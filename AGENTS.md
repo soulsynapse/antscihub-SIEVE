@@ -38,3 +38,6 @@ Indexes are directories that group contents of a doc category based on their uti
 4. Antipatterns
 
 When you make decisions off the docs, you should inform the user how that guided your behavior so that old documentation that no longer holds doesn't contaminate the current live implementation. You should also flag any that seem like they shouldn't be the case so the user can evaluate them.
+
+## Check ins
+After a functional change or feature, do a commit following conventional commit standardization.

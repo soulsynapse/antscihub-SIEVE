@@ -1,0 +1,118 @@
+{
+  "asset": {
+    "asset_id": "dde0b3b6-284f-42ba-ae79-0d6780d935f8",
+    "codec": "mpeg4",
+    "container_frame_count": 30579,
+    "content_sha256": "fb042764e1b587a37bd93dfb485c3b3c9616cf7b908adbdcabdacc6e4ccb3c19",
+    "decoded_frame_count": null,
+    "duration_seconds": 510.16016,
+    "fps_den": 50,
+    "fps_num": 2997,
+    "height": 2988,
+    "mtime_ns": 1784068799929132900,
+    "packet_frame_count": null,
+    "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE\\test_videos\\stab_GX010050c2_02_18_26.MP4",
+    "pixel_format": "yuv420p",
+    "size_bytes": 11682917233,
+    "width": 5312
+  },
+  "configuration": {
+    "decoded_frame_size": [
+      1280,
+      720
+    ],
+    "iterations": 3,
+    "max_width": 1280,
+    "random_positions": [
+      27520,
+      3058,
+      15289
+    ],
+    "sequential_frames": 8,
+    "warm_or_cold": "new MediaSession per open sample; OS filesystem cache not flushed"
+  },
+  "counts": {
+    "decoded": 20,
+    "failed": 0,
+    "requested": 20
+  },
+  "environment": {
+    "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "python": "3.11.9"
+  },
+  "measurements": {
+    "open_probe": {
+      "count": 3,
+      "max_ms": 91.7305,
+      "median_ms": 85.987,
+      "min_ms": 84.9109,
+      "p95_ms": 91.7305,
+      "samples_ms": [
+        91.7305,
+        85.987,
+        84.9109
+      ]
+    },
+    "open_to_first_frame": {
+      "count": 3,
+      "max_ms": 320.1404,
+      "median_ms": 311.9849,
+      "min_ms": 309.0418,
+      "p95_ms": 320.1404,
+      "samples_ms": [
+        320.1404,
+        309.0418,
+        311.9849
+      ]
+    },
+    "random_seek": {
+      "count": 9,
+      "max_ms": 276.7602,
+      "median_ms": 267.1059,
+      "min_ms": 248.2117,
+      "p95_ms": 276.7602,
+      "samples_ms": [
+        259.3105,
+        269.0773,
+        267.1059,
+        265.0479,
+        267.0455,
+        270.4533,
+        273.9051,
+        276.7602,
+        248.2117
+      ]
+    },
+    "sequential_read": {
+      "count": 7,
+      "max_ms": 7.3792,
+      "median_ms": 5.5549,
+      "min_ms": 2.7404,
+      "p95_ms": 7.3792,
+      "samples_ms": [
+        5.7874,
+        5.7874,
+        2.7404,
+        3.1965,
+        5.5549,
+        7.3792,
+        4.1913
+      ]
+    },
+    "sequential_startup": {
+      "count": 1,
+      "max_ms": 226.2688,
+      "median_ms": 226.2688,
+      "min_ms": 226.2688,
+      "p95_ms": 226.2688,
+      "samples_ms": [
+        226.2688
+      ]
+    }
+  },
+  "mode": "service",
+  "schema_version": 1,
+  "seek_verification": null
+}

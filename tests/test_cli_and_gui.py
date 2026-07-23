@@ -46,9 +46,25 @@ def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([os.sys.executable, "-m", "antscihub_sieve.cli.main", *args], text=True, capture_output=True)
 
 
+def test_headless_cli_does_not_import_qt() -> None:
+    completed = subprocess.run(
+        [
+            os.sys.executable,
+            "-c",
+            (
+                "import sys; import antscihub_sieve.cli.main; "
+                "assert not any(name.startswith('PyQt6') for name in sys.modules)"
+            ),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
 @pytest.mark.parametrize("args", [("asset", "inspect"), ("asset", "init"), ("asset", "verify"), ("lineage", "show"), ("lineage", "parent"),
     ("layout", "inspect"), ("layout", "add"), ("layout", "update"), ("layout", "rename"), ("layout", "remove"), ("layout", "clear"),
-    ("layout", "import"), ("layout", "export"), ("layout", "validate"), ("media", "probe"), ("media", "frame"), ("derive",), ("derive", "verify")])
+    ("layout", "import"), ("layout", "export"), ("layout", "validate"), ("media", "probe"), ("media", "frame"), ("media", "benchmark"), ("derive",), ("derive", "verify")])
 def test_required_commands_have_help(args: tuple[str, ...]) -> None:
     completed = run_cli(*args, "--help"); assert completed.returncode == 0 and "usage:" in completed.stdout
 
@@ -60,6 +76,35 @@ def test_cli_json_stdout_and_invalid_usage(video: Path, tmp_path: Path) -> None:
     frame = run_cli("media", "frame", str(video), "--frame", "0", "--out", str(tmp_path / "frame.png"), "--json")
     assert frame.returncode == 0 and json.loads(frame.stdout)["frame"] == 0 and (tmp_path / "frame.png").read_bytes().startswith(b"\x89PNG")
     invalid = run_cli("layout", "add", str(video), "--box", "bad", "--json"); assert invalid.returncode == 2
+
+
+def test_media_benchmark_is_a_user_facing_estimate(video: Path) -> None:
+    AssetService().initialize(video, label="benchmark source")
+    completed = run_cli(
+        "media", "benchmark", str(video),
+        "--iterations", "1", "--sequential-frames", "3", "--json",
+    )
+    assert completed.returncode == 0 and completed.stderr == ""
+    result = json.loads(completed.stdout)
+    assert result["kind"] == "media_performance_estimate"
+    assert result["asset"]["asset_id"]
+    assert result["representation"] == {
+        "kind": "display",
+        "max_width": 1280,
+        "decoded_width": 18,
+        "decoded_height": 14,
+    }
+    assert result["measurements"]["adjacent_sequential_read"]["count"] == 2
+    assert isinstance(result["estimate"]["keeps_up_with_native_rate"], bool)
+
+    human = run_cli(
+        "media", "benchmark", str(video),
+        "--iterations", "1", "--sequential-frames", "2",
+    )
+    assert human.returncode == 0
+    assert "Media performance estimate:" in human.stdout
+    assert "Media service fits the native frame budget:" in human.stdout
+    assert "excludes GUI paint" in human.stdout
 
 
 def test_frame_view_letterbox_mapping_stamp_and_created_immutability(qtbot, video: Path) -> None:  # type: ignore[no-untyped-def]
@@ -82,6 +127,23 @@ def test_frame_view_letterbox_mapping_stamp_and_created_immutability(qtbot, vide
     child_center = view._to_view_rect(child["region_snapshot"]["box_xyxy"]).center().toPoint(); QTest.mouseClick(view, Qt.MouseButton.LeftButton, pos=child_center); assert opened == [0] and moved == []
     view.select("c"); stamp_point = view._to_view_rect([9, 12, 10, 13]).center().toPoint(); QTest.mouseClick(view, Qt.MouseButton.LeftButton, pos=stamp_point)
     assert created[-1][2] - created[-1][0] == 7 and created[-1][3] - created[-1][1] == 6
+
+
+def test_frame_views_retain_zero_copy_rgb_storage(qtbot) -> None:  # type: ignore[no-untyped-def]
+    import gc
+
+    from antscihub_sieve.gui.frame_view import FrameView
+    from antscihub_sieve.gui.isolate_player import IsolatePlayer
+
+    for view in (FrameView(), IsolatePlayer()):
+        qtbot.addWidget(view)
+        raw = bytes([10, 20, 30] * 4)
+        view.set_frame(raw, 2, 2)
+        assert view._frame_bytes is raw
+        del raw
+        gc.collect()
+        color = view.image.pixelColor(0, 0)
+        assert (color.red(), color.green(), color.blue()) == (10, 20, 30)
 
 
 def test_gui_opens_unknown_video_without_classification_prompt(qtbot, video: Path) -> None:  # type: ignore[no-untyped-def]

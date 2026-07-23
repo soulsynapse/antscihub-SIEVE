@@ -1,0 +1,134 @@
+{
+  "asset": {
+    "asset_id": "dde0b3b6-284f-42ba-ae79-0d6780d935f8",
+    "codec": "mpeg4",
+    "container_frame_count": 30579,
+    "content_sha256": "fb042764e1b587a37bd93dfb485c3b3c9616cf7b908adbdcabdacc6e4ccb3c19",
+    "decoded_frame_count": null,
+    "duration_seconds": 510.16016,
+    "fps_den": 50,
+    "fps_num": 2997,
+    "height": 2988,
+    "mtime_ns": 1784068799929132900,
+    "packet_frame_count": null,
+    "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE\\test_videos\\stab_GX010050c2_02_18_26.MP4",
+    "pixel_format": "yuv420p",
+    "size_bytes": 11682917233,
+    "width": 5312
+  },
+  "configuration": {
+    "frames": 8,
+    "synchronous_repaint": true,
+    "window_obscured_or_minimized": false,
+    "window_size": [
+      960,
+      540
+    ],
+    "window_visible": true
+  },
+  "counts": {
+    "decoded": 8,
+    "delivered": 8,
+    "failed": 0,
+    "painted": 16,
+    "requested": 8
+  },
+  "environment": {
+    "device_pixel_ratio": 1.0,
+    "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "python": "3.11.9",
+    "qt_platform_plugin": "windows",
+    "qt_qpa_platform_env": null
+  },
+  "measurements": {
+    "decode_to_paint": {
+      "count": 8,
+      "max_ms": 375.2505,
+      "median_ms": 85.94284999999999,
+      "min_ms": 83.0017,
+      "p95_ms": 375.2505,
+      "samples_ms": [
+        375.2505,
+        85.3622,
+        85.0204,
+        83.0017,
+        86.5235,
+        84.3701,
+        88.1497,
+        90.4308
+      ]
+    },
+    "paint": {
+      "count": 8,
+      "max_ms": 5.4646,
+      "median_ms": 2.1396,
+      "min_ms": 1.8936,
+      "p95_ms": 5.4646,
+      "samples_ms": [
+        5.4646,
+        2.0988,
+        2.1804,
+        1.8936,
+        5.0051,
+        2.0729,
+        2.3739,
+        2.0038
+      ]
+    },
+    "qt_image_install": {
+      "count": 8,
+      "max_ms": 8.5037,
+      "median_ms": 7.787100000000001,
+      "min_ms": 7.2624,
+      "p95_ms": 8.5037,
+      "samples_ms": [
+        7.2624,
+        7.3569,
+        7.8585,
+        7.7157,
+        8.0093,
+        7.4636,
+        7.9871,
+        8.5037
+      ]
+    },
+    "sequential_decode": {
+      "count": 8,
+      "max_ms": 362.5235,
+      "median_ms": 75.44399999999999,
+      "min_ms": 73.3924,
+      "p95_ms": 362.5235,
+      "samples_ms": [
+        362.5235,
+        75.9065,
+        74.9815,
+        73.3924,
+        73.5091,
+        74.8336,
+        77.7887,
+        79.9233
+      ]
+    },
+    "unchanged_frame_repaint": {
+      "count": 8,
+      "max_ms": 6.0348,
+      "median_ms": 1.88345,
+      "min_ms": 1.6485,
+      "p95_ms": 6.0348,
+      "samples_ms": [
+        1.8331,
+        2.1437,
+        6.0348,
+        1.9329,
+        1.6946,
+        1.6485,
+        1.834,
+        2.0854
+      ]
+    }
+  },
+  "mode": "viewer",
+  "schema_version": 1
+}

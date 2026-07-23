@@ -10,8 +10,11 @@ from antscihub_sieve.errors import SieveError
 from antscihub_sieve.media.session import MediaSession
 
 
+ISOLATE_DISPLAY_MAX_WIDTH = 1280
+
+
 class IsolateDecodeThread(QThread):
-    frame_decoded = pyqtSignal(int, int, bytes)
+    frame_decoded = pyqtSignal(int, int, bytes, int, int)
     decode_failed = pyqtSignal(int, str)
 
     def __init__(self, generation: int, session: MediaSession) -> None:
@@ -43,7 +46,12 @@ class IsolateDecodeThread(QThread):
                 frame = self._requested
                 self._requested = None
             try:
-                raw = self.session.read_frame_rgb(frame)
+                width, height = self.session.scaled_dimensions(
+                    ISOLATE_DISPLAY_MAX_WIDTH
+                )
+                raw = self.session.read_frame_rgb(
+                    frame, max_width=ISOLATE_DISPLAY_MAX_WIDTH
+                )
             except SieveError as exc:
                 if not self._stopping:
                     self.decode_failed.emit(
@@ -53,7 +61,9 @@ class IsolateDecodeThread(QThread):
             with self._condition:
                 if self._requested is not None:
                     continue
-            self.frame_decoded.emit(self.generation, frame, raw)
+            self.frame_decoded.emit(
+                self.generation, frame, raw, width, height
+            )
 
 
 class IsolateSession(QObject):
@@ -79,6 +89,10 @@ class IsolateSession(QObject):
         self._generation = 0
         self.play_timer = QTimer(self)
         self.play_timer.timeout.connect(self._play_tick)
+        self.scrub_timer = QTimer(self)
+        self.scrub_timer.setSingleShot(True)
+        self.scrub_timer.setInterval(60)
+        self.scrub_timer.timeout.connect(self.settle_timeline_scrub)
 
     @property
     def loaded(self) -> bool:
@@ -104,6 +118,7 @@ class IsolateSession(QObject):
         return float(Fraction(frame * self.fps_den, self.fps_num))
 
     def open_asset(self, asset: ActiveAsset) -> None:
+        self.scrub_timer.stop()
         self._close_media()
         self._generation += 1
         self.asset = asset
@@ -149,6 +164,7 @@ class IsolateSession(QObject):
         self.request_frame(0)
 
     def _close_media(self) -> None:
+        self.scrub_timer.stop()
         self.pause()
         self._generation += 1
         decoder, self.decoder = self.decoder, None
@@ -208,6 +224,26 @@ class IsolateSession(QObject):
     def timeline_seek(self, frame: int) -> None:
         if not self.loaded:
             return
+        self._position_timeline(frame)
+        self.request_frame(self.current_frame)
+
+    def timeline_scrub(self, frame: int) -> None:
+        if not self.loaded:
+            return
+        self.pause()
+        self._position_timeline(frame)
+        self.state_changed.emit()
+        self.scrub_timer.start()
+
+    def settle_timeline_scrub(self, frame: int | None = None) -> None:
+        self.scrub_timer.stop()
+        if frame is not None:
+            self._position_timeline(frame)
+        self.request_frame(self.current_frame)
+
+    def _position_timeline(self, frame: int) -> None:
+        if not self.loaded:
+            return
         frame = min(max(0, frame), self.frame_count - 1)
         if not self.window_start <= frame < self.window_stop:
             length = self.window_length
@@ -216,7 +252,7 @@ class IsolateSession(QObject):
                 self.frame_count - length,
             )
             self.window_start, self.window_stop = start, start + length
-        self.request_frame(frame)
+        self.current_frame = frame
 
     def toggle_play(self) -> None:
         if not self.can_loop:
@@ -260,7 +296,14 @@ class IsolateSession(QObject):
         )
         self.request_frame(next_frame)
 
-    def _frame_decoded(self, generation: int, frame: int, raw: bytes) -> None:
+    def _frame_decoded(
+        self,
+        generation: int,
+        frame: int,
+        raw: bytes,
+        width: int,
+        height: int,
+    ) -> None:
         if (
             generation != self._generation
             or self.media is None
@@ -271,8 +314,8 @@ class IsolateSession(QObject):
         self.frame_ready.emit(
             frame,
             raw,
-            int(self.media.metadata["width"]),
-            int(self.media.metadata["height"]),
+            width,
+            height,
         )
         self.state_changed.emit()
 

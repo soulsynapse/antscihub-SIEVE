@@ -10,21 +10,25 @@ class IsolatePlayer(QWidget):
         super().__init__()
         self.setMinimumSize(480, 300)
         self.image: QImage | None = None
+        self._frame_bytes: bytes | None = None
         self.frame_size = (1, 1)
         self.message = (
             "Open footage in Replicates or use File > Open to begin."
         )
 
     def set_frame(self, raw: bytes, width: int, height: int) -> None:
-        self.image = QImage(
+        image = QImage(
             raw, width, height, width * 3, QImage.Format.Format_RGB888
-        ).copy()
+        )
+        self._frame_bytes = raw
+        self.image = image
         self.frame_size = (width, height)
         self.message = ""
         self.update()
 
     def clear(self, message: str = "Loading video...") -> None:
         self.image = None
+        self._frame_bytes = None
         self.frame_size = (1, 1)
         self.message = message
         self.update()

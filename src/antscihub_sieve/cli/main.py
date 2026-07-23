@@ -11,6 +11,10 @@ from antscihub_sieve.application.derivation import DerivationService
 from antscihub_sieve.application.layouts import LayoutService
 from antscihub_sieve.application.lineage import LineageService
 from antscihub_sieve.errors import SieveError
+from antscihub_sieve.media.benchmark import (
+    benchmark_media,
+    format_media_benchmark,
+)
 from antscihub_sieve.media.session import MediaSession
 
 
@@ -27,6 +31,23 @@ def _box(value: str) -> str:
 
 def _json_flag(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="write the result as JSON to stdout")
+
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("value must be an integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
+def _at_least_two(value: str) -> int:
+    parsed = _positive_int(value)
+    if parsed < 2:
+        raise argparse.ArgumentTypeError("value must be at least 2")
+    return parsed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -57,6 +78,13 @@ def build_parser() -> argparse.ArgumentParser:
     media = commands.add_parser("media", help="probe media and decode preview frames"); media_sub = media.add_subparsers(dest="action", required=True)
     p = media_sub.add_parser("probe"); p.add_argument("asset"); _json_flag(p)
     p = media_sub.add_parser("frame"); p.add_argument("asset"); group = p.add_mutually_exclusive_group(required=True); group.add_argument("--frame", type=int); group.add_argument("--time"); p.add_argument("--out", required=True); _json_flag(p)
+    p = media_sub.add_parser("benchmark", help="estimate media responsiveness on this computer"); p.add_argument("asset")
+    representation = p.add_mutually_exclusive_group()
+    representation.add_argument("--native", action="store_true", help="measure full-resolution RGB instead of the 1280-pixel display representation")
+    representation.add_argument("--max-width", type=_positive_int, default=1280, help="display representation width cap (default: 1280)")
+    p.add_argument("--iterations", type=_positive_int, default=3)
+    p.add_argument("--sequential-frames", type=_at_least_two, default=12)
+    _json_flag(p)
 
     derive = commands.add_parser("derive", help="materialize child replicate assets")
     derive.add_argument("parent", nargs="?", help="parent asset, or the literal 'verify'"); derive.add_argument("target", nargs="?", help="child asset when using 'derive verify'"); derive.add_argument("--crop", type=_box); derive.add_argument("--label")
@@ -94,7 +122,16 @@ def dispatch(args: argparse.Namespace) -> Any:
         if args.action == "export": return layouts.export_template(args.parent, args.out)
         return layouts.validate(args.reference)
     if args.command == "media":
-        inspected = assets.verify(args.asset, level="metadata"); session = MediaSession(Path(inspected["media_path"]))
+        inspected = assets.verify(args.asset, level="metadata")
+        if args.action == "benchmark":
+            return benchmark_media(
+                Path(inspected["media_path"]),
+                asset=inspected["asset"],
+                iterations=args.iterations,
+                sequential_frames=args.sequential_frames,
+                max_width=None if args.native else args.max_width,
+            )
+        session = MediaSession(Path(inspected["media_path"]))
         try:
             if args.action == "probe":
                 return {"asset_id": inspected["asset"]["asset_id"], "media_path": inspected["media_path"], **session.metadata, "frame_count": session.frame_count}
@@ -125,6 +162,11 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(argv); result = dispatch(args)
         if getattr(args, "json", False):
             print(json.dumps(result, ensure_ascii=False))
+        elif (
+            getattr(args, "command", None) == "media"
+            and getattr(args, "action", None) == "benchmark"
+        ):
+            print(format_media_benchmark(result))
         else:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0

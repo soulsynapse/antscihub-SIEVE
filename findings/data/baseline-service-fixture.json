@@ -1,0 +1,151 @@
+{
+  "asset": {
+    "codec": "ffv1",
+    "container_frame_count": null,
+    "decoded_frame_count": null,
+    "duration_seconds": 5.0,
+    "fps_den": 1,
+    "fps_num": 60,
+    "height": 180,
+    "mtime_ns": 1784841211555465100,
+    "packet_frame_count": null,
+    "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE\\test_videos\\benchmark-numbered-ffv1.mkv",
+    "pixel_format": "bgr0",
+    "size_bytes": 3545231,
+    "width": 320
+  },
+  "configuration": {
+    "iterations": 5,
+    "random_positions": [
+      269,
+      30,
+      150
+    ],
+    "sequential_frames": 30,
+    "warm_or_cold": "new MediaSession per open sample; OS filesystem cache not flushed"
+  },
+  "counts": {
+    "decoded": 50,
+    "failed": 0,
+    "requested": 50
+  },
+  "environment": {
+    "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "python": "3.11.9"
+  },
+  "measurements": {
+    "open_probe": {
+      "count": 5,
+      "max_ms": 89.5279,
+      "median_ms": 85.3585,
+      "min_ms": 79.3657,
+      "p95_ms": 89.5279,
+      "samples_ms": [
+        82.6246,
+        79.3657,
+        85.3585,
+        86.7726,
+        89.5279
+      ]
+    },
+    "open_to_first_frame": {
+      "count": 5,
+      "max_ms": 183.2552,
+      "median_ms": 172.5463,
+      "min_ms": 165.3741,
+      "p95_ms": 183.2552,
+      "samples_ms": [
+        170.6202,
+        165.3741,
+        172.5463,
+        175.9546,
+        183.2552
+      ]
+    },
+    "random_seek": {
+      "count": 15,
+      "max_ms": 103.8476,
+      "median_ms": 95.295,
+      "min_ms": 90.4686,
+      "p95_ms": 103.8476,
+      "samples_ms": [
+        96.9708,
+        90.4686,
+        91.781,
+        93.5598,
+        93.0147,
+        96.161,
+        91.6165,
+        91.7281,
+        94.8663,
+        99.7253,
+        98.861,
+        103.8476,
+        95.4365,
+        95.295,
+        96.4344
+      ]
+    },
+    "sequential_read": {
+      "count": 29,
+      "max_ms": 0.2716,
+      "median_ms": 0.1695,
+      "min_ms": 0.1361,
+      "p95_ms": 0.2653,
+      "samples_ms": [
+        0.2528,
+        0.2175,
+        0.2047,
+        0.2331,
+        0.2068,
+        0.1956,
+        0.1954,
+        0.183,
+        0.187,
+        0.1695,
+        0.2716,
+        0.2169,
+        0.2653,
+        0.2164,
+        0.1905,
+        0.1572,
+        0.1652,
+        0.1595,
+        0.1493,
+        0.1562,
+        0.156,
+        0.1473,
+        0.1367,
+        0.1361,
+        0.1362,
+        0.1406,
+        0.1437,
+        0.1546,
+        0.1472
+      ]
+    },
+    "sequential_startup": {
+      "count": 1,
+      "max_ms": 88.2662,
+      "median_ms": 88.2662,
+      "min_ms": 88.2662,
+      "p95_ms": 88.2662,
+      "samples_ms": [
+        88.2662
+      ]
+    }
+  },
+  "mode": "service",
+  "schema_version": 1,
+  "seek_verification": {
+    "exact_same_backend_match": true,
+    "mismatches": {},
+    "positions": [
+      269,
+      30,
+      150
+    ]
+  }
+}

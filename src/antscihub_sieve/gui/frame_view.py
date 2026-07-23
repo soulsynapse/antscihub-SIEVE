@@ -18,14 +18,15 @@ class FrameView(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setMinimumSize(480, 300); self.setMouseTracking(True); self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.image: QImage | None = None; self.frame_size = (1, 1)
+        self.image: QImage | None = None; self._frame_bytes: bytes | None = None; self.frame_size = (1, 1)
         self.drafts: list[dict[str, Any]] = []; self.children: list[dict[str, Any]] = []
         self.selected_id: str | None = None; self.focus_box: list[int] | None = None
         self.draw_enabled = True; self.stamp_enabled = False; self.hide_overlays = False
         self._gesture: dict[str, Any] | None = None; self._preview_box: list[int] | None = None
 
     def set_frame(self, raw: bytes, width: int, height: int) -> None:
-        self.image = QImage(raw, width, height, width * 3, QImage.Format.Format_RGB888).copy()
+        image = QImage(raw, width, height, width * 3, QImage.Format.Format_RGB888)
+        self._frame_bytes = raw; self.image = image
         self.frame_size = (width, height); self.update()
 
     def set_layout(self, drafts: list[dict[str, Any]], children: list[dict[str, Any]], selected_id: str | None = None) -> None:

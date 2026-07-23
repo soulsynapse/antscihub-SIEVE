@@ -1,0 +1,203 @@
+{
+  "asset": {
+    "asset_id": "dde0b3b6-284f-42ba-ae79-0d6780d935f8",
+    "codec": "mpeg4",
+    "container_frame_count": 30579,
+    "content_sha256": "fb042764e1b587a37bd93dfb485c3b3c9616cf7b908adbdcabdacc6e4ccb3c19",
+    "decoded_frame_count": null,
+    "duration_seconds": 510.16016,
+    "fps_den": 50,
+    "fps_num": 2997,
+    "height": 2988,
+    "mtime_ns": 1784068799929132900,
+    "packet_frame_count": null,
+    "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE\\test_videos\\stab_GX010050c2_02_18_26.MP4",
+    "pixel_format": "yuv420p",
+    "size_bytes": 11682917233,
+    "width": 5312
+  },
+  "configuration": {
+    "decoded_frame_size": [
+      1280,
+      720
+    ],
+    "display_decode_max_width": 1280,
+    "frames": 8,
+    "synchronous_repaint": true,
+    "window_obscured_or_minimized": false,
+    "window_size": [
+      960,
+      540
+    ],
+    "window_visible": true
+  },
+  "counts": {
+    "decoded": 8,
+    "delivered": 8,
+    "failed": 0,
+    "painted": 16,
+    "requested": 8
+  },
+  "environment": {
+    "device_pixel_ratio": 1.0,
+    "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "python": "3.11.9",
+    "qt_platform_plugin": "windows",
+    "qt_qpa_platform_env": null
+  },
+  "measurements": {
+    "decode_to_paint": {
+      "count": 8,
+      "max_ms": 237.1446,
+      "median_ms": 8.74045,
+      "min_ms": 6.9729,
+      "p95_ms": 237.1446,
+      "samples_ms": [
+        237.1446,
+        9.0101,
+        8.0619,
+        6.9729,
+        7.8314,
+        8.4708,
+        9.6443,
+        9.1381
+      ]
+    },
+    "paint": {
+      "count": 8,
+      "max_ms": 10.2507,
+      "median_ms": 3.6248,
+      "min_ms": 2.5333,
+      "p95_ms": 10.2507,
+      "samples_ms": [
+        10.2507,
+        4.2091,
+        4.1509,
+        2.5333,
+        3.5593,
+        3.3548,
+        2.7238,
+        3.6903
+      ]
+    },
+    "qt_image_install": {
+      "count": 8,
+      "max_ms": 0.6696,
+      "median_ms": 0.26759999999999995,
+      "min_ms": 0.2064,
+      "p95_ms": 0.6696,
+      "samples_ms": [
+        0.5798,
+        0.2064,
+        0.2825,
+        0.2165,
+        0.2527,
+        0.2158,
+        0.6696,
+        0.3115
+      ]
+    },
+    "sequential_decode": {
+      "count": 8,
+      "max_ms": 226.3141,
+      "median_ms": 4.7474,
+      "min_ms": 3.6285,
+      "p95_ms": 226.3141,
+      "samples_ms": [
+        226.3141,
+        4.5946,
+        3.6285,
+        4.2231,
+        4.0194,
+        4.9002,
+        6.2509,
+        5.1363
+      ]
+    },
+    "steady_state_decode_to_paint": {
+      "count": 7,
+      "max_ms": 9.6443,
+      "median_ms": 8.4708,
+      "min_ms": 6.9729,
+      "p95_ms": 9.6443,
+      "samples_ms": [
+        9.0101,
+        8.0619,
+        6.9729,
+        7.8314,
+        8.4708,
+        9.6443,
+        9.1381
+      ]
+    },
+    "steady_state_paint": {
+      "count": 7,
+      "max_ms": 4.2091,
+      "median_ms": 3.5593,
+      "min_ms": 2.5333,
+      "p95_ms": 4.2091,
+      "samples_ms": [
+        4.2091,
+        4.1509,
+        2.5333,
+        3.5593,
+        3.3548,
+        2.7238,
+        3.6903
+      ]
+    },
+    "steady_state_qt_image_install": {
+      "count": 7,
+      "max_ms": 0.6696,
+      "median_ms": 0.2527,
+      "min_ms": 0.2064,
+      "p95_ms": 0.6696,
+      "samples_ms": [
+        0.2064,
+        0.2825,
+        0.2165,
+        0.2527,
+        0.2158,
+        0.6696,
+        0.3115
+      ]
+    },
+    "steady_state_sequential_decode": {
+      "count": 7,
+      "max_ms": 6.2509,
+      "median_ms": 4.5946,
+      "min_ms": 3.6285,
+      "p95_ms": 6.2509,
+      "samples_ms": [
+        4.5946,
+        3.6285,
+        4.2231,
+        4.0194,
+        4.9002,
+        6.2509,
+        5.1363
+      ]
+    },
+    "unchanged_frame_repaint": {
+      "count": 8,
+      "max_ms": 3.9737,
+      "median_ms": 1.734,
+      "min_ms": 1.0187,
+      "p95_ms": 3.9737,
+      "samples_ms": [
+        3.9737,
+        1.8838,
+        1.5771,
+        1.397,
+        1.0187,
+        1.9482,
+        2.7125,
+        1.5842
+      ]
+    }
+  },
+  "mode": "viewer",
+  "schema_version": 1
+}

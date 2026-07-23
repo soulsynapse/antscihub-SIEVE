@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 class IsolateTimeline(QWidget):
     frame_clicked = pyqtSignal(int)
+    scrub_finished = pyqtSignal(int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -97,5 +98,12 @@ class IsolateTimeline(QWidget):
             self.frame_clicked.emit(self.x_to_frame(event.position().x()))
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self._scrubbing
+            and self.frame_count > 0
+        ):
             self._scrubbing = False
+            self.scrub_finished.emit(
+                self.x_to_frame(event.position().x())
+            )

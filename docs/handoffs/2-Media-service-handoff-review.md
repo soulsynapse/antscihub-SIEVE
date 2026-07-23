@@ -11,8 +11,8 @@ lessons:
 - Treat oracle mechanisms as hypotheses rather than instructions.
 - Establish correctness before optimizing.
 - Measure service-level decode separately from end-to-end viewer latency.
-- Preserve exact time, asset identity, cancellation, and declared decoder
-  behavior.
+- Preserve the rational frame/time model, asset identity, cancellation, and
+  declared decoder behavior.
 - Distinguish sequential reads from random seeks.
 - Coalesce obsolete scrub and repaint requests.
 - Avoid doing full-source-resolution work for a much smaller display.
@@ -20,14 +20,39 @@ lessons:
 - Do not assume that visible player lag is necessarily decoder lag.
 
 Those principles are compatible with the rewrite's existing `MediaSession`,
-asset, and scientific computation contracts.
+asset, derivation, and player boundaries, and with the intended future
+separation between display and scientific processing. The rewrite does not yet
+have a channel-processing worker or an established scientific frame-consumption
+contract, so this review must not imply that one already exists.
 
 The handoff should be clarified before implementation so that a performance pass
 does not accidentally create a new product subsystem or make the headless media
 service UI-shaped.
 
-## Important correction 1: the benchmark does not need to become a supported
-## public CLI command
+## Repository requirement: every retained performance change needs a finding
+
+The repository's `AGENTS.md` makes the benchmark and reporting workflow
+mandatory:
+
+1. Benchmark the relevant behavior before changing it.
+2. Make the smallest change that addresses the measured behavior.
+3. Run the same benchmark afterward.
+4. Report the before/after comparison under `findings/`.
+5. Add the report to `findings/.index.md`.
+
+Every report must begin with a BLUF, include the detailed setup, measurements,
+comparison, and interpretation, and contain a section titled:
+
+```text
+Potential ways this finding could be invalid now or later
+```
+
+The handoff's general instruction to record results is therefore not sufficient
+for this checkout. Creating `findings/` and `findings/.index.md`, if still
+absent, is part of the first benchmark-report change rather than a reason to
+invent another reporting location.
+
+## Important correction 1: reusable benchmarks are product diagnostics
 
 The handoff suggests:
 
@@ -36,36 +61,28 @@ sieve media benchmark ASSET --mode service --json
 sieve media benchmark ASSET --mode viewer --offscreen --json
 ```
 
-It says equivalent scripts are acceptable, but an implementation agent may still
-read the named commands as required additions to the canonical CLI.
+The project has deliberately decided that a reusable benchmark which helps a
+user estimate responsiveness, runtime, throughput, or feasibility is a product
+diagnostic. Its measurement logic belongs in an importable package module and
+should be reported through a supported CLI or UI surface.
 
-That would enlarge this milestone from:
+Use `scripts/` only for disposable hypothesis tests, one-time investigations,
+fixture construction, or thin development launchers around package-owned
+measurement logic.
 
-> Measure and improve the existing media service.
+For this milestone:
 
-to:
+- Expose the reusable headless estimate through `sieve media benchmark`.
+- Provide useful human output and versioned JSON output.
+- State whether the native or capped display representation was measured.
+- Report estimated frame capacity and realtime factor without claiming that a
+  short benchmark predicts every future workload.
+- Keep Qt viewer instrumentation in an importable GUI module until a deliberate
+  UI diagnostics surface exists; do not import Qt into the headless CLI.
 
-> Design, document, test, and maintain a new public benchmarking product
-> surface.
-
-The benchmark needs a repeatable invocation and machine-readable output. It does
-not need a permanent top-level command.
-
-Prefer initially:
-
-```text
-scripts/bench_media_service.py
-scripts/bench_media_viewer.py
-```
-
-or the rewrite's established benchmark harness.
-
-Promote a benchmark into `sieve media benchmark` only if the project deliberately
-decides that operators need it as a supported product capability. Do not make
-that promotion as an incidental performance optimization step.
-
-The result schema may be stable enough to compare before and after without
-becoming a public compatibility promise.
+Do not run an expensive benchmark automatically during application startup.
+Explicit user invocation is appropriate. Cheap, cached results may be shown in
+the UI later if their provenance and age remain visible.
 
 ## Important correction 2: do not make the media-service API display-specific
 
@@ -101,7 +118,7 @@ A safe boundary is:
 MediaSession
   returns a declared native/RGB/luma plane with timing and source coordinates
 
-DisplayAdapter
+GUI display layer
   chooses display resolution
   performs any GUI-only color/layout conversion
   owns Qt image lifetime
@@ -110,9 +127,54 @@ FrameView
   paints the prepared display frame
 ```
 
+The current checkout performs Qt image ownership directly in `FrameView` and
+`IsolatePlayer`; it has no `DisplayAdapter` abstraction. Do not create that
+abstraction merely to satisfy this diagram. Extract a shared adapter only if a
+measured implementation needs one for reuse, ownership, or testability.
+
 If the backend can efficiently emit RGB or a lower-resolution preview plane, the
 request must be explicit and recorded. The full-resolution scientific path must
 remain independently requestable and must not inherit a GUI cap.
+
+## Current-checkout correction: persistent sequential decoding already exists
+
+The current `MediaSession` is not reopen-per-frame for adjacent playback. It
+keeps one FFmpeg subprocess alive while requests are sequential. When a request
+is not the decoder's next expected frame, it terminates the subprocess and starts
+a new FFmpeg process with an input-side `-ss` seek.
+
+The baseline should therefore measure the implementation that exists:
+
+- Adjacent frame read through the retained subprocess.
+- Random seek including subprocess termination and creation.
+- Backward step and loop restart, which take the random-seek path.
+- Repeated asset switches, including process and thread cleanup.
+
+Do not schedule "add a persistent sequential decoder" as the first change unless
+the baseline shows that the existing mechanism is not actually being retained
+through the relevant viewer path.
+
+The existing test proves subprocess identity is retained for frames 0 and 1. It
+does not prove random-seek frame accuracy, seek latency on long-GOP footage, or
+cleanup under concurrent cancellation.
+
+Both GUI decode-thread owners currently request interruption and then wait up to
+three seconds, but they do not assert that the wait succeeded before continuing
+session cleanup. The asset-switch benchmark must therefore check the thread-wait
+result, FFmpeg process exit, handle count, and absence of a late signal/frame;
+elapsed switch time alone is not sufficient evidence of clean cancellation.
+
+## Current-checkout correction: rational calculation does not prove exact seek
+
+`MediaSession.timestamp_for_frame()` calculates timestamps with `Fraction`, but
+`read_frame_rgb()` converts the result to a float-formatted decimal before
+passing it to FFmpeg's input-side `-ss`.
+
+Preserve the rational application model, but treat the concrete mapping from
+requested frame to decoded FFmpeg output as a correctness hypothesis. Verify it
+with numbered temporal fixtures and representative variable/long-GOP media. Do
+not describe the current random-seek path as frame-accurate solely because its
+timestamp was calculated rationally.
 
 ## Important correction 3: frame-count verification must not contaminate the
 ## latency benchmark
@@ -222,6 +284,12 @@ Define a minimum diagnostic set:
 
 Run that set before and after every candidate.
 
+The checkout already contains a representative source MP4 and isolated
+replicate child under `test_videos/`. Reuse those in place for the project-media
+cases unless inspection shows that their codec or GOP structure does not cover
+the hypothesis. Add a small deterministic numbered lossless fixture separately;
+do not create another large transcoded corpus merely to satisfy the matrix.
+
 Use the extended set when relevant:
 
 - 120 fps fixture.
@@ -304,9 +372,10 @@ outcome: painted | superseded | cancelled | failed
 This makes “the final scrub request won” provable and prevents a late result from
 being counted as successful merely because some frame eventually painted.
 
-These diagnostics can live in the benchmark wrapper or existing structured
-events. They do not need to become permanent production logging at full
-verbosity.
+Start with these diagnostics in the benchmark wrapper. Move only the minimum
+required timestamps or identifiers into production code when the wrapper cannot
+observe a stage accurately. They do not need to become permanent production
+logging at full verbosity.
 
 ## Clarification: one decode per displayed-frame request is a diagnostic, not a
 ## universal cache law
@@ -328,6 +397,37 @@ The narrower invariant is:
 > Within one media-session generation and one resolved display request, adding
 > passive GUI consumers must not cause an unintended duplicate decode of the
 > same requested representation.
+
+## Current-checkout decision: the two workflow tabs intentionally own separate
+## media sessions
+
+The current main window constructs both Replicates and Isolate immediately. Both
+listen to the shared active-asset controller, both open their own
+`MediaSession`, and both request frame zero when the active asset changes. The
+existing GUI test explicitly waits for both images.
+
+That is not the same failure mode as two passive consumers accidentally decoding
+twice inside one media-session generation. It is the current independent-tab
+lifecycle, and changing it could alter tab responsiveness and state isolation.
+
+Before treating the second first-frame decode as waste, decide which lifecycle
+is intended:
+
+- Both tabs eagerly retain independent sessions and initial frames.
+- The inactive tab opens its session but defers decode until activation.
+- The inactive tab opens both session and first frame lazily on activation.
+- An inactive tab closes its session and restores only independent UI state when
+  reactivated.
+
+Benchmark the selected lifecycle end to end. Do not share a mutable decoder
+between the tabs merely to remove the duplicate, and do not silently make tab
+activation expensive without measuring that tradeoff.
+
+The hidden-view benchmark should report the two sessions separately. Within each
+session, hidden widgets should not schedule repaint work. Across sessions, any
+decode performed by the inactive workflow should be classified as intentional
+eager initialization or as avoidable hidden-view overhead according to the
+chosen lifecycle.
 
 ## Clarification: display-resolution reduction needs an explicit cache key
 
@@ -359,8 +459,8 @@ Do not reuse:
 The handoff already warns that the oracle's prefetch result came from a
 scientific extraction benchmark. Strengthen the implementation priority:
 
-1. Persistent decoder session.
-2. Sequential fast path.
+1. Baseline the existing persistent sequential decoder.
+2. Optimize that path only if its measured behavior warrants a change.
 3. Latest-only scrubbing.
 4. Duplicate decode/repaint removal.
 5. Display-resolution and conversion profiling.
@@ -379,8 +479,10 @@ prevents historical measurements from becoming universal thresholds.
 
 ### Persistent session and sequential-read hints
 
-These match the existing `MediaSession` direction and do not require copying the
-oracle's OpenCV wrapper.
+These are already present in the existing `MediaSession`: adjacent reads retain
+one FFmpeg subprocess, while non-adjacent requests replace it. The hints remain
+safe as benchmark hypotheses and do not require copying the oracle's OpenCV
+wrapper.
 
 ### Scrub coalescing and generation checks
 
@@ -417,8 +519,8 @@ stronger contracts.
 
 ### Potentially expensive if left ambiguous
 
-1. Adding and supporting `sieve media benchmark` as an accidental new public
-   product command.
+1. Leaving a reusable user-facing estimate stranded in a developer script with
+   no supported human or machine-readable product surface.
 2. Returning Qt/widget-sized representations from the headless media-service
    contract.
 3. Requiring a full decoded-frame count before measuring or displaying the
@@ -426,6 +528,8 @@ stronger contracts.
 4. Treating exact pixel hashes as portable across lossy decoder backends.
 5. Drawing final conclusions about visible playback solely from offscreen Qt
    timings.
+6. Treating the two tabs' independent media sessions as an accidental duplicate
+   without first choosing the intended inactive-tab lifecycle.
 
 ### Scope risks rather than architecture failures
 
@@ -435,6 +539,10 @@ stronger contracts.
 3. Adding a large frame cache before measuring revisit behavior.
 4. Instrumenting permanent production code more heavily than the benchmark
    requires.
+5. Creating a `DisplayAdapter` class solely because this review used it in a
+   boundary diagram.
+6. Running expensive diagnostics automatically during ordinary application
+   startup instead of requiring explicit user action.
 
 ### Correctly deferred
 
@@ -451,13 +559,24 @@ Keep the media-service handoff's overall structure and oracle hints.
 
 Before giving it to an implementation agent:
 
-1. State that benchmark scripts are preferred initially and the suggested CLI
-   commands are illustrative, not required public interfaces.
-2. Keep Qt/display resizing in a display adapter rather than `MediaSession`.
-3. Record frame-count status without requiring a full count for viewer startup.
-4. Restrict exact hashes to deterministic lossless fixtures or same-backend
+1. Require every retained performance change to produce the mandated BLUF-first
+   report under `findings/` and an entry in `findings/.index.md`.
+2. Put reusable measurement logic in package modules, expose the headless media
+   estimate through `sieve media benchmark`, and reserve scripts for disposable
+   work or fixture construction.
+3. Keep Qt and widget-dependent display work in the GUI layer rather than
+   `MediaSession`; do not require a new adapter abstraction.
+4. Benchmark the existing retained FFmpeg subprocess for adjacent reads and its
+   subprocess-replacement path for random seeks before proposing decoder work.
+5. Preserve rational application timing while independently verifying the
+   concrete FFmpeg frame returned by random seeks.
+6. Record frame-count status without requiring a full count for viewer startup.
+7. Restrict exact hashes to deterministic lossless fixtures or same-backend
    equality claims.
-5. Require a visible-window measurement before final viewer conclusions.
-6. Separate the minimum diagnostic benchmark from the extended matrix.
+8. Require a visible-window measurement before final viewer conclusions.
+9. Separate the minimum diagnostic benchmark from the extended matrix and reuse
+   the existing project footage where appropriate.
+10. Decide whether inactive workflow tabs should eagerly open and decode before
+    classifying the current second session as redundant.
 
-No broader redesign is required.
+No broader redesign is justified before baseline measurement.

@@ -134,6 +134,19 @@ def test_timeline_click_preserves_length_and_latest_request_wins(qtbot) -> None:
     assert decoder.frames[-1] == 82
 
 
+def test_timeline_drag_defers_decode_until_settled(qtbot) -> None:  # type: ignore[no-untyped-def]
+    session, decoder = configured_session(qtbot, frames=100)
+    session.window_start, session.window_stop = 20, 40
+    session.timeline_scrub(30)
+    session.timeline_scrub(80)
+    assert decoder.frames == []
+    assert session.current_frame == 80
+    assert session.scrub_timer.isActive()
+    session.settle_timeline_scrub(82)
+    assert decoder.frames == [82]
+    assert not session.scrub_timer.isActive()
+
+
 def test_late_decode_results_are_ignored(qtbot) -> None:  # type: ignore[no-untyped-def]
     session, _ = configured_session(qtbot, frames=20)
     session._generation = 4
@@ -143,9 +156,9 @@ def test_late_decode_results_are_ignored(qtbot) -> None:  # type: ignore[no-unty
     )()  # type: ignore[assignment]
     ready: list[int] = []
     session.frame_ready.connect(lambda frame, *_: ready.append(frame))
-    session._frame_decoded(3, 3, bytes(12))
-    session._frame_decoded(4, 2, bytes(12))
-    session._frame_decoded(4, 3, bytes(12))
+    session._frame_decoded(3, 3, bytes(12), 2, 2)
+    session._frame_decoded(4, 2, bytes(12), 2, 2)
+    session._frame_decoded(4, 3, bytes(12), 2, 2)
     assert ready == [3]
 
 
@@ -170,7 +183,9 @@ def test_timeline_drag_emits_latest_scrub_position(qtbot) -> None:  # type: igno
     timeline = IsolateTimeline(); qtbot.addWidget(timeline)
     timeline.resize(1000, 72); timeline.set_state(100, 20, 40, 20)
     requested: list[int] = []
+    settled: list[int] = []
     timeline.frame_clicked.connect(requested.append)
+    timeline.scrub_finished.connect(settled.append)
     y = timeline.content_rect().center().y()
     press = QMouseEvent(
         QMouseEvent.Type.MouseButtonPress, QPointF(100, y), QPointF(100, y),
@@ -193,6 +208,7 @@ def test_timeline_drag_emits_latest_scrub_position(qtbot) -> None:  # type: igno
     timeline.mouseReleaseEvent(release)
     assert requested[-1] == timeline.x_to_frame(900)
     assert len(requested) == 4
+    assert settled == [timeline.x_to_frame(900)]
 
 
 def test_player_letterboxes_without_cropping(qtbot) -> None:  # type: ignore[no-untyped-def]

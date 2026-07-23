@@ -1,0 +1,102 @@
+{
+  "assets": {
+    "initial": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE\\test_videos\\stab_GX010050c2_02_18_26.MP4",
+    "switched": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE\\test_videos\\benchmark-numbered-ffv1.mkv"
+  },
+  "configuration": {
+    "scrub_requests": 100,
+    "scrub_seconds_target": 1.0
+  },
+  "correctness": {
+    "clean_state_after_close": true,
+    "expected_switch_frame_area": 57600,
+    "final_scrub_frame_displayed": true,
+    "switch_frame_area": 57600
+  },
+  "counts": {
+    "frames_delivered_during_or_after_scrub": 1,
+    "scrub_requests": 100
+  },
+  "environment": {
+    "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "python": "3.11.9",
+    "qt_platform_plugin": "offscreen",
+    "qt_qpa_platform_env": "offscreen"
+  },
+  "measurements": {
+    "asset_switch_call_return": {
+      "count": 1,
+      "max_ms": 88.3842,
+      "median_ms": 88.3842,
+      "min_ms": 88.3842,
+      "p95_ms": 88.3842,
+      "samples_ms": [
+        88.3842
+      ]
+    },
+    "asset_switch_to_first_frame": {
+      "count": 1,
+      "max_ms": 179.3932,
+      "median_ms": 179.3932,
+      "min_ms": 179.3932,
+      "p95_ms": 179.3932,
+      "samples_ms": [
+        179.3932
+      ]
+    },
+    "close": {
+      "count": 1,
+      "max_ms": 7.1589,
+      "median_ms": 7.1589,
+      "min_ms": 7.1589,
+      "p95_ms": 7.1589,
+      "samples_ms": [
+        7.1589
+      ]
+    },
+    "final_scrub_release_to_frame": {
+      "count": 1,
+      "max_ms": 165.9192,
+      "median_ms": 165.9192,
+      "min_ms": 165.9192,
+      "p95_ms": 165.9192,
+      "samples_ms": [
+        165.9192
+      ]
+    },
+    "open_call_plus_first_frame": {
+      "count": 1,
+      "max_ms": 319.3134,
+      "median_ms": 319.3134,
+      "min_ms": 319.3134,
+      "p95_ms": 319.3134,
+      "samples_ms": [
+        319.3134
+      ]
+    },
+    "open_call_return": {
+      "count": 1,
+      "max_ms": 92.1396,
+      "median_ms": 92.1396,
+      "min_ms": 92.1396,
+      "p95_ms": 92.1396,
+      "samples_ms": [
+        92.1396
+      ]
+    },
+    "total_scrub": {
+      "count": 1,
+      "max_ms": 1221.3733,
+      "median_ms": 1221.3733,
+      "min_ms": 1221.3733,
+      "p95_ms": 1221.3733,
+      "samples_ms": [
+        1221.3733
+      ]
+    }
+  },
+  "mode": "interactions",
+  "schema_version": 1
+}

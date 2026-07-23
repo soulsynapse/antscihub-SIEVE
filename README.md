@@ -37,6 +37,28 @@ sieve-gui
 .\.venv\Scripts\python.exe .\sieve_gui.py
 ```
 
+## Media performance estimate
+
+Measure the display representation used by Isolate and report whether the
+media-service sequential path fits the asset's native frame budget:
+
+```powershell
+sieve media benchmark .\video.mp4
+sieve media benchmark .\video.mp4 --json
+```
+
+Use `--native` to measure full-resolution RGB instead. This is more expensive
+and answers a different question from ordinary viewer responsiveness:
+
+```powershell
+sieve media benchmark .\video.mp4 --native
+```
+
+Benchmarks run only when explicitly requested. Results describe the current
+computer, backend, representation, and cache conditions; they are estimates,
+not portable performance guarantees. The CLI estimate excludes GUI painting,
+overlays, and scientific processing.
+
 The CLI does not import Qt and continues to work when the GUI extra is not
 installed. FFmpeg and FFprobe must be available on `PATH`.
 

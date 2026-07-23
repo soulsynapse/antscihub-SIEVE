@@ -92,7 +92,10 @@ class IsolateTab(QWidget):
         self.play_button.clicked.connect(self.session.toggle_play)
         self.start_spin.valueChanged.connect(self._start_changed)
         self.length_spin.valueChanged.connect(self._length_changed)
-        self.timeline.frame_clicked.connect(self.session.timeline_seek)
+        self.timeline.frame_clicked.connect(self.session.timeline_scrub)
+        self.timeline.scrub_finished.connect(
+            self.session.settle_timeline_scrub
+        )
         self.session.state_changed.connect(self._refresh)
         self.session.frame_ready.connect(self._frame_ready)
         self.session.error_changed.connect(self.status_label.setText)

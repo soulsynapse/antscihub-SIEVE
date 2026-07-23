@@ -59,6 +59,46 @@ def test_media_frames_use_one_sequential_decoder(video: Path) -> None:
     finally: session.close()
 
 
+def test_display_scaled_decode_is_explicit_and_keeps_native_default(video: Path) -> None:
+    session = MediaSession(video)
+    try:
+        assert session.scaled_dimensions(9) == (9, 8)
+        scaled = session.read_frame_rgb(0, max_width=9)
+        assert len(scaled) == 9 * 8 * 3
+        native = session.read_frame_rgb(0)
+        assert len(native) == 18 * 14 * 3
+    finally:
+        session.close()
+
+
+def test_random_seek_matches_sequential_lossless_frames(video: Path) -> None:
+    sequential = MediaSession(video)
+    try:
+        expected = {
+            frame: sequential.read_frame_rgb(frame)
+            for frame in range(sequential.frame_count)
+        }
+    finally:
+        sequential.close()
+
+    random_access = MediaSession(video)
+    try:
+        positions = [
+            random_access.frame_count - 1,
+            1,
+            random_access.frame_count // 2,
+        ]
+        assert {
+            frame: random_access.read_frame_rgb(frame)
+            for frame in positions
+        } == {
+            frame: expected[frame]
+            for frame in positions
+        }
+    finally:
+        random_access.close()
+
+
 def test_packet_count_checks_length_without_decoding_frames(video: Path) -> None:
     from antscihub_sieve.media.probe import expected_frame_count, run_ffprobe
     probe = run_ffprobe(video, count_packets=True)

@@ -77,6 +77,11 @@ are complete:
 - Add scientific result persistence, recipes, export, CLI/HPC processing, or a
   general graph executor.
 
+When the first real channel handoff arrives, evaluate the benchmarkable
+multi-basis channel contract proposed in
+`docs/ideas/processing-ideas.md`. Do not add direct grayscale delivery or a
+general plane registry before a real channel and measurement justify them.
+
 The oracle handoff for each milestone must be reviewed against the then-current
 checkout and recorded in `docs/handoffs/.isolate-state-divergence.md` before
 implementation.

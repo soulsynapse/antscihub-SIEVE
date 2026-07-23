@@ -36,7 +36,7 @@ As we get further and further down the list, the handoffs will deviate more and 
 Some handoffs might ask for something that seems impossible. When this is the case, you can craft a prompt for me to ask the oracle repo how to achieve this. I'll pass the answer back to you.
 
 ## Follow ups
-Once a given task is completed, review `docs/next_steps.md` for work that would benefit from your current context and update it with concrete unfinished work or proposed follow-ups. If there was a significant finding or antipattern, you can propose it as a decision if it will make the long term health of the repository better. This is deliberately broad - when you notice some inefficiency that would annoy a senior developer for not following standard practice, you can note it, and say if it truly applies in this context or if it is theoretical-senior-dev-gripe only.
+Once a given task is completed, review `docs/next_steps.md` for work that would benefit from your current context and update it with concrete unfinished work or proposed follow-ups. If there was a significant finding or antipattern, you can propose it as a decision if it will make the long term health of the repository better. This is deliberately broad - when you notice some inefficiency that would annoy a senior developer for not following standard practice, you can note it, and say if it truly applies in this context or if it is theoretical-senior-dev-gripe only. You can also add things to the candidate section of optimizations.md if you found any.
 
 ## Indexes
 Indexes are directories that group contents of a doc category based on their utility:

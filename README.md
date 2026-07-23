@@ -1,12 +1,13 @@
-# antscihub-SIEVE
+# SIEVE *(Signal Isolation for Ethological Video Events)*
 
-SIEVE is a tool to filter out behaviors from video without the need for training.
+SIEVE is a tool to filter out behaviors from video without the need for training, with a focus on efficiency.
 
-If there is a *pure signal* that can identify your behavior, SIEVE enables you to isolate that.
+The primary use categories:
 
-Signal Isolation for Ethological Video Events. This milestone provides the
-Replicates workspace: portable video assets, editable crop layouts, recursive
-child-replicate derivation, lineage navigation, and a PyQt6 desktop interface.
+1. Study feasibility assessments
+2. HPC-assisted analysis
+3. Feature vector composition
+4. Temporal sampling 
 
 ## Development setup
 

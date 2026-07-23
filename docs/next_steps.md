@@ -1,6 +1,6 @@
 # Next steps
 
-Last reviewed: `2026-07-23 15:07:01 -07:00`.
+Last reviewed: `2026-07-23 15:16:37 -07:00`.
 
 This file records unfinished work that is justified by the current checkout.
 It is not an authorization to continue automatically into later Isolate
@@ -54,14 +54,17 @@ Do not begin grid or channel implementation during this validation step.
 
 ### Define and implement the working grid
 
-The working-grid divergence notes already identify likely current-checkout
-corrections, but milestone 4 remains blocked until:
+The fourth handoff and review have now been assessed against the implemented
+milestone-3 seams. The dated post-milestone-3 refresh is recorded in
+`docs/handoffs/.isolate-state-divergence.md`.
 
-- The working-window milestone is implemented and accepted.
-- The grid handoff and review are present in the checkout.
-- Their assumptions are rechecked against the implemented headless request,
-  resolved-source, stream, and GUI snapshot seams.
-- The dated divergence record is refreshed against that implementation.
+Milestone 4 remains blocked until:
+
+- The implemented working-window milestone is accepted.
+- The user approves corrections to the handoff and review so their stale
+  `4b09232` checkout description matches the current repository.
+- The user chooses whether downsample and block intent persist or reset across
+  active-asset switches.
 
 Do not implement the grid from divergence notes alone. When unblocked, keep
 native working geometry separate from the capped display preview and preserve

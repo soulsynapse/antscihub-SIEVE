@@ -34,8 +34,10 @@ sieve derive .\video.mp4 --layout .\video.replicate-layout.json `
 # Or use the Replicates desktop workspace.
 sieve-gui
 
-# In Isolate, choose a time window and working grid, then explicitly compute
-# the fixed post-decoder RGB601 intensity channel.
+# In Isolate, choose a time window and working grid, select normalization
+# (Off or Per-frame z-score), then explicitly compute the post-decoder RGB601
+# intensity channel. Changing normalization after a result exists safely
+# recomputes the current window.
 
 # In VS Code, open and run the top-level sieve_gui.py file.
 .\.venv\Scripts\python.exe .\sieve_gui.py

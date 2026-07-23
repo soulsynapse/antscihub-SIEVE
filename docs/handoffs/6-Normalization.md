@@ -4,32 +4,55 @@ Reviewed and corrected against rewrite commit `f6af6fe` on
 `2026-07-23 16:22:38 -07:00`. The oracle review was folded into this handoff
 rather than delivered as a separate review file.
 
-Status: handoff only. Implementation is not authorized until milestone 5 has
-been implemented, visibly validated, and accepted, and the rewrite-side
-divergence refresh in section 1.1 has been completed.
+Implemented and automated-validated on `2026-07-23 16:36:24 -07:00` against
+the working tree based on `6c09ac6`. The user explicitly authorized milestone
+6 after the review, superseding the sequencing gate without retroactively
+claiming that milestone 5 received separate manual acceptance. Milestone 6
+still awaits visible/manual acceptance; milestones 7 onward remain
+unauthorized.
 
-Rewrite review disposition:
+Pre-implementation rewrite findings that guided the implementation:
 
 - Milestone 5 is implemented and has automated evidence, but manual acceptance
-  remains outstanding. Nothing in this review closes that gate.
+  was not separately recorded before the user explicitly authorized this step.
 - The rewrite's accepted result-memory defaults are 16 GiB for CPU and 6 GiB
   for GPU through `ExecutionResourcePolicy`; milestone 6 must not replace them
   with the oracle's proposed 512 MiB default. Execution is currently CPU-only.
-- The current rewrite has no independent scientific result-key type.
-  Publication uses `IntensityRequest` equality plus the GUI `_job_token`, even
-  though request equality currently also includes execution policy, execution
-  target, and batch size. Milestone 6 must introduce or expose a scientific-key
-  comparison without treating those execution fields as scientific identity.
-- The current `off` identity exists only as
+- Before milestone 6, the rewrite had no independent scientific result-key
+  type. Publication used `IntensityRequest` equality plus the GUI `_job_token`,
+  even though request equality included execution policy, execution target,
+  and batch size. The implementation added `IntensityScientificKey` and uses
+  it for publication.
+- Before milestone 6, the `off` identity existed only as
   `IntensityResult.normalization_id == "off"`; it is not captured by
-  `IntensityRequest`.
-- The current `reduce_rgb_frame(...)` owns conversion, area reduction, and
-  block reduction in one function. There is no existing pre-block extension
-  hook. Split out only the smallest pure working-frame normalization seam.
-- Current asset, window, and grid changes invalidate and cancel without
-  automatic recomputation. Automatic replacement after a committed
-  normalization change is new milestone-6 behavior, not accepted milestone-5
-  behavior.
+  `IntensityRequest`. The implementation now captures an immutable
+  `NormalizationSpec`.
+- Before milestone 6, `reduce_rgb_frame(...)` owned conversion, area reduction,
+  and block reduction in one function. The implementation extracted only the
+  pure working-frame normalizer and block reducer needed at that boundary.
+- Milestone-5 asset, window, and grid changes continue to invalidate and cancel
+  without automatic recomputation. Only a committed normalization change with
+  an established result/job automatically queues replacement work.
+
+Implementation evidence:
+
+- The only modes are `off` and fixed-epsilon per-frame population z-score.
+- `normalize_working_frame(...)` is Qt-free, requires a finite float32 working
+  plane, uses float64 population statistics, emits float32 values, and returns
+  exact zero plus explicit degeneracy for `sigma < 1e-6`.
+- Immutable one-byte-per-frame degeneracy flags are aligned with processed
+  absolute frames and included in pre-source retained-result admission.
+- `IntensityScientificKey` separates scientific identity from resource policy,
+  execution target, batch size, and GUI tokens.
+- Isolate starts at Off, retains mode intent across active assets, does not
+  launch the first job on selection alone, and reuses the verified newest-only
+  worker handshake for later committed mode changes.
+- The panel uses fixed `[0,1]` grayscale for Off and fixed `[-3,3]` diverging
+  presentation for z-score. Hover displays stored unclipped values, units,
+  normalization identity, and degeneracy.
+- Focused headless/offscreen normalization and intensity GUI validation reports
+  `43 passed in 4.54s`. The final complete offscreen suite reports
+  `158 passed in 28.00s`.
 
 This milestone adds one upstream scientific choice to the accepted Isolate
 intensity path:
@@ -69,11 +92,11 @@ This handoff follows the accepted implementations of:
 - `5-First-channel.md`.
 
 The user has visibly accepted milestone 4; there is no remaining milestone-4
-gate. Milestone 5 is implemented at `f6af6fe`, with 135 automated tests
-reported passing, but its visible/manual acceptance remains the only feature
-prerequisite for this handoff.
+gate. Milestone 5 is implemented at `f6af6fe`. Its separate manual acceptance
+was not recorded, but the user explicitly authorized milestone 6 after the
+rewrite review.
 
-Milestone 5 acceptance is a hard prerequisite. Its concrete rewrite seams are
+The concrete rewrite seams are
 `IntensityRequest`, `IntensityResult`, `ChannelStageOutcome`,
 `compute_intensity(...)`, `reduce_rgb_frame(...)`, `IntensityWorker`,
 `IsolateTab`, and `IntensityRaster`. Extend those seams rather than restoring
@@ -116,10 +139,10 @@ facts:
   population-z-score, degenerate-frame, or publication rules.
 
 The divergence entry reports actual code and tests rather than commit subjects
-or planned class names. Implementation still requires milestone-5 manual
-acceptance and must adapt this handoff to its smallest accepted seam; it must
-not introduce a parallel normalization pipeline, result owner, worker, or
-panel.
+or planned class names. The later explicit user instruction superseded the
+milestone-5 sequencing gate. The implementation used the smallest accepted
+seam and did not introduce a parallel normalization pipeline, result owner,
+worker, or panel.
 
 ## 2. Outcome
 
@@ -422,14 +445,12 @@ normalization. Remove the result-only `normalization_id = "off"` shortcut once
 the result can retain the captured specification without duplicating
 conflicting identity.
 
-The rewrite does not currently have a separate scientific result key:
-`IsolateTab._intensity_finished(...)` publishes only when `_job_token` and a
-freshly captured `IntensityRequest` equality both match. Because that request
-also contains resource policy, execution target, and batch size, raw request
-equality is not yet the scientific key described here.
-
-Add the smallest Qt-free scientific-key value or property shared by headless
-results and GUI publication. It must distinguish:
+Before milestone 6, the rewrite had no separate scientific result key:
+`IsolateTab._intensity_finished(...)` used `_job_token` plus raw
+`IntensityRequest` equality, which also included resource policy, execution
+target, and batch size. The implementation adds the Qt-free
+`IntensityScientificKey`, exposed by requests/results and used by GUI
+publication. It distinguishes:
 
 ```text
 asset recorded/content-verification identity
@@ -766,12 +787,13 @@ existing intensity panel
 ```
 
 Names are illustrative, but the reusable Qt-free operation at the pre-block
-working-frame boundary is required. The current rewrite has no such hook:
-`reduce_rgb_frame(...)` performs conversion, area reduction, and block
-reduction together. Extract the minimum pre-block seam from that function and
-reuse the existing block reducer. Do not introduce `PreprocessingPipeline`,
-`ChannelRegistry`, `ScientificGraph`, a cache, or a new worker for one
-operation.
+working-frame boundary is required. Before implementation,
+`reduce_rgb_frame(...)` performed conversion, area reduction, and block
+reduction together. The implementation extracted
+`normalize_working_frame(...)` and `reduce_working_frame(...)` at the minimum
+pre-block seam and reused the existing path. It did not introduce
+`PreprocessingPipeline`, `ChannelRegistry`, `ScientificGraph`, a cache, or a
+new worker.
 
 ## 17. Automated tests
 

@@ -5,7 +5,14 @@ from PyQt6.QtCore import QPoint, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QImage, QMouseEvent, QPaintEvent, QPainter, QPen
 from PyQt6.QtWidgets import QToolTip, QWidget
 
-from antscihub_sieve.application.intensity import IntensityResult
+from antscihub_sieve.application.intensity import (
+    IntensityResult,
+    NormalizationMode,
+)
+
+
+OFF_PRESENTATION_ID = "sieve.presentation.intensity_0_1_grayscale.v1"
+ZSCORE_PRESENTATION_ID = "sieve.presentation.zscore_minus3_plus3_diverging.v1"
 
 
 class IntensityRaster(QWidget):
@@ -18,33 +25,55 @@ class IntensityRaster(QWidget):
         self._result: IntensityResult | None = None
         self._image = QImage()
         self._current_frame: int | None = None
+        self._presentation_mapping_id: str | None = None
 
     @property
     def result(self) -> IntensityResult | None:
         return self._result
 
+    @property
+    def presentation_mapping_id(self) -> str | None:
+        return self._presentation_mapping_id
+
     def set_result(self, result: IntensityResult | None) -> None:
         self._result = result
         self._image = QImage()
+        self._presentation_mapping_id = None
         if result is not None and result.values.size:
             time_by_block = result.values.reshape(
                 result.values.shape[0], -1
             )
-            pixels = np.ascontiguousarray(
-                np.clip(
-                    np.rint(time_by_block.T * 255.0),
-                    0,
-                    255,
-                ).astype(np.uint8)
-            )
-            height, width = pixels.shape
-            self._image = QImage(
-                pixels.data,
-                width,
-                height,
-                pixels.strides[0],
-                QImage.Format.Format_Grayscale8,
-            ).copy()
+            if (
+                result.request.normalization.mode
+                is NormalizationMode.PER_FRAME_ZSCORE
+            ):
+                pixels = _zscore_diverging_pixels(time_by_block.T)
+                height, width, _ = pixels.shape
+                self._image = QImage(
+                    pixels.data,
+                    width,
+                    height,
+                    pixels.strides[0],
+                    QImage.Format.Format_RGB888,
+                ).copy()
+                self._presentation_mapping_id = ZSCORE_PRESENTATION_ID
+            else:
+                pixels = np.ascontiguousarray(
+                    np.clip(
+                        np.rint(time_by_block.T * 255.0),
+                        0,
+                        255,
+                    ).astype(np.uint8)
+                )
+                height, width = pixels.shape
+                self._image = QImage(
+                    pixels.data,
+                    width,
+                    height,
+                    pixels.strides[0],
+                    QImage.Format.Format_Grayscale8,
+                ).copy()
+                self._presentation_mapping_id = OFF_PRESENTATION_ID
         self.update()
 
     def set_current_frame(self, frame: int | None) -> None:
@@ -100,12 +129,18 @@ class IntensityRaster(QWidget):
         value = float(
             result.values[frame_offset, row, column]
         )
+        degenerate = bool(result.degenerate_flags[frame_offset])
+        mode = result.request.normalization.mode.value
+        mapping = self._presentation_mapping_id or "none"
         QToolTip.showText(
             event.globalPosition().toPoint(),
             (
                 f"Frame {result.processed_start + frame_offset}\n"
                 f"Block ({row}, {column})\n"
-                f"Intensity {value:.6f}\n"
+                f"Value {value:.6f} {result.scientific_units}\n"
+                f"Normalization {mode}\n"
+                f"Degenerate {'yes' if degenerate else 'no'}\n"
+                f"Presentation {mapping}\n"
                 f"Bounds x[{bounds.x0},{bounds.x1}) "
                 f"y[{bounds.y0},{bounds.y1})\n"
                 f"Partial-cell weight "
@@ -156,3 +191,15 @@ class IntensityRaster(QWidget):
             int((position.y() - target.top()) * blocks / target.height()),
         )
         return frame_offset, block_index
+
+
+def _zscore_diverging_pixels(values: np.ndarray) -> np.ndarray:
+    scaled = np.clip((values.astype(np.float64) + 3.0) / 6.0, 0.0, 1.0)
+    low = np.array((33.0, 102.0, 172.0), dtype=np.float64)
+    center = np.array((255.0, 255.0, 255.0), dtype=np.float64)
+    high = np.array((178.0, 24.0, 43.0), dtype=np.float64)
+    lower_fraction = np.minimum(scaled * 2.0, 1.0)[..., None]
+    upper_fraction = np.maximum((scaled - 0.5) * 2.0, 0.0)[..., None]
+    lower_colors = low + (center - low) * lower_fraction
+    colors = lower_colors + (high - center) * upper_fraction
+    return np.ascontiguousarray(np.rint(colors).astype(np.uint8))

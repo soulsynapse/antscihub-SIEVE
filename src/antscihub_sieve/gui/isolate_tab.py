@@ -22,6 +22,8 @@ from antscihub_sieve.application.active_asset import (
 from antscihub_sieve.application.intensity import (
     IntensityRequest,
     IntensityResult,
+    NormalizationMode,
+    NormalizationSpec,
 )
 from antscihub_sieve.application.resources import ExecutionResourcePolicy
 from antscihub_sieve.application.working_grid import (
@@ -33,7 +35,11 @@ from antscihub_sieve.application.working_grid import (
 from antscihub_sieve.gui.isolate_player import IsolatePlayer
 from antscihub_sieve.gui.isolate_session import IsolateSession
 from antscihub_sieve.gui.isolate_timeline import IsolateTimeline
-from antscihub_sieve.gui.intensity_panel import IntensityRaster
+from antscihub_sieve.gui.intensity_panel import (
+    IntensityRaster,
+    OFF_PRESENTATION_ID,
+    ZSCORE_PRESENTATION_ID,
+)
 from antscihub_sieve.gui.intensity_worker import IntensityWorker
 
 
@@ -45,6 +51,7 @@ class IsolateTab(QWidget):
         self._active_asset: ActiveAsset | None = None
         self.grid_settings = WorkingGridSettings()
         self.resolved_grid: ResolvedWorkingGrid | None = None
+        self.normalization_spec = NormalizationSpec.off()
         self.resource_policy = ExecutionResourcePolicy()
         self._job_token = 0
         self._intensity_worker: IntensityWorker | None = None
@@ -149,6 +156,22 @@ class IsolateTab(QWidget):
         self.compute_intensity_button = QPushButton("Compute intensity")
         self.cancel_intensity_button = QPushButton("Cancel")
         self.cancel_intensity_button.setEnabled(False)
+        compute_controls.addWidget(QLabel("Normalize"))
+        self.normalization_combo = QComboBox()
+        self.normalization_combo.addItem(
+            "Off",
+            NormalizationMode.OFF.value,
+        )
+        self.normalization_combo.addItem(
+            "Per-frame z-score",
+            NormalizationMode.PER_FRAME_ZSCORE.value,
+        )
+        self.normalization_combo.setToolTip(
+            "Applied independently to every scientific working-resolution "
+            "frame. Z-score changes scientific units and can change temporal "
+            "amplitude; this is not display-only contrast."
+        )
+        compute_controls.addWidget(self.normalization_combo)
         self.compute_status = QLabel(
             "CPU result budget 16 GiB · GPU result budget 6 GiB"
         )
@@ -216,6 +239,9 @@ class IsolateTab(QWidget):
         )
         self.cancel_intensity_button.clicked.connect(
             self._cancel_intensity
+        )
+        self.normalization_combo.currentIndexChanged.connect(
+            self._normalization_changed
         )
         self.intensity_raster.frame_selected.connect(
             self.session.timeline_seek
@@ -332,6 +358,7 @@ class IsolateTab(QWidget):
         self.intensity_raster.set_current_frame(
             self.session.current_frame if loaded else None
         )
+        self._update_intensity_context()
         self._invalidate_if_inputs_changed()
         self._update_compute_controls()
         if not loaded:
@@ -406,8 +433,32 @@ class IsolateTab(QWidget):
         return IntensityRequest(
             working_window=window,
             grid=self.resolved_grid,
+            normalization=self.normalization_spec,
             resources=self.resource_policy,
         )
+
+    def _normalization_changed(self, _index: int) -> None:
+        mode = NormalizationMode(self.normalization_combo.currentData())
+        selected = (
+            NormalizationSpec.off()
+            if mode is NormalizationMode.OFF
+            else NormalizationSpec.per_frame_zscore()
+        )
+        if selected == self.normalization_spec:
+            return
+        established = (
+            self._intensity_result is not None
+            or self._intensity_worker is not None
+            or self._pending_intensity is not None
+        )
+        self.normalization_spec = selected
+        if established:
+            self._compute_intensity()
+        else:
+            self.compute_status.setText(
+                f"Normalization selected: {mode.value}. "
+                "Compute intensity to start."
+            )
 
     def _compute_intensity(self) -> None:
         request = self._snapshot_intensity_request()
@@ -466,7 +517,8 @@ class IsolateTab(QWidget):
         current = self._snapshot_intensity_request()
         if (
             worker.token == self._job_token
-            and current == worker.request
+            and current is not None
+            and current.scientific_key == worker.request.scientific_key
         ):
             if worker.error_value is not None:
                 error = worker.error_value
@@ -501,21 +553,56 @@ class IsolateTab(QWidget):
 
     def _publish_intensity(self, result: IntensityResult) -> None:
         self._intensity_result = result
-        grid = result.request.grid
-        self.intensity_context.setText(
-            f"Frames [{result.processed_start},{result.processed_stop}) · "
-            f"Source {grid.source_width} × {grid.source_height} · "
-            f"Working {grid.work_width} × {grid.work_height} · "
-            f"Grid {grid.rows} × {grid.columns} · "
-            f"Block {grid.resolved_block_size} px"
-        )
         self.intensity_raster.set_result(result)
         self.intensity_raster.set_current_frame(self.session.current_frame)
+        self._update_intensity_context()
+        if (
+            result.request.normalization.mode
+            is NormalizationMode.PER_FRAME_ZSCORE
+        ):
+            self.intensity_legend.setText(
+                "sieve.channel.rgb601_intensity.v1 · Per-frame z-score · "
+                "frame population standard deviations · fixed [-3,3] "
+                f"diverging presentation ({ZSCORE_PRESENTATION_ID}); "
+                "values outside the interval are color-clipped only"
+            )
+        else:
+            self.intensity_legend.setText(
+                "sieve.channel.rgb601_intensity.v1 · Normalize Off · "
+                "post-decoder RGB601 intensity · "
+                "normalized RGB-code intensity fraction · fixed [0,1] "
+                f"presentation ({OFF_PRESENTATION_ID}); "
+                "0 black · white 1"
+            )
         self.channels_empty.hide()
         self.intensity_panel.show()
         self.compute_status.setText(
             f"Intensity complete: {result.values.shape[0]} frames · "
-            f"{result.conversion_id} · {result.backend}"
+            f"{result.conversion_id} · {result.normalization_id} · "
+            f"{result.backend}"
+        )
+
+    def _update_intensity_context(self) -> None:
+        result = self._intensity_result
+        if result is None:
+            return
+        grid = result.request.grid
+        frame = self.session.current_frame
+        current = "Current frame outside computed span"
+        if result.processed_start <= frame < result.processed_stop:
+            offset = frame - result.processed_start
+            state = (
+                "degenerate (valid zero data)"
+                if result.degenerate_flags[offset]
+                else "nondegenerate"
+            )
+            current = f"Current frame {frame}: {state}"
+        self.intensity_context.setText(
+            f"Frames [{result.processed_start},{result.processed_stop}) · "
+            f"Source {grid.source_width} × {grid.source_height} · "
+            f"Working {grid.work_width} × {grid.work_height} · "
+            f"Grid {grid.rows} × {grid.columns} row-major · "
+            f"Block {grid.resolved_block_size} px · {current}"
         )
 
     def _clear_intensity_result(self) -> None:

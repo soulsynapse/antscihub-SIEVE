@@ -25,7 +25,7 @@ The implementation order is mandatory:
 At completion, a user can:
 
 1. Open any video.
-2. Declare that its full frame is either source footage or already a replicate.
+2. Use its full frame as the current video asset without classifying what it represents.
 3. Play, pause, step, and scrub through the video.
 4. Draw, stamp, select, rename, move, and remove proposed child regions.
 5. Save and reopen that draft layout automatically.
@@ -47,20 +47,13 @@ two execution routes.
 
 ## 2. Core model
 
-### 2.1 Asset kind is descriptive
+### 2.1 Assets are lineage-agnostic
 
-Every registered video asset has:
-
-```text
-kind = source | replicate
-```
-
-- `source` means the user currently regards the video as parent footage.
-- `replicate` means the user regards the complete frame as an experimental unit.
-
-The kind does not select a different implementation. Both kinds open in the
-same Replicates workspace, both can be used whole, and both can produce spatial
-children. There is no root-only crop path and no special sub-replicate path.
+A registered video has no source/replicate kind. The user may not know how the
+video was produced, and the same asset can have a parent and also become a
+parent later. Lineage records only known relationships; it does not classify an
+asset's scientific role. Every asset opens in the same Replicates workspace,
+can be used whole, and can produce spatial children.
 
 ### 2.2 The selected asset owns the frame
 
@@ -162,7 +155,6 @@ Minimum schema:
 {
   "schema_version": 1,
   "asset_id": "uuid",
-  "kind": "source",
   "label": "colony 07",
   "media": {
     "filename": "colony_07.mp4",
@@ -223,6 +215,7 @@ Minimum schema:
       "label": "rep3",
       "box_xyxy": [200, 100, 700, 650],
       "color": "#ffd24a",
+      "state": "draft",
       "created_utc": "...",
       "updated_utc": "..."
     }
@@ -279,9 +272,8 @@ colliding.
 The child asset sidecar records:
 
 ```text
-kind: replicate
 parent.asset_id and parent.content_sha256
-parent label/kind snapshots
+parent label snapshots
 optional location hints
 derivation.operation: crop
 derivation.parent_box_xyxy
@@ -341,8 +333,7 @@ import package is `antscihub_sieve`.
 
 ```powershell
 sieve asset inspect VIDEO_OR_SIDECAR --json
-sieve asset init VIDEO --kind source --label "colony 07" --json
-sieve asset init VIDEO --kind replicate --label "replicate 27" --json
+sieve asset init VIDEO --label "colony 07" --json
 sieve asset verify ASSET --level metadata|quick|full --json
 sieve lineage show ASSET --json
 sieve lineage parent ASSET --json
@@ -353,7 +344,8 @@ Requirements:
 
 - `inspect` never changes files.
 - `init` fails if an incompatible sidecar already exists.
-- Noninteractive `init` never guesses `kind`.
+- `init` records no source/replicate classification; the label defaults to the
+  filename stem when omitted.
 - `lineage parent` can report a known-but-unreachable parent distinctly from a
   root asset.
 - `--locate` verifies identity before accepting a parent selected by the user.
@@ -400,7 +392,6 @@ Single region:
 sieve derive PARENT `
   --crop x0,y0,x1,y1 `
   --label rep1 `
-  --kind replicate `
   --out OUTPUT_DIR `
   --profile lossless `
   --json
@@ -515,7 +506,7 @@ Preprocessing, Detection, Optimization, or other future tabs.
 The empty window contains:
 
 - **Open video or asset…**
-- A short statement: “Open source footage or an existing replicate.”
+- A short statement: “Open a video asset.”
 - A recent-file list is optional and must not become authoritative state.
 
 Opening accepts a video or `.asset.json` sidecar. Drag-and-drop support is
@@ -523,33 +514,22 @@ desirable but not required for acceptance.
 
 ### 7.2 First open of an unregistered video
 
-Show one blocking choice after the media has been probed:
-
-> What does this entire video represent?
-
-Two explicit choices:
-
-- **Source footage — I want to create replicates from it**
-- **Replicate — the whole video is already one replicate**
-
-Also request an editable label. Cancel leaves the video unregistered and writes
-nothing. Confirmation calls the same initialization service as `sieve asset
-init`. On later opens, the sidecar answers this question; never prompt again
-unless the user deliberately edits asset metadata.
-
-Both choices lead to the same Replicates workspace. A replicate remains
-croppable, so the interface never reaches a dead end.
+Probe and register the video automatically without asking the user to classify
+what it represents. Use the filename stem as its initial editable label. Its
+lineage begins with no known parent because that is all the application knows;
+this does not assert that the file was scientifically original footage. Open it
+in the same Replicates workspace used for every other asset.
 
 ### 7.3 Window structure
 
 Top asset bar:
 
 ```text
-[Open…]  label  [SOURCE|REPLICATE]  dimensions · fps · duration
+[Open…]  label  dimensions · fps · duration
 Parent: label/status  [Open parent] [Locate parent…]
 ```
 
-- Root assets say `Parent: none`.
+- Assets without recorded upstream lineage say `Known parent: none recorded`.
 - Reachable children enable **Open parent**.
 - Known but unreachable parents show their recorded label/id and enable
   **Locate parent…**.
@@ -559,13 +539,12 @@ Main area:
 
 ```text
 +--------------------------------------+------------------------------+
-|                                      | Draft regions                |
-|             video view               | [region list]                |
-|    with draft/child box overlays     | Rename  Delete  Clear        |
+|                                      | Replicate | State | Children |
+|             video view               | [compact replicate table]    |
+|    with draft/child box overlays     | contextual actions           |
 |                                      |                              |
-|                                      | Created children             |
-|                                      | [child list]                 |
-|                                      | Open  Locate  Duplicate box  |
+|                                      | Status                       |
+|                                      | 7 ready · 2 drafts           |
 +--------------------------------------+------------------------------+
 | Play/Pause     scrubber      time/frame                            |
 +--------------------------------------------------------------------+
@@ -617,10 +596,12 @@ Use a stable visible palette for successive boxes.
 - Right-click during a drag cancels that drag.
 - Right-click otherwise exits draft-preview focus or returns from a child to
   its parent when that parent is reachable.
-- Delete removes the selected draft after confirmation.
+- Delete removes the selected draft after confirmation. For a missing created
+  child, Delete removes only the unreachable lineage entry after an explicit
+  warning; it never deletes child files.
 - Rename changes only the label, never the region id.
 - Clear removes drafts after confirmation and does not remove created children.
-- Selection is synchronized between box and list.
+- Selection is synchronized between box and table row.
 - Clicking a draft-list row selects it and enters draft-preview focus.
 - Draft-preview focus uses the exact rectangle without changing stored
   coordinate space.
@@ -633,16 +614,26 @@ operations.
 
 ### 7.6 Created-child interaction
 
+The table has only **Replicate**, **State**, and **Children** columns. Replicate
+labels use their assigned colors. Size, coordinates, asset id, path, and similar
+details appear only in row tooltips. States are Draft, Extracting, Verifying,
+Ready, Failed, Canceled, and Missing. Starting extraction freezes that region's
+geometry permanently; changed geometry requires duplicating it as a new draft.
+Children is `—` before extraction and otherwise the count of direct children.
+
 After derivation succeeds:
 
-- Move the region snapshot from the draft list to the created-child list.
-- Show label, dimensions, output location, and verified status.
+- Change the unified table row to Ready while retaining its region snapshot as
+  immutable provenance.
 - Draw its parent rectangle as a non-editable dashed overlay.
 - Clicking its dashed box, double-clicking its row, or pressing **Open** all call
   the identical `open_asset(child)` operation and replace the current asset
   session with the child's own video.
 - **Locate** repairs only a non-authoritative location hint after verifying
   identity.
+- **Delete** is also available for a Missing child and removes only that
+  unreachable entry from the parent's list. It does not delete files; reachable
+  Ready children remain protected.
 - **Duplicate box as draft** creates a new editable region with a new region id
   at the same coordinates.
 
@@ -824,8 +815,8 @@ frame. The only seam this feature owes it is a stable, verified asset contract.
 
 Use offscreen Qt for interaction tests where possible.
 
-- Opening an unknown video asks source versus replicate exactly once.
-- Canceling registration writes nothing.
+- Opening an unknown video registers it without a classification prompt.
+- Newly registered assets contain no source/replicate kind field.
 - Opening a known asset restores its correct layout only.
 - Switching assets closes the old decoder and clears selection/focus.
 - Mouse-to-source coordinates remain correct with letterboxing and focus zoom.
@@ -851,8 +842,9 @@ The implementation is ready for the user's validation only when this exact
 workflow succeeds:
 
 1. Launch `sieve-gui` in a clean directory.
-2. Open an unregistered source video.
-3. Choose **Source footage** and confirm its sidecar was created.
+2. Open an unregistered video and confirm its sidecar is created without a
+   classification prompt.
+3. Confirm the asset shows no known parent and remains fully croppable.
 4. Scrub to several distant frames and play/pause without a decode backlog.
 5. Draw one box, then stamp several copies.
 6. Select an earlier box and verify the stamp changes to that selected size.

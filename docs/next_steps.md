@@ -1,6 +1,6 @@
 # Next steps
 
-Last reviewed: `2026-07-23 15:53:49 -07:00`.
+Last reviewed: `2026-07-23 16:12:57 -07:00`.
 
 This file records unfinished work that is justified by the current checkout.
 It is not authorization to continue automatically into later Isolate
@@ -8,50 +8,48 @@ milestones.
 
 ## Current priority
 
-### Validate and accept the implemented working grid
+### Validate and accept the first intensity channel
 
 Source:
 
-- `docs/handoffs/4-Working-grid.md`
-- `docs/handoffs/4-Working-grid-review.md`
+- `docs/handoffs/5-First-channel.md`
+- `docs/handoffs/5-First-channel-review.md`
 - `docs/handoffs/.isolate-state-divergence.md`
 
-Implementation now provides:
+Milestone 4 was accepted when the user authorized milestone 5. The first
+channel now provides:
 
-- A Qt-free immutable working-grid contract with deterministic dimension
-  resolution, tagged auto/explicit block intent, compact block ownership,
-  partial-edge bounds and area weights, and boundary projection.
-- Isolate-local downsample and block controls whose plain settings value is
-  retained across asset switches and reset only on application restart.
-- A resolved source/working/block/grid/edge readout.
-- A toggleable presentation-only player overlay mapped through the existing
-  letterboxed `image_rect()`.
-- Dense-grid suppression that preserves the true geometry and outside boundary
-  without generating thousands of internal lines.
-- Spatial controls on one-frame assets without coupling them to `can_loop`.
-- No working-window decode, display-decoder request, worker, persistence, cache,
-  channel, result, or coverage artifact on geometry changes.
+- A Qt-independent post-decoder RGB601 intensity computation with exact area
+  downsampling and partial-cell-aware block means.
+- Exact retained-result admission before source construction through a portable
+  policy with 16 GiB CPU and 6 GiB GPU defaults; execution remains CPU-only.
+- A worker-owned request-local source, cancellation, verified shutdown,
+  latest-only pending work, and stale-publication rejection.
+- One fixed-scale time-by-block raster with absolute-frame cursor,
+  click-to-seek, and spatial hover context.
+- Immediate invalidation on asset, window, downsample, or block changes without
+  automatic recomputation.
 
 Automated validation:
 
 ```text
-Focused grid/player suites: 39 passed in 2.37s
-Complete offscreen suite: 115 passed in 23.71s
+Focused intensity, GUI, and player suites: 39 passed
+Complete offscreen suite: 135 passed in 25.46s
 ```
 
 Remaining:
 
-1. Open a representative registered parent and child or two replicate assets.
-2. Confirm the controls/readout placement is readable at the normal window
-   size.
-3. Toggle the grid and verify alignment while resizing and scrubbing.
-4. Change downsample and block intent, then switch assets and confirm the
-   requested intent remains while dimensions and edge cells re-resolve.
-5. Confirm a dense grid shows its bounded presentation indication without
-   affecting playback.
-6. Accept milestone 4 or report visible interaction changes.
+1. Open a representative registered asset and choose a short window.
+2. Compute intensity and inspect the fixed `[0,1]` time-by-block raster.
+3. Play, scrub, step, and click raster columns to confirm exact cursor/seek
+   synchronization without recomputation.
+4. Change the window and grid, then switch assets; confirm obsolete results
+   disappear immediately.
+5. Start, supersede, cancel, and close during work; confirm no stale or partial
+   result is presented as current.
+6. Accept milestone 5 or report visible/scientific interaction changes.
 
-Do not begin a channel during this validation step.
+Do not begin normalization or a second channel during this validation step.
 
 ## Planned foundational product surface — no current implementation authorization
 
@@ -113,12 +111,9 @@ current `KeyError` masks the actionable cause.
 Do not begin these merely because the working-window source and working grid
 are complete:
 
-- Implement the first scientific channel. Its oracle handoff and review have
-  now been reconciled with the current checkout in
-  `docs/handoffs/5-First-channel.md`,
-  `docs/handoffs/5-First-channel-review.md`, and the divergence ledger. The
-  corrected path is queued behind visible milestone-4 acceptance.
-- Add a GUI computation worker, latest-only publication, or cross-thread queue.
+- Add normalization or a second scientific channel.
+- Generalize the concrete intensity worker/panel into a channel registry,
+  graph, or cross-channel scheduler before another measured use requires it.
 - Add additional media planes or a plane registry.
 - Add scientific result persistence, recipes, export, CLI/HPC processing, or a
   general graph executor.
@@ -132,12 +127,9 @@ The milestone-5 review found that commit `0f4afb2` has implementation-shaped
 metadata but contains documentation only. Do not use its commit subject as
 evidence that intensity exists.
 
-Before milestone-5 implementation, confirm milestone-4 visible acceptance.
-Define the minimal Qt-free resource-policy input and select its initial
-in-memory result-budget value/default under decision 003. Then implement only
-the corrected first-channel increment, including pre-source result-memory
-admission, source-outcome composition, and a worker-owned source lifecycle.
-Stop before normalization or a second channel.
+Milestone 5 implemented the minimal Qt-free resource policy and first intensity
+channel. Manual acceptance is now the gate. Stop before normalization or a
+second channel.
 
 The oracle handoff for each later milestone must be reviewed against the
 then-current checkout and recorded in

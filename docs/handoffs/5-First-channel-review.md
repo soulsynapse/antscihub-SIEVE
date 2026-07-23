@@ -13,13 +13,13 @@ Status: architectural, scientific-contract, and forward-looking review of
 `5-First-channel.md`.
 
 Reviewed and updated in the rewrite checkout on
-`2026-07-23 15:43:15 -07:00` against commit `0f4afb2`.
+`2026-07-23 16:12:57 -07:00` against the working tree based on `48087a1`.
 
-Status: corrected current-rewrite review. Milestone 5 is not implemented and is
-not authorized to begin before visible milestone-4 acceptance. The exact
-in-memory result value/default remains an explicit pre-implementation resource
-policy choice. Decision 003 now establishes its first-class product owner and
-portable boundary rather than leaving it as an isolated channel constant.
+Status: corrected review was applied. Milestone 5 is implemented with explicit
+16 GiB CPU and 6 GiB GPU result-memory policy defaults and has passed the
+complete 135-test offscreen suite. It is returned for visible user acceptance.
+Decision 003 establishes the policy's first-class owner and portable boundary
+rather than leaving it as an isolated channel constant.
 
 The original oracle review correctly disclosed that it could not inspect the
 rewrite source. The rewrite-side review has now confirmed the exact current
@@ -75,12 +75,11 @@ corrections:
    intensity values are not numerically identical to the new scientific
    contract.
 
-The rewrite-side refresh is now complete. The corrected handoff chooses the
+The rewrite-side refresh and implementation are now complete. The corrected handoff chooses the
 named post-decoder Rec.601-like path, requires pre-source result-memory
 admission, composes the existing source outcome, and pins the worker ownership
-handshake. The increment is suitable for implementation only after the user
-accepts the visible milestone-4 behavior and the minimal execution-resource
-policy input/default is defined.
+handshake. The user authorized the increment, thereby accepting milestone 4,
+and selected 16 GiB CPU and 6 GiB GPU result-memory defaults.
 
 ## Current-rewrite evidence available to this review
 
@@ -134,7 +133,7 @@ repository suite with Qt offscreen.
 
 This is the largest scientific issue in the handoff.
 
-The handoff currently says:
+The original handoff said:
 
 ```text
 I_raw = (0.299*R + 0.587*G + 0.114*B) / 255
@@ -828,12 +827,10 @@ normalization UI.
    boundaries without implementing them.
 8. Keep scientific values distinct from presentation contrast.
 9. Refresh rewrite-side divergence after milestone 4 implementation. This is
-   now complete; visible user acceptance remains pending.
+   complete.
 
-Subject to milestone-4 acceptance and the minimal resource-policy input/default,
-the corrected first-channel direction is sound and aligned with the rewrite's
-forward-looking architecture.
+The corrected first-channel direction was implemented and automatically
+validated. Manual acceptance of milestone 5 remains pending.
 
-Do not infer implementation from commit `0f4afb2`, do not begin milestone 5
-before the user accepts milestone 4, and do not proceed to normalization merely
-because this review exists.
+Do not infer implementation from commit `0f4afb2`, and do not proceed to
+normalization merely because milestone 5 now exists.

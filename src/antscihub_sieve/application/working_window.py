@@ -163,7 +163,8 @@ def _resolve(
     if request.plane_id != RGB24:
         raise SieveError(
             "MEDIA_PLANE_UNSUPPORTED",
-            "The current working-window source supports only native rgb24",
+            "The current working-window source supports only "
+            "native-resolution decoded rgb24",
             plane_id=request.plane_id,
         )
     if not request.expected_asset_id or not request.expected_content_sha256:

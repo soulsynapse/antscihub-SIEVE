@@ -19,6 +19,11 @@ from antscihub_sieve.application.active_asset import (
     ActiveAsset,
     ActiveAssetController,
 )
+from antscihub_sieve.application.intensity import (
+    IntensityRequest,
+    IntensityResult,
+)
+from antscihub_sieve.application.resources import ExecutionResourcePolicy
 from antscihub_sieve.application.working_grid import (
     BlockIntent,
     ResolvedWorkingGrid,
@@ -28,6 +33,8 @@ from antscihub_sieve.application.working_grid import (
 from antscihub_sieve.gui.isolate_player import IsolatePlayer
 from antscihub_sieve.gui.isolate_session import IsolateSession
 from antscihub_sieve.gui.isolate_timeline import IsolateTimeline
+from antscihub_sieve.gui.intensity_panel import IntensityRaster
+from antscihub_sieve.gui.intensity_worker import IntensityWorker
 
 
 class IsolateTab(QWidget):
@@ -38,6 +45,11 @@ class IsolateTab(QWidget):
         self._active_asset: ActiveAsset | None = None
         self.grid_settings = WorkingGridSettings()
         self.resolved_grid: ResolvedWorkingGrid | None = None
+        self.resource_policy = ExecutionResourcePolicy()
+        self._job_token = 0
+        self._intensity_worker: IntensityWorker | None = None
+        self._pending_intensity: tuple[int, IntensityRequest] | None = None
+        self._intensity_result: IntensityResult | None = None
         self._build_ui()
         self._connect()
         self._resolve_grid()
@@ -61,6 +73,24 @@ class IsolateTab(QWidget):
         )
         channels_layout.addWidget(channels_heading)
         channels_layout.addWidget(self.channels_empty)
+        self.intensity_panel = QWidget()
+        intensity_layout = QVBoxLayout(self.intensity_panel)
+        intensity_layout.setContentsMargins(0, 0, 0, 0)
+        intensity_heading = QLabel("Intensity")
+        intensity_heading.setStyleSheet("font-weight: 600;")
+        intensity_layout.addWidget(intensity_heading)
+        self.intensity_context = QLabel()
+        self.intensity_context.setWordWrap(True)
+        intensity_layout.addWidget(self.intensity_context)
+        self.intensity_raster = IntensityRaster()
+        intensity_layout.addWidget(self.intensity_raster, 1)
+        self.intensity_legend = QLabel(
+            "0 black  ·  post-decoder RGB601 intensity  ·  white 1"
+        )
+        self.intensity_legend.setWordWrap(True)
+        intensity_layout.addWidget(self.intensity_legend)
+        self.intensity_panel.hide()
+        channels_layout.addWidget(self.intensity_panel, 1)
         channels_layout.addStretch()
         self.splitter.addWidget(self.player)
         self.splitter.addWidget(self.channels)
@@ -115,6 +145,17 @@ class IsolateTab(QWidget):
             "Geometry only. No frames have been processed."
         )
         grid_panel_layout.addWidget(self.grid_readout)
+        compute_controls = QHBoxLayout()
+        self.compute_intensity_button = QPushButton("Compute intensity")
+        self.cancel_intensity_button = QPushButton("Cancel")
+        self.cancel_intensity_button.setEnabled(False)
+        self.compute_status = QLabel(
+            "CPU result budget 16 GiB · GPU result budget 6 GiB"
+        )
+        compute_controls.addWidget(self.compute_intensity_button)
+        compute_controls.addWidget(self.cancel_intensity_button)
+        compute_controls.addWidget(self.compute_status, 1)
+        grid_panel_layout.addLayout(compute_controls)
         root.addWidget(self.grid_panel)
 
         transport = QHBoxLayout()
@@ -170,8 +211,18 @@ class IsolateTab(QWidget):
         self.session.state_changed.connect(self._refresh)
         self.session.frame_ready.connect(self._frame_ready)
         self.session.error_changed.connect(self.status_label.setText)
+        self.compute_intensity_button.clicked.connect(
+            self._compute_intensity
+        )
+        self.cancel_intensity_button.clicked.connect(
+            self._cancel_intensity
+        )
+        self.intensity_raster.frame_selected.connect(
+            self.session.timeline_seek
+        )
 
     def _active_asset_changed(self, asset: ActiveAsset) -> None:
+        self._invalidate_intensity("Active asset changed.")
         self._active_asset = asset
         self.player.clear()
         self._resolve_grid()
@@ -179,6 +230,7 @@ class IsolateTab(QWidget):
         self.session.open_asset(asset)
 
     def _grid_controls_changed(self, _value: object = None) -> None:
+        self._invalidate_intensity("Working grid changed.")
         intent = BlockIntent(self.block_intent_combo.currentData())
         self.block_size_spin.setVisible(intent is BlockIntent.EXPLICIT)
         self.block_size_spin.setEnabled(
@@ -230,6 +282,7 @@ class IsolateTab(QWidget):
             self.resolved_grid,
             visible=self.show_grid_check.isChecked(),
         )
+        self._update_compute_controls()
 
     @staticmethod
     def _grid_readout_text(grid: ResolvedWorkingGrid) -> str:
@@ -276,6 +329,11 @@ class IsolateTab(QWidget):
         self.start_spin.setEnabled(can_loop)
         self.length_spin.setEnabled(can_loop)
         self.play_button.setText("Pause" if self.session.playing else "Play")
+        self.intensity_raster.set_current_frame(
+            self.session.current_frame if loaded else None
+        )
+        self._invalidate_if_inputs_changed()
+        self._update_compute_controls()
         if not loaded:
             self.timeline.set_state(0, 0, 0, 0)
             if not self.session.error_text:
@@ -338,6 +396,179 @@ class IsolateTab(QWidget):
                 "A looping time window requires at least two decodable frames."
             )
 
+    def _snapshot_intensity_request(self) -> IntensityRequest | None:
+        if not self.session.loaded or self.resolved_grid is None:
+            return None
+        try:
+            window = self.session.snapshot_working_window_request()
+        except RuntimeError:
+            return None
+        return IntensityRequest(
+            working_window=window,
+            grid=self.resolved_grid,
+            resources=self.resource_policy,
+        )
+
+    def _compute_intensity(self) -> None:
+        request = self._snapshot_intensity_request()
+        if request is None:
+            self.compute_status.setText(
+                "Open a registered asset with a valid window and grid."
+            )
+            return
+        self._job_token += 1
+        token = self._job_token
+        self._clear_intensity_result()
+        if self._intensity_worker is not None:
+            self._pending_intensity = (token, request)
+            self._intensity_worker.cancel()
+            self.compute_status.setText(
+                "Stopping obsolete computation before starting the newest request…"
+            )
+            self._update_compute_controls()
+            return
+        self._start_intensity_worker(token, request)
+
+    def _start_intensity_worker(
+        self, token: int, request: IntensityRequest
+    ) -> None:
+        worker = IntensityWorker(token, request)
+        self._intensity_worker = worker
+        worker.progress_changed.connect(self._intensity_progress)
+        worker.finished.connect(
+            lambda active=worker: self._intensity_finished(active)
+        )
+        self.compute_status.setText("Computing intensity…")
+        self._update_compute_controls()
+        worker.start()
+
+    def _intensity_progress(
+        self, token: int, completed: int, total: int
+    ) -> None:
+        if token != self._job_token:
+            return
+        self.compute_status.setText(
+            f"Computing intensity: {completed} / {total} frames"
+        )
+
+    def _intensity_finished(self, worker: IntensityWorker) -> None:
+        if self._intensity_worker is not worker:
+            return
+        if not worker.wait(3_000):
+            self.compute_status.setText(
+                "Intensity worker did not reach verified thread exit."
+            )
+            return
+        self._intensity_worker = None
+        pending = self._pending_intensity
+        self._pending_intensity = None
+
+        current = self._snapshot_intensity_request()
+        if (
+            worker.token == self._job_token
+            and current == worker.request
+        ):
+            if worker.error_value is not None:
+                error = worker.error_value
+                requested = error.context.get("requested_bytes")
+                allowed = error.context.get("allowed_bytes")
+                suffix = (
+                    f" Requested {requested} bytes; allowed {allowed} bytes."
+                    if requested is not None and allowed is not None
+                    else ""
+                )
+                self.compute_status.setText(
+                    f"{error.code}: {error.message}.{suffix}"
+                )
+            elif worker.result_value is not None:
+                result = worker.result_value
+                if result.complete:
+                    self._publish_intensity(result)
+                else:
+                    detail = (
+                        f"{result.error.code}: {result.error.message}"
+                        if result.error is not None
+                        else result.source_outcome.kind.value
+                    )
+                    self.compute_status.setText(
+                        f"Intensity did not complete: {detail}"
+                    )
+
+        if pending is not None and pending[0] == self._job_token:
+            self._start_intensity_worker(*pending)
+        else:
+            self._update_compute_controls()
+
+    def _publish_intensity(self, result: IntensityResult) -> None:
+        self._intensity_result = result
+        grid = result.request.grid
+        self.intensity_context.setText(
+            f"Frames [{result.processed_start},{result.processed_stop}) · "
+            f"Source {grid.source_width} × {grid.source_height} · "
+            f"Working {grid.work_width} × {grid.work_height} · "
+            f"Grid {grid.rows} × {grid.columns} · "
+            f"Block {grid.resolved_block_size} px"
+        )
+        self.intensity_raster.set_result(result)
+        self.intensity_raster.set_current_frame(self.session.current_frame)
+        self.channels_empty.hide()
+        self.intensity_panel.show()
+        self.compute_status.setText(
+            f"Intensity complete: {result.values.shape[0]} frames · "
+            f"{result.conversion_id} · {result.backend}"
+        )
+
+    def _clear_intensity_result(self) -> None:
+        self._intensity_result = None
+        self.intensity_raster.set_result(None)
+        self.intensity_panel.hide()
+        self.channels_empty.show()
+
+    def _invalidate_if_inputs_changed(self) -> None:
+        active = self._snapshot_intensity_request()
+        if (
+            self._intensity_result is not None
+            and active != self._intensity_result.request
+        ):
+            self._invalidate_intensity("Window or grid changed.")
+        elif (
+            self._intensity_worker is not None
+            and active != self._intensity_worker.request
+        ):
+            self._invalidate_intensity("Window or grid changed.")
+
+    def _invalidate_intensity(self, reason: str) -> None:
+        if (
+            self._intensity_worker is None
+            and self._intensity_result is None
+            and self._pending_intensity is None
+        ):
+            return
+        self._job_token += 1
+        self._pending_intensity = None
+        if self._intensity_worker is not None:
+            self._intensity_worker.cancel()
+        self._clear_intensity_result()
+        self.compute_status.setText(reason)
+        self._update_compute_controls()
+
+    def _cancel_intensity(self) -> None:
+        if self._intensity_worker is None:
+            return
+        self._job_token += 1
+        self._pending_intensity = None
+        self._intensity_worker.cancel()
+        self._clear_intensity_result()
+        self.compute_status.setText("Cancelling intensity…")
+        self._update_compute_controls()
+
+    def _update_compute_controls(self) -> None:
+        ready = self.session.loaded and self.resolved_grid is not None
+        self.compute_intensity_button.setEnabled(ready)
+        self.cancel_intensity_button.setEnabled(
+            self._intensity_worker is not None
+        )
+
     def handle_shortcut(self, command: str) -> None:
         if command == "toggle":
             self.session.toggle_play()
@@ -355,6 +586,12 @@ class IsolateTab(QWidget):
             self.session.seek_end()
 
     def shutdown(self) -> None:
+        self._pending_intensity = None
+        if self._intensity_worker is not None:
+            worker = self._intensity_worker
+            worker.cancel()
+            worker.wait()
+            self._intensity_worker = None
         self.session.close()
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]

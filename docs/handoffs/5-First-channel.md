@@ -1,19 +1,19 @@
 # 5 — Add the first Isolate channel
 
-Reviewed and updated against rewrite commit `0f4afb2` on
-`2026-07-23 15:43:15 -07:00`.
+Reviewed and updated against the rewrite working tree based on `48087a1` on
+`2026-07-23 16:12:57 -07:00`.
 
-Status: assessed and corrected against the current rewrite; implementation has
-not started and remains gated on visible user acceptance of milestone 4 and
-definition of the minimal execution-resource policy input described in section
-8.1 and decision 003.
+Status: implemented and automatically validated with `135 passed in 25.46s`;
+returned for the manual acceptance in section 19. The user accepted milestone 4
+by authorizing this milestone and selected 16 GiB CPU and 6 GiB GPU
+result-memory defaults. Normalization and later channels remain out of scope.
 
 The rewrite-side assessment found one especially important repository-history
 inconsistency: commit `0f4afb2` is titled `feat: implement first Isolate
 channel for intensity computation`, but its tree change adds only this handoff
-and its review. The current source contains no intensity computation, channel
-result, scientific worker, compute/cancel controls, or channel panel. Do not
-treat that commit subject or body as implementation evidence.
+and its review. That commit remains documentation-only; the implementation
+described by the current status was added later and must be assessed from the
+current source and tests rather than from `0f4afb2` metadata.
 
 The following current-checkout corrections control this handoff:
 
@@ -41,7 +41,8 @@ The following current-checkout corrections control this handoff:
   media session. Bounded decode batches alone do not bound retained results.
   The budget belongs to the first-class compute-resource policy accepted in
   `docs/decisions/003-compute-resources-are-a-first-class-product-capability.md`;
-  it is not intensity-specific scientific identity.
+  it is not intensity-specific scientific identity. The accepted defaults are
+  16 GiB for CPU and 6 GiB for GPU; milestone 5 executes on CPU only.
 - The current display worker is not a lifecycle template for science work:
   `IsolateDecodeThread.stop()` interrupts a shared `MediaSession` and waits
   with a timeout whose success is not checked. The milestone-5 worker must use
@@ -50,14 +51,13 @@ The following current-checkout corrections control this handoff:
   `docs/sieve-scientific-computation-contract.md`, and
   `.isolate-handoff-practices` do not exist in this checkout. Their oracle
   content is not a controlling rewrite file.
-- Neither NumPy nor OpenCV is declared as a project dependency. Do not assume
-  either backend exists. Any optimized resampler must preserve the reference
-  fixtures, and any speed claim must follow the repository benchmark/report
-  requirements.
+- NumPy is now an explicit runtime dependency and the result records its
+  version in backend provenance. OpenCV remains absent. The NumPy area reducer
+  is pinned by independent fractional-footprint fixtures; no speedup is claimed.
 
 This milestone turns the accepted temporal source and spatial grid into one real
-scientific result: block-mean encoded-luma intensity over the selected looping
-window. It adds the first cancellable GUI scientific job and one concrete
+scientific result: block-mean post-decoder RGB601 intensity over the selected
+looping window. It adds the first cancellable GUI scientific job and one concrete
 channel panel. It does not create a general processing framework.
 
 The required result is:
@@ -89,10 +89,9 @@ This handoff follows:
   lifecycle contracts.
 - The corrected geometry and intensity conventions in this handoff and review.
 
-Do not begin milestone 5 until milestones 3 and 4 have been implemented,
-manually validated, and accepted. Milestone 4 is implemented with automated
-validation, but visible user acceptance is still pending as of the review time
-above. In particular, do not build channel code on an unaccepted grid.
+Milestones 3 and 4 were implemented and accepted before milestone 5 began. The
+user's `2026-07-23` authorization to work on the first channel closed the
+remaining visible milestone-4 sequencing gate.
 
 The grid-setting asset-switch policy is no longer provisional: requested
 downsample and block intent remain Isolate-session-local and survive asset
@@ -157,7 +156,7 @@ At completion:
 Implement:
 
 - One fixed channel id, `intensity`.
-- Deterministic conversion of delivered `rgb24` pixels to canonical `[0,1]`
+- Deterministic conversion of delivered `rgb24` pixels to fixed `[0,1]`
   intensity.
 - Area downsampling to the already-resolved working dimensions.
 - Mean reduction over the already-resolved grid, including partial edge cells.
@@ -201,7 +200,7 @@ native source frame
   one immutable rgb24 frame delivered by the working-window source
 
 working intensity frame
-  canonical float intensity after RGB conversion and area downsampling
+  fixed-rule float intensity after RGB conversion and area downsampling
 
 block plane
   one mean intensity value per resolved grid cell for one absolute frame
@@ -253,7 +252,7 @@ resolved_source.height == captured_grid.source_height
 A mismatch is a structured stale-input/geometry failure. Never silently choose
 one extent.
 
-### 5.2 RGB to encoded-luma intensity
+### 5.2 RGB to named post-decoder intensity
 
 For each delivered RGB code triplet:
 
@@ -277,7 +276,7 @@ Requirements:
 Record a stable conversion id such as:
 
 ```text
-sieve.intensity.rgb601_float.v1
+sieve.channel.rgb601_intensity.v1
 ```
 
 The id names this exact post-`rgb24` rule. Result provenance must also retain the
@@ -447,10 +446,17 @@ result_bytes = elements * 4
 
 Use overflow-safe integer arithmetic and one explicit milestone-5 in-memory
 result budget supplied through a small immutable Qt-free execution/resource
-policy. Decision 003 establishes the long-term owner; milestone 5 must define a
-minimal input that the future Resources tab, CLI, and HPC runner can all supply
-without building those surfaces now. The initial value/default must still be
-selected and recorded before implementation rather than invented silently.
+policy. Decision 003 establishes the long-term owner. `ExecutionResourcePolicy`
+is the minimal input that the future Resources tab, CLI, and HPC runner can all
+supply without building those surfaces now. Its accepted defaults are:
+
+```text
+CPU result memory: 16 GiB
+GPU result memory:  6 GiB
+```
+
+The current channel admits and executes CPU work only. The GPU value is retained
+as portable policy for a future explicitly implemented GPU backend.
 Admit a request exactly at the chosen budget and reject one over it with a
 structured resource error that reports the requested and allowed bytes.
 Rejection must occur before a `WorkingWindowStream` or `MediaSession` exists.
@@ -1008,7 +1014,8 @@ This milestone is complete only when:
   persistence, caches, recipes, whole-asset execution, or general channel
   framework were introduced.
 - Focused headless and offscreen GUI tests pass.
-- The user has manually validated and accepted the milestone.
+- The user has manually validated and accepted the milestone. This remains the
+  only incomplete definition-of-done item after automated validation.
 
 Stop here. Normalization is milestone 6 and is not authorized by completion of
 this milestone.

@@ -1,6 +1,6 @@
 # Next steps
 
-Last reviewed: `2026-07-23 15:26:23 -07:00`.
+Last reviewed: `2026-07-23 15:43:15 -07:00`.
 
 This file records unfinished work that is justified by the current checkout.
 It is not authorization to continue automatically into later Isolate
@@ -71,7 +71,11 @@ current `KeyError` masks the actionable cause.
 Do not begin these merely because the working-window source and working grid
 are complete:
 
-- Implement the first scientific channel.
+- Implement the first scientific channel. Its oracle handoff and review have
+  now been reconciled with the current checkout in
+  `docs/handoffs/5-First-channel.md`,
+  `docs/handoffs/5-First-channel-review.md`, and the divergence ledger. The
+  corrected path is queued behind visible milestone-4 acceptance.
 - Add a GUI computation worker, latest-only publication, or cross-thread queue.
 - Add additional media planes or a plane registry.
 - Add scientific result persistence, recipes, export, CLI/HPC processing, or a
@@ -82,6 +86,17 @@ multi-basis channel contract proposed in
 `docs/ideas/processing-ideas.md`. Do not add direct grayscale delivery or a
 general plane registry before a real channel and measurement justify them.
 
-The oracle handoff for each milestone must be reviewed against the then-current
-checkout and recorded in `docs/handoffs/.isolate-state-divergence.md` before
-implementation.
+The milestone-5 review found that commit `0f4afb2` has implementation-shaped
+metadata but contains documentation only. Do not use its commit subject as
+evidence that intensity exists.
+
+Before milestone-5 implementation, confirm milestone-4 visible acceptance.
+Select and record the explicit in-memory result budget; the current repository
+does not contain an accepted value. Then implement only the corrected
+first-channel increment, including pre-source result-memory admission,
+source-outcome composition, and a worker-owned source lifecycle. Stop before
+normalization or a second channel.
+
+The oracle handoff for each later milestone must be reviewed against the
+then-current checkout and recorded in
+`docs/handoffs/.isolate-state-divergence.md` before implementation.

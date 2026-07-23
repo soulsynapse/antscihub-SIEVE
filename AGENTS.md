@@ -26,8 +26,17 @@ Handoffs are generated from an oracle repo of the first draft of this project an
 
 You should report inconsistencies in the handoffs (always) and ask me about it unless you are 95% certain what I would say the answer is (when appropriate: when you are below 95% confident in the right answer).
 
+The first thing you should do is look at the handoff and the review, find what corrections to make, report them, then ask if you can go ahead and make those corrections across the files to match the current repo. You should state that the file was reviewed and updated with date and time at the top so you know when.
+
+You should update the 
+
+As we get further and further down the list, the handoffs will deviate more and more from the current repo as the rewrite diverges from the oracle; this is normal, even with the state updates file.
+
+## Oracle hints
+Some handoffs might ask for something that seems impossible. When this is the case, you can craft a prompt for me to ask the oracle repo how to achieve this. I'll pass the answer back to you.
+
 ## Follow ups
-Once a given task is completed, you can scan the todos for ones that would benefit from your current context, or propose it for the next task. You can also suggest todos.
+Once a given task is completed, you can scan the todos for ones that would benefit from your current context, or propose it for the next task. You can also suggest todos. If there was a significant finding or antipattern, you can propose it as a decision if it will make the long term health of the repository better. This is deliberately broad - when you notice some inefficiency that would annoy a senior developer for not following standard practice, you can note it, and say if it truly applies in this context or if it is theoretical-senior-dev-gripe only.
 
 ## Indexes
 Indexes are directories that group contents of a doc category based on their utility:

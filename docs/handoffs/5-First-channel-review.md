@@ -17,8 +17,9 @@ Reviewed and updated in the rewrite checkout on
 
 Status: corrected current-rewrite review. Milestone 5 is not implemented and is
 not authorized to begin before visible milestone-4 acceptance. The exact
-in-memory result budget remains an explicit pre-implementation user decision;
-the current repository contains no accepted value from which to derive it.
+in-memory result value/default remains an explicit pre-implementation resource
+policy choice. Decision 003 now establishes its first-class product owner and
+portable boundary rather than leaving it as an isolated channel constant.
 
 The original oracle review correctly disclosed that it could not inspect the
 rewrite source. The rewrite-side review has now confirmed the exact current
@@ -78,8 +79,8 @@ The rewrite-side refresh is now complete. The corrected handoff chooses the
 named post-decoder Rec.601-like path, requires pre-source result-memory
 admission, composes the existing source outcome, and pins the worker ownership
 handshake. The increment is suitable for implementation only after the user
-accepts the visible milestone-4 behavior and selects the in-memory result
-budget.
+accepts the visible milestone-4 behavior and the minimal execution-resource
+policy input/default is defined.
 
 ## Current-rewrite evidence available to this review
 
@@ -829,8 +830,8 @@ normalization UI.
 9. Refresh rewrite-side divergence after milestone 4 implementation. This is
    now complete; visible user acceptance remains pending.
 
-Subject to milestone-4 acceptance and the explicit result-budget choice, the
-corrected first-channel direction is sound and aligned with the rewrite's
+Subject to milestone-4 acceptance and the minimal resource-policy input/default,
+the corrected first-channel direction is sound and aligned with the rewrite's
 forward-looking architecture.
 
 Do not infer implementation from commit `0f4afb2`, do not begin milestone 5

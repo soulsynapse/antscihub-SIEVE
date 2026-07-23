@@ -1,6 +1,6 @@
 # Next steps
 
-Last reviewed: `2026-07-23 15:43:15 -07:00`.
+Last reviewed: `2026-07-23 15:53:49 -07:00`.
 
 This file records unfinished work that is justified by the current checkout.
 It is not authorization to continue automatically into later Isolate
@@ -53,6 +53,48 @@ Remaining:
 
 Do not begin a channel during this validation step.
 
+## Planned foundational product surface — no current implementation authorization
+
+### Design compute resources and execution policy
+
+Source:
+
+- `docs/decisions/003-compute-resources-are-a-first-class-product-capability.md`
+- `docs/decisions/001-reusable-benchmarks-are-product-diagnostics.md`
+- `docs/decisions/002-headless-scientific-identity-is-not-gui-lifecycle.md`
+
+Available compute resources are a first-class product capability and the basis
+for keeping SIEVE HPC-ready. Plan a dedicated **Resources** surface, likely a
+top-level tab before Replicates, without coupling the underlying contracts to
+Qt or to one workstation.
+
+Concrete later work:
+
+1. Define immutable Qt-free capability-report and execution-policy schemas.
+2. Separate observed capability from selected policy, with timestamps,
+   provenance, refresh behavior, and explicit staleness.
+3. Inventory CPU topology and compute backends, memory, GPUs,
+   drivers/backends, and media capabilities.
+4. Add supported, bounded diagnostics for relevant source, result, temporary,
+   and scratch-path read/write performance.
+5. Let users configure memory admission, thread/process counts, device/backend,
+   concurrency, and scratch placement.
+6. Provide guided CPU and GPU compatibility, backend selection, parallelism,
+   and setup/use workflows rather than merely listing devices.
+7. Design the Resources tab placement, recommendation/override interaction,
+   and clear distinction between cheap automatic inventory and explicitly run
+   expensive diagnostics.
+8. Make resource profiles exportable/importable for later CLI, remote, and HPC
+   execution, including scheduler/container/scratch facts when those runners
+   exist.
+9. Define how job admission combines current availability, configured limits,
+   peak-buffer estimates, retained results, storage, and backend constraints.
+
+Milestone 5 is the first consumer: its retained-result limit should enter
+through a minimal portable resource-policy seam. Do not implement the complete
+Resources tab, CPU/GPU executors, scheduler integration, or general job planner
+as part of that channel milestone.
+
 ## Follow-up diagnostic
 
 One full-suite run intermittently reached
@@ -91,11 +133,11 @@ metadata but contains documentation only. Do not use its commit subject as
 evidence that intensity exists.
 
 Before milestone-5 implementation, confirm milestone-4 visible acceptance.
-Select and record the explicit in-memory result budget; the current repository
-does not contain an accepted value. Then implement only the corrected
-first-channel increment, including pre-source result-memory admission,
-source-outcome composition, and a worker-owned source lifecycle. Stop before
-normalization or a second channel.
+Define the minimal Qt-free resource-policy input and select its initial
+in-memory result-budget value/default under decision 003. Then implement only
+the corrected first-channel increment, including pre-source result-memory
+admission, source-outcome composition, and a worker-owned source lifecycle.
+Stop before normalization or a second channel.
 
 The oracle handoff for each later milestone must be reviewed against the
 then-current checkout and recorded in

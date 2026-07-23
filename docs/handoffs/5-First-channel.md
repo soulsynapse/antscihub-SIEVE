@@ -5,7 +5,8 @@ Reviewed and updated against rewrite commit `0f4afb2` on
 
 Status: assessed and corrected against the current rewrite; implementation has
 not started and remains gated on visible user acceptance of milestone 4 and
-selection of the explicit in-memory result budget described in section 8.1.
+definition of the minimal execution-resource policy input described in section
+8.1 and decision 003.
 
 The rewrite-side assessment found one especially important repository-history
 inconsistency: commit `0f4afb2` is titled `feat: implement first Isolate
@@ -38,6 +39,9 @@ The following current-checkout corrections control this handoff:
 - Exact result-memory admission is required before
   `open_working_window(...)`, because that call constructs the request-local
   media session. Bounded decode batches alone do not bound retained results.
+  The budget belongs to the first-class compute-resource policy accepted in
+  `docs/decisions/003-compute-resources-are-a-first-class-product-capability.md`;
+  it is not intensity-specific scientific identity.
 - The current display worker is not a lifecycle template for science work:
   `IsolateDecodeThread.stop()` interrupts a shared `MediaSession` and waits
   with a timeout whose success is not checked. The milestone-5 worker must use
@@ -442,8 +446,11 @@ result_bytes = elements * 4
 ```
 
 Use overflow-safe integer arithmetic and one explicit milestone-5 in-memory
-result budget. No existing repository decision supplies that value, so it must
-be selected and recorded before implementation rather than invented silently.
+result budget supplied through a small immutable Qt-free execution/resource
+policy. Decision 003 establishes the long-term owner; milestone 5 must define a
+minimal input that the future Resources tab, CLI, and HPC runner can all supply
+without building those surfaces now. The initial value/default must still be
+selected and recorded before implementation rather than invented silently.
 Admit a request exactly at the chosen budget and reject one over it with a
 structured resource error that reports the requested and allowed bytes.
 Rejection must occur before a `WorkingWindowStream` or `MediaSession` exists.
@@ -985,7 +992,8 @@ This milestone is complete only when:
 - The result preserves absolute time, rational rate, geometry, identity,
   verification status, implementation provenance, processed span, and outcome.
 - An explicit accepted result budget rejects oversized requests before source
-  construction, with exact boundary tests.
+  construction, with exact boundary tests, and enters through the portable
+  execution/resource policy rather than intensity identity.
 - The result embeds the exact source outcome and distinguishes it from
   channel-stage failure and processed channel coverage.
 - Execution is bounded and cancellable and closes its source on every exit.

@@ -1,6 +1,6 @@
 # Next steps
 
-Last reviewed: `2026-07-23 16:12:57 -07:00`.
+Last reviewed: `2026-07-23 16:22:38 -07:00`.
 
 This file records unfinished work that is justified by the current checkout.
 It is not authorization to continue automatically into later Isolate
@@ -50,6 +50,13 @@ Remaining:
 6. Accept milestone 5 or report visible/scientific interaction changes.
 
 Do not begin normalization or a second channel during this validation step.
+
+The folded oracle handoff/review for milestone 6 has been reconciled with the
+current rewrite in `docs/handoffs/6-Normalization.md` and
+`docs/handoffs/.isolate-state-divergence.md`. This makes the future
+normalization plan current; it does not authorize implementation. After the
+user accepts milestone 5, milestone 6 can proceed through the corrected
+existing intensity request, worker, and panel seams.
 
 ## Planned foundational product surface — no current implementation authorization
 

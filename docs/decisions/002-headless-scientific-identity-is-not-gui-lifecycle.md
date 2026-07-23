@@ -1,7 +1,6 @@
 # Headless scientific identity is not GUI lifecycle state
 
-Status: proposed on 2026-07-23. Validate during implementation of the
-working-window handoff before accepting.
+Status: accepted on 2026-07-23 after working-window implementation validation.
 
 ## Context
 
@@ -17,16 +16,16 @@ asset_id
 media.content_sha256
 ```
 
-The GUI-facing `ActiveAsset` snapshot is immutable, but it currently shares a
-module with the PyQt `ActiveAssetController` and does not contain the active
-media's `content_sha256`.
+At proposal time, the GUI-facing `ActiveAsset` snapshot was immutable but did
+not contain the active media's `content_sha256`. It still shares a module with
+the PyQt `ActiveAssetController`.
 
 Using the GUI generation as scientific identity would couple reusable source
 contracts to Qt lifecycle and would not establish which asset bytes a request
 intended to process. Importing the current `ActiveAsset` module into a headless
 source would also import PyQt.
 
-## Proposed decision
+## Decision
 
 Reusable headless scientific contracts identify their intended asset using the
 existing stable asset/content identity:
@@ -62,24 +61,30 @@ bytes were rehashed during request resolution. Ordinary small-window resolution
 must report that distinction honestly rather than imposing full-file hashing on
 interactive open latency.
 
-## Required implementation evidence
+## Implementation evidence
 
-Accept this decision only after the working-window implementation demonstrates:
+The working-window implementation demonstrated:
 
-- Importing the headless request and source does not import PyQt.
-- A request retains expected `asset_id` and `content_sha256`.
+- `application.working_window` imports without importing PyQt.
+- `WorkingWindowRequest` retains expected `asset_id` and
+  `content_sha256`.
 - Resolution rejects a sidecar whose recorded identity no longer matches the
   immutable request.
-- Changing `IsolateSession._generation` does not change an existing headless
-  request's meaning.
-- A later GUI state change does not mutate an already-created request.
-- GUI stale-result rejection can remain outside the reusable source contract.
-- Headless tests can construct and resolve requests without a Qt application.
+- `ActiveAssetController` now copies the existing sidecar content hash into its
+  immutable snapshot.
+- `IsolateSession.snapshot_working_window_request()` copies stable identity and
+  the local half-open window without opening the scientific source.
+- Changing the private GUI generation or later window values does not mutate an
+  existing request.
+- Existing display-generation rejection remains in `IsolateSession`; the
+  reusable source imports no GUI module.
+- Headless source and diagnostic tests construct and resolve requests without a
+  Qt application.
+- The implementation reuses `AssetService` identity resolution rather than
+  creating a competing identity system.
+- The complete offscreen regression suite passed with `93` tests.
 
-If those checks require broad duplication of asset identity logic, revise this
-proposal before acceptance rather than creating a competing identity system.
-
-## Consequences if accepted
+## Consequences
 
 - Scientific requests remain portable across GUI, test, CLI, and later
   distributed execution surfaces.
@@ -93,7 +98,5 @@ proposal before acceptance rather than creating a competing identity system.
 
 ## Relationship to current handoff
 
-This proposal records the identity and import boundary required by
-`docs/handoffs/3-Working-window.md`. That handoff remains the implementation
-specification. Successful implementation supplies the evidence needed to move
-this decision from Proposed to Accepted.
+This decision records the implemented identity and import boundary required by
+`docs/handoffs/3-Working-window.md`.

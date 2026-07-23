@@ -102,9 +102,17 @@ class MediaSession:
             chunks.extend(chunk)
         if len(chunks) != expected:
             detail = decoder.stderr.read().decode(errors="replace") if decoder.stderr else ""
+            returncode = decoder.poll()
+            if returncode is None:
+                try:
+                    returncode = decoder.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    returncode = None
+            reason = "clean_eof" if returncode == 0 else "decoder_error"
             self._stop_decoder()
             raise SieveError("FRAME_DECODE_FAILED", "Could not decode requested frame", frame=frame,
-                             path=str(self.path), detail=detail.strip())
+                             path=str(self.path), detail=detail.strip(), reason=reason,
+                             returncode=returncode, bytes_read=len(chunks), expected_bytes=expected)
         self._next_frame = frame + 1
         return bytes(chunks)
 

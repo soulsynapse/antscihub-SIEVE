@@ -6,6 +6,7 @@ from fractions import Fraction
 from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
 
 from antscihub_sieve.application.active_asset import ActiveAsset
+from antscihub_sieve.application.working_window import WorkingWindowRequest
 from antscihub_sieve.errors import SieveError
 from antscihub_sieve.media.session import MediaSession
 
@@ -116,6 +117,19 @@ class IsolateSession(QObject):
 
     def seconds_for_frame(self, frame: int) -> float:
         return float(Fraction(frame * self.fps_den, self.fps_num))
+
+    def snapshot_working_window_request(self) -> WorkingWindowRequest:
+        if self.asset is None:
+            raise RuntimeError("No active asset")
+        if not self.asset.content_sha256:
+            raise RuntimeError("Active asset has no stable content identity")
+        return WorkingWindowRequest(
+            asset_ref=self.asset.sidecar_path,
+            expected_asset_id=self.asset.asset_id,
+            expected_content_sha256=self.asset.content_sha256,
+            start_frame=self.window_start,
+            stop_frame=self.window_stop,
+        )
 
     def open_asset(self, asset: ActiveAsset) -> None:
         self.scrub_timer.stop()

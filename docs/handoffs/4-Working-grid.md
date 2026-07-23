@@ -1,9 +1,11 @@
 # 4 — Build the Isolate working grid
 
-Status: implementation handoff for the fourth Isolate-tab milestone.
+Status: implemented with automated validation; visible user acceptance pending.
 
 Reviewed and updated against rewrite commit `01b256f` on
 `2026-07-23 15:16:37 -07:00`.
+Implementation reviewed on `2026-07-23 15:26:23 -07:00` against headless-grid
+commit `1d09b6f` plus the current GUI change.
 
 This milestone adds the spatial geometry that later channels will use. The user
 can choose a working scale and block size, see the resolved source, working, and
@@ -39,11 +41,10 @@ Do not begin this milestone until the previous working-window milestone has been
 accepted. Do not implement against an uncorrected handoff merely because its
 number is earlier.
 
-Milestone 3 is implemented in the current checkout. It provides a Qt-free
+Milestone 3 is implemented and accepted. It provides a Qt-free
 working-window request, resolved source facts, request-local native `rgb24`
 streaming, explicit outcomes and provenance, and an immutable GUI request
-snapshot. Its implementation still awaits user acceptance, so the milestone-4
-implementation gate remains closed.
+snapshot. The user authorized milestone 4 after accepting the corrected plan.
 
 Names and illustrative types in this document are not a demand that the rewrite
 copy an oracle class layout. Preserve the required behavior through the
@@ -82,9 +83,9 @@ imitate the examples here.
 
 The required post-milestone-3 assessment is recorded in
 `.isolate-state-divergence.md` at `2026-07-23 15:14:42 -07:00`. It confirms one
-remaining true behavior choice: whether downsample and block intent persist or
-reset across active-asset switches. Resolve that choice with the user before
-implementation.
+behavior choice that the user subsequently resolved: retain downsample and
+block intent across active-asset switches, re-resolve against the new asset,
+and return to defaults only on application restart.
 
 If the rewrite already has a scientifically coherent and tested dimension
 rounding rule that differs at exact half-pixel ties, report it before changing
@@ -535,20 +536,25 @@ base source block = 64
 show grid = a presentation choice
 ```
 
-The rewrite has no existing spatial-setting reset or asset-switch behavior to
-preserve. Before implementation, choose one of these session-only policies:
+The accepted session-only policy is:
 
 ```text
-retain
-  keep requested downsample and block intent across active-asset changes
+on Isolate-tab construction
+  downsample intent = 1.0
+  block intent = auto
 
-reset
-  restore downsample 1.0 and block auto on each active-asset change
+on active-asset change
+  retain requested downsample and block intent
+  re-resolve against the new native dimensions
+  clear the old painted grid before showing the new asset
+
+on application restart
+  return to defaults
 ```
 
-Whichever policy is accepted, application restart returns to defaults. Do not
-introduce a sidecar, `QSettings` key, per-asset tuning store, or reset button
-solely for these controls.
+This supports parent/child and replicate comparisons under one deliberate
+scientific intent. Do not introduce a sidecar, `QSettings` key, per-asset tuning
+store, or reset button solely for these controls.
 
 On asset change, resolve geometry against the new asset's dimensions. An old
 resolved grid may not remain painted over the new asset.
@@ -966,8 +972,9 @@ This milestone is complete only when:
   transform and remains responsive for dense grids.
 - Changing geometry performs no working-window decode and creates no scientific
   coverage or result.
-- The accepted retain-or-reset policy is applied consistently on active-asset
-  changes, and the old overlay is never shown over the new asset.
+- Requested downsample and block intent are retained consistently across
+  active-asset changes, re-resolved against the new asset, and the old overlay
+  is never shown over the new asset.
 - Existing player behavior has not regressed.
 - No channel, normalization, detector, persistence, recipe, cache, or general
   executor was added.

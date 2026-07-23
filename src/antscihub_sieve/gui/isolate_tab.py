@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSpinBox,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -15,6 +18,12 @@ from PyQt6.QtWidgets import (
 from antscihub_sieve.application.active_asset import (
     ActiveAsset,
     ActiveAssetController,
+)
+from antscihub_sieve.application.working_grid import (
+    BlockIntent,
+    ResolvedWorkingGrid,
+    WorkingGridSettings,
+    resolve_working_grid,
 )
 from antscihub_sieve.gui.isolate_player import IsolatePlayer
 from antscihub_sieve.gui.isolate_session import IsolateSession
@@ -26,8 +35,12 @@ class IsolateTab(QWidget):
         super().__init__()
         self._controller = controller
         self.session = IsolateSession()
+        self._active_asset: ActiveAsset | None = None
+        self.grid_settings = WorkingGridSettings()
+        self.resolved_grid: ResolvedWorkingGrid | None = None
         self._build_ui()
         self._connect()
+        self._resolve_grid()
         self._refresh()
         controller.active_asset_changed.connect(self._active_asset_changed)
         if controller.active_asset is not None:
@@ -55,6 +68,54 @@ class IsolateTab(QWidget):
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setSizes([1000, 260])
         root.addWidget(self.splitter, 1)
+
+        self.grid_panel = QWidget()
+        grid_panel_layout = QVBoxLayout(self.grid_panel)
+        grid_panel_layout.setContentsMargins(0, 0, 0, 0)
+        grid_controls = QHBoxLayout()
+        grid_heading = QLabel("Working grid")
+        grid_heading.setStyleSheet("font-weight: 600;")
+        grid_controls.addWidget(grid_heading)
+        grid_controls.addWidget(QLabel("Downsample"))
+        self.downsample_spin = QDoubleSpinBox()
+        self.downsample_spin.setRange(0.001, 1.0)
+        self.downsample_spin.setDecimals(3)
+        self.downsample_spin.setSingleStep(0.05)
+        self.downsample_spin.setValue(1.0)
+        self.downsample_spin.setKeyboardTracking(False)
+        self.downsample_spin.setToolTip(
+            "Downsampling can remove spatial evidence that may be needed "
+            "to detect behavior."
+        )
+        grid_controls.addWidget(self.downsample_spin)
+        grid_controls.addWidget(QLabel("Block"))
+        self.block_intent_combo = QComboBox()
+        self.block_intent_combo.addItem("Auto", BlockIntent.AUTO.value)
+        self.block_intent_combo.addItem(
+            "Explicit", BlockIntent.EXPLICIT.value
+        )
+        grid_controls.addWidget(self.block_intent_combo)
+        self.block_size_spin = QSpinBox()
+        self.block_size_spin.setRange(1, 2_147_483_647)
+        self.block_size_spin.setValue(64)
+        self.block_size_spin.setSuffix(" working px")
+        self.block_size_spin.setKeyboardTracking(False)
+        self.block_size_spin.setEnabled(False)
+        grid_controls.addWidget(self.block_size_spin)
+        self.show_grid_check = QCheckBox("Show grid")
+        grid_controls.addWidget(self.show_grid_check)
+        grid_controls.addStretch()
+        grid_panel_layout.addLayout(grid_controls)
+        self.grid_readout = QLabel("Open an asset to resolve spatial geometry.")
+        self.grid_readout.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.grid_readout.setWordWrap(True)
+        self.grid_readout.setToolTip(
+            "Geometry only. No frames have been processed."
+        )
+        grid_panel_layout.addWidget(self.grid_readout)
+        root.addWidget(self.grid_panel)
 
         transport = QHBoxLayout()
         self.play_button = QPushButton("Play")
@@ -96,14 +157,101 @@ class IsolateTab(QWidget):
         self.timeline.scrub_finished.connect(
             self.session.settle_timeline_scrub
         )
+        self.downsample_spin.valueChanged.connect(
+            self._grid_controls_changed
+        )
+        self.block_intent_combo.currentIndexChanged.connect(
+            self._grid_controls_changed
+        )
+        self.block_size_spin.valueChanged.connect(
+            self._grid_controls_changed
+        )
+        self.show_grid_check.toggled.connect(self._show_grid_changed)
         self.session.state_changed.connect(self._refresh)
         self.session.frame_ready.connect(self._frame_ready)
         self.session.error_changed.connect(self.status_label.setText)
 
     def _active_asset_changed(self, asset: ActiveAsset) -> None:
+        self._active_asset = asset
         self.player.clear()
+        self._resolve_grid()
         self.status_label.setText("Loading video...")
         self.session.open_asset(asset)
+
+    def _grid_controls_changed(self, _value: object = None) -> None:
+        intent = BlockIntent(self.block_intent_combo.currentData())
+        self.block_size_spin.setVisible(intent is BlockIntent.EXPLICIT)
+        self.block_size_spin.setEnabled(
+            self._active_asset is not None
+            and intent is BlockIntent.EXPLICIT
+        )
+        self.grid_settings = WorkingGridSettings(
+            downsample=self.downsample_spin.value(),
+            block_intent=intent,
+            explicit_block_size=(
+                self.block_size_spin.value()
+                if intent is BlockIntent.EXPLICIT
+                else None
+            ),
+        )
+        self._resolve_grid()
+
+    def _show_grid_changed(self, visible: bool) -> None:
+        self.player.set_working_grid(self.resolved_grid, visible=visible)
+
+    def _resolve_grid(self) -> None:
+        asset = self._active_asset
+        enabled = asset is not None
+        self.downsample_spin.setEnabled(enabled)
+        self.block_intent_combo.setEnabled(enabled)
+        self.show_grid_check.setEnabled(enabled)
+        self.block_size_spin.setVisible(
+            self.grid_settings.block_intent is BlockIntent.EXPLICIT
+        )
+        self.block_size_spin.setEnabled(
+            enabled
+            and self.grid_settings.block_intent is BlockIntent.EXPLICIT
+        )
+        if asset is None:
+            self.resolved_grid = None
+            self.grid_readout.setText(
+                "Open an asset to resolve spatial geometry."
+            )
+        else:
+            self.resolved_grid = resolve_working_grid(
+                asset.width,
+                asset.height,
+                self.grid_settings,
+            )
+            self.grid_readout.setText(
+                self._grid_readout_text(self.resolved_grid)
+            )
+        self.player.set_working_grid(
+            self.resolved_grid,
+            visible=self.show_grid_check.isChecked(),
+        )
+
+    @staticmethod
+    def _grid_readout_text(grid: ResolvedWorkingGrid) -> str:
+        if grid.block_intent is BlockIntent.AUTO:
+            block = (
+                f"auto ({grid.resolved_block_size} working px; "
+                f"about {grid.base_source_block} source px)"
+            )
+        else:
+            block = f"{grid.resolved_block_size} working px"
+        edges: list[str] = []
+        if grid.right_edge_width < grid.resolved_block_size:
+            edges.append(f"right {grid.right_edge_width} px")
+        if grid.bottom_edge_height < grid.resolved_block_size:
+            edges.append(f"bottom {grid.bottom_edge_height} px")
+        edge_text = ", ".join(edges) if edges else "full edge cells"
+        return (
+            f"Source {grid.source_width} x {grid.source_height} px -> "
+            f"Working {grid.work_width} x {grid.work_height} px; "
+            f"Block {block}; Grid {grid.rows} rows x {grid.columns} columns; "
+            f"{edge_text}"
+        )
 
     def _start_changed(self, seconds: float) -> None:
         self.session.set_window_start(

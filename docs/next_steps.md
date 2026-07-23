@@ -1,79 +1,75 @@
 # Next steps
 
-Last reviewed: `2026-07-23 15:16:37 -07:00`.
+Last reviewed: `2026-07-23 15:26:23 -07:00`.
 
 This file records unfinished work that is justified by the current checkout.
-It is not an authorization to continue automatically into later Isolate
+It is not authorization to continue automatically into later Isolate
 milestones.
 
 ## Current priority
 
-### Validate and accept the implemented working-window milestone
+### Validate and accept the implemented working grid
 
 Source:
 
-- `docs/handoffs/3-Working-window.md`
-- `docs/handoffs/3-Working-window-review.md`
-- Accepted decision
-  `docs/decisions/002-headless-scientific-identity-is-not-gui-lifecycle.md`
+- `docs/handoffs/4-Working-grid.md`
+- `docs/handoffs/4-Working-grid-review.md`
+- `docs/handoffs/.isolate-state-divergence.md`
 
 Implementation now provides:
 
-- Qt-free stable request, resolution, plane, batch, stream, and outcome types.
-- Registered sidecar identity checks and explicit extent provenance.
-- Request-local synchronous native `rgb24` delivery.
-- Bounded batching, cancellation, cleanup, and accessible final outcomes.
-- Structured clean-EOF versus decoder-error reasons.
-- An immutable GUI request snapshot that starts no scientific decode.
-- A development diagnostic at `scripts/inspect_working_window.py`.
-- Focused headless and offscreen GUI regression coverage.
+- A Qt-free immutable working-grid contract with deterministic dimension
+  resolution, tagged auto/explicit block intent, compact block ownership,
+  partial-edge bounds and area weights, and boundary projection.
+- Isolate-local downsample and block controls whose plain settings value is
+  retained across asset switches and reset only on application restart.
+- A resolved source/working/block/grid/edge readout.
+- A toggleable presentation-only player overlay mapped through the existing
+  letterboxed `image_rect()`.
+- Dense-grid suppression that preserves the true geometry and outside boundary
+  without generating thousands of internal lines.
+- Spatial controls on one-frame assets without coupling them to `can_loop`.
+- No working-window decode, display-decoder request, worker, persistence, cache,
+  channel, result, or coverage artifact on geometry changes.
 
 Automated validation:
 
 ```text
-93 passed in 23.12s
+Focused grid/player suites: 39 passed in 2.37s
+Complete offscreen suite: 115 passed in 23.71s
 ```
 
 Remaining:
 
-1. Review the implementation and automated validation result.
-2. Optionally run the diagnostic on a registered source and derived child:
+1. Open a representative registered parent and child or two replicate assets.
+2. Confirm the controls/readout placement is readable at the normal window
+   size.
+3. Toggle the grid and verify alignment while resizing and scrubbing.
+4. Change downsample and block intent, then switch assets and confirm the
+   requested intent remains while dimensions and edge cells re-resolve.
+5. Confirm a dense grid shows its bounded presentation indication without
+   affecting playback.
+6. Accept milestone 4 or report visible interaction changes.
 
-   ```powershell
-   .\.venv\Scripts\python.exe scripts\inspect_working_window.py `
-     PATH\TO\video.asset.json 2 5 --batch-size 2
-   ```
+Do not begin a channel during this validation step.
 
-3. Confirm the existing Isolate player still behaves normally in a visible
-   manual session if desired.
-4. Accept the milestone before unblocking the working grid.
+## Follow-up diagnostic
 
-Do not begin grid or channel implementation during this validation step.
+One full-suite run intermittently reached
+`test_delete_removes_a_missing_child_record_without_deleting_its_files` with a
+derivation child record lacking `media_path`, causing the test to report a
+`KeyError` instead of the underlying derivation status. The test passed
+immediately in isolation and the next complete run passed all 115 tests.
 
-## Queued work — blocked on the current priority
-
-### Define and implement the working grid
-
-The fourth handoff and review have now been assessed against the implemented
-milestone-3 seams. The dated post-milestone-3 refresh is recorded in
-`docs/handoffs/.isolate-state-divergence.md`.
-
-Milestone 4 remains blocked until:
-
-- The implemented working-window milestone is accepted.
-- The user approves corrections to the handoff and review so their stale
-  `4b09232` checkout description matches the current repository.
-- The user chooses whether downsample and block intent persist or reset across
-  active-asset switches.
-
-Do not implement the grid from divergence notes alone. When unblocked, keep
-native working geometry separate from the capped display preview and preserve
-the milestone's no-channel boundary.
+If this recurs, capture the returned child status/error before indexing output
+paths and decide whether the derivation fixture needs a bounded retry or a
+clearer failure assertion. This is unrelated to working-grid behavior, but the
+current `KeyError` masks the actionable cause.
 
 ## Deferred work — no current implementation authorization
 
-Do not begin these merely because the working-window source or working grid is
-complete:
+Do not begin these merely because the working-window source and working grid
+are complete:
 
 - Implement the first scientific channel.
 - Add a GUI computation worker, latest-only publication, or cross-thread queue.

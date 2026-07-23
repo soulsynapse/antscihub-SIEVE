@@ -222,6 +222,128 @@ def test_player_letterboxes_without_cropping(qtbot) -> None:  # type: ignore[no-
     assert drawn.top() == 50
 
 
+def test_player_grid_maps_normalized_boundaries_and_bounds_dense_paint(
+    qtbot,
+) -> None:  # type: ignore[no-untyped-def]
+    from PyQt6.QtGui import QImage
+    from antscihub_sieve.application.working_grid import (
+        WorkingGridSettings,
+        resolve_working_grid,
+    )
+    from antscihub_sieve.gui.isolate_player import IsolatePlayer
+
+    player = IsolatePlayer()
+    qtbot.addWidget(player)
+    player.resize(600, 400)
+    player.set_frame(bytes(200 * 100 * 3), 200, 100)
+    grid = resolve_working_grid(
+        200,
+        100,
+        WorkingGridSettings.explicit(50),
+    )
+    player.set_working_grid(grid, visible=True)
+    vertical, horizontal, dense = player.grid_overlay_geometry()
+    assert not dense
+    assert vertical == (150.0, 300.0, 450.0)
+    assert horizontal == (200.0,)
+    rendered = QImage(
+        player.size(),
+        QImage.Format.Format_ARGB32_Premultiplied,
+    )
+    player.render(rendered)
+    assert not rendered.isNull()
+
+    dense_grid = resolve_working_grid(
+        10_000,
+        10_000,
+        WorkingGridSettings.explicit(1),
+    )
+    player.set_working_grid(dense_grid, visible=True)
+    vertical, horizontal, dense = player.grid_overlay_geometry()
+    assert dense
+    assert vertical == horizontal == ()
+    player.render(rendered)
+
+    player.set_working_grid(grid, visible=False)
+    assert player.grid_overlay_geometry() == ((), (), False)
+
+
+def test_grid_controls_retain_intent_across_assets_without_decode(
+    qtbot,
+    tmp_path: Path,
+) -> None:  # type: ignore[no-untyped-def]
+    from antscihub_sieve.application.active_asset import (
+        ActiveAsset,
+        ActiveAssetController,
+    )
+    from antscihub_sieve.application.working_grid import BlockIntent
+    from antscihub_sieve.gui.isolate_tab import IsolateTab
+
+    def asset(name: str, width: int, height: int) -> ActiveAsset:
+        return ActiveAsset(
+            asset_id=name,
+            sidecar_path=tmp_path / f"{name}.asset.json",
+            video_path=tmp_path / f"{name}.mkv",
+            label=name,
+            kind="video",
+            width=width,
+            height=height,
+            fps_num=1,
+            fps_den=1,
+            duration_seconds=1.0,
+            parent=None,
+            content_sha256=f"{name}-hash",
+        )
+
+    tab = IsolateTab(ActiveAssetController())
+    qtbot.addWidget(tab)
+    assert not tab.downsample_spin.isEnabled()
+    assert tab.resolved_grid is None
+
+    opened: list[str] = []
+    tab.session.open_asset = lambda active: opened.append(active.asset_id)  # type: ignore[method-assign]
+    decoder = RequestedFrames()
+    tab.session.decoder = decoder  # type: ignore[assignment]
+
+    tab._active_asset_changed(asset("parent", 411, 428))
+    assert tab.downsample_spin.isEnabled()
+    assert tab.resolved_grid is not None
+    assert tab.resolved_grid.resolved_block_size == 64
+    assert "Block auto (64 working px" in tab.grid_readout.text()
+    tab.downsample_spin.setValue(0.5)
+    assert tab.resolved_grid is not None
+    assert tab.resolved_grid.resolved_block_size == 32
+    assert "Block auto (32 working px" in tab.grid_readout.text()
+    tab.block_intent_combo.setCurrentIndex(1)
+    tab.block_size_spin.setValue(10)
+    tab.show_grid_check.setChecked(True)
+    assert tab.grid_settings.block_intent is BlockIntent.EXPLICIT
+    assert tab.resolved_grid is not None
+    assert (
+        tab.resolved_grid.work_width,
+        tab.resolved_grid.work_height,
+        tab.resolved_grid.resolved_block_size,
+    ) == (206, 214, 10)
+    assert decoder.frames == []
+
+    tab._active_asset_changed(asset("child", 101, 51))
+    assert opened == ["parent", "child"]
+    assert tab.grid_settings.downsample == 0.5
+    assert tab.grid_settings.block_intent is BlockIntent.EXPLICIT
+    assert tab.grid_settings.explicit_block_size == 10
+    assert tab.resolved_grid is not None
+    assert (
+        tab.resolved_grid.work_width,
+        tab.resolved_grid.work_height,
+        tab.resolved_grid.resolved_block_size,
+    ) == (50, 26, 10)
+    assert tab.show_grid_check.isChecked()
+    assert decoder.frames == []
+    assert "Source 101 x 51 px" in tab.grid_readout.text()
+    tab.session.decoder = None
+    tab.close()
+
+
 def test_main_window_shortcuts_dispatch_only_to_active_tab(qtbot, video: Path) -> None:  # type: ignore[no-untyped-def]
     from PyQt6.QtCore import Qt
     from PyQt6.QtTest import QTest
@@ -282,6 +404,9 @@ def test_one_frame_asset_displays_but_cannot_loop(qtbot, tmp_path: Path) -> None
     qtbot.waitUntil(lambda: tab.player.image is not None, timeout=5000)
     assert tab.session.frame_count == 1
     assert not tab.play_button.isEnabled()
+    assert tab.downsample_spin.isEnabled()
+    assert tab.block_intent_combo.isEnabled()
+    assert tab.show_grid_check.isEnabled()
     assert "at least two" in tab.status_label.text()
     tab.close()
 

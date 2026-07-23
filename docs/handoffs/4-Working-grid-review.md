@@ -5,6 +5,7 @@ Reviewed and updated after milestone 3 on `2026-07-23 15:16:37 -07:00` at
 commit `01b256f`.
 
 Status: architectural and current-rewrite review of `4-Working-grid.md`.
+Implementation disposition updated on `2026-07-23 15:26:23 -07:00`.
 
 ## Verdict
 
@@ -33,15 +34,14 @@ The handoff needs a few current-checkout clarifications before implementation.
 Most are not scientific changes; they prevent an implementer from inventing
 abstractions around GUI capabilities the rewrite does not have.
 
-The largest sequencing fact is now:
+The sequencing gate is now resolved:
 
-> Milestone 3 is implemented in commit `5bffca7`, but still awaits user
-> acceptance.
+> Milestone 3 is implemented in commit `5bffca7` and was accepted when the user
+> authorized milestone 4 from the corrected plan.
 
 The required post-milestone-3 divergence check is complete and recorded in
-`.isolate-state-divergence.md`. Milestone 4 remains queued only until milestone
-3 is accepted, the corrected milestone-4 documents are accepted, and the
-asset-switch setting policy is chosen.
+`.isolate-state-divergence.md`. The user accepted retaining grid intent across
+asset switches and authorized implementation.
 
 ## Current-checkout evidence
 
@@ -51,6 +51,8 @@ asset-switch setting policy is chosen.
   sidecar/media references.
 - `application.working_window` provides Qt-free request, resolved-source,
   plane, batch, stream, provenance, and outcome contracts.
+- `application.working_grid` now provides Qt-free immutable settings, compact
+  resolved geometry, partial bounds and area weights, and boundary projection.
 - `IsolateSession.snapshot_working_window_request()` captures registered
   identity and temporal bounds without opening scientific media.
 - `IsolateSession` owns temporal window state, playback, the display
@@ -63,15 +65,15 @@ asset-switch setting policy is chosen.
 - Qt painting uses logical widget coordinates, so normal device-pixel scaling is
   handled by the painter.
 - The right-hand channel area remains an explicit empty placeholder.
+- `IsolateTab` now owns session-local grid settings, controls, and the resolved
+  readout.
+- `IsolatePlayer` now accepts one optional resolved grid and bounds dense
+  internal-line painting.
 - Existing tests cover letterboxing, one-frame assets, temporal controls,
   display backpressure, and decode cleanup.
 
 ### Absent
 
-- A headless working-grid settings or resolved-geometry type.
-- A downsample or block-size setting in Isolate.
-- A grid readout.
-- A grid overlay input or paint branch in `IsolatePlayer`.
 - A native-source-coordinate transform in `IsolatePlayer`.
 - Zoom behavior in `IsolatePlayer`.
 - An Isolate overlay-hiding shortcut.
@@ -105,15 +107,15 @@ with its captured grid before combining pixels and cells.
 
 Required disposition:
 
-1. Accept the implemented milestone 3.
-2. Keep grid geometry in a Qt-independent application module.
-3. Keep one plain grid-settings value in `IsolateTab`.
-4. Do not expand the temporal GUI request snapshot into a general settings
+1. Milestone 3 was accepted.
+2. Grid geometry was kept in a Qt-independent application module.
+3. One plain grid-settings value is owned by `IsolateTab`.
+4. The temporal GUI request snapshot was not expanded into a general settings
    controller.
-5. Choose the asset-switch policy, then implement milestone 4.
+5. The user chose retention across asset switches.
 
-This review approves the geometry contract and the current package/ownership
-seam, subject to the remaining user decisions above.
+This review approves the implemented geometry contract and package/ownership
+seam.
 
 ## Important correction 2: map normalized grid boundaries directly into the current player rectangle
 
@@ -242,8 +244,7 @@ The handoff says to use the rewrite's current reset/open-asset behavior, but the
 rewrite has no downsample or block settings today. There is no existing behavior
 to preserve.
 
-The review recommends the following simplest explicit rule, but it is not
-accepted behavior until the user chooses it:
+The user accepted the review's recommended rule:
 
 ```text
 on Isolate-tab construction
@@ -266,9 +267,9 @@ Do not add a sidecar, `QSettings` key, per-asset tuning store, or reset button i
 this milestone. Later persistence can deliberately decide whether settings are
 global, session-local, or per asset.
 
-Resetting to defaults on every asset switch is the other cheap, coherent policy.
-The handoff now exposes this as an explicit implementation gate rather than
-silently treating this review's recommendation as a decision.
+Resetting to defaults on every asset switch was rejected because it would
+silently discard deliberate intent and make parent/child or replicate
+comparisons less predictable.
 
 ## Important correction 6: “no worker” means no additional grid worker
 
@@ -551,8 +552,8 @@ $env:QT_QPA_PLATFORM = "offscreen"
    `IsolateSession`.
 4. Allocating one Python or Qt object per block.
 5. Persisting settings before their later ownership is known.
-6. Starting milestone 4 before the implemented milestone-3 package seam is
-   accepted.
+6. Regressing the accepted separation between the milestone-3 source seam and
+   milestone-4 geometry.
 
 ### Correctness risks if left ambiguous
 
@@ -778,26 +779,29 @@ The current focused suites pass:
 
 ```text
 tests/test_working_window.py
+tests/test_working_grid.py
 tests/test_isolate_player.py
 tests/test_domain_and_services.py
 
-49 passed in 10.46s
+Focused grid/player validation: 39 passed in 2.37s
+Complete repository validation: 115 passed in 23.71s
 ```
 
 Passing tests do not negate the findings above; the stale-error path,
 start/interrupt race, timeout result, same-size stale-content lineage case, and
 aspect-preservation expectation are not covered by those tests.
 
-## Recommended disposition
+## Implementation disposition
 
-The geometry and scope in `4-Working-grid.md` are safe.
+The geometry and scope in `4-Working-grid.md` were implemented through the
+smallest approved seams.
 
-Before implementation:
+Completed:
 
-1. Accept the implemented milestone 3.
-2. Accept the updated handoff and review.
-3. Choose retain or reset behavior for grid intents across asset switches.
-4. Preserve the current-player and ownership clarifications above.
+1. Milestone 3 and the updated milestone-4 plan were accepted.
+2. Retention across asset switches was selected.
+3. Headless geometry, controls/readout, and the bounded overlay were added.
+4. The current-player and ownership clarifications were preserved.
 
 The smallest implementation for the current rewrite should remain:
 
@@ -815,4 +819,5 @@ IsolatePlayer
 ```
 
 No wider architectural rewrite is needed. After these corrections and the
-post-milestone-3 divergence refresh, the handoff is suitable for implementation.
+post-milestone-3 divergence refresh, the remaining milestone-4 gate is visible
+user acceptance of the interaction.

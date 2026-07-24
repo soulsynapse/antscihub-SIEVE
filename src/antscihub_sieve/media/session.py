@@ -21,7 +21,6 @@ class MediaSession:
         self.closed = False
         self._decoder: subprocess.Popen[bytes] | None = None
         self._next_frame: int | None = None
-        self._decoder_output_size: tuple[int, int] | None = None
 
     @property
     def frame_count(self) -> int:
@@ -39,7 +38,6 @@ class MediaSession:
     def _stop_decoder(self) -> None:
         decoder, self._decoder = self._decoder, None
         self._next_frame = None
-        self._decoder_output_size = None
         if decoder is not None:
             if decoder.poll() is None:
                 decoder.terminate()
@@ -52,48 +50,21 @@ class MediaSession:
         """Stop an in-flight frame read so asset navigation does not wait on decoding."""
         self._stop_decoder()
 
-    def scaled_dimensions(self, max_width: int | None = None) -> tuple[int, int]:
-        width = int(self.metadata["width"])
-        height = int(self.metadata["height"])
-        if max_width is None or width <= max_width:
-            return width, height
-        scaled_height = max(2, round(height * max_width / width))
-        if scaled_height % 2:
-            scaled_height += 1
-        return max_width, scaled_height
-
-    def read_frame_rgb(
-        self, frame: int, *, max_width: int | None = None
-    ) -> bytes:
+    def read_frame_rgb(self, frame: int) -> bytes:
         if self.closed:
             raise SieveError("FRAME_DECODE_FAILED", "Media session is closed")
         timestamp = self.timestamp_for_frame(frame)
-        output_size = self.scaled_dimensions(max_width)
-        if (
-            self._decoder is None
-            or self._next_frame != frame
-            or self._decoder_output_size != output_size
-        ):
+        if self._decoder is None or self._next_frame != frame:
             self._stop_decoder()
             args = ["ffmpeg", "-v", "error", "-ss", f"{float(timestamp):.12f}", "-i", str(self.path),
-                    "-map", "0:v:0"]
-            if output_size != (
-                int(self.metadata["width"]),
-                int(self.metadata["height"]),
-            ):
-                args += [
-                    "-vf",
-                    f"scale={output_size[0]}:{output_size[1]}:flags=area",
-                ]
-            args += ["-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+                    "-map", "0:v:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
             try:
                 self._decoder = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=CREATE_NO_WINDOW)
             except OSError as exc:
                 raise SieveError("FRAME_DECODE_FAILED", "FFmpeg decoder could not be started", detail=str(exc)) from exc
             self._next_frame = frame
-            self._decoder_output_size = output_size
         decoder = self._decoder; assert decoder.stdout is not None
-        expected = output_size[0] * output_size[1] * 3
+        expected = self.metadata["width"] * self.metadata["height"] * 3
         chunks = bytearray()
         while len(chunks) < expected:
             chunk = decoder.stdout.read(expected - len(chunks))
@@ -102,17 +73,9 @@ class MediaSession:
             chunks.extend(chunk)
         if len(chunks) != expected:
             detail = decoder.stderr.read().decode(errors="replace") if decoder.stderr else ""
-            returncode = decoder.poll()
-            if returncode is None:
-                try:
-                    returncode = decoder.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    returncode = None
-            reason = "clean_eof" if returncode == 0 else "decoder_error"
             self._stop_decoder()
             raise SieveError("FRAME_DECODE_FAILED", "Could not decode requested frame", frame=frame,
-                             path=str(self.path), detail=detail.strip(), reason=reason,
-                             returncode=returncode, bytes_read=len(chunks), expected_bytes=expected)
+                             path=str(self.path), detail=detail.strip())
         self._next_frame = frame + 1
         return bytes(chunks)
 

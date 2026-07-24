@@ -34,7 +34,6 @@ class ActiveAsset:
     fps_den: int
     duration_seconds: float
     parent: ParentIdentity | None
-    content_sha256: str | None = None
 
     @property
     def fps(self) -> float:
@@ -110,5 +109,4 @@ class ActiveAssetController(QObject):
             fps_den=int(media["fps_den"]),
             duration_seconds=float(media["duration_seconds"]),
             parent=parent,
-            content_sha256=str(media["content_sha256"]),
         )

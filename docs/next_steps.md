@@ -1,6 +1,6 @@
 # Next steps
 
-Last reviewed: `2026-07-23 16:36:24 -07:00`.
+Last reviewed: `2026-07-23 16:55:13 -07:00`.
 
 This file records unfinished work that is justified by the current checkout.
 It is not authorization to continue automatically into later Isolate
@@ -8,51 +8,64 @@ milestones.
 
 ## Current priority
 
-### Validate and accept per-frame normalization
+### Validate and accept temporal change energy
 
 Source:
 
-- `docs/handoffs/6-Normalization.md`
+- `docs/handoffs/7-Change-energy.md`
 - `docs/handoffs/.isolate-state-divergence.md`
+- `findings/2026-07-23-change-energy-overlay-performance.md`
 
-The user explicitly authorized milestone 6 after its rewrite review. This
-superseded the sequencing gate without claiming that milestone 5 separately
-received manual acceptance. The intensity path now provides:
+The user explicitly authorized milestone 7 after its current-checkout review.
+This superseded the handoff's sequencing gate without claiming that milestones
+5 or 6 separately received manual acceptance. The selected-channel path now
+provides:
 
-- Immutable Qt-free `off` and per-frame population-z-score specifications.
-- Fixed `1e-6` z-score epsilon, float64 population statistics, float32 science,
-  finite complete-frame validation, and exact-zero degeneracy.
-- One immutable uint8 degeneracy flag per processed frame, included in exact
-  pre-source result admission.
-- A scientific key separated from execution policy, batch size, and GUI token.
-- Safe automatic replacement when normalization changes after a result/job
-  exists, without overlapping source-owning workers.
-- Fixed `[0,1]` Off and `[-3,3]` diverging z-score presentation with real-value
-  hover readout and explicit units/degeneracy.
+- Exactly Intensity or Change energy through one active worker, one newest
+  pending request, one retained result, and one publication token.
+- One bounded predecessor context frame and explicit later-frame temporal
+  alignment, with frame zero invalid rather than fabricated zero.
+- Fixed float32 current-minus-previous square, sigma-2 17-tap reflect-101
+  Gaussian integration, and accepted owned-pixel block reduction.
+- Immutable temporal-valid, previous/current normalization-degenerate evidence
+  and exact `4*T*R*C + 3*T` pre-source retained-result admission.
+- Area-weighted time-by-value density with fixed scientific mappings and
+  absolute cursor/seek behavior.
+- One shared selected-channel overlay gated to the absolute frame actually
+  decoded into the player, with independent grid/channel visibility.
 
 Automated validation:
 
 ```text
-Focused intensity/normalization and GUI suites: 43 passed in 4.54s
-Complete offscreen suite: 158 passed in 28.00s
+Focused milestone-5/6/7 and player suites: 74 passed in 9.63s
+Complete offscreen suite: 170 passed in 30.33s
 ```
 
 Remaining:
 
-1. Open a representative registered asset and choose a short window.
-2. Compute with **Off** and confirm the accepted `[0,1]` raster behavior.
-3. Select **Per-frame z-score** and confirm immediate old-result removal, one
-   replacement job, z-score units, and fixed `[-3,3]` presentation.
-4. Hover clipped extremes and confirm the readout retains the stored value.
-5. Use a constant/near-constant lossless fixture and confirm exact-zero output
-   is labelled valid degenerate data.
-6. Play, step, scrub, and click raster columns; confirm the one player clock
-   remains synchronized without recomputation.
-7. Toggle modes rapidly, change window/grid/asset during work, cancel, and
-   close; confirm no overlapping worker or stale publication.
-8. Accept milestone 6 or report visible/scientific interaction changes.
+1. Open a representative registered asset, choose a short mid-asset window,
+   compute Intensity, and verify the new value-density panel plus exact
+   current-frame spatial overlay.
+2. Select Change energy and confirm one replacement job, hidden predecessor
+   context, later-frame `(t-1,t)` alignment, and no retained Intensity result.
+3. Move the window to frame zero and confirm frame zero is absent/invalid while
+   valid exact-zero pairs remain visibly distinct.
+4. Toggle grid and channel overlay independently; hover density bins and player
+   blocks to verify their different aggregate/spatial readouts.
+5. Seek, scrub, step, and play rapidly; confirm an old overlay never paints over
+   a newly decoded frame and no navigation triggers scientific computation.
+6. Compare Off and per-frame z-score units/mappings and verify previous/current
+   degenerate pair evidence on constant/nonconstant lossless fixtures.
+7. Resize and play on the native Windows window. Confirm partial-edge alignment
+   and assess whether the measured approximately `6 ms` per-new-frame overlay
+   preparation causes any visible playback regression.
+8. Toggle channel and normalization rapidly, change window/grid/asset during
+   work, cancel, and close; confirm one source owner and no stale publication.
+9. Accept milestones 5–7 as visible integrated behavior or report concrete
+   scientific/presentation changes.
 
-Do not begin change energy or another channel during this validation step.
+Do not begin static value filtering, Morlet processing, or detection during
+this validation step.
 
 ## Planned foundational product surface — no current implementation authorization
 
@@ -121,25 +134,26 @@ mask the actionable cause. This remains unrelated to Isolate normalization.
 Do not begin these merely because the working-window source and working grid
 are complete:
 
-- Add change energy or a second scientific channel.
-- Generalize the concrete intensity worker/panel into a channel registry,
+- Add static value filtering, value bands, Morlet processing, detection, or a
+  third scientific channel.
+- Generalize the concrete selected-channel worker/panel into a channel registry,
   graph, or cross-channel scheduler before another measured use requires it.
 - Add additional media planes or a plane registry.
 - Add scientific result persistence, recipes, export, CLI/HPC processing, or a
   general graph executor.
 
-When the first real channel handoff arrives, evaluate the benchmarkable
-multi-basis channel contract proposed in
-`docs/ideas/processing-ideas.md`. Do not add direct grayscale delivery or a
-general plane registry before a real channel and measurement justify them.
+When a later multi-basis channel handoff arrives, evaluate the benchmarkable
+contract proposed in `docs/ideas/processing-ideas.md`. Do not add direct
+grayscale delivery or a general plane registry before a measured channel use
+justifies them.
 
 The milestone-5 review found that commit `0f4afb2` has implementation-shaped
 metadata but contains documentation only. Do not use its commit subject as
 evidence that intensity exists.
 
-Milestone 6 implemented per-frame normalization through the existing intensity
-path. Visible/manual acceptance is now the gate. Stop before change energy or a
-second channel.
+Milestone 7 implemented temporal change energy through the selected-channel
+path. Visible/manual acceptance of the integrated milestone-5/6/7 behavior is
+now the gate. Stop before static filtering or milestone 8.
 
 The oracle handoff for each later milestone must be reviewed against the
 then-current checkout and recorded in

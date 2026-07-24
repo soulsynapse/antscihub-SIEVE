@@ -934,7 +934,9 @@ assertions to add normalization.
 ## 18. Manual acceptance
 
 After automated tests pass, stop and return the milestone for user validation.
-Do not begin change energy.
+The original gate said not to begin Change energy. The user's explicit
+milestone-7 instruction on `2026-07-23` superseded that sequencing gate without
+retroactively recording milestone-6 manual acceptance.
 
 Manual path:
 

@@ -19,6 +19,11 @@ from antscihub_sieve.application.active_asset import (
     ActiveAsset,
     ActiveAssetController,
 )
+from antscihub_sieve.application.change_energy import (
+    CHANGE_ENERGY_ID,
+    ChangeEnergyRequest,
+    ChangeEnergyResult,
+)
 from antscihub_sieve.application.intensity import (
     IntensityRequest,
     IntensityResult,
@@ -32,15 +37,21 @@ from antscihub_sieve.application.working_grid import (
     WorkingGridSettings,
     resolve_working_grid,
 )
-from antscihub_sieve.gui.isolate_player import IsolatePlayer
+from antscihub_sieve.gui.isolate_player import ChannelOverlay, IsolatePlayer
 from antscihub_sieve.gui.isolate_session import IsolateSession
 from antscihub_sieve.gui.isolate_timeline import IsolateTimeline
 from antscihub_sieve.gui.intensity_panel import (
+    CHANGE_OFF_PRESENTATION_ID,
+    CHANGE_ZSCORE_PRESENTATION_ID,
     IntensityRaster,
     OFF_PRESENTATION_ID,
     ZSCORE_PRESENTATION_ID,
 )
-from antscihub_sieve.gui.intensity_worker import IntensityWorker
+from antscihub_sieve.gui.intensity_worker import (
+    ScientificRequest,
+    ScientificResult,
+    ScientificWorker,
+)
 
 
 class IsolateTab(QWidget):
@@ -52,11 +63,14 @@ class IsolateTab(QWidget):
         self.grid_settings = WorkingGridSettings()
         self.resolved_grid: ResolvedWorkingGrid | None = None
         self.normalization_spec = NormalizationSpec.off()
+        self.selected_channel = "intensity"
         self.resource_policy = ExecutionResourcePolicy()
         self._job_token = 0
-        self._intensity_worker: IntensityWorker | None = None
-        self._pending_intensity: tuple[int, IntensityRequest] | None = None
+        self._intensity_worker: ScientificWorker | None = None
+        self._pending_intensity: tuple[int, ScientificRequest] | None = None
         self._intensity_result: IntensityResult | None = None
+        self._change_energy_result: ChangeEnergyResult | None = None
+        self._selected_result: ScientificResult | None = None
         self._build_ui()
         self._connect()
         self._resolve_grid()
@@ -83,9 +97,9 @@ class IsolateTab(QWidget):
         self.intensity_panel = QWidget()
         intensity_layout = QVBoxLayout(self.intensity_panel)
         intensity_layout.setContentsMargins(0, 0, 0, 0)
-        intensity_heading = QLabel("Intensity")
-        intensity_heading.setStyleSheet("font-weight: 600;")
-        intensity_layout.addWidget(intensity_heading)
+        self.channel_heading = QLabel("Intensity")
+        self.channel_heading.setStyleSheet("font-weight: 600;")
+        intensity_layout.addWidget(self.channel_heading)
         self.intensity_context = QLabel()
         self.intensity_context.setWordWrap(True)
         intensity_layout.addWidget(self.intensity_context)
@@ -141,6 +155,9 @@ class IsolateTab(QWidget):
         grid_controls.addWidget(self.block_size_spin)
         self.show_grid_check = QCheckBox("Show grid")
         grid_controls.addWidget(self.show_grid_check)
+        self.show_channel_overlay_check = QCheckBox("Show channel overlay")
+        self.show_channel_overlay_check.setChecked(True)
+        grid_controls.addWidget(self.show_channel_overlay_check)
         grid_controls.addStretch()
         grid_panel_layout.addLayout(grid_controls)
         self.grid_readout = QLabel("Open an asset to resolve spatial geometry.")
@@ -153,9 +170,14 @@ class IsolateTab(QWidget):
         )
         grid_panel_layout.addWidget(self.grid_readout)
         compute_controls = QHBoxLayout()
-        self.compute_intensity_button = QPushButton("Compute intensity")
+        self.compute_intensity_button = QPushButton("Compute selected channel")
         self.cancel_intensity_button = QPushButton("Cancel")
         self.cancel_intensity_button.setEnabled(False)
+        compute_controls.addWidget(QLabel("Channel"))
+        self.channel_combo = QComboBox()
+        self.channel_combo.addItem("Intensity", "intensity")
+        self.channel_combo.addItem("Change energy", "change_energy")
+        compute_controls.addWidget(self.channel_combo)
         compute_controls.addWidget(QLabel("Normalize"))
         self.normalization_combo = QComboBox()
         self.normalization_combo.addItem(
@@ -231,6 +253,9 @@ class IsolateTab(QWidget):
             self._grid_controls_changed
         )
         self.show_grid_check.toggled.connect(self._show_grid_changed)
+        self.show_channel_overlay_check.toggled.connect(
+            self.player.set_channel_overlay_visible
+        )
         self.session.state_changed.connect(self._refresh)
         self.session.frame_ready.connect(self._frame_ready)
         self.session.error_changed.connect(self.status_label.setText)
@@ -242,6 +267,9 @@ class IsolateTab(QWidget):
         )
         self.normalization_combo.currentIndexChanged.connect(
             self._normalization_changed
+        )
+        self.channel_combo.currentIndexChanged.connect(
+            self._channel_changed
         )
         self.intensity_raster.frame_selected.connect(
             self.session.timeline_seek
@@ -345,7 +373,8 @@ class IsolateTab(QWidget):
     def _frame_ready(
         self, frame: int, raw: bytes, width: int, height: int
     ) -> None:
-        self.player.set_frame(raw, width, height)
+        self.player.set_frame(raw, width, height, frame)
+        self._update_channel_overlay()
         self.status_label.setText("Ready")
 
     def _refresh(self) -> None:
@@ -437,6 +466,39 @@ class IsolateTab(QWidget):
             resources=self.resource_policy,
         )
 
+    def _snapshot_selected_request(self) -> ScientificRequest | None:
+        intensity = self._snapshot_intensity_request()
+        if intensity is None or self.selected_channel == "intensity":
+            return intensity
+        return ChangeEnergyRequest(
+            working_window=intensity.working_window,
+            grid=intensity.grid,
+            normalization=intensity.normalization,
+            resources=intensity.resources,
+            execution_target=intensity.execution_target,
+            batch_size=intensity.batch_size,
+        )
+
+    def _channel_changed(self, _index: int) -> None:
+        selected = str(self.channel_combo.currentData())
+        if selected == self.selected_channel:
+            return
+        established = (
+            self._selected_result is not None
+            or self._intensity_worker is not None
+            or self._pending_intensity is not None
+        )
+        self.selected_channel = selected
+        self.channel_heading.setText(self._selected_channel_label())
+        self._clear_intensity_result()
+        if established:
+            self._compute_intensity()
+        else:
+            self.compute_status.setText(
+                f"{self._selected_channel_label()} selected. "
+                "Compute selected channel to start."
+            )
+
     def _normalization_changed(self, _index: int) -> None:
         mode = NormalizationMode(self.normalization_combo.currentData())
         selected = (
@@ -447,7 +509,7 @@ class IsolateTab(QWidget):
         if selected == self.normalization_spec:
             return
         established = (
-            self._intensity_result is not None
+            self._selected_result is not None
             or self._intensity_worker is not None
             or self._pending_intensity is not None
         )
@@ -457,11 +519,11 @@ class IsolateTab(QWidget):
         else:
             self.compute_status.setText(
                 f"Normalization selected: {mode.value}. "
-                "Compute intensity to start."
+                f"Compute {self._selected_channel_label().lower()} to start."
             )
 
     def _compute_intensity(self) -> None:
-        request = self._snapshot_intensity_request()
+        request = self._snapshot_selected_request()
         if request is None:
             self.compute_status.setText(
                 "Open a registered asset with a valid window and grid."
@@ -481,15 +543,17 @@ class IsolateTab(QWidget):
         self._start_intensity_worker(token, request)
 
     def _start_intensity_worker(
-        self, token: int, request: IntensityRequest
+        self, token: int, request: ScientificRequest
     ) -> None:
-        worker = IntensityWorker(token, request)
+        worker = ScientificWorker(token, request)
         self._intensity_worker = worker
         worker.progress_changed.connect(self._intensity_progress)
         worker.finished.connect(
             lambda active=worker: self._intensity_finished(active)
         )
-        self.compute_status.setText("Computing intensity…")
+        self.compute_status.setText(
+            f"Computing {self._selected_channel_label().lower()}…"
+        )
         self._update_compute_controls()
         worker.start()
 
@@ -499,10 +563,11 @@ class IsolateTab(QWidget):
         if token != self._job_token:
             return
         self.compute_status.setText(
-            f"Computing intensity: {completed} / {total} frames"
+            f"Computing {self._selected_channel_label().lower()}: "
+            f"{completed} / {total} frames"
         )
 
-    def _intensity_finished(self, worker: IntensityWorker) -> None:
+    def _intensity_finished(self, worker: ScientificWorker) -> None:
         if self._intensity_worker is not worker:
             return
         if not worker.wait(3_000):
@@ -514,7 +579,7 @@ class IsolateTab(QWidget):
         pending = self._pending_intensity
         self._pending_intensity = None
 
-        current = self._snapshot_intensity_request()
+        current = self._snapshot_selected_request()
         if (
             worker.token == self._job_token
             and current is not None
@@ -551,12 +616,35 @@ class IsolateTab(QWidget):
         else:
             self._update_compute_controls()
 
-    def _publish_intensity(self, result: IntensityResult) -> None:
-        self._intensity_result = result
+    def _publish_intensity(self, result: ScientificResult) -> None:
+        self._selected_result = result
+        self._intensity_result = (
+            result if isinstance(result, IntensityResult) else None
+        )
+        self._change_energy_result = (
+            result if isinstance(result, ChangeEnergyResult) else None
+        )
         self.intensity_raster.set_result(result)
         self.intensity_raster.set_current_frame(self.session.current_frame)
         self._update_intensity_context()
-        if (
+        if isinstance(result, ChangeEnergyResult):
+            self.channel_heading.setText("Change energy")
+            if (
+                result.request.normalization.mode
+                is NormalizationMode.PER_FRAME_ZSCORE
+            ):
+                self.intensity_legend.setText(
+                    f"{CHANGE_ENERGY_ID} · Per-frame z-score · "
+                    "z-score squared · fixed E/(E+1) mapping "
+                    f"({CHANGE_ZSCORE_PRESENTATION_ID}); E=1 maps to 0.5"
+                )
+            else:
+                self.intensity_legend.setText(
+                    f"{CHANGE_ENERGY_ID} · Normalize Off · "
+                    "post-decoder intensity squared · fixed [0,1] mapping "
+                    f"({CHANGE_OFF_PRESENTATION_ID})"
+                )
+        elif (
             result.request.normalization.mode
             is NormalizationMode.PER_FRAME_ZSCORE
         ):
@@ -577,13 +665,15 @@ class IsolateTab(QWidget):
         self.channels_empty.hide()
         self.intensity_panel.show()
         self.compute_status.setText(
-            f"Intensity complete: {result.values.shape[0]} frames · "
+            f"{self._selected_channel_label()} complete: "
+            f"{result.values.shape[0]} frames · "
             f"{result.conversion_id} · {result.normalization_id} · "
             f"{result.backend}"
         )
+        self._update_channel_overlay()
 
     def _update_intensity_context(self) -> None:
-        result = self._intensity_result
+        result = self._selected_result
         if result is None:
             return
         grid = result.request.grid
@@ -591,11 +681,19 @@ class IsolateTab(QWidget):
         current = "Current frame outside computed span"
         if result.processed_start <= frame < result.processed_stop:
             offset = frame - result.processed_start
-            state = (
-                "degenerate (valid zero data)"
-                if result.degenerate_flags[offset]
-                else "nondegenerate"
-            )
+            if isinstance(result, ChangeEnergyResult):
+                state = (
+                    f"pair ({frame - 1},{frame}), "
+                    f"temporally {'valid' if result.temporal_valid[offset] else 'invalid'}, "
+                    f"previous degenerate {int(result.previous_degenerate[offset])}, "
+                    f"current degenerate {bool(result.current_degenerate[offset])}"
+                )
+            else:
+                state = (
+                    "degenerate (valid zero data)"
+                    if result.degenerate_flags[offset]
+                    else "nondegenerate"
+                )
             current = f"Current frame {frame}: {state}"
         self.intensity_context.setText(
             f"Frames [{result.processed_start},{result.processed_stop}) · "
@@ -607,27 +705,38 @@ class IsolateTab(QWidget):
 
     def _clear_intensity_result(self) -> None:
         self._intensity_result = None
+        self._change_energy_result = None
+        self._selected_result = None
         self.intensity_raster.set_result(None)
+        self.player.set_channel_overlay(None)
         self.intensity_panel.hide()
         self.channels_empty.show()
 
     def _invalidate_if_inputs_changed(self) -> None:
-        active = self._snapshot_intensity_request()
+        active = self._snapshot_selected_request()
         if (
-            self._intensity_result is not None
-            and active != self._intensity_result.request
+            self._selected_result is not None
+            and (
+                active is None
+                or active.scientific_key
+                != self._selected_result.scientific_key
+            )
         ):
             self._invalidate_intensity("Window or grid changed.")
         elif (
             self._intensity_worker is not None
-            and active != self._intensity_worker.request
+            and (
+                active is None
+                or active.scientific_key
+                != self._intensity_worker.request.scientific_key
+            )
         ):
             self._invalidate_intensity("Window or grid changed.")
 
     def _invalidate_intensity(self, reason: str) -> None:
         if (
             self._intensity_worker is None
-            and self._intensity_result is None
+            and self._selected_result is None
             and self._pending_intensity is None
         ):
             return
@@ -646,7 +755,7 @@ class IsolateTab(QWidget):
         self._pending_intensity = None
         self._intensity_worker.cancel()
         self._clear_intensity_result()
-        self.compute_status.setText("Cancelling intensity…")
+        self.compute_status.setText("Cancelling selected channel…")
         self._update_compute_controls()
 
     def _update_compute_controls(self) -> None:
@@ -654,6 +763,66 @@ class IsolateTab(QWidget):
         self.compute_intensity_button.setEnabled(ready)
         self.cancel_intensity_button.setEnabled(
             self._intensity_worker is not None
+        )
+
+    def _selected_channel_label(self) -> str:
+        return (
+            "Intensity"
+            if self.selected_channel == "intensity"
+            else "Change energy"
+        )
+
+    def _update_channel_overlay(self) -> None:
+        result = self._selected_result
+        frame = self.player.displayed_frame
+        if (
+            result is None
+            or frame is None
+            or not result.processed_start <= frame < result.processed_stop
+        ):
+            self.player.set_channel_overlay(None)
+            return
+        offset = frame - result.processed_start
+        if isinstance(result, ChangeEnergyResult):
+            if not result.temporal_valid[offset]:
+                self.player.set_channel_overlay(None)
+                return
+            mapping = (
+                CHANGE_ZSCORE_PRESENTATION_ID
+                if result.request.normalization.mode
+                is NormalizationMode.PER_FRAME_ZSCORE
+                else CHANGE_OFF_PRESENTATION_ID
+            )
+            detail = (
+                f"Pair ({frame - 1},{frame}); previous degenerate "
+                f"{bool(result.previous_degenerate[offset])}; current "
+                f"degenerate {bool(result.current_degenerate[offset])}"
+            )
+            label = "Change energy"
+        else:
+            mapping = (
+                ZSCORE_PRESENTATION_ID
+                if result.request.normalization.mode
+                is NormalizationMode.PER_FRAME_ZSCORE
+                else OFF_PRESENTATION_ID
+            )
+            detail = (
+                "Normalization degenerate "
+                f"{bool(result.degenerate_flags[offset])}"
+            )
+            label = "Intensity"
+        self.player.set_channel_overlay(
+            ChannelOverlay(
+                publication_token=self._job_token,
+                absolute_frame=frame,
+                grid=result.request.grid,
+                values=result.values[offset],
+                presentation_mapping_id=mapping,
+                channel_label=label,
+                scientific_units=result.scientific_units,
+                detail=detail,
+            ),
+            visible=self.show_channel_overlay_check.isChecked(),
         )
 
     def handle_shortcut(self, command: str) -> None:

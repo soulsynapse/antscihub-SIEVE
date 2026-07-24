@@ -1,8 +1,33 @@
 # 7 — Add temporal change energy
 
-Status: handoff only. Implementation is not authorized until milestones 5 and
-6 have been implemented, visibly validated, and accepted, and the rewrite-side
-divergence refresh in section 1.1 has been completed.
+Reviewed and updated against the current rewrite checkout:
+`2026-07-23 16:55:13 -07:00`.
+
+Status: implemented after the user's explicit milestone-7 authorization on
+`2026-07-23`. Automated and performance validation are recorded below; visible
+manual acceptance remains outstanding.
+
+Corrections made during the current-checkout review:
+
+- The embedded review at `6c09ac6` described milestone 6 as in progress.
+  Milestone 6 is implemented at `113980b`; the concrete normalization,
+  scientific-key, resource-admission, worker, and panel seams were used.
+- Milestones 5 and 6 still have no recorded manual acceptance. The handoff's
+  earlier gate remains historically accurate, but the user's direct instruction
+  to implement milestone 7 superseded it without retroactively recording that
+  acceptance.
+- The implementation keeps concrete `IntensityRequest` and
+  `ChangeEnergyRequest` contracts while generalizing only the GUI's single
+  worker/newest-pending/current-result envelope.
+- `IntensityRaster` was the accepted widget seam, so it remains as a
+  compatibility class name while its presentation changed from flattened
+  time-by-block rows to selected-channel time-by-value density.
+- The display callback already carries an absolute decoded-frame index. The
+  player now retains that authoritative identity and the owner gates one shared
+  selected-channel overlay against it; no second player clock was introduced.
+- Current rendering evidence is offscreen and short-run. It establishes bounded
+  overlay preparation and paint costs on the representative source, not a
+  general speedup or native-window performance claim.
 
 This milestone adds the first temporal scientific channel to Isolate:
 
@@ -45,10 +70,12 @@ This handoff follows the accepted implementations of:
 - `5-First-channel.md`.
 - `6-Normalization.md`.
 
-Milestones 5 and 6 are hard prerequisites. Do not implement this document
-against their illustrative request, result, worker, panel, or normalization
-types. First return those milestones for visible validation, then adapt this
-handoff to their real accepted seams.
+Milestones 5 and 6 were hard prerequisites. Their implementations were present
+before this work, although their separate visible/manual acceptance remains
+unrecorded. The user's explicit milestone-7 implementation instruction
+superseded the acceptance gate. The implementation was adapted to their real
+request, result, worker, panel, and normalization seams rather than the
+handoff's illustrative types.
 
 Milestone 7 must reuse rather than replace:
 
@@ -64,9 +91,8 @@ Milestone 7 must reuse rather than replace:
 - The one-active-worker/one-newest-pending-request supersession handshake.
 - The existing channel panel's absolute player clock.
 
-Completing this handoff does not authorize starting milestone 7. Completing
-milestone 7 does not authorize static value filtering, Morlet processing, or
-detection.
+Completing milestone 7 does not authorize static value filtering, Morlet
+processing, or detection.
 
 ### 1.1 Required rewrite-side divergence refresh
 
@@ -1439,3 +1465,27 @@ Milestone 7 is complete only when:
 
 Stop here. Static value filtering requires its own accepted handoff and is not
 authorized by completion of Change energy.
+
+### Rewrite implementation record — 2026-07-23 16:55:13 -07:00
+
+Implemented source and automated coverage:
+
+- Qt-free temporal request/result, one-frame context source span, explicit
+  validity and normalization-degenerate pair evidence, exact retained-array
+  admission, fixed float32 difference/square, float64 sigma-2 reflect-101
+  integration, and accepted owned-cell reduction.
+- One selected-channel GUI worker, newest-pending request, current result, and
+  publication token for Intensity or Change energy.
+- Area-weighted time-by-value density, fixed mappings, absolute cursor/seek,
+  invalid-frame exclusion, and aggregated-bin hover.
+- One display-bounded selected-channel player overlay with authoritative
+  decoded-frame identity, exact partial-cell geometry, independent visibility,
+  and composition below the grid.
+- Focused milestone-5/6/7 and player validation: `74 passed`.
+- Complete offscreen validation: `170 passed in 30.33s`.
+- Final viewer timing is recorded in the rewrite divergence note, finding, and
+  `docs/next_steps.md`.
+
+This is not a claim that the definition of done's visible/manual acceptance
+item has passed. Return the implemented milestone for that acceptance before
+starting milestone 8.

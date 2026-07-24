@@ -45,6 +45,11 @@ def main() -> int:
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=540)
     parser.add_argument("--json-out", type=Path)
+    parser.add_argument(
+        "--channel-overlays",
+        action="store_true",
+        help="Also benchmark grid and representative selected-channel overlays.",
+    )
     args = parser.parse_args()
 
     from PyQt6.QtWidgets import QApplication
@@ -66,6 +71,7 @@ def main() -> int:
     paint_ms: list[float] = []
     end_to_end_ms: list[float] = []
     unchanged_repaint_ms: list[float] = []
+    overlay_measurements: dict[str, Any] = {}
     try:
         frame_count = min(args.frames, session.frame_count)
         display_width, display_height = session.scaled_dimensions(
@@ -81,6 +87,7 @@ def main() -> int:
                 raw,
                 display_width,
                 display_height,
+                frame,
             )
             installed = time.perf_counter_ns()
             player.repaint()
@@ -98,6 +105,67 @@ def main() -> int:
             unchanged_repaint_ms.append(
                 (time.perf_counter_ns() - started) / 1_000_000
             )
+        if args.channel_overlays:
+            import numpy as np
+
+            from antscihub_sieve.application.working_grid import (
+                resolve_working_grid,
+            )
+            from antscihub_sieve.gui.intensity_panel import (
+                OFF_PRESENTATION_ID,
+            )
+            from antscihub_sieve.gui.isolate_player import ChannelOverlay
+
+            grid = resolve_working_grid(
+                int(session.metadata["width"]), int(session.metadata["height"])
+            )
+            values = np.linspace(
+                0.0,
+                1.0,
+                grid.rows * grid.columns,
+                dtype=np.float32,
+            ).reshape(grid.rows, grid.columns)
+            values.setflags(write=False)
+            overlay = ChannelOverlay(
+                publication_token=1,
+                absolute_frame=frame_count - 1,
+                grid=grid,
+                values=values,
+                presentation_mapping_id=OFF_PRESENTATION_ID,
+                channel_label="Intensity",
+                scientific_units="normalized RGB-code intensity fraction",
+                detail="representative benchmark field",
+            )
+            for name, show_overlay, show_grid in (
+                ("video_only", False, False),
+                ("video_plus_grid", False, True),
+                ("video_plus_channel_overlay", True, False),
+                ("video_plus_channel_overlay_plus_grid", True, True),
+            ):
+                player.set_working_grid(grid, visible=show_grid)
+                player.set_channel_overlay(
+                    overlay if show_overlay else None,
+                    visible=show_overlay,
+                )
+                preparation_ms = 0.0
+                if show_overlay:
+                    prepared = time.perf_counter_ns()
+                    player._channel_overlay_image(player.image_rect())
+                    preparation_ms = (
+                        time.perf_counter_ns() - prepared
+                    ) / 1_000_000
+                samples: list[float] = []
+                for _ in range(max(8, frame_count)):
+                    started = time.perf_counter_ns()
+                    player.repaint()
+                    application.processEvents()
+                    samples.append(
+                        (time.perf_counter_ns() - started) / 1_000_000
+                    )
+                overlay_measurements[name] = {
+                    "overlay_preparation_ms": preparation_ms,
+                    "paint": latency_summary(samples),
+                }
     finally:
         metadata: dict[str, Any] = session.metadata
         session.close()
@@ -122,6 +190,7 @@ def main() -> int:
             "window_visible": True,
             "window_obscured_or_minimized": False,
             "synchronous_repaint": True,
+            "channel_overlay_matrix": args.channel_overlays,
         },
         "measurements": {
             "sequential_decode": latency_summary(decode_ms),
@@ -135,6 +204,7 @@ def main() -> int:
                 end_to_end_ms[1:]
             ),
             "unchanged_frame_repaint": latency_summary(unchanged_repaint_ms),
+            "overlay_matrix": overlay_measurements,
         },
         "counts": {
             "requested": frame_count,

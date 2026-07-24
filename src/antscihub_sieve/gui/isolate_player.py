@@ -1,13 +1,29 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+import numpy as np
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QImage, QPainter, QPen
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPen
+from PyQt6.QtWidgets import QToolTip, QWidget
 
 from antscihub_sieve.application.working_grid import ResolvedWorkingGrid
 
 
 GRID_MIN_DISPLAY_SPACING = 4.0
+CHANNEL_OVERLAY_OPACITY = 0.46
+
+
+@dataclass(frozen=True, slots=True)
+class ChannelOverlay:
+    publication_token: int
+    absolute_frame: int
+    grid: ResolvedWorkingGrid
+    values: np.ndarray
+    presentation_mapping_id: str
+    channel_label: str
+    scientific_units: str
+    detail: str
 
 
 class IsolatePlayer(QWidget):
@@ -16,20 +32,38 @@ class IsolatePlayer(QWidget):
         self.setMinimumSize(480, 300)
         self.image: QImage | None = None
         self._frame_bytes: bytes | None = None
+        self.displayed_frame: int | None = None
         self.frame_size = (1, 1)
         self.working_grid: ResolvedWorkingGrid | None = None
         self.show_grid = False
+        self.channel_overlay: ChannelOverlay | None = None
+        self.show_channel_overlay = True
+        self._overlay_image = QImage()
+        self._overlay_cache_key: tuple[object, ...] | None = None
+        self.setMouseTracking(True)
         self.message = (
             "Open footage in Replicates or use File > Open to begin."
         )
 
-    def set_frame(self, raw: bytes, width: int, height: int) -> None:
+    def set_frame(
+        self,
+        raw: bytes,
+        width: int,
+        height: int,
+        absolute_frame: int | None = None,
+    ) -> None:
         image = QImage(
             raw, width, height, width * 3, QImage.Format.Format_RGB888
         )
         self._frame_bytes = raw
         self.image = image
         self.frame_size = (width, height)
+        self.displayed_frame = absolute_frame
+        if (
+            self.channel_overlay is not None
+            and self.channel_overlay.absolute_frame != absolute_frame
+        ):
+            self.set_channel_overlay(None)
         self.message = ""
         self.update()
 
@@ -37,8 +71,24 @@ class IsolatePlayer(QWidget):
         self.image = None
         self._frame_bytes = None
         self.frame_size = (1, 1)
+        self.displayed_frame = None
         self.working_grid = None
+        self.set_channel_overlay(None)
         self.message = message
+        self.update()
+
+    def set_channel_overlay(
+        self, overlay: ChannelOverlay | None, *, visible: bool | None = None
+    ) -> None:
+        self.channel_overlay = overlay
+        if visible is not None:
+            self.show_channel_overlay = visible
+        self._overlay_image = QImage()
+        self._overlay_cache_key = None
+        self.update()
+
+    def set_channel_overlay_visible(self, visible: bool) -> None:
+        self.show_channel_overlay = visible
         self.update()
 
     def set_working_grid(
@@ -101,6 +151,17 @@ class IsolatePlayer(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         image_rect = self.image_rect()
         painter.drawImage(image_rect, self.image)
+        overlay = self.channel_overlay
+        if (
+            overlay is not None
+            and self.show_channel_overlay
+            and overlay.absolute_frame == self.displayed_frame
+        ):
+            overlay_image = self._channel_overlay_image(image_rect)
+            if not overlay_image.isNull():
+                painter.setOpacity(CHANNEL_OVERLAY_OPACITY)
+                painter.drawImage(image_rect, overlay_image)
+                painter.setOpacity(1.0)
         if self.working_grid is None or not self.show_grid:
             return
 
@@ -132,3 +193,113 @@ class IsolatePlayer(QWidget):
                 int(round(image_rect.right())),
                 int(round(y)),
             )
+
+    def _channel_overlay_image(self, rect: QRectF) -> QImage:
+        overlay = self.channel_overlay
+        if overlay is None:
+            return QImage()
+        width = max(1, int(round(rect.width())))
+        height = max(1, int(round(rect.height())))
+        key = (
+            overlay.publication_token,
+            overlay.absolute_frame,
+            overlay.presentation_mapping_id,
+            width,
+            height,
+        )
+        if key == self._overlay_cache_key:
+            return self._overlay_image
+        grid = overlay.grid
+        x_work = (
+            (np.arange(width, dtype=np.float64) + 0.5)
+            * grid.work_width
+            / width
+        )
+        y_work = (
+            (np.arange(height, dtype=np.float64) + 0.5)
+            * grid.work_height
+            / height
+        )
+        columns = np.minimum(
+            (x_work // grid.resolved_block_size).astype(np.intp),
+            grid.columns - 1,
+        )
+        rows = np.minimum(
+            (y_work // grid.resolved_block_size).astype(np.intp),
+            grid.rows - 1,
+        )
+        sampled = overlay.values[np.ix_(rows, columns)]
+        pixels = _mapped_rgb(sampled, overlay.presentation_mapping_id)
+        self._overlay_image = QImage(
+            pixels.tobytes(),
+            width,
+            height,
+            pixels.strides[0],
+            QImage.Format.Format_RGB888,
+        ).copy()
+        self._overlay_cache_key = key
+        return self._overlay_image
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        overlay = self.channel_overlay
+        rect = self.image_rect()
+        if (
+            overlay is None
+            or not self.show_channel_overlay
+            or overlay.absolute_frame != self.displayed_frame
+            or not rect.contains(event.position())
+        ):
+            QToolTip.hideText()
+            return super().mouseMoveEvent(event)
+        grid = overlay.grid
+        work_x = (event.position().x() - rect.left()) * grid.work_width / rect.width()
+        work_y = (event.position().y() - rect.top()) * grid.work_height / rect.height()
+        column = min(grid.columns - 1, int(work_x) // grid.resolved_block_size)
+        row = min(grid.rows - 1, int(work_y) // grid.resolved_block_size)
+        bounds = grid.block_bounds(row, column)
+        QToolTip.showText(
+            event.globalPosition().toPoint(),
+            (
+                f"Frame {overlay.absolute_frame}\n"
+                f"{overlay.channel_label}\n"
+                f"Block ({row}, {column})\n"
+                f"Value {float(overlay.values[row, column]):.6f} "
+                f"{overlay.scientific_units}\n"
+                f"Bounds x[{bounds.x0},{bounds.x1}) "
+                f"y[{bounds.y0},{bounds.y1})\n"
+                f"Partial-cell weight "
+                f"{grid.block_area_weight(row, column):.6f}\n"
+                f"{overlay.detail}"
+            ),
+            self,
+        )
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        QToolTip.hideText()
+        super().leaveEvent(event)
+
+
+def _mapped_rgb(values: np.ndarray, mapping_id: str) -> np.ndarray:
+    from antscihub_sieve.gui.intensity_panel import (
+        CHANGE_OFF_PRESENTATION_ID,
+        CHANGE_ZSCORE_PRESENTATION_ID,
+        OFF_PRESENTATION_ID,
+        ZSCORE_PRESENTATION_ID,
+        _zscore_diverging_pixels,
+    )
+
+    if mapping_id == ZSCORE_PRESENTATION_ID:
+        return _zscore_diverging_pixels(values)
+    if mapping_id == CHANGE_ZSCORE_PRESENTATION_ID:
+        scaled = np.asarray(values, dtype=np.float64)
+        scaled = scaled / (scaled + 1.0)
+    else:
+        scaled = np.clip(np.asarray(values, dtype=np.float64), 0.0, 1.0)
+    gray = np.rint(scaled * 255.0).astype(np.uint8)
+    if mapping_id in (CHANGE_OFF_PRESENTATION_ID, CHANGE_ZSCORE_PRESENTATION_ID):
+        return np.ascontiguousarray(
+            np.stack((gray, np.rint(gray * 0.72).astype(np.uint8), np.zeros_like(gray)), axis=-1)
+        )
+    assert mapping_id == OFF_PRESENTATION_ID
+    return np.ascontiguousarray(np.repeat(gray[..., None], 3, axis=-1))

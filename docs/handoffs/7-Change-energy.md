@@ -1,7 +1,7 @@
 # 7 — Add temporal change energy
 
 Reviewed and updated against the current rewrite checkout:
-`2026-07-23 16:55:13 -07:00`.
+`2026-07-23 21:51:33 -07:00`.
 
 Status: implemented after the user's explicit milestone-7 authorization on
 `2026-07-23`. Automated and performance validation are recorded below; visible
@@ -28,6 +28,48 @@ Corrections made during the current-checkout review:
 - Current rendering evidence is offscreen and short-run. It establishes bounded
   overlay preparation and paint costs on the representative source, not a
   general speedup or native-window performance claim.
+- The first milestone-7 presentation was final-result-only, used an orange
+  fixed mapping for Change energy, and rendered a channel-colored density
+  raster. The user rejected that as behaviorally unlike the pre-rewrite
+  `change` surface. The corrected implementation restores live playback,
+  progressively filled graphs, the cyan/white log-density instrument,
+  hatched uncomputed coverage, and the adaptive TURBO change overlay.
+- The live path does not introduce a second scientific result or copy the full
+  retained tensor into GUI state. Headless computation publishes immutable
+  frame views from the same admitted result buffer; the worker coalesces them
+  to at most 10 Hz after the first eight-frame preview; the panel owns only
+  presentation histograms and frame-view references.
+
+## Implementation correction: live pre-rewrite presentation behavior
+
+The user's `2026-07-23` correction supersedes later passages in this handoff
+that require final-only publication, channel-colored density, or a fixed
+Change-energy color mapping.
+
+The accepted presentation behavior is now:
+
+1. **Compute selected channel** starts the single existing worker and begins
+   playback once the first eight-frame preview is accepted.
+2. The headless computation may report immutable, ordered per-frame channel
+   fields while it fills the same final admitted result. The final immutable
+   result remains authoritative and numerically unchanged.
+3. The right-side graph uses the pre-rewrite density visual language: time on
+   X, scientific value on Y, cyan-to-white log-density brightness, a magenta
+   absolute-frame cursor, current maximum readout, click-to-seek, and diagonal
+   hatching for coverage that has not been computed.
+4. Change energy uses the pre-rewrite TURBO spatial overlay at 55% opacity,
+   with a run-local 99th-percentile display scale established from the first
+   nonzero accepted preview. That scale is presentation-only and does not
+   alter stored values.
+5. Overlay publication is still gated to the absolute frame actually decoded
+   into the player. A frame outside accepted preview/result coverage, including
+   temporally invalid frame zero, receives no channel overlay.
+6. The player remains display-bounded, the grid remains an independent layer,
+   and channel switching still uses one worker, one newest pending request,
+   and one publication token.
+
+Corrected automated validation: `174 passed in 35.07s` with offscreen Qt,
+followed by compileall and `git diff --check`.
 
 This milestone adds the first temporal scientific channel to Isolate:
 

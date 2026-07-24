@@ -11,7 +11,7 @@ from antscihub_sieve.application.working_grid import ResolvedWorkingGrid
 
 
 GRID_MIN_DISPLAY_SPACING = 4.0
-CHANNEL_OVERLAY_OPACITY = 0.46
+CHANNEL_OVERLAY_OPACITY = 0.55
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +24,7 @@ class ChannelOverlay:
     channel_label: str
     scientific_units: str
     detail: str
+    display_scale: float = 1.0
 
 
 class IsolatePlayer(QWidget):
@@ -204,6 +205,7 @@ class IsolatePlayer(QWidget):
             overlay.publication_token,
             overlay.absolute_frame,
             overlay.presentation_mapping_id,
+            overlay.display_scale,
             width,
             height,
         )
@@ -228,8 +230,12 @@ class IsolatePlayer(QWidget):
             (y_work // grid.resolved_block_size).astype(np.intp),
             grid.rows - 1,
         )
-        sampled = overlay.values[np.ix_(rows, columns)]
-        pixels = _mapped_rgb(sampled, overlay.presentation_mapping_id)
+        block_pixels = _mapped_rgb(
+            overlay.values,
+            overlay.presentation_mapping_id,
+            overlay.display_scale,
+        )
+        pixels = np.ascontiguousarray(block_pixels[rows[:, None], columns])
         self._overlay_image = QImage(
             pixels.tobytes(),
             width,
@@ -280,7 +286,11 @@ class IsolatePlayer(QWidget):
         super().leaveEvent(event)
 
 
-def _mapped_rgb(values: np.ndarray, mapping_id: str) -> np.ndarray:
+def _mapped_rgb(
+    values: np.ndarray,
+    mapping_id: str,
+    display_scale: float = 1.0,
+) -> np.ndarray:
     from antscihub_sieve.gui.intensity_panel import (
         CHANGE_OFF_PRESENTATION_ID,
         CHANGE_ZSCORE_PRESENTATION_ID,
@@ -291,15 +301,43 @@ def _mapped_rgb(values: np.ndarray, mapping_id: str) -> np.ndarray:
 
     if mapping_id == ZSCORE_PRESENTATION_ID:
         return _zscore_diverging_pixels(values)
-    if mapping_id == CHANGE_ZSCORE_PRESENTATION_ID:
-        scaled = np.asarray(values, dtype=np.float64)
-        scaled = scaled / (scaled + 1.0)
-    else:
-        scaled = np.clip(np.asarray(values, dtype=np.float64), 0.0, 1.0)
-    gray = np.rint(scaled * 255.0).astype(np.uint8)
     if mapping_id in (CHANGE_OFF_PRESENTATION_ID, CHANGE_ZSCORE_PRESENTATION_ID):
-        return np.ascontiguousarray(
-            np.stack((gray, np.rint(gray * 0.72).astype(np.uint8), np.zeros_like(gray)), axis=-1)
+        scaled = np.clip(
+            np.asarray(values, dtype=np.float64)
+            / max(float(display_scale), np.finfo(np.float32).eps),
+            0.0,
+            1.0,
         )
+        return _turbo_pixels(scaled)
     assert mapping_id == OFF_PRESENTATION_ID
+    scaled = np.clip(np.asarray(values, dtype=np.float64), 0.0, 1.0)
+    gray = np.rint(scaled * 255.0).astype(np.uint8)
     return np.ascontiguousarray(np.repeat(gray[..., None], 3, axis=-1))
+
+
+def _turbo_pixels(scaled: np.ndarray) -> np.ndarray:
+    """Lookup-table equivalent of the old OpenCV TURBO change overlay."""
+    indices = np.rint(
+        np.clip(np.asarray(scaled, dtype=np.float64), 0.0, 1.0) * 255.0
+    ).astype(np.uint8)
+    return np.ascontiguousarray(_TURBO_LUT[indices])
+
+
+def _build_turbo_lut() -> np.ndarray:
+    x = np.linspace(0.0, 1.0, 256, dtype=np.float64)
+    coefficients = np.array(
+        [
+            [0.13572138, 4.61539260, -42.66032258, 132.13108234, -152.94239396, 59.28637943],
+            [0.09140261, 2.19418839, 4.84296658, -14.18503333, 4.27729857, 2.82956604],
+            [0.10667330, 12.64194608, -60.58204836, 110.36276771, -89.90310912, 27.34824973],
+        ],
+        dtype=np.float64,
+    )
+    powers = np.stack([np.ones_like(x), x, x**2, x**3, x**4, x**5], axis=-1)
+    rgb = np.clip(powers @ coefficients.T, 0.0, 1.0)
+    lut = np.ascontiguousarray(np.rint(rgb * 255.0).astype(np.uint8))
+    lut.setflags(write=False)
+    return lut
+
+
+_TURBO_LUT = _build_turbo_lut()

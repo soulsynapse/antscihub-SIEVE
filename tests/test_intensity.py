@@ -736,6 +736,34 @@ def test_batch_size_does_not_change_normalized_results() -> None:
     assert separate.scientific_key == combined.scientific_key
 
 
+def test_live_frame_callback_publishes_ordered_immutable_fields() -> None:
+    item = request(start=0, stop=2)
+    descriptor = plane(2, 2)
+    frames = tuple(
+        bytes([value, value, value] * 4)
+        for value in (32, 96)
+    )
+    stream = FakeStream(
+        item,
+        [FrameBatch((0, 1), frames, descriptor)],
+    )
+    published = []
+
+    result = compute_intensity(
+        item,
+        stream_factory=lambda *_args, **_kwargs: stream,
+        frame_completed=published.append,
+    )
+
+    assert [frame.absolute_frame for frame in published] == [0, 1]
+    assert all(frame.valid for frame in published)
+    assert all(not frame.values.flags.writeable for frame in published)
+    assert all(
+        np.shares_memory(frame.values, result.values)
+        for frame in published
+    )
+
+
 def test_overlapping_frame_is_window_independent() -> None:
     descriptor = plane(2, 2)
     common = bytes(

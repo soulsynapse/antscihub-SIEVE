@@ -50,6 +50,11 @@ def main() -> int:
         action="store_true",
         help="Also benchmark grid and representative selected-channel overlays.",
     )
+    parser.add_argument(
+        "--change-overlay",
+        action="store_true",
+        help="Use the adaptive TURBO Change-energy mapping in the overlay matrix.",
+    )
     args = parser.parse_args()
 
     from PyQt6.QtWidgets import QApplication
@@ -112,6 +117,7 @@ def main() -> int:
                 resolve_working_grid,
             )
             from antscihub_sieve.gui.intensity_panel import (
+                CHANGE_OFF_PRESENTATION_ID,
                 OFF_PRESENTATION_ID,
             )
             from antscihub_sieve.gui.isolate_player import ChannelOverlay
@@ -126,15 +132,31 @@ def main() -> int:
                 dtype=np.float32,
             ).reshape(grid.rows, grid.columns)
             values.setflags(write=False)
+            mapping = (
+                CHANGE_OFF_PRESENTATION_ID
+                if args.change_overlay
+                else OFF_PRESENTATION_ID
+            )
             overlay = ChannelOverlay(
                 publication_token=1,
                 absolute_frame=frame_count - 1,
                 grid=grid,
                 values=values,
-                presentation_mapping_id=OFF_PRESENTATION_ID,
-                channel_label="Intensity",
-                scientific_units="normalized RGB-code intensity fraction",
+                presentation_mapping_id=mapping,
+                channel_label=(
+                    "Change energy" if args.change_overlay else "Intensity"
+                ),
+                scientific_units=(
+                    "post-decoder intensity squared"
+                    if args.change_overlay
+                    else "normalized RGB-code intensity fraction"
+                ),
                 detail="representative benchmark field",
+                display_scale=(
+                    float(np.percentile(values, 99))
+                    if args.change_overlay
+                    else 1.0
+                ),
             )
             for name, show_overlay, show_grid in (
                 ("video_only", False, False),
@@ -191,6 +213,7 @@ def main() -> int:
             "window_obscured_or_minimized": False,
             "synchronous_repaint": True,
             "channel_overlay_matrix": args.channel_overlays,
+            "change_overlay": args.change_overlay,
         },
         "measurements": {
             "sequential_decode": latency_summary(decode_ms),

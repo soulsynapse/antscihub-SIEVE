@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 
 
@@ -105,3 +107,122 @@ def test_density_panel_excludes_temporally_invalid_frame_zero(
     if raster._density_count.shape[1] > 1:
         assert int(raster._density_count[:, 1].sum()) > 0
     tab.close()
+
+
+def test_change_graph_overlay_and_playback_publish_while_worker_is_running(
+    qtbot,
+    video: Path,
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    import antscihub_sieve.gui.intensity_worker as worker_module
+
+    actual_compute = worker_module.compute_change_energy
+    preview_blocked = threading.Event()
+    release = threading.Event()
+
+    def controlled_compute(
+        request,
+        *,
+        cancelled,
+        progress,
+        frame_completed,
+    ):  # type: ignore[no-untyped-def]
+        delivered = 0
+
+        def relay(frame):  # type: ignore[no-untyped-def]
+            nonlocal delivered
+            frame_completed(frame)
+            delivered += 1
+            if delivered == 8:
+                preview_blocked.set()
+                while not release.is_set() and not cancelled():
+                    time.sleep(0.001)
+
+        return actual_compute(
+            request,
+            cancelled=cancelled,
+            progress=progress,
+            frame_completed=relay,
+        )
+
+    monkeypatch.setattr(
+        worker_module,
+        "compute_change_energy",
+        controlled_compute,
+    )
+    tab = open_isolate(qtbot, video)
+    tab.session.set_window_length(tab.session.frame_count)
+    tab.channel_combo.setCurrentIndex(1)
+    try:
+        tab.compute_intensity_button.click()
+        qtbot.waitUntil(preview_blocked.is_set, timeout=5000)
+        qtbot.waitUntil(
+            lambda: tab.intensity_raster.covered_frames >= 8,
+            timeout=5000,
+        )
+        assert tab._intensity_worker is not None
+        assert tab._intensity_worker.isRunning()
+        assert tab.session.playing
+        assert not tab.intensity_raster._image.isNull()
+        hatch = tab.intensity_raster._image.pixelColor(
+            tab.intensity_raster._image.width() - 1,
+            0,
+        )
+        assert hatch.name() in {"#181c21", "#343d46"}
+        qtbot.waitUntil(
+            lambda: (
+                tab.player.displayed_frame is not None
+                and tab.player.displayed_frame > 0
+                and tab.player.channel_overlay is not None
+            ),
+            timeout=5000,
+        )
+        overlay = tab.player.channel_overlay
+        assert overlay is not None
+        assert "turbo_percentile99" in overlay.presentation_mapping_id
+        assert overlay.display_scale > 0
+        seek_target = min(
+            tab.session.window_start + 3,
+            tab.session.window_stop - 1,
+        )
+        tab.session.timeline_seek(seek_target)
+        qtbot.waitUntil(
+            lambda: tab.player.displayed_frame == seek_target,
+            timeout=5000,
+        )
+        assert tab.player.channel_overlay is not None
+        assert (
+            tab.player.channel_overlay.absolute_frame
+            == tab.player.displayed_frame
+        )
+        tab.cancel_intensity_button.click()
+        qtbot.waitUntil(lambda: tab._intensity_worker is None, timeout=5000)
+        assert tab._selected_result is None
+        assert tab.intensity_raster.covered_frames == 0
+        assert tab.player.channel_overlay is None
+    finally:
+        release.set()
+        if tab._intensity_worker is not None:
+            qtbot.waitUntil(
+                lambda: tab._intensity_worker is None,
+                timeout=10_000,
+            )
+        tab.close()
+
+
+def test_change_overlay_uses_turbo_and_adaptive_scale_without_mutating_values() -> None:
+    import numpy as np
+
+    from antscihub_sieve.gui.intensity_panel import (
+        CHANGE_OFF_PRESENTATION_ID,
+    )
+    from antscihub_sieve.gui.isolate_player import _mapped_rgb
+
+    values = np.array([[0.0, 0.5, 1.0]], dtype=np.float32)
+    before = values.copy()
+    pixels = _mapped_rgb(values, CHANGE_OFF_PRESENTATION_ID, 1.0)
+
+    assert pixels.shape == (1, 3, 3)
+    assert not np.array_equal(pixels[0, 0], pixels[0, 1])
+    assert not np.array_equal(pixels[0, 1], pixels[0, 2])
+    assert np.array_equal(values, before)

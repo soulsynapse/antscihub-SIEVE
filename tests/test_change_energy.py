@@ -237,6 +237,29 @@ def test_frame_zero_is_explicitly_invalid_and_never_counted_as_zero_energy() -> 
     assert result.valid_start == 1
 
 
+def test_live_frame_callback_is_ordered_immutable_and_marks_frame_zero_invalid() -> None:
+    item = request(0, 3, width=1, height=1, block_size=1)
+    frames = [rgb_frame(1, 1, value) for value in (0, 64, 128)]
+    published = []
+
+    def factory(source_request, *, batch_size, cancelled):  # type: ignore[no-untyped-def]
+        return FakeStream(source_request, item, frames, batch_size=batch_size)
+
+    result = compute_change_energy(
+        item,
+        stream_factory=factory,
+        frame_completed=published.append,
+    )
+
+    assert [frame.absolute_frame for frame in published] == [0, 1, 2]
+    assert [frame.valid for frame in published] == [False, True, True]
+    assert all(not frame.values.flags.writeable for frame in published)
+    assert all(
+        np.shares_memory(frame.values, result.values)
+        for frame in published
+    )
+
+
 def test_zscore_degenerate_evidence_is_retained_per_pair() -> None:
     item = request(
         1,

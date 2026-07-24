@@ -8,6 +8,10 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.typing import NDArray
 
+from antscihub_sieve.application.channel_progress import (
+    ChannelFrame,
+    FrameCompletedCallback,
+)
 from antscihub_sieve.application.intensity import (
     ChannelStageOutcome,
     Float32Array,
@@ -316,6 +320,7 @@ def compute_change_energy(
     *,
     cancelled: CancellationPredicate | None = None,
     progress: ProgressCallback | None = None,
+    frame_completed: FrameCompletedCallback | None = None,
     stream_factory: StreamFactory = open_working_window,
 ) -> ChangeEnergyResult:
     estimated_bytes = admit_result_memory(request)
@@ -405,6 +410,14 @@ def compute_change_energy(
                             "Required predecessor was not delivered",
                             output_frame=absolute_frame,
                             expected_predecessor=absolute_frame - 1,
+                        )
+                    if frame_completed is not None:
+                        frame_completed(
+                            ChannelFrame(
+                                absolute_frame=absolute_frame,
+                                values=values[offset],
+                                valid=bool(temporal_valid[offset]),
+                            )
                         )
                     if progress is not None:
                         progress(len(produced), total)

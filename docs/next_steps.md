@@ -1,12 +1,35 @@
 # Next steps
 
-Last reviewed: `2026-07-23 16:55:13 -07:00`.
+Last reviewed: `2026-07-23 22:23:31 -07:00`.
 
 This file records unfinished work that is justified by the current checkout.
 It is not authorization to continue automatically into later Isolate
 milestones.
 
 ## Current priority
+
+### Port the proven Isolate UI in acceptance-sized chunks
+
+Source:
+
+- `docs/plans/isolate-ui-port.md`
+
+The user requested a plan-first port of the pre-rewrite Isolate/Preprocessing
+surface so context can be cleared safely between chunks. The plan separates
+GUI presentation algorithms worth retaining from Morlet/detection work that
+must remain outside Qt and outside the present scope.
+
+Chunk 0 is complete and awaiting user acceptance. Its reviewable evidence is
+in `docs/plans/isolate-ui-baseline.md`: the unvalidated preliminary shell was
+removed without disturbing the accepted live Change-energy work, matched-size
+oracle/current screenshots and widget inventories were captured, current
+cursor/playback painting was benchmarked, and one integrated stalled-worker
+test now pins autoplay, progressive density, overlay/frame identity, seek, and
+cancel.
+
+Do not begin Chunk 1 until the user explicitly accepts this baseline. Once
+accepted, Chunk 1 is standalone SIEVE-native instrument primitives only; it
+must not change the `IsolateTab` layout.
 
 ### Validate and accept temporal change energy
 
@@ -15,6 +38,7 @@ Source:
 - `docs/handoffs/7-Change-energy.md`
 - `docs/handoffs/.isolate-state-divergence.md`
 - `findings/2026-07-23-change-energy-overlay-performance.md`
+- `findings/2026-07-23-live-change-presentation-performance.md`
 
 The user explicitly authorized milestone 7 after its current-checkout review.
 This superseded the handoff's sequencing gate without claiming that milestones
@@ -29,23 +53,27 @@ provides:
   Gaussian integration, and accepted owned-pixel block reduction.
 - Immutable temporal-valid, previous/current normalization-degenerate evidence
   and exact `4*T*R*C + 3*T` pre-source retained-result admission.
-- Area-weighted time-by-value density with fixed scientific mappings and
-  absolute cursor/seek behavior.
+- Pre-rewrite-style cyan/white time-by-value log density with an absolute
+  cursor, click-to-seek, and visibly hatched uncomputed coverage.
 - One shared selected-channel overlay gated to the absolute frame actually
-  decoded into the player, with independent grid/channel visibility.
+  decoded into the player, with independent grid/channel visibility. Change
+  energy uses the old TURBO/99th-percentile presentation at 55% opacity.
+- Progressive immutable frame views from the admitted result allocation, so
+  playback, graph fill, and the current-frame overlay begin before the final
+  result is published without a second full preview tensor.
 
 Automated validation:
 
 ```text
-Focused milestone-5/6/7 and player suites: 74 passed in 9.63s
-Complete offscreen suite: 170 passed in 30.33s
+Focused channel and GUI suites: 59 passed in 13.82s
+Complete offscreen suite: 174 passed in 35.07s
 ```
 
 Remaining:
 
 1. Open a representative registered asset, choose a short mid-asset window,
-   compute Intensity, and verify the new value-density panel plus exact
-   current-frame spatial overlay.
+   compute Intensity, and verify playback begins while the cyan density panel
+   fills and the exact current-frame spatial overlay follows it.
 2. Select Change energy and confirm one replacement job, hidden predecessor
    context, later-frame `(t-1,t)` alignment, and no retained Intensity result.
 3. Move the window to frame zero and confirm frame zero is absent/invalid while
@@ -56,13 +84,14 @@ Remaining:
    a newly decoded frame and no navigation triggers scientific computation.
 6. Compare Off and per-frame z-score units/mappings and verify previous/current
    degenerate pair evidence on constant/nonconstant lossless fixtures.
-7. Resize and play on the native Windows window. Confirm partial-edge alignment
-   and assess whether the measured approximately `6 ms` per-new-frame overlay
-   preparation causes any visible playback regression.
+7. Resize and play on the native Windows window. Confirm partial-edge alignment,
+   TURBO presentation, graph legibility, and whether per-new-frame overlay plus
+   progressive graph preparation causes any visible playback regression.
 8. Toggle channel and normalization rapidly, change window/grid/asset during
    work, cancel, and close; confirm one source owner and no stale publication.
-9. Accept milestones 5–7 as visible integrated behavior or report concrete
-   scientific/presentation changes.
+9. Confirm the corrected overlay and graph now match the pre-rewrite `change`
+   behavior closely enough, then accept milestones 5–7 as visible integrated
+   behavior or report the remaining concrete difference.
 
 Do not begin static value filtering, Morlet processing, or detection during
 this validation step.

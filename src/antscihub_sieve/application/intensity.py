@@ -8,6 +8,10 @@ from typing import Protocol
 import numpy as np
 from numpy.typing import NDArray
 
+from antscihub_sieve.application.channel_progress import (
+    ChannelFrame,
+    FrameCompletedCallback,
+)
 from antscihub_sieve.application.resources import (
     ExecutionResourcePolicy,
     ExecutionTarget,
@@ -245,6 +249,7 @@ def compute_intensity(
     *,
     cancelled: CancellationPredicate | None = None,
     progress: ProgressCallback | None = None,
+    frame_completed: FrameCompletedCallback | None = None,
     stream_factory: StreamFactory = open_working_window,
 ) -> IntensityResult:
     estimated_bytes = admit_result_memory(request)
@@ -313,6 +318,13 @@ def compute_intensity(
                 retained[len(processed_indices)] = blocks
                 retained_degenerate[len(processed_indices)] = int(degenerate)
                 processed_indices.append(absolute_frame)
+                if frame_completed is not None:
+                    frame_completed(
+                        ChannelFrame(
+                            absolute_frame=absolute_frame,
+                            values=retained[len(processed_indices) - 1],
+                        )
+                    )
                 if progress is not None:
                     progress(len(processed_indices), total)
     except SieveError as exc:
@@ -356,9 +368,9 @@ def compute_intensity(
         )
     if retained_degenerate is None:
         retained_degenerate = np.empty(0, dtype=np.uint8)
-    values = retained[: len(processed_indices)].copy()
+    values = retained[: len(processed_indices)]
     values.setflags(write=False)
-    degenerate_flags = retained_degenerate[: len(processed_indices)].copy()
+    degenerate_flags = retained_degenerate[: len(processed_indices)]
     degenerate_flags.setflags(write=False)
     start = request.working_window.start_frame
     stop = start + len(processed_indices)

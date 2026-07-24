@@ -1,0 +1,1498 @@
+{
+  "actual_surface_size": [
+    1885,
+    980
+  ],
+  "captured_size": [
+    1600,
+    980
+  ],
+  "qt_platform": "offscreen",
+  "state": "computed",
+  "surface": "oracle",
+  "widgets": [
+    {
+      "class": "LiveScalogramSurface",
+      "enabled": true,
+      "geometry": [
+        2,
+        2,
+        1885,
+        980
+      ],
+      "minimum_size": [
+        1731,
+        809
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        11,
+        11,
+        1863,
+        29
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        51,
+        29
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Window start",
+      "visible": true
+    },
+    {
+      "class": "QSpinBox",
+      "enabled": true,
+      "geometry": [
+        57,
+        3,
+        41,
+        23
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "0",
+      "visible": true
+    },
+    {
+      "class": "QLineEdit",
+      "enabled": true,
+      "geometry": [
+        3,
+        3,
+        21,
+        17
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_spinbox_lineedit",
+      "text": "0",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        104,
+        0,
+        70,
+        29
+      ],
+      "minimum_size": [
+        70,
+        0
+      ],
+      "object_name": "",
+      "text": "0.00 s",
+      "visible": true
+    },
+    {
+      "checkable": false,
+      "checked": false,
+      "class": "QPushButton",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        640,
+        480
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Inherit",
+      "visible": false
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        180,
+        0,
+        26,
+        29
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Length",
+      "visible": true
+    },
+    {
+      "class": "QDoubleSpinBox",
+      "enabled": true,
+      "geometry": [
+        212,
+        3,
+        49,
+        23
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "5.00 s",
+      "visible": true
+    },
+    {
+      "class": "QLineEdit",
+      "enabled": true,
+      "geometry": [
+        3,
+        3,
+        29,
+        17
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_spinbox_lineedit",
+      "text": "5.00 s",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        279,
+        0,
+        48,
+        29
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Downsample",
+      "visible": true
+    },
+    {
+      "class": "QDoubleSpinBox",
+      "enabled": true,
+      "geometry": [
+        333,
+        3,
+        48,
+        23
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "1.000",
+      "visible": true
+    },
+    {
+      "class": "QLineEdit",
+      "enabled": true,
+      "geometry": [
+        3,
+        3,
+        28,
+        17
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_spinbox_lineedit",
+      "text": "1.000",
+      "visible": true
+    },
+    {
+      "checkable": false,
+      "checked": false,
+      "class": "QPushButton",
+      "enabled": true,
+      "geometry": [
+        387,
+        4,
+        26,
+        21
+      ],
+      "minimum_size": [
+        26,
+        0
+      ],
+      "object_name": "",
+      "text": "\u2026",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        419,
+        0,
+        20,
+        29
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Block",
+      "visible": true
+    },
+    {
+      "class": "QSpinBox",
+      "enabled": true,
+      "geometry": [
+        445,
+        3,
+        60,
+        23
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "auto (64)",
+      "visible": true
+    },
+    {
+      "class": "QLineEdit",
+      "enabled": true,
+      "geometry": [
+        3,
+        3,
+        40,
+        17
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_spinbox_lineedit",
+      "text": "auto (64)",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": false,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        511,
+        5,
+        69,
+        18
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "All channels",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": false,
+      "class": "QCheckBox",
+      "enabled": false,
+      "geometry": [
+        586,
+        5,
+        70,
+        18
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Use ROI clips",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        662,
+        0,
+        38,
+        29
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Normalize",
+      "visible": true
+    },
+    {
+      "class": "QComboBox",
+      "enabled": true,
+      "geometry": [
+        706,
+        3,
+        55,
+        22
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QFrame",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        100,
+        30
+      ],
+      "minimum_size": [
+        2,
+        2
+      ],
+      "object_name": "",
+      "visible": false
+    },
+    {
+      "class": "QListView",
+      "enabled": true,
+      "geometry": [
+        1,
+        1,
+        98,
+        28
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": false
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        98,
+        28
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_scrollarea_viewport",
+      "visible": false
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        100,
+        14
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_scrollarea_hcontainer",
+      "visible": false
+    },
+    {
+      "class": "QScrollBar",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        100,
+        14
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": false
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        14,
+        30
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_scrollarea_vcontainer",
+      "visible": false
+    },
+    {
+      "class": "QScrollBar",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        14,
+        30
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": false
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        100,
+        30
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": false
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        100,
+        30
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": false
+    },
+    {
+      "checkable": false,
+      "checked": false,
+      "class": "QPushButton",
+      "enabled": true,
+      "geometry": [
+        767,
+        4,
+        80,
+        21
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Reset",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        853,
+        0,
+        777,
+        14
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        853,
+        15,
+        777,
+        14
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "ready   \u00b7   cubes 1 \u00b7 96.0 KB/6.0 GB   \u00b7   cube 24\u00d764\u00d716 (96.0 KB)   \u00b7   channels 16.0 KB",
+      "visible": true
+    },
+    {
+      "checkable": false,
+      "checked": false,
+      "class": "QPushButton",
+      "enabled": true,
+      "geometry": [
+        1644,
+        3,
+        80,
+        22
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Play \u25b6",
+      "visible": true
+    },
+    {
+      "checkable": false,
+      "checked": false,
+      "class": "QPushButton",
+      "enabled": true,
+      "geometry": [
+        1730,
+        3,
+        99,
+        22
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Process whole video \u25b6",
+      "visible": true
+    },
+    {
+      "checkable": false,
+      "checked": false,
+      "class": "QPushButton",
+      "enabled": true,
+      "geometry": [
+        1835,
+        2,
+        28,
+        24
+      ],
+      "minimum_size": [
+        28,
+        0
+      ],
+      "object_name": "",
+      "text": "\u2699",
+      "visible": true
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        11,
+        46,
+        1863,
+        796
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "ScalogramExplorer",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        1863,
+        796
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "FrameView",
+      "enabled": true,
+      "geometry": [
+        9,
+        9,
+        1103,
+        638
+      ],
+      "minimum_size": [
+        720,
+        480
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "checkable": false,
+      "checked": false,
+      "class": "QPushButton",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        640,
+        480
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Pause",
+      "visible": false
+    },
+    {
+      "class": "QSlider",
+      "enabled": true,
+      "geometry": [
+        9,
+        653,
+        859,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        874,
+        653,
+        120,
+        15
+      ],
+      "minimum_size": [
+        120,
+        0
+      ],
+      "object_name": "",
+      "text": "0.07 s  (#4)",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        1000,
+        653,
+        112,
+        15
+      ],
+      "minimum_size": [
+        112,
+        0
+      ],
+      "object_name": "",
+      "text": "measuring\u2026",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        9,
+        674,
+        36,
+        13
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Replicate:",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        51,
+        674,
+        1061,
+        13
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "all (#0)",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": true,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        9,
+        693,
+        115,
+        18
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Highlight blocks in band",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": true,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        130,
+        693,
+        126,
+        18
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Centered detection window",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        9,
+        717,
+        260,
+        15
+      ],
+      "minimum_size": [
+        260,
+        0
+      ],
+      "object_name": "",
+      "text": "Detection window D (count mean): 60 fr (1.00 s)",
+      "visible": true
+    },
+    {
+      "class": "QSlider",
+      "enabled": true,
+      "geometry": [
+        275,
+        717,
+        837,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        9,
+        738,
+        1103,
+        30
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Drag the FREQUENCY band on the scalogram to pick which rhythm to detect on; each channel's density plot below shows the per-block power that band yields, with its own VALUE band. Check a channel to detect on it -- its per-block cube builds on demand (nothing else is precomputed). Click a replicate in the video to select it. Space toggles playback; hold Shift to peek at the raw frame.",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        9,
+        774,
+        1103,
+        13
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "cache: chunk-0-presentation-fixture | fps 60.00 | 64 frames | scalogram 0.50-25.00 Hz, 24 scales",
+      "visible": true
+    },
+    {
+      "class": "QScrollArea",
+      "enabled": true,
+      "geometry": [
+        1118,
+        9,
+        736,
+        778
+      ],
+      "minimum_size": [
+        480,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        1,
+        1,
+        734,
+        776
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_scrollarea_viewport",
+      "visible": true
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        734,
+        776
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        9,
+        9,
+        716,
+        20
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Selected channel",
+      "visible": true
+    },
+    {
+      "class": "MiniPlot",
+      "enabled": true,
+      "geometry": [
+        9,
+        33,
+        716,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "ScalogramPlot",
+      "enabled": true,
+      "geometry": [
+        9,
+        55,
+        716,
+        132
+      ],
+      "minimum_size": [
+        0,
+        132
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        9,
+        191,
+        716,
+        20
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Per-block band power by channel \u2014 check to detect (builds on demand)",
+      "visible": true
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        9,
+        215,
+        716,
+        276
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": true,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        12,
+        67,
+        14,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "class": "DensityPlot",
+      "enabled": true,
+      "geometry": [
+        32,
+        9,
+        675,
+        132
+      ],
+      "minimum_size": [
+        0,
+        132
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": false,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        12,
+        145,
+        14,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "class": "DensityPlot",
+      "enabled": true,
+      "geometry": [
+        32,
+        144,
+        675,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": false,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        12,
+        166,
+        14,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "class": "DensityPlot",
+      "enabled": true,
+      "geometry": [
+        32,
+        165,
+        675,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": false,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        12,
+        187,
+        14,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "class": "DensityPlot",
+      "enabled": true,
+      "geometry": [
+        32,
+        186,
+        675,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": false,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        12,
+        208,
+        14,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "class": "DensityPlot",
+      "enabled": true,
+      "geometry": [
+        32,
+        207,
+        675,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": false,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        12,
+        229,
+        14,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "class": "DensityPlot",
+      "enabled": true,
+      "geometry": [
+        32,
+        228,
+        675,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "checkable": true,
+      "checked": false,
+      "class": "QCheckBox",
+      "enabled": true,
+      "geometry": [
+        12,
+        250,
+        14,
+        15
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": true
+    },
+    {
+      "class": "DensityPlot",
+      "enabled": true,
+      "geometry": [
+        32,
+        249,
+        675,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        9,
+        495,
+        716,
+        20
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Detection sweep (selected channel)",
+      "visible": true
+    },
+    {
+      "class": "MiniPlot",
+      "enabled": true,
+      "geometry": [
+        9,
+        519,
+        716,
+        132
+      ],
+      "minimum_size": [
+        0,
+        132
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        640,
+        480
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "",
+      "visible": false
+    },
+    {
+      "class": "PixelBarPlot",
+      "enabled": true,
+      "geometry": [
+        9,
+        655,
+        716,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "PixelBarPlot",
+      "enabled": true,
+      "geometry": [
+        9,
+        677,
+        716,
+        18
+      ],
+      "minimum_size": [
+        0,
+        18
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        100,
+        14
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_scrollarea_hcontainer",
+      "visible": false
+    },
+    {
+      "class": "QScrollBar",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        100,
+        14
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": false
+    },
+    {
+      "class": "QWidget",
+      "enabled": true,
+      "geometry": [
+        721,
+        1,
+        14,
+        776
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "qt_scrollarea_vcontainer",
+      "visible": false
+    },
+    {
+      "class": "QScrollBar",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        14,
+        776
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": false
+    },
+    {
+      "class": "DetectionNavigator",
+      "enabled": true,
+      "geometry": [
+        11,
+        848,
+        1863,
+        121
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        0,
+        0,
+        1863,
+        12
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "100% of the clip examined \u00b7 0 detections \u00b7 0.0 s detected",
+      "visible": true
+    },
+    {
+      "class": "_Strip",
+      "enabled": true,
+      "geometry": [
+        0,
+        14,
+        1863,
+        84
+      ],
+      "minimum_size": [
+        0,
+        84
+      ],
+      "object_name": "",
+      "visible": true
+    },
+    {
+      "class": "QLabel",
+      "enabled": true,
+      "geometry": [
+        0,
+        100,
+        254,
+        21
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "\u2581 lit = examined \u00b7 gray = other settings \u00b7 dark = not examined \u00b7 bar height log",
+      "visible": true
+    },
+    {
+      "checkable": false,
+      "checked": false,
+      "class": "QPushButton",
+      "enabled": false,
+      "geometry": [
+        1783,
+        100,
+        80,
+        21
+      ],
+      "minimum_size": [
+        0,
+        0
+      ],
+      "object_name": "",
+      "text": "Save detections",
+      "visible": true
+    }
+  ],
+  "window_size": [
+    1600,
+    980
+  ]
+}

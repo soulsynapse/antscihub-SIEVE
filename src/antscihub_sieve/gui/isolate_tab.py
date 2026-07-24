@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -21,10 +22,14 @@ from antscihub_sieve.application.active_asset import (
 )
 from antscihub_sieve.application.change_energy import (
     CHANGE_ENERGY_ID,
+    OFF_UNITS as CHANGE_OFF_UNITS,
+    ZSCORE_UNITS as CHANGE_ZSCORE_UNITS,
     ChangeEnergyRequest,
     ChangeEnergyResult,
 )
 from antscihub_sieve.application.intensity import (
+    OFF_UNITS as INTENSITY_OFF_UNITS,
+    ZSCORE_UNITS as INTENSITY_ZSCORE_UNITS,
     IntensityRequest,
     IntensityResult,
     NormalizationMode,
@@ -49,6 +54,7 @@ from antscihub_sieve.gui.intensity_panel import (
 )
 from antscihub_sieve.gui.intensity_worker import (
     ScientificRequest,
+    ScientificPreview,
     ScientificResult,
     ScientificWorker,
 )
@@ -71,6 +77,10 @@ class IsolateTab(QWidget):
         self._intensity_result: IntensityResult | None = None
         self._change_energy_result: ChangeEnergyResult | None = None
         self._selected_result: ScientificResult | None = None
+        self._preview_request: ScientificRequest | None = None
+        self._preview_covered = 0
+        self._overlay_scale: float | None = None
+        self._auto_play_started = False
         self._build_ui()
         self._connect()
         self._resolve_grid()
@@ -547,7 +557,26 @@ class IsolateTab(QWidget):
     ) -> None:
         worker = ScientificWorker(token, request)
         self._intensity_worker = worker
+        total = (
+            request.working_window.stop_frame
+            - request.working_window.start_frame
+        )
+        self._preview_request = request
+        self._preview_covered = 0
+        self._overlay_scale = None
+        self._auto_play_started = False
+        self.intensity_raster.begin_preview(
+            request,
+            channel_label=self._selected_channel_label(),
+            scientific_units=self._scientific_units_for_request(request),
+        )
+        self.channel_heading.setText(self._selected_channel_label())
+        self._set_live_legend(request)
+        self.channels_empty.hide()
+        self.intensity_panel.show()
+        self.session.request_frame(request.working_window.start_frame)
         worker.progress_changed.connect(self._intensity_progress)
+        worker.preview_ready.connect(self._scientific_preview)
         worker.finished.connect(
             lambda active=worker: self._intensity_finished(active)
         )
@@ -556,6 +585,80 @@ class IsolateTab(QWidget):
         )
         self._update_compute_controls()
         worker.start()
+
+    @staticmethod
+    def _scientific_units_for_request(request: ScientificRequest) -> str:
+        if isinstance(request, ChangeEnergyRequest):
+            return (
+                CHANGE_OFF_UNITS
+                if request.normalization.mode is NormalizationMode.OFF
+                else CHANGE_ZSCORE_UNITS
+            )
+        return (
+            INTENSITY_OFF_UNITS
+            if request.normalization.mode is NormalizationMode.OFF
+            else INTENSITY_ZSCORE_UNITS
+        )
+
+    def _set_live_legend(self, request: ScientificRequest) -> None:
+        if isinstance(request, ChangeEnergyRequest):
+            self.intensity_legend.setText(
+                f"{CHANGE_ENERGY_ID} · "
+                f"{self._scientific_units_for_request(request)} · "
+                "cyan log-density graph · TURBO 99th-percentile overlay · "
+                "hatched columns are not computed yet"
+            )
+        else:
+            self.intensity_legend.setText(
+                "sieve.channel.rgb601_intensity.v1 · "
+                f"{self._scientific_units_for_request(request)} · "
+                "cyan density graph · hatched columns are not computed yet"
+            )
+
+    def _scientific_preview(
+        self, token: int, preview: ScientificPreview
+    ) -> None:
+        if (
+            token != self._job_token
+            or self._preview_request is None
+            or not preview.frames
+        ):
+            return
+        offset = (
+            preview.start_frame
+            - self._preview_request.working_window.start_frame
+        )
+        stop = offset + len(preview.frames)
+        if (
+            offset < 0
+            or stop
+            > (
+                self._preview_request.working_window.stop_frame
+                - self._preview_request.working_window.start_frame
+            )
+        ):
+            return
+        if offset <= self._preview_covered:
+            self._preview_covered = max(self._preview_covered, stop)
+        self.intensity_raster.append_preview(preview.frames)
+        if (
+            isinstance(self._preview_request, ChangeEnergyRequest)
+            and self._overlay_scale is None
+        ):
+            valid_fields = [
+                frame.values for frame in preview.frames if frame.valid
+            ]
+            if valid_fields:
+                scale = float(
+                    np.percentile(np.stack(valid_fields, axis=0), 99)
+                )
+                if scale > np.finfo(np.float32).eps:
+                    self._overlay_scale = scale
+        if not self._auto_play_started and self.session.can_loop:
+            self._auto_play_started = True
+            if not self.session.playing:
+                self.session.toggle_play()
+        self._update_channel_overlay()
 
     def _intensity_progress(
         self, token: int, completed: int, total: int
@@ -635,13 +738,15 @@ class IsolateTab(QWidget):
             ):
                 self.intensity_legend.setText(
                     f"{CHANGE_ENERGY_ID} · Per-frame z-score · "
-                    "z-score squared · fixed E/(E+1) mapping "
-                    f"({CHANGE_ZSCORE_PRESENTATION_ID}); E=1 maps to 0.5"
+                    "z-score squared · cyan log-density graph · "
+                    "TURBO overlay scaled to the run's 99th percentile "
+                    f"({CHANGE_ZSCORE_PRESENTATION_ID})"
                 )
             else:
                 self.intensity_legend.setText(
                     f"{CHANGE_ENERGY_ID} · Normalize Off · "
-                    "post-decoder intensity squared · fixed [0,1] mapping "
+                    "post-decoder intensity squared · cyan log-density graph · "
+                    "TURBO overlay scaled to the run's 99th percentile "
                     f"({CHANGE_OFF_PRESENTATION_ID})"
                 )
         elif (
@@ -707,6 +812,10 @@ class IsolateTab(QWidget):
         self._intensity_result = None
         self._change_energy_result = None
         self._selected_result = None
+        self._preview_request = None
+        self._preview_covered = 0
+        self._overlay_scale = None
+        self._auto_play_started = False
         self.intensity_raster.set_result(None)
         self.player.set_channel_overlay(None)
         self.intensity_panel.hide()
@@ -775,52 +884,106 @@ class IsolateTab(QWidget):
     def _update_channel_overlay(self) -> None:
         result = self._selected_result
         frame = self.player.displayed_frame
-        if (
-            result is None
-            or frame is None
-            or not result.processed_start <= frame < result.processed_stop
-        ):
+        if frame is None:
             self.player.set_channel_overlay(None)
             return
-        offset = frame - result.processed_start
-        if isinstance(result, ChangeEnergyResult):
-            if not result.temporal_valid[offset]:
+        if result is not None:
+            start = result.processed_start
+            stop = result.processed_stop
+            values = result.values
+            request = result.request
+            units = result.scientific_units
+            valid = (
+                result.temporal_valid
+                if isinstance(result, ChangeEnergyResult)
+                else np.ones(result.values.shape[0], dtype=np.uint8)
+            )
+            final = True
+        elif (
+            self._preview_request is not None
+        ):
+            start = self._preview_request.working_window.start_frame
+            stop = start + self._preview_covered
+            request = self._preview_request
+            units = self._scientific_units_for_request(request)
+            preview_frame = self.intensity_raster.preview_frame(frame)
+            if preview_frame is None:
                 self.player.set_channel_overlay(None)
                 return
+            field_values = preview_frame.values
+            frame_valid = preview_frame.valid
+            final = False
+        else:
+            self.player.set_channel_overlay(None)
+            return
+        if not start <= frame < stop:
+            self.player.set_channel_overlay(None)
+            return
+        offset = frame - start
+        if result is not None:
+            field_values = values[offset]
+            frame_valid = bool(valid[offset])
+        if not frame_valid:
+            self.player.set_channel_overlay(None)
+            return
+        if isinstance(request, ChangeEnergyRequest):
             mapping = (
                 CHANGE_ZSCORE_PRESENTATION_ID
-                if result.request.normalization.mode
+                if request.normalization.mode
                 is NormalizationMode.PER_FRAME_ZSCORE
                 else CHANGE_OFF_PRESENTATION_ID
             )
-            detail = (
-                f"Pair ({frame - 1},{frame}); previous degenerate "
-                f"{bool(result.previous_degenerate[offset])}; current "
-                f"degenerate {bool(result.current_degenerate[offset])}"
-            )
+            if isinstance(result, ChangeEnergyResult):
+                detail = (
+                    f"Pair ({frame - 1},{frame}); previous degenerate "
+                    f"{bool(result.previous_degenerate[offset])}; current "
+                    f"degenerate {bool(result.current_degenerate[offset])}"
+                )
+            else:
+                detail = f"Pair ({frame - 1},{frame}); live computation"
             label = "Change energy"
+            if self._overlay_scale is None:
+                if result is not None:
+                    available = values[: max(1, stop - start)]
+                    available = available[np.isfinite(available)]
+                    candidate = (
+                        float(np.percentile(available, 99))
+                        if available.size
+                        else 0.0
+                    )
+                else:
+                    candidate = float(np.percentile(field_values, 99))
+                if candidate > np.finfo(np.float32).eps:
+                    self._overlay_scale = candidate
+            display_scale = self._overlay_scale or float(
+                np.finfo(np.float32).eps
+            )
         else:
             mapping = (
                 ZSCORE_PRESENTATION_ID
-                if result.request.normalization.mode
+                if request.normalization.mode
                 is NormalizationMode.PER_FRAME_ZSCORE
                 else OFF_PRESENTATION_ID
             )
             detail = (
                 "Normalization degenerate "
                 f"{bool(result.degenerate_flags[offset])}"
+                if isinstance(result, IntensityResult)
+                else "Live computation"
             )
             label = "Intensity"
+            display_scale = 1.0
         self.player.set_channel_overlay(
             ChannelOverlay(
                 publication_token=self._job_token,
                 absolute_frame=frame,
-                grid=result.request.grid,
-                values=result.values[offset],
+                grid=request.grid,
+                values=field_values,
                 presentation_mapping_id=mapping,
                 channel_label=label,
-                scientific_units=result.scientific_units,
-                detail=detail,
+                scientific_units=units,
+                detail=detail + ("" if final else "; final result pending"),
+                display_scale=display_scale,
             ),
             visible=self.show_channel_overlay_check.isChecked(),
         )

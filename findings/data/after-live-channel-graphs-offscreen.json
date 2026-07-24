@@ -1,0 +1,281 @@
+{
+  "asset": {
+    "codec": "mpeg4",
+    "duration_seconds": 510.16016,
+    "fps_den": 50,
+    "fps_num": 2997,
+    "height": 2988,
+    "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE\\test_videos\\stab_GX010050c2_02_18_26.MP4",
+    "pixel_format": "yuv420p",
+    "size_bytes": 11682917233,
+    "width": 5312
+  },
+  "configuration": {
+    "change_overlay": true,
+    "channel_overlay_matrix": true,
+    "decoded_frame_size": [
+      1280,
+      720
+    ],
+    "display_decode_max_width": 1280,
+    "frames": 8,
+    "synchronous_repaint": true,
+    "window_obscured_or_minimized": false,
+    "window_size": [
+      960,
+      540
+    ],
+    "window_visible": true
+  },
+  "counts": {
+    "decoded": 8,
+    "delivered": 8,
+    "failed": 0,
+    "painted": 16,
+    "requested": 8
+  },
+  "environment": {
+    "device_pixel_ratio": 1.0,
+    "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "python": "3.11.9",
+    "qt_platform_plugin": "offscreen",
+    "qt_qpa_platform_env": "offscreen"
+  },
+  "measurements": {
+    "decode_to_paint": {
+      "count": 8,
+      "max_ms": 218.2641,
+      "median_ms": 5.308,
+      "min_ms": 4.1023,
+      "p95_ms": 218.2641,
+      "samples_ms": [
+        218.2641,
+        4.4965,
+        4.683,
+        5.7256,
+        4.1023,
+        5.9006,
+        6.8689,
+        4.8904
+      ]
+    },
+    "overlay_matrix": {
+      "video_only": {
+        "overlay_preparation_ms": 0.0,
+        "paint": {
+          "count": 8,
+          "max_ms": 2.2625,
+          "median_ms": 0.89185,
+          "min_ms": 0.6715,
+          "p95_ms": 2.2625,
+          "samples_ms": [
+            1.5757,
+            0.7953,
+            0.7183,
+            0.6715,
+            0.9884,
+            0.7644,
+            2.2625,
+            1.9314
+          ]
+        }
+      },
+      "video_plus_channel_overlay": {
+        "overlay_preparation_ms": 4.9528,
+        "paint": {
+          "count": 8,
+          "max_ms": 0.906,
+          "median_ms": 0.8061499999999999,
+          "min_ms": 0.7029,
+          "p95_ms": 0.906,
+          "samples_ms": [
+            0.8482,
+            0.7641,
+            0.8572,
+            0.8588,
+            0.7084,
+            0.7029,
+            0.906,
+            0.7258
+          ]
+        }
+      },
+      "video_plus_channel_overlay_plus_grid": {
+        "overlay_preparation_ms": 4.7879,
+        "paint": {
+          "count": 8,
+          "max_ms": 6.4776,
+          "median_ms": 5.89845,
+          "min_ms": 5.3379,
+          "p95_ms": 6.4776,
+          "samples_ms": [
+            5.3379,
+            5.5295,
+            5.7293,
+            5.9376,
+            6.2285,
+            6.1115,
+            6.4776,
+            5.8593
+          ]
+        }
+      },
+      "video_plus_grid": {
+        "overlay_preparation_ms": 0.0,
+        "paint": {
+          "count": 8,
+          "max_ms": 7.2064,
+          "median_ms": 5.06515,
+          "min_ms": 4.8383,
+          "p95_ms": 7.2064,
+          "samples_ms": [
+            7.2064,
+            5.062,
+            6.4081,
+            5.0683,
+            4.8543,
+            5.5325,
+            4.9363,
+            4.8383
+          ]
+        }
+      }
+    },
+    "paint": {
+      "count": 8,
+      "max_ms": 7.066,
+      "median_ms": 1.7763499999999999,
+      "min_ms": 1.4054,
+      "p95_ms": 7.066,
+      "samples_ms": [
+        7.066,
+        1.602,
+        1.7897,
+        1.7891,
+        1.4054,
+        1.7636,
+        2.7175,
+        1.5025
+      ]
+    },
+    "qt_image_install": {
+      "count": 8,
+      "max_ms": 0.2313,
+      "median_ms": 0.1766,
+      "min_ms": 0.0668,
+      "p95_ms": 0.2313,
+      "samples_ms": [
+        0.0668,
+        0.1887,
+        0.1323,
+        0.1923,
+        0.149,
+        0.2313,
+        0.1703,
+        0.1829
+      ]
+    },
+    "sequential_decode": {
+      "count": 8,
+      "max_ms": 211.1313,
+      "median_ms": 3.4746,
+      "min_ms": 2.5479,
+      "p95_ms": 211.1313,
+      "samples_ms": [
+        211.1313,
+        2.7058,
+        2.761,
+        3.7442,
+        2.5479,
+        3.9057,
+        3.9811,
+        3.205
+      ]
+    },
+    "steady_state_decode_to_paint": {
+      "count": 7,
+      "max_ms": 6.8689,
+      "median_ms": 4.8904,
+      "min_ms": 4.1023,
+      "p95_ms": 6.8689,
+      "samples_ms": [
+        4.4965,
+        4.683,
+        5.7256,
+        4.1023,
+        5.9006,
+        6.8689,
+        4.8904
+      ]
+    },
+    "steady_state_paint": {
+      "count": 7,
+      "max_ms": 2.7175,
+      "median_ms": 1.7636,
+      "min_ms": 1.4054,
+      "p95_ms": 2.7175,
+      "samples_ms": [
+        1.602,
+        1.7897,
+        1.7891,
+        1.4054,
+        1.7636,
+        2.7175,
+        1.5025
+      ]
+    },
+    "steady_state_qt_image_install": {
+      "count": 7,
+      "max_ms": 0.2313,
+      "median_ms": 0.1829,
+      "min_ms": 0.1323,
+      "p95_ms": 0.2313,
+      "samples_ms": [
+        0.1887,
+        0.1323,
+        0.1923,
+        0.149,
+        0.2313,
+        0.1703,
+        0.1829
+      ]
+    },
+    "steady_state_sequential_decode": {
+      "count": 7,
+      "max_ms": 3.9811,
+      "median_ms": 3.205,
+      "min_ms": 2.5479,
+      "p95_ms": 3.9811,
+      "samples_ms": [
+        2.7058,
+        2.761,
+        3.7442,
+        2.5479,
+        3.9057,
+        3.9811,
+        3.205
+      ]
+    },
+    "unchanged_frame_repaint": {
+      "count": 8,
+      "max_ms": 2.4871,
+      "median_ms": 1.85845,
+      "min_ms": 1.3433,
+      "p95_ms": 2.4871,
+      "samples_ms": [
+        1.5489,
+        2.4871,
+        1.3433,
+        1.35,
+        1.912,
+        2.0673,
+        2.3279,
+        1.8049
+      ]
+    }
+  },
+  "mode": "viewer",
+  "schema_version": 1
+}

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QImage, QPainter
+from PyQt6.QtGui import QImage, QPainter
 from PyQt6.QtWidgets import QWidget
+
+from antscihub_sieve.gui.theme import MEDIA_BACKGROUND, MEDIA_PLACEHOLDER_TEXT
 
 
 class IsolatePlayer(QWidget):
@@ -43,9 +45,9 @@ class IsolatePlayer(QWidget):
 
     def paintEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor("#12151a"))
+        painter.fillRect(self.rect(), MEDIA_BACKGROUND)
         if self.image is None:
-            painter.setPen(QColor("#aab2bf"))
+            painter.setPen(MEDIA_PLACEHOLDER_TEXT)
             painter.drawText(
                 self.rect(), Qt.AlignmentFlag.AlignCenter, self.message
             )

@@ -19,6 +19,7 @@ from antscihub_sieve.application.active_asset import (
 from antscihub_sieve.gui.isolate_player import IsolatePlayer
 from antscihub_sieve.gui.isolate_session import IsolateSession
 from antscihub_sieve.gui.isolate_timeline import IsolateTimeline
+from antscihub_sieve.gui.theme import apply_channels_heading_theme
 
 
 class IsolateTab(QWidget):
@@ -41,7 +42,7 @@ class IsolateTab(QWidget):
         self.channels.setMinimumWidth(220)
         channels_layout = QVBoxLayout(self.channels)
         channels_heading = QLabel("Channels")
-        channels_heading.setStyleSheet("font-size: 17px; font-weight: 600;")
+        apply_channels_heading_theme(channels_heading)
         self.channels_empty = QLabel("No channels added yet.")
         self.channels_empty.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft

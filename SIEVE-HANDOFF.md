@@ -1,8 +1,8 @@
 # SIEVE Rewrite — Agent Handoff
 
-You are implementing SIEVE, a video signal-processing tool, in a clean repo. A v1 exists in a separate folder. It worked well enough that users offered co-authorship within three days of seeing it. The rewrite exists because v1 became difficult to maintain — the kind of drift that happens when structure isn't enforced by tooling. This handoff is about building v2 so that structure enforces itself.
+You are implementing SIEVE, a video signal-processing tool, in a clean repo. A v1 exists in a separate folder - you may check against it (antscihub-optical-flow-detector) when necessary, but shouldn't without reason. The rewrite exists because while v1 shipped and served it's purpose, it became difficult to maintain — the kind of drift that happens when structure isn't enforced by tooling. This handoff is about building v2 so that structure enforces itself.
 
-Read every file under `docs/` before writing code — architecture doc, ADRs, specs, vision. Those are the considered decisions; this prompt is orientation on top of them. Where something here seems to conflict with the docs, the docs win; flag the conflict. However, the docs were written over time, and might have some internal inconsistencies. Bring them up with me.
+Read every file under `docs/` before writing code — architecture doc, ADRs, specs, vision. Those are the considered decisions; this prompt is orientation on top of them. Where something here seems to conflict with the docs, the docs win; flag the conflict. However, the docs were written over time, and might have some internal inconsistencies. Do a test against the objectives, propose an ADR, and update the docs when approved.
 
 ## What matters
 
@@ -19,7 +19,7 @@ Rather than checking against constraints every time you write code, build tools 
 - **Filter-contract property tests.** Hypothesis, from the first filter onward. Any valid params → output shape and dtype match declaration, no NaN unless declared, deterministic filters produce byte-identical output. This is what keeps the contract honest as filters accumulate.
 - **A lightweight code-health check.** Build a small tool (a Nox session, a script, whatever fits) that flags things worth a second look: files that have grown unusually large, functions that touch more than one layer, modules with high fan-in and fan-out, tests that grew brittle. Not a linter with hard rules — a report you run periodically and act on when something stands out. Design it so it's cheap to extend as you learn which signals actually matter for this codebase.
 
-Once those are in place, trust them and move fast. The point of building the guardrails is exactly so you don't have to keep the constraints in your head.
+Once those are in place, trust them and move fast. The point of building the guardrails is exactly so you don't have to keep the constraints in your head. Build new ones as needed - use your judgement.
 
 ## Sequencing
 

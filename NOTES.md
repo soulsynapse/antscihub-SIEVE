@@ -11,7 +11,84 @@ second.
 
 ---
 
-## Resolved this session
+## Resolved this session (session 6)
+
+**The video viewer exists: `VideoViewer`, `MainWindow`, `sieve-gui`.**
+`src/sieve/gui/panels/video_viewer.py` holds `VideoViewer`, a `QWidget` that
+opens a `VideoReader`, shows a `QSlider` ranged to the file's frame count, and
+repaints on every slider move via one `VideoReader.read(index)` call.
+[ASSUMPTION] Deliberately naive, per the session-5 handoff: no ring buffer, no
+keyframe index, no decoder thread. Section 5.5 asks for all three; they are
+still deferred, now against a measurement rather than a guess (see below).
+`src/sieve/gui/main_window.py` holds `MainWindow` — one menu (`Project >
+Open Video…`), the viewer as central widget, a status bar for scrub errors.
+`src/sieve/gui/app.py` is the `sieve-gui` console entry point declared in
+`pyproject.toml`, landed in the same commit as the module it names per the
+rule this file already recorded. Verified past typecheck and lint: launched
+for real (`sieve-gui <path>` and a driver script), opened a corpus clip,
+scrubbed to frame 40, and the displayed frame's burned-in timecode and index
+label matched — seek accuracy holds through the widget, not just through
+`VideoReader` directly. `nox -s checks` and `nox -s test_gui` both green
+afterward; `.importlinter`'s `gui/` → `io/` edge confirmed legal.
+
+[ASSUMPTION] `resizeEvent` re-decodes the current frame on every resize rather
+than caching the last-decoded array. A live window drag will therefore repeat
+the ~9 ms decode cost per resize event, which is a known cost of the
+no-ring-buffer shape recorded here rather than an oversight — caching one
+frame is a reasonable session-7 pickup if a resize-drag feels laggy in the
+recording.
+
+**A scrub-time decode failure no longer takes the process down.**
+`VideoReader.read()` can raise `FrameReadError` — a rejected seek, or a decode
+that returns nothing, the exact ADR-018 failure mode. PySide6 terminates the
+process on an unhandled Python exception raised from a connected slot rather
+than logging and continuing, and the slider's `valueChanged` slot called
+`read()` unguarded. `VideoViewer._show_frame` and `resizeEvent` now catch
+`VideoReadError`, emit a `scrubError` signal with the message, and leave the
+previous frame on screen; `MainWindow` shows it in the status bar for 5s.
+Verified directly: monkeypatched `VideoReader.read` to raise on one frame
+index, drove the slider onto it, confirmed the process exits 0 with the
+message surfaced rather than aborting.
+
+**`DECODE_SHARE` is measured, not guessed.** `tests/gui/measure_repaint.py` is
+a new, permanent, manually-run script — the same "architectural experiment,
+not a pytest test" shape as `tests/benchmark_image_viewers.py`, and for the
+same reason: it needs PySide6, and `nox -s benchmark` installs the headless
+`dev` extra by design, so it cannot be a collected pytest-benchmark test
+without reworking that session's install policy. It times
+`VideoViewer._paint` (the BGR→QImage wrap, the aspect-preserving scale,
+`QLabel.setPixmap`) against real decoded frames from the h264-8bit corpus
+clip. Measured median 0.7-0.9 ms over 64 samples, offscreen and against a real
+window alike, max observed 6.7 ms. `tests/bench/test_decode_seek.py`'s
+`DECODE_SHARE` moved from the session-4 guess of 0.6 to 0.9 — allotting 10% of
+the 50 ms scrub budget (5 ms) to repaint leaves roughly 5x headroom over the
+observed maximum. Total scrub today: ~8.8 ms decode (median, this machine) +
+~0.9 ms repaint, against 50 ms allotted — [STALE WHEN] `VideoViewer._paint`'s
+shape changes; re-run the script and update both the constant and this note.
+
+**New suppressions, reasoned at the site per this repo's convention:**
+`positionChanged`/`scrubError` on `VideoViewer` carry `# noqa: N815` — Qt's
+own signal-naming convention, not a naming lapse. `tests/gui/test_environment.py`'s
+`import PyQt6` inside `test_pyqt6_is_not_installed` carries
+`# pyright: ignore[reportMissingImports]` — Pyright resolving that import is
+exactly the failure state ADR-001 is written against; the ignore is asserting
+"correctly absent," not suppressing a defect. Both test-file imports are also
+local (`# noqa: PLC0415`): a module-level `import qtpy` or `import PyQt6`
+would fail *collection* in the headless `dev` environment, where `not qt`
+deselection only skips execution.
+
+**The first `qt`-marked test lands: `tests/gui/test_environment.py`.**
+Two assertions, both needed per NOTES.md's earlier framing (28-33): `qtpy.API_NAME
+== "PySide6"` proves qtpy resolved to the licensed binding, and
+`import PyQt6` raising `ImportError` proves the GPLv3 binding is actually
+absent — qtpy resolving to PySide6 alone would not prove that, since qtpy
+picks whichever binding is importable and does not guarantee determinism
+across environments if both were present. `nox -s test_gui`'s tripwire
+(`_has_qt_tests()`) fired as designed: the session stopped skipping and ran a
+real `dev-gui` install and suite the moment this file existed, with no
+noxfile edit needed.
+
+## Resolved earlier sessions
 
 **The Qt binding is PySide6, in the environment and not only on paper.** The
 migration turned out to have almost no code surface: nothing under `src/`
@@ -303,6 +380,27 @@ replaceable with a measured repaint cost at the same point. The first
 `qt`-marked test also arrives, which is what turns `test_gui` from a logged
 skip into a real leg of the gate — expect the gate's wall time to change that
 day.
+
+Session 6 checkpoint — this paragraph was session 5's forward plan, written
+before the PySide6 migration (ADR-001, `d8aa24f`) took session 5's actual
+slot; the video viewer landed here instead, one session later than planned.
+Done, in the order the session-5 handoff set: the first `qt`-marked test
+(`tests/gui/test_environment.py`), `VideoViewer` + `MainWindow` + the
+`sieve-gui` entry point (naive index-seek, no ring buffer, no keyframe index,
+no decoder thread), a scrub-time-exception fix found while verifying the
+widget by hand, and `DECODE_SHARE` moved from a guess to a measurement
+(0.6 → 0.9, `tests/gui/measure_repaint.py`). `nox -s checks` and `nox -s
+test_gui` both green.
+
+**The session's `[STOP]` is cleared.** `SIEVE-HANDOFF.md` required a screen
+recording of the loop running end to end — "feel is what is being signed off"
+(`docs/06-ops/00-agent-orientation.md`) — before anything moves past this
+point. The agent's own evidence was three screenshots from a `QTimer`-driven
+script, which proved the mechanism but not the feel. Kendrick tested the
+slider drag live at session close and confirmed it feels right, which is the
+artifact the stopping point actually asked for. Session 7 is clear to start
+the deferred buffering work (ring buffer, keyframe index, eager head-decode,
+decoder thread) — see the next-session prompt at the end of this file.
 
 ## Phase 1 plan — guardrails
 

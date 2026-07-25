@@ -39,13 +39,17 @@ pytestmark = pytest.mark.slow
 
 BUDGET_KEY = "scrub-seek"
 
-# [ASSUMPTION] Decode is allotted 60% of the 50 ms scrub budget, leaving 20 ms
-# for color conversion, the QImage wrap, and the repaint. The split is a
-# judgement made before the repaint path exists, chosen so that a decode which
-# passes here leaves a repaint budget that a Qt widget has been observed to
-# meet. It is the number to replace with a measurement once the scrub is
-# assembled, and it is the reason a pass here is not a pass on the budget.
-DECODE_SHARE = 0.6
+# Measured, not guessed, as of the video viewer landing (2026-07-25): the
+# BGR-to-QImage wrap, the aspect-preserving scale, and QLabel.setPixmap
+# through VideoViewer._paint on the h264-8bit corpus clip median 0.7-0.8 ms
+# over 64 samples on this machine, offscreen and against a real window alike
+# (max observed 6.7 ms). Allotting 10% of the 50 ms scrub budget to that
+# component leaves roughly 5x headroom over the observed maximum, which is
+# the margin this share is chosen for rather than for the median alone.
+# Superseded the earlier 0.6 guess, made before the repaint path existed to
+# measure. Re-measure with `tests/gui/measure_repaint.py` if the widget's
+# paint path changes shape.
+DECODE_SHARE = 0.9
 
 # Distinct targets per call: seeking repeatedly to one frame would measure a
 # decoder cache rather than a scrub. Seeded so two runs on one machine are

@@ -94,10 +94,10 @@ dev-gui = [
   "pytest-qt>=4.4",                 # ADR-008
 ]
 
-# [INTENT] No console entry points are declared. cli/ and gui/ hold no module
-# to point at, and a declared script naming a module that does not exist is the
-# failure mode this file is replacing. They land with the commit that creates
-# the entry module.
+# gui/app.py exists as of this entry (NOTES.md 178-182: a script lands with
+# the module it names). cli/ still has none.
+[project.scripts]
+sieve-gui = "sieve.gui.app:main"
 
 [project.urls]
 Homepage = "https://github.com/soulsynapse/antscihub-SIEVE"

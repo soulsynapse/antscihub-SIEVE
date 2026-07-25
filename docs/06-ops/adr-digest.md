@@ -149,9 +149,9 @@ declines to promise OS-level fd-2 capture.
 
 ---
 
-## Proposed, being built against
+## Decode
 
-**ADR-018 — OpenCV VideoCapture as the v1 decode path.**
+**ADR-018 — OpenCV VideoCapture as the v1 decode path.** Accepted.
 One decoder for both display and executor input. It was the only candidate to
 pass the seek-accuracy gate across the codec corpus; the cost is that source
 bit depth above 8 bits is reduced at the decode boundary, reported at open time
@@ -163,6 +163,12 @@ reopening conditions.
 
 ## Decisions with no ADR yet
 
-[OPEN QUESTION] Layer enforcement tooling (import-linter or equivalent). Named
-in `SIEVE-HANDOFF.md` but covered by no ADR, and it would be a new top-level
-development dependency.
+[OPEN QUESTION] Layer enforcement tooling. Named in `SIEVE-HANDOFF.md` but
+covered by no ADR. It is now in the tree as import-linter with four contracts in
+`.importlinter`, and it remains a top-level development dependency that no
+decision record explains.
+
+[OPEN QUESTION] The `gui` / `gpu` / `dev-gui` extras split in
+`pyproject.toml`. A packaging consequence of §3's parity guarantee rather than
+a new decision, which is the argument against an ADR; the argument for one is
+that a later reader will look for an ADR to explain it. See `NOTES.md`.

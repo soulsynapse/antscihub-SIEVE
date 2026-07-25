@@ -81,7 +81,7 @@ The lightweight coordination mechanism is a single `NOTES.md` at the repo root
 
 ## Context management.
 
-Start a session by drafting the scope to the next checkpoint that optimally maintains your operational context without letting it grow too big. This should be a running to-do, which you edit as the last thing of the session. Check in, then the last line should say you're ready to compact. Give me the compact cmd written out to optimize the next session. You can utilize an LLM wiki under 06-ops using best practices, or document a run book. No docs you write should be 
+Start a session by drafting the scope to the next checkpoint that optimally maintains your operational context without letting it grow too big. This should be a running to-do, which you edit as the last thing of the session. Check in, then the last line should say you're ready to clear. Give me the prompt for the next session to run after the clear. You can utilize an LLM wiki under 06-ops using best practices, or document a run book.
 
 ## Documentation
 
@@ -92,6 +92,7 @@ Examples:
 "The cache expires after 60s."	vs "[INTENT] cache TTL: 60s (see config.ts). Confirm the runtime value hasn't drifted."
 
 If I have written 'always', 'never', 'must' etc flag it so I can correct it.
+
 
 ## Start here
 

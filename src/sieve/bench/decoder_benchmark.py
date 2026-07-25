@@ -9,10 +9,10 @@ own sequentially decoded frame N.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import importlib.metadata
 import json
-import os
 import platform
 import random
 import subprocess
@@ -20,25 +20,17 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import psutil
 
+from sieve.bench.corpus import CORPUS_FILENAME, DEFAULT_CORPUS_DIR, Clip, read_manifest
+
 BACKENDS = ("pyav", "decord", "imageio-ffmpeg", "opencv-videocapture")
-CORPUS_FILENAME = "manifest.json"
 MIB = 1024 * 1024
-
-
-@dataclass(frozen=True)
-class Clip:
-    label: str
-    codec: str
-    path: Path
-    expected_bit_depth: int
 
 
 class PeakRssSampler:
@@ -54,16 +46,12 @@ class PeakRssSampler:
 
     def _rss_bytes(self) -> int:
         processes = [self._process]
-        try:
+        with contextlib.suppress(psutil.Error):
             processes.extend(self._process.children(recursive=True))
-        except psutil.Error:
-            pass
         total = 0
         for process in processes:
-            try:
+            with contextlib.suppress(psutil.Error):
                 total += process.memory_info().rss
-            except psutil.Error:
-                pass
         return total
 
     def _run(self) -> None:
@@ -87,24 +75,6 @@ def _hash_pixels(array: np.ndarray) -> str:
     digest.update(np.asarray(contiguous.shape, dtype=np.int64).tobytes())
     digest.update(contiguous.tobytes())
     return digest.hexdigest()
-
-
-def _read_manifest(corpus_dir: Path) -> list[Clip]:
-    manifest_path = corpus_dir / CORPUS_FILENAME
-    data = json.loads(manifest_path.read_text(encoding="utf-8"))
-    clips = [
-        Clip(
-            label=item["label"],
-            codec=item["codec"],
-            path=(corpus_dir / item["file"]).resolve(),
-            expected_bit_depth=int(item["expected_bit_depth"]),
-        )
-        for item in data["clips"]
-    ]
-    missing = [str(clip.path) for clip in clips if not clip.path.is_file()]
-    if missing:
-        raise FileNotFoundError(f"Corpus files are missing: {missing}")
-    return clips
 
 
 def _generate_corpus(corpus_dir: Path, ffmpeg: str, frames: int) -> Path:
@@ -295,9 +265,7 @@ def _imageio_generator(
 ) -> tuple[Iterator[bytes], dict[str, Any]]:
     import imageio_ffmpeg
 
-    generator = imageio_ffmpeg.read_frames(
-        str(path), pix_fmt="rgb24", input_params=input_params
-    )
+    generator = imageio_ffmpeg.read_frames(str(path), pix_fmt="rgb24", input_params=input_params)
     metadata = next(generator)
     return generator, metadata
 
@@ -319,9 +287,7 @@ def _imageio_seek(path: Path, metadata: list[None], index: int) -> np.ndarray:
     probe, info = _imageio_generator(path)
     probe.close()
     fps = float(info["fps"])
-    generator, seek_info = _imageio_generator(
-        path, input_params=["-ss", f"{index / fps:.12f}"]
-    )
+    generator, seek_info = _imageio_generator(path, input_params=["-ss", f"{index / fps:.12f}"])
     width, height = seek_info["size"]
     try:
         frame_bytes = next(generator)
@@ -591,8 +557,7 @@ def _write_report(
         ]
         if failures:
             lines.append(
-                f"- **{backend}: DISQUALIFIED** — failed seek accuracy on "
-                f"{', '.join(failures)}."
+                f"- **{backend}: DISQUALIFIED** — failed seek accuracy on {', '.join(failures)}."
             )
         else:
             lines.append(f"- **{backend}: eligible** — no mismatches in this corpus/run.")
@@ -642,7 +607,7 @@ def _worker_entry(args: argparse.Namespace) -> int:
 def _controller(args: argparse.Namespace) -> int:
     if args.generate_corpus:
         _generate_corpus(args.corpus_dir, args.ffmpeg, args.corpus_frames)
-    clips = _read_manifest(args.corpus_dir)
+    clips = read_manifest(args.corpus_dir)
     output = args.output or Path(
         f"tests/results/decoder-benchmark-{time.strftime('%Y%m%d-%H%M%S')}"
     )
@@ -724,7 +689,7 @@ def _controller(args: argparse.Namespace) -> int:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--corpus-dir", type=Path, default=Path("tests/fixtures/decoder-corpus"))
+    parser.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS_DIR)
     parser.add_argument("--generate-corpus", action="store_true")
     parser.add_argument("--corpus-frames", type=int, default=1000)
     parser.add_argument("--ffmpeg", default="ffmpeg")

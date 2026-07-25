@@ -34,7 +34,10 @@ Reading past that is task-driven. The routing table says when.
   supersedes an old one; ADRs are not edited into a new decision. Template at
   `.adr-template.md`. A file whose `Status` is not `Accepted` is not binding.
 - `docs/06-ops/` — operational material for whoever is working the repo:
-  digests, runbooks (`.template-runbook.md`). Derived, disposable, rewritable.
+  digests, runbooks (`.template-runbook.md`), and `handoff-*.md` briefs.
+  Derived, disposable, rewritable. A handoff brief is self-contained by
+  construction: it is written for an agent that will not read the rest of this
+  tree, so it restates what it needs rather than pointing at it.
 - `docs/07-resources/` — external references. Nothing depends on it.
 
 ## Routing table — when the full document earns its tokens

@@ -24,15 +24,15 @@ import importlib.metadata
 import json
 import math
 import os
-from pathlib import Path
 import platform
 import statistics
 import subprocess
 import sys
 import time
 import traceback
-from typing import Any, Callable, Protocol
-
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, Protocol
 
 BACKENDS = ("qt-native", "pyqtgraph", "napari")
 
@@ -123,7 +123,7 @@ class QtNativeBackend:
         presented: Callable[[int], None],
     ) -> None:
         from qtpy.QtCore import Qt
-        from qtpy.QtGui import QImage, QPainter, QPixmap
+        from qtpy.QtGui import QImage, QPainter
         from qtpy.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
 
         owner = self
@@ -142,9 +142,7 @@ class QtNativeBackend:
         self._scene = QGraphicsScene()
         self.widget = MeasuredGraphicsView(self._scene)
         self.widget.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-        self.widget.setTransformationAnchor(
-            QGraphicsView.ViewportAnchor.AnchorUnderMouse
-        )
+        self.widget.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.widget.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self._items = [QGraphicsPixmapItem() for _ in range(3)]
         for item in self._items:
@@ -157,18 +155,14 @@ class QtNativeBackend:
         self.publish(0, *first)
         height, width = first[0].shape[:2]
         self._scene.setSceneRect(0, 0, width, height)
-        self.widget.fitInView(
-            self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
-        )
+        self.widget.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
 
     def publish(self, frame_id: int, rgb: Any, composite: Any, current: Any) -> None:
         from qtpy.QtGui import QPixmap
 
         self._frame_id = frame_id
         self._arrays = (rgb, composite, current)
-        for item, array, image_format in zip(
-            self._items, self._arrays, self._formats, strict=True
-        ):
+        for item, array, image_format in zip(self._items, self._arrays, self._formats, strict=True):
             item.setPixmap(QPixmap.fromImage(_qimage(array, image_format)))
         self.widget.viewport().update()
 
@@ -234,9 +228,7 @@ class NapariBackend:
         self._frame_id = -1
         self._model = ViewerModel(title="SIEVE viewer ADR benchmark", ndisplay=2)
         self.widget = QtViewer(self._model, show_welcome_screen=False)
-        self.widget.canvas.events.draw.connect(
-            lambda event: presented(self._frame_id)
-        )
+        self.widget.canvas.events.draw.connect(lambda event: presented(self._frame_id))
         rgb, composite, current = first
         self._raw = self._model.add_image(
             rgb,
@@ -298,7 +290,7 @@ class BenchmarkRunner:
         result: dict[str, Any],
     ) -> None:
         import psutil
-        from qtpy.QtCore import QTimer, Qt
+        from qtpy.QtCore import Qt, QTimer
 
         self.app = app
         self.backend_name = backend_name
@@ -398,12 +390,7 @@ class BenchmarkRunner:
         end_ns = self._measure_end_ns or time.perf_counter_ns()
         start_ns = self._measure_start_ns or end_ns
         measured_wall_s = max((end_ns - start_ns) / 1_000_000_000, 1e-9)
-        cpu_s = (
-            cpu_end.user
-            + cpu_end.system
-            - cpu_start.user
-            - cpu_start.system
-        )
+        cpu_s = cpu_end.user + cpu_end.system - cpu_start.user - cpu_start.system
         scheduled_duration_s = self.frames / self.fps
         if len(self._presentation_ns) >= 2:
             presentation_span_s = (
@@ -421,7 +408,7 @@ class BenchmarkRunner:
         deadline_ms = 1000 / self.fps
         tick_intervals_ms = [
             (right - left) / 1_000_000
-            for left, right in zip(self._tick_ns, self._tick_ns[1:])
+            for left, right in zip(self._tick_ns, self._tick_ns[1:], strict=False)
         ][self.warmup_frames :]
 
         self.result.update(
@@ -435,15 +422,12 @@ class BenchmarkRunner:
                     "p50": _percentile(self._latency_ms, 0.50),
                     "p95": _percentile(self._latency_ms, 0.95),
                     "p99": _percentile(self._latency_ms, 0.99),
-                    "mean": statistics.fmean(self._latency_ms)
-                    if self._latency_ms
-                    else None,
+                    "mean": statistics.fmean(self._latency_ms) if self._latency_ms else None,
                     "max": max(self._latency_ms) if self._latency_ms else None,
                 },
                 "deadline_ms": deadline_ms,
                 "deadline_miss_rate": (
-                    sum(value > deadline_ms for value in self._latency_ms)
-                    / len(self._latency_ms)
+                    sum(value > deadline_ms for value in self._latency_ms) / len(self._latency_ms)
                     if self._latency_ms
                     else None
                 ),
@@ -454,8 +438,7 @@ class BenchmarkRunner:
                 },
                 "measured_wall_s": measured_wall_s,
                 "scheduled_duration_s": scheduled_duration_s,
-                "effective_presented_fps": len(self._presented)
-                / scheduled_duration_s,
+                "effective_presented_fps": len(self._presented) / scheduled_duration_s,
                 "presentation_span_fps": presentation_span_fps,
                 "cpu_s": cpu_s,
                 "cpu_percent_of_one_core": 100 * cpu_s / measured_wall_s,
@@ -504,9 +487,7 @@ def _worker(args: argparse.Namespace) -> int:
 
         fixtures_started = time.perf_counter_ns()
         fixtures = _make_fixture_ring(args.width, args.height, args.ring_size)
-        result["fixture_build_ms"] = (
-            time.perf_counter_ns() - fixtures_started
-        ) / 1_000_000
+        result["fixture_build_ms"] = (time.perf_counter_ns() - fixtures_started) / 1_000_000
         result["rss_after_fixtures_mb"] = process.memory_info().rss / (1024**2)
 
         app = QApplication.instance() or QApplication([])
@@ -519,9 +500,7 @@ def _worker(args: argparse.Namespace) -> int:
 
         backend_started = time.perf_counter_ns()
         backend = _create_backend(args.worker, fixtures[0], presented)
-        result["backend_init_ms"] = (
-            time.perf_counter_ns() - backend_started
-        ) / 1_000_000
+        result["backend_init_ms"] = (time.perf_counter_ns() - backend_started) / 1_000_000
         result["rss_after_backend_mb"] = process.memory_info().rss / (1024**2)
         result["worker_start_to_ready_ms"] = (
             time.perf_counter_ns() - worker_started_ns
@@ -594,9 +573,7 @@ def _write_markdown(path: Path, results: list[dict[str, Any]], args: argparse.Na
                 p50=_fmt(latency.get("p50")),
                 p95=_fmt(latency.get("p95")),
                 drop=_fmt(
-                    100 * result["drop_rate"]
-                    if result.get("drop_rate") is not None
-                    else None
+                    100 * result["drop_rate"] if result.get("drop_rate") is not None else None
                 ),
                 miss=_fmt(
                     100 * result["deadline_miss_rate"]

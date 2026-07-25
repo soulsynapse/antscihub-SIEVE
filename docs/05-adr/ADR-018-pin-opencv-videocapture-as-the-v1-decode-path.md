@@ -141,7 +141,7 @@ be undone before the first cached result rather than at leisure.
 
 ## Status
 
-Proposed.
+Accepted.
 
 ## Consequences
 

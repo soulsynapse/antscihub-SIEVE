@@ -1,6 +1,6 @@
-# Benchmarking Suite — Vision
+# Benchmarking Suite — Vision [INTENT]
 
-## Raw vision (USER WRITTEN VISION)
+## Raw vision (USER WRITTEN VISION) [INTENT]
 
 One of the core tenets of the benchmarking plan is that this program, inherently, has a role that is asking about processing economy.
 
@@ -8,13 +8,15 @@ One of the central features of this product is that it asks: when I downsample, 
 
 This is seen in the decision to downsample by pixel blocks, vs downsampling the video itself. This is also seen when the user sets the clip length to 5 vs 10 - how long does the active processing take? how much faster than real time are you achieving?
 
-The second central feature is asking: if I allocate these resources, how fast can I do all of it? e.g., I run the whole thing on my pc, when will it be done? if I run it on the hpc, when will that be done? if I change from cpu to gpu, what does that buy me? If I allocate more ram, what does that buy me?
+The second central feature asks: if I allocate these resources, how fast can I
+complete the workload? For example: when will a local PC or HPC run finish,
+what does CPU-to-GPU change buy, and what does more RAM buy?
 
 The third central feature is asking: what is inefficient about the program as is? if we a/b test some part of how the program is implemented, how much stuff do we gain?
 
 The third one might be outside the scope of something that needs to be planned deliberately to be user-facing, but I'd like to have a standardized suite so I can visualize which part is taking how much time, and so that between agent sessions, I imagine there is a fairly standard tool/package to reach for to see what is going slow and why, have that both be readable to agents as well as visualized for me when I ask for it to get either a live readout as I navigate the menu (like chrome has, to see where the slowdowns and resource consumption spikes occur) or a report after the fact.
 
-## Purpose
+## Purpose [INTENT]
 
 One of the core questions SIEVE answers is **processing economy vs. signal detection**.
 The benchmarking suite exists to make that trade-off legible: to the user planning
@@ -29,13 +31,13 @@ how much of each knob is free.** If dropping 60fps footage to 1fps costs
 nothing in detection, the user should know that, and the tool should show the
 Pareto frontier that makes it obvious.
 
-The suite has three tenets, and they don't share a data shape. Trying to put
-them all in one format hurts the first two.
+The suite has three tenets, and they do not share a data shape. Putting them in
+one format harms the first two.
 
-## Tenet 1 — Economy vs. detection
+## Tenet 1 — Economy vs. detection [INTENT]
 
-*"When I downsample, how much economy does it produce, and how much detection
-do I pay for it?"*
+*"When I downsample, how much economy does it produce, and how much detection do
+I pay for it?"*
 
 This is a **parametric sweep** over a grid of settings (spatial factor,
 temporal factor, clip length, block-vs-video downsampling, precision, …)
@@ -44,13 +46,13 @@ wall_time, peak_rss, throughput_relative_to_realtime, and a detection score
 against ground truth (F1, recall at fixed FPR, or whatever the task
 specifies).
 
-The natural artifact is a **long-form structured results table**, one row per
-run, that supports Pareto-frontier queries and groupby comparisons. Not a
-timeline.
+The natural artifact is a **long-form structured results table**, with one row
+per run supporting Pareto-frontier queries and groupby comparisons rather than
+a timeline.
 
-## Tenet 2 — Resource scaling
+## Tenet 2 — Resource scaling [INTENT]
 
-*"If I allocate these resources, how fast can I do all of it?"*
+*"If I allocate these resources, how fast can I complete the workload?"*
 
 Same shape as Tenet 1: a parametric sweep, but the varying axis is hardware
 (local CPU, local GPU, HPC partition, RAM ceiling, worker count) rather than
@@ -59,7 +61,7 @@ algorithmic settings. Rows in the same results table, distinguished by a
 question and their "how much do I lose going to 1fps" question are answered by
 the same substrate — just different groupbys.
 
-## Tenet 3 — Where is time going
+## Tenet 3 — Where is time going [INTENT]
 
 *"What is inefficient about the program as-is?"*
 
@@ -73,9 +75,9 @@ Kept as a per-run artifact linked back to the results table by `run_id`.
 
 ---
 
-## Architecture — two layers, linked by ID
+## Architecture — two layers, linked by ID [INTENT]
 
-### Layer A — Results table (Tenets 1 & 2)
+### Layer A — Results table (Tenets 1 & 2) [INTENT]
 
 **Format:** Parquet, or a DuckDB table over Parquet files. One row per run.
 
@@ -99,7 +101,7 @@ Kept as a per-run artifact linked back to the results table by `run_id`.
 - "What does GPU buy me?" — groupby `hardware_tag`, compare `wall_s`
 - Regression check across `git_sha` at fixed params
 
-### Layer B — Per-run timeline (Tenet 3)
+### Layer B — Per-run timeline (Tenet 3) [INTENT]
 
 **Format:** Chrome Trace Event Format (CTF) JSON — the format Chrome DevTools
 Performance and Perfetto UI both consume, and which LLM agents parse
@@ -117,13 +119,14 @@ downsample, detect, aggregate, write — with explicit `tracer.log_event()` or
 looks suspicious. Full-fidelity function tracing has bad noise-to-signal on
 tight numpy loops and bloats the JSON.
 
-**Counter events** (`"ph": "C"`) overlay RSS, GPU memory, queue depth, and any
-other resource-over-time series. This is what enables the resource-spike
+**Counter events** (`"ph": "C"`) overlay RSS, GPU memory, queue depth, and
+additional resource-over-time series. This is what enables the resource-spike
 visualization.
 
-### Live readout in the PyQt6 app
+### Live readout in the PyQt6 app [INTENT]
 
-Separate from the trace file — VizTracer flushes at process exit, not live.
+[INTENT] The live readout is separate from the trace file because VizTracer
+flushes at process exit rather than live.
 
 **Design:** A lightweight metric bus — a `QObject` with signals emitting
 `(name, value, t)` — that both feeds a `pyqtgraph` panel for the in-app HUD
@@ -132,7 +135,7 @@ two views.
 
 ---
 
-## GPU caveat
+## GPU caveat [ASSUMPTION]
 
 If real work runs on the GPU, CPU-side Python tracers show launch and sync
 points but not what the GPU actually did between them. Time will be
@@ -148,7 +151,7 @@ misattributed to whichever function was blocking on the sync.
 
 ---
 
-## Explicitly not doing
+## Explicitly not doing [INTENT]
 
 - **cProfile** — deterministic tracing overhead (10–100% on Python-heavy
   code), single-threaded model, output doesn't compose across runs. Fine for
@@ -161,7 +164,7 @@ misattributed to whichever function was blocking on the sync.
 - **Speedscope as primary viewer** — nicer flamegraph, but no counter or
   async event support. Fine as a secondary view.
 
-## Possibly worth adding later
+## Possibly worth adding later [INTENT]
 
 - **ASV (airspeed velocity)** — what numpy/scipy/scikit-learn use for
   tracking benchmark regressions over git history. Not useful for the
@@ -171,13 +174,13 @@ misattributed to whichever function was blocking on the sync.
 
 ---
 
-## Open questions
+## Open questions [OPEN QUESTION]
 
 - What ground-truth set(s) define the detection metric for Tenet 1? The
   Pareto frontier only means something if the y-axis is fixed.
 - Which pipeline phases are the right default trace granularity? First cut:
   decode / downsample / detect / aggregate / write. Refine after first
   traces.
-- Does any pipeline stage cross the process boundary (multiprocessing
+- Whether a pipeline stage crosses the process boundary (multiprocessing
   workers, HPC job splits)? If so, CTF's process/thread model needs a
   deliberate assignment scheme so the timeline stays readable.

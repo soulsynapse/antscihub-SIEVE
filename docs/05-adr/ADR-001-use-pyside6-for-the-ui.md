@@ -23,9 +23,9 @@ and vectors. napari provides those facilities through a Qt viewer backed by
 VisPy. SIEVE also requires intensive time-series and benchmark graphs;
 pyqtgraph remains a better purpose-built component for those plot surfaces.
 
-An executable comparison under `tests/benchmark_image_viewers.py` tested an
+[STABLE] An executable comparison under `tests/benchmark_image_viewers.py` tested an
 embedded napari viewer against pyqtgraph and Qt-native image stacks using the
-same RGB frame and two RGBA overlays. All candidates sustained 30 frames per
+same RGB frame and two RGBA overlays. Each candidate sustained 30 frames per
 second without dropped presentations at 1920x1080 and 3840x2160. napari used
 more memory and took approximately 2.2 seconds to initialize, but remained
 within the preview frame budget and supplies substantially more required
@@ -99,7 +99,7 @@ under LGPLv3 and is therefore preferred.
 
 ### Qt-native or pyqtgraph image viewers
 
-The executable viewer comparison showed that both alternatives can meet the
+[STABLE] The executable viewer comparison showed that both alternatives can meet the
 current raster-presentation frame budget. pyqtgraph had the lowest measured
 draw-boundary latency and lower memory use than napari. Qt-native viewing had
 the smallest dependency surface.
@@ -112,7 +112,7 @@ plotting model is the desired behavior.
 
 ### Direct VisPy
 
-Direct VisPy would retain GPU-backed rendering while avoiding napari's full
+[INTENT] Direct VisPy would retain GPU-backed rendering while avoiding napari's full
 application and layer models. It would also require SIEVE to build the
 higher-level layer controls, interaction modes, and coordinate behavior that
 motivated the viewer-tool decision. Since embedded napari met the measured

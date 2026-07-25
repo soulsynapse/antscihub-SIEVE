@@ -4,25 +4,25 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE's filter contract requires a backend registry, and the backend-dispatch
+[INTENT] SIEVE's filter contract needs a backend registry, and the backend-dispatch
 architecture anticipates NumPy CPU, CuPy GPU, and PyTorch GPU implementations.
-If every filter is independently rewritten against `numpy`, `cupy`, and
+[INTENT] Independently rewriting each filter against `numpy`, `cupy`, and
 `torch`, the registry becomes a catalog of duplicated algorithms rather than a
 dispatch mechanism.
 
-The Python Array API standard defines a common array vocabulary across array
+[STABLE] The Python Array API standard defines a common array vocabulary across array
 libraries. `array-api-compat` provides a compatibility layer for supported
 NumPy, CuPy, and PyTorch arrays, including a way to obtain the array namespace
 appropriate to an input. Writing portable numerical kernels against that
 namespace creates a leverage point where one implementation can serve several
 registered backends.
 
-Not all SIEVE operations fit the common API. Video decode, OpenCV operations,
+[INTENT] Some SIEVE operations sit outside the common API. Video decode, OpenCV operations,
 shared-memory NumPy views, library-specific algorithms, device-specific
 optimization, and some advanced indexing or signal-processing operations may
 require a concrete library.
 
-Array typing is a related but separate concern. SIEVE needs useful dtype
+[INTENT] Array typing is a related but separate concern. SIEVE needs useful dtype
 annotations and shape documentation without adopting an inactive shape-typing
 package or claiming that Python's type system proves runtime array shapes.
 `numpy.typing.NDArray` is maintained with NumPy and accurately describes
@@ -107,44 +107,44 @@ device changes, and backend-specific determinism differences.
 
 ## Alternatives considered
 
-### Separate NumPy, CuPy, and PyTorch implementations for every filter
+### Backend-specific NumPy, CuPy, and PyTorch implementations
 
-This permits maximal backend-specific optimization but duplicates ordinary
-array algorithms and makes semantic drift likely. Separate implementations
-remain appropriate for operations that cannot be expressed well through the
+[INTENT] This alternative permits maximal backend-specific optimization but duplicates
+ordinary array algorithms and makes semantic drift likely. Distinct
+implementations remain appropriate for operations outside the
 common API, not as the default structure.
 
 ### NumPy source with automatic substitution
 
-Aliasing `numpy` to another module or mechanically replacing `np` calls hides
+[INTENT] Aliasing `numpy` to another module or mechanically replacing `np` calls hides
 semantic differences and does not reliably control device transfer, dtype
 promotion, indexing, or unsupported operations. The Array API namespace makes
 the portable subset explicit.
 
 ### NumPy only until GPU backends are implemented
 
-Deferring portability makes early filter implementations establish NumPy-only
+[INTENT] Deferring portability makes early filter implementations establish NumPy-only
 idioms and types that later need invasive rewrites. The repository is early
 enough to keep portable kernels within the common subset from their first
 implementation.
 
 ### nptyping
 
-nptyping combines dtype and shape notation, but introduces a separate typing
+[INTENT] nptyping combines dtype and shape notation, but introduces a separate typing
 model and an unsuitable maintenance dependency. It also does not solve runtime
 portability across NumPy, CuPy, and PyTorch. NumPy's maintained typing module
 and optional jaxtyping are preferred.
 
 ### jaxtyping everywhere
 
-Uniform symbolic shape annotations could make dimensions highly visible, but
+[INTENT] Uniform symbolic shape annotations could make dimensions highly visible, but
 would add annotation complexity and potentially encourage runtime checking in
 hot paths. SIEVE uses it selectively where shape relationships are difficult
 to communicate accurately through types and docstrings alone.
 
 ### A SIEVE-specific array abstraction
 
-A custom wrapper could normalize every backend and enforce SIEVE-specific
+[INTENT] A custom wrapper could normalize the supported backends and enforce SIEVE-specific
 semantics, but would create another array library, complicate interoperability,
 and obscure access to native operations. A thin compatibility and adapter
 boundary is sufficient.

@@ -13,6 +13,8 @@ on any machine that has the corpus.
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -24,16 +26,23 @@ from sieve.io.video_read import (
     DELIVERED_DTYPE,
     DELIVERED_LAYOUT,
     DecoderIdentity,
+    DecoderThread,
     FrameReadError,
+    FrameRingBuffer,
     VideoOpenError,
     VideoReader,
     VideoReadError,
+    build_keyframe_index,
     decoder_identity,
 )
 
 FRAME_NDIM = 3
 BGR_CHANNELS = 3
 EIGHT_BIT = 8
+CANCEL_AFTER_CALLS = 2
+RING_EVICTION_BUDGET_FRAMES = 2
+SCRUB_TARGET_A = 50
+SCRUB_TARGET_B = 30
 
 
 @pytest.fixture
@@ -242,3 +251,188 @@ def test_identity_without_a_capture_declines_to_name_a_backend() -> None:
     """VideoCapture resolves its backend per file, so there is no process-wide
     answer to invent."""
     assert decoder_identity().backend == "unresolved"
+
+
+def test_last_frame_type_reports_a_keyframe_at_index_zero(reader: VideoReader) -> None:
+    """Frame 0 is always a keyframe -- there is nothing before it to reference."""
+    reader.read(0)
+    assert reader.last_frame_type() == ord("I")
+
+
+class TestKeyframeIndex:
+    """`build_keyframe_index` -- `ARCHITECTURE.md` 5.5's background index.
+
+    Confirms the index is constructible through the pinned ADR-018 decoder
+    with no second decode dependency: `cv2.CAP_PROP_FRAME_TYPE` reports an
+    ASCII frame-type code after each decode (probed directly against the
+    corpus before this module was written), so the index needs nothing beyond
+    what `VideoReader` already exposes via `last_frame_type`.
+    """
+
+    def test_starts_at_zero_and_is_sorted(self, clip: Clip) -> None:
+        index = build_keyframe_index(clip.path)
+        assert index is not None
+        assert index.frame_count > 0
+        assert index.keyframes[0] == 0
+        assert list(index.keyframes) == sorted(index.keyframes)
+
+    def test_nearest_at_or_before_never_overshoots(self, clip: Clip) -> None:
+        index = build_keyframe_index(clip.path)
+        assert index is not None
+        for target in (0, index.frame_count // 2, index.frame_count - 1):
+            nearest = index.nearest_at_or_before(target)
+            assert nearest <= target
+            assert nearest in index.keyframes
+
+    def test_cancellation_yields_no_index(self, clip: Clip) -> None:
+        """A cancelled build reports `None` rather than a partial index, which
+        would silently mis-answer the frames the build never reached."""
+        calls = 0
+
+        def cancelled() -> bool:
+            nonlocal calls
+            calls += 1
+            return calls > CANCEL_AFTER_CALLS
+
+        assert build_keyframe_index(clip.path, cancelled=cancelled) is None
+
+
+def _blank_frame(width: int = 4, height: int = 4) -> np.ndarray:
+    return np.zeros((height, width, 3), dtype=np.uint8)
+
+
+class TestFrameRingBuffer:
+    """Byte-budgeted LRU cache backing the decoder thread's read-ahead."""
+
+    def test_evicts_oldest_past_the_byte_budget(self) -> None:
+        oldest, middle, newest = 0, 1, 2
+        frame = _blank_frame()
+        ring = FrameRingBuffer(max_bytes=frame.nbytes * RING_EVICTION_BUDGET_FRAMES)
+        ring.put(oldest, frame)
+        ring.put(middle, frame)
+        ring.put(newest, frame)
+        assert oldest not in ring
+        assert middle in ring
+        assert newest in ring
+        assert len(ring) == RING_EVICTION_BUDGET_FRAMES
+
+    def test_get_refreshes_recency(self) -> None:
+        touched, untouched, newest = 0, 1, 2
+        frame = _blank_frame()
+        ring = FrameRingBuffer(max_bytes=frame.nbytes * RING_EVICTION_BUDGET_FRAMES)
+        ring.put(touched, frame)
+        ring.put(untouched, frame)
+        ring.get(touched)  # touches it, leaving `untouched` as the least recently used
+        ring.put(newest, frame)
+        assert touched in ring
+        assert untouched not in ring
+        assert newest in ring
+
+    def test_clear_empties_the_buffer(self) -> None:
+        frame = _blank_frame()
+        ring = FrameRingBuffer(max_bytes=frame.nbytes * 4)
+        ring.put(0, frame)
+        ring.clear()
+        assert len(ring) == 0
+        assert ring.get(0) is None
+
+
+@pytest.fixture
+def ring() -> FrameRingBuffer:
+    return FrameRingBuffer(max_bytes=64 * 1024 * 1024)
+
+
+class TestDecoderThread:
+    """Background decode-ahead with latest-wins coalescing.
+
+    Waits are on `threading.Event`, not `time.sleep`: a sleep-based wait either
+    races a slow CI machine or pads every run with idle time, where an event
+    returns the instant the awaited call happens.
+    """
+
+    def test_delivers_the_requested_frame(self, clip: Clip, ring: FrameRingBuffer) -> None:
+        received = threading.Event()
+        result: dict[str, object] = {}
+
+        def on_frame(index: int, frame: np.ndarray) -> None:
+            result["index"] = index
+            result["frame"] = frame
+            received.set()
+
+        thread = DecoderThread(clip.path, ring, on_frame=on_frame)
+        thread.start()
+        try:
+            thread.request(SCRUB_TARGET_A)
+            assert received.wait(timeout=5.0), "no frame delivered within 5s"
+        finally:
+            thread.stop()
+        assert result["index"] == SCRUB_TARGET_A
+        assert isinstance(result["frame"], np.ndarray)
+        assert result["frame"].dtype == np.uint8
+        assert SCRUB_TARGET_A in ring
+
+    def test_prefetch_fills_the_ring_ahead_of_the_target(
+        self, clip: Clip, ring: FrameRingBuffer
+    ) -> None:
+        """The read-ahead fills the ring after the requested target, not just
+        the target itself -- that fill is what turns a subsequent adjacent
+        scrub into a `FrameRingBuffer.get` hit instead of a decode.
+
+        Polled with a deadline rather than a single wait: the prefetch loop
+        has no completion signal of its own (it is deliberately fire-and-
+        forget), so "did it fill in" is only observable by checking the ring
+        repeatedly, bounded so a genuine failure still fails in finite time.
+        """
+        lookahead_range = range(11, 15)
+        thread = DecoderThread(clip.path, ring, lookahead=4)
+        thread.start()
+        try:
+            thread.request(10)
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline and not any(i in ring for i in lookahead_range):
+                time.sleep(0.02)
+        finally:
+            thread.stop()
+        assert any(index in ring for index in lookahead_range), (
+            "prefetch did not fill any lookahead frame in time"
+        )
+
+    def test_request_coalesces_to_the_latest_target(
+        self, clip: Clip, ring: FrameRingBuffer
+    ) -> None:
+        """Repeated `request` calls before the thread wakes leave only the
+        latest target pending, not a queue of all of them -- the mechanism
+        that keeps a fast drag from trailing through every intermediate
+        value. Asserted against the pending-target state directly, the same
+        way `test_adjacent_reads_do_not_reseek` reaches into `VideoReader`'s
+        private seek: the alternative is inferring coalescing from timing.
+        """
+        thread = DecoderThread(clip.path, ring)  # not started
+        thread.request(10)
+        thread.request(20)
+        thread.request(SCRUB_TARGET_B)
+        assert thread._target == SCRUB_TARGET_B
+
+    def test_reports_errors_for_a_rejected_target(self, clip: Clip, ring: FrameRingBuffer) -> None:
+        errors: list[tuple[int, str]] = []
+        got_error = threading.Event()
+
+        def on_error(index: int, message: str) -> None:
+            errors.append((index, message))
+            got_error.set()
+
+        thread = DecoderThread(clip.path, ring, on_error=on_error)
+        thread.start()
+        try:
+            thread.request(-1)
+            assert got_error.wait(timeout=5.0), "no error reported within 5s"
+        finally:
+            thread.stop()
+        assert errors[0][0] == -1
+        assert "negative" in errors[0][1]
+
+    def test_stop_joins_the_thread(self, clip: Clip, ring: FrameRingBuffer) -> None:
+        thread = DecoderThread(clip.path, ring)
+        thread.start()
+        thread.stop()
+        assert not thread._thread.is_alive()

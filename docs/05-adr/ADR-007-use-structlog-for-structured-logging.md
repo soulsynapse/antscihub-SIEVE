@@ -4,7 +4,7 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE runs work across the CLI, GUI, long-lived worker subprocesses, local
+[ASSUMPTION] SIEVE runs work across the CLI, GUI, long-lived worker subprocesses, local
 benchmarks, and eventual HPC jobs. Operators and developers need to correlate
 events across those boundaries and answer questions such as which pipeline
 node ran, which backend was selected, why a fallback occurred, how long a
@@ -23,7 +23,7 @@ need to build those conventions and adapters.
 
 The architecture separately assigns authoritative benchmark outputs to a
 Parquet/DuckDB results table and performance timelines to CTF traces. Logging
-must complement those products rather than becoming an accidental replacement
+[INTENT] Logging complements those products rather than becoming an accidental replacement
 for either one.
 
 ## Decision

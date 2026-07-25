@@ -4,27 +4,27 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE's filter contract is the single source of truth for filter parameters.
+[INTENT] SIEVE's filter contract is the single source of truth for filter parameters.
 The GUI, CLI, pipeline loader, cache-key construction, cost model, validation
-command, and generated documentation must all consume that contract without
+command, and generated documentation consume that contract without
 maintaining parallel parameter declarations.
 
 The contract needs to:
 
-- validate user-authored pipeline parameters and produce readable errors for
+- [INTENT] User-authored pipeline parameter validation and readable errors for
   the user-facing `sieve validate pipeline.yaml` command described in
   `ARCHITECTURE.md` section 16;
 - export JSON Schema so editor support and `PIPELINE_SCHEMA.md` can be
   generated rather than maintained by hand;
 - represent the pipeline's `filter type + params` polymorphism without custom
   dispatch code;
-- create immutable parameter objects so validated parameters cannot change
+- immutable parameter objects, so validated parameters remain unchanged
   after their canonical cache-key representation has been computed; and
 - validate cheaply enough that parameter validation is not a meaningful part
   of per-frame processing cost.
 
-Application configuration has a related but distinct requirement: settings
-must be loaded from supported external sources such as environment variables
+[INTENT] Application configuration has a related but distinct requirement: settings
+are loaded from supported external sources such as environment variables
 without mixing source-loading behavior into the scientific filter models.
 
 ## Decision
@@ -68,7 +68,7 @@ undermining the single-source-of-truth requirement.
 
 ### msgspec
 
-msgspec prioritizes serialization and validation performance and may be faster
+[ASSUMPTION] msgspec prioritizes serialization and validation performance and may be faster
 for some workloads. Pydantic has the broader validation, JSON Schema,
 settings, editor, and integration ecosystem needed by SIEVE. Parameter
 validation is not expected to dominate frame-processing cost, so the narrower
@@ -114,7 +114,7 @@ Accepted.
   `model_validate`, `model_dump`, and `model_json_schema`; v1 compatibility
   patterns are not part of the contract.
 
-## References
+## References [STABLE]
 
 - [Pydantic models](https://docs.pydantic.dev/latest/concepts/models/)
 - [Pydantic JSON Schema](https://docs.pydantic.dev/latest/concepts/json_schema/)

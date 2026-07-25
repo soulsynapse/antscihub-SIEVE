@@ -4,11 +4,11 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-The pipeline artifact is SIEVE's project file, CLI input, and HPC handoff
+[INTENT] The pipeline artifact is SIEVE's project file, CLI input, and HPC handoff
 format. `ARCHITECTURE.md` section 7 requires it to be human-editable, fully
 describe a run, round-trip through the GUI without semantic loss, use explicit
 DAG references, carry a schema version, and remain stable under changes that
-must not affect cache keys.
+are irrelevant to cache keys.
 
 Users need to inspect and edit pipeline files directly. Editors and the
 user-facing `sieve validate pipeline.yaml` command also need a machine-readable
@@ -102,7 +102,7 @@ Accepted.
 - Cache stability depends on canonical validated data, not serialized YAML
   text.
 
-## References
+## References [STABLE]
 
 - [YAML 1.2.2 specification](https://yaml.org/spec/1.2.2/)
 - [JSON Schema specification](https://json-schema.org/specification)

@@ -4,26 +4,26 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE needs to answer two different performance questions.
+[INTENT] SIEVE needs to answer two different performance questions.
 
-The benchmarking workflow needs planned, repeatable timelines for known
+[INTENT] The benchmarking workflow needs planned, repeatable timelines for known
 pipeline phases such as decode, downsample, detect, aggregate, and write. The
 benchmarking vision selects VizTracer to emit Chrome Trace Event JSON for
 inspection in Perfetto. This path is intentionally enabled for a measured run
 and can include SIEVE-defined phase boundaries and resource counter events.
 
-Production diagnosis starts from a different situation: a user reports that
+[ASSUMPTION] Production diagnosis starts from a different situation: a user reports that
 the GUI is stuttering or a worker is unexpectedly slow, but the process was
 not launched with tracing enabled. Restarting with instrumentation can lose
 the behavior, and instrumentation overhead can perturb the workload being
 investigated.
 
-VizTracer is an instrumenting tracer that must be enabled for the target run.
+[STABLE] VizTracer is an instrumenting tracer that requires activation for the target run.
 py-spy is a sampling profiler that can attach to an already-running Python
 process without adding profiling calls to SIEVE's code. They answer related
 questions but have different activation, overhead, and output semantics.
 
-CPU-side Python tools do not provide authoritative GPU-kernel timing. The
+[STABLE] CPU-side Python tools do not provide authoritative GPU-kernel timing. The
 benchmarking vision already assigns PyTorch GPU profiling to `torch.profiler`
 and CuPy or custom-kernel profiling to NVTX and Nsight Systems.
 
@@ -92,21 +92,21 @@ before attaching to a process outside the current user's diagnostic scope.
 
 ### VizTracer alone
 
-VizTracer supplies the planned phase timeline and integrates with the chosen
-Chrome Trace Event workflow. It cannot reconstruct the behavior of a process
-that was not launched with tracing active. Always-on tracing would add overhead
+[ASSUMPTION] VizTracer supplies the planned phase timeline and integrates with the chosen
+Chrome Trace Event workflow. It does not reconstruct the behavior of a process
+that was not launched with tracing active. Continuous tracing would add overhead
 and storage cost and could perturb intermittent GUI behavior.
 
 ### py-spy alone
 
-py-spy can attach to a live process with no SIEVE code instrumentation and is
+[ASSUMPTION] py-spy can attach to a live process with no SIEVE code instrumentation and is
 well suited to locating hot Python stacks. Sampling does not provide the same
 explicit pipeline-phase spans, async relationships, or SIEVE-defined resource
 counters as the planned VizTracer trace.
 
 ### cProfile
 
-cProfile is built into Python and useful for bounded local investigations, but
+[ASSUMPTION] cProfile is built into Python and useful for bounded local investigations, but
 its deterministic call tracing has higher perturbation for Python-heavy code
 and does not address attachment to an already-running uninstrumented process.
 The benchmarking vision already rejects it as SIEVE's primary benchmarking
@@ -114,16 +114,16 @@ trace tool.
 
 ### Scalene
 
-Scalene provides CPU, memory, and Python-versus-native attribution and may be
+[ASSUMPTION] Scalene provides CPU, memory, and Python-versus-native attribution and may be
 useful for focused investigations. It adds another profiling workflow and does
 not replace the selected Perfetto timeline or the simple attach-to-PID
 production diagnostic provided by py-spy.
 
-### Always-on application profiling
+### Continuous application profiling
 
-Always-on profiling would make every incident observable from process start,
+[ASSUMPTION] Continuous profiling would make incidents observable from process start,
 but imposes continuous overhead, storage, privacy, and lifecycle costs.
-SIEVE instead keeps structured operational logs always available and activates
+SIEVE instead retains structured operational logs and activates
 profilers deliberately.
 
 ## Status

@@ -4,9 +4,9 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE's architecture makes testable promises about filters and pipelines:
+[STABLE] SIEVE's architecture makes testable promises about filters and pipelines:
 
-- section 19 requires property-based tests showing that valid filter
+- [STABLE] Section 19 requires property-based tests showing that valid filter
   parameters preserve the filter contract, including declared output shape,
   dtype, and NaN behavior;
 - section 12 requires a canonical short clip to produce deterministic pipeline
@@ -14,8 +14,8 @@ SIEVE's architecture makes testable promises about filters and pipelines:
 - the benchmarking vision requires performance to remain visible as filters,
   backends, and worker behavior evolve.
 
-Example-based unit tests are necessary but cannot practically enumerate the
-valid parameter space of every filter. Hand-written parameter loops tend to
+[ASSUMPTION] Example-based unit tests are necessary but do not practically enumerate the
+valid parameter space of each filter. Hand-written parameter loops tend to
 miss boundary combinations and do not shrink a failure to a minimal
 reproducer.
 
@@ -24,9 +24,9 @@ runner can detect timing changes, but timing repetition does not prove that
 outputs are equal. Likewise, a byte comparison can prove equality for a
 fixture without detecting a performance regression.
 
-Some tests will necessarily decode canonical media, run full pipelines,
+[INTENT] Some tests will necessarily decode canonical media, run full pipelines,
 exercise subprocesses, initialize GUI or GPU resources, or collect stable
-benchmark samples. Running all of those tests on every inner-loop invocation
+benchmark samples. Running the complete set on an inner-loop invocation
 would make the routine suite too slow to use frequently.
 
 ## Decision
@@ -107,9 +107,9 @@ single universal wall-time threshold across heterogeneous developer machines.
 
 ### unittest
 
-The standard-library framework can express unit and integration tests but has
+[STABLE] The standard-library framework can express unit and integration tests but has
 a less composable fixture and plugin model for Hypothesis and performance
-benchmarking. pytest is the common integration point for all three selected
+benchmarking. pytest is the common integration point for the three selected
 tools.
 
 ### Hand-written parameter matrices
@@ -132,9 +132,9 @@ become useful for a dedicated benchmark lab. It adds its own environment and
 publishing workflow. pytest-benchmark is the smaller initial fit for
 regression checks beside the tests they protect.
 
-### Treating every test as part of the default suite
+### Including the complete test suite by default
 
-This maximizes coverage per invocation but makes routine feedback progressively
+[INTENT] This maximizes coverage per invocation but makes routine feedback progressively
 slower as media, subprocess, GUI, GPU, and benchmark tests accumulate. An
 explicit slow tier preserves fast feedback while retaining a full validation
 path.

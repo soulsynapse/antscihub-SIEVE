@@ -109,7 +109,7 @@ Poetry would couple routine installation and packaging to Poetry's project
 model. uv plus Hatchling keeps resolution and building separate while using
 standard project metadata.
 
-Resolver-speed claims vary by dependency graph, platform, cache state, and
+[ASSUMPTION] Resolver-speed claims vary by dependency graph, platform, cache state, and
 tool version. The decision does not depend on a permanent universal claim
 that Poetry is slow; uv's observed and documented focus on fast resolution and
 installation is sufficient for this repository.

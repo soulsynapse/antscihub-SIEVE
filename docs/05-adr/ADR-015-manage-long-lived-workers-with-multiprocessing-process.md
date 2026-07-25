@@ -4,30 +4,30 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-Architecture §10 requires compute to run outside the Qt process, prefers a
+[STABLE] Architecture §10 places compute outside the Qt process, prefers a
 long-lived worker over per-job process creation, and makes cancellation of an
 in-flight preview a first-class operation. ADR-002 already selects subprocess
 workers and named shared memory for frame payloads, but deliberately leaves the
 worker lifecycle and control protocol unspecified.
 
-SIEVE's interactive workload is not a conventional bag of independent
+[STABLE] SIEVE's interactive workload is not a conventional bag of independent
 functions. A worker may retain a decoder, filter state, allocated shared-memory
 buffers, and a CPU or GPU backend across requests. While one request is
-running, the controller must be able to send cancellation or shutdown commands,
+running, the controller sends cancellation or shutdown commands,
 observe progress and health, reject stale results, and recover from a crashed
 or unresponsive child.
 
-The standard `multiprocessing.Pool` abstraction owns a pool and a task queue,
+[STABLE] The standard `multiprocessing.Pool` abstraction owns a pool and a task queue,
 but its per-task `AsyncResult` does not provide cancellation of running work.
 Terminating a pool stops its worker processes rather than cooperatively
 cancelling one request while preserving a known worker lifecycle.
 
-`concurrent.futures.ProcessPoolExecutor` provides a useful `Future` interface,
-but `Future.cancel()` cannot cancel a call that is already running. Its
+[STABLE] `concurrent.futures.ProcessPoolExecutor` provides a useful `Future` interface,
+but `Future.cancel()` does not cancel a call that is already running. Its
 executor-owned process lifecycle and one-way submitted-call model do not expose
 the bidirectional, stateful control loop required here.
 
-The remaining mechanism is small enough to own directly: a
+[INTENT] The remaining mechanism is small enough to own directly: a
 `multiprocessing.Process`, a duplex command/event channel, a versioned message
 protocol, explicit cancellation checkpoints, and bounded shutdown/restart
 logic.
@@ -209,11 +209,11 @@ and steady-state throughput when tuning the implementation.
 This ADR refines ADR-002. It does not replace ADR-002's separate-process,
 shared-memory transport, descriptor lifetime, or zero-copy boundary.
 
-## Alternatives considered
+## Alternatives considered [INTENT]
 
 ### multiprocessing.Pool
 
-`Pool` provides worker creation, task distribution, and result collection.
+[INTENT] `Pool` provides worker creation, task distribution, and result collection.
 Its `AsyncResult` supports waiting and timeouts but not cancellation of an
 already running task. `Pool.terminate()` stops workers and outstanding work
 rather than expressing cooperative cancellation and stateful recovery for one
@@ -221,7 +221,7 @@ request.
 
 ### concurrent.futures.ProcessPoolExecutor
 
-The futures API is convenient for independent calls and queued-work
+[INTENT] The futures API is convenient for independent calls and queued-work
 cancellation. Once a future is running, `Future.cancel()` returns false. Adding
 a separate cancellation channel and persistent worker state around the
 executor would bypass its abstraction while leaving SIEVE without direct
@@ -229,28 +229,28 @@ ownership of the process protocol.
 
 ### billiard
 
-billiard extends Python multiprocessing and is used by Celery. SIEVE does not
+[INTENT] billiard extends Python multiprocessing and is used by Celery. SIEVE does not
 need Celery-compatible pool behavior or another multiprocessing fork. Its
 required long-lived single-worker protocol can be expressed with the standard
 library, avoiding an additional runtime dependency and compatibility layer.
 
 ### One Process per request
 
-Per-request processes make hard cancellation and failure isolation easy because
+[INTENT] Per-request processes make hard cancellation and failure isolation easy because
 the process is disposable. They repeatedly pay interpreter, import, decoder,
-model, and GPU initialization costs and cannot naturally retain state across
+model, and GPU initialization costs and do not naturally retain state across
 interactive previews. They remain a possible isolation boundary for a future
 untrusted or uniquely failure-prone operation, not the default worker model.
 
 ### Threads or QThread
 
-Threads avoid process IPC but do not provide the process isolation selected in
+[INTENT] Threads avoid process IPC but do not provide the process isolation selected in
 ADR-002. Native compute, decoder behavior, or the GIL can still interfere with
-the GUI process, and a Python thread cannot be safely force-terminated.
+the GUI process, and Python has no safe thread force-termination mechanism.
 
 ### asyncio subprocesses
 
-`asyncio.create_subprocess_exec` is useful for supervising external executables
+[INTENT] `asyncio.create_subprocess_exec` is useful for supervising external executables
 and streaming bytes. SIEVE's worker needs Python object protocol models, named
 shared-memory descriptors, retained Python backend state, and integration with
 both Qt and non-async CLI callers. Adding an asyncio event loop does not solve
@@ -258,7 +258,7 @@ cooperative in-flight cancellation inside the worker.
 
 ### Celery or another distributed task system
 
-A distributed task system supplies brokers, retries, routing, monitoring, and
+[INTENT] A distributed task system supplies brokers, retries, routing, monitoring, and
 fleet execution. It adds services and delivery semantics beyond a local GUI/CLI
 worker and still requires task code to cooperate for prompt cancellation.
 SIEVE can add an HPC scheduler handoff without making the local interactive
@@ -301,7 +301,7 @@ Accepted.
 - The implementation is expected to stay focused, but an approximate
   200-line estimate is not used as a correctness constraint.
 
-## References
+## References [STABLE]
 
 - [Python multiprocessing documentation](https://docs.python.org/3/library/multiprocessing.html)
 - [Python multiprocessing connections](https://docs.python.org/3/library/multiprocessing.html#connection-objects)

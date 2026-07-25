@@ -4,32 +4,32 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE's benchmarking workflow produces parametric sweeps across filters,
-parameters, backends, hardware, and code revisions. The results layer must
+[INTENT] SIEVE's benchmarking workflow produces parametric sweeps across filters,
+parameters, backends, hardware, and code revisions. The results layer needs to
 support questions such as:
 
-- what is the economy-versus-detection Pareto frontier for each filter;
+- [INTENT] what is the economy-versus-detection Pareto frontier for each filter;
 - where does signal preservation begin to fall off as spatial or temporal
   reduction increases;
 - how do CPU and GPU runs compare at fixed parameters; and
 - did performance or detection regress at a later code revision?
 
-Architecture §13 makes signal-preservation measurement a prerequisite for
+[STABLE] Architecture §13 makes signal-preservation measurement a prerequisite for
 guidance such as "this alternative preserves similar signal at lower cost."
 The benchmarking vision assigns one typed row per run to an authoritative
 results table and links each row by `run_id` to its detailed trace artifact.
 ADR-007 separately assigns operational diagnostics to structured logs and
-live HUD values to the metric bus. The analytical results store must preserve
+live HUD values to the metric bus. The analytical results store preserves
 those boundaries rather than turning logs or transient HUD events into the
 benchmark record.
 
-Sweep results are naturally tabular and analytical. Typical access scans a
+[INTENT] Sweep results are naturally tabular and analytical. Typical access scans a
 subset of columns, filters many runs, groups by filter or hardware, and computes
 rankings or frontiers. SIEVE also needs portable artifacts that can be copied
 from an HPC system, inspected without a running service, and read by tools
 other than the application.
 
-This decision concerns analytical benchmark results and queryable cache
+[STABLE] This decision concerns analytical benchmark results and queryable cache
 inventory metadata. It does not select the payload format for content-addressed
 frame, tensor, video, or N-dimensional array caches. The architecture already
 assigns persisted array intermediates to Zarr and terminal outputs to their
@@ -132,8 +132,8 @@ SQLite or pandas are not part of the decision.
 
 ### Parquet files queried only through pandas or PyArrow
 
-Parquet alone provides portable columnar storage. pandas and PyArrow can read,
-filter, and combine datasets, but every analytical question would need Python
+[INTENT] Parquet alone provides portable columnar storage. pandas and PyArrow can read,
+filter, and combine datasets, but the range of analytical questions would need Python
 loading, grouping, joining, null-handling, and projection code. DuckDB supplies
 a common relational query surface directly over the same files and can return
 Arrow or pandas results when a downstream API needs them.
@@ -143,7 +143,7 @@ proprietary to DuckDB.
 
 ### SQLite
 
-SQLite is embedded, mature, transactional, and excellent for operational
+[INTENT] SQLite is embedded, mature, transactional, and excellent for operational
 metadata and point lookups. It could store benchmark rows and answer the
 required SQL queries. The dominant SIEVE access pattern is analytical scanning
 over portable columnar artifacts, not transactional row updates. SQLite would
@@ -156,7 +156,7 @@ different workload.
 
 ### Native DuckDB tables as the authoritative store
 
-Native tables provide transactions, indexes where appropriate, cached catalogs,
+[INTENT] Native tables provide transactions, indexes where appropriate, cached catalogs,
 and simpler mutation within one process. A single `.duckdb` file is less
 transparent as an HPC collection artifact and introduces coordination limits
 for multiple writer processes. Keeping Parquet authoritative allows independent
@@ -171,15 +171,15 @@ ADR-007; logs are not the authoritative benchmark-results table.
 
 ### A client-server analytical database
 
-PostgreSQL, ClickHouse, or another service could centralize concurrent writes,
+[INTENT] PostgreSQL, ClickHouse, or another service could centralize concurrent writes,
 access control, and shared dashboards. SIEVE does not currently need an
-always-running service to analyze local or copied HPC artifacts. A server can
+continuously running service to analyze local or copied HPC artifacts. A server can
 be added as a publication or fleet-aggregation layer later without replacing
 the Parquet interchange format.
 
 ### A dataframe-native query framework
 
-Polars, pandas, or another dataframe library can express the required
+[INTENT] Polars, pandas, or another dataframe library can express the required
 analytics. They would make Python expression code the shared query interface
 and provide less direct interoperability with command-line SQL exploration.
 DuckDB's SQL layer is the more suitable stable interface for the stated
@@ -220,7 +220,7 @@ Accepted.
   partitioning, and compaction thresholds; those details are not decided by
   generic tool benchmarks.
 
-## References
+## [STABLE] References
 
 - [DuckDB: reading and writing Parquet](https://duckdb.org/docs/stable/data/parquet/overview)
 - [DuckDB: Parquet query guide](https://duckdb.org/docs/stable/guides/file_formats/query_parquet)

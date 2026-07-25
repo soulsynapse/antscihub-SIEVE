@@ -5,19 +5,23 @@ See [workflow-vision](docs\01-vision\workflow-vision.md) for what this is derive
 
 # SIEVE — Architecture
 
-This document is the **broad architectural plan**. It commits to structure,
-component boundaries, and the criteria that load-bearing contracts must
+[INTENT] This document is the **broad architectural plan**. It commits to structure,
+component boundaries, and the criteria that load-bearing contracts are intended to
 satisfy. It does *not* specify those contracts — each has its own reference
 document so it can be designed carefully in isolation. This document assumes
 those specs meet the criteria stated here.
 
-This document is a working guide, not a specification. Treat claims as hypotheses to verify against the code. If you find a contradiction or correction, measure against project goals and code practices.
+[ASSUMPTION] This document is a working guide, not a specification. Its claims
+remain hypotheses to verify against the code; a contradiction or correction is
+evaluated against project goals and code practices.
 
-## Index of reference documents
+## Index of reference documents [INTENT]
+
+[INTENT] This index identifies the planned contracts and supporting documents.
 
 Load-bearing specs (to be written; criteria for each are stated in this doc):
 
-- `FILTER_CONTRACT.md` — the interface every filter implements
+- `FILTER_CONTRACT.md` — the interface implemented by each filter
 - `PIPELINE_SCHEMA.md` — the serializable DAG artifact (project file / HPC handoff)
 - `CACHE_KEY_SPEC.md` — content-addressed cache key derivation
 - `WORKER_PROTOCOL.md` — subprocess IPC, shared-memory frame transport
@@ -34,18 +38,22 @@ Companion docs (exist or planned):
 
 ---
 
-## 1. Purpose and core commitments
+## 1. Purpose and core commitments [INTENT]
 
-SIEVE is a video signal-processing tool built around one question: how much economy can the user buy back without losing signal? The whole architecture serves the ability to answer that question interactively for a representative clip, then execute the answer over the full dataset locally or on HPC.
+[INTENT] SIEVE is a video signal-processing tool built around one question: how much economy can the user buy back without losing signal? The architecture serves the ability to answer that question interactively for a representative clip, then execute the answer over the full dataset locally or on HPC.
 
-This tool's value is first measured in speed. Speed has two distinct regimes, and both are load-bearing:
+[INTENT] This tool's value is first measured in speed. Speed has two distinct regimes, and both are load-bearing:
 
-Pre-pipeline speed — from opening a video to having replicates cut and a clip selected. This must feel like a video editor, not a distributed system.
-In-pipeline speed — from dragging a slider to seeing the graph update. This must feel like direct manipulation, not job submission.
-The v1 prototype earned its reception because both regimes felt immediate. Architectural choices that improve one regime at measurable cost to the other are regressions, regardless of how clean they are.
+Pre-pipeline speed — from opening a video to having replicates cut and a clip selected. The intended feel is a video editor rather than a distributed system.
+In-pipeline speed — from dragging a slider to seeing the graph update. The intended feel is direct manipulation rather than job submission.
+The v1 prototype earned its reception because both regimes felt immediate. Architectural choices that improve one regime at measurable cost to the other count as regressions, regardless of how clean they are.
 
-Latency budgets
-These are hard targets on a representative development machine (mid-range laptop, no discrete GPU required for the pre-pipeline regime). Any layer that cannot meet them is a bug to be fixed, not a tradeoff to be accepted.
+Latency budgets [STABLE]
+The budget table is transcribed in `src/sieve/bench/budgets.py` and compared
+against this document by `tests/bench/test_budget_table.py`. Its values apply to
+a representative development machine (mid-range laptop, no discrete GPU
+required for the pre-pipeline regime). A layer that misses a budget is treated
+as a defect rather than an accepted tradeoff.
 
 | Interaction | Budget | Regime |
 | --- | --- | --- |
@@ -56,32 +64,32 @@ These are hard targets on a representative development machine (mid-range laptop
 | Slider drag → preview clip repainted | < 100 ms | in-pipeline |
 | Slider drag → dependent graph updated | < 200 ms | in-pipeline |
 | Full-clip preview render (5–10 s clip, typical pipeline) | < 3 s | in-pipeline |
-These budgets are the acceptance criteria for the tuning-loop-is-the-product commitment. They are checked in CI on a canonical clip and canonical pipeline; a PR that regresses any budget by more than 20% requires explicit justification.
+[STABLE] These budgets are the acceptance criteria for the tuning-loop-is-the-product commitment. CI checks them on a canonical clip and canonical pipeline; a PR regressing a budget by more than 20% carries explicit justification.
 
-Four commitments the architecture never violates
-The filesystem is truth — at rest. A user can navigate to any materialized artifact and see exactly what it is, without SIEVE running. During interactive tuning, truth lives in the decoder and in-memory pipeline state; the filesystem-as-truth contract kicks in at compaction and terminal output, not on every slider drag.
-The pipeline is a data structure. GUI, CLI, and HPC executor all consume the same serialized artifact. There is no "GUI-only state" that affects pipeline execution. (Pre-pipeline interactions — scrub position, zoom level, panel layout — are UI state and are not part of the pipeline artifact.)
-The filter is the extension unit. Adding a filter is writing one class plus one markdown file. The GUI, CLI, cache, and HPC handoff pick it up with no other changes.
-Nothing materializes without reason. In-memory during editing; compaction to disk is user-initiated or explicitly pressure-triggered. The "MP4 per step" model is a mental model for reasoning about determinism, not a storage policy.
-The tuning loop is the product. The latency budgets above are the operational definition. Any architectural layer that imposes measurable latency on the pre-pipeline or in-pipeline interactive loops is a regression against the tool's core value, regardless of how clean it is.
+Four core architectural commitments [INTENT]
+[INTENT] The filesystem is truth at rest. A user can navigate to a materialized artifact and see what it is without SIEVE running. During interactive tuning, truth lives in the decoder and in-memory pipeline state; the filesystem-as-truth contract begins at compaction and terminal output rather than on slider drags.
+[INTENT] The pipeline is a data structure. GUI, CLI, and HPC executor consume the same serialized artifact. Pipeline execution has no GUI-only state. (Pre-pipeline interactions — scrub position, zoom level, panel layout — are UI state and are not part of the pipeline artifact.)
+[INTENT] The filter is the extension unit. Adding a filter consists of one class plus one markdown file. The GUI, CLI, cache, and HPC handoff discover it without other changes.
+[INTENT] Materialization has a stated reason. During editing, intermediates remain in memory; compaction to disk is user-initiated or explicitly pressure-triggered. The "MP4 per step" model is a mental model for reasoning about determinism, not a storage policy.
+[INTENT] The tuning loop is the product. The latency budgets above are its operational definition. An architectural layer imposing measurable latency on the pre-pipeline or in-pipeline interactive loops counts as a regression against the tool's core value, regardless of its structural cleanliness.
 
 ## 2. Progressive-MVP framing
 
-The vision document builds SIEVE up in seven progressive stages, each a
-functional product on its own. The architecture must respect this: **each
+[INTENT] The vision document builds SIEVE up in seven progressive stages, each a
+functional product on its own. The architectural framing is that **each
 stage's substrate is a strict subset of the next stage's substrate**. Stage 4
 adds the GUI on top of Stages 1–3's execution model; it does not replace it.
 Stage 5's guidance layer reads from the same filter metadata that Stage 3's
 CLI already exposes.
 
-Practically, this means the CLI executor is built first and remains the
+[INTENT] Practically, the CLI executor is built first and remains the
 canonical run path. The GUI is a live view over the same executor with a
 representative-clip preview mode swapped in.
 
 ## 3. Layer model
 
-Strict one-way dependencies. Each layer knows about layers below it, never
-above.
+[STABLE] Dependencies are one-way. Each layer knows about lower layers, not
+upper layers.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -99,19 +107,21 @@ above.
 └─────────────────────────────────────────────────────┘
 ```
 
-Enforcement: `core/` has no imports from anything above it, no Qt, no Zarr, no
-subprocess. `pipeline/` never imports Qt. `bench/` never imports Qt, so that
+[STABLE] Enforcement: `core/` has no imports from anything above it, no Qt, no Zarr, no
+subprocess. `.importlinter` rejects Qt imports by `pipeline/` and `bench/`, so that
 the CLI and headless benchmark runs can observe without a GUI toolkit; the
-QObject adapter over the metric bus lives in `gui/`. `gui/` never imports from
-`workers/` directly — it goes through `pipeline/`. This is the mechanism that
+QObject adapter over the metric bus lives in `gui/`. `gui/` reaches `workers/`
+through `pipeline/`. This is the mechanism that
 makes CLI and HPC parity real rather than aspirational.
 
-## 4. The pipeline is a DAG
+## 4. The pipeline is a DAG [INTENT]
+
+[INTENT] The following DAG properties describe the intended pipeline model.
 
 Filters fork and merge — one raw video feeds an optical-flow branch and an HSV
 branch that get combined downstream. The pipeline model is a directed acyclic
 graph. A linear operation list is a degenerate DAG and renders identically in
-the UI, but the underlying model must support forks from day one.
+the UI, but the underlying model is intended to support forks from day one.
 
 Consequences that ripple through the rest of the architecture:
 
@@ -123,14 +133,17 @@ Consequences that ripple through the rest of the architecture:
 - The pipeline schema is a node list with explicit `inputs:` references, not
   an ordered array with implicit chaining
 
-## 5. Storage substrate — filesystem-as-truth without the cost
+## 5. Storage substrate — filesystem-as-truth without the cost [INTENT]
 
-The user-facing model: source video in a folder; each transformation writes
-its result to a child folder; navigation to any folder shows what that stage
-produced. This is the model, not necessarily the physical storage on every
-step.
+[INTENT] The user-facing model places source video in a folder and writes each
+transformation result to a child folder; navigating to a stage folder exposes
+that stage's result. This is the model, not necessarily the physical storage at
+each step.
 
 The physical policy:
+
+[INTENT] The storage policy distinguishes interactive state from persisted
+artifacts.
 
 - **During editing:** intermediates live in-memory in the worker. Nothing is
   written until compaction.
@@ -138,26 +151,52 @@ The physical policy:
   (chunked N-D array, dtype-honest, memory-mappable, slice-efficient) with a
   `preview.mp4` sidecar so filesystem navigation still shows a viewable
   artifact. Compaction is initiated by the user or suggested by the memory
-  pressure heuristic; it is never automatic.
+  pressure heuristic; it does not run automatically.
 - **At full-video output:** the executor materializes what the pipeline
   declares as terminal outputs — mask video, coordinate CSV, background-
   subtracted video, whatever the DAG's output nodes specify.
 
-Zarr is not required for the MVP CLI executor to work; it is required once
+[INTENT] Zarr is not needed for the MVP CLI executor; it becomes part of the
+architecture once
 compaction and HPC handoff are real. The cache/materialization layer is where
 this policy lives (see `pipeline/materialize.py` in §14).
 
-5.5 The pre-pipeline loop
-Before any filter exists, the user opens a video, scrubs to find the interesting segments, cuts replicates, and selects a representative clip. This is not filter execution and does not route through the pipeline executor, the cache, or the worker subprocess. It is a direct, in-process interaction with the decoder and the UI, governed by the pre-pipeline latency budgets in §1.
+### 5.5 The pre-pipeline loop
 
-Treating crop and replicate selection as pipeline nodes — which is architecturally tempting for uniformity — would route every scrub through DAG construction, cache-key derivation, IPC serialization, and shared-memory handoff. That is the correct machinery for filter execution and the wrong machinery for showing a user their own video.
+[INTENT] This section describes the intended pre-pipeline interaction path.
+[INTENT] Before a filter exists, the user opens a video, scrubs to find the
+interesting segments, cuts replicates, and selects a representative clip. This
+is distinct from filter execution and does not route through the pipeline
+executor, cache, or worker subprocess. It is a direct, in-process interaction
+with the decoder and UI, governed by the pre-pipeline latency budgets in §1.
 
-Requirements
-Eager head-decode on open. As soon as a file is selected, the decoder begins decoding the head of the video into a ring buffer. The first frame is on screen before any user action is required. The full keyframe index builds in the background and does not block display.
+[INTENT] Treating crop and replicate selection as pipeline nodes — an
+architecturally tempting uniformity — routes each scrub through DAG
+construction, cache-key derivation, IPC serialization, and shared-memory
+handoff. That machinery fits filter execution and not showing a user their own
+video.
+
+[INTENT] Requirements
+
+[INTENT] Eager head-decode on open. After a file is selected, the decoder
+begins decoding its head into a ring buffer. The first frame reaches the screen
+without a further user action. The full keyframe index builds in the background
+without blocking display.
 Index-based scrubbing. Scrub and seek hit the nearest keyframe plus a short forward decode. No worker roundtrip, no cache lookup, no pipeline evaluation. A scrub interaction is a decoder call and a widget repaint.
-Replicates materialize in the background by default. Cropping a small ROI out of an HD decode is where the ~25× speedup lives; keeping crops virtual throws that speedup away on every subsequent scrub, filter add, and slider drag. On replicate commit, a background worker begins writing the cropped frame range to a fast local intermediate (raw or lightly-compressed, dtype-honest, keyframe-dense for scrub). The UI reports "materializing — Nx speedup incoming" non-modally; the user is not blocked and can start adding filters against the still-decoding source. As soon as the materialized version is ready, the executor swaps its source pointer transparently. Filters already running continue against the original decode until their next invocation.
+[INTENT] Replicates materialize in the background by default. Cropping a small
+ROI from an HD decode is where the ~25× speedup lives; virtual crops discard
+that speedup on subsequent scrubs, filter adds, and slider drags. On replicate
+commit, a background worker writes the cropped frame range to a fast local
+intermediate (raw or lightly-compressed, dtype-honest, keyframe-dense for
+scrub). The UI reports "materializing — Nx speedup incoming" non-modally; the
+user can add filters against the still-decoding source. Once the materialized
+version is ready, the executor swaps its source pointer transparently. Running
+filters continue against the original decode until their next invocation.
 Opt-out is a setting, not a prompt. Storage-constrained users can disable background materialization globally; the loop then falls back to virtual crops against the original decode. This is the only case where the pre-pipeline latency budgets are allowed to slip, and the UI states so.
-Materialized replicates are not cache entries. They are source artifacts owned by the project, tied to the replicate record, not to any pipeline node's cache key. Invalidation happens when the user edits the replicate's frame range or bbox, not when the pipeline changes.
+[INTENT] Materialized replicates are source artifacts rather than cache entries.
+The project owns them and ties them to the replicate record rather than a
+pipeline node cache key. Editing the replicate's frame range or bbox invalidates
+them; pipeline changes do not.
 Replicates become sources, not filters. When the user commits to tuning a filter, the selected replicate becomes the source of the pipeline's root node — consumed lazily by the executor via the same virtual coordinates. The filter DAG does not contain a "crop" node for the replicate; the crop is intrinsic to the source.
 In-process decode for display. The subprocess boundary described in §10 exists for filter execution. Decode-for-display, overlay compositing, and scrub playback remain in the main process (with a dedicated decoder thread where appropriate) to stay inside the < 50 ms scrub budget.
 Preview-clip extraction is the handoff point. Only when a filter is added does the pipeline executor engage, at which point it pulls frames for the selected replicate (plus warmup padding per §11) through the worker protocol. Until then, no worker process needs to exist.
@@ -171,16 +210,16 @@ The pre-pipeline loop lives in io/video_read.py (decode, keyframe index, ring bu
 
 
 
-## 6. Filter contract — criteria
+## 6. Filter contract — criteria [INTENT]
 
 See `FILTER_CONTRACT.md` for the specification. The architecture requires that
 the contract satisfy:
 
 - **Single source of truth for parameters.** Whatever schema mechanism it uses
-  (Pydantic model, dataclass, whatever) must be the sole declaration of a
+  (Pydantic model, dataclass, whatever) serves as the sole declaration of a
   filter's parameters. GUI widgets, CLI flags, YAML fields, cache-key
-  contribution, and cost-model input all read from it. No parallel
-  definitions anywhere in the codebase.
+  contribution and cost-model input read from it. The design has no
+  parallel definitions in the codebase.
 - **Declared I/O typing.** Each filter declares input and output stream specs
   (dtype, channel count, spatial/temporal dimensionality, valid ranges).
   Enough for the executor to reject invalid graphs statically without
@@ -195,7 +234,7 @@ the contract satisfy:
 - **Determinism declaration.** Each filter declares whether it is
   deterministic under the project's `DETERMINISM_POLICY.md`. Non-
   deterministic filters (some GPU reductions, some optical-flow variants)
-  are legal but must be flagged so the cache can behave correctly and the
+  are legal but are flagged so the cache can behave correctly and the
   bench layer can annotate results.
 - **Cost estimation.** Each filter provides a cost estimate given input
   spec and params: predicted wall-time per frame, peak resident memory,
@@ -212,46 +251,49 @@ the contract satisfy:
   decorated class is sufficient.
 - **Versioned.** Each filter has an explicit semver. A bump invalidates
   cache entries for that node.
-  Primary parameters declared. Each filter's parameter schema marks a subset (typically 1–3) as primary. The GUI shows only these by default; the rest are behind "Advanced." CLI and YAML expose all parameters equally; this distinction is UI-only.
+   **Primary parameters declared.** Each filter's parameter schema marks a
+   subset (typically 1–3) as primary. The GUI shows these by default; the
+   remainder is behind "Advanced." CLI and YAML expose the complete parameter set
+   equally; this distinction is UI-only.
 Toolbar eligibility is metadata, not automatic. A filter declares whether it is a candidate for the default toolbar. The actual toolbar contents are a curated project-level list that draws from candidates. New filters do not silently appear in the user's primary workflow.
 
 If the filter contract meets these criteria, the "GUI panels are generated,
-CLI flags are generated, HPC handoff is generated" promise holds. If any is
+CLI flags are generated, HPC handoff is generated" promise holds. A missing
 missing, one of those three fragments.
 
 
 
 
-## 7. Pipeline artifact — criteria
+## 7. Pipeline artifact — criteria [INTENT]
 
 See `PIPELINE_SCHEMA.md`. The architecture requires:
 
 - **Fully describes a run.** Given the pipeline artifact plus the source
-  video path, any executor (CLI, GUI preview, HPC) can reproduce the run.
+  video path, an executor (CLI, GUI preview, or HPC) can reproduce the run.
   No implicit state.
 - **Human-editable.** A user comfortable with YAML can hand-edit a
   pipeline. This is a debugging affordance and an HPC-power-user
   affordance.
 - **Round-trips through the GUI losslessly.** Loading a pipeline into the
-  GUI, saving it without changes, must produce a byte-identical (modulo
+  GUI, saving it without changes, produces a byte-identical (modulo
   formatting) artifact.
 - **Node references are explicit.** Each node declares its input nodes by
   ID and output slot. This is what makes the DAG a DAG rather than a list.
 - **Versioned.** The schema itself has a version so future changes can be
   migrated cleanly.
 - **Cache-key stable.** Reordering unrelated nodes, reformatting, adding
-  comments, does not change any node's cache key. See `CACHE_KEY_SPEC.md`.
+  comments does not change a node's cache key. See `CACHE_KEY_SPEC.md`.
 
 The pipeline artifact is the project file, the CLI input, and the HPC
 handoff artifact. It is the single interchange format.
 
-## 8. Cache key — criteria
+## 8. Cache key — criteria [INTENT]
 
 See `CACHE_KEY_SPEC.md`. The architecture requires the cache key for a node
 to be a deterministic function of:
 
 - The node's parameters (canonicalized)
-- The content hashes of all upstream nodes it depends on
+- The content hashes of upstream nodes it depends on
 - The filter's `name` and `version`
 - The selected backend identifier (CPU and GPU results may differ; the
   cache honors this)
@@ -259,10 +301,10 @@ to be a deterministic function of:
   changes not captured by `version` bumps (may be tied to git SHA in dev,
   filter-source hash in release)
 
-Anything that can change the output must be in the key. Anything that cannot
-must not be, or siblings will spuriously invalidate.
+[INTENT] Output-affecting inputs belong in the key. Inputs without an output
+effect stay out, so siblings do not spuriously invalidate.
 
-## 9. Backend dispatch — criteria
+## 9. Backend dispatch — criteria [INTENT]
 
 See `BACKEND_DISPATCH.md`. The architecture requires:
 
@@ -275,12 +317,12 @@ See `BACKEND_DISPATCH.md`. The architecture requires:
   estimate for each backend informs the choice.
 - **Graceful fallback.** GPU OOM or missing backend falls back to CPU with
   a logged warning and a bench-layer annotation.
-- **Visible in the HUD.** The user always sees which backend actually ran.
+- **Visible in the HUD.** The HUD identifies the backend that ran.
 
-## 10. Worker architecture — criteria
+## 10. Worker architecture — criteria [INTENT]
 
-See `WORKER_PROTOCOL.md`. The GIL and Qt event loop mean that filters cannot
-run in the same process as the GUI without freezing it. The requirements:
+See `WORKER_PROTOCOL.md`. The GIL and Qt event loop mean that running filters
+in the GUI process freezes the interface. The requirements:
 
 - **Compute runs in a separate process**, not a thread. Long-lived worker
   subprocess is preferred over per-job spawns.
@@ -289,13 +331,13 @@ run in the same process as the GUI without freezing it. The requirements:
 - **GPU worker is singular and serial.** One process owns the CUDA context.
   Multiple GPU jobs queue on it.
 - **Qt main thread only orchestrates.** Dispatches jobs, receives
-  completion signals, updates widgets. Never runs a filter.
+  completion signals, and updates widgets; it does not run a filter.
 - **The same worker protocol serves the CLI.** The CLI is the worker
   process without the Qt frontend. This is what keeps CLI/GUI parity real.
 - **Cancellation is first-class.** A user changing a slider in the GUI
-  must be able to interrupt an in-flight preview render cleanly.
+  can interrupt an in-flight preview render cleanly.
 
-## 11. Preview semantics — criteria
+## 11. Preview semantics — criteria [INTENT]
 
 See `PREVIEW_SEMANTICS.md`. Temporal filters have warmup transients. A 5-second
 preview clip's output at t=0 is not what the full-video output looks like at
@@ -304,6 +346,9 @@ cases involving IIR, temporal integration, MEI/MHI, 3D wavelets, and Morlet
 banks.
 
 Requirements:
+
+[INTENT] Preview semantics preserve the selected clip's relationship to the
+full-video result.
 
 - **Warmup padding.** Preview extraction pulls the user-selected window
   *plus* the sum of upstream `warmup_frames` on the temporal path.
@@ -316,17 +361,20 @@ Requirements:
 
 ## 12. Determinism policy — criteria
 
-See `DETERMINISM_POLICY.md`. "Deterministic downstream" is a load-bearing
-claim of the vision. It only holds under enforcement.
+See `DETERMINISM_POLICY.md`. [INTENT] "Deterministic downstream" is a
+load-bearing claim of the vision. The claim depends on enforcement.
 
 Requirements:
 
-- **Thread counts fixed per worker.** `OMP_NUM_THREADS`, `MKL_NUM_THREADS`,
-  `OPENBLAS_NUM_THREADS` set explicitly. Benchmark numbers reproducible;
-  float reduction order stable.
-- **Deterministic GPU mode available.** `torch.use_deterministic_algorithms`,
-  `CUBLAS_WORKSPACE_CONFIG` set when the user opts in. Off by default (slow);
-  on for CI and reproducibility runs.
+- **Thread counts fixed per worker.** [INTENT] `OMP_NUM_THREADS`,
+  `MKL_NUM_THREADS`, and `OPENBLAS_NUM_THREADS` are set explicitly. Benchmark
+  numbers are reproducible and float reduction order is stable.
+- **CuPy-specific GPU reproducibility.** [INTENT] Each registered GPU filter
+  declares whether its CuPy/CUDA operations are deterministic under the
+  supported configuration and names the CPU-comparison tolerance. Cache identity
+  and provenance pin or record CUDA-relevant library, kernel, and algorithm
+  configuration where it affects reproducibility. This is the v1 GPU contract
+  from ADR-016; Torch controls are not part of the CuPy worker.
 - **Video decoder pinned.** The decode library and its version are part of
   the code-version hash contributing to cache keys. Decode truncation is a
   hard error by default; opt-out requires an explicit flag and is recorded in
@@ -338,7 +386,7 @@ Requirements:
   `is_deterministic = False`; the cache still stores their outputs but
   the bench layer notes it and the pipeline artifact records a run seed.
 
-## 13. Signal-preservation measurement
+## 13. Signal-preservation measurement [INTENT]
 
 Half the "GUI guides you" promise depends on being able to say something
 useful when the user considers swapping one filter for another. The naive
@@ -353,12 +401,12 @@ entitled to make.
 
 The architecture therefore commits to delta characterization, not scoring:
 
-- For any candidate swap, the guidance layer reports observable differences
+- For a candidate swap, the guidance layer reports observable differences
   against the user's current pipeline: detection count delta, temporal lag
   delta (frames until the signal crosses threshold), spatial footprint delta,
-  cost delta. Never a single "preservation" number.
+  cost delta, rather than a single "preservation" number.
 - The user's current pipeline is the reference only in the weak sense that it
-  is what the alternative is being compared against. The guidance never claims
+  is what the alternative is being compared against. The guidance does not claim
   the alternative is closer to truth.
 - Optional labeled intervals. If the user marks positive intervals where the
   signal should fire, or negative intervals where it should not, those labels
@@ -448,7 +496,7 @@ sieve/
     └── ...
 ```
 
-## 15. GUI structure
+## 15. GUI structure [INTENT]
 
 Panels match the vision document's six regions:
 
@@ -465,7 +513,11 @@ Panels match the vision document's six regions:
 6. **Benchmark HUD** — live cost of the current operation and projected
    cost for the full video, backend actually running, memory pressure
 
-The six-region layout described is the maximum GUI, not the default. The default is: video viewer, overlay toggles, curated toolbar, graphs. Operations list, operation detail, guidance panel, and benchmark HUD are dockable and closed on first launch. A user who never opens them still has a working tool.
+[INTENT] The six-region layout is the maximum GUI rather than the default. The
+default is video viewer, overlay toggles, curated toolbar, and graphs. The
+operations list, operation detail, guidance panel, and benchmark HUD are
+dockable and closed on first launch. A user who leaves them closed still has a
+working tool.
 
 
 
@@ -483,12 +535,19 @@ Menus:
 - **Review** — enter review mode on a completed run
 
 15.5 UI philosophy — curated surface, deep interior
-The v1's reception was partly earned by what it did not show. A small, opinionated set of filters (change energy, LK optical flow, intensity, a scalogram band picker) meant the user was never choosing from a menu of twenty options they did not understand. The general-purpose filter framework in §6 is a capability commitment, not a UI commitment.
+[INTENT] The v1's reception was partly earned by what it did not show. A small,
+opinionated set of filters (change energy, LK optical flow, intensity, and a
+scalogram band picker) meant the user did not face a menu of twenty options they
+did not understand. The general-purpose filter framework in §6 is a capability
+commitment, not a UI commitment.
 
 Principles
 Default view is graphs, playback, and the replicate. No DAG minimap, no benchmark HUD, no guidance panel, no operations list expanded, no backend readouts. Just the clip playing with overlays and the graphs filling in below it. This is the state the tool opens into and the state a first-time user sees.
 Curated filter shortlist on the toolbar. The default toolbar exposes the small set that solves the 80% case: intensity, change energy, LK optical flow, scalogram band, windowed-block detector, threshold. "More filters…" is one click away and opens the full registry. Adding a filter to the codebase does not add it to the toolbar; toolbar contents are a curated list, edited deliberately.
-Power lives in wizards and menus, not in the main view. Compaction, HPC export, backend selection, determinism mode, sweep configuration, review mode — all reachable, none visible by default. The main window's job is to keep the tuning loop uncluttered.
+[INTENT] Power lives in wizards and menus, not in the main view. Compaction, HPC
+export, backend selection, determinism mode, sweep configuration, and review
+mode are reachable without being visible by default. The main window keeps the
+tuning loop uncluttered.
 Progressive disclosure per filter. Each filter's detail panel opens with two or three parameters — the ones that actually matter for tuning. "Advanced" reveals the rest. The filter contract's parameter schema (§6) declares which parameters are primary; the widget generator (schema_to_qt.py) respects that declaration.
 HUD is opt-in. The benchmark HUD is powerful and belongs in the tool, but it is a panel the user opens, not a strip that occupies screen real estate by default. When collapsed, cost and backend information appear as a single-line status footer, not a panel.
 The DAG minimap stays hidden until the graph forks. Restated from §4; reinforced here because it is the single biggest source of visual noise in the general case where the pipeline is linear.
@@ -497,7 +556,7 @@ The DAG minimap stays hidden until the graph forks. Restated from §4; reinforce
 
 
 
-## 16. CLI and HPC
+## 16. CLI and HPC [INTENT]
 
 The CLI is the canonical run path. Everything else is built over it.
 
@@ -513,21 +572,21 @@ HPC handoff produces a bundle: the pipeline YAML, the resource declaration
 (cores, memory, GPU count), and a scheduler-specific job script that invokes
 `sieve run`. See `HPC_HANDOFF.md`.
 
-## 17. Coherence mechanisms
+## 17. Coherence mechanisms [INTENT]
 
 Three enforced patterns keep the codebase from drifting as filters accumulate:
 
 1. **Filter contract is the sole source of truth.** GUI widgets, CLI flags,
-   YAML schema, guidance panel, cost model all derive from it. Adding a
-   filter never requires touching GUI code.
-2. **Pipeline YAML is the interchange format.** The GUI never has state the
-   YAML cannot represent. Every GUI action is a mutation of the graph. This
+   YAML schema, guidance panel, and cost model derive from it. Adding a
+   filter does not require touching GUI code.
+2. **Pipeline YAML is the interchange format.** GUI state has a YAML
+   representation. Each GUI action is a graph mutation. This
    gives undo/redo (Command pattern), inter-user sharing, and HPC handoff
    for free.
 3. **Guidance is data.** Markdown next to the filter, rendered by one
    widget. Refining suggestions is a documentation change.
 
-## 18. Performance patterns worth committing to now
+## 18. Performance patterns worth committing to now [INTENT]
 
 - **Streaming when possible, batching when not.** Filters declare
   `is_streaming`; the executor pipelines them to avoid intermediates.
@@ -536,17 +595,17 @@ Three enforced patterns keep the codebase from drifting as filters accumulate:
 - **Deterministic threading** in workers (see §12).
 - **Content-addressed cache** so re-runs with same params are free.
 
-## 19. Maintainability patterns
+## 19. Maintainability patterns [INTENT]
 
-- **Property-based tests on the filter contract.** For any valid params,
+- **Property-based tests on the filter contract.** For valid params,
   output shape/dtype matches declaration; no NaN unless declared.
 - **CI determinism check** on a canonical clip.
 - **Registry auto-discovery** via decorator; filters are plugins.
 - **Explicit filter versioning** protects users from silent output changes.
 - **Type-checked pipeline schema** at load time — bad graphs are rejected
-  before any frame is decoded.
+  before a frame is decoded.
 
-## 20. Resolved policies
+## 20. Resolved policies [INTENT]
 
 The following were open questions in earlier drafts and are now committed.
 Cross-referenced here so the reasoning is preserved.
@@ -569,12 +628,12 @@ Cross-referenced here so the reasoning is preserved.
   (`traces/<run_id>/worker_<pid>.pftrace`) with a stable process name set at
   worker init. On run completion, a post-processing step invokes Trace
   Processor to merge fragments into one viewable timeline; parametric sweeps
-  use Batch Trace Processor. On HPC, workers write to node-local scratch and
+  are processed by the Batch Trace Processor. On HPC, workers write to node-local scratch and
   sieve collects on job completion, landing one merged trace next to the
   results Parquet. Details in `BENCHMARKING_VISION.md` and
   `WORKER_PROTOCOL.md`.
 - **Undo/redo coalescing is a UI concern, not an architecture concern.**
   Continuous parameter changes on the same node within a short window collapse
   into one undo entry, committed on mouse-up or focus loss. Structural edits
-  (add / remove / reconnect nodes) never coalesce. Stated once in the pipeline
+  (adding, removing, or reconnecting nodes) do not coalesce. This is stated in the pipeline
   schema spec; not load-bearing here.

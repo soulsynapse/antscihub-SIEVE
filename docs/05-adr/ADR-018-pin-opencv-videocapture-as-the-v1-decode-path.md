@@ -78,9 +78,9 @@ of opening rather than in a document.
 "dtype-preserving decode" no longer describes the implementation and is amended
 to describe a seek-accurate decode boundary that reports its dtype reduction.
 
-## Reopening conditions
+## Reopening conditions [STALE WHEN]
 
-[STALE WHEN] Any of the following holds, at which point this ADR is superseded
+[STALE WHEN] One or more of the following conditions holds, at which point this ADR is superseded
 rather than amended:
 
 - an accepted filter's signal demonstrably depends on more than 8 bits of input
@@ -103,7 +103,7 @@ behaves the same way.
 
 ### PyAV as the pinned decoder
 
-PyAV preserves native dtype and format on every codec in the corpus, has the
+[STABLE] PyAV preserves native dtype and format on each codec in the corpus, has the
 smallest install closure and lowest memory use, and gives direct access to
 frame-level metadata. It failed the seek-accuracy gate on H.265. Its
 sequential throughput is also the lowest of the four, which matters for the
@@ -111,30 +111,30 @@ background replicate materialization described in §5.5.
 
 ### decord as the pinned decoder
 
-decord had the highest sequential throughput by a wide margin and is designed
+[STABLE] decord had the highest sequential throughput by a wide margin and is designed
 for the random-access pattern scrubbing needs. It failed the seek gate on
 H.265, loses depth on 10-bit and ProRes anyway, and carries the highest memory
-use of the four. It offers no property that survives its disqualification.
+footprint of the four. It offers no property that survives its disqualification.
 
 ### imageio-ffmpeg as the pinned decoder
 
-Small closure and no transitive dependencies, but it failed the seek gate on
+[STABLE] imageio-ffmpeg has a small closure and no transitive dependencies, but it failed the seek gate on
 H.265 and delivers uint8 rgb24 regardless of source depth. It is disqualified
 on accuracy while offering none of the depth preservation that would justify
 the risk.
 
 ### Two decode paths, split by role
 
-A seek-accurate path for display and a dtype-honest path for executor input is
+[INTENT] A seek-accurate path for display and a dtype-honest path for executor input is
 the shape this decision would take if bit depth were load-bearing. It is the
 expected outcome of the reopening conditions above. Adopting it now would
-require the filter-input path to exist before any filter does, and would pin
+require the filter-input path to exist before the first filter does, and would pin
 two decoders whose disagreement on frame identity is itself a determinism
 problem — the display and the executor could be looking at different frames.
 
 ### Deferring the decision
 
-Leaving the decoder unpinned would let the pre-pipeline loop be built against
+[INTENT] Leaving the decoder unpinned would let the pre-pipeline loop be built against
 whatever is convenient. §12 makes decoder identity part of cache identity, so
 an unpinned decoder means unpinned cache keys, and the deferral would have to
 be undone before the first cached result rather than at leisure.
@@ -166,7 +166,7 @@ Accepted.
 - `ARCHITECTURE.md` §14 requires amendment; its current wording describes a
   property the implementation does not have.
 
-## References
+## References [STABLE]
 
 - [SIEVE decoder benchmark harness](../../src/sieve/bench/decoder_benchmark.py)
 - [Decoder benchmark results](../../tests/results/decoder-benchmark-final/README.md)

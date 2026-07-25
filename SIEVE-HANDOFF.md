@@ -57,7 +57,7 @@ I trust you to make most decisions. What I need is to be in the loop on the ones
 
 **Stop and wait for me:**
 
-- After the pre-pipeline loop works end to end. Show me a screen recording — this is the earliest point where the tool's feel is testable, and feel is the thing I need to sign off on.
+- After the pre-pipeline loop works end to end. This is the earliest point where the tool's feel is testable, and feel is the thing I need to sign off on.
 - At v1 parity. Full v1 pipeline running on a canonical clip. Show me the tool running.
 
 **Flag it and keep going, but make it visible:**

@@ -16,9 +16,9 @@ Without explicit ownership and precedence, the same setting can acquire
 different values depending on where it was supplied. That makes runs difficult
 to explain and reproduce and makes the GUI, CLI, and HPC paths drift.
 
-The architecture already assigns composition to the pipeline artifact.
+[STABLE] The architecture already assigns composition to the pipeline artifact.
 `ARCHITECTURE.md` section 17.2 states that pipeline YAML is the interchange
-format and that every GUI pipeline action mutates the graph. Introducing
+format and that each GUI pipeline action mutates the graph. Introducing
 another general-purpose configuration-composition layer would duplicate that
 responsibility.
 

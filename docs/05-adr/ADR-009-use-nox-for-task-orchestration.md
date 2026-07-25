@@ -17,15 +17,15 @@ These tasks need stable local and CI entry points and a composed quality gate.
 Copying command sequences into contributor instructions and CI workflow files
 would let local and automated validation drift.
 
-The task graph will also accumulate conditional behavior. GPU tests should run
+[INTENT] The task graph will also accumulate conditional behavior. GPU tests run
 when CUDA and the required backend are available, while CPU-only environments
-must report why they were skipped. GL-dependent GUI tests require a capable
+report why they were skipped. GL-dependent GUI tests require a capable
 display, while ordinary PySide6 tests use Qt's offscreen platform. Some tasks
 will need platform-specific arguments, environment variables, generated-file
 checks, or dependency groups.
 
-SIEVE's repository instructions currently require validation and tests to use
-the repository `.venv`. The initial task runner must preserve that operational
+[STABLE] SIEVE's repository instructions currently require validation and tests to use
+the repository `.venv`. [INTENT] The initial task runner preserves that operational
 contract rather than silently selecting a different interpreter.
 
 ## Decision
@@ -113,7 +113,7 @@ between sessions.
 
 ### tox
 
-tox is mature and particularly strong at testing packages across interpreter
+[ASSUMPTION] tox is mature and particularly strong at testing packages across interpreter
 and dependency matrices. Its conventional configuration is declarative, which
 is effective for regular environment matrices but less direct for the
 platform and hardware conditionals SIEVE expects to accumulate. Implementing
@@ -124,16 +124,16 @@ Nox's Python session file.
 tox remains a reasonable choice if multi-interpreter packaging matrices become
 the dominant orchestration concern. That is not SIEVE's current task shape.
 
-### CI workflow commands
+### CI workflow command duplication
 
-Putting all commands directly in GitHub Actions or another CI system avoids an
+[INTENT] Putting commands directly in GitHub Actions or another CI system avoids an
 additional local dependency. It duplicates the task graph between CI and
 developer workflows and makes local reproduction of composed checks harder.
 
-### Make
+### `Make`
 
-Make can compose commands effectively, but Windows is a supported development
-environment and cannot be assumed to provide it. Python-based sessions also
+[ASSUMPTION] Command composition is effective in Make, but Windows is a supported development
+environment and does not necessarily provide it. Python-based sessions also
 handle capability detection and cross-platform path behavior more naturally.
 
 ### PowerShell and shell scripts
@@ -144,7 +144,7 @@ keeps orchestration in the project's existing implementation language.
 
 ### Ad hoc Python scripts
 
-Plain scripts could implement every task, but Nox provides session discovery,
+Plain scripts could implement the task set, but Nox provides session discovery,
 selection, parameterization, lifecycle hooks, and a conventional automation
 interface without requiring SIEVE to build a task runner.
 

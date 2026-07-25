@@ -4,34 +4,34 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE's backend architecture supports explicit CPU and GPU registrations,
+[STABLE] SIEVE's backend architecture supports explicit CPU and GPU registrations,
 capability-based dispatch, cost-aware selection, visible fallback, and backend
 identity in cache keys. ADR-011 selects Array API-compatible kernels where
 possible so numerical code is not needlessly tied to one array library.
 
-Those architectural seams make multiple GPU libraries possible, but they do
+[STABLE] Those architectural seams make multiple GPU libraries possible, but they do
 not make multiple GPU libraries free. CuPy and PyTorch each bring CUDA binary
 compatibility requirements, device and stream semantics, memory allocation and
 caching behavior, failure modes, profiling integration, determinism controls,
 and a large validation matrix.
 
-CuPy is a direct NumPy-like GPU array library and is sufficient for SIEVE v1's
+[INTENT] CuPy is a direct NumPy-like GPU array library and is sufficient for SIEVE v1's
 planned array filters and custom kernels. No accepted v1 filter requires
 PyTorch autograd, neural-network modules, a Torch-only pretrained model, or a
 Torch-specific operator.
 
-CuPy and PyTorch can technically coexist and exchange arrays through protocols
-such as DLPack. The issue is not that coexistence is categorically impossible.
+[STABLE] CuPy and PyTorch can technically coexist and exchange arrays through protocols
+such as DLPack. The issue is not whether coexistence is technically feasible.
 The issue is that one process would then own two allocator/stream/library
 surfaces and their packaging constraints without a filter requirement that
 justifies the integration and test burden.
 
-The current architecture already marks `backends/gpu_torch.py` as "only if any
+[STABLE] The current architecture already marks `backends/gpu_torch.py` as "only if a
 filter uses torch." ADR-011's references to NumPy, CuPy, and PyTorch describe a
 portable-kernel capability and possible future registrations, not a requirement
-to ship all three backends in v1.
+to ship three backends in v1.
 
-Architecture §12 currently gives only Torch-specific examples for deterministic
+[STALE WHEN] Architecture §12 currently gives only Torch-specific examples for deterministic
 GPU mode. That language is not an operative v1 implementation prescription:
 v1 needs CuPy/CUDA-specific reproducibility declarations and tests. Torch
 determinism controls become relevant only if a Torch backend is accepted later.
@@ -169,7 +169,7 @@ contract.
 This ADR narrows the v1 backend scope described by ADR-011 without superseding
 its Array API-compatible kernel and typing decisions.
 
-## Alternatives considered
+## Alternatives considered [INTENT]
 
 ### CuPy and PyTorch in the same v1 GPU worker
 
@@ -180,14 +180,14 @@ needs both. The added surface has no v1 payoff.
 
 ### CuPy and PyTorch in separate v1 workers
 
-Process isolation is the correct shape if Torch becomes necessary. Adding the
+[INTENT] Process isolation is the correct shape if Torch becomes necessary. Adding the
 second worker now would still add dependencies, GPU resource coordination,
 startup, memory admission, CI, packaging, and backend-equivalence obligations
 for no accepted filter.
 
 ### PyTorch only
 
-PyTorch provides a mature tensor library, custom operators, pretrained-model
+[INTENT] PyTorch provides a mature tensor library, custom operators, pretrained-model
 ecosystem, and strong profiling tools. SIEVE v1's expected GPU operations are
 array transformations and custom numerical kernels rather than model training
 or inference. CuPy is the smaller conceptual match for the NumPy-oriented
@@ -201,7 +201,7 @@ deployment/runtime stack not required by v1 filters.
 
 ### Numba CUDA or handwritten CUDA only
 
-These approaches provide direct kernel control and may be appropriate for a
+[INTENT] These approaches provide direct kernel control and may be appropriate for a
 specific hotspot. They do not replace the general GPU array, memory, and
 namespace surface needed by ordinary filters. A measured custom kernel can
 remain an implementation detail of `gpu_cupy` where CuPy's raw-kernel path is
@@ -209,14 +209,14 @@ suitable.
 
 ### CPU-only v1
 
-Deferring all GPU support would minimize deployment complexity but fail the
+[INTENT] Deferring GPU support would minimize deployment complexity but fail the
 architecture's GPU dispatch, cost comparison, and HPC goals. CuPy provides the
 single GPU path needed to validate those contracts without multiplying
 runtimes.
 
 ### Placeholder gpu_torch.py
 
-A stub could advertise intended extensibility. It would imply a backend exists,
+[INTENT] A stub could advertise intended extensibility. It would imply a backend exists,
 invite imports or registrations before its contract is defined, and create
 dead code. The documented addition path and registry boundary provide cheaper,
 more honest reversibility.
@@ -259,7 +259,7 @@ Accepted.
   `torch.profiler`.
 - No speculative backend file or compatibility matrix is maintained.
 
-## References
+## References [STABLE]
 
 - [CuPy installation documentation](https://docs.cupy.dev/en/stable/install.html)
 - [CuPy interoperability documentation](https://docs.cupy.dev/en/stable/user_guide/interoperability.html)

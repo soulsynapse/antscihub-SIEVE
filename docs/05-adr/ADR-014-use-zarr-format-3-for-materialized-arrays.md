@@ -4,10 +4,10 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE keeps intermediate arrays in memory while the user edits a pipeline and
+[STABLE] SIEVE keeps intermediate arrays in memory while the user edits a pipeline and
 materializes them only when the user requests compaction or the application
 explicitly responds to memory pressure. Architecture §5 assigns those persisted
-N-dimensional intermediates to Zarr because they must retain dtype and shape,
+N-dimensional intermediates to Zarr because they need to retain dtype and shape,
 support partial access, and remain practical for local and HPC workflows.
 
 The architecture has not yet selected a Zarr on-disk format version. That
@@ -180,8 +180,8 @@ geometry.
 
 ### Sharded Zarr v3 everywhere
 
-Always sharding may reduce object counts but can increase read amplification,
-write contention, and partial-shard update cost when shard geometry does not
+[INTENT] Universal sharding may reduce object counts but can increase read amplification,
+contention while writing, and partial-shard update cost when shard geometry does not
 match the workload. Format 3 is mandatory; sharding is a layout decision.
 
 ## Status
@@ -216,7 +216,7 @@ Accepted.
 - Zarr-Python major upgrades and codec changes receive explicit compatibility
   review instead of entering through an unconstrained dependency update.
 
-## References
+## [STABLE] References
 
 - [Zarr-Python 3 migration guide](https://zarr.readthedocs.io/en/stable/user-guide/v3_migration/)
 - [Zarr format 3 core specification](https://zarr-specs.readthedocs.io/en/latest/v3/core/)

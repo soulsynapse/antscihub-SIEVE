@@ -17,16 +17,19 @@ Two obligations from the ADR are met here rather than by convention:
   that contributes to cache keys. Recording it while there is one decoder is
   what makes adding a second one a clean invalidation.
 
-[INTENT] Scope is seek, decode, and metadata. `ARCHITECTURE.md` section 5.5
-also asks this module for a keyframe index, a ring buffer, and eager
-head-decode on open. Those exist to keep a widget fed, no widget exists, and
-building a buffering policy before there is a consumer to tune it against
-means tuning it against a guess. They land with the video viewer.
+The keyframe index, the ring buffer, and the decoder thread that
+`ARCHITECTURE.md` section 5.5 asks this module for land here too, tuned
+against the video viewer's measured repaint cost (`tests/gui/measure_repaint.py`,
+`DECODE_SHARE` in `tests/bench/test_decode_seek.py`) rather than a guess.
 """
 
 from __future__ import annotations
 
+import bisect
 import importlib.metadata
+import threading
+from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -39,11 +42,15 @@ __all__ = [
     "DELIVERED_DTYPE",
     "DELIVERED_LAYOUT",
     "DecoderIdentity",
+    "DecoderThread",
     "FrameReadError",
+    "FrameRingBuffer",
+    "KeyframeIndex",
     "SourceInfo",
     "VideoOpenError",
     "VideoReadError",
     "VideoReader",
+    "build_keyframe_index",
     "decoder_identity",
 ]
 
@@ -327,6 +334,19 @@ class VideoReader:
             raise FrameReadError(f"OpenCV rejected a seek to frame {index} of {self._path.name}.")
         self._position = index
 
+    def last_frame_type(self) -> int:
+        """ASCII code of the most recently decoded frame's type.
+
+        Valid immediately after `read` or `read_next`. `cv2.CAP_PROP_FRAME_TYPE`
+        reports it as a bare ASCII code (`I` = 73, `P` = 80, `B` = 66) rather
+        than as an enum -- confirmed by probing the corpus, since OpenCV's
+        `VideoCapture` documents no dedicated keyframe flag.
+        `build_keyframe_index` is the caller: it is what makes a keyframe
+        index constructible through the pinned ADR-018 decoder without a
+        second decode dependency.
+        """
+        return int(self._active().get(cv2.CAP_PROP_FRAME_TYPE))
+
     def read_next(self) -> np.ndarray:
         """Decode the frame at `position` and advance.
 
@@ -366,3 +386,216 @@ class VideoReader:
     def __repr__(self) -> str:
         state = "closed" if self.closed else f"at frame {self._position}"
         return f"<VideoReader {self._path.name} {self._info.width}x{self._info.height} {state}>"
+
+
+_KEYFRAME_TYPE: Final = ord("I")
+
+
+@dataclass(frozen=True)
+class KeyframeIndex:
+    """Which frame indices are keyframes, ascending, always including 0.
+
+    Answers "nearest keyframe at or before N" -- the piece `ARCHITECTURE.md`
+    5.5's "scrub hits the nearest keyframe plus a short forward decode"
+    describes, and the input a prefetcher can use to judge whether a target is
+    a cheap or an expensive decode.
+    """
+
+    frame_count: int
+    keyframes: tuple[int, ...]
+
+    def nearest_at_or_before(self, index: int) -> int:
+        position = bisect.bisect_right(self.keyframes, index) - 1
+        return self.keyframes[max(position, 0)]
+
+
+def build_keyframe_index(
+    path: Path | str, *, cancelled: Callable[[], bool] | None = None
+) -> KeyframeIndex | None:
+    """Sequentially decode `path` once, recording which indices are keyframes.
+
+    Opens its own `VideoReader` rather than taking one from the caller: this
+    walks every frame in the file, and sharing a handle with a live scrub means
+    two callers racing the one position `VideoReader` documents itself as not
+    safe for. Meant to run off the GUI thread -- `ARCHITECTURE.md` 5.5 asks for
+    the full index "in the background without blocking display" -- so
+    `cancelled` is polled between frames rather than the caller having to kill
+    a thread. Returns `None` on a file with no reported frame count (nothing to
+    index) or on cancellation (a partial index would silently mis-answer the
+    frames it never reached).
+    """
+    with VideoReader(path) as reader:
+        total = reader.info.frame_count
+        if total is None:
+            return None
+        keyframes: list[int] = []
+        for index in range(total):
+            if cancelled is not None and cancelled():
+                return None
+            reader.read_next()
+            if reader.last_frame_type() == _KEYFRAME_TYPE:
+                keyframes.append(index)
+        if not keyframes or keyframes[0] != 0:
+            keyframes.insert(0, 0)
+        return KeyframeIndex(frame_count=total, keyframes=tuple(keyframes))
+
+
+class FrameRingBuffer:
+    """A byte-budgeted, not frame-budgeted, LRU cache of decoded frames.
+
+    [ASSUMPTION] Sized in bytes because a frame-count budget is a fiction
+    across sources: the corpus clips this repo measures against are 640x360
+    (~0.7 MB/frame uncompressed BGR), but HD footage is ~6.2 MB/frame -- a
+    16-frame budget is 11 MB on one and 100 MB on the other. Eviction is a
+    plain `OrderedDict` least-recently-used drop, deliberately: this backs a
+    50 ms scrub budget, not a general cache, and a smarter policy is
+    complexity this session's measured headroom does not ask for.
+    """
+
+    def __init__(self, max_bytes: int) -> None:
+        self._max_bytes = max_bytes
+        self._frames: OrderedDict[int, np.ndarray] = OrderedDict()
+        self._bytes = 0
+        self._lock = threading.Lock()
+
+    def get(self, index: int) -> np.ndarray | None:
+        with self._lock:
+            frame = self._frames.get(index)
+            if frame is not None:
+                self._frames.move_to_end(index)
+            return frame
+
+    def put(self, index: int, frame: np.ndarray) -> None:
+        with self._lock:
+            existing = self._frames.pop(index, None)
+            if existing is not None:
+                self._bytes -= existing.nbytes
+            self._frames[index] = frame
+            self._bytes += frame.nbytes
+            while self._bytes > self._max_bytes and self._frames:
+                _, evicted = self._frames.popitem(last=False)
+                self._bytes -= evicted.nbytes
+
+    def clear(self) -> None:
+        with self._lock:
+            self._frames.clear()
+            self._bytes = 0
+
+    def __contains__(self, index: int) -> bool:
+        with self._lock:
+            return index in self._frames
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._frames)
+
+
+class DecoderThread:
+    """Background decode-ahead with latest-wins coalescing, one file, one thread.
+
+    [INTENT] Owns a private `VideoReader` over the same path rather than
+    sharing the caller's: `VideoReader` documents itself as not thread-safe
+    because one `VideoCapture` handle has one position, and a second reader is
+    the mechanism `ARCHITECTURE.md` 5.5 names for the decoder thread, not a
+    lock on the first one.
+
+    [INTENT] "Latest-wins" is the part that makes a fast slider drag feel
+    live rather than laggy. At an ~8.8 ms measured decode, a drag that emits
+    many `valueChanged` events faster than that queues a backlog on whichever
+    thread processes them; queuing every intermediate target makes the image
+    trail the mouse by however many stale frames are still pending. `request`
+    replaces the pending target instead of enqueuing alongside it, so the
+    thread is always working toward wherever the slider is now, and a frame
+    for an abandoned target is dropped by the caller rather than painted late.
+    """
+
+    def __init__(
+        self,
+        path: Path | str,
+        ring: FrameRingBuffer,
+        *,
+        on_frame: Callable[[int, np.ndarray], None] | None = None,
+        on_error: Callable[[int, str], None] | None = None,
+        lookahead: int = 8,
+    ) -> None:
+        self._path = path
+        self._ring = ring
+        self._on_frame = on_frame
+        self._on_error = on_error
+        self._lookahead = lookahead
+        self._target: int | None = None
+        self._stop = threading.Event()
+        self._wake = threading.Condition()
+        self._thread = threading.Thread(target=self._run, name="sieve-decoder", daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def request(self, index: int) -> None:
+        """Replace the pending target. Does not block, does not queue."""
+        with self._wake:
+            self._target = index
+            self._wake.notify()
+
+    def stop(self, *, timeout: float | None = 2.0) -> None:
+        self._stop.set()
+        with self._wake:
+            self._wake.notify()
+        self._thread.join(timeout=timeout)
+
+    def _take_target(self) -> int | None:
+        with self._wake:
+            while self._target is None and not self._stop.is_set():
+                self._wake.wait()
+            index = self._target
+            self._target = None
+            return index
+
+    def _target_changed(self) -> bool:
+        with self._wake:
+            return self._target is not None
+
+    def _run(self) -> None:
+        try:
+            reader = VideoReader(self._path)
+        except VideoOpenError:
+            return
+        try:
+            while not self._stop.is_set():
+                index = self._take_target()
+                if index is None or self._stop.is_set():
+                    continue
+                frame = self._ring.get(index)
+                if frame is None:
+                    try:
+                        frame = reader.read(index)
+                    except VideoReadError as exc:
+                        if self._on_error is not None:
+                            self._on_error(index, str(exc))
+                        continue
+                    self._ring.put(index, frame)
+                if self._on_frame is not None:
+                    self._on_frame(index, frame)
+                self._prefetch_forward(reader, index)
+        finally:
+            reader.close()
+
+    def _prefetch_forward(self, reader: VideoReader, from_index: int) -> None:
+        """Opportunistic read-ahead, abandoned the instant a new target arrives.
+
+        This is the ring buffer's fill path for the adjacent-scrub and
+        playback cases: a slow drag or a play command requests frames the
+        prefetch already reached, which is a `FrameRingBuffer.get` hit instead
+        of a decode.
+        """
+        for offset in range(1, self._lookahead + 1):
+            if self._target_changed() or self._stop.is_set():
+                return
+            next_index = from_index + offset
+            if next_index in self._ring:
+                continue
+            try:
+                frame = reader.read(next_index)
+            except VideoReadError:
+                return
+            self._ring.put(next_index, frame)

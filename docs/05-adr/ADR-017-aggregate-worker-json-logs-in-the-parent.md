@@ -4,37 +4,37 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE runs compute in long-lived `multiprocessing.Process` workers under the
+[STABLE] SIEVE runs compute in long-lived `multiprocessing.Process` workers under the
 versioned supervisor protocol selected in ADR-015. ADR-007 selects structlog,
 UTC timestamps, stable event fields, and JSON Lines for machine-readable logs.
 It requires each worker to initialize logging independently while preserving
-run, process, worker, and generation context.
+execution, process, worker, and generation context.
 
-Without a subprocess bridge, worker logs can:
+[STABLE] Without a subprocess bridge, worker logs can:
 
-- interleave unreadably on an inherited console;
-- write separate files whose rotation, naming, retention, and discovery drift;
-- bypass the parent application's console/file configuration;
-- lose supervisor-authoritative worker identity; or
-- become confused with worker result messages and high-volume trace data.
+- [STABLE] interleave unreadably on an inherited console;
+- [STABLE] produce separate files whose rotation, naming, retention, and discovery drift;
+- [STABLE] bypass the parent application's console/file configuration;
+- [STABLE] lose supervisor-authoritative worker identity; or
+- [STABLE] become confused with worker result messages and high-volume trace data.
 
-The parent process already owns worker identity, process generation, lifecycle,
+[STABLE] The parent process already owns worker identity, process generation, lifecycle,
 restart policy, and user-facing presentation. It is therefore the correct
 aggregation point for local structured logs.
 
-The logging channel has a different contract from the ADR-015 control channel.
-Control messages must remain available for cancellation, health, results, and
+[INTENT] The logging channel has a different contract from the ADR-015 control channel.
+Control messages remain available for cancellation, health, results, and
 shutdown even when logging is noisy. Logs are append-only diagnostic events;
 they are not commands, acknowledgements, or scientific results.
 
-The architecture also assigns opt-in algorithmic timelines to VizTracer Chrome
+[STABLE] The architecture also assigns opt-in algorithmic timelines to VizTracer Chrome
 Trace Event Format files through `bench/tracer.py`. CTF events are higher
 volume, use a different schema and clock model, and are opened in Perfetto.
 Sending them through structlog or stderr would distort execution and erase the
 separation selected by ADR-007 and ADR-010.
 
-`multiprocessing.Process` does not expose the `stderr=PIPE` capture option
-provided by `subprocess.Popen`. A per-worker stderr bridge must therefore be
+[STABLE] `multiprocessing.Process` does not expose the `stderr=PIPE` capture option
+provided by `subprocess.Popen`. A per-worker stderr bridge is therefore
 created explicitly. On the supported `spawn` context, relying on inherited
 console descriptors would not give the parent an independently readable,
 worker-specific stream.
@@ -221,7 +221,7 @@ trace size, and merge time when tuning the implementation.
 This ADR refines ADR-007, ADR-010, and ADR-015. It does not merge logs, metrics,
 benchmark rows, protocol events, or traces into one artifact.
 
-## Alternatives considered
+## Alternatives considered [INTENT]
 
 ### logging QueueHandler and QueueListener
 
@@ -229,7 +229,7 @@ Python's logging cookbook explicitly recommends `QueueHandler` and
 `QueueListener` as a multiprocessing aggregation pattern. It is a meaningful
 alternative, not an absence of one.
 
-SIEVE prefers the JSONL bridge because it creates a process-neutral, versioned
+[INTENT] SIEVE prefers the JSONL bridge because it creates a process-neutral, versioned
 wire representation that can be inspected independently and does not couple
 the worker-parent boundary to pickled `LogRecord` objects or parent logging
 internals. The parent still centralizes routing and presentation.
@@ -243,28 +243,28 @@ remain separate.
 
 ### Workers write separate JSONL files
 
-Per-worker files are simple, crash-tolerant, and useful on distributed systems.
+[INTENT] Per-worker files are simple, crash-tolerant, and useful on distributed systems.
 For local supervised workers they duplicate file naming, rotation, retention,
-redaction, and console routing while delaying user-visible errors. Separate
+redaction, and console routing while delaying user-visible errors. Those
 files remain a valid HPC collection mode when there is no live parent
 aggregator, provided they use the same schema and are ingested later.
 
 ### Workers inherit the parent's stderr
 
-This requires almost no setup, but lines from multiple processes can interleave
-and the parent cannot reliably attach supervisor identity, route events, or
-apply one sink policy. It also fails the per-worker lifecycle boundary.
+[INTENT] This requires almost no setup, but lines from multiple processes can interleave
+and the parent lacks a reliable way to attach supervisor identity, route events,
+or enforce one sink policy. It also fails the per-worker lifecycle boundary.
 
 ### Workers send unrendered event dictionaries
 
-Sending dictionaries avoids JSON parsing and can preserve richer Python types.
+[INTENT] Sending dictionaries avoids JSON parsing and can preserve richer Python types.
 It couples the IPC boundary to Python serialization and processor versions and
 makes the raw stream less inspectable. Rendering JSON in the worker freezes the
 wire contract at the process boundary.
 
 ### syslog, journald, Windows Event Log, or OpenTelemetry
 
-System or telemetry collectors can aggregate many processes and hosts. They add
+[INTENT] System or telemetry collectors can aggregate many processes and hosts. They add
 platform-specific configuration or external services that SIEVE does not need
 for its local GUI/CLI supervisor. A parent sink may forward accepted events to
 one of these systems later without changing the worker JSON schema.
@@ -276,9 +276,9 @@ CTF volume and timing semantics would pressure cancellation/logging IPC, and
 structlog processing would add overhead to trace events. Disk artifacts with
 post-hoc merge preserve the profiler contract.
 
-### One shared CTF file written by all workers
+### One shared CTF file written by multiple workers
 
-Concurrent writes would require coordination and turn a worker crash into
+[INTENT] Concurrent writes would require coordination and turn a worker crash into
 shared-file corruption risk. Independent files align trace ownership with
 process lifecycle and can be merged deterministically after completion.
 
@@ -322,7 +322,7 @@ Accepted.
 - Logging and tracing overhead, capacity, drop behavior, and shutdown races
   require tests even though no selection benchmark is needed.
 
-## References
+## References [STABLE]
 
 - [structlog documentation](https://www.structlog.org/en/stable/)
 - [structlog processors](https://www.structlog.org/en/stable/processors.html)

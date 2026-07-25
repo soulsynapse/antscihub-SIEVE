@@ -4,15 +4,15 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE needs one repository-wide standard for Python linting, import ordering,
-and formatting. The standard must give developers fast local feedback and
-produce deterministic pass/fail results in automated checks. It must cover
+[INTENT] SIEVE uses one repository-wide standard for Python linting, import ordering,
+and formatting. The standard gives developers fast local feedback and
+produces deterministic pass/fail results in automated checks. It covers
 application code, tests, scripts, and top-level Python files without requiring
 different tool configurations for different parts of the repository.
 
-The project also needs strict static type checking in its core and pipeline
+[INTENT] The project uses strict static type checking in its core and pipeline
 code. Linting and type checking catch different classes of defects, so choosing
-a linter must not displace Pyright.
+a linter does not displace Pyright.
 
 Ruff combines lint rules derived from tools including Pyflakes, pycodestyle,
 isort, pyupgrade, flake8-bugbear, and Pylint with a formatter. A combined tool
@@ -20,7 +20,7 @@ reduces configuration, dependency, and editor-integration overhead compared
 with assembling equivalent behavior from several independent tools.
 
 The repository is early enough that stronger rules can be adopted without a
-large legacy cleanup, but making every prospective rule mandatory immediately
+large legacy cleanup, but making the full prospective rule set mandatory immediately
 would create avoidable churn. The quality gate therefore needs a ratcheting
 path toward stricter enforcement.
 
@@ -66,7 +66,7 @@ adopted separately.
 
 ### Black, isort, and Flake8
 
-This combination is mature and widely understood, but requires multiple
+[ASSUMPTION] This combination is mature and widely understood, but requires multiple
 dependencies, configurations, editor integrations, and invocations to provide
 the linting, import-ordering, and formatting behavior SIEVE needs.
 
@@ -79,7 +79,7 @@ type-analysis responsibility.
 
 ### Pyright alone
 
-Rejected because a type checker does not replace formatting, import ordering,
+[INTENT] Rejected because a type checker does not replace formatting, import ordering,
 or the broad range of correctness and maintainability checks supplied by a
 linter. Pyright remains required alongside Ruff.
 

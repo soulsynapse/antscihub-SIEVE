@@ -4,13 +4,13 @@ Reference: https://docs.arc42.org/section-9/
 
 ## Context
 
-SIEVE must keep its Qt event loop responsive while filters process video
+[INTENT] SIEVE keeps its Qt event loop responsive while filters process video
 frames. Moving frame arrays through a queue or pipe would serialize and copy
 large payloads across the process boundary. At video rates, that overhead
 would compete with the scientific computation and make interactive previews
 less responsive.
 
-Qt provides `QSharedMemory`, but its locking, attachment, and Python buffer
+[ASSUMPTION] Qt provides `QSharedMemory`, but its locking, attachment, and Python buffer
 handling are awkward for NumPy-based processing. Python's
 `multiprocessing.shared_memory.SharedMemory` exposes a named shared-memory
 buffer directly and works naturally with NumPy array views.
@@ -52,12 +52,12 @@ buffers and NumPy arrays.
 
 ### Pickled arrays through a queue or pipe
 
-Rejected because serialization and payload copies scale with every frame and
+[INTENT] Rejected because serialization and payload copies scale with each frame and
 undermine interactive throughput.
 
 ### Threads in the Qt process
 
-Rejected because compute would share the GUI process, complicate failure
+[INTENT] Rejected because compute would share the GUI process, complicate failure
 isolation, and allow Python or native-library contention to interfere with the
 event loop.
 

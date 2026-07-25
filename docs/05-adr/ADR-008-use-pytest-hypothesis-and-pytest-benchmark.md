@@ -94,7 +94,9 @@ appropriate schedule and before releases. Do not use `slow` to hide an
 ordinary unit test that can be made fast through smaller fixtures or better
 isolation.
 
-Run tests with the repository's `.venv` Python. Run PySide6 GUI tests with
+Run tests through the uv-managed `sieve` environment created by
+`uv venv sieve --python 3.11` (for example,
+`.\\sieve\\Scripts\\python.exe -m pytest ...`). Run PySide6 GUI tests with
 `QT_QPA_PLATFORM=offscreen`; tests that require a real OpenGL context need a
 separate GL-capable environment and are slow.
 

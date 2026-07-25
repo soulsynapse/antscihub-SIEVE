@@ -138,10 +138,10 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "PL", "NPY", "PD"]
 [tool.pyright]
 pythonVersion = "3.11"
 include = ["src", "tests", "tools", "noxfile.py"]
-exclude = ["**/__pycache__", ".venv", "tests/results", "videos-testing"]
+exclude = ["**/__pycache__", ".venv", "sieve", "tests/results", "videos-testing"]
 strict = ["src/sieve/core", "src/sieve/pipeline"]  # strict where it matters
 # Nox owns the validation environment. Pinning this configuration to the
-# repository `.venv` made an isolated session inspect a different dependency
+# repository virtualenv made an isolated session inspect a different dependency
 # set and allowed reused local environments to hide missing CI dependencies.
 # The comparison harnesses reach through third-party surfaces that carry weak
 # or dynamic typing -- PyAV frame planes, pyqtgraph and napari attribute

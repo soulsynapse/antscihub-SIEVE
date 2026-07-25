@@ -24,9 +24,9 @@ display, while ordinary PySide6 tests use Qt's offscreen platform. Some tasks
 will need platform-specific arguments, environment variables, generated-file
 checks, or dependency groups.
 
-[STABLE] SIEVE's repository instructions currently require validation and tests to use
-the repository `.venv`. [INTENT] The initial task runner preserves that operational
-contract rather than silently selecting a different interpreter.
+[STABLE] SIEVE's repository instructions require validation and tests to run in
+the uv-managed `sieve` environment (`uv venv sieve --python 3.11`) rather than
+silently selecting a different interpreter.
 
 ## Decision
 
@@ -65,12 +65,11 @@ Session names are the supported automation interface. CI calls Nox sessions
 instead of restating their internal commands. Contributor documentation should
 show the same session invocations.
 
-Run local Nox and its validation commands through the repository `.venv` until
-the repository's environment policy is superseded. On Windows, the canonical
-form is:
+Run local Nox and its validation commands through the uv-managed `sieve`
+environment. On Windows, the canonical form is:
 
 ```console
-.\.venv\Scripts\python.exe -m nox -s checks
+.\sieve\Scripts\python.exe -m nox -s checks
 ```
 
 Initial sessions use Nox's `venv_backend="none"` pass-through mode so their
@@ -80,9 +79,9 @@ per-session virtual environments.
 Nox is selected here primarily for task orchestration and composition, not to
 silently create a second local dependency universe. If isolated or
 multi-version Nox environments are added later, their interpreter and
-dependency-lock relationship to the repository `.venv` must be explicit and
-CI must exercise the same resolved dependencies used for supported
-validation.
+dependency-lock relationship to the uv-managed local environment must be
+explicit and CI must exercise the same resolved dependencies used for
+supported validation.
 
 Use Python capability checks for optional hardware and platform sessions. A
 GPU session:
@@ -163,7 +162,7 @@ Accepted.
   pass without GPU execution.
 - Tool rules remain in their native configuration rather than being copied
   into `noxfile.py`.
-- The current repository `.venv` remains the local validation interpreter;
+- The uv-managed `sieve` environment remains the local validation interpreter;
   introducing Nox-managed environment matrices requires an explicit,
   reproducible dependency policy.
 - Nox and the tools used by its sessions become pinned development

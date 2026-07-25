@@ -148,9 +148,9 @@ the main body, say so explicitly rather than printing an empty section.
 - `nox -s doc_voice` runs it.
 - `python tools/doc_voice.py --path <one ADR>` scopes correctly to that file.
 - `python tools/doc_voice.py --json` emits parseable JSON.
-- `.venv/Scripts/python.exe -m ruff check .` passes.
-- `.venv/Scripts/python.exe -m ruff format --check .` passes.
-- `.venv/Scripts/python.exe -m pyright` passes.
+- `.\\sieve\\Scripts\\python.exe -m ruff check .` passes.
+- `.\\sieve\\Scripts\\python.exe -m ruff format --check .` passes.
+- `.\\sieve\\Scripts\\python.exe -m pyright` passes.
 - A code block containing the word `must` produces **no** finding. Test this
   deliberately before you call the task done — it is the check most likely to
   be quietly broken.
@@ -164,7 +164,8 @@ the main body, say so explicitly rather than printing an empty section.
   list, say in a comment why that choice and not another. Match the comment
   density of `tools/code_health.py` — read it first; it is the model for this
   file in structure, tone, and how it treats a report as distinct from a gate.
-- The interpreter is `.venv/Scripts/python.exe`. Use it directly.
+- The interpreter is `.\\sieve\\Scripts\\python.exe` from `uv venv sieve --python 3.11`.
+  Use it directly for checks after environment setup with uv.
 - Do not run `git commit` or `git push`.
 
 ## What not to do

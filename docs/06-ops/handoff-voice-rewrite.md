@@ -146,7 +146,7 @@ answer to the open question rather than the settled one.
 ## Verify before you finish
 
 ```
-.venv/Scripts/python.exe -m pytest -m "not slow and not qt" -q
+.\sieve\Scripts\python.exe -m pytest -m "not slow and not qt" -q
 python tools/doc_voice.py
 ```
 

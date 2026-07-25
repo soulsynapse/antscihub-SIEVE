@@ -27,7 +27,7 @@ ROOT = Path(__file__).parent
 SRC = ROOT / "src" / "sieve"
 HEADLESS_PYRIGHT_CONFIG = ROOT / "pyright-headless.json"
 
-nox.options.default_venv_backend = "uv|virtualenv"
+nox.options.default_venv_backend = "uv"
 nox.options.reuse_existing_virtualenvs = True
 nox.options.sessions = ["checks"]
 

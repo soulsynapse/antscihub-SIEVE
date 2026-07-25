@@ -124,14 +124,16 @@ are imperative by genre. Unresolved — see `NOTES.md`.
 
 ## Environment invariants
 
-[STABLE] The repository virtual environment is `.venv` at the repo root; on
-Windows the interpreter is `.\.venv\Scripts\python.exe`. Validation commands
-run through that interpreter rather than a globally-resolved `python`.
+[STABLE] The repository virtual environment is uv-managed at `sieve/` from
+`uv venv sieve --python 3.11`; on Windows the interpreter is
+`.\sieve\Scripts\python.exe`. Validation commands run through uv (`uv run`
+for environment creation/install, then run through `.\sieve\Scripts\python.exe`
+rather than a globally-resolved `python`.
 
 [STABLE] Ordinary Qt tests run under `QT_QPA_PLATFORM=offscreen`. Renderer
 measurements do not: napari's VisPy canvas needs a real OpenGL context, and
 offscreen timings are not renderer timings.
 
-[STALE WHEN] The packaging work in `NOTES.md` lands. ADR-012 moves environment
-creation to uv from `pyproject.toml`, which supersedes the `.venv`
-pass-through policy this section describes.
+[STALE WHEN] The packaging work in `NOTES.md` lands. ADR-012 moved environment
+creation to uv from `pyproject.toml`, which superseded the old `.venv`
+pass-through policy this section used to describe.

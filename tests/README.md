@@ -18,17 +18,18 @@ records frame-publication-to-draw latency, missed frame deadlines, dropped
 presentations, CPU time, memory, initialization time, process startup time,
 versions, logs, and screenshots.
 
-Install the experiment dependencies into the repository virtual environment:
+Install the experiment dependencies into the uv-managed `sieve` environment:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r tests\requirements-image-viewers.txt
+uv venv sieve --python 3.11
+uv pip install --python .\sieve\Scripts\python.exe -r tests\requirements-image-viewers.txt
 ```
 
 Run a short headless correctness smoke test:
 
 ```powershell
 $env:QT_QPA_PLATFORM = 'offscreen'
-.\.venv\Scripts\python.exe tests\benchmark_image_viewers.py `
+.\sieve\Scripts\python.exe tests\benchmark_image_viewers.py `
     --offscreen --width 640 --height 360 --frames 12 --warmup-frames 3
 ```
 
@@ -40,7 +41,7 @@ Run the meaningful display/GPU comparison:
 
 ```powershell
 Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
-.\.venv\Scripts\python.exe tests\benchmark_image_viewers.py `
+.\sieve\Scripts\python.exe tests\benchmark_image_viewers.py `
     --width 1920 --height 1080 --fps 30 --frames 180 --warmup-frames 30
 ```
 
@@ -69,14 +70,14 @@ VP9, and ProRes clips. Each backend/clip pair runs in a fresh subprocess.
 Install the pinned optional dependencies:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r tests\requirements-decoders.txt
+uv pip install --python .\sieve\Scripts\python.exe -r tests\requirements-decoders.txt
 ```
 
 Generate the deterministic 1000-frame corpus and run the benchmark:
 
 ```powershell
 $env:PYTHONPATH = 'src'
-.\.venv\Scripts\python.exe -m sieve.bench.decoder_benchmark `
+.\sieve\Scripts\python.exe -m sieve.bench.decoder_benchmark `
     --generate-corpus `
     --output tests\results\decoder-benchmark
 ```

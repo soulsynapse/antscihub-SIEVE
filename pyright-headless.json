@@ -3,6 +3,7 @@
   "exclude": [
     "**/__pycache__",
     ".venv",
+    "sieve",
     "src/sieve/gui",
     "tests/gui",
     "tests/results",

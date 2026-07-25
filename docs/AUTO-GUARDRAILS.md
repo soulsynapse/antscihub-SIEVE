@@ -1,6 +1,6 @@
 # AUTO-GUARDRAILS.md
 
-Guardrails are enforced in CI. A violation is a blocking defect. This is meant to be automatic so problems are caught before they become a big problem.
+Guardrails are enforced in CI. A violation is a blocking defect. This is meant to be automatic so problems are caught before they become a big problem. These aren't requirements, and might be ill-designed for the current instructions. Use your judgement.
 
 ## 1. Import Boundaries
 - `core/` imports nothing from above it. No Qt, no Zarr, no subprocess.

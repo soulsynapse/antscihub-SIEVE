@@ -14,31 +14,20 @@ Rather than checking against constraints every time you write code, build tools 
 
 Once those are in place, trust them and move fast. The point of building the guardrails is exactly so you don't have to keep the constraints in your head. Build new ones as needed - use your judgement.
 
-## Sequencing
-
-Build vertically. One decode path, one filter, one worker, one graph, one slider — end to end, rough but real — before widening any single layer. v1 already proved what the vertical slice needs to feel like, and that knowledge is more valuable than a beautiful substrate built in isolation.
-
-A working sketch:
-
-- Skeleton and guardrails (Ruff, Pyright, pytest, import-linter, Nox, benchmark harness, code-health check).
-- Pre-pipeline loop: open, scrub, cut replicate, background materialize. This is where the tool first has a feel, and where the latency budgets first get tested against reality.
-- One filter end-to-end. Intensity is the simplest; it exercises the full stack without hiding behind complexity.
-- The rest of v1's filter set (change energy, LK optical flow, windowed-block, threshold, scalogram band). This is where abstractions get stressed; refactor the contract here if it resists, not after ten filters exist.
-- Everything else — caching, compaction, HPC handoff, backend dispatch, guidance, determinism CI, review mode — after v1 parity, sequenced by what actually blocks users.
-
-Adapt this once you see the repo. The shape matters more than the specifics.
-
-## Building well as you go
-
-While you're building, keep an eye on two things beyond correctness:
-
-**User experience.** Some kinds of code hurt the user without hurting any test — a silent worker roundtrip on a UI operation, a decode that blocks the event loop, a filter that materializes when it could stream, a widget that rebuilds on every parameter change instead of updating in place. Test for these explicitly when the shape of the code suggests they're possible. The latency benchmarks catch the big ones; smaller ones need judgment. If you're writing something that touches the interactive loop, ask what would happen if it were 5× slower and whether the test suite would notice.
-
-**Maintainability and product trajectory.** After finishing a piece of work, briefly assess: is this the code a future contributor (or future you, or future me) would want to change when the next requirement arrives? Where would it resist change? Note anything worth revisiting in `NOTES.md` — not as a promise to fix, just as an honest map of where the debt is. The architecture reserves space for a lot of future capability (HPC, backends, guidance, review mode); when you write something today, briefly consider whether it's compatible with those directions or whether it silently forecloses them.
-
-Neither of these needs to slow you down. They're a pass over what you just wrote, not a filter on what you write.
 
 ## Start here
 
-Read the docs. 
+You were probably told to build one thing. If something else needs to exist first, or be fixed first, or if it is in conflict, if you are at least 95% sure what I want, just do it.
 
+Look at the ARCHITECTURE.md file for how it fits in. If there is something in the SCAFFOLD.md for where it should live, put it there. SCAFFOLD is a crude map - you don't have to follow it exactly, but it is designed to approximate the separation of responsibility the final product has.
+
+For different steps, the following in the src\sieve\docs should be updated if touched:
+
+- `FILTER_CONTRACT.md` — the interface implemented by each filter
+- `PIPELINE_SCHEMA.md` — the serializable DAG artifact (project file / HPC handoff)
+- `CACHE_KEY_SPEC.md` — content-addressed cache key derivation
+- `WORKER_PROTOCOL.md` — subprocess IPC, shared-memory frame transport
+- `BACKEND_DISPATCH.md` — CPU/GPU/threading policy
+- `GUIDANCE_FORMAT.md` — the markdown convention colocated with filters
+- `PREVIEW_SEMANTICS.md` — warmup handling for temporal filters in preview
+- `REVIEW_OUTPUT_SPEC.md` — Step 7 review-mode data contract

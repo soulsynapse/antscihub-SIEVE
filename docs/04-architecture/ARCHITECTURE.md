@@ -11,6 +11,8 @@ satisfy. It does *not* specify those contracts — each has its own reference
 document so it can be designed carefully in isolation. This document assumes
 those specs meet the criteria stated here.
 
+This document is a working guide, not a specification. Treat claims as hypotheses to verify against the code. If you find a contradiction or correction, measure against project goals and code practices.
+
 ## Index of reference documents
 
 Load-bearing specs (to be written; criteria for each are stated in this doc):
@@ -98,9 +100,11 @@ above.
 ```
 
 Enforcement: `core/` has no imports from anything above it, no Qt, no Zarr, no
-subprocess. `pipeline/` never imports Qt. `gui/` never imports from `workers/`
-directly — it goes through `pipeline/`. This is the mechanism that makes CLI
-and HPC parity real rather than aspirational.
+subprocess. `pipeline/` never imports Qt. `bench/` never imports Qt, so that
+the CLI and headless benchmark runs can observe without a GUI toolkit; the
+QObject adapter over the metric bus lives in `gui/`. `gui/` never imports from
+`workers/` directly — it goes through `pipeline/`. This is the mechanism that
+makes CLI and HPC parity real rather than aspirational.
 
 ## 4. The pipeline is a DAG
 
@@ -388,7 +392,8 @@ sieve/
 │   ├── materialize.py          # Compaction policy (§5)
 │   └── preview.py              # Warmup-aware clip extraction (§11)
 ├── io/
-│   ├── video_read.py           # Dtype-preserving decode
+│   ├── video_read.py           # Seek-accurate decode boundary; reports the
+│   │                           # dtype it delivers vs. source depth (ADR-018)
 │   ├── zarr_store.py           # Chunked intermediate persistence
 │   ├── preview_mp4.py          # Sidecar viewable renders
 │   └── sidecar.py              # CSV / JSON / Parquet outputs
@@ -407,7 +412,9 @@ sieve/
 │   ├── tracer.py               # VizTracer wrapper (CTF timeline)
 │   ├── pyspy.py                # py-spy attach wrapper for ad hoc live diagnosis
 │   ├── results_table.py        # Parquet/DuckDB (economy vs. detection)
-│   ├── metric_bus.py           # QObject signal bus for live HUD
+│   ├── metric_bus.py           # Qt-free metric bus; plain callbacks. The
+│   │                           # QObject adapter lives in gui/ so that CLI
+│   │                           # and headless runs import bench/ without Qt.
 │   └── cost_model.py           # Aggregates filter-declared cost estimates
 ├── cli/
 │   ├── run.py                  # `sieve run pipeline.yaml`

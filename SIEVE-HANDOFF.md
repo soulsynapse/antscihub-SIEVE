@@ -2,7 +2,7 @@
 
 You are implementing SIEVE, a video signal-processing tool, in a clean repo. A v1 exists in a separate folder - you may check against it (antscihub-optical-flow-detector) when necessary, but shouldn't without reason. The rewrite exists because while v1 shipped and served it's purpose, it became difficult to maintain — the kind of drift that happens when structure isn't enforced by tooling. This handoff is about building v2 so that structure enforces itself.
 
-Read every file under `docs/` before writing code — architecture doc, ADRs, specs, vision. Those are the considered decisions; this prompt is orientation on top of them. Where something here seems to conflict with the docs, the docs win; flag the conflict. However, the docs were written over time, and might have some internal inconsistencies. Do a test against the objectives, propose an ADR, and update the docs when approved.
+Read every file under `docs/` before writing code — architecture doc, ADRs, specs, vision. Those are the considered decisions; this prompt is orientation on top of them. Where something here seems to conflict with the docs, the docs win; flag the conflict. However, the docs are written over time, and might have some internal inconsistencies or inaccuracies. Do a test against the objectives, propose an ADR, and update the docs when approved.
 
 ## What matters
 
@@ -78,15 +78,24 @@ The lightweight coordination mechanism is a single `NOTES.md` at the repo root
 - Coverage: `core/` is pure and should be well-tested. GUI panels are not — chasing coverage there produces brittle tests. Test behavior, not lines.
 - Determinism CI when it's cheap to add. If you can byte-compare a canonical clip early, do it. If it requires the full pipeline to exist first, defer it and note it in `NOTES.md`.
 
-## Context management
 
-You should write a shell wrapper so that you can clear context and loops something like claude -p "continue from handoff", detects a sentinel (claude outputs ##CLEAR## or exits with a specific status), and starts a new claude invocation pointing at the handoff file.
+## Context management.
 
-This is to automate your context management. Start a session by drafting the scope to the next checkpoint that optimally maintains your operational context without letting it grow too big, then run the script you need to restart and continue. Critically, if you notice that you are continuously restarting because you are stuck, you should have a path to prevent that, such as raising a question or something similar. Otherwise you should be largely autonomous. You can fix this script up as you go.
+Start a session by drafting the scope to the next checkpoint that optimally maintains your operational context without letting it grow too big. This should be a running to-do, which you edit as the last thing of the session. Check in, then the last line should say you're ready to compact. Give me the compact cmd written out to optimize the next session. You can utilize an LLM wiki under 06-ops using best practices, or document a run book. No docs you write should be 
+
+## Documentation
+
+All documentation should NOT be in the imperative. Docu voice should be written in the descriptive voice. It should follow the epistemic status EXPLICITLY, often and freely, where relevant. You can write guardrail scripts to ensure this. The tags are [STABLE] [ASSUMPTION] [INTENT] [STALE WHEN] [OPEN QUESTION].
+
+Examples:
+
+"The cache expires after 60s."	vs "[INTENT] cache TTL: 60s (see config.ts). Confirm the runtime value hasn't drifted."
+
+If I have written 'always', 'never', 'must' etc flag it so I can correct it.
 
 ## Start here
 
-Read the docs. Set up the guardrails as your first working commits — layer enforcement, benchmarks, property-test scaffolding, code-health check. Then produce your phase-1 plan as a draft ADR (if it involves decisions worth capturing) or a `NOTES.md` checklist (if it's execution). Confirm with me before writing feature code.
+Read the docs. Write the plan or edit it for best practices. Note what you need feedback on. Set up the guardrails as your first working commits — layer enforcement, benchmarks, property-test scaffolding, code-health check. Then produce your phase-1 plan as a draft ADR (if it involves decisions worth capturing) or a `NOTES.md` checklist (if it's execution). Confirm with me before writing feature code.
 
 If the repo state or the docs suggest a different sequencing than what's here, say so in your first message. This handoff is orientation, not a script.
 

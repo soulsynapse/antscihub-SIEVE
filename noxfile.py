@@ -25,6 +25,7 @@ import nox
 
 ROOT = Path(__file__).parent
 SRC = ROOT / "src" / "sieve"
+HEADLESS_PYRIGHT_CONFIG = ROOT / "pyright-headless.json"
 
 nox.options.default_venv_backend = "uv|virtualenv"
 nox.options.reuse_existing_virtualenvs = True
@@ -89,6 +90,10 @@ def _lint(session: nox.Session) -> None:
 
 
 def _typecheck(session: nox.Session) -> None:
+    session.run("pyright", "--project", str(HEADLESS_PYRIGHT_CONFIG))
+
+
+def _typecheck_gui(session: nox.Session) -> None:
     session.run("pyright")
 
 
@@ -161,6 +166,7 @@ def test_gui(session: nox.Session) -> None:
         )
         return
     install_project(session, "dev-gui")
+    _typecheck_gui(session)
     session.run("pytest", "-m", "qt and not gl", *session.posargs, env=OFFSCREEN_ENV)
 
 

@@ -1,0 +1,11 @@
+{
+  "extends": "./pyproject.toml",
+  "exclude": [
+    "**/__pycache__",
+    ".venv",
+    "src/sieve/gui",
+    "tests/gui",
+    "tests/results",
+    "videos-testing"
+  ]
+}

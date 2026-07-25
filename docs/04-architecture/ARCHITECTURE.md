@@ -352,6 +352,7 @@ sieve/
 │   └── protocol.py             # Job/result messages
 ├── bench/                      # See BENCHMARKING_VISION.md
 │   ├── tracer.py               # VizTracer wrapper (CTF timeline)
+│   ├── pyspy.py                # py-spy attach wrapper for ad hoc live diagnosis
 │   ├── results_table.py        # Parquet/DuckDB (economy vs. detection)
 │   ├── metric_bus.py           # QObject signal bus for live HUD
 │   └── cost_model.py           # Aggregates filter-declared cost estimates

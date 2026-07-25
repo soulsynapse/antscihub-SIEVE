@@ -1,0 +1,4 @@
+# Pinned so the ADR comparison remains reproducible.
+napari==0.8.0
+psutil==7.2.2
+pyqtgraph==0.14.0

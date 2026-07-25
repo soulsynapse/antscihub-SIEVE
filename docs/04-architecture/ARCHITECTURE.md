@@ -295,24 +295,33 @@ Requirements:
 
 ## 13. Signal-preservation measurement
 
-This is a design commitment, not a code layer, but it belongs in the
-architecture because half the "GUI guides you" promise depends on it.
+Half the "GUI guides you" promise depends on being able to say something
+useful when the user considers swapping one filter for another. The naive
+framing — "does this alternative preserve signal?" — assumes a ground truth.
+SIEVE does not have one, and cannot: the user's threshold choice is the
+operative definition of signal. More smoothing with longer accumulation is
+not wrong-vs-right against a shorter-window alternative; it is a different
+point in a (signal-fidelity × latency × economy) space, and which point is
+correct is a domain judgment SIEVE is not entitled to make.
 
-The guidance layer's suggestions ("this alternative usually preserves signal
-at half the cost") require the ability to measure signal preservation during
-preview. Two paths, and the project needs to pick one:
+The architecture therefore commits to delta characterization, not scoring:
 
-- **User-provided ground truth.** A labeled reference clip against which
-  detection metrics (F1, recall at fixed FPR) are computed. Cleaner
-  semantics; requires the user to have labeled data.
-- **Baseline-pipeline proxy.** The user marks one pipeline as the
-  reference; alternatives are scored by agreement with the reference's
-  outputs. Doesn't require labels; the reference has no independent claim
-  to correctness.
+- For any candidate swap, the guidance layer reports observable differences
+  against the user's current pipeline: detection count delta, temporal lag
+  delta (frames until the signal crosses threshold), spatial footprint delta,
+  cost delta. Never a single "preservation" number.
+- The user's current pipeline is the reference only in the weak sense that it
+  is what the alternative is being compared against. The guidance never claims
+  the alternative is closer to truth.
+- Optional negative regions. If the user marks a region they know should not
+  fire, that region yields a real specificity number without requiring full
+  labeling. This is cheap to author and worth surfacing when available. It is
+  not required.
 
-This choice affects the results table schema (`BENCHMARKING_VISION.md`) and
-the guidance format (`GUIDANCE_FORMAT.md`). Flagged as an open question in
-§20.
+This resolves the labeled-clip vs. baseline-proxy dichotomy: it is neither. It
+is characterize-the-delta and let the user judge. The results table schema
+(`BENCHMARKING_VISION.md`) and guidance format (`GUIDANCE_FORMAT.md`) follow
+from this commitment.
 
 ## 14. Component decomposition
 
@@ -467,20 +476,35 @@ Three enforced patterns keep the codebase from drifting as filters accumulate:
 - **Type-checked pipeline schema** at load time — bad graphs are rejected
   before any frame is decoded.
 
-## 20. Open questions
+## 20. Resolved policies
 
-- **Detection-metric ground truth.** See §13 — the guidance layer's
-  suggestions depend on how signal preservation is measured. Choice of
-  labeled-clip vs. baseline-pipeline-proxy affects `BENCHMARKING_VISION.md`
-  and `GUIDANCE_FORMAT.md`.
-- **Intermediate dtype policy.** Standardize all filters on float32
-  internally with uint8 at edges (simpler, some memory cost), or let each
-  filter declare its own dtype and have the executor handle promotions
-  (efficient, more executor complexity)? Recommend float32 for v1.
-- **Multiprocess-worker HPC semantics.** How CTF trace files from
-  multiple worker processes on HPC compose into a single readable
-  timeline. Deferred to `WORKER_PROTOCOL.md` / `BENCHMARKING_VISION.md`
-  interaction.
-- **Undo/redo scope.** Trivial if the pipeline artifact is authoritative,
-  but decisions about coalescing (slider drags shouldn't produce 200
-  undo entries) belong somewhere.
+The following were open questions in earlier drafts and are now committed.
+Cross-referenced here so the reasoning is preserved.
+
+- **Signal preservation is delta characterization, not scoring.** See §13.
+- **Intermediate dtype is per-filter, not global.** Each filter declares its
+  storage dtype (float16, bfloat16, float32, or integer) via the filter
+  contract. Accumulators for temporal state (IIR, MEI/MHI, temporal
+  integration, wavelet coefficients) are float32 regardless of storage dtype.
+  Edges — decoded input and terminal output — remain at their native dtype.
+  Rationale: benchmarks show float16 storage roughly halves memory with no
+  meaningful accuracy loss for most filters, but temporal accumulators and
+  coefficient-quantization-sensitive filters (Morlet banks, 3D wavelets near
+  band edges) can drift. Separating storage from accumulator dtype absorbs
+  both cases without forcing a global choice. bfloat16 is preferred over
+  float16 where the filter's numeric range benefits from wider exponent
+  (optical flow magnitudes, integration accumulators near zero).
+- **Multiprocess CTF traces compose via Perfetto Trace Processor.** Each worker
+  writes a Chrome/Perfetto-compatible fragment to a run-scoped directory
+  (`traces/<run_id>/worker_<pid>.pftrace`) with a stable process name set at
+  worker init. On run completion, a post-processing step invokes Trace
+  Processor to merge fragments into one viewable timeline; parametric sweeps
+  use Batch Trace Processor. On HPC, workers write to node-local scratch and
+  sieve collects on job completion, landing one merged trace next to the
+  results Parquet. Details in `BENCHMARKING_VISION.md` and
+  `WORKER_PROTOCOL.md`.
+- **Undo/redo coalescing is a UI concern, not an architecture concern.**
+  Continuous parameter changes on the same node within a short window collapse
+  into one undo entry, committed on mouse-up or focus loss. Structural edits
+  (add / remove / reconnect nodes) never coalesce. Stated once in the pipeline
+  schema spec; not load-bearing here.

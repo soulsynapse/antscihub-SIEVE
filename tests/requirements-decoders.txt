@@ -1,0 +1,8 @@
+# Pinned so decoder comparisons remain reproducible.
+av==16.0.1
+decord==0.6.0
+imageio-ffmpeg==0.6.0
+numpy==2.2.6
+opencv-python-headless==4.12.0.88
+packaging==26.2
+psutil==7.2.2

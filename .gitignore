@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 videos-testing/
 tests/results/
+tests/fixtures/decoder-corpus/

@@ -13,6 +13,58 @@ second.
 
 ## Resolved this session
 
+**The decode boundary exists.** `src/sieve/io/video_read.py` is the module
+ADR-018 licensed: `VideoReader` over a pinned OpenCV VideoCapture, index-based
+seek-and-decode, `SourceInfo` carrying the source's bit depth beside the uint8
+BGR it delivers, and `DecoderIdentity` for the §12 code-version hash.
+`tests/io/test_video_read.py` covers the contract in 16 tests, unmarked so they
+run in `checks`. `tests/bench/test_decode_seek.py` now measures through the
+boundary instead of reaching `cv2` directly, and its `[STALE WHEN]` is
+discharged.
+
+The bit-depth report is the part worth knowing about. OpenCV exposes source
+depth only through `CAP_PROP_CODEC_PIXEL_FORMAT`, whose value is a fourcc:
+`I420` for the 8-bit encodes, and FFmpeg's planar-YUV tags — `MKTAG('Y','3',11,10)`
+— for the 10-bit ones, which carry depth in a raw byte rather than as text.
+An unrecognized tag reports `None` rather than defaulting to 8, because a
+warning that silently says "no depth lost" in the one case it cannot read is a
+warning that fails where it is needed. The corpus manifest already records
+`expected_bit_depth` per clip, so the test asserts the decode across all five
+codecs against a number written down independently of OpenCV.
+
+[ASSUMPTION] Kept out of the boundary for now: the keyframe index, the ring
+buffer, and eager head-decode that `ARCHITECTURE.md` §5.5 also asks of this
+module. They exist to keep a widget fed, no widget exists, and a buffering
+policy built before its consumer is tuned against a guess.
+
+**Session 3's number holds through the boundary.** The scrub measurement reads
+8.2, 9.2, and 10.1 ms median across three consecutive runs on this machine
+against 30 ms allotted — the ~±1 ms run-to-run spread swamps the wrapper's
+cost, and session 3's 8.6 ms sits inside it. Worth recording as the noise floor
+the deferred CI gate has to clear, since a regression margin narrower than the
+spread would fire on thermal state.
+
+**`test_gui` joins `checks`, by notification rather than inline.** Kendrick's
+call. `checks` calls `session.notify("test_gui")`, so the GUI suite builds its
+own `dev-gui` environment and the `checks` environment stays installed from
+`dev` alone. Inlining it would have put a Qt binding into the environment
+`_test` uses to demonstrate the headless guarantee, which is the one place that
+guarantee is observed. The session skips with a stated reason while no test
+carries the `qt` marker — pytest exits 5 on an empty collection, so a gate
+wired to it would otherwise fail for having nothing to do. Verified in both
+directions.
+
+**ADR-019 records the extras split.** Kendrick's call, against the argument
+that a derived decision does not need one: ADRs are cheap and the archaeology
+they prevent is not. `pyproject.toml` carries the generating rule as a comment
+block at the extras — a package belongs in `dependencies` when a CLI or HPC run
+with no display and no GPU would fail without it — pointing at §3 and ADR-016.
+No code changed; the split was already built this way.
+
+**The license is deferred.** Kendrick's call, not an oversight. Nothing is
+blocked by it until distribution, and ADR-001's PySide6 choice already fixes
+the constraint the eventual answer has to satisfy.
+
 **ADR-018 is Accepted.** Kendrick's call. OpenCV VideoCapture is the pinned v1
 decode path; the reopening conditions in the ADR stand unchanged.
 
@@ -75,14 +127,7 @@ emits plain callbacks and the QObject adapter lives in `gui/`. Encoded as a
 layer contract so the CLI and headless runs keep importing `bench/` without Qt.
 
 **Qt and CuPy are optional extras; `dependencies` is what a headless run
-needs.** Derived from §3's parity guarantee rather than from an ADR that says
-so. `gui` carries PySide6, napari, and pyqtgraph; `gpu` carries CuPy per
-ADR-016; `dev-gui` adds pytest-qt on top of both. The forcing case: pytest-qt
-aborts collection when no Qt binding is importable, so leaving it in `dev`
-makes a headless developer unable to run any test at all. [OPEN QUESTION]
-Whether this split deserves its own ADR. It is a packaging consequence of an
-accepted architectural rule, not a new decision, but it is the kind of thing a
-later reader will look for an ADR to explain.
+needs.** Now ADR-019 — see "Resolved this session".
 
 **The layer contract is verified, not just written.** `.importlinter` encodes
 four contracts and each was confirmed to fail against a deliberate violation
@@ -97,22 +142,24 @@ requires the napari embedding to be revalidated against PySide6 before first
 production use. [INTENT] Handle as part of the first GUI commit rather than as
 a standalone migration, since no GUI code exists to migrate yet.
 
-**No license is declared.** There is no LICENSE file and `pyproject.toml`
-carries no `license` field. ADR-001 chose PySide6 precisely to avoid being
-bound by PyQt6's GPLv3, so a license position exists in the reasoning without
-existing in the repository. Needs Kendrick's decision; nothing is blocked by it
-until distribution.
+**No license is declared,** deliberately deferred. There is no LICENSE file and
+`pyproject.toml` carries no `license` field. ADR-001 chose PySide6 precisely to
+avoid being bound by PyQt6's GPLv3, so a license position exists in the
+reasoning without existing in the repository. [STALE WHEN] Distribution becomes
+real — that is the point at which the deferral stops being free.
 
 **No console entry points are declared,** deliberately. `cli/` and `gui/` have
 no module to point at, and a script naming a module that does not exist is the
 exact stale-metadata failure this work replaced. They land with the commit that
 creates the entry module.
 
-**`checks` has no GUI coverage.** `test_gui` is a separate session because
-pytest-qt cannot be installed into the headless environment. Costless while
-`gui/` is empty. [OPEN QUESTION] Whether `test_gui` joins `checks` or stays a
-separately-invoked CI job — decide at the first GUI commit, when the cost of
-installing Qt into every gate run becomes real.
+**`checks` will get slower at the first GUI test.** `test_gui` is now notified
+by `checks`, so the first `qt`-marked test turns the gate from one `dev` install
+into two, the second of which carries PySide6 and napari. That cost is the
+decision, not a surprise; recording it because a seven-second gate is a habit
+and a two-minute one is a thing people start skipping. If it bites, the lever
+is a CI job that runs `checks` and `test_gui` as separate parallel jobs, which
+the session split already permits.
 
 **Two files are exempted from both gates.** `bench/decoder_benchmark.py` and
 `tests/benchmark_image_viewers.py` carry Ruff per-file ignores (PLC0415, E501,
@@ -196,11 +243,39 @@ sequenced first because it is the rewrite's instrument: the rewriting agent
 runs it, fixes what it names, and re-runs, so the pass is verifiable by a tool
 rather than judged by eye.
 
-Session 4 scope — open at Kendrick's call. The guardrail phase is complete
-except for the two handed-off documentation items, so the next thing is either
-the first vertical-slice code (the decode boundary at `io/video_read.py`, which
-ADR-018 now licenses and which the scrub benchmark is waiting to measure
-through) or clearing the open questions below.
+Session 4 — the voice checker has landed as `tools/doc_voice.py` with a
+`nox -s doc_voice` session (report by default, `--gate` for later CI wiring).
+Two defects were fixed on receipt: it crashed printing its own report on a
+cp1252 Windows console, and it failed `ruff format --check`. The corpus rewrite
+is still in flight, so the docs are unrewritten: 971 findings across the tree,
+542 in the main body and 429 in ADRs. [ASSUMPTION] The `runtime` check fires on
+policy prose that merely uses a word from its vocabulary — the flag-and-continue
+list in `00-agent-orientation.md` is one — so the count overstates the rewrite's
+real surface. Worth a look once the rewrite settles the true number.
+
+The session-shape and stopping-point rules from `SIEVE-HANDOFF.md` are now
+restated in `docs/06-ops/00-agent-orientation.md` rather than living only in the
+handoff. [INTENT] Kendrick's ask: a session declares its checkpoint goal at the
+start and knows where it halts without reading the handoff, so the two-file
+read-set stays sufficient.
+
+Session 4 checkpoint — the decode boundary exists and the benchmark measures
+through it. Done: `io/video_read.py`, its 16-test contract suite, the
+`test_decode_seek` refactor onto it, `test_gui` notified by `checks`, ADR-019
+and the `pyproject.toml` rule block, the orientation's session-shape and
+stopping-point sections, and the voice checker's two defects. `nox -s checks`
+green in seven seconds; `nox -s test_gui` skips with a reason.
+
+Session 5 — the video viewer, which is where the pre-pipeline loop starts
+having a feel. It is also the first `[STOP]` in `SIEVE-HANDOFF.md`: the loop
+running end to end wants a screen recording before anything moves past it. The
+things this session deferred land there rather than earlier, because they are
+tuned against the widget they feed: the keyframe index, the ring buffer, eager
+head-decode on open, and the decoder thread. `DECODE_SHARE = 0.6` becomes
+replaceable with a measured repaint cost at the same point. The first
+`qt`-marked test also arrives, which is what turns `test_gui` from a logged
+skip into a real leg of the gate — expect the gate's wall time to change that
+day.
 
 ## Phase 1 plan — guardrails
 
@@ -232,10 +307,12 @@ verifiable on its own.
       cross-layer reach, suppression census, brittle-test heuristics). A report
       to read, not a gate to pass. Stdlib-only and deliberately outside `src/`,
       so extending it costs nothing and ships nothing.
-- [ ] Documentation voice checker — flags imperative constructions and
+- [x] Documentation voice checker — flags imperative constructions and
       absolutes ("always", "never", "must") in `docs/` and reports untagged
       claims about runtime behaviour. A report first; a gate once the corpus
-      passes it. **Handed off** — see `docs/06-ops/handoff-voice-checker.md`.
+      passes it. `tools/doc_voice.py`, `nox -s doc_voice`, stdlib-only, with
+      `--gate` as the wired enforcement point on the same pattern as
+      `SIEVE_BENCH_ENFORCE`. Brief at `docs/06-ops/handoff-voice-checker.md`.
 - [ ] Voice rewrite of the existing corpus against that checker: every ADR, the
       architecture doc, the vision and requirements prose. Sequenced after the
       checker so the pass is verifiable. **Handed off** — see
@@ -266,6 +343,14 @@ first; `nox.options.default_venv_backend` falls back to `virtualenv` when it
 cannot. Sessions build their own environments under `.nox/` and reuse them, so
 a dependency *removed* from `pyproject.toml` survives in a reused session env
 until `.nox/` is cleared. CI creates them fresh and does not have this problem.
+
+[ASSUMPTION] On Windows, the first `nox -s checks` after a source edit fails
+reproducibly with `failed to remove directory ...antscihub_sieve-0.1.0.dev0.dist-info:
+Access is denied (os error 5)`, and the immediate retry succeeds. It looks like
+a scanner or an indexer holding the freshly built `dist-info` while uv tries to
+replace it, which would make it a local-environment property rather than a repo
+one — CI creates environments fresh and has not shown it. Recorded because
+retrying looks like flakiness in the gate and is not.
 
 [STABLE] napari registers a pytest plugin, so it loads into any test session in
 an environment where it is installed and emits Pydantic deprecation warnings

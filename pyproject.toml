@@ -34,6 +34,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# ADR-019 states the rule that generates this whole section. A package belongs
+# in `dependencies` above when a CLI or HPC run with no display and no GPU
+# would fail without it; everything else is an extra named for the capability
+# it adds.
+#
+# The rule is derived rather than invented. ARCHITECTURE.md 3 calls the layer
+# model "the mechanism that makes CLI and HPC parity real rather than
+# aspirational", and ADR-016 requires the controller to import and run without
+# CuPy or CUDA. Both are claims about what a process can do with a package
+# absent, and installing that package by default does not falsify the claim --
+# it stops anyone from observing it. `nox -s checks` builds from `dev` alone
+# for exactly that reason.
+#
+# The forcing case is pytest-qt, in `dev-gui` below and deliberately not in
+# `dev`. See ADR-019 before moving anything between these lists.
+
 # ADR-001. PyQt6 is what the environment currently carries; the ADR selects
 # PySide6 for licensing and requires the napari embedding to be revalidated
 # against it before first production use. See NOTES.md.

@@ -11,10 +11,14 @@ What is measured is a seek-and-decode on the pinned ADR-018 path, not a scrub.
 The 50 ms budget covers seek, decode, color conversion, and widget repaint;
 this covers the first two. `DECODE_SHARE` is where that gap is written down.
 
-[STALE WHEN] `io/video_read.py` lands. This reaches `cv2` directly because the
-decode boundary ADR-018 specifies has no module yet, and a benchmark against a
-module that does not exist cannot run. When it exists, this measures through it
--- otherwise the harness measures a path the product does not take.
+[STABLE] The measurement runs through `sieve.io.video_read`, the decode
+boundary ADR-018 specifies, rather than through `cv2` directly. A benchmark
+that reaches past the boundary measures a path the product does not take, and
+would stay green through a regression introduced in the boundary itself.
+
+[STALE WHEN] The video viewer lands and the scrub becomes assemblable end to
+end. At that point `DECODE_SHARE` is replaceable with a measurement, and this
+becomes the decode component of a real scrub number rather than a proxy for it.
 """
 
 from __future__ import annotations
@@ -24,12 +28,12 @@ import random
 from itertools import cycle
 from typing import Any
 
-import cv2
 import numpy as np
 import pytest
 
 from sieve.bench.budgets import Verdict, budget, verdict_for
 from sieve.bench.corpus import Clip
+from sieve.io.video_read import VideoOpenError, VideoReader
 
 pytestmark = pytest.mark.slow
 
@@ -55,53 +59,42 @@ ENFORCE = os.environ.get("SIEVE_BENCH_ENFORCE", "").strip().lower() in {"1", "tr
 FRAME_NDIM = 3
 
 
-def _frame_count(capture: cv2.VideoCapture) -> int:
-    count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-    if count <= 0:
-        pytest.skip(
-            "OpenCV reports no frame count for this clip; index-based seeking is undefined."
-        )
-    return count
-
-
 def test_scrub_seek_decode_latency(
     benchmark: Any,
     scrub_clip: Clip,
     bench_environment: dict[str, Any],
 ) -> None:
     entry = budget(BUDGET_KEY)
-    capture = cv2.VideoCapture(str(scrub_clip.path))
-    if not capture.isOpened():
-        pytest.skip(f"OpenCV could not open {scrub_clip.path}")
     try:
-        total = _frame_count(capture)
+        reader = VideoReader(scrub_clip.path)
+    except VideoOpenError as exc:
+        pytest.skip(str(exc))
+    try:
+        total = reader.info.frame_count
+        if total is None:
+            pytest.skip(
+                f"{scrub_clip.label} reports no frame count, so index-based seeking "
+                f"is undefined and there is no scrub to measure."
+            )
         rng = random.Random(f"sieve-scrub-seek:{scrub_clip.label}")
         targets = cycle(rng.sample(range(total), min(SEEK_SAMPLE, total)))
 
-        def seek_and_decode() -> np.ndarray:
-            index = next(targets)
-            if not capture.set(cv2.CAP_PROP_POS_FRAMES, index):
-                raise RuntimeError(f"OpenCV rejected a seek to frame {index}")
-            ok, frame = capture.read()
-            if not ok:
-                raise RuntimeError(f"OpenCV seeked to frame {index} and decoded nothing")
-            return frame
-
-        # The capture handle is opened once and reused, because a scrub happens
-        # on a file the user already has open. Timing the open here would fold
-        # the `file-open` budget into the `scrub-seek` one.
-        frame = benchmark(seek_and_decode)
+        # The reader is opened once and reused, because a scrub happens on a
+        # file the user already has open. Timing the open here would fold the
+        # `file-open` budget into the `scrub-seek` one.
+        frame = benchmark(lambda: reader.read(next(targets)))
     finally:
-        capture.release()
+        reader.close()
 
     # What this test asserts, as opposed to reports. Both are machine-
     # independent: a decode that returns the wrong shape or the wrong dtype is
-    # broken on any hardware, and ADR-018 pins uint8 BGR as the delivered
-    # representation whatever the source depth.
+    # broken on any hardware. The boundary's own contract is covered in
+    # `tests/io/test_video_read.py`; kept here as a sanity check that the timed
+    # region produced a frame at all, since a benchmark of a function that
+    # returns nothing still reports a very good number.
     assert frame.ndim == FRAME_NDIM, f"Expected an HxWx3 frame; got shape {frame.shape}"
     assert frame.dtype == np.uint8, (
-        f"ADR-018 pins uint8 BGR delivery; OpenCV returned {frame.dtype}. "
-        "A change here changes the decode boundary's declared dtype contract."
+        f"ADR-018 pins uint8 BGR delivery; the boundary returned {frame.dtype}."
     )
 
     measured_ms = benchmark.stats["median"] * 1000.0

@@ -13,23 +13,23 @@ contract's required declarations change. Sources win on disagreement.
 ## The commitment everything else serves
 
 [STABLE] The tuning loop is the product. A layer that adds measurable latency
-to the interactive loop is a regression regardless of how clean it is. Two
-regimes, both load-bearing: pre-pipeline (open → scrub → replicate cut) must
-feel like a video editor; in-pipeline (slider → graph) must feel like direct
-manipulation.
+to the interactive loop is a regression regardless of how clean it is. The two
+load-bearing regimes are pre-pipeline (open → scrub → replicate cut), which
+feels like a video editor, and in-pipeline (slider → graph), which feels like
+direct manipulation.
 
 [STABLE] The latency budgets in `ARCHITECTURE.md` §1 are the operational
 definition of that commitment, not aspirations. They are per-interaction wall
 times on a mid-range laptop with no discrete GPU required for the pre-pipeline
-regime. A PR regressing any budget past its stated margin needs explicit
-justification. The table is short and load-bearing enough to read in full at
-its source rather than be paraphrased here — paraphrasing invites drift in the
-one place drift is most expensive.
+regime. A PR that regresses a budget past its stated margin is a change that
+needs explicit justification. The table is short and load-bearing enough to
+read in full at its source rather than be paraphrased here — paraphrasing
+invites drift in the one place drift is most expensive.
 
 ## Layer model
 
 [STABLE] Dependencies run one way. Each layer knows the layers below it and
-never those above:
+does not know those above:
 
 ```
 gui/  cli/  review/     ← user-facing
@@ -41,12 +41,12 @@ core/                   ← pure logic (filters, contract, dtypes)
 ```
 
 [STABLE] The enforced consequences: `core/` imports nothing above it and no
-Qt, Zarr, or subprocess. `pipeline/` never imports Qt. `bench/` never imports
-Qt, so headless and CLI runs can observe without a GUI toolkit — the QObject
-adapter over the metric bus lives in `gui/`. `gui/` reaches `workers/` only
-through `pipeline/`. This is the mechanism that makes CLI and HPC parity real
-rather than aspirational — a violation is not a style problem, it is the loss
-of a product guarantee.
+Qt, Zarr, or subprocess. `pipeline/` does not import Qt. `bench/` does not
+import Qt, so headless and CLI runs can observe without a GUI toolkit — the
+QObject adapter over the metric bus lives in `gui/`. `gui/` reaches `workers/`
+only through `pipeline/`. This is the mechanism that makes CLI and HPC parity
+real rather than aspirational; a violation is a product regression rather than
+a style problem.
 
 [INTENT] The rule is encoded as a machine-checked contract rather than
 enforced by review. See `NOTES.md` for its current home.
@@ -58,24 +58,26 @@ which responsibility, one responsibility per file. Placement questions are
 answered there rather than by precedent from neighbouring code. Two invariants
 worth carrying without reading it:
 
-- A filter is `<name>.py` plus `<name>.md` guidance sitting beside it in a
-  category directory under `core/filters/`. The pair is the extension unit.
-- Each load-bearing contract has exactly one owning module — the Zarr store,
-  the results table, the cache, the tracer. Callers do not construct these
-  independently; they go through the owner.
+- [STABLE] A filter is `<name>.py` plus `<name>.md` guidance sitting beside it
+   in a category directory under `core/filters/`. The pair is the extension
+   unit.
+- [STABLE] Each load-bearing contract has exactly one owning module — the Zarr
+   backing layer, the results table, the cache, the tracer. Callers reach these
+   through the owner rather than constructing them independently.
 
 ## The four commitments
 
-[STABLE] Stated in `ARCHITECTURE.md` §1 and never violated:
+[STABLE] The statements in `ARCHITECTURE.md` §1 are the commitments this
+summary carries forward:
 
-1. **The filesystem is truth — at rest.** Materialized artifacts are legible
-   by navigation without SIEVE running. During interactive tuning truth lives
-   in the decoder and in-memory state; the contract binds at compaction and
-   terminal output, not on every slider drag.
-2. **The pipeline is a data structure.** GUI, CLI, and HPC consume the same
-   serialized artifact. No GUI-only state affects execution. Pre-pipeline
-   interaction state (scrub position, zoom, layout) is UI state and stays out
-   of the artifact.
+1. [STABLE] The filesystem is truth — at rest. Materialized artifacts remain
+   legible by navigation without SIEVE running. During interactive tuning truth
+   lives in the decoder and in-memory state; the contract binds at compaction
+   and terminal output, not on slider drags.
+2. [STABLE] The pipeline is a data structure. GUI, CLI, and HPC consume the
+   same serialized artifact. GUI-only state stays out of execution.
+   Pre-pipeline interaction state (scrub position, zoom, layout) is UI state
+   and stays out of the artifact.
 3. **The filter is the extension unit.** One class plus one markdown file.
    GUI, CLI, cache, and HPC handoff pick it up with no other change.
 4. **Nothing materializes without reason.** In-memory while editing;
@@ -99,7 +101,7 @@ for display stays in the main process (with a decoder thread where
 appropriate); the subprocess boundary exists for filter execution.
 
 [STABLE] Treating crop and replicate selection as pipeline nodes is
-architecturally tempting for uniformity and is rejected: it routes every scrub
+architecturally tempting for uniformity and is rejected: it routes each scrub
 through DAG construction, cache-key derivation, and IPC. Replicates become
 *sources*, not filters — the crop is intrinsic to the source, and the DAG
 contains no crop node for it.
@@ -107,7 +109,7 @@ contains no crop node for it.
 [STABLE] Replicates materialize in the background on commit rather than
 staying virtual. Cropping a small ROI out of an HD decode is where the large
 speedup lives, and keeping the crop virtual pays the full decode cost again on
-every later scrub, filter add, and slider drag. The UI reports progress
+later scrubs, filter adds, and slider drags. The UI reports progress
 non-modally and the user is not blocked; the executor swaps its source pointer
 when the materialized version is ready. Materialized replicates are source
 artifacts owned by the project, keyed to the replicate record — they are not
@@ -123,14 +125,14 @@ full before writing a filter. The shape: a Pydantic model plus one or more
 backend implementations, registered by decorator, colocated with a markdown
 guidance file whose existence the registry validates.
 
-[STABLE] Every filter declares — and registration fails loudly at import time
-if any declaration is missing: identity (`name`, semver `version`), input and
+[STABLE] Each filter declares — and registration fails loudly at import time
+if a declaration is missing: identity (`name`, semver `version`), input and
 output stream specs, output topology, warmup frames, streaming capability,
-determinism, storage dtype policy, backend set, a cost estimate that must not
-run the filter, and the process implementation. Parameters are Pydantic fields
-and are the *sole* declaration — GUI widgets, CLI flags, YAML schema, cache
-key contribution, and cost model all derive from them, and a parallel
-definition anywhere is a contract violation.
+determinism, storage dtype policy, backend set, a cost estimate that is
+computed without running the filter, and the process implementation.
+Parameters are Pydantic fields and are the *sole* declaration — GUI widgets,
+CLI flags, YAML schema, cache key contribution, and cost model derive from
+them, and a parallel definition anywhere is a contract violation.
 
 [STABLE] Discovery is by explicit import in `core/filters/__init__.py`, not
 filesystem scanning. Registration failure is intentional and loud: a broken
@@ -140,7 +142,7 @@ filter does not silently disappear from the registry.
 Warmup is a filter property; composing it along temporal paths is the
 executor's job. Filters read calibration from `ctx.replicate` rather than
 storing it as parameters, which is what keeps temporal frequencies in Hz and
-spatial scales in mm without every filter reinventing calibration.
+spatial scales in mm without filters reinventing calibration.
 
 [STABLE] Filters do not select their own backend, read from disk, spawn
 threads, or mutate global state through the context.
@@ -150,21 +152,21 @@ threads, or mutate global state through the context.
 [STABLE] Guidance is data: markdown beside the filter, rendered by one widget.
 Refining suggestions is a documentation change, not a code change.
 
-[STABLE] SIEVE reports delta characterization, never a preservation score. For
-a candidate swap it reports observable differences against the user's current
-pipeline — detection count, temporal lag, spatial footprint, cost — and never
-claims the alternative is closer to truth. Where the user supplies labeled
-intervals, supervised metrics use them; absent labels, SIEVE does not invent
-ground truth. More smoothing is a different point in a (fidelity × latency ×
-economy) space, not a wrong answer, and which point is correct is a domain
-judgment SIEVE is not entitled to make.
+[STABLE] SIEVE reports delta characterization rather than a preservation
+score. For a candidate swap it reports observable differences against the
+user's current pipeline — detection count, temporal lag, spatial footprint,
+cost — and does not claim the alternative is closer to truth. Where the user
+supplies labeled intervals, supervised metrics use them; absent labels, SIEVE
+does not invent ground truth. More smoothing is a different point in a
+(fidelity × latency × economy) space, not a wrong answer, and which point is
+correct is a domain judgment SIEVE is not entitled to make.
 
 ## UI posture
 
 [STABLE] The six-region layout in §15 is the maximum GUI, not the default. The
 tool opens into video, overlay toggles, a curated toolbar, and graphs.
 Operations list, operation detail, guidance, and benchmark HUD are dockable and
-closed on first launch; a user who never opens them still has a working tool.
+closed on first launch; a user who ignores them can still use the tool.
 
 [STABLE] Adding a filter to the codebase does not add it to the toolbar.
 Toolbar contents are a curated project-level list drawn from filters that

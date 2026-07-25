@@ -9,29 +9,29 @@ code-version hash that contributes to cache keys, which means the decoder is a
 pinned identity rather than an implementation detail. §14 describes
 `io/video_read.py` as "dtype-preserving decode". §5.5 makes index-based
 scrubbing — nearest keyframe plus a short forward decode — the mechanism behind
-the sub-50 ms scrub budget. Those three statements were written before any
-decoder had been measured.
+the sub-50 ms scrub budget. [STABLE] Those three statements were written before
+a decoder had been measured.
 
-The measurement now exists. `src/sieve/bench/decoder_benchmark.py` compared
-PyAV, decord, imageio-ffmpeg, and OpenCV VideoCapture over H.264 8-bit, H.264
-10-bit, H.265, VP9, and ProRes 422 HQ, with results at
-`tests/results/decoder-benchmark-final/`. It applied a hard gate: any failed or
-pixel-mismatched random seek on any codec disqualifies a backend for preview
+[STABLE] The measurement now exists. `src/sieve/bench/decoder_benchmark.py`
+compared PyAV, decord, imageio-ffmpeg, and OpenCV VideoCapture over H.264
+8-bit, H.264 10-bit, H.265, VP9, and ProRes 422 HQ, with results at
+`tests/results/decoder-benchmark-final/`. It applied a hard gate: a failed or
+pixel-mismatched random seek on a codec disqualifies a backend for preview
 extraction, on the reasoning that a scrub landing on the wrong frame is a
-correctness failure the user cannot see and cannot work around.
+correctness failure the user does not see and does not work around.
 
 [STABLE] The corpus separates the candidates cleanly, and not along the axis
 the architecture assumed. PyAV, decord, and imageio-ffmpeg each failed seek
 accuracy on H.265 — roughly one request in ten landed on a mismatched frame.
-OpenCV VideoCapture was the only backend with no mismatches on any codec.
+OpenCV VideoCapture was the only backend with no mismatches across the corpus.
 OpenCV is also the only candidate that does not preserve source bit depth: it
 delivers uint8 BGR, so 10-bit H.264 and ProRes 422 HQ lose depth at the decode
-boundary. Every backend that preserves depth fails the seek gate, and the
-backend that passes the seek gate discards depth.
+boundary. Backends that preserve depth fail the seek gate, and the backend
+that passes the seek gate discards depth.
 
-No single decoder therefore satisfies both halves of what the architecture
-describes. The two properties are not equally load-bearing, and the decision
-turns on which one the product's stated value actually rests on.
+[STABLE] No single decoder therefore satisfies both halves of what the
+architecture describes. The two properties are not equally load-bearing, and
+the decision turns on which one the product's stated value actually rests on.
 
 ## Decision
 

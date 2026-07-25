@@ -1,5 +1,7 @@
 # Handoff: build the documentation voice checker
 
+DONE: 2026.07.25
+
 [INTENT] A self-contained brief for an agent that has not read this repository.
 Everything needed is below; do not go read the `docs/` tree to understand the
 task. The standard is already decided — this is implementation, not design.

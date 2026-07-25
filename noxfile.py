@@ -61,6 +61,23 @@ def _has_filters() -> bool:
     return any(p.name != "__init__.py" for p in filters.rglob("*.py"))
 
 
+def _has_qt_tests() -> bool:
+    """Whether any test carries the ``qt`` marker.
+
+    pytest exits 5 when it collects nothing, so a ``test_gui`` wired into
+    ``checks`` before a single Qt test exists would fail the gate for having
+    nothing to do. Read from the source text rather than by collecting, because
+    collecting requires the Qt install this check exists to avoid paying for.
+    """
+    tests = ROOT / "tests"
+    if not tests.is_dir():
+        return False
+    return any(
+        "pytest.mark.qt" in path.read_text(encoding="utf-8", errors="ignore")
+        for path in tests.rglob("test_*.py")
+    )
+
+
 # --------------------------------------------------------------------------
 # Gates. Non-mutating: they report and fail, they never rewrite the checkout.
 # --------------------------------------------------------------------------
@@ -126,14 +143,23 @@ def test_gui(session: nox.Session) -> None:
 
     Separate from `test` because pytest-qt cannot be installed into the
     headless environment: it errors at collection when no Qt binding is
-    importable. GL-dependent renderer tests are marked `gl` and are not run
-    here -- offscreen is not a GL-capable platform.
+    importable (ADR-019). GL-dependent renderer tests are marked `gl` and are
+    not run here -- offscreen is not a GL-capable platform.
 
-    [OPEN QUESTION] This session is not part of `checks`, so the default gate
-    has no GUI coverage. That costs nothing while gui/ is empty. Whether it
-    joins `checks` or stays a separately-invoked CI job is a decision due at
-    the first GUI commit -- see NOTES.md.
+    [STABLE] `checks` notifies this session rather than calling its body.
+    Kendrick's call that GUI coverage belongs in the default gate, implemented
+    so that the two properties do not fight: a notified session builds its own
+    `dev-gui` environment, which leaves the `checks` environment installed from
+    `dev` alone and therefore still able to prove the headless guarantee that
+    ADR-019 and `tests/test_smoke.py` rest on. Folding `dev-gui` into `checks`
+    would have made every gate run install Qt and retired that proof.
     """
+    if not _has_qt_tests():
+        session.log(
+            "test_gui: no test carries the `qt` marker yet, so there is nothing to run. "
+            "This session becomes real with the first GUI test."
+        )
+        return
     install_project(session, "dev-gui")
     session.run("pytest", "-m", "qt and not gl", *session.posargs, env=OFFSCREEN_ENV)
 
@@ -267,18 +293,40 @@ def code_health(session: nox.Session) -> None:
     session.run("python", str(ROOT / "tools" / "code_health.py"), *session.posargs)
 
 
+@nox.session(venv_backend="none")
+def doc_voice(session: nox.Session) -> None:
+    """Report markdown voice violations. Never a gate by default.
+
+    The corpus is not clean yet, so wiring this into `checks` would make the
+    composed gate red on arrival. The `--gate` switch exists for local use and
+    for later CI wiring when the report is quiet enough to become a gate.
+
+    No virtualenv: it is stdlib-only by design, so it runs against whatever
+    interpreter invoked Nox rather than paying an install to analyze text.
+    """
+    session.run("python", str(ROOT / "tools" / "doc_voice.py"), *session.posargs)
+
+
 @nox.session
 def checks(session: nox.Session) -> None:
     """The composed, non-mutating quality gate (ADR-009).
 
-    Runs in one environment rather than notifying the individual sessions, so
-    the gate is one install and the failure output stays in one place.
+    Runs the headless gates in one environment rather than notifying the
+    individual sessions, so the gate is one install and the failure output
+    stays in one place.
+
+    [STABLE] `test_gui` is the exception and is notified rather than inlined.
+    It needs the `dev-gui` extra, and installing that here would put a Qt
+    binding into the environment that `_test` uses to demonstrate the headless
+    guarantee (ADR-019). A notified session gets its own environment, so the
+    gate covers the GUI without the coverage costing the property.
     """
     install_project(session)
     _lint(session)
     _typecheck(session)
     _layers(session)
     _test(session)
+    session.notify("test_gui")
     for name in ("determinism_check", "build_docs"):
         session.log(f"{name}: see its own session; skipped until the first filter exists.")
 

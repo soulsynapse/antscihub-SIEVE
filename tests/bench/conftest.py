@@ -1,24 +1,19 @@
 """Fixtures for the latency-budget harness.
 
-[INTENT] The corpus these benchmarks read is generated, not committed --
-`.gitignore` excludes `tests/fixtures/decoder-corpus/`, because five encodes of
-a synthetic source are ninety megabytes that regenerate deterministically. A
-fresh checkout therefore has no corpus, and these fixtures skip with the
-command that fixes it rather than failing on a missing path. A benchmark
-session that cannot run is not the same as a benchmark session that failed.
+The `corpus` fixture these build on lives in `tests/conftest.py`, because
+`tests/io/` reads it too. What stays here is what only a benchmark needs:
+machine metadata, and the choice of which clip a latency number is measured
+against.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from sieve.bench.corpus import REGENERATE_COMMAND, Clip, read_manifest
+from sieve.bench.corpus import REGENERATE_COMMAND, Clip
 from sieve.bench.environment import capture
-
-CORPUS_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "decoder-corpus"
 
 
 @pytest.fixture(scope="session")
@@ -31,14 +26,6 @@ def bench_environment() -> dict[str, Any]:
     varies between the machines a result comes from.
     """
     return capture()
-
-
-@pytest.fixture(scope="session")
-def corpus() -> list[Clip]:
-    try:
-        return read_manifest(CORPUS_DIR)
-    except FileNotFoundError as exc:
-        pytest.skip(str(exc))
 
 
 @pytest.fixture(scope="session")

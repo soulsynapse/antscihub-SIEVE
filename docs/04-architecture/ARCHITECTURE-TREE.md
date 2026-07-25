@@ -30,6 +30,17 @@ This is the navigatable decisions made for the architecture.
     * [Composed local and CI quality gates](../05-adr/ADR-009-use-nox-for-task-orchestration.md)
     * [Conditional CUDA and GL sessions](../05-adr/ADR-009-use-nox-for-task-orchestration.md)
 
+* Packaging and environments
+    * [uv and Hatchling packaging](../05-adr/ADR-012-use-uv-and-hatchling-for-packaging.md)
+    * [pyproject.toml as the sole dependency declaration](../05-adr/ADR-012-use-uv-and-hatchling-for-packaging.md)
+    * [Qt and the GPU backend as optional extras](../05-adr/ADR-019-split-qt-and-gpu-into-optional-extras.md)
+    * [pytest-qt confined to the dev-gui extra](../05-adr/ADR-019-split-qt-and-gpu-into-optional-extras.md)
+
+* Decode
+    * [OpenCV VideoCapture as the pinned v1 decoder](../05-adr/ADR-018-pin-opencv-videocapture-as-the-v1-decode-path.md)
+    * [Seek accuracy chosen over source bit-depth preservation](../05-adr/ADR-018-pin-opencv-videocapture-as-the-v1-decode-path.md)
+    * [Decoder identity inside the code-version hash](../05-adr/ADR-018-pin-opencv-videocapture-as-the-v1-decode-path.md)
+
 * Filter and pipeline contracts
     * [Pydantic v2 filter and pipeline models](../05-adr/ADR-004-use-pydantic-v2-for-the-filter-contract.md)
     * [pydantic-settings application configuration](../05-adr/ADR-004-use-pydantic-v2-for-the-filter-contract.md)

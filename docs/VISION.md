@@ -1,3 +1,7 @@
+# SIEVE vision
+
+## Overview
+
 At it's core, SIEVE is about applying filters. The absolute bare-bones, pre-optimization version is like this:
 
 1. You have a video file in a folder, and transformations live in subsequent folders.

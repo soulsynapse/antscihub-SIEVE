@@ -14,6 +14,10 @@ from antscihub_sieve.application.active_asset import ActiveAsset, ActiveAssetCon
 from antscihub_sieve.errors import SieveError
 from antscihub_sieve.gui.isolate_tab import IsolateTab
 from antscihub_sieve.gui.replicate_workspace import ReplicateWorkspace
+from antscihub_sieve.gui.theme import (
+    apply_menu_bar_theme,
+    apply_recent_list_theme,
+)
 
 
 def default_settings() -> QSettings:
@@ -53,23 +57,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self._build_workflow_shortcuts()
 
-        self.menuBar().setStyleSheet("""
-            QMenuBar { padding: 3px 6px; spacing: 3px; }
-            QMenuBar::item { padding: 5px 10px; border-radius: 4px; }
-            QMenuBar::item:selected { background: palette(midlight); }
-            QMenu { padding: 4px; }
-            QMenu::item { padding: 5px 28px 5px 10px; border-radius: 4px; }
-            QMenu::item:selected {
-                background: palette(highlight);
-                color: palette(highlighted-text);
-            }
-            QMenu::item:disabled { color: palette(mid); }
-            QMenu::separator {
-                height: 1px;
-                background: palette(mid);
-                margin: 4px 7px;
-            }
-        """)
+        apply_menu_bar_theme(self.menuBar())
 
         self.file_menu = self.menuBar().addMenu("&File")
         self.open_action = QAction("&Open…", self)
@@ -90,14 +78,7 @@ class MainWindow(QMainWindow):
         self.recent_list.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.recent_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.recent_list.setMinimumWidth(480)
-        self.recent_list.setStyleSheet("""
-            QListWidget { border: 0; padding: 1px; }
-            QListWidget::item { padding: 3px 8px; border-radius: 4px; }
-            QListWidget::item:selected {
-                background: palette(highlight);
-                color: palette(highlighted-text);
-            }
-        """)
+        apply_recent_list_theme(self.recent_list)
         self.recent_list.itemClicked.connect(self._recent_item_clicked)
         self.recent_widget_action = QWidgetAction(self.recent_menu)
         self.recent_widget_action.setDefaultWidget(self.recent_list)

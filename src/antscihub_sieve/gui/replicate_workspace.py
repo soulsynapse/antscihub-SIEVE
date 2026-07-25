@@ -19,6 +19,10 @@ from antscihub_sieve.application.derivation import DerivationService
 from antscihub_sieve.application.layouts import LayoutService
 from antscihub_sieve.errors import SieveError
 from antscihub_sieve.gui.frame_view import FrameView
+from antscihub_sieve.gui.theme import (
+    apply_extraction_progress_theme,
+    apply_primary_action_theme,
+)
 from antscihub_sieve.media.session import MediaSession
 
 
@@ -176,8 +180,8 @@ class ReplicateWorkspace(QWidget):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         self.splitter = QSplitter(); self.view = FrameView(); self.inspector = QWidget(); inspector_layout = QVBoxLayout(self.inspector); inspector_layout.setContentsMargins(6, 0, 0, 0)
-        self.busy_overlay = QFrame(); self.busy_overlay.setObjectName("extractionProgress"); self.busy_overlay.setStyleSheet("#extractionProgress { background: #eff6ff; border: 1px solid #60a5fa; border-radius: 7px; }")
-        progress_layout = QVBoxLayout(self.busy_overlay); progress_layout.setContentsMargins(12, 9, 12, 9); progress_layout.setSpacing(5); progress_heading = QHBoxLayout(); title = QLabel("Creating child replicates"); title.setStyleSheet("font-weight: 600;"); self.cancel_button = QPushButton("Cancel"); progress_heading.addWidget(title); progress_heading.addStretch(); progress_heading.addWidget(self.cancel_button); progress_layout.addLayout(progress_heading)
+        self.busy_overlay = QFrame(); self.busy_overlay.setObjectName("extractionProgress")
+        progress_layout = QVBoxLayout(self.busy_overlay); progress_layout.setContentsMargins(12, 9, 12, 9); progress_layout.setSpacing(5); progress_heading = QHBoxLayout(); title = QLabel("Creating child replicates"); apply_extraction_progress_theme(self.busy_overlay, title); self.cancel_button = QPushButton("Cancel"); progress_heading.addWidget(title); progress_heading.addStretch(); progress_heading.addWidget(self.cancel_button); progress_layout.addLayout(progress_heading)
         self.progress_detail = QLabel("Preparing encoding plan…"); self.progress_detail.setWordWrap(True); progress_layout.addWidget(self.progress_detail); self.progress = QProgressBar(); progress_layout.addWidget(self.progress); self.busy_overlay.hide(); inspector_layout.addWidget(self.busy_overlay)
         self.replicate_table = QTableWidget(0, 4); self.replicate_table.setHorizontalHeaderLabels(["Replicate", "State", "Children", ""])
         self.replicate_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.replicate_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection); self.replicate_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers); self.replicate_table.verticalHeader().hide(); self.replicate_table.setShowGrid(False); self.replicate_table.setAlternatingRowColors(True)
@@ -197,7 +201,7 @@ class ReplicateWorkspace(QWidget):
         transport.addWidget(self.play_button); transport.addWidget(self.slider, 1); transport.addWidget(self.frame_label); root.addLayout(transport)
         tools = QHBoxLayout(); self.draw_check = QCheckBox("Draw boxes"); self.draw_check.setChecked(True); self.stamp_check = QCheckBox("Fixed-size stamp"); self.stamp_check.setChecked(True); self.view.stamp_enabled = True; self.import_button = QPushButton("Import template…"); self.export_button = QPushButton("Export template…"); self.derive_button = QPushButton("Create child replicates…")
         for widget in (self.draw_check, self.stamp_check, self.import_button, self.export_button): tools.addWidget(widget)
-        tools.addStretch(); self.derive_button.setMinimumSize(250, 46); self.derive_button.setCursor(Qt.CursorShape.PointingHandCursor); self.derive_button.setStyleSheet("QPushButton { background: #2563eb; color: white; border: 1px solid #1d4ed8; border-radius: 6px; font-size: 15px; font-weight: 600; padding: 8px 18px; } QPushButton:hover { background: #1d4ed8; } QPushButton:pressed { background: #1e40af; } QPushButton:disabled { background: #94a3b8; border-color: #94a3b8; }"); tools.addWidget(self.derive_button); root.addLayout(tools)
+        tools.addStretch(); self.derive_button.setMinimumSize(250, 46); self.derive_button.setCursor(Qt.CursorShape.PointingHandCursor); apply_primary_action_theme(self.derive_button); tools.addWidget(self.derive_button); root.addLayout(tools)
         status = QHBoxLayout(); self.status_label = QLabel("Ready"); status.addWidget(self.status_label, 1); root.addLayout(status)
         self.play_timer = QTimer(self); self.scrub_timer = QTimer(self); self.scrub_timer.setSingleShot(True); self.scrub_timer.setInterval(80)
         self.delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self); self.backspace_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Backspace), self)

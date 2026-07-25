@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QMouseEvent, QPainter, QPen
+from PyQt6.QtGui import QMouseEvent, QPainter, QPen
 from PyQt6.QtWidgets import QSizePolicy, QWidget
+
+from antscihub_sieve.gui.theme import (
+    TIMELINE_CURSOR,
+    TIMELINE_EMPTY_TEXT,
+    TIMELINE_TRACK_BACKGROUND,
+    TIMELINE_TRACK_BORDER,
+    TIMELINE_WINDOW_BACKGROUND,
+    TIMELINE_WINDOW_BORDER,
+)
 
 
 class IsolateTimeline(QWidget):
@@ -63,20 +72,20 @@ class IsolateTimeline(QWidget):
         painter = QPainter(self)
         painter.fillRect(self.rect(), self.palette().window())
         track = self.content_rect()
-        painter.setPen(QPen(QColor("#5b6573"), 1))
-        painter.setBrush(QColor("#20252d"))
+        painter.setPen(QPen(TIMELINE_TRACK_BORDER, 1))
+        painter.setBrush(TIMELINE_TRACK_BACKGROUND)
         painter.drawRoundedRect(track, 4, 4)
         if self.frame_count <= 0:
-            painter.setPen(QColor("#8993a1"))
+            painter.setPen(TIMELINE_EMPTY_TEXT)
             painter.drawText(
                 track, Qt.AlignmentFlag.AlignCenter, "No asset open"
             )
             return
-        painter.setPen(QPen(QColor("#60a5fa"), 1))
-        painter.setBrush(QColor("#2563eb"))
+        painter.setPen(QPen(TIMELINE_WINDOW_BORDER, 1))
+        painter.setBrush(TIMELINE_WINDOW_BACKGROUND)
         painter.drawRoundedRect(self.window_rect(), 3, 3)
         cursor_x = self.frame_to_x(self.current_frame)
-        painter.setPen(QPen(QColor("#fbbf24"), 2))
+        painter.setPen(QPen(TIMELINE_CURSOR, 2))
         painter.drawLine(
             int(cursor_x), int(track.top() - 6),
             int(cursor_x), int(track.bottom() + 6),

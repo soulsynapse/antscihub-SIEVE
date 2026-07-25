@@ -7,6 +7,12 @@ from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPen
 from PyQt6.QtWidgets import QApplication, QWidget
 
+from antscihub_sieve.gui.theme import (
+    DRAW_PREVIEW_OUTLINE,
+    MEDIA_BACKGROUND,
+    MEDIA_PLACEHOLDER_TEXT,
+)
+
 
 class FrameView(QWidget):
     region_created = pyqtSignal(list)
@@ -94,9 +100,9 @@ class FrameView(QWidget):
         return None
 
     def paintEvent(self, event) -> None:  # type: ignore[no-untyped-def]
-        painter = QPainter(self); painter.fillRect(self.rect(), QColor("#12151a"))
+        painter = QPainter(self); painter.fillRect(self.rect(), MEDIA_BACKGROUND)
         if self.image is None:
-            painter.setPen(QColor("#aab2bf")); painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Open source footage or an existing replicate."); return
+            painter.setPen(MEDIA_PLACEHOLDER_TEXT); painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Open source footage or an existing replicate."); return
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.drawImage(self._image_rect(), self.image, self._source_rect())
         if self.hide_overlays: return
@@ -108,7 +114,7 @@ class FrameView(QWidget):
             pen = QPen(QColor(region["color"]), 3 if region["region_id"] == self.selected_id else 2); painter.setPen(pen); painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(self._to_view_rect(box)); painter.drawText(self._to_view_rect(box).topLeft() + QPointF(4, 14), region["label"])
         if self._gesture and self._gesture["kind"] == "draw" and self._preview_box:
-            painter.setPen(QPen(QColor("#ffd24a"), 2)); painter.drawRect(self._to_view_rect(self._preview_box))
+            painter.setPen(QPen(DRAW_PREVIEW_OUTLINE, 2)); painter.drawRect(self._to_view_rect(self._preview_box))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         point = self._to_source(event.position())

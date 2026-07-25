@@ -3,9 +3,4 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
-.coverage
-dist/
-build/
-*.asset.json
-HANDOFF.md
-test_videos/
+videos-testing/

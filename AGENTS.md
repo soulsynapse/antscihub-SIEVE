@@ -1,9 +1,7 @@
-# Repository instructions
-
 ## Python environment
 
-This repository has its own virtual environment at `.venv`. Use its Python
-executable for validation and tests instead of the system or Anaconda Python.
+
+
 For PyQt GUI tests, also set `QT_QPA_PLATFORM=offscreen`.
 
 

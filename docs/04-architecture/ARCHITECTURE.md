@@ -285,7 +285,9 @@ Requirements:
   `CUBLAS_WORKSPACE_CONFIG` set when the user opts in. Off by default (slow);
   on for CI and reproducibility runs.
 - **Video decoder pinned.** The decode library and its version are part of
-  the code-version hash contributing to cache keys.
+  the code-version hash contributing to cache keys. Decode truncation is a
+  hard error by default; opt-out requires an explicit flag and is recorded in
+  the run's provenance.
 - **CI determinism test.** A canonical short clip runs a standard pipeline;
   outputs are byte-compared across runs and platforms (with documented
   tolerances for GPU float ops).
@@ -298,11 +300,13 @@ Requirements:
 Half the "GUI guides you" promise depends on being able to say something
 useful when the user considers swapping one filter for another. The naive
 framing — "does this alternative preserve signal?" — assumes a ground truth.
-SIEVE does not have one, and cannot: the user's threshold choice is the
-operative definition of signal. More smoothing with longer accumulation is
-not wrong-vs-right against a shorter-window alternative; it is a different
-point in a (signal-fidelity × latency × economy) space, and which point is
-correct is a domain judgment SIEVE is not entitled to make.
+SIEVE does not assume a universal ground truth. When the user supplies labeled
+intervals, positive or negative, the guidance layer uses them. Otherwise it
+does not invent labels or truth claims; it reports deltas only. More smoothing
+with longer accumulation is not wrong-vs-right against a shorter-window
+alternative; it is a different point in a (signal-fidelity × latency ×
+economy) space, and which point is correct is a domain judgment SIEVE is not
+entitled to make.
 
 The architecture therefore commits to delta characterization, not scoring:
 
@@ -313,13 +317,14 @@ The architecture therefore commits to delta characterization, not scoring:
 - The user's current pipeline is the reference only in the weak sense that it
   is what the alternative is being compared against. The guidance never claims
   the alternative is closer to truth.
-- Optional negative regions. If the user marks a region they know should not
-  fire, that region yields a real specificity number without requiring full
-  labeling. This is cheap to author and worth surfacing when available. It is
-  not required.
+- Optional labeled intervals. If the user marks positive intervals where the
+  signal should fire, or negative intervals where it should not, those labels
+  anchor the guidance metrics that depend on supervision. This is cheap to
+  author and worth surfacing when available. It is not required.
 
-This resolves the labeled-clip vs. baseline-proxy dichotomy: it is neither. It
-is characterize-the-delta and let the user judge. The results table schema
+This resolves the labeled-clip vs. baseline-proxy dichotomy: it is neither.
+It is labeled-interval-aware when supervision exists, and characterize-the-
+delta otherwise. The results table schema
 (`BENCHMARKING_VISION.md`) and guidance format (`GUIDANCE_FORMAT.md`) follow
 from this commitment.
 

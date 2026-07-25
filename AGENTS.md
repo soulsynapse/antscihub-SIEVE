@@ -11,4 +11,4 @@ When you make decisions off the docs, you should inform the user how that guided
 
 
 ## Commits
-When you make a significant change, author a commit using conventional commits protocol and 
+When you make a significant change, author a commit using conventional commits protocol and sync to the active branch.

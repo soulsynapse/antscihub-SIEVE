@@ -13,6 +13,25 @@ second.
 
 ## Resolved this session
 
+**The Qt binding is PySide6, in the environment and not only on paper.** The
+migration turned out to have almost no code surface: nothing under `src/`
+imports a Qt binding at all, `gui/` is an empty package, and `pyproject.toml`
+already named `PySide6>=6.7` in the `gui` extra. What actually carried PyQt6
+was the repository `.venv` — 6.11.0, installed by hand long before the extras
+existed. That matters more than it looks: `[tool.pyright]` pins `venvPath = "."`
+and `venv = ".venv"`, so Pyright analyzes against `.venv` no matter which Nox
+environment invoked it, and the first `from PySide6 import ...` under
+`src/sieve/gui/` would have failed typecheck inside an otherwise-green `checks`.
+PySide6 6.11.1 is installed and PyQt6 is gone; `qtpy` now reports `PySide6`, so
+napari and pyqtgraph reach the same binding SIEVE does.
+
+[ASSUMPTION] The absence of PyQt6 is doing the enforcement work here, and
+nothing tests it yet. `tests/test_smoke.py` cannot: it runs in the headless
+`dev` environment where neither binding is installed, so it has nothing to
+observe. The check belongs in the first `qt`-marked test, which runs under
+`dev-gui` where the question is answerable — a reintroduced PyQt6 is a silent
+return to GPLv3, which is the one thing ADR-001 was choosing against.
+
 **The decode boundary exists.** `src/sieve/io/video_read.py` is the module
 ADR-018 licensed: `VideoReader` over a pinned OpenCV VideoCapture, index-based
 seek-and-decode, `SourceInfo` carrying the source's bit depth beside the uint8
@@ -136,11 +155,19 @@ not installed, because the analysis is static.
 
 ## Flagged, proceeding anyway
 
-**PySide6 migration is unstarted.** ADR-001 selects PySide6 for licensing
-reasons; the environment carries PyQt6 and its Qt binding. ADR-001 also
-requires the napari embedding to be revalidated against PySide6 before first
-production use. [INTENT] Handle as part of the first GUI commit rather than as
-a standalone migration, since no GUI code exists to migrate yet.
+**The napari-against-PySide6 revalidation ADR-001 asks for was skipped.**
+Kendrick's call, made when the migration was scoped. ADR-001's consequences say
+the napari integration "must be validated with PySide6 before its first
+production use", because the ADR's viewer comparison ran against PyQt6. That
+validation has not happened and is not scheduled. [ASSUMPTION] The exposure is
+bounded: `qtpy` is the layer napari uses to reach a binding, it resolves
+PySide6 cleanly in this environment, and a binding incompatibility would
+surface as an import or canvas failure at the first viewer construction rather
+than as a silent wrong result. Recorded here rather than as a superseding ADR
+because the decision ADR-001 makes is unchanged — PySide6 is still the binding;
+what lapsed is a verification step. [STALE WHEN] napari is embedded for real,
+which is the point at which "first production use" arrives and the deferral
+stops being free.
 
 **No license is declared,** deliberately deferred. There is no LICENSE file and
 `pyproject.toml` carries no `license` field. ADR-001 chose PySide6 precisely to
@@ -351,6 +378,17 @@ a scanner or an indexer holding the freshly built `dist-info` while uv tries to
 replace it, which would make it a local-environment property rather than a repo
 one — CI creates environments fresh and has not shown it. Recorded because
 retrying looks like flakiness in the gate and is not.
+
+[ASSUMPTION] Uninstalling PyQt6 from `.venv` hit the same Windows
+access-denied failure this file already records for `nox -s checks`, and the
+retry made it worse rather than better: the first attempt removed the package's
+`RECORD` before failing on a locked `licenses/` directory, which left uv unable
+to uninstall on the second attempt and 189 MB of `site-packages/PyQt6` orphaned
+behind three stale `dist-info` directories. Cleared by deleting the four
+directories directly. Worth knowing because the general shape — "retry the
+access-denied failure" — is the right move for the `dist-info` case and the
+wrong one for an uninstall, where the first attempt has already destroyed the
+manifest the second one needs.
 
 [STABLE] napari registers a pytest plugin, so it loads into any test session in
 an environment where it is installed and emits Pydantic deprecation warnings

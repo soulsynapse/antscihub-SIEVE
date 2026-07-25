@@ -50,9 +50,12 @@ dependencies = [
 # The forcing case is pytest-qt, in `dev-gui` below and deliberately not in
 # `dev`. See ADR-019 before moving anything between these lists.
 
-# ADR-001. PyQt6 is what the environment currently carries; the ADR selects
-# PySide6 for licensing and requires the napari embedding to be revalidated
-# against it before first production use. See NOTES.md.
+# ADR-001. PySide6 is the binding, for licensing reasons: PyQt6's free
+# distribution is GPLv3, and the ADR chose PySide6's LGPLv3 Community Edition
+# so the application license stays an open question rather than a foregone one.
+# napari and pyqtgraph reach Qt through `qtpy`, which resolves whichever
+# binding is importable -- so PyQt6 being absent from the environment is what
+# makes the choice real, not the declaration here. See NOTES.md.
 gui = [
   "PySide6>=6.7",
   "napari>=0.5",

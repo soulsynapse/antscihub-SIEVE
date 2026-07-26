@@ -1,0 +1,57 @@
+# Machine-checked layer boundaries (ARCHITECTURE.md).
+#
+# A violation here is a product regression, not a style problem: the moment
+# `pipeline/` imports Qt, headless CLI and HPC parity stops being real.
+# Parenthesised layers are optional — declared before they exist so the
+# contract governs them from their first commit rather than being widened to
+# accommodate them afterwards.
+
+[importlinter]
+root_package = sieve
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = Layered architecture
+type = layers
+layers =
+    sieve.gui | (sieve.cli)
+    sieve.bench
+    (sieve.pipeline) | (sieve.workers)
+    sieve.decode | (sieve.storage)
+    sieve.core
+
+[importlinter:contract:core-purity]
+name = core imports no toolkit, no codec, no processes
+type = forbidden
+source_modules =
+    sieve.core
+forbidden_modules =
+    PySide6
+    cv2
+    zarr
+    subprocess
+    multiprocessing
+
+[importlinter:contract:headless]
+name = bench and decode run without a GUI toolkit
+type = forbidden
+source_modules =
+    sieve.bench
+    sieve.decode
+forbidden_modules =
+    PySide6
+
+[importlinter:contract:opencv-containment]
+name = OpenCV is confined to the decode layer
+type = forbidden
+# Direct imports only: reaching a decoded frame *through* `sieve.decode` is
+# the supported path. What this forbids is a second module learning to drive
+# VideoCapture itself, which is how decoder identity stops being one string
+# and cache keys stop meaning anything.
+allow_indirect_imports = True
+source_modules =
+    sieve.core
+    sieve.bench
+    sieve.gui
+forbidden_modules =
+    cv2

@@ -29,6 +29,12 @@ def typecheck(session: nox.Session) -> None:
 
 
 @nox.session
+def imports(session: nox.Session) -> None:
+    """Layer boundary contracts (.importlinter)."""
+    session.run("lint-imports", env={"PYTHONIOENCODING": "utf-8"})
+
+
+@nox.session
 def tests(session: nox.Session) -> None:
     """Test suite, excluding benchmarks."""
     session.run(
@@ -44,6 +50,7 @@ def checks(session: nox.Session) -> None:
     """The full quality gate — what CI runs."""
     lint(session)
     typecheck(session)
+    imports(session)
     tests(session)
 
 

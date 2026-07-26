@@ -20,6 +20,9 @@ dependencies = [
     "pyarrow",
 ]
 
+[project.scripts]
+sieve-gui = "sieve.gui.app:main"
+
 [project.optional-dependencies]
 gui = [
     "PySide6",
@@ -41,6 +44,7 @@ dev = [
     "viztracer",
     "py-spy",
     "jaxtyping",
+    "import-linter>=2.13",
 ]
 dev-gui = [
     "pytest-qt",
@@ -72,6 +76,13 @@ select = [
     "TID",      # tidy imports
     "RUF",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Qt's virtuals are camelCase. Renaming them would stop them being overrides.
+"src/sieve/gui/*" = ["N802"]
+# Budget labels are copied verbatim from docs/ARCHITECTURE.md, en dash and all,
+# because tests/bench/test_budget_table.py compares them character for character.
+"src/sieve/bench/budgets.py" = ["RUF001"]
 
 [tool.pyright]
 include = ["src", "tests"]

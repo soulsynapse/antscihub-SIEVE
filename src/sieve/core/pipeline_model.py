@@ -316,8 +316,13 @@ class Pipeline(_Artifact):
     on, and keeping the two apart is what stops a validator quietly growing a
     dependency on a decoded frame.
 
-    A node with no incoming edge is a root: it consumes the source directly,
-    once per replicate.
+    A node with no incoming edge is a root: it consumes the source once per
+    replicate, and what it consumes is that replicate's ROI crop — the fan-out
+    has already happened by the time the graph starts, so there is no position
+    in the graph from which an uncropped frame is observable. That is what makes
+    a materialized crop a checkpoint rather than a mode: it is a faster source
+    for the same pixels, and by the rule above it cannot change what is
+    computed. See `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
     """
 
     nodes: tuple[Node, ...] = ()

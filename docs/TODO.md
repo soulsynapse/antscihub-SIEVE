@@ -111,37 +111,23 @@ here.
 
 Read: `src/sieve/core/{pipeline_model,replicates}.py`, `docs/VISION.md` step 2.
 
-## Spatial context declaration
+## Per-replicate threshold spread
 
-`core/filter_base.py`, and the same shape as the rate gap that item closed:
-`warmup_frames` declares how much *temporal* context a filter needs, and
-nothing declares how much *spatial* context it needs. The crop is to space what
-the decimator is to time.
+A probe, not a build, and it gates nothing — but it sizes the item above before
+the machinery for it is written. Take one parent frame from `videos-testing/`,
+compute Otsu on the whole frame, compute Otsu on each replicate crop of that
+same frame, and compare.
 
-It bites on entering a replicate. The intended behaviour is that the filter tab
-previews against the parent frame until the replicate's crop has been
-materialized in the background, which keeps the click responsive. That
-substitution is sound for some filters and silently wrong for others:
+If the per-arena thresholds cluster tightly, per-replicate deviation is a
+feature that exists for the rare case and the GUI should optimize for the twelve
+identical arenas. If they spread widely, deviation is the ordinary path and the
+equivalence-group display is load-bearing rather than reassuring. That is a
+different set of defaults, and the measurement costs an afternoon against
+machinery that costs weeks.
 
-- **Local kernels** — blur, morphology, wavelet bands. Computing on the parent
-  and then cropping equals computing on a crop expanded by the kernel radius and
-  then trimming. Identical given margin; wrong only in a border band of width
-  *r* without it.
-- **Whole-frame statistics** — Otsu and any auto-threshold, histogram
-  normalization, per-frame mean subtraction, a background model fit over the
-  frame. The parent's statistic is taken over the whole arena field, the
-  replicate's over one arena. This is not a border effect. Every pixel differs,
-  and the preview the user tuned detection against is not the run they get once
-  the crop lands.
+Write it to `docs/findings/`, not into a completed entry.
 
-The second class is where thresholds get set, which is the worst possible place
-for a silent substitution. A declaration — a context radius for local filters,
-and something that marks a filter as needing the whole frame — lets the executor
-crop with margin where that is equivalent and refuse the parent-frame preview
-where it is not. `warmup_frames`' own docstring is the model for how to phrase
-"how much context, in what unit".
-
-Read: `docs/findings/2026.07.25-the-crop-is-a-spatial-warmup.md`.
+Read: `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` open questions.
 
 ## First filter and discovery
 
@@ -218,11 +204,18 @@ Read: `src/sieve/gui/{player,scrub_policy}.py`.
 use it identically, and the GUI adds a view over it rather than a second path.
 Streaming execution with cache lookup per node.
 
-Warmup accumulates along the path, not per node: sum `warmup_frames` over the
-topological path feeding a request, decode `[start − total, end]`, discard the
-lead-in.
+Warmup accumulates along the path, not per node, and does not simply sum —
+`core.source_warmup_frames` converts across rate-changing nodes and is the only
+thing that should. Decode `[start − total, end]`, discard the lead-in.
 
-Read: `docs/SCAFFOLD.md` `pipeline/`.
+The root consumes the replicate's ROI crop on every frame, whether or not a
+materialized crop exists on disk. The materialized one is a checkpoint and a
+performance decision; letting its presence decide what the graph is handed
+would make a cache question into a semantic one and break the rule that
+checkpoints are never hashed.
+
+Read: `docs/SCAFFOLD.md` `pipeline/`,
+`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
 
 ## Build the CLI
 

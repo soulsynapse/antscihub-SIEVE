@@ -435,7 +435,12 @@ Claims: rescale at 0.25 yields `round(w·0.25)` preserving dtype; zscore of
 a nonconstant frame hits mean ≈ 128 / sd ≈ 32; a constant frame does not
 divide by zero.
 
-### Item 3 — Block-signal extraction filter (`filters/`)
+### Item 3 — Block-signal extraction filter (`filters/`) — DONE
+
+Landed 2026.07.26; see
+`docs/completed-todo/2026.07.26-block-signal-extraction-filter.md`.
+`auto_block` / `resolve_block` / `grid_shape` are the exported resolution
+functions; grayscale conversion lives at the top of this kernel.
 
 `block_signal.py` + `.md`, tests. One filter, `signal ∈ {change_energy,
 flow_speed}`, `block: int` with `0 = auto` (`max(1, round(64 · scale))`;

@@ -19,6 +19,7 @@ from sieve.core.filter_base import (
     Mode,
     ParamsBase,
     TableSpec,
+    input_warmup_frames,
     source_warmup_frames,
 )
 from sieve.core.filter_registry import (
@@ -46,6 +47,21 @@ class DecimateParams(ParamsBase):
 
     def output_rate(self) -> Fraction:
         return Fraction(1, self.stride)
+
+
+class InterpolateParams(ParamsBase):
+    """Emits three frames for every two consumed: a rate above 1.
+
+    Here so the rounding in `input_warmup_frames` has something inexact to
+    round. Every decimator divides exactly — `need / (1/n)` is `need * n` — so a
+    fixture set of decimators alone leaves `ceil` unexercised.
+    """
+
+    numerator: int = 3
+    denominator: int = 2
+
+    def output_rate(self) -> Fraction:
+        return Fraction(self.numerator, self.denominator)
 
 
 class DownsampleParams(ParamsBase):
@@ -77,6 +93,9 @@ def make_spec(**overrides: object) -> FilterSpec:
 DECIMATOR = make_spec(filter_id="decimate", params_model=DecimateParams, rate_changing=True)
 DOWNSAMPLER = make_spec(filter_id="downsample", params_model=DownsampleParams)
 IIR = make_spec(filter_id="iir", warmup_frames=5)
+INTERPOLATOR = make_spec(
+    filter_id="interpolate", params_model=InterpolateParams, rate_changing=True
+)
 
 
 class TestFilterSpec:
@@ -127,6 +146,16 @@ class TestRate:
             [(DECIMATOR, DecimateParams(stride=3)), (IIR, SampleParams())]
         )
         assert by_three == 15
+
+    def test_a_partial_input_frame_rounds_up(self) -> None:
+        # A rate of 3/2 means two input frames buy three output frames, so five
+        # output frames want 3.33 inputs and therefore 4. Flooring gives 3, and
+        # the node is one frame short of settled — which is why this is an
+        # example rather than a property: every rate of the form 1/n divides
+        # exactly, so a suite generated from decimators alone cannot tell the
+        # two roundings apart no matter how many graphs it draws.
+        assert input_warmup_frames((INTERPOLATOR, InterpolateParams()), 5) == 4
+        assert input_warmup_frames((INTERPOLATOR, InterpolateParams()), 6) == 4
 
     def test_undeclared_rate_change_is_refused_at_registration(self) -> None:
         # Without this the gap reopens silently: a decimator whose spec forgot

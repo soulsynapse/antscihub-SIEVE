@@ -396,6 +396,43 @@ class FilterSpec:
 PathStep: TypeAlias = "tuple[FilterSpec, ParamsBase]"
 
 
+def input_warmup_frames(step: PathStep, output_warmup: int) -> int:
+    """One node's conversion: lead-in at its input, given lead-in at its output.
+
+    The single edge of the warmup arithmetic. `output_warmup` frames wanted at
+    this node's output cost `ceil(output_warmup / rate)` at its input, and the
+    node's own `warmup_frames` is already denominated there, so it adds on top.
+
+    Extracted from `source_warmup_frames` rather than inlined in it because a
+    DAG walk needs the step without the path: `pipeline/plan.py` folds this over
+    a topological order, taking the maximum over a node's downstreams instead of
+    over enumerated paths. Two implementations of one conversion is exactly what
+    that function's docstring argues against, so there is one and both call it.
+
+    **Monotone non-decreasing in `output_warmup`**, and that is load-bearing
+    rather than incidental: `ceil` and `+` are both monotone, so the maximum
+    over a node's paths equals the maximum taken node-by-node along the way.
+    Without it a DAG walk would have to enumerate paths, of which a diamond
+    chain has exponentially many.
+
+    Args:
+        step: The node's `(spec, params)`.
+        output_warmup: Frames of lead-in wanted at this node's output.
+
+    Returns:
+        Frames of lead-in needed at this node's input.
+
+    Raises:
+        ValueError: if the node reports a non-positive output rate, which would
+            mean an output frame no quantity of input could supply.
+    """
+    spec, params = step
+    rate = params.output_rate()
+    if rate <= 0:
+        raise ValueError(f"{spec.filter_id}: output_rate must be positive, got {rate}")
+    return math.ceil(Fraction(output_warmup) / rate) + spec.warmup_frames
+
+
 def source_warmup_frames(path: Sequence[PathStep]) -> int:
     """Lead-in to decode, in *source* frames, for a path ordered root to sink.
 
@@ -415,6 +452,12 @@ def source_warmup_frames(path: Sequence[PathStep]) -> int:
     an executor; and the conversion belongs beside the declaration that defines
     the unit, where a second copy is less likely to be written.
 
+    A fold of `input_warmup_frames` from sink to root. The per-step conversion
+    is separate because a DAG has more than one root-to-node path and the walk
+    that handles that — `pipeline/plan.py` — needs the step rather than the
+    path. This function is the single-path case and stays the definition the
+    walk is checked against.
+
     Args:
         path: `(spec, params)` from the root node to the requesting node,
             inclusive. An empty path needs no lead-in.
@@ -426,10 +469,7 @@ def source_warmup_frames(path: Sequence[PathStep]) -> int:
         ValueError: if any node reports a non-positive output rate, which would
             mean an output frame the source could never supply enough input for.
     """
-    need = Fraction(0)
-    for spec, params in reversed(path):
-        rate = params.output_rate()
-        if rate <= 0:
-            raise ValueError(f"{spec.filter_id}: output_rate must be positive, got {rate}")
-        need = Fraction(math.ceil(need / rate) + spec.warmup_frames)
-    return int(need)
+    need = 0
+    for step in reversed(path):
+        need = input_warmup_frames(step, need)
+    return need

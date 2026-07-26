@@ -71,33 +71,16 @@ and the source stamp, Qt-free and tested by feeding it calls, so
 `pipeline/preview.py` inherits that discipline rather than reimplementing it.
 See `docs/completed-todo/2026.07.25-qt-free-coalescer.md`.
 
+The graph now runs. `pipeline/plan.py` derives everything about a run that is
+knowable before a frame is decoded — resolved params, keys, and the source
+lead-in as a backward max over `Dag.order` — `pipeline/cache.py` holds the store
+protocol, and `pipeline/executor.py` is the one loop all three front ends call.
+Nothing below needs to invent an execution path, a warmup arithmetic, or a
+cache lookup; it takes these. `Mode.WINDOWED`, rate-changing, and multi-upstream
+nodes are refused at run time until `Kernel` grows a second signature. See
+`docs/completed-todo/2026.07.25-executor.md`.
+
 Items under **Independent of the stack** gate nothing and can be taken whenever.
-
-## Executor
-
-`pipeline/executor.py`. The single shared execution path — CLI, GUI, and HPC
-use it identically, and the GUI adds a view over it rather than a second path.
-Streaming execution with cache lookup per node.
-
-Warmup accumulates along the path, not per node, and does not simply sum —
-`core.source_warmup_frames` converts across rate-changing nodes and is the only
-thing that should. Decode `[start − total, end]`, discard the lead-in.
-
-The root consumes the replicate's ROI crop on every frame, whether or not a
-materialized crop exists on disk. The materialized one is a checkpoint and a
-performance decision; letting its presence decide what the graph is handed
-would make a cache question into a semantic one and break the rule that
-checkpoints are never hashed.
-
-Ordering and cache lookup are not this item's to invent: `Dag.build` gives the
-schedule as `order`, the resolved `FilterSpec` per node, and `node_keys` for one
-replicate on one backend — a node absent from that map is one that must be
-computed. Warmup is what is genuinely left, and `core.source_warmup_frames`
-wants a root-to-node path, which a DAG has more than one of; the executor has to
-decide that a node's lead-in is the maximum over its paths.
-
-Read: `docs/SCAFFOLD.md` `pipeline/`, `src/sieve/pipeline/dag.py`,
-`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
 
 ## Build the CLI
 

@@ -525,3 +525,221 @@ decision.
   trigger already written in `docs/LATER.md:96-135`.
 - clahe normalize, the five dropped channels, whole-video processing, saved
   detections, detection lanes on the cross-tab timeline (`docs/LATER.md:158`).
+
+---
+
+## Stage 4 — mockup-cycle revisions (2026.07.26)
+
+Stage 3 was written before the interaction mockups existed. Four clickable
+mockups were then built and iterated with real math under them
+(`mockups/insertion`, `mockups/graphs`, `mockups/seeker`, `mockups/tab` —
+each README pins its contract; the folders are deleted when the items land,
+so anything load-bearing is restated here). This stage records what those
+sessions **decided**, what they **changed in the item list**, and what they
+**revealed as necessary** that stage 3 missed. Where stage 3 and stage 4
+disagree, stage 4 wins.
+
+### 4a — Decisions now pinned (superseding stage 3 where they touch it)
+
+**The tab's right column is the operation stack, not a knob row.** Stage 3
+item 6's "control row above two graphs" is dead. The chain is a vertical
+stack of step cards under fixed stage headers (SPATIAL PREP → SIGNAL
+EXTRACTION → TEMPORAL FILTER → DETECTION, each with an `in → out` type
+chip). Every step's parameters live in its card; every graph lives in the
+card of the step that produces it — scalogram and band-power density in the
+temporal-filter card. The green blocks-in-band graph is the detection
+step's output *promoted* under the video per the target layout, and its
+card says so. **No reachable step, no graph**: chain validity is derived by
+one walk (ok / conflict at first type mismatch / unreached after), and when
+the chain breaks, graphs disappear and the left column says why.
+
+**The left "video" is the block-heat view**, not a bare frame: frame +
+block grid, fill = band power at the playhead, outline = in the value band,
+click a block to solo its trace in the density plot. On this tab the
+picture's job is to say where the signal is.
+
+**Insertion is a wizard, not a picker.** Clicking a seam (invisible until
+hovered; hover grows a hairline + plus) or a card's `swap` opens a
+near-full-window inset helper. It is the configuration surface for a
+*provisional* step:
+
+- Left: the equivalents for the seam — everything whose input type matches,
+  grouped by stage with the seam's own stage first. Hover or click swaps
+  the provisional step in place; comparing candidates and choosing one are
+  the same gesture.
+- Center: the current video, live-edited by the provisional chain; the
+  band-power graph; the green detection graph with its D row — all fully
+  interactive (handles drag, detections update) because a candidate is
+  judged by what it does to the green.
+- Right: the selected step's own settings (the same widgets its card owns)
+  over its guidance, taken from the filter's `.md` (`summary` → row blurb,
+  "When to use it" / "What it does not do" → the pane).
+- The provisional step sits in the chain as a dashed card; Add commits,
+  Cancel/Esc restores everything byte-for-byte.
+- **The wizard cannot break the chain**: type-breakers and duplicates are
+  listed but disabled with the reason. Conflict states (red card, inline
+  Swap/Remove, downstream dimmed unreached) still exist — they arise from
+  removals or loaded files, never from insertion.
+
+**Quick-switch**: the extraction card carries the Jtt | LK choice as two
+checkable buttons that swap the step in place — one click, no wizard. The
+"two signals only" parity constraint is expressed as exactly these two
+swaps; a third signal is a registry entry that appears in the wizard, not a
+new widget. Removal: hovering any card shows `swap` and `x`.
+
+**Detector semantics** (deviations from v1, felt and confirmed in the
+mockups):
+- An unset count threshold means the detector is **disarmed** — nothing is
+  green, the footer says so. v1's unset-means-unbounded painted a fresh tab
+  as one giant detection. Frequency/value bands still default wide open:
+  they shape a signal, they don't claim an event.
+- Count threshold stored as a fraction of region blocks (stage 2 decision,
+  unchanged).
+- Every band drag is two-tier: continuous `changed` = cheap re-derive,
+  `committed` on release = the expensive tier. Same for seeker window
+  drags. Reset is parameters-not-structure: knobs, bands, D reset; the
+  chain the user built stays.
+
+**Plot contracts** (from `mockups/graphs`, QPainter settled — drop
+pyqtgraph from the gui extra in the item that lands these):
+- One drag gesture, two meanings: within 8 px of a handle moves the handle,
+  anywhere else scrubs the shared playhead. No modes.
+- Handles read out in the right margin; drag past the edge = unbounded
+  (`inf`); frequency handles clamp to the bank's edges instead.
+- The signal graph is a **per-frame value histogram over all blocks**
+  (log1p axis), not a mean line — the detector counts blocks, so the user
+  tunes against the population the count comes from. Solo answers the
+  opposite question.
+- Scalogram: log-f axis, per-column max, COI alpha fade; the title carries
+  the *snapped* bank band even when handles sit between rows — the title
+  tells the truth the transform uses.
+- Gate spans floored to 1 px. Green is a status color: detection only,
+  never a data series. One sequential ramp per magnitude surface (warm =
+  scalogram, cyan = density). "Visibility decides what is drawn, never
+  what is computed" carries over from v1.
+
+**Seeker** (from `mockups/seeker`, `lanes` vs `split` still user's call):
+press = seek / move = scrub / release = commit is untouched; the working
+window is a bracket manipulated directly (edges resize, header band moves,
+minimum 1 s) and the Length spinbox is the same value; detection ticks
+floored to 1 px with `|<` `>|` jumps; **coverage is a first-class
+encoding** — signal bars tinted examined-current / examined-other-settings
+/ never-examined, restated in words in the hover bubble.
+
+### 4b — What the mockups revealed as necessary (missing from stage 3)
+
+1. **A non-throwing chain grade.** `Dag.build` raises on the first bad
+   edge; the stack UI needs per-node status (ok / conflict / unreached)
+   for chains that removal or a loaded file made invalid. A small pure
+   function over `FilterSpec.accepts/emits` (`admits`-based walk) — likely
+   `pipeline/` next to `dag.py`, shared by the stack and the wizard's
+   disable logic.
+2. **Stage identity is derivable — do not add metadata.** The four stages
+   are exactly the (accepts, emits) kind pairs: image→image = spatial,
+   image→series = extraction, series→series = temporal, series→events =
+   detection. Grouping, type chips, seam suggestions, and "equivalents"
+   (same pair) all fall out of the existing spec types. Resist adding a
+   `category` field to `FilterSpec`.
+3. **Provisional preview is nearly free by construction.** The wizard
+   renders a *different* `Pipeline` value without touching the document —
+   `PreviewRunner.request_render(pipeline, …)` already accepts the
+   pipeline as an argument, and content-derived `node_key`s mean the
+   provisional chain shares every cache entry up to the insertion point.
+   This is the strongest validation of the rewrite's architecture the
+   mockups produced; the real wizard should lean on it rather than any
+   copy of state.
+4. **The wizard's video preview needs the single-frame path.**
+   `PreviewSession.render_frame` (the 100 ms `slider_to_preview` path)
+   exists and is called by no GUI code; the wizard's paused-frame preview
+   is its first consumer. Hover-preview recompute must ride the coalescer
+   tier (latest-wins), never synchronous — the mockup cheats with
+   precomputed cubes.
+5. **Coverage must be recorded before the seeker can show it.** Examined /
+   other-settings / unexamined requires per-frame bookkeeping keyed by the
+   settings identity — which the cache keys already are: "examined under
+   settings S" ≈ "frames present in the store under S's node keys". Design
+   the coverage index in the seeker item; this is also the trigger the
+   `docs/LATER.md` detection-lanes entry has been waiting on.
+6. **Reparenting shared widgets is a footgun.** The mockups moved single
+   widget instances between hosts (density plot into the wizard, D row
+   out of the left column) and hit PySide's parent-death semantics — a
+   parentless widget dies with its Python reference and takes its children
+   with it. The real tab should prefer multiple thin views over one shared
+   model (the house pattern anyway) to moving Qt widgets between parents.
+7. **Guidance `.md`s are UI content.** The wizard pane and picker blurbs
+   are built from `summary`, "When to use it", and "What it does not do".
+   The existing one-class-one-markdown convention already mandates these
+   sections; the wizard makes their *presence and quality* user-facing.
+   The parity filters' `.md`s (items 2–3) should be written knowing they
+   will be read in the wizard, not only in the repo.
+8. **Duplicate blocking needs a real rule.** The mockup disabled any op
+   already in the chain. That is right for the parity set but wrong in
+   general (a second `denoise` or `median smooth` can be legitimate).
+   The real rule is per-filter — effectively a `repeatable` judgment.
+   Decide at wizard-item time; default to blocking until a real chain
+   needs repetition.
+
+### 4c — Revised work items
+
+Items 1–4 stand as written in stage 3 (math in `core/`, `rescale` +
+`normalize`, `block_signal`, per-frame delivery + collector). Item 4 gains
+one clause: expose the single-frame render path to the GUI alongside
+per-frame delivery (learning 4). Beyond those:
+
+**Item 5 — plot widgets** (revised): as stage 3, plus the **block-heat
+panel** (grid over the frame, band-power fill, in-band outlines,
+click-to-solo) and the shared drag discipline from 4a. Claims add: a drag
+starting 9 px from a handle scrubs instead of grabbing; solo state lives in
+detector state, not the widget.
+
+**Item 6 — chain model + stack UI** (rewritten): the Qt-free chain/detector
+state (nodes + bands + D + solo, one pure recompute), the non-throwing
+grade (learning 1), stage derivation from spec types (learning 2), and the
+stack widgets: step cards with embedded parameter rows and graphs, stage
+headers with type chips, hover `swap`/`x`, conflict cards with inline
+repair, seam affordances. No wizard yet — seams can no-op or log until
+item 7. Claims: grade() statuses for a valid chain, a mid-chain removal,
+and a loaded-broken chain; removing the temporal step hides its graphs and
+the left column reports why; captions restate current parameter values.
+
+**Item 7 — the wizard** (new): provisional insertion as a second Pipeline
+value rendered through the existing runner (learning 3), candidates =
+type-fitting ops grouped by derived stage with disable rules, live video
+via the single-frame path, borrowed-not-duplicated graphs done as views
+over shared state (learning 6), settings hosting, md-derived guidance pane,
+Add/Cancel/Esc semantics. Claims: cancel restores the exact prior document
+and view state; a provisional render reuses every cache entry upstream of
+the seam (assert on store hit counts); disabled candidates cannot be
+committed by any input path.
+
+**Item 8 — seeker upgrades** (new): coverage index derived from the store
+(learning 5), coverage tint + hover wording, detection ticks + prev/next,
+window bracket + Length lockstep, lanes-vs-split decision. Claims: a frame
+rendered under settings A then revisited under B reads "other settings";
+a 1-frame detection paints at any width; bracket and spinbox can never
+disagree.
+
+**Item 9 — parity comparison finding** (stage 3's item 7, unchanged in
+content; renumbered).
+
+Order: 1 → (2, 3) → 4 → 5 ∥ 6 → 7 → 8 → 9. Item 6 no longer depends on 5's
+plots existing (cards can hold placeholder bodies), but 7 needs both.
+
+### 4d — Open decisions (consolidated, replacing stage 3's list)
+
+- Item 2: new `rescale` filter vs params-v2 of `downsample`.
+- Item 5: colormap stops (v1's ramps vs the mockup palette). Note the
+  mockup palettes were explicitly *not* the decision.
+- Item 6: `detector_state.py` vs the SCAFFOLD-reserved `gui/state.py`;
+  whether knob-settle and band-drag get ARCHITECTURE.md budget rows
+  (recommended: yes, here).
+- Item 7: band memory across a signal swap — the mockups keep bands (the
+  consequence is visible in `mockups/tab --shot lk`); v1 remembered value
+  bands per (region, channel). Per-signal memory is probably right; decide
+  by feel in the wizard item. Also: the `repeatable` rule (learning 8),
+  and whether the wizard hosts the scalogram too (currently: video, band
+  power, count — the scalogram stays behind on the stack).
+- Item 8: `lanes` vs `split`; seeker scrub outside the window — clamp
+  (mocked) vs move-the-window.
+- Whether the superseded `mockups/filter_tab.py` (operations-list concept)
+  is deleted now or when item 6 lands.

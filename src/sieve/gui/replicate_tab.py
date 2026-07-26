@@ -164,9 +164,8 @@ class ReplicateTab(QWidget):
         self._document.replicate_changed.connect(self._refresh_overlay)
         self._document.replicate_added.connect(self._select_row)
 
-        selection = self._table.selectionModel()
-        if selection is not None:
-            selection.selectionChanged.connect(self._on_table_selection_changed)
+        # `setModel` above guarantees a selection model exists from here on.
+        self._table.selectionModel().selectionChanged.connect(self._on_table_selection_changed)
 
         self._delete_button.clicked.connect(self.delete_selected)
         self._delegate.editing_started.connect(lambda: self.editor_open_changed.emit(True))
@@ -177,7 +176,7 @@ class ReplicateTab(QWidget):
     def selected_row(self) -> int:
         """Currently selected replicate row, or `NO_SELECTION`."""
         selection = self._table.selectionModel()
-        if selection is None or not selection.hasSelection():
+        if not selection.hasSelection():
             return NO_SELECTION
         return selection.currentIndex().row()
 
@@ -251,8 +250,6 @@ class ReplicateTab(QWidget):
     @Slot(int)
     def _select_row(self, row: int) -> None:
         selection = self._table.selectionModel()
-        if selection is None:
-            return
         if row == NO_SELECTION or row >= len(self._document):
             selection.clearSelection()
             return

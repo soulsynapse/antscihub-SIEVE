@@ -26,7 +26,6 @@ from types import TracebackType
 from typing import Any, Self
 
 import cv2
-import numpy as np
 from numpy.typing import NDArray
 
 from sieve.core.types import ChannelSpec, Frame, VideoMetadata
@@ -102,8 +101,10 @@ class VideoReader:
             )
 
         self._position_at(index)
+        # A failed read is always `(False, None)` — never a truthy flag with no
+        # array — so the flag alone is the whole check.
         ok, data = self._capture.read()
-        if not ok or data is None:
+        if not ok:
             self._cursor = -1  # Position is now unknown; force a seek next time.
             raise VideoDecodeError(f"Failed to decode frame {index} of {self._path}")
         self._cursor = index + 1
@@ -142,7 +143,7 @@ class VideoReader:
         self.close()
 
 
-def _downscale(data: NDArray[Any], max_width: int | None) -> NDArray[np.uint8]:
+def _downscale(data: NDArray[Any], max_width: int | None) -> NDArray[Any]:
     """Area-resample `data` down to `max_width` if it is wider. Never upscales."""
     source_height, source_width = data.shape[:2]
     if max_width is None or source_width <= max_width:

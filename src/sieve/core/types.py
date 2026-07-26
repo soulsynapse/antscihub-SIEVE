@@ -24,8 +24,12 @@ class ChannelSpec(StrEnum):
     BGR = "bgr"
 
     @property
-    def count(self) -> int:
-        """Number of channels this layout carries."""
+    def channel_count(self) -> int:
+        """Number of channels this layout carries.
+
+        Not `count`: `StrEnum` is a `str`, and `str.count` is a method with
+        entirely different semantics that callers are entitled to reach for.
+        """
         return 1 if self is ChannelSpec.GRAY else 3
 
 

@@ -71,7 +71,10 @@ class TestFrame:
         )
         assert (frame.width, frame.height, frame.index) == (64, 48, 7)
         assert frame.dtype == np.uint8
-        assert frame.channels.count == 3
+        assert frame.channels.channel_count == 3
 
     def test_gray_declares_one_channel(self) -> None:
-        assert ChannelSpec.GRAY.count == 1
+        assert ChannelSpec.GRAY.channel_count == 1
+
+    def test_channel_count_leaves_str_count_intact(self) -> None:
+        assert ChannelSpec.BGR.count("b") == 1

@@ -83,7 +83,9 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self._undo_action)
 
         self._redo_action = stack.createRedoAction(self, "&Redo")
-        self._redo_action.setShortcuts([QKeySequence.StandardKey.Redo, QKeySequence("Ctrl+Y")])
+        self._redo_action.setShortcuts(
+            [QKeySequence(QKeySequence.StandardKey.Redo), QKeySequence("Ctrl+Y")]
+        )
         edit_menu.addAction(self._redo_action)
 
         edit_menu.addSeparator()

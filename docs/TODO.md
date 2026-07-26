@@ -44,14 +44,26 @@ marker is now declared per module.
 Checked by mutation: breaking the editor guard, the letterbox offset, or the
 rename's undo push each fails a test.
 
-## Pyright on gui
+## Done — Pyright strict (2026-07-25)
 
-`nox -s typecheck` fails: 8 errors under `typeCheckingMode = "strict"`, all in
-`src/` — 3 in `gui/replicate_tab.py`, 2 in `gui/main_window.py`, 2 in
-`decode/reader.py`, 1 in `core/types.py`. `tests/` is clean, so this is not a
-stub problem across the board and a blanket relaxation for `src/sieve/gui/**`
-would be overkill. Read the 8 and fix or scope them deliberately; don't leave
-the session failing.
+`nox -s typecheck` is clean: 0 errors, no `# type: ignore`, no per-directory
+relaxation. All 8 were real, and each was fixed at the source rather than
+silenced.
+
+One was a latent bug. `ChannelSpec.count` shadowed `str.count` on a `StrEnum`,
+so `ChannelSpec.BGR.count("b")` returned 3 instead of 1 — any caller treating
+the spec as the string it is would have been silently wrong. Renamed to
+`channel_count`, with a test pinning `str.count` intact.
+
+The rest were honesty fixes: `_downscale` claimed `NDArray[uint8]` while doing
+nothing to guarantee it (now `NDArray[Any]`, matching its input); `read()`
+tested `data is None` alongside `not ok`, which OpenCV never produces
+separately; `setShortcuts` was handed a bare `StandardKey` (now wrapped in
+`QKeySequence`); and three `selectionModel() is None` guards in
+`ReplicateTab` were dead — `setModel` runs in the constructor before any of
+them.
+
+134 tests pass; `ruff`, `lint-imports`, and `pyright` all clean.
 
 ## Scrub budget miss
 

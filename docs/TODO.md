@@ -18,6 +18,12 @@
    item that would each fail for a distinct real reason, not a sweep of every
    accessor. A property or benchmark earns its place when it pins something an
    example cannot state; otherwise an example is the better test.
+8. **Start by building a checklist.** Before the first edit, read what the item
+   points at and put the steps in the task list, one per file or gate — the
+   module, the tests, the contract change, the gate run, the completed entry.
+   It is what makes the work visible while it is happening rather than only in
+   the diff, and an item whose steps cannot be listed up front is an item whose
+   scope has not been read yet.
 
 ---
 
@@ -34,16 +40,18 @@ both have declarations to be written against.
 No `core/` item remains. Per-replicate parameter deviation, the last one, has
 landed: `Replicate.overrides` holds the deviation, `resolved_params` is the one
 definition of effective params, and `Project.with_param_edit` performs the two
-writes. `cache_key.py` therefore has something to hash that is not `Node.params`
-— see `docs/completed-todo/2026.07.25-per-replicate-parameter-deviation.md`.
-The replicate table renders which arenas that deviation has actually separated,
+writes — see
+`docs/completed-todo/2026.07.25-per-replicate-parameter-deviation.md`. The
+replicate table renders which arenas that deviation has actually separated,
 derived on every read, so the GUI is no longer silent about it.
 
-`sieve.filters` and `sieve.backend` are no longer parenthesised in
-`.importlinter`: one filter exists, registers itself by being importable, and is
-found by a `pkgutil` scan that names nothing. So the cache key below has a real
-params model to canonicalize and a real `backend_identity` to include — see
-`docs/completed-todo/2026.07.25-first-filter-and-discovery.md`.
+Neither `sieve.filters`, `sieve.backend`, nor `sieve.pipeline` is parenthesised
+in `.importlinter` any more. One filter exists and is found by a `pkgutil` scan
+that names nothing, so `cache_key.py` had a real params model to canonicalize
+and a real `backend_identity` to include, and it is now written: every item
+below either folds a node key into a walk (`dag.py`, the executor) or does not
+touch caching at all. Nothing further needs to decide what a key is made of —
+see `docs/completed-todo/2026.07.25-cache-key.md`.
 
 The per-replicate threshold-spread probe that sat at the top of this list is
 gone, not deferred: it would have measured one rack under one backlight, and the
@@ -53,23 +61,6 @@ arenas cluster or spread. Reasoning in
 
 Items under **Independent of the stack** gate nothing and can be taken whenever.
 
-## Cache key
-
-`pipeline/cache_key.py`. `H(upstream_hash, filter_id, version,
-canonical_params_json, backend_id unless backend_agnostic)`, with decoder
-identity entering at the root node only. Canonical means `model_dump(mode=
-"json")` with sorted keys.
-
-`canonical_params_json` is the *resolved* params for this node and replicate,
-not `Node.params`: build it from `pipeline_model.resolved_params`, never from
-the node's dict, which is now only the default unconfigured replicates inherit.
-
-Guardrail §5 belongs here: changing a parameter on one branch must not
-invalidate a sibling branch.
-
-Read: `docs/AUTO-GUARDRAILS.md` §5, `src/sieve/decode/identity.py`,
-`src/sieve/backend/identity.py`.
-
 ## DAG validation
 
 `pipeline/dag.py`. Construction, cycle detection, topological sort, and the
@@ -77,7 +68,11 @@ static rejection that the declared I/O types exist to enable — resolve each
 node's `filter_id` against the registry, then check that each edge's upstream
 `emits` satisfies the downstream `accepts`.
 
-Read: `docs/ARCHITECTURE.md` Pipeline Model.
+It also owns the walk `cache_key.py` deliberately does not carry: `node_key`
+takes its upstreams' keys as an argument, so *which* nodes in *what* order is
+the topological sort's answer and there is to be no second traversal.
+
+Read: `docs/ARCHITECTURE.md` Pipeline Model, `src/sieve/pipeline/cache_key.py`.
 
 ## Qt-free coalescer
 

@@ -16,7 +16,7 @@ type = layers
 layers =
     sieve.gui | (sieve.cli)
     sieve.bench
-    (sieve.pipeline) | (sieve.workers)
+    sieve.pipeline | (sieve.workers)
     sieve.filters
     sieve.decode | (sieve.storage) | sieve.backend
     sieve.core
@@ -34,9 +34,10 @@ forbidden_modules =
     multiprocessing
 
 [importlinter:contract:headless]
-name = bench, decode, filters, and backend run without a GUI toolkit
+name = pipeline, bench, decode, filters, and backend run without a GUI toolkit
 type = forbidden
 source_modules =
+    sieve.pipeline
     sieve.bench
     sieve.decode
     sieve.filters

@@ -17,8 +17,8 @@ layers =
     sieve.gui | (sieve.cli)
     sieve.bench
     (sieve.pipeline) | (sieve.workers)
-    (sieve.filters)
-    sieve.decode | (sieve.storage) | (sieve.backend)
+    sieve.filters
+    sieve.decode | (sieve.storage) | sieve.backend
     sieve.core
 
 [importlinter:contract:core-purity]
@@ -34,11 +34,13 @@ forbidden_modules =
     multiprocessing
 
 [importlinter:contract:headless]
-name = bench and decode run without a GUI toolkit
+name = bench, decode, filters, and backend run without a GUI toolkit
 type = forbidden
 source_modules =
     sieve.bench
     sieve.decode
+    sieve.filters
+    sieve.backend
 forbidden_modules =
     PySide6
 

@@ -36,34 +36,16 @@ landed: `Replicate.overrides` holds the deviation, `resolved_params` is the one
 definition of effective params, and `Project.with_param_edit` performs the two
 writes. `cache_key.py` therefore has something to hash that is not `Node.params`
 — see `docs/completed-todo/2026.07.25-per-replicate-parameter-deviation.md`.
+The replicate table renders which arenas that deviation has actually separated,
+derived on every read, so the GUI is no longer silent about it.
 
 Items under **Independent of the stack** gate nothing and can be taken whenever.
 
-## Replicate equivalence groups
-
-The replicate table's rendering of per-replicate deviation, and derived on
-every read rather than stored — a cached group number is a number that goes stale. Walk
-replicates in order, hash each one's resolved params, assign the next integer
-on first sight of a new hash: the first replicate gets 1, everything matching it
-gets 1, the first that differs gets 2, everything matching *that* gets 2.
-
-`Project.replicates` is already documented as ordered and meaningful, so the
-numbering is stable for a given document. It is not stable across edits, and
-that is the trap: editing replicate 1 renumbers every group below it. The
-numbers are positional labels, not identities. Nothing durable may reference
-one — output paths, sink names, and report keys use `replicate_id`.
-
-Hash `resolved_params(node, replicate)` over the graph's nodes in topological
-order — that function now exists and is the only thing that may answer what a
-replicate runs with. The filter-tab surfacing of the same information comes
-later and is out of scope here.
-
-Read: `src/sieve/core/{pipeline_model,replicates}.py`, `docs/VISION.md` step 2.
-
 ## Per-replicate threshold spread
 
-A probe, not a build, and it gates nothing — but it sizes the item above before
-the machinery for it is written. Take one parent frame from `videos-testing/`,
+A probe, not a build, and it gates nothing — but it says whether the deviation
+machinery is the ordinary path or the escape hatch, and that decides a set of
+GUI defaults. Take one parent frame from `videos-testing/`,
 compute Otsu on the whole frame, compute Otsu on each replicate crop of that
 same frame, and compare.
 

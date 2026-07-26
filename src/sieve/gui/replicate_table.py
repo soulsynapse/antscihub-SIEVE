@@ -28,21 +28,29 @@ class Column(IntEnum):
     """Table columns, in display order."""
 
     NAME = 0
-    X = 1
-    Y = 2
-    WIDTH = 3
-    HEIGHT = 4
-    AREA = 5
+    GROUP = 1
+    X = 2
+    Y = 3
+    WIDTH = 4
+    HEIGHT = 5
+    AREA = 6
 
 
 _HEADERS = {
     Column.NAME: "Replicate",
+    Column.GROUP: "Group",
     Column.X: "X",
     Column.Y: "Y",
     Column.WIDTH: "W",
     Column.HEIGHT: "H",
     Column.AREA: "Pixels",
 }
+
+#: Columns that are read-only because they are computed from something else in
+#: the document. Editing one would have to write backwards through the
+#: derivation, and for `GROUP` there is nothing coherent to write: "make this
+#: replicate group 2" names no parameter change.
+_DERIVED = frozenset({Column.GROUP, Column.AREA})
 
 _GEOMETRY_FIELDS: dict[Column, str] = {
     Column.X: "x",
@@ -60,6 +68,7 @@ class ReplicateTableModel(QAbstractTableModel):
         self._document = document
         document.structure_changed.connect(self._on_structure_changed)
         document.replicate_changed.connect(self._on_replicate_changed)
+        document.grouping_changed.connect(self._on_grouping_changed)
 
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
         """Number of replicates."""
@@ -100,6 +109,14 @@ class ReplicateTableModel(QAbstractTableModel):
         if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             if column is Column.NAME:
                 return replicate.name
+            if column is Column.GROUP:
+                # Recomputed for the whole set on every cell read, which is a
+                # dozen replicates over a handful of nodes and is not in any
+                # latency budget. Caching it per row would need invalidating on
+                # every parameter edit anywhere in the graph — that is "on
+                # everything", which is what recomputing already does, minus a
+                # class of stale-number bugs.
+                return self._document.equivalence_groups()[index.row()]
             if column is Column.AREA:
                 area = replicate.roi.area
                 return f"{area:,}" if role == Qt.ItemDataRole.DisplayRole else area
@@ -124,7 +141,7 @@ class ReplicateTableModel(QAbstractTableModel):
         if column is Column.NAME:
             self._document.rename(row, str(value))
             return True
-        if column is Column.AREA:
+        if column in _DERIVED:
             return False
 
         try:
@@ -144,13 +161,27 @@ class ReplicateTableModel(QAbstractTableModel):
         return True
 
     def flags(self, index: QModelIndex | QPersistentModelIndex) -> Qt.ItemFlag:
-        """Everything but the derived area column is editable."""
+        """Everything but the derived columns is editable."""
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
         base = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
-        if Column(index.column()) is Column.AREA:
+        if Column(index.column()) in _DERIVED:
             return base
         return base | Qt.ItemFlag.ItemIsEditable
+
+    def _on_grouping_changed(self) -> None:
+        """Repaint the group column for every row.
+
+        Not one row: a parameter edit anywhere in the graph can move any
+        replicate into or out of any group, and the numbers below a change
+        shift wholesale because they are positional.
+        """
+        rows = len(self._document)
+        if rows:
+            self.dataChanged.emit(
+                self.index(0, int(Column.GROUP)),
+                self.index(rows - 1, int(Column.GROUP)),
+            )
 
     def _on_structure_changed(self) -> None:
         self.beginResetModel()

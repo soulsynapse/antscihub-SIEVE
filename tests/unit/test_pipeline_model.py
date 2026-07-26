@@ -261,6 +261,78 @@ class TestPerReplicateDeviation:
             )
 
 
+class TestEquivalenceGroups:
+    def _project(self, count: int = 4) -> Project:
+        """`count` arenas, one node, nobody deviating yet."""
+        node = Node(
+            node_id="n1", filter_id="threshold", version="1.0.0", params={"level": 0.5, "blur": 3}
+        )
+        return Project(
+            source=SourceRef(path="arena.MP4"),
+            replicates=tuple(
+                Replicate(roi=ROI(64 * i, 0, 64, 64), name=f"r{i}", replicate_id=f"r{i}")
+                for i in range(count)
+            ),
+            pipeline=Pipeline(nodes=(node,)),
+        )
+
+    def test_a_deviating_replicate_renumbers_every_group_below_it(self) -> None:
+        # The numbering rule and the trap in one: numbers are assigned on first
+        # sight walking in order, so the three arenas that nobody touched stop
+        # being group 1 the moment the arena above them deviates. That is why
+        # nothing durable may reference a group number.
+        #
+        # Reaching the deviation takes two edits because the default moves with
+        # each one: configuring r0 alone leaves all four resolving to 0.9.
+        # Putting r1 back to 0.5 moves the default back and strands r0's pin.
+        project = self._project()
+        assert project.equivalence_groups() == (1, 1, 1, 1)
+
+        deviated = project.with_param_edit("n1", "r0", {"level": 0.9})
+        assert deviated.equivalence_groups() == (1, 1, 1, 1)
+
+        deviated = deviated.with_param_edit("n1", "r1", {"level": 0.5})
+
+        # r1 is pinned and r2/r3 inherit, and all three run 0.5 — so they are
+        # one group. Grouping on whether a replicate *has* an override rather
+        # than on what it resolves to would read (1, 2, 3, 3) here.
+        assert deviated.equivalence_groups() == (1, 2, 2, 2)
+
+    def test_a_deviation_anywhere_in_the_graph_splits_a_group(self) -> None:
+        # The fingerprint covers every node, not the one being looked at. A
+        # version that walked only the first node would call these arenas
+        # interchangeable while they run different blur radii — and the whole
+        # point of the column is to answer "which of these twelve are actually
+        # the same run".
+        first = Node(node_id="n1", filter_id="downsample", version="1.0.0", params={"factor": 4})
+        second = Node(node_id="n2", filter_id="blur", version="1.0.0", params={"radius": 3})
+        project = Project(
+            source=SourceRef(path="arena.MP4"),
+            replicates=(
+                Replicate(roi=ROI(0, 0, 64, 64), name="one", replicate_id="r0"),
+                Replicate(
+                    roi=ROI(64, 0, 64, 64),
+                    name="two",
+                    replicate_id="r1",
+                    overrides={"n2": {"radius": 9}},
+                ),
+            ),
+            pipeline=Pipeline(nodes=(first, second), edges=(Edge(upstream="n1", downstream="n2"),)),
+        )
+
+        assert project.equivalence_groups() == (1, 2)
+
+    def test_geometry_and_naming_are_not_what_makes_a_group(self) -> None:
+        # Every arena has its own ROI by construction, so a fingerprint that
+        # included geometry would put all twelve in twelve groups and the
+        # feature would report nothing. Names and ids are out for the same
+        # reason: the question is what the pipeline runs with, not where the
+        # box is or what it is called.
+        groups = self._project(count=3).equivalence_groups()
+
+        assert groups == (1, 1, 1)
+
+
 class TestConventions:
     def test_the_project_file_sits_beside_its_video(self) -> None:
         # VISION step 1's folder layout: the project names the child folders its

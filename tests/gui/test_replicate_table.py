@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
 
+from sieve.core.pipeline_model import Node, Pipeline
 from sieve.core.types import ROI
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.replicate_table import Column, ReplicateTableModel
@@ -50,16 +51,17 @@ class TestShape:
         titles = [
             model.headerData(int(column), Qt.Orientation.Horizontal, DISPLAY) for column in Column
         ]
-        assert titles == ["Replicate", "X", "Y", "W", "H", "Pixels"]
+        assert titles == ["Replicate", "Group", "X", "Y", "W", "H", "Pixels"]
 
     def test_row_numbers_are_one_based(self, model: ReplicateTableModel) -> None:
         assert model.headerData(0, Qt.Orientation.Vertical, DISPLAY) == 1
 
-    def test_only_the_area_column_is_read_only(self, model: ReplicateTableModel) -> None:
+    def test_the_derived_columns_are_read_only(self, model: ReplicateTableModel) -> None:
         editable = Qt.ItemFlag.ItemIsEditable
         assert model.flags(_cell(model, Column.NAME)) & editable
         assert model.flags(_cell(model, Column.WIDTH)) & editable
         assert not model.flags(_cell(model, Column.AREA)) & editable
+        assert not model.flags(_cell(model, Column.GROUP)) & editable
 
     def test_an_invalid_index_has_no_flags(self, model: ReplicateTableModel) -> None:
         assert model.flags(QModelIndex()) == Qt.ItemFlag.NoItemFlags
@@ -158,8 +160,11 @@ class TestEditing:
         assert not model.setData(_cell(model, Column.WIDTH), value, EDIT)
         assert document.undo_stack.count() == before
 
-    def test_the_area_column_refuses_edits(self, model: ReplicateTableModel) -> None:
-        assert not model.setData(_cell(model, Column.AREA), 1234, EDIT)
+    @pytest.mark.parametrize("column", [Column.AREA, Column.GROUP])
+    def test_a_derived_column_refuses_edits(
+        self, model: ReplicateTableModel, column: Column
+    ) -> None:
+        assert not model.setData(_cell(model, column), 1234, EDIT)
 
     def test_only_the_edit_role_writes(
         self, model: ReplicateTableModel, document: ReplicateDocument
@@ -169,6 +174,61 @@ class TestEditing:
 
     def test_an_invalid_index_refuses_edits(self, model: ReplicateTableModel) -> None:
         assert not model.setData(QModelIndex(), "Nest A", EDIT)
+
+
+class TestEquivalenceGroups:
+    def _graphed(self, document: ReplicateDocument) -> None:
+        """Give the document a one-node graph and a second replicate."""
+        document.add_roi(ROI(x=200, y=200, width=100, height=80))
+        node = Node(node_id="n1", filter_id="threshold", version="1.0.0", params={"level": 0.5})
+        document.set_pipeline(Pipeline(nodes=(node,)))
+
+    def test_identical_replicates_share_a_group_and_a_deviation_splits_them(
+        self, model: ReplicateTableModel, document: ReplicateDocument
+    ) -> None:
+        # The column's whole job: twelve arenas configured once read as one
+        # group, and the one that had to differ is visible without opening it.
+        self._graphed(document)
+        assert model.data(_cell(model, Column.GROUP, 0), DISPLAY) == 1
+        assert model.data(_cell(model, Column.GROUP, 1), DISPLAY) == 1
+
+        document.apply_replace(1, document.at(1).with_override("n1", {"level": 0.9}))
+
+        assert model.data(_cell(model, Column.GROUP, 1), DISPLAY) == 2
+
+    def test_the_number_is_derived_rather_than_stored(
+        self, model: ReplicateTableModel, document: ReplicateDocument
+    ) -> None:
+        # Pinning a parameter to the value it was already inheriting must not
+        # split the group — the number tracks what a replicate *runs with*, not
+        # whether anyone has configured it. A group cached at the moment an
+        # override was written would answer this the other way and stay wrong.
+        self._graphed(document)
+        document.apply_replace(1, document.at(1).with_override("n1", {"level": 0.5}))
+
+        assert model.data(_cell(model, Column.GROUP, 1), DISPLAY) == 1
+
+    def test_a_new_graph_repaints_the_whole_column(
+        self, model: ReplicateTableModel, document: ReplicateDocument
+    ) -> None:
+        # Not one row: the numbers are positional, so a change that moves any
+        # replicate shifts every number below it. A per-row signal would leave
+        # stale numbers painted above and below the edit.
+        document.add_roi(ROI(x=200, y=200, width=100, height=80))
+        spans: list[tuple[int, int, int, int]] = []
+
+        def record(top_left: QModelIndex, bottom_right: QModelIndex, roles: object = None) -> None:
+            del roles
+            spans.append(
+                (top_left.row(), bottom_right.row(), top_left.column(), bottom_right.column())
+            )
+
+        model.dataChanged.connect(record)
+        document.set_pipeline(
+            Pipeline(nodes=(Node(node_id="n1", filter_id="threshold", version="1.0.0"),))
+        )
+
+        assert spans == [(0, 1, int(Column.GROUP), int(Column.GROUP))]
 
 
 class TestNotification:

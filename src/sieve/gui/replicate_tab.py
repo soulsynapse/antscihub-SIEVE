@@ -124,7 +124,7 @@ class ReplicateTab(QWidget):
         self._table.verticalHeader().setDefaultSectionSize(22)
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(int(Column.NAME), QHeaderView.ResizeMode.Stretch)
-        for column in (Column.X, Column.Y, Column.WIDTH, Column.HEIGHT, Column.AREA):
+        for column in (column for column in Column if column is not Column.NAME):
             header.setSectionResizeMode(int(column), QHeaderView.ResizeMode.ResizeToContents)
 
         self._delete_button = QPushButton("Delete")

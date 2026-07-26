@@ -73,8 +73,9 @@ for replicates that pin every parameter and never read it.
 
 from __future__ import annotations
 
+import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any, Self
 from uuid import uuid4
@@ -399,6 +400,71 @@ class Pipeline(_Artifact):
         raise KeyError(node_id)
 
 
+def _params_fingerprint(nodes: Sequence[Node], replicate: Replicate | None) -> str:
+    """Canonical text standing for everything `replicate` runs the graph with.
+
+    Two replicates are in the same equivalence group exactly when this string
+    matches, so it is a key rather than a digest — the string *is* what gets
+    compared, and there is no collision to reason about. Canonical in the same
+    sense `cache_key.py` will use: JSON with sorted keys, so `{"a": 1, "b": 2}`
+    and `{"b": 2, "a": 1}` are one value and not two groups.
+
+    Not `hash()`: it is salted per process on `str`, so a group number derived
+    from it would be stable within a session and different in the next one.
+    Nothing here may be stored, but a number that changes on restart is a
+    number that shows up as a spurious diff the moment anyone screenshots or
+    logs a table.
+
+    Raises:
+        TypeError: if a parameter value cannot enter JSON — which is the same
+            failure `Project.to_yaml` would give it, named at the same place.
+    """
+    return json.dumps(
+        [[node.node_id, resolved_params(node, replicate)] for node in nodes],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def equivalence_groups(pipeline: Pipeline, replicates: Sequence[Replicate]) -> tuple[int, ...]:
+    """Group number per replicate, positionally, counting from 1.
+
+    Walk in order and assign the next unused integer on first sight of a set of
+    resolved parameters: the first replicate gets 1, everything matching it gets
+    1, the first that differs gets 2, everything matching *that* gets 2. The
+    result is as long as `replicates` and lines up with it index for index.
+
+    **Derived on every read, never stored.** A cached group number is a number
+    that goes stale — every parameter edit anywhere in the graph can move any
+    replicate into or out of any group, so the invalidation rule would be "on
+    everything", which is the same thing as recomputing.
+
+    **The numbers are positional labels, not identities.** They are stable for a
+    given document, because `Project.replicates` is ordered and that order is
+    meaningful, and they are *not* stable across edits: pinning a parameter on
+    replicate 1 renumbers every group below it. Nothing durable may reference
+    one. Output paths, sink names, and report keys use `replicate_id`.
+
+    Node order is the graph's declaration order, and the choice is genuinely
+    free: every replicate is fingerprinted under the same order, so reordering
+    the nodes changes each fingerprint and changes no *grouping*. The TODO item
+    asked for topological order, which would buy nothing here and would put a
+    `dag.py` dependency underneath a function that is pure arithmetic over
+    `resolved_params`.
+
+    A replicate that pins a parameter to the value it was already inheriting
+    stays in its group, because `with_param_edit` diffs before it pins and so
+    stores nothing — the group tracks what a replicate *runs with*, not whether
+    a user has visited it.
+    """
+    groups: dict[str, int] = {}
+    numbers: list[int] = []
+    for replicate in replicates:
+        fingerprint = _params_fingerprint(pipeline.nodes, replicate)
+        numbers.append(groups.setdefault(fingerprint, len(groups) + 1))
+    return tuple(numbers)
+
+
 class Project(_Artifact):
     """A source video, how it is cut, what runs on it, and what comes out.
 
@@ -579,6 +645,16 @@ class Project(_Artifact):
         """
         node = self.pipeline.node(node_id)
         return resolved_params(node, None if replicate_id is None else self.replicate(replicate_id))
+
+    def equivalence_groups(self) -> tuple[int, ...]:
+        """Group number per replicate, in `replicates` order.
+
+        A lookup around the module function, for the same reason `params_for`
+        is one around `resolved_params`: the caller holds a document, and
+        pairing the graph with the replicate set itself is the step where a
+        second answer gets invented.
+        """
+        return equivalence_groups(self.pipeline, self.replicates)
 
     def with_param_edit(self, node_id: str, replicate_id: str, params: Mapping[str, Any]) -> Self:
         """Configure `node_id` for one replicate, and move the default with it.

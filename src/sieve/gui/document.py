@@ -14,6 +14,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QUndoStack
 
+from sieve.core.pipeline_model import Pipeline, equivalence_groups
 from sieve.core.replicates import Replicate, ReplicateSet
 from sieve.core.types import ROI
 from sieve.gui.commands import (
@@ -33,10 +34,15 @@ class ReplicateDocument(QObject):
     replicate_changed = Signal(int)
     #: A row was added at this position, by a user action or a redo.
     replicate_added = Signal(int)
+    #: The graph changed, so every replicate's equivalence group may have. No
+    #: row index: a parameter edit anywhere can move any replicate into or out
+    #: of any group, so there is no smaller claim to make than "all of them".
+    grouping_changed = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._replicates = ReplicateSet()
+        self._pipeline = Pipeline()
         self._source_size: tuple[int, int] | None = None
         self.undo_stack = QUndoStack(self)
 
@@ -58,7 +64,43 @@ class ReplicateDocument(QObject):
         """Dimensions of the video these replicates were cut from."""
         return self._source_size
 
+    @property
+    def pipeline(self) -> Pipeline:
+        """The graph these replicates are processed by, empty until one is set.
+
+        The document holds it rather than resolving it from somewhere on demand
+        because a replicate's deviation is stored against a node id: without
+        the graph, `overrides` is a mapping whose keys name nothing and the
+        equivalence groups below cannot be computed at all.
+        """
+        return self._pipeline
+
+    def equivalence_groups(self) -> tuple[int, ...]:
+        """Group number per row, derived on every call.
+
+        Delegates to `core`, and must keep doing so — the number a table paints
+        and the number a report prints have to come from one definition, for the
+        same reason `resolved_params` is the only answer to what a node runs
+        with. An empty graph puts every replicate in group 1, which is the
+        correct answer to "which of these run the same thing" when the answer is
+        "nothing yet".
+        """
+        return equivalence_groups(self._pipeline, self._replicates.as_list())
+
     # ---- lifecycle -------------------------------------------------------
+
+    def set_pipeline(self, pipeline: Pipeline) -> None:
+        """Attach a graph, announcing that every group number may have moved.
+
+        Not undoable and not a command: this is how a loaded project or a
+        future graph editor hands the document the graph, not a user edit to
+        it. When there is a GUI that edits nodes, its edits go through the undo
+        stack and land here — the setter stays the one write either way.
+        """
+        if pipeline == self._pipeline:
+            return
+        self._pipeline = pipeline
+        self.grouping_changed.emit()
 
     def bind_source(self, width: int, height: int) -> None:
         """Attach to a new source video, discarding replicates and history.
@@ -67,18 +109,27 @@ class ReplicateDocument(QObject):
         across a file open would silently reinterpret them against different
         dimensions. Clearing is not undoable for the same reason — there is no
         coherent state to return to once the source is gone.
+
+        The graph goes with them. It is not geometry and would survive the
+        reinterpretation, but a replicate's deviation is keyed by node id, so
+        keeping the graph while dropping every replicate leaves a set of
+        defaults tuned against footage nobody is looking at any more.
         """
         self._source_size = (width, height)
-        self._replicates.clear()
-        self.undo_stack.clear()
+        self._reset()
         self.structure_changed.emit()
 
     def unbind_source(self) -> None:
         """Detach from any source video."""
         self._source_size = None
-        self._replicates.clear()
-        self.undo_stack.clear()
+        self._reset()
         self.structure_changed.emit()
+
+    def _reset(self) -> None:
+        """Drop replicates, graph, and history without announcing structure."""
+        self._replicates.clear()
+        self._pipeline = Pipeline()
+        self.undo_stack.clear()
 
     # ---- user intents ----------------------------------------------------
 

@@ -19,6 +19,7 @@ from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI, ChannelSpec, Frame
+from sieve.pipeline import cache_key
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import FrameResult, FrameSource, UnrunnableNodeError, execute
@@ -127,6 +128,25 @@ def plan_for(
         backend=Backend.CPU,
         replicate=replicate,
     )
+
+
+def _every_backend_runs(backend: Backend) -> bool:
+    """What `runtime_available` answers once cupy is installed.
+
+    Module level so the two backend tests share one definition rather than
+    each declaring its own lambda, which pyright cannot type.
+    """
+    return True
+
+
+def _pretend_identity(backend: Backend) -> str:
+    """What `backend_identity` returns once cupy's dist-info is readable.
+
+    Distinct per backend, which is the only property the key derivation needs
+    of it — the real string names a numpy or cupy version, and nothing hashes
+    it for anything but inequality.
+    """
+    return f"pretend-{backend}"
 
 
 @pytest.fixture(autouse=True)
@@ -263,18 +283,14 @@ def test_the_backend_is_pinned_to_the_plans(monkeypatch: pytest.MonkeyPatch) -> 
     detect: the entry is served, the numbers are plausible, and only a machine
     that ran the CPU kernel disagrees.
 
-    Both halves of the seam are fake and have to be. There is no CUDA on the
-    machines this suite runs on, and the claim being tested is about which of
-    two available kernels is chosen — a claim that is vacuous unless two are
-    available. `backend_identity` is why the mirror-image test cannot exist:
-    building a *GPU* plan needs a real cupy version, and refusing to invent one
-    is correct of it.
+    `runtime_available` is faked because the claim is about which of two
+    *available* kernels is chosen, and that claim is vacuous unless two are
+    available — `select` skips GPU on a machine with no cupy, so without the
+    fake this test would pass on a registry that had no GPU kernel in it at
+    all. Nothing about the hardware is being simulated: `runtime_available` is
+    a `find_spec` call, so what is faked is a packaging fact.
     """
-
-    def every_backend_runs(backend: Backend) -> bool:
-        return True
-
-    monkeypatch.setattr("sieve.backend.dispatch.runtime_available", every_backend_runs)
+    monkeypatch.setattr("sieve.backend.dispatch.runtime_available", _every_backend_runs)
     shelf = KernelRegistry()
     shelf.register(SHELF.get("tag", "1.0.0"), Backend.CPU, tag_cpu)
 
@@ -286,6 +302,61 @@ def test_the_backend_is_pinned_to_the_plans(monkeypatch: pytest.MonkeyPatch) -> 
     results = run(plan_for(Pipeline(nodes=(node("t"),))), ListSource(), kernels=shelf)
 
     assert len(results) == 3
+
+
+def test_a_gpu_run_is_not_served_the_cpu_runs_cache_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The failure the pinning exists to prevent, stated end to end.
+
+    The test above proves the executor *selects* the right kernel. This proves
+    the consequence that actually matters: two plans over one graph, one span,
+    and one source, differing only in backend, do not share a single store
+    entry. If backend identity ever stopped reaching the key — dropped from the
+    digest, or a filter wrongly claiming `backend_agnostic` — selection would
+    still be correct and the CPU's frames would be served to the GPU run
+    anyway. Nothing downstream could detect that.
+
+    Both fakes are packaging facts rather than hardware ones. `backend_identity`
+    is patched at its import site the way `test_cache_key.py` does it, because
+    the function reads cupy's *dist-info* — it never imports cupy and never
+    opens a driver — so what is missing on this machine is a wheel, not a GPU.
+    A real `uv pip install cupy-cuda12x` would remove both fakes and change
+    nothing else about what is asserted.
+    """
+    monkeypatch.setattr("sieve.backend.dispatch.runtime_available", _every_backend_runs)
+    monkeypatch.setattr(cache_key, "backend_identity", _pretend_identity)
+
+    shelf = KernelRegistry()
+    shelf.register(SHELF.get("tag", "1.0.0"), Backend.CPU, tag_cpu)
+
+    def tag_gpu(frame: Frame, params: TagParams) -> Frame:
+        # Distinguishable from `tag_cpu`, which adds `amount`. A GPU kernel
+        # that returned the same bytes would let a served CPU entry pass.
+        return Frame(data=frame.data * np.uint8(2), index=frame.index, channels=frame.channels)
+
+    shelf.register(SHELF.get("tag", "1.0.0"), Backend.GPU, tag_gpu)
+
+    pipeline = Pipeline(nodes=(node("t"),))
+    on_cpu = plan_for(pipeline)
+    on_gpu = ExecutionPlan.build(
+        Dag.build(pipeline, SHELF),
+        source=SOURCE,
+        span=DEFAULT_SPAN,
+        backend=Backend.GPU,
+    )
+    assert on_cpu.keys["t"] != on_gpu.keys["t"]
+
+    store = MemoryFrameStore()
+    cpu_results = run(on_cpu, ListSource(), store=store, kernels=shelf)
+    gpu_results = run(on_gpu, ListSource(), store=store, kernels=shelf)
+
+    assert all(not result.from_cache for result in gpu_results)
+    assert len(store) == 2 * len(on_cpu.decode_range)
+    assert not any(
+        np.array_equal(cpu["t"].data, gpu["t"].data)
+        for cpu, gpu in zip(cpu_results, gpu_results, strict=True)
+    )
 
 
 def test_a_node_with_no_kernel_for_the_plans_backend_says_so() -> None:

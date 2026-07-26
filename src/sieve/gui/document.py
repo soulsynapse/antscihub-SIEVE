@@ -300,12 +300,19 @@ class ReplicateDocument(QObject):
             return
         self.undo_stack.push(RemoveReplicate(self, index))
 
-    def rename(self, index: int, name: str) -> None:
-        """Give the replicate at `index` a new display name."""
+    def rename(self, index: int, name: str) -> bool:
+        """Give the replicate at `index` a new display name.
+
+        Returns whether the name was taken. An empty or unchanged name is not,
+        and the caller cannot work that out for itself without reimplementing
+        the strip-and-compare above — `Qt`'s `setData` has to answer "did the
+        model change?" and answering it wrongly costs the user their feedback.
+        """
         name = name.strip()
         if not name or name == self._replicates[index].name:
-            return
+            return False
         self.undo_stack.push(RenameReplicate(self, index, name))
+        return True
 
     def set_roi(self, index: int, roi: ROI) -> None:
         """Give the replicate at `index` new geometry."""

@@ -68,7 +68,7 @@ class Preferences(QObject):
 
     @adaptive_scrub.setter
     def adaptive_scrub(self, enabled: bool) -> None:
-        self._store(ADAPTIVE_SCRUB, bool(enabled))
+        self._store(ADAPTIVE_SCRUB, bool(enabled), current=self.adaptive_scrub)
 
     @property
     def coarse_interval_seconds(self) -> float:
@@ -85,6 +85,7 @@ class Preferences(QObject):
         self._store(
             COARSE_INTERVAL_SECONDS,
             _clamp(float(seconds), MIN_COARSE_INTERVAL_SECONDS, MAX_COARSE_INTERVAL_SECONDS),
+            current=self.coarse_interval_seconds,
         )
 
     @property
@@ -101,7 +102,11 @@ class Preferences(QObject):
 
     @proxy_width.setter
     def proxy_width(self, width: int) -> None:
-        self._store(PROXY_WIDTH, int(_clamp(float(width), MIN_PROXY_WIDTH, MAX_PROXY_WIDTH)))
+        self._store(
+            PROXY_WIDTH,
+            int(_clamp(float(width), MIN_PROXY_WIDTH, MAX_PROXY_WIDTH)),
+            current=self.proxy_width,
+        )
 
     @property
     def last_video(self) -> Path | None:
@@ -121,7 +126,13 @@ class Preferences(QObject):
         # Silent: `changed` means "reapply the settings you run on", and this
         # key changes nobody's behaviour until the next launch. Emitting it
         # would make every video that opens look like a preference edit.
-        self._store(LAST_VIDEO, "" if path is None else str(path), notify=False)
+        stored = self.last_video
+        self._store(
+            LAST_VIDEO,
+            "" if path is None else str(path),
+            current="" if stored is None else str(stored),
+            notify=False,
+        )
 
     # ---- bulk ------------------------------------------------------------
 
@@ -137,8 +148,20 @@ class Preferences(QObject):
         self._settings.sync()
         self.changed.emit()
 
-    def _store(self, key: str, value: object, notify: bool = True) -> None:
-        if self._settings.value(key) == value:
+    def _store(self, key: str, value: object, *, current: object, notify: bool = True) -> None:
+        """Write `value` under `key`, emitting `changed` only if it is new.
+
+        `current` is the caller's *typed* reading of the preference, not the
+        raw stored value. Comparing raw against typed is the exact mismatch
+        `_as_bool`/`_as_float` exist to absorb, and it hides in testing: within
+        one process `QSettings` answers from its own cache and hands back the
+        `int` it was given, so the guard holds. It is the *next launch* that
+        parses the INI off disk and hands back `"1920"`, which equals nothing,
+        and every reopened preference then rewrites and re-signals on an edit
+        that changed nothing. Each setter has a typed property that already
+        performs the coercion, so the comparison is made where it has happened.
+        """
+        if current == value:
             return
         self._settings.setValue(key, value)
         self._settings.sync()

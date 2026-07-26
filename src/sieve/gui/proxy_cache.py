@@ -1,4 +1,12 @@
-"""A bounded LRU of decoded frames, keyed by frame index.
+"""A bounded LRU of decoded display proxies, keyed by frame index.
+
+Named for the proxy rather than for the frame because `pipeline/cache.py` is
+also a frame cache and the two are unrelated objects. This one holds what the
+viewport is currently showing, keyed by *where in the video* it came from, and
+is discarded when the source closes; that one holds what a filter computed,
+keyed by *what computation produced it*, and is the thing that makes a rerun
+cheap. A name that said only "frame cache" would leave the difference to be
+rediscovered at every call site.
 
 This exists to make coarse scrubbing cost nothing. Snapping drag targets to a
 grid is only a win if the grid points stop being decoded after the first pass,
@@ -26,8 +34,8 @@ from PySide6.QtGui import QImage
 DEFAULT_CAPACITY_BYTES = 96 * 1024 * 1024
 
 
-class FrameCache:
-    """Least-recently-used cache of `QImage` by frame index."""
+class ProxyFrameCache:
+    """Least-recently-used cache of display-proxy `QImage` by frame index."""
 
     def __init__(self, capacity_bytes: int = DEFAULT_CAPACITY_BYTES) -> None:
         self._capacity_bytes = capacity_bytes

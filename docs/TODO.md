@@ -115,25 +115,10 @@ stack** below — those gate nothing and can be taken whenever — and in
 
 # Independent of the stack
 
-These gate nothing below them and can be taken at any point.
-
-## Three small GUI fixes
-
-Each is ~10 lines, all found in the same audit, all in `gui/`.
-
-1. `ReplicateTableModel.setData` returns `True` for a rename the document
-   rejected (empty or unchanged). Qt reads that as "the model changed" and the
-   user gets no feedback. The geometry path twelve lines below already returns
-   `False` correctly.
-2. `Preferences._store` dedupes by comparing a raw stored value against a
-   typed one — the exact mismatch `_as_bool`/`_as_float` exist to absorb. Works
-   on the Windows registry, always misses on INI. Route it through the same
-   coercion or delete the guard and say `changed` may fire spuriously.
-3. Rename `gui/frame_cache.py` -> display-proxy naming. It and the eventual
-   `pipeline/cache.py` are unrelated objects (frame index vs. content hash) and
-   neither name says so. Cheap now, confusing once both exist.
-
-Read: `src/sieve/gui/{replicate_table,preferences,frame_cache}.py`.
+These gate nothing below them and can be taken at any point. The three small
+GUI fixes that sat here are done — see
+`docs/completed-todo/2026.07.26-three-small-gui-fixes.md`, which also records
+why the preferences one could not be tested the obvious way.
 
 ## Drag existing boxes
 

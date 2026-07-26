@@ -114,6 +114,37 @@ class TestChangeSignal:
         preferences.proxy_width = 1920
         assert seen == []
 
+    @pytest.mark.parametrize(
+        ("attribute", "value"),
+        [("adaptive_scrub", True), ("proxy_width", 1920), ("coarse_interval_seconds", 2.5)],
+    )
+    def test_writing_the_same_value_is_silent_over_a_file_qt_did_not_write(
+        self, qapp: object, tmp_path: Path, attribute: str, value: object
+    ) -> None:
+        """The dedupe has to hold against strings, which is what an INI holds.
+
+        Not reachable through a second `QSettings` over the same path: Qt
+        caches a settings file per process, so an in-session "reopen" is
+        answered from the same in-memory copy and hands back the int it was
+        given. The file below is what the *next launch* parses — plain text,
+        every value a string — and it is also the hand-edited case. Against a
+        raw comparison every one of these writes and emits `changed`, so the
+        pane reapplies settings nobody touched.
+        """
+        del qapp
+        ini = tmp_path / "prior-session.ini"
+        ini.write_text(
+            "[decode]\nproxy_width=1920\n\n[scrub]\nadaptive=true\ncoarse_interval_seconds=2.5\n",
+            encoding="utf-8",
+        )
+
+        preferences = Preferences(QSettings(str(ini), QSettings.Format.IniFormat))
+        seen: list[int] = []
+        preferences.changed.connect(lambda: seen.append(1))
+        setattr(preferences, attribute, value)
+
+        assert seen == []
+
     def test_restore_defaults_emits_once_and_resets_everything(
         self, preferences: Preferences
     ) -> None:

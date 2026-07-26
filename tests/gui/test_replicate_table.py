@@ -160,6 +160,20 @@ class TestEditing:
         assert not model.setData(_cell(model, Column.WIDTH), value, EDIT)
         assert document.undo_stack.count() == before
 
+    @pytest.mark.parametrize("value", ["", "   ", "Replicate 1"])
+    def test_a_rename_the_document_refuses_is_reported_as_no_change(
+        self, model: ReplicateTableModel, document: ReplicateDocument, value: str
+    ) -> None:
+        """Empty, whitespace, and unchanged are all names the document drops.
+
+        `True` here would tell Qt the model changed, and the user would see a
+        cell repaint as if the rename had been taken.
+        """
+        before = document.undo_stack.count()
+        assert not model.setData(_cell(model, Column.NAME), value, EDIT)
+        assert document.at(0).name == "Replicate 1"
+        assert document.undo_stack.count() == before
+
     @pytest.mark.parametrize("column", [Column.AREA, Column.GROUP])
     def test_a_derived_column_refuses_edits(
         self, model: ReplicateTableModel, column: Column

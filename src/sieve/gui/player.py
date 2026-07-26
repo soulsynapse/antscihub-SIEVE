@@ -17,7 +17,7 @@ fall; it does nothing about the cost of the one decode it still has to do. On
 the reference source that is ~68 ms, most of it an irreducible container seek,
 and on a slower machine it is worse. When sustained scrub latency exceeds the
 budget the player snaps drag targets to a coarse grid and serves them from
-`FrameCache`, which costs nothing because a cache hit does not seek. The
+`ProxyFrameCache`, which costs nothing because a cache hit does not seek. The
 decision lives in `ScrubPolicy`; releasing the slider always decodes the exact
 frame regardless of mode.
 
@@ -53,8 +53,8 @@ from sieve.core.pipeline_model import ClipRange
 from sieve.core.types import VideoMetadata
 from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
 from sieve.gui.decode_worker import DecodeWorker
-from sieve.gui.frame_cache import FrameCache
 from sieve.gui.preferences import Preferences
+from sieve.gui.proxy_cache import ProxyFrameCache
 from sieve.gui.scrub_policy import ScrubPolicy
 from sieve.gui.timeline_model import playback_step
 
@@ -100,7 +100,7 @@ class VideoPlayer(QObject):
         self._window: ClipRange | None = None
         self._coalescer = RequestCoalescer()
 
-        self._cache = FrameCache()
+        self._cache = ProxyFrameCache()
         # Injectable so the degradation path can be exercised against a
         # threshold a test can actually cross. On a machine fast enough to
         # meet the budget the default policy never degrades, which is correct

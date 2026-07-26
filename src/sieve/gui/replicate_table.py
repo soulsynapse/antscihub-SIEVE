@@ -139,8 +139,11 @@ class ReplicateTableModel(QAbstractTableModel):
         column = Column(index.column())
 
         if column is Column.NAME:
-            self._document.rename(row, str(value))
-            return True
+            # `False` leaves the previous name showing, which is the whole
+            # feedback the user gets that an empty or unchanged name was
+            # refused. Returning `True` unconditionally tells Qt the model
+            # changed and it repaints a cell that did not.
+            return self._document.rename(row, str(value))
         if column in _DERIVED:
             return False
 

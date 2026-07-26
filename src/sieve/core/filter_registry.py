@@ -121,6 +121,7 @@ def register_filter(
     warmup_frames: int = 0,
     rate_changing: bool = False,
     deterministic: bool = True,
+    stateful: bool = False,
     backend_agnostic: bool = False,
     primary_params: tuple[str, ...] = (),
     registry: FilterRegistry | None = None,
@@ -150,6 +151,7 @@ def register_filter(
             warmup_frames=warmup_frames,
             rate_changing=rate_changing,
             deterministic=deterministic,
+            stateful=stateful,
             backend_agnostic=backend_agnostic,
             primary_params=primary_params,
         )

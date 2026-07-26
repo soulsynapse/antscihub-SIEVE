@@ -12,6 +12,16 @@ absence of a GPU kernel is answered here once rather than by an `if cupy` in
 every filter module. That is also what keeps `backend/` free of any filter's
 implementation — non-negotiable #3 fails the moment adding a filter means
 editing a file in this package.
+
+**State belongs to the run, and this is where that is made structural.** A
+streaming filter that has to remember the last frame — a background model, an
+IIR, a tracker — is still one frame in, one frame out; it only needs somewhere
+to keep what it learned. The obvious place is the kernel object, and it is
+wrong: two replicates previewing the same node concurrently are two states, and
+a kernel closing over its own would mix them silently, producing plausible
+frames from a background model fed by two arenas. So the state is created by
+`KernelBinding.start`, once per run, by a caller that is starting one — and a
+kernel with no state to keep is unchanged, unwrapped, and pays nothing.
 """
 
 from __future__ import annotations
@@ -20,7 +30,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from importlib.util import find_spec
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, cast
 
 from sieve.core.filter_base import FilterSpec, ParamsBase
 from sieve.core.types import Frame
@@ -47,6 +57,12 @@ DEFAULT_PREFERENCE: tuple[Backend, ...] = (Backend.GPU, Backend.CPU)
 ParamsT_contra = TypeVar("ParamsT_contra", bound=ParamsBase, contravariant=True)
 ParamsT = TypeVar("ParamsT", bound=ParamsBase)
 
+#: Whatever a stateful kernel's factory returns. Unbounded on purpose: the
+#: registry never inspects it, and requiring a base class would make every
+#: filter's private scratch space a public type in this package.
+StateT_contra = TypeVar("StateT_contra", contravariant=True)
+StateT = TypeVar("StateT")
+
 
 class Kernel(Protocol[ParamsT_contra]):
     """One frame in, one frame out, on one backend.
@@ -62,6 +78,25 @@ class Kernel(Protocol[ParamsT_contra]):
     def __call__(self, frame: Frame, params: ParamsT_contra, /) -> Frame: ...
 
 
+class StatefulKernel(Protocol[ParamsT_contra, StateT_contra]):
+    """The same shape, plus somewhere to keep what the last frame taught it.
+
+    Not the second protocol the docstring above declines to invent. That one is
+    about kernels whose *arity in frames* is different — a span in, a frame out;
+    a frame in, sometimes nothing out; two frames in, one out — and each needs a
+    decision about what the executor hands over and what it does with the
+    answer. This is one frame in and one frame out, unchanged, with a third
+    argument the executor does not read, does not key on, and never constructs
+    itself: `start` mints it and the closure carries it.
+
+    Positional-only for `Kernel`'s reason. `state` last because a filter author
+    writing their first stateful kernel edits a signature they already know
+    rather than learning a new one.
+    """
+
+    def __call__(self, frame: Frame, params: ParamsT_contra, state: StateT_contra, /) -> Frame: ...
+
+
 class DuplicateKernelError(LookupError):
     """Two kernels claim the same filter, version, and backend."""
 
@@ -72,16 +107,42 @@ class NoKernelError(LookupError):
 
 @dataclass(frozen=True, slots=True)
 class KernelBinding:
-    """The kernel `select` chose, and which backend it came from.
+    """The kernel `select` chose, which backend it came from, and how to start it.
 
-    Both halves are needed and neither is derivable from the other: the callable
-    is what runs, and the backend is what enters the cache key for every filter
-    that has not declared `backend_agnostic`. Returning only the callable would
-    make the executor guess at what it just ran.
+    The first two are needed and neither is derivable from the other: the
+    callable is what runs, and the backend is what enters the cache key for
+    every filter that has not declared `backend_agnostic`. Returning only the
+    callable would make the executor guess at what it just ran.
+
+    `run` is deliberately not the thing a caller invokes. It is the registered
+    function, which for a stateful kernel takes three arguments and cannot be
+    called without a state nobody has made yet; `start` is what turns either
+    shape into the two-argument callable the executor's loop knows.
     """
 
     backend: Backend
-    run: Kernel[Any]
+    run: Kernel[Any] | StatefulKernel[Any, Any]
+    #: How to make one run's state, or `None` for a kernel that keeps none.
+    state_factory: Callable[[], Any] | None = None
+
+    def start(self) -> Kernel[Any]:
+        """A callable for exactly one run, with its own state if it needs any.
+
+        Called once per `execute`, not once per frame — the state has to see
+        every frame of the run in order, which is the whole reason it exists.
+        Calling it twice makes two independent runs, which is the right answer
+        for two concurrent previews and the wrong one for a resumed loop.
+
+        A stateless kernel is returned unwrapped. That is not just an
+        optimisation: it means every existing kernel keeps its identity, so a
+        benchmark or an equivalence test that names `downsample_cpu` still gets
+        the function it named.
+        """
+        if self.state_factory is None:
+            return cast(Kernel[Any], self.run)
+        stateful = cast(StatefulKernel[Any, Any], self.run)
+        state = self.state_factory()
+        return lambda frame, params: stateful(frame, params, state)
 
 
 def runtime_available(backend: Backend) -> bool:
@@ -103,26 +164,58 @@ class KernelRegistry:
     """Lookup from a spec and a backend to the callable that implements it."""
 
     def __init__(self) -> None:
-        self._kernels: dict[tuple[str, str, Backend], Kernel[Any]] = {}
+        # The value is the binding rather than the callable, so the state
+        # factory travels with the kernel it belongs to. A parallel dict keyed
+        # the same way would be a second place to forget.
+        self._kernels: dict[tuple[str, str, Backend], KernelBinding] = {}
 
     def __len__(self) -> int:
         return len(self._kernels)
 
-    def register(self, spec: FilterSpec, backend: Backend, run: Kernel[Any]) -> None:
+    def register(
+        self,
+        spec: FilterSpec,
+        backend: Backend,
+        run: Kernel[Any] | StatefulKernel[Any, Any],
+        *,
+        state_factory: Callable[[], Any] | None = None,
+    ) -> None:
         """Bind `run` as `spec`'s implementation on `backend`.
+
+        Args:
+            spec: the filter this implements.
+            backend: the device family `run` is written against.
+            run: the kernel. Three-argument when `state_factory` is given, two
+                otherwise.
+            state_factory: how to make one run's state, for a kernel that keeps
+                any. Its presence is what makes `run` be called with three
+                arguments, so the two travel together and cannot disagree.
 
         Raises:
             DuplicateKernelError: if that triple is already bound. The failure
                 this catches is a module copy-pasted without changing its id,
                 which would otherwise silently replace another filter's kernel
                 while leaving that filter's cache entries in place.
+            ValueError: if `state_factory` is given for a spec that does not
+                declare `stateful`. The two say the same thing to different
+                readers — the factory to this registry, the declaration to
+                `dag.py`, which is what decides the node may not be cached — and
+                a kernel that kept state behind a spec that did not say so would
+                have its span-dependent output written into the cache under a
+                key that does not carry the span.
         """
+        if state_factory is not None and not spec.stateful:
+            raise ValueError(
+                f"{spec.filter_id} {spec.version} registers a stateful {backend} kernel but its "
+                "spec does not declare stateful=True, so dag.py would give the node a cache key "
+                "and serve its output to a run that started somewhere else"
+            )
         key = (spec.filter_id, spec.version, backend)
         if key in self._kernels:
             raise DuplicateKernelError(
                 f"{spec.filter_id} {spec.version} already has a {backend} kernel"
             )
-        self._kernels[key] = run
+        self._kernels[key] = KernelBinding(backend=backend, run=run, state_factory=state_factory)
 
     def backends_for(self, spec: FilterSpec) -> tuple[Backend, ...]:
         """Backends `spec` has a kernel for, in `Backend` declaration order.
@@ -153,9 +246,9 @@ class KernelRegistry:
                 different problems with different fixes.
         """
         for backend in preference:
-            run = self._kernels.get((spec.filter_id, spec.version, backend))
-            if run is not None and runtime_available(backend):
-                return KernelBinding(backend=backend, run=run)
+            binding = self._kernels.get((spec.filter_id, spec.version, backend))
+            if binding is not None and runtime_available(backend):
+                return binding
         registered = self.backends_for(spec)
         raise NoKernelError(
             f"no usable kernel for {spec.filter_id} {spec.version}: "
@@ -204,6 +297,48 @@ def kernel(
 
     def decorate(run: Kernel[ParamsT]) -> Kernel[ParamsT]:
         (registry if registry is not None else KERNELS).register(spec, backend, run)
+        return run
+
+    return decorate
+
+
+def stateful_kernel(
+    params_model: type[ParamsT],
+    backend: Backend,
+    *,
+    state: Callable[[], StateT],
+    registry: KernelRegistry | None = None,
+) -> Callable[[StatefulKernel[ParamsT, StateT]], StatefulKernel[ParamsT, StateT]]:
+    """Decorate a three-argument function as `params_model`'s kernel on `backend`.
+
+    A separate decorator rather than an optional argument to `kernel`, because
+    the two decorate functions of different arity and one decorator would have
+    to type its argument as the union — which would let a two-argument kernel be
+    registered with a state factory and fail at the first frame rather than at
+    import.
+
+    Args:
+        params_model: the registered filter this implements.
+        backend: the device family the kernel is written against.
+        state: called once per run to make that run's state. A class is the
+            usual argument, and anything zero-argument works.
+        registry: the shelf to register on. Defaults to the process-wide one.
+
+    Raises:
+        TypeError: if `params_model` carries no spec, as `kernel`.
+        ValueError: if the spec does not declare `stateful`. See
+            `KernelRegistry.register`.
+    """
+    spec = params_model.__filter_spec__
+    if spec is None:
+        raise TypeError(
+            f"{params_model.__name__} has no filter spec: @stateful_kernel implements a registered "
+            "filter, so the params class it names must carry @register_filter"
+        )
+
+    def decorate(run: StatefulKernel[ParamsT, StateT]) -> StatefulKernel[ParamsT, StateT]:
+        shelf = registry if registry is not None else KERNELS
+        shelf.register(spec, backend, run, state_factory=state)
         return run
 
     return decorate

@@ -35,7 +35,7 @@ the point and starting them would be the mistake.
 
 ## GPU execution
 
-**Why not now.** There are zero GPU kernels and one filter. The product is not
+**Why not now.** There are zero GPU kernels and two filters. The product is not
 at feature parity with what VISION describes on the backend that already works,
 and adding a second backend before the first one carries a real workflow means
 maintaining two of everything to make nothing new possible.
@@ -45,6 +45,16 @@ the bottleneck of a tuning session — not a kernel that is merely slow, but one
 where `bench/budgets.py` is being missed because of it and the profile says so.
 VISION's detection and tracking steps are the likely first candidates;
 `downsample` is not.
+
+**`background_ema` is the first filter for which the arithmetic below no longer
+refuses.** At 9.9 ms/MP it is ~30x `downsample`, so on the reference source a
+frame costs order 200 ms on CPU against ~10 ms of round trip — the transfer is
+now 5% of the work rather than double it. That does *not* promote this entry:
+the trigger is a missed budget with a profile behind it, and no in-pipeline
+budget can be missed until `pipeline/preview.py` exists to publish one. What it
+does mean is that the answer to "would a GPU kernel pay?" has flipped from
+"provably not, for the only filter we have" to "probably, and somebody should
+measure it" — and that measurement is step one of acting on this entry.
 
 **What it involves, so the size is not a surprise:**
 
@@ -103,17 +113,25 @@ shape has a different trigger and they are unlikely to arrive together:
   on `Edge` first. That is a change to the saved artifact and to every edge ever
   written, which `filter_base.py`'s `StreamSpec` docstring already prices.
 
-**A fourth shape is not deferred, and this entry used to imply it was.** A
-*stateful streaming* filter — one frame in, one frame out, carrying what it
-learned from the last frame — is refused by nothing and expressible by nothing:
-the executor runs it happily and `Kernel` has nowhere to keep the state. It is
-the only one of the four whose supporting machinery is already built and
-property-tested (`warmup_frames`, `source_warmup_frames`, `lead_in_shortfall`),
-so the lead-in is currently decoded and discarded on behalf of state that
-cannot exist. That makes it takeable rather than deferred, and it has moved to
-`TODO.md` as "A kernel that can remember". The three shapes above stay here.
+**A fourth shape was never deferred and is now built.** A *stateful streaming*
+filter — one frame in, one frame out, carrying what it learned from the last
+frame — needed no new arity, only somewhere to keep the state. `StatefulKernel`
+and `KernelBinding.start` are that, and `background_ema` is the filter; see
+`docs/completed-todo/2026.07.26-a-kernel-that-can-remember.md`. The three shapes
+above stay here, and the precedent it sets for them is worth naming: the state
+lives on the *binding*, made once per `execute`, so whatever a windowed or
+merging kernel needs to be handed, it will be handed by `start` and not by a
+registry entry.
 
-Read: `src/sieve/backend/dispatch.py` `Kernel`,
+One consequence for the WINDOWED trigger specifically. A temporal median was
+named above as the likeliest first windowed filter, on the grounds that it is
+what background subtraction wants; there is now an EMA background model that
+does the job streaming. That does not remove the trigger — a median is robust to
+transient occlusion in a way an EMA is not — but it does mean the first windowed
+filter has to earn its place against something that already works, rather than
+being the only way to get a background.
+
+Read: `src/sieve/backend/dispatch.py` `Kernel` and `StatefulKernel`,
 `src/sieve/pipeline/executor.py` `UnrunnableNodeError`.
 
 ## Sink writers
@@ -380,12 +398,17 @@ interval directly — the seek cost, the colour conversion, the scrub round trip
 time go*, and that question has not been asked yet.
 
 **What would make it the right time.** A budget miss whose cause is not obvious
-from the span that reported it. The metric bus in `TODO.md` is what makes that
-situation reachable: once spans are published against budget keys, a miss
-arrives with a key and no explanation, and that is exactly the gap
-`bench/profiling.py` fills. The two tools are complementary and both are already
-declared — VizTracer for phase structure, py-spy for sampling a process nobody
-instrumented — so this is wiring, not a choice.
+from the span that reported it. Half of that is now in place: `bench/metrics.py`
+publishes spans against budget keys and `Sample.within_budget` says which
+missed, so a miss can arrive with a key and no explanation — which is exactly
+the gap `bench/profiling.py` fills. The other half is a *nested* span worth
+attributing, and today the only publisher is `gui/player.py`'s scrub round trip,
+whose cause is already known (`docs/findings/2026.07.25-the-seek-is-irreducible.md`).
+The trigger is therefore the preview: a `full_preview_render` miss over a
+multi-node graph is the first question of the form "which node?". The two tools
+are complementary and both are already declared — VizTracer for phase structure,
+py-spy for sampling a process nobody instrumented — so this is wiring, not a
+choice.
 
 Read: `docs/SCAFFOLD.md` `bench/profiling.py`, `docs/findings/`,
 `pyproject.toml` dev group.

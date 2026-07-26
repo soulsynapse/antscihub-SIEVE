@@ -19,6 +19,20 @@ reader is a `FrameSource` rather than a `VideoReader` for the same reason the
 store is a protocol: a run over materialized frames (VISION step 4) is the same
 executor with a different source, not a mode.
 
+**A stateful node keeps its state in its binding, and is never served a cache
+entry.** The second half is not enforced here — `FilterSpec.cacheable` excludes
+`stateful`, so the plan carries no key for such a node and the `key is None`
+branch below already computes it and stores nothing. Why the category is
+excluded is
+`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`; what
+matters to this loop is the consequence, which is that a stateful node sees
+every frame of `decode_range` in order and never a gap. A store that could serve
+frame `i-1` and miss frame `i` would leave the kernel running on a state that
+had seen nothing, and there is no branch here defending against that because
+there is no key to hit. What the lead-in is for finally has a consumer: those
+frames reach the kernel, settle its state, and are discarded before the caller
+sees anything.
+
 **The backend is the plan's, per node.** `KernelRegistry.select` is asked for
 `plan.backend_for(node_id)` alone rather than for a preference order, because
 the plan's keys already have that backend hashed into them for every filter
@@ -190,6 +204,15 @@ def _bind(plan: ExecutionPlan, kernels: KernelRegistry) -> dict[str, Kernel[Any]
     to deliver a message that was available immediately. Every rejection here
     is static: it reads declarations and the kernel shelf, and nothing about
     the footage can change the answer.
+
+    **`start()` rather than `.run`, and that is what makes state per-run.** This
+    function is called once inside `execute`, so a stateful node's state is
+    created here, lives in the closure `start` returned, and is unreachable from
+    anywhere else — two concurrent `execute` calls over the same node are two
+    bindings and therefore two states, with no registry entry, no dict keyed by
+    node id, and nothing to reset between runs. The generator is the state's
+    lifetime, which is also the right one: a caller that cancels a preview by
+    abandoning the iterator drops the half-warmed background model with it.
     """
     bindings: dict[str, Kernel[Any]] = {}
     for node in plan.dag.order:
@@ -212,7 +235,7 @@ def _bind(plan: ExecutionPlan, kernels: KernelRegistry) -> dict[str, Kernel[Any]
             )
         # A one-element preference: see the module docstring. A fallback here
         # would write entries keyed on a backend that did not produce them.
-        bindings[node.node_id] = kernels.select(spec, (plan.backend_for(node.node_id),)).run
+        bindings[node.node_id] = kernels.select(spec, (plan.backend_for(node.node_id),)).start()
     return bindings
 
 

@@ -114,11 +114,21 @@ its first producer. Nothing below needs to invent a callback to report through
 or a place to compare a duration against a ceiling. See
 `docs/completed-todo/2026.07.26-the-metric-bus.md`.
 
+A kernel can now keep state across frames, so the warmup arithmetic has a
+consumer. `KernelBinding.start` mints one state per `execute` — the lifetime is
+the generator's, which is what makes two concurrent previews two models — and
+`background_ema` is the second filter and the first declaring a nonzero
+`warmup_frames`. A stateful node is deliberately uncacheable, and the reason is
+not the obvious one: see
+`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md` before
+assuming a cache key could carry it. Also see
+`docs/completed-todo/2026.07.26-a-kernel-that-can-remember.md`.
+
 What remains is the in-pipeline regime, which has budgets, a plan, an executor,
-a metric bus, and no code that can reach any of it. The four items below are the
-tuning loop VISION step 4 describes, in dependency order: each says what it is
-gated on, so an item can be taken out of order when its gate is already clear
-rather than because it is next in the list.
+a metric bus, two filters, and no code that can reach any of it. The three items
+below are the tuning loop VISION step 4 describes, in dependency order: each
+says what it is gated on, so an item can be taken out of order when its gate is
+already clear rather than because it is next in the list.
 
 ## The representative-clip preview
 
@@ -156,56 +166,6 @@ is also what keeps the GUI from becoming a second execution path.
 Read: `src/sieve/pipeline/{plan,executor,cache,cache_key}.py`,
 `src/sieve/gui/coalescer.py`, `docs/completed-todo/2026.07.25-executor.md`,
 `docs/completed-todo/2026.07.26-the-timeline-replaces-the-transport.md`.
-
-## A kernel that can remember
-
-**Gated on: nothing, but worth little before the preview above can show it.**
-
-`core/filter_base.py` carries the most carefully built arithmetic in the repo:
-`warmup_frames` converted sink-to-root through each node's `output_rate`,
-monotone in its second argument, property-tested in
-`tests/property/test_warmup.py`, with `ExecutionPlan.lead_in_shortfall`
-reporting a window too near the start of the source to warm. `plan.py` decodes
-the lead-in and `executor.py` discards it.
-
-No filter declares a nonzero `warmup_frames`, and none can use one if it did:
-`Kernel` is `(frame, params) -> Frame`, positional-only, with nowhere to put
-state. A warmup exists to settle state across frames. So the lead-in is
-currently decoded and thrown away on behalf of state the protocol cannot hold,
-and every test of that arithmetic is a test of a function with no consumer.
-
-`LATER.md`'s "A kernel protocol that is not one frame in, one frame out" names
-three shapes — `Mode.WINDOWED`, rate-changing, and multi-upstream — and this is
-not one of them. A stateful streaming filter *is* one frame in, one frame out.
-It only needs somewhere to keep what it learned from the last one, which is the
-cheapest of the four changes and the only one that validates work already paid
-for.
-
-Two halves, and the second is what stops the first being designed against
-nothing:
-
-1. Somewhere for per-run kernel state to live. It belongs to the *run*, not to
-   the kernel object — two replicates previewing the same node concurrently are
-   two states, and a kernel that closes over its own would silently mix them.
-   That is the constraint the shape has to satisfy; `dispatch.py`'s reasoning
-   about not inventing a signature before a filter needs one applies here as
-   much as it does to WINDOWED, so this item writes the filter too.
-2. One temporal filter declaring a nonzero `warmup_frames`. An exponential
-   moving-average background model is the smallest honest one: it is VISION
-   step 3's category C, its warmup is nominally infinite so it must declare a
-   settled-within-epsilon number and say which epsilon in its docstring —
-   exactly the case `filter_base.py` describes and nothing exercises — and
-   background subtraction is what VISION step 1 names first.
-
-This is also the second filter, which most of `LATER.md` is waiting on: several
-entries there trigger on "a filter that needs it", and one filter that is
-stateless, rate-preserving, single-upstream, and float-free triggers none of
-them.
-
-Read: `src/sieve/backend/dispatch.py` `Kernel`,
-`src/sieve/core/filter_base.py` `warmup_frames`/`source_warmup_frames`,
-`src/sieve/pipeline/plan.py` `lead_in_shortfall`,
-`src/sieve/filters/downsample.py`, `docs/LATER.md` kernel-protocol entry.
 
 ## The first live graph tick
 

@@ -99,6 +99,27 @@ class ParamsBase(BaseModel):
     #: — a test fixture, or a base another filter's params inherit from.
     __filter_spec__: ClassVar[FilterSpec | None] = None
 
+    @classmethod
+    def spec(cls) -> FilterSpec:
+        """This model's registered spec, or refuse.
+
+        The narrowing every caller was writing by hand. `__filter_spec__` is
+        legitimately optional — a test fixture or a shared base has none — but
+        almost nobody who reaches for it wants the `None`: a kernel decorator, a
+        registry, and a test all want the spec or a clear failure, and each was
+        spelling that out again with a slightly different message.
+
+        Raises:
+            TypeError: if this model carries no spec, meaning it was never
+                decorated with `@register_filter`.
+        """
+        if cls.__filter_spec__ is None:
+            raise TypeError(
+                f"{cls.__name__} has no filter spec: it was never decorated with @register_filter, "
+                "so it has no id, version, or declared I/O"
+            )
+        return cls.__filter_spec__
+
     def canonical_json(self) -> str:
         """Byte-stable JSON of these params, for hashing.
 
@@ -289,6 +310,11 @@ class FilterSpec:
     #: is the only thing that should. An IIR's true warmup is infinite, so a
     #: nonzero value here is a settled-to-within-epsilon choice and the
     #: filter's docstring says which epsilon.
+    #:
+    #: Usually paired with `stateful` below, and deliberately not *required* to
+    #: be. The claim this makes is "my first N outputs are untrustworthy", and
+    #: kernel state is one way to have such outputs rather than the only one — a
+    #: `WINDOWED` filter has them too, and its protocol does not exist yet.
     warmup_frames: int = 0
     #: This filter's output is not indexed like its input — a decimator. Must
     #: agree with whether `params_model` overrides `output_rate`, and the
@@ -301,6 +327,25 @@ class FilterSpec:
     #: Same backend, same input, same output. Gates whether the node may be
     #: cached at all.
     deterministic: bool = True
+    #: This filter's kernel carries state across frames — a background model, an
+    #: IIR, a tracker. Declared here rather than discovered from the kernel
+    #: because the consequence is a *caching* decision and caching is settled by
+    #: `pipeline/dag.py` on a machine that may have no kernels installed.
+    #:
+    #: What it costs is the cache, and the reason is subtler than it looks. Such
+    #: a filter's output at frame `i` depends on every frame from wherever the
+    #: run began — but if its `warmup_frames` is correct, that dependence has
+    #: decayed below the filter's own epsilon by the time any frame is yielded,
+    #: and two runs over different spans agree. Measured; see the finding.
+    #:
+    #: The exclusion is because *nothing can check that*. A key is derived from
+    #: declarations, and a filter declaring `warmup_frames=0` over a running sum
+    #: is indistinguishable here from one declaring 90 over a settled EMA. So a
+    #: served entry would rest on an unverified number in a decorator, and the
+    #: failure lands exactly where `cache_key.py`'s asymmetry rule says it must
+    #: not: well-formed key, plausible frame, no symptom. See
+    #: `docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`.
+    stateful: bool = False
     #: CPU and GPU kernels agree bit for bit. Gates whether backend identity
     #: leaves the cache key. False for essentially every float kernel — cuFFT
     #: and NumPy's FFT do not agree, and neither do two OpenCV SIMD paths — so
@@ -370,8 +415,16 @@ class FilterSpec:
 
     @property
     def cacheable(self) -> bool:
-        """Whether this node's output may be reused from a cache entry."""
-        return self.deterministic
+        """Whether this node's output may be reused from a cache entry.
+
+        Two different disqualifications, and they are not the same one twice.
+        A non-deterministic filter cannot reproduce its own output at all. A
+        stateful one reproduces it exactly, and may well reproduce it across
+        runs too — but only if a number it declared about itself is true, and
+        this property is evaluated where that cannot be checked. See `stateful`
+        above.
+        """
+        return self.deterministic and not self.stateful
 
     @staticmethod
     def stored_bytes_ratio(params: ParamsBase) -> float:

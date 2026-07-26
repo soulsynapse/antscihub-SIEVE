@@ -48,10 +48,16 @@ derived on every read, so the GUI is no longer silent about it.
 Neither `sieve.filters`, `sieve.backend`, nor `sieve.pipeline` is parenthesised
 in `.importlinter` any more. One filter exists and is found by a `pkgutil` scan
 that names nothing, so `cache_key.py` had a real params model to canonicalize
-and a real `backend_identity` to include, and it is now written: every item
-below either folds a node key into a walk (`dag.py`, the executor) or does not
-touch caching at all. Nothing further needs to decide what a key is made of —
-see `docs/completed-todo/2026.07.25-cache-key.md`.
+and a real `backend_identity` to include, and it is now written: nothing further
+needs to decide what a key is made of — see
+`docs/completed-todo/2026.07.25-cache-key.md`.
+
+The walk that folds those keys into a graph is written too. `pipeline/dag.py`
+resolves every node against the registry, rejects cycles and edges whose
+declared types cannot chain, and produces the topological order — one order per
+document, not per traversal — that the executor is to schedule in and that
+`node_keys` already walks. Nothing below needs to sort a graph again; it takes
+`Dag.order`. See `docs/completed-todo/2026.07.25-dag-validation.md`.
 
 The per-replicate threshold-spread probe that sat at the top of this list is
 gone, not deferred: it would have measured one rack under one backlight, and the
@@ -60,19 +66,6 @@ arenas cluster or spread. Reasoning in
 `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
 
 Items under **Independent of the stack** gate nothing and can be taken whenever.
-
-## DAG validation
-
-`pipeline/dag.py`. Construction, cycle detection, topological sort, and the
-static rejection that the declared I/O types exist to enable — resolve each
-node's `filter_id` against the registry, then check that each edge's upstream
-`emits` satisfies the downstream `accepts`.
-
-It also owns the walk `cache_key.py` deliberately does not carry: `node_key`
-takes its upstreams' keys as an argument, so *which* nodes in *what* order is
-the topological sort's answer and there is to be no second traversal.
-
-Read: `docs/ARCHITECTURE.md` Pipeline Model, `src/sieve/pipeline/cache_key.py`.
 
 ## Qt-free coalescer
 
@@ -110,7 +103,14 @@ performance decision; letting its presence decide what the graph is handed
 would make a cache question into a semantic one and break the rule that
 checkpoints are never hashed.
 
-Read: `docs/SCAFFOLD.md` `pipeline/`,
+Ordering and cache lookup are not this item's to invent: `Dag.build` gives the
+schedule as `order`, the resolved `FilterSpec` per node, and `node_keys` for one
+replicate on one backend — a node absent from that map is one that must be
+computed. Warmup is what is genuinely left, and `core.source_warmup_frames`
+wants a root-to-node path, which a DAG has more than one of; the executor has to
+decide that a node's lead-in is the maximum over its paths.
+
+Read: `docs/SCAFFOLD.md` `pipeline/`, `src/sieve/pipeline/dag.py`,
 `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
 
 ## Build the CLI

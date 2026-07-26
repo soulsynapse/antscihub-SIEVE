@@ -25,35 +25,14 @@
 
 The items below are ordered by the layer stack in `ARCHITECTURE.md`, not by
 appeal. Everything unbuilt sits above `core/`, and two of the five
-non-negotiables each gate on one core module: #2 "pipeline is a data structure"
-needs `core/pipeline_model.py`, and #3 "filter = one class + one markdown"
-needs `core/filter_base.py`. Nothing above them — DAG, cache keys, executor,
-CLI — can be written first without being rewritten after.
+non-negotiables each gate on one core module. #3 "filter = one class + one
+markdown" is no longer one of them: `core/filter_base.py` and
+`core/filter_registry.py` exist, so a spec can be declared and looked up. #2
+"pipeline is a data structure" still needs `core/pipeline_model.py`, and
+nothing above it — DAG, cache keys, executor, CLI — can be written first
+without being rewritten after.
 
 Items under **Independent of the stack** gate nothing and can be taken whenever.
-
-## Filter contract
-
-`core/filter_base.py` and `core/filter_registry.py`. The contract as *data*:
-`FilterSpec`, `ParamsBase`, `ArraySpec`, `Mode`. Nothing here executes — that
-is the point, and it is what lets a saved DAG validate structurally with no
-filters installed and no codec present.
-
-The spec carries: one pydantic params model (the single source of truth that
-GUI widgets, CLI flags, YAML, and the cache key all read), `accepts`/`emits`
-array specs, `warmup_frames`, streaming-vs-windowed, `deterministic`,
-`backend_agnostic`, a cost estimate, and explicit semver.
-
-Two flags, not one: `deterministic` means same backend, same input, same
-output, and gates whether the node may be cached at all. `backend_agnostic`
-means CPU and GPU kernels agree bit for bit, and gates whether backend identity
-leaves the cache key. The second is false for essentially every float kernel;
-default it false and make claiming it require an equivalence test.
-
-The registry is a container and a lookup, populated from above by decorators at
-import time. Core defines the shelf; `filters/` puts things on it.
-
-Read: `docs/ARCHITECTURE.md` Extension Pattern, `docs/SCAFFOLD.md` `core/`.
 
 ## Pipeline artifact
 

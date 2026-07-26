@@ -17,6 +17,7 @@ coercion that falls back to the default rather than trusting the store.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Final
 
 from PySide6.QtCore import QObject, QSettings, Signal
@@ -37,6 +38,11 @@ PROXY_WIDTH: Final = "decode/proxy_width"
 DEFAULT_PROXY_WIDTH: Final = 1280
 MIN_PROXY_WIDTH: Final = 320
 MAX_PROXY_WIDTH: Final = 3840
+
+#: The last video successfully opened, reoffered at the next launch. Session
+#: state rather than a tunable: it has no entry in the preferences pane and is
+#: written by the window, not by the user.
+LAST_VIDEO: Final = "session/last_video"
 
 
 class Preferences(QObject):
@@ -97,21 +103,47 @@ class Preferences(QObject):
     def proxy_width(self, width: int) -> None:
         self._store(PROXY_WIDTH, int(_clamp(float(width), MIN_PROXY_WIDTH, MAX_PROXY_WIDTH)))
 
+    @property
+    def last_video(self) -> Path | None:
+        """The video to reoffer at launch, or `None` if there is nothing to offer.
+
+        A path is not validated here. Whether the file still exists is a
+        question about the filesystem now, not about what was stored, and the
+        caller is the only one that knows what to do when the answer is no.
+        """
+        raw = self._settings.value(LAST_VIDEO)
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        return Path(raw)
+
+    @last_video.setter
+    def last_video(self, path: Path | None) -> None:
+        # Silent: `changed` means "reapply the settings you run on", and this
+        # key changes nobody's behaviour until the next launch. Emitting it
+        # would make every video that opens look like a preference edit.
+        self._store(LAST_VIDEO, "" if path is None else str(path), notify=False)
+
     # ---- bulk ------------------------------------------------------------
 
     def restore_defaults(self) -> None:
-        """Drop every stored value, emitting one change rather than three."""
+        """Drop every tunable, emitting one change rather than three.
+
+        `LAST_VIDEO` is deliberately not in the list. Restoring defaults is a
+        statement about how the application should behave, and forgetting which
+        file the user was working on is not one of the things they asked for.
+        """
         for key in (ADAPTIVE_SCRUB, COARSE_INTERVAL_SECONDS, PROXY_WIDTH):
             self._settings.remove(key)
         self._settings.sync()
         self.changed.emit()
 
-    def _store(self, key: str, value: object) -> None:
+    def _store(self, key: str, value: object, notify: bool = True) -> None:
         if self._settings.value(key) == value:
             return
         self._settings.setValue(key, value)
         self._settings.sync()
-        self.changed.emit()
+        if notify:
+            self.changed.emit()
 
 
 def _clamp(value: float, low: float, high: float) -> float:

@@ -4,6 +4,13 @@ Step 2 of the workflow — cut the source into replicates. The split is a real
 splitter rather than a fixed ratio: the table is where the user works once the
 boxes exist, and the viewport is where they work while drawing them, so which
 half deserves the pixels changes within a single session.
+
+The top half is split again, left and right, and the right half is empty — it
+is where the per-frame tools will go. It holds no placeholder text and no
+frame, because an empty pane the user can drag closed says less than a label
+promising something that does not exist yet. The transport bar stays on the
+left with the player rather than spanning the width: it drives the player, and
+a scrubber running under a tool pane would claim to drive that too.
 """
 
 from __future__ import annotations
@@ -70,8 +77,18 @@ class ReplicateTab(QWidget):
         self._table = QTableView()
         self._delegate = EditingAwareDelegate(self._table)
 
+        self._tools_panel = QWidget()
+
+        self._top_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._top_splitter.addWidget(self._build_viewport_panel())
+        self._top_splitter.addWidget(self._tools_panel)
+        self._top_splitter.setStretchFactor(0, 1)
+        self._top_splitter.setStretchFactor(1, 1)
+        self._top_splitter.setSizes([500, 500])
+        self._top_splitter.setChildrenCollapsible(False)
+
         splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self._build_viewport_panel())
+        splitter.addWidget(self._top_splitter)
         splitter.addWidget(self._build_table_panel())
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 1)
@@ -84,6 +101,16 @@ class ReplicateTab(QWidget):
 
         self._connect()
         self._set_transport_enabled(False)
+
+    @property
+    def top_splitter(self) -> QSplitter:
+        """The horizontal split between the player and the tool pane."""
+        return self._top_splitter
+
+    @property
+    def tools_panel(self) -> QWidget:
+        """The empty right half. Whatever is built there parents to this."""
+        return self._tools_panel
 
     # ---- construction ----------------------------------------------------
 

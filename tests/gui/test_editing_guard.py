@@ -15,7 +15,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QModelIndex, QPointF
+from PySide6.QtCore import QModelIndex, QPointF, QSettings
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QTableView, QWidget
 from pytestqt.qtbot import QtBot
@@ -24,6 +24,7 @@ from sieve.core.types import ROI
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.main_window import MainWindow
 from sieve.gui.player import VideoPlayer
+from sieve.gui.preferences import Preferences
 from sieve.gui.replicate_tab import ReplicateTab
 from sieve.gui.replicate_table import Column, EditingAwareDelegate, ReplicateTableModel
 from sieve.gui.video_view import VideoView
@@ -107,9 +108,14 @@ class TestTabRelay:
 
 class TestWindowShortcutGuard:
     @pytest.fixture
-    def window(self, qtbot: QtBot, synthetic_video: Path) -> Iterator[MainWindow]:
-        """A shown window with the synthetic video open and one replicate drawn."""
-        main = MainWindow()
+    def window(self, qtbot: QtBot, tmp_path: Path, synthetic_video: Path) -> Iterator[MainWindow]:
+        """A shown window with the synthetic video open and one replicate drawn.
+
+        Preferences on a temporary INI file: opening a video now records the
+        path, and a test has no business writing that to the real store.
+        """
+        settings = QSettings(str(tmp_path / "sieve.ini"), QSettings.Format.IniFormat)
+        main = MainWindow(Preferences(settings))
         qtbot.addWidget(main)
         main.show()
         main.open_video(synthetic_video)

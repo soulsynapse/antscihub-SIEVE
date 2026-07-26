@@ -16,6 +16,8 @@ def main(argv: list[str] | None = None) -> int:
 
     An optional video path may be passed to skip the open dialog, which is
     what makes a launch-open-first-frame timing straightforward to measure.
+    Without one, the video from the previous session is reopened if it is
+    still where it was.
     """
     argv = list(sys.argv if argv is None else argv)
 
@@ -27,8 +29,12 @@ def main(argv: list[str] | None = None) -> int:
     window = MainWindow()
     window.show()
 
+    # An explicit path wins over the remembered one: the argument is what the
+    # caller asked for now, the preference is what they did last time.
     if len(argv) > 1:
         window.open_video(Path(argv[1]))
+    else:
+        window.restore_last_video()
 
     return app.exec()
 

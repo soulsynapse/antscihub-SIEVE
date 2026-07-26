@@ -60,6 +60,46 @@ class TestRoundTrip:
         assert reopened.proxy_width == 1920
 
 
+class TestLastVideo:
+    """Session state, not a tunable: silent, unvalidated, and not a default."""
+
+    def test_an_empty_store_remembers_nothing(self, preferences: Preferences) -> None:
+        assert preferences.last_video is None
+
+    def test_a_path_survives_a_new_store_over_the_same_file(
+        self, preferences: Preferences, settings: QSettings, tmp_path: Path
+    ) -> None:
+        video = tmp_path / "arena.mp4"
+        preferences.last_video = video
+
+        reopened = Preferences(QSettings(settings.fileName(), QSettings.Format.IniFormat))
+        assert reopened.last_video == video
+
+    def test_a_path_that_no_longer_exists_is_still_returned(
+        self, preferences: Preferences, tmp_path: Path
+    ) -> None:
+        """Existence is the caller's question. Answering it here would leave
+        the window unable to tell "nothing remembered" from "file moved"."""
+        preferences.last_video = tmp_path / "deleted.mp4"
+        assert preferences.last_video == tmp_path / "deleted.mp4"
+
+    def test_writing_it_does_not_emit_changed(
+        self, preferences: Preferences, tmp_path: Path
+    ) -> None:
+        seen: list[int] = []
+        preferences.changed.connect(lambda: seen.append(1))
+        preferences.last_video = tmp_path / "arena.mp4"
+        assert seen == []
+
+    def test_restore_defaults_leaves_it_alone(
+        self, preferences: Preferences, tmp_path: Path
+    ) -> None:
+        video = tmp_path / "arena.mp4"
+        preferences.last_video = video
+        preferences.restore_defaults()
+        assert preferences.last_video == video
+
+
 class TestChangeSignal:
     def test_writing_a_new_value_emits_changed(self, preferences: Preferences) -> None:
         seen: list[int] = []

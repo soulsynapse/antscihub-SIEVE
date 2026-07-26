@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -45,12 +45,23 @@ COARSE_SCRUB_NOTICE = (
 class MainWindow(QMainWindow):
     """The SIEVE desktop window."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, preferences: Preferences | None = None, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("SIEVE")
+        # Both, in this order: `resize` is what the window restores down *to*
+        # once maximized, so dropping it would leave the restored size to
+        # whatever Qt picks from the layout's size hint. The state is set
+        # rather than `showMaximized()` called, because a constructor that
+        # puts a window on screen takes that decision away from its caller.
         self.resize(1280, 900)
+        self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
 
-        self._preferences = Preferences(parent=self)
+        # An injected store is what lets a test drive the window without
+        # reading or writing the developer's real settings — which now matters,
+        # because opening a video writes to it.
+        self._preferences = preferences if preferences is not None else Preferences(parent=self)
         self._preferences_dialog: PreferencesDialog | None = None
 
         self._player = VideoPlayer(self)
@@ -188,9 +199,27 @@ class MainWindow(QMainWindow):
     @Slot()
     def open_video_dialog(self) -> None:
         """Prompt for a video file and load it."""
-        path, _ = QFileDialog.getOpenFileName(self, "Open Video", "", VIDEO_FILTER)
+        start_directory = ""
+        remembered = self._preferences.last_video
+        if remembered is not None and remembered.parent.is_dir():
+            start_directory = str(remembered.parent)
+        path, _ = QFileDialog.getOpenFileName(self, "Open Video", start_directory, VIDEO_FILTER)
         if path:
             self.open_video(Path(path))
+
+    def restore_last_video(self) -> bool:
+        """Reopen the video from the previous session, if it is still there.
+
+        Returns whether anything was opened. A remembered file that has been
+        moved or deleted is not an error the user needs told about — they have
+        not asked for anything yet — so the window is left in exactly the state
+        it would have had with nothing remembered at all, hint included.
+        """
+        path = self._preferences.last_video
+        if path is None or not path.is_file():
+            return False
+        self.open_video(path)
+        return True
 
     def open_video(self, path: Path) -> None:
         """Load a video by path."""
@@ -211,6 +240,9 @@ class MainWindow(QMainWindow):
 
     @Slot(VideoMetadata)
     def _on_opened(self, metadata: VideoMetadata) -> None:
+        # Recorded on success rather than on the open attempt: a path that
+        # failed to decode is not one to hand back at the next launch.
+        self._preferences.last_video = metadata.path
         self._document.bind_source(metadata.width, metadata.height)
         self._set_video_actions_enabled(True)
         self.setWindowTitle(f"SIEVE — {metadata.path.name}")

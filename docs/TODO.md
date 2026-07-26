@@ -24,29 +24,45 @@
 # Build order
 
 The items below are ordered by the layer stack in `ARCHITECTURE.md`, not by
-appeal. Everything unbuilt sits above `core/`, and two of the five
-non-negotiables each gate on one core module. #3 "filter = one class + one
-markdown" is no longer one of them: `core/filter_base.py` and
-`core/filter_registry.py` exist, so a spec can be declared and looked up. #2
-"pipeline is a data structure" still needs `core/pipeline_model.py`, and
-nothing above it — DAG, cache keys, executor, CLI — can be written first
-without being rewritten after.
+appeal. Everything unbuilt sits above `core/`. Neither of the two
+non-negotiables that gated on a core module still does: #3 "filter = one class
++ one markdown" has `core/filter_base.py` and `core/filter_registry.py`, and #2
+"pipeline is a data structure" now has `core/pipeline_model.py`. The layer
+below `pipeline/` is therefore complete, and DAG, cache keys, executor, and CLI
+can be written against a settled artifact rather than ahead of one.
 
 Items under **Independent of the stack** gate nothing and can be taken whenever.
 
-## Pipeline artifact
+## Filter contract: rate, stream kind, output size
 
-`core/pipeline_model.py` (pydantic v2 → YAML). Nodes store `filter_id`,
-`version`, and a params dict; edges store the DAG. Deliberately *not*
-registry-aware: id resolution and type-chaining are `pipeline/dag.py`'s job, so
-the artifact loads even when a filter it names is absent.
+`core/filter_base.py`. Three things VISION requires of filters are
+inexpressible in `FilterSpec`, and all three were found while writing the
+pipeline artifact against VISION rather than by a filter hitting them —
+`sieve.filters` is still empty, so nothing is broken yet.
 
-Replicates are the first real nodes (VISION step 2) and currently die with the
-window, so this is also what makes them persist. Needs a decision on where a
-project file lives relative to the source video. Guardrail to honour: no
-GUI-only state in the artifact.
+Must land before `pipeline/dag.py`'s edge check and before the executor's
+warmup accumulation, because both are specified in terms of declarations that
+do not exist:
 
-Read: `docs/AUTO-GUARDRAILS.md` §2, `src/sieve/core/replicates.py`.
+1. **Rate.** Nothing says a filter changes its output frame rate. ARCHITECTURE
+   says to sum `warmup_frames` along the path and decode `[start − total,
+   end]`, and summing is only valid in one unit — five frames of warmup behind
+   a 10:1 decimator is fifty source frames. An executor written from the
+   current specification under-warms every temporal filter behind a decimator
+   by the decimation factor, and renders a plausible frame while doing it.
+2. **Stream kind.** `ArraySpec` describes arrays. VISION step 1 wants
+   coordinates as CSV, and duckdb/pyarrow are already dependencies, so a
+   detection filter emits a table that `emits:` cannot describe.
+3. **Output size.** `CostEstimate.peak_bytes_per_input_byte` is a working set,
+   not stored bytes, so nothing can predict what a checkpoint costs on disk —
+   which VISION step 4 asks for directly and step 5 drives a suggestion off.
+
+Design note: 1 and 3 are close to the same declaration, since output frames per
+input frame is most of output bytes per input byte. Also open — whether
+decimation is a filter at all, or a decode-time setting, which would move the
+index-space conversion into `decode/` where one already happens.
+
+Read: `docs/findings/2026.07.25-the-filter-contract-cannot-type-vision.md`.
 
 ## First filter and discovery
 
@@ -141,9 +157,9 @@ Read: `docs/SCAFFOLD.md` `cli/`, `.importlinter`.
 ## Representative clip range
 
 The tab cuts space; the workflow also needs the 5–10 s clip that in-pipeline
-tuning runs against. In/out points on the transport bar. Where it is stored is
-no longer an open question once the pipeline artifact exists — it is project
-state, not GUI state. Feeds `pipeline/preview.py`.
+tuning runs against. In/out points on the transport bar. Storage is settled —
+`ClipRange` is on `Project`, half-open frame indices — so what is left is the
+transport-bar UI and feeding `pipeline/preview.py`.
 
 Read: `docs/VISION.md` step 4, `src/sieve/gui/replicate_tab.py`.
 
@@ -152,6 +168,26 @@ Read: `docs/VISION.md` step 4, `src/sieve/gui/replicate_tab.py`.
 # Independent of the stack
 
 These gate nothing below them and can be taken at any point.
+
+## Open and save a project
+
+`core/pipeline_model.py` exists, so replicates *can* persist; nothing in the
+GUI yet does it, and they still die with the window. Needs File > Open Project
+/ Save / Save As, a dirty flag driven off `QUndoStack.cleanChanged`, and a
+prompt on close. Opening a video offers its `project_path_for` neighbour when
+one exists.
+
+This is independent of the CLI despite SCAFFOLD's "CLI before further GUI
+work". That rule exists so the executor stays the single execution path, and
+reading and writing a document touches no execution path at all.
+
+The awkward part is `bind_source`, which clears replicates and history on every
+open because geometry in one video's pixel space cannot carry to another.
+Loading a project has to populate the set *after* that clear without pushing
+undo commands, so it needs a load path beside the command-facing primitives
+rather than through them.
+
+Read: `src/sieve/gui/{document,main_window}.py`, `src/sieve/core/pipeline_model.py`.
 
 ## Three small GUI fixes
 

@@ -28,11 +28,16 @@ from sieve.core.types import ChannelSpec
 #: `MAJOR.MINOR.PATCH`, no pre-release or build metadata. A filter version is
 #: an input to a cache key before it is a human-facing label, and `1.0.0-rc1`
 #: vs `1.0.0` is an ordering question with no answer this system needs to have.
-_SEMVER_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+#:
+#: Public because `pipeline_model` validates the same two strings on the way in
+#: from YAML. That is not registry awareness — it never asks whether the filter
+#: exists — but it is the same syntactic contract, and a second copy of the
+#: regex is a second thing to keep in step.
+SEMVER_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 #: Lowercase identifier. It appears in cache keys, YAML, and CLI arguments, so
 #: it may not depend on case folding or shell quoting to stay itself.
-_FILTER_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+FILTER_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class Mode(StrEnum):
@@ -161,11 +166,11 @@ class FilterSpec:
     primary_params: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
-        if not _FILTER_ID_PATTERN.match(self.filter_id):
+        if not FILTER_ID_PATTERN.match(self.filter_id):
             raise ValueError(
-                f"filter_id must match {_FILTER_ID_PATTERN.pattern!r}, got {self.filter_id!r}"
+                f"filter_id must match {FILTER_ID_PATTERN.pattern!r}, got {self.filter_id!r}"
             )
-        if not _SEMVER_PATTERN.match(self.version):
+        if not SEMVER_PATTERN.match(self.version):
             raise ValueError(f"version must be MAJOR.MINOR.PATCH, got {self.version!r}")
         if self.warmup_frames < 0:
             raise ValueError(f"warmup_frames must be non-negative, got {self.warmup_frames}")
@@ -188,7 +193,7 @@ class FilterSpec:
     @property
     def version_tuple(self) -> tuple[int, int, int]:
         """Version as integers, so `1.10.0` sorts above `1.9.0`."""
-        match = _SEMVER_PATTERN.match(self.version)
+        match = SEMVER_PATTERN.match(self.version)
         assert match is not None  # guaranteed by __post_init__
         major, minor, patch = match.groups()
         return (int(major), int(minor), int(patch))

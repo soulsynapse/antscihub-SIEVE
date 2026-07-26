@@ -8,14 +8,21 @@ nothing about it.
 
 Every mutator is index-addressed and returns what it displaced, so an inverse
 operation is always constructible without the caller re-deriving state.
+
+A replicate also carries how its processing *deviates* from the rest — see
+`Replicate.overrides`. That lives here rather than on `Node` because twelve
+arenas would otherwise make one node carry twelve parameter dicts and the
+source-level fan-out would stop being a fan-out. Resolving an override against
+a node's baseline is `pipeline_model.resolved_params`, one layer up, since it
+is the only place that can see both.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
-from typing import Self
+from typing import Any, Self
 from uuid import uuid4
 
 from sieve.core.types import ROI
@@ -31,6 +38,11 @@ def _new_id() -> str:
     return uuid4().hex
 
 
+def _no_overrides() -> dict[str, dict[str, Any]]:
+    """An empty deviation map, typed — `default_factory=dict` infers nothing."""
+    return {}
+
+
 @dataclass(frozen=True, slots=True)
 class Replicate:
     """A named region of the source, stable across renames and geometry edits.
@@ -43,6 +55,21 @@ class Replicate:
     roi: ROI
     name: str
     replicate_id: str = field(default_factory=_new_id)
+    #: Per-node parameter deviation: `{node_id: {param_name: value}}`, and
+    #: sparse in *both* levels. A node absent from the mapping is processed
+    #: with the node's own parameters; a parameter absent from a node's entry
+    #: is inherited from them even when a sibling parameter is pinned. That
+    #: second level is what lets one arena hold its own threshold while still
+    #: following every later edit to a blur radius nobody varied.
+    #:
+    #: An override storing every parameter would be unable to tell "the user
+    #: set this to the same value" from "the user never touched it", and that
+    #: distinction is exactly what the replicate table renders — so sparsity is
+    #: a construction rule, not a storage optimization. `hash=False` because a
+    #: dict is unhashable and the identity of a replicate is `replicate_id`
+    #: anyway; two replicates differing only in overrides hash alike and
+    #: compare unequal, which is the correct pair of answers.
+    overrides: dict[str, dict[str, Any]] = field(default_factory=_no_overrides, hash=False)
 
     def renamed(self, name: str) -> Self:
         """Copy carrying a new display name and the same identity."""
@@ -51,6 +78,40 @@ class Replicate:
     def with_roi(self, roi: ROI) -> Self:
         """Copy carrying new geometry and the same identity."""
         return replace(self, roi=roi)
+
+    def override_for(self, node_id: str) -> dict[str, Any]:
+        """This replicate's deviation at `node_id`, empty when it follows.
+
+        A copy: the stored mapping is nested inside a frozen dataclass, and
+        handing out the live dict would make `frozen=True` a claim the type
+        cannot keep.
+        """
+        return dict(self.overrides.get(node_id, {}))
+
+    def with_override(self, node_id: str, changes: Mapping[str, Any]) -> Self:
+        """Copy whose deviation at `node_id` is merged with `changes`.
+
+        Merged, not replaced, because an edit names only the parameters it
+        touched. Replacing would silently un-pin every other parameter the
+        replicate had been configured with.
+        """
+        if not changes:
+            return self
+        merged = dict(self.overrides)
+        merged[node_id] = {**merged.get(node_id, {}), **changes}
+        return replace(self, overrides=merged)
+
+    def without_override(self, node_id: str) -> Self:
+        """Copy that follows `node_id`'s baseline again.
+
+        The way back from a pin. Without it a parameter set once could only
+        ever be re-pinned to a new value, never returned to inheriting, and the
+        replicate would drop out of the equivalence group it started in
+        permanently.
+        """
+        if node_id not in self.overrides:
+            return self
+        return replace(self, overrides={k: v for k, v in self.overrides.items() if k != node_id})
 
 
 class ReplicateSet:

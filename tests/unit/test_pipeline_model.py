@@ -36,7 +36,12 @@ def make_project() -> Project:
     return Project(
         source=SourceRef(path="../footage/arena.MP4"),
         replicates=(
-            Replicate(roi=ROI(0, 0, 64, 64), name="Replicate 1", replicate_id="r1"),
+            Replicate(
+                roi=ROI(0, 0, 64, 64),
+                name="Replicate 1",
+                replicate_id="r1",
+                overrides={"n2": {"level": 0.4}},
+            ),
             Replicate(roi=ROI(64, 0, 64, 64), name="Replicate 2", replicate_id="r2"),
         ),
         clip=ClipRange(start=120, end=420),
@@ -171,11 +176,89 @@ class TestReferentialIntegrity:
         project = make_project()
         replacement = Pipeline(nodes=(Node(node_id="n9", filter_id="blur", version="1.0.0"),))
 
-        with pytest.raises(ValidationError, match="checkpoint names no such node"):
+        with pytest.raises(ValidationError, match="overrides no such node"):
             project.with_pipeline(replacement)
 
-        without_checkpoints = project.model_copy(update={"checkpoints": (), "outputs": ()})
-        assert without_checkpoints.with_pipeline(replacement).pipeline == replacement
+        following = project.with_param_reset("n2", "r1")
+        with pytest.raises(ValidationError, match="checkpoint names no such node"):
+            following.with_pipeline(replacement)
+
+        bare = following.model_copy(update={"checkpoints": (), "outputs": ()})
+        assert bare.with_pipeline(replacement).pipeline == replacement
+
+
+class TestPerReplicateDeviation:
+    def _project(self) -> Project:
+        """Two arenas and one node carrying two parameters."""
+        node = Node(
+            node_id="n1", filter_id="threshold", version="1.0.0", params={"level": 0.5, "blur": 3}
+        )
+        return Project(
+            source=SourceRef(path="arena.MP4"),
+            replicates=(
+                Replicate(roi=ROI(0, 0, 64, 64), name="one", replicate_id="r1"),
+                Replicate(roi=ROI(64, 0, 64, 64), name="two", replicate_id="r2"),
+            ),
+            pipeline=Pipeline(nodes=(node,)),
+        )
+
+    def test_untouched_replicates_follow_the_newest_edit(self) -> None:
+        # The whole workflow, and the reason for the second write. Configuring
+        # arena 1 must leave arena 2 showing arena 1's settings, so twelve
+        # arenas are configured once. A `with_param_edit` that stored the
+        # override and left `Node.params` alone would pass every other test
+        # here and make the user configure all twelve.
+        project = self._project().with_param_edit("n1", "r1", {"level": 0.9, "blur": 3})
+
+        assert project.params_for("n1", "r2") == {"level": 0.9, "blur": 3}
+        assert project.pipeline.node("n1").params == {"level": 0.9, "blur": 3}
+
+        moved = project.with_param_edit("n1", "r2", {"level": 0.2, "blur": 3})
+
+        # Arena 1 pinned its level and does not follow; arena 2 is now the
+        # default anything unconfigured inherits.
+        assert moved.params_for("n1", "r1") == {"level": 0.9, "blur": 3}
+        assert moved.params_for("n1", "r2") == {"level": 0.2, "blur": 3}
+
+    def test_a_pinned_parameter_does_not_freeze_its_siblings(self) -> None:
+        # Sparsity is per key, not per node, and this is what that buys: one
+        # dim arena holds its own threshold while still picking up a later
+        # change to a blur radius nobody varied. An override that stored the
+        # whole submitted parameter set would leave arena 1 on blur 3 forever,
+        # silently — the run completes and the arenas are no longer comparable.
+        project = self._project().with_param_edit("n1", "r1", {"level": 0.9, "blur": 3})
+        project = project.with_param_edit("n1", "r2", {"level": 0.5, "blur": 7})
+
+        assert project.params_for("n1", "r1") == {"level": 0.9, "blur": 7}
+        assert project.replicate("r1").overrides == {"n1": {"level": 0.9}}
+
+    def test_resetting_returns_a_replicate_to_the_default(self) -> None:
+        # The way back from a pin, and it must not move the default: resetting
+        # is not an edit. Without this a parameter set once could only ever be
+        # re-pinned, and the replicate would never rejoin its equivalence group.
+        project = self._project().with_param_edit("n1", "r1", {"level": 0.9})
+        project = project.with_param_edit("n1", "r2", {"level": 0.1})
+
+        reset = project.with_param_reset("n1", "r1")
+
+        assert reset.replicate("r1").overrides == {}
+        assert (
+            reset.params_for("n1", "r1")
+            == reset.params_for("n1", "r2")
+            == project.params_for("n1", "r2")
+        )
+
+    def test_an_override_naming_no_node_is_refused(self) -> None:
+        # Same staleness a checkpoint has, and it survives every save
+        # otherwise — a deviation nothing reads, waiting for a new node to be
+        # handed the dead id.
+        with pytest.raises(ValidationError, match="overrides no such node"):
+            Project(
+                source=SourceRef(path="arena.MP4"),
+                replicates=(
+                    Replicate(roi=ROI(0, 0, 8, 8), name="one", overrides={"ghost": {"level": 0.5}}),
+                ),
+            )
 
 
 class TestConventions:

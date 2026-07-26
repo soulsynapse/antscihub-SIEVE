@@ -31,70 +31,18 @@ does: #3 "filter = one class + one markdown" has `core/filter_base.py` and
 and output size, so `dag.py`'s edge check and the executor's warmup arithmetic
 both have declarations to be written against.
 
-One `core/` item remains, and it is first because it changes what a cache key
-is made of: per-replicate parameter deviation. Writing `cache_key.py` before it
-means writing it twice, since the thing hashed stops being `Node.params` and
-becomes a resolution of baseline against override.
+No `core/` item remains. Per-replicate parameter deviation, the last one, has
+landed: `Replicate.overrides` holds the deviation, `resolved_params` is the one
+definition of effective params, and `Project.with_param_edit` performs the two
+writes. `cache_key.py` therefore has something to hash that is not `Node.params`
+— see `docs/completed-todo/2026.07.25-per-replicate-parameter-deviation.md`.
 
 Items under **Independent of the stack** gate nothing and can be taken whenever.
 
-## Per-replicate parameter deviation
-
-`core/pipeline_model.py` currently says replicates are a source-level fan-out
-and states the consequence plainly: "every replicate is processed with
-identical parameters, so a dim arena needing its own threshold is not
-expressible". That consequence is now rejected — it is a key component, not an
-acceptable simplification, and the docstring is wrong rather than merely
-narrow.
-
-The model is **lateral inheritance from a moving default**. The workflow it
-serves: you draw replicates, click into one, and it zooms you to the filter tab.
-You tune detection there. The next replicate you click into opens showing the
-last one's settings, so twelve arenas are configured once unless one of them
-needs to differ.
-
-Two writes per edit, and the second is the whole trick. Editing replicate `R`
-stores an override on `R` *and* overwrites `Node.params`. A replicate with no
-override resolves to `Node.params`, which therefore always holds the most
-recently configured values. Twelve arenas, configuring rep 1 to `X` then rep 2
-to `Y`:
-
-| | rep 1 | rep 2 | reps 3-12 | `Node.params` |
-| --- | --- | --- | --- | --- |
-| drawn | — | — | — | filter defaults |
-| rep 1 set to X | X | — | — | X |
-| rep 2 opens showing | | X | | |
-| rep 2 set to Y | X | Y | — | Y |
-| rep 3 opens showing | | | Y | |
-
-Untouched replicates follow the newest edit rather than pinning to the first
-one. The cost is real and was accepted knowingly: editing rep 2 silently
-changes ten replicates nobody was looking at. What it buys is that inheritance
-needs no record of what was clicked in what order — an un-overridden replicate
-resolves to a value stored in the document, so the artifact stays reproducible
-without a visit log, and GUI interaction history stays out of it.
-
-`Node.params` consequently stops meaning "the parameters" and starts meaning
-"the default for replicates that have not been configured". It must not enter a
-cache key on its own: a project where every replicate carries an override never
-reads it, and hashing it would invalidate all twelve entries every time it
-moved.
-
-1. Where overrides live. Not on `Node` — twelve arenas would make one node
-   carry twelve dicts and the fan-out stops being a fan-out. On `Replicate`, as
-   `overrides: dict[node_id, dict[str, Any]]`, which keeps the fan-out shape and
-   puts the deviation next to the thing that deviates.
-2. The resolution function is what `cache_key.py` hashes, and it must be the
-   only definition of "effective params" anywhere. A second one in the GUI is
-   how a preview and a batch run stop agreeing.
-3. Sparse by construction. An override storing every parameter cannot tell "the
-   user set this to the same value" from "the user never touched it", and that
-   distinction is exactly what the replicate table renders.
-
 ## Replicate equivalence groups
 
-The replicate table's rendering of the above, and derived on every read rather
-than stored — a cached group number is a number that goes stale. Walk
+The replicate table's rendering of per-replicate deviation, and derived on
+every read rather than stored — a cached group number is a number that goes stale. Walk
 replicates in order, hash each one's resolved params, assign the next integer
 on first sight of a new hash: the first replicate gets 1, everything matching it
 gets 1, the first that differs gets 2, everything matching *that* gets 2.
@@ -105,9 +53,10 @@ that is the trap: editing replicate 1 renumbers every group below it. The
 numbers are positional labels, not identities. Nothing durable may reference
 one — output paths, sink names, and report keys use `replicate_id`.
 
-Depends on the resolution function above, so it does not stand alone. The
-filter-tab surfacing of the same information comes later and is out of scope
-here.
+Hash `resolved_params(node, replicate)` over the graph's nodes in topological
+order — that function now exists and is the only thing that may answer what a
+replicate runs with. The filter-tab surfacing of the same information comes
+later and is out of scope here.
 
 Read: `src/sieve/core/{pipeline_model,replicates}.py`, `docs/VISION.md` step 2.
 
@@ -161,8 +110,8 @@ identity entering at the root node only. Canonical means `model_dump(mode=
 "json")` with sorted keys.
 
 `canonical_params_json` is the *resolved* params for this node and replicate,
-not `Node.params` — see the per-replicate deviation item, which is why this one
-waits on it.
+not `Node.params`: build it from `pipeline_model.resolved_params`, never from
+the node's dict, which is now only the default unconfigured replicates inherit.
 
 Guardrail §5 belongs here: changing a parameter on one branch must not
 invalidate a sibling branch.

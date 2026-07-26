@@ -51,19 +51,30 @@ The alternative considered and rejected was one root node per replicate.
 
 *This paragraph used to continue "every replicate is processed with identical
 parameters, so a dim arena needing its own threshold is not expressible", and
-called that consequence deliberate. It is not — see the "Per-replicate
-parameter deviation" item in `docs/TODO.md`. A replicate is to inherit a
-node's baseline parameters laterally and may override any subset, appearing
-identical until adjusted. The fan-out shape above survives that; what does not
-survive is the assumption below that a node's `params` is the whole of what
-gets hashed. Nothing in this module implements the override yet, and the
-sentence is recorded rather than deleted so the change reads as a reversal
-rather than as something nobody had thought about.*
+called that consequence deliberate. It was not, and the sentence is recorded
+rather than deleted so what follows reads as a reversal rather than as
+something nobody had thought about.*
+
+**Lateral inheritance from a moving default.** A replicate inherits a node's
+parameters and may pin any subset of them (`Replicate.overrides`), appearing
+identical until adjusted. The fan-out above survives that unchanged; what does
+not survive is the assumption that `Node.params` is the whole of what gets
+hashed. It is now the *default for replicates that have not been configured*,
+`resolved_params` is what a cache key is built from, and every edit performs
+two writes — see `Project.with_param_edit`, which is the only place the second
+one happens.
+
+The identity line above therefore reads one clause longer: everything on
+`Node` feeds the cache key, but `params` feeds it only after resolution
+against the replicate being processed. `Node.params` hashed on its own would
+invalidate all twelve entries every time a thirteenth edit moved it, including
+for replicates that pin every parameter and never read it.
 """
 
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any, Self
 from uuid import uuid4
@@ -210,7 +221,9 @@ class Node(_Artifact):
 
     Every field here enters the cache key, and that is the invariant governing
     what may be added: a field that does not change the node's output does not
-    belong on the node. See the module docstring.
+    belong on the node. See the module docstring — with the one qualification
+    that `params` enters it only after `resolved_params` has been applied,
+    because a replicate may deviate from it.
 
     `params` is an opaque mapping, not a parsed `ParamsBase`. The filter's
     parameter model is the only thing that knows what shape it should be, and
@@ -226,6 +239,12 @@ class Node(_Artifact):
     node_id: str = Field(default_factory=_new_id)
     filter_id: str
     version: str
+    #: Not "the parameters" — "the default for replicates that have not been
+    #: configured". It moves to the most recently configured values on every
+    #: edit, so it must never enter a cache key on its own: a project where
+    #: every replicate carries an override never reads it, and hashing it would
+    #: invalidate all twelve entries every time it moved. Hash
+    #: `resolved_params(node, replicate)` instead.
     params: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("filter_id")
@@ -241,6 +260,28 @@ class Node(_Artifact):
         if not SEMVER_PATTERN.match(value):
             raise ValueError(f"version must be MAJOR.MINOR.PATCH, got {value!r}")
         return value
+
+
+def resolved_params(node: Node, replicate: Replicate | None = None) -> dict[str, Any]:
+    """The parameters `node` actually runs with, for `replicate`.
+
+    **The only definition of "effective params" in the system.** `cache_key.py`
+    hashes this, the executor configures kernels from it, and the GUI shows it.
+    A second implementation anywhere is how a preview and a batch run stop
+    agreeing about what they computed, and the disagreement would be invisible,
+    because both would report success against caches keyed on their own answer.
+
+    A key-wise merge, deliberately. The override supplies only the parameters
+    pinned on this replicate and everything else follows `node.params` as it
+    moves, so one arena can hold its own threshold while still picking up a
+    later change to a blur radius nobody varied.
+
+    `replicate=None` is the node's baseline: what a graph inspected outside any
+    fan-out shows, and what a project with no replicates runs.
+    """
+    if replicate is None:
+        return dict(node.params)
+    return {**node.params, **replicate.overrides.get(node.node_id, {})}
 
 
 class Edge(_Artifact):
@@ -398,6 +439,16 @@ class Project(_Artifact):
         ids = [replicate.replicate_id for replicate in self.replicates]
         if len(set(ids)) != len(ids):
             raise ValueError("duplicate replicate_id")
+        for replicate in self.replicates:
+            for node_id in replicate.overrides:
+                # Same class of staleness as a checkpoint's, and the same
+                # remedy. A deviation on a node that has been deleted is a
+                # parameter set nothing will ever read, and it would survive
+                # every save until a new node happened to be given the id.
+                if node_id not in self.pipeline:
+                    raise ValueError(
+                        f"replicate {replicate.replicate_id!r} overrides no such node: {node_id!r}"
+                    )
         for node_id in self.checkpoints:
             if node_id not in self.pipeline:
                 raise ValueError(f"checkpoint names no such node: {node_id!r}")
@@ -502,3 +553,114 @@ class Project(_Artifact):
     def with_clip(self, clip: ClipRange | None) -> Self:
         """Copy carrying a different representative clip."""
         return self.model_copy(update={"clip": clip})
+
+    # ---- per-replicate deviation -----------------------------------------
+
+    def replicate(self, replicate_id: str) -> Replicate:
+        """The replicate carrying `replicate_id`.
+
+        Raises:
+            KeyError: if no replicate carries it.
+        """
+        for candidate in self.replicates:
+            if candidate.replicate_id == replicate_id:
+                return candidate
+        raise KeyError(replicate_id)
+
+    def params_for(self, node_id: str, replicate_id: str | None = None) -> dict[str, Any]:
+        """What `node_id` runs with for this replicate, by id.
+
+        A lookup around `resolved_params`, not a second answer: it exists so a
+        caller holding two ids does not have to fetch two objects and is
+        therefore never tempted to merge them itself.
+
+        Raises:
+            KeyError: if either id names nothing.
+        """
+        node = self.pipeline.node(node_id)
+        return resolved_params(node, None if replicate_id is None else self.replicate(replicate_id))
+
+    def with_param_edit(self, node_id: str, replicate_id: str, params: Mapping[str, Any]) -> Self:
+        """Configure `node_id` for one replicate, and move the default with it.
+
+        **Two writes, and the second is the whole mechanism.** The parameters
+        that changed are pinned on `replicate_id`, *and* `node.params` is
+        overwritten with everything submitted — so a replicate that has never
+        been configured resolves to the most recently configured values and the
+        next arena the user clicks into opens showing the last one's settings.
+        Twelve arenas are configured once unless one of them needs to differ.
+
+        The cost is real and was accepted knowingly: editing replicate 2
+        silently changes the ten replicates nobody was looking at. What it buys
+        is that inheritance needs no record of what was clicked in what order.
+        An un-overridden replicate resolves to a value stored in the document,
+        so the artifact stays reproducible without a visit log and GUI
+        interaction history stays out of it.
+
+        Only the parameters that actually *changed* are pinned, against what
+        this replicate resolved to before the edit. Submitting a value equal to
+        the one on screen therefore pins nothing and leaves the replicate
+        following the default — which is the same ambiguity `Replicate.overrides`
+        documents, and the reason a form may submit its whole field set here
+        without every edited replicate acquiring a full override.
+
+        Args:
+            node_id: The node being configured.
+            replicate_id: The replicate the user was looking at.
+            params: What the form holds. May be the node's whole parameter set
+                or only the fields touched; both give the same result.
+
+        Raises:
+            KeyError: if either id names nothing.
+        """
+        node = self.pipeline.node(node_id)
+        target = self.replicate(replicate_id)
+        before = resolved_params(node, target)
+        changed = {
+            name: value
+            for name, value in params.items()
+            if name not in before or before[name] != value
+        }
+        edited = target.with_override(node_id, changed)
+        updated_node = node.model_copy(update={"params": {**node.params, **params}})
+        return self._replacing(node, updated_node, target, edited)
+
+    def with_param_reset(self, node_id: str, replicate_id: str) -> Self:
+        """Drop one replicate's deviation at `node_id`, so it follows again.
+
+        The way back from a pin, and it moves nothing else — resetting is not
+        an edit, so the default stays where the last real edit left it.
+
+        Raises:
+            KeyError: if either id names nothing.
+        """
+        node = self.pipeline.node(node_id)
+        target = self.replicate(replicate_id)
+        return self._replacing(node, node, target, target.without_override(node_id))
+
+    def _replacing(
+        self, node: Node, new_node: Node, replicate: Replicate, new_replicate: Replicate
+    ) -> Self:
+        """Copy with one node and one replicate substituted in place.
+
+        Positional substitution because both collections are ordered and the
+        order is meaningful — replicate order is the order outputs are written
+        in, so rebuilding either by filtering and appending would reorder the
+        run.
+        """
+        return self.model_copy(
+            update={
+                "pipeline": self.pipeline.model_copy(
+                    update={
+                        "nodes": tuple(
+                            new_node if candidate is node else candidate
+                            for candidate in self.pipeline.nodes
+                        )
+                    }
+                ),
+                "replicates": tuple(
+                    new_replicate if candidate is replicate else candidate
+                    for candidate in self.replicates
+                ),
+            }
+        )

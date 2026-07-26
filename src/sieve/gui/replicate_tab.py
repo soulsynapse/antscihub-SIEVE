@@ -11,6 +11,12 @@ frame, because an empty pane the user can drag closed says less than a label
 promising something that does not exist yet. The transport bar stays on the
 left with the player rather than spanning the width: it drives the player, and
 a scrubber running under a tool pane would claim to drive that too.
+
+The transport also carries the representative clip — VISION step 4's five to
+ten seconds — because in and out points are marked *at the playhead*. A clip
+editor anywhere else in the window would need its own copy of the position the
+transport already holds, and the two would drift the first time one of them
+was moved without the other.
 """
 
 from __future__ import annotations
@@ -19,12 +25,12 @@ from PySide6.QtCore import QItemSelection, QSignalBlocker, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
     QSizePolicy,
-    QSlider,
     QSplitter,
     QTableView,
     QVBoxLayout,
@@ -32,6 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from sieve.core.types import VideoMetadata
+from sieve.gui.clip_bar import ClipSlider, ClipStrip
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.player import VideoPlayer
 from sieve.gui.replicate_table import Column, EditingAwareDelegate, ReplicateTableModel
@@ -40,6 +47,7 @@ from sieve.gui.video_view import NO_SELECTION, VideoView
 _PLAY_GLYPH = "▶"
 _PAUSE_GLYPH = "⏸"
 _DRAW_HINT = "Drag on the video to cut a replicate.  Click a box to select it."
+_CLIP_HINT = "No clip — mark in and out to choose the span you tune against."
 
 
 def format_timecode(seconds: float) -> str:
@@ -101,6 +109,7 @@ class ReplicateTab(QWidget):
 
         self._connect()
         self._set_transport_enabled(False)
+        self._refresh_clip()
 
     @property
     def top_splitter(self) -> QSplitter:
@@ -119,20 +128,28 @@ class ReplicateTab(QWidget):
         self._play_button.setFixedWidth(40)
         self._play_button.setToolTip("Play / pause (Space)")
 
-        self._slider = QSlider(Qt.Orientation.Horizontal)
+        self._slider = ClipSlider()
         self._slider.setRange(0, 0)
-        self._slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._strip = ClipStrip(self._slider)
 
         self._timecode = QLabel("—")
         self._timecode.setTextFormat(Qt.TextFormat.PlainText)
         self._timecode.setMinimumWidth(220)
         self._timecode.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-        transport = QHBoxLayout()
+        # A grid rather than nested boxes: the strip has to sit in the slider's
+        # column and nothing else's, because its band is drawn in the slider's
+        # coordinates. Sharing the column is what keeps the two aligned when
+        # the play button or the timecode changes width.
+        transport = QGridLayout()
         transport.setContentsMargins(8, 4, 8, 6)
-        transport.addWidget(self._play_button)
-        transport.addWidget(self._slider)
-        transport.addWidget(self._timecode)
+        transport.setSpacing(0)
+        transport.setHorizontalSpacing(6)
+        transport.addWidget(self._play_button, 0, 0)
+        transport.addWidget(self._slider, 0, 1)
+        transport.addWidget(self._timecode, 0, 2)
+        transport.addWidget(self._strip, 1, 1)
+        transport.setColumnStretch(1, 1)
 
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -140,7 +157,35 @@ class ReplicateTab(QWidget):
         layout.setSpacing(0)
         layout.addWidget(self._view, 1)
         layout.addLayout(transport)
+        layout.addLayout(self._build_clip_bar())
         return panel
+
+    def _build_clip_bar(self) -> QHBoxLayout:
+        """The in/out controls, under the strip they act on."""
+        self._mark_in_button = QPushButton("Mark In")
+        self._mark_in_button.setToolTip("Start the representative clip here (I)")
+        self._mark_out_button = QPushButton("Mark Out")
+        self._mark_out_button.setToolTip("End the representative clip here (O)")
+        self._clear_clip_button = QPushButton("Clear")
+        self._clear_clip_button.setToolTip("Drop the representative clip")
+
+        self._clip_label = QLabel(_CLIP_HINT)
+        self._clip_label.setTextFormat(Qt.TextFormat.PlainText)
+        # Ignored, so a sentence-long readout cannot set the minimum width of
+        # the pane it sits in. Without this the clip hint alone is wide enough
+        # to push the player/tool split off centre before either has any
+        # content in it, which is the tab's layout being decided by a string.
+        self._clip_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+
+        bar = QHBoxLayout()
+        bar.setContentsMargins(8, 0, 8, 6)
+        bar.setSpacing(6)
+        bar.addWidget(self._mark_in_button)
+        bar.addWidget(self._mark_out_button)
+        bar.addWidget(self._clear_clip_button)
+        bar.addSpacing(12)
+        bar.addWidget(self._clip_label, 1)
+        return bar
 
     def _build_table_panel(self) -> QWidget:
         self._table.setModel(self._model)
@@ -185,6 +230,11 @@ class ReplicateTab(QWidget):
         self._slider.valueChanged.connect(self._on_slider_value_changed)
         self._slider.sliderReleased.connect(self._on_slider_released)
 
+        self._mark_in_button.clicked.connect(self.mark_clip_in)
+        self._mark_out_button.clicked.connect(self.mark_clip_out)
+        self._clear_clip_button.clicked.connect(self._document.clear_clip)
+        self._document.clip_changed.connect(self._refresh_clip)
+
         self._view.roi_drawn.connect(self._document.add_roi)
         self._view.selection_requested.connect(self._select_row)
 
@@ -215,6 +265,16 @@ class ReplicateTab(QWidget):
         if row != NO_SELECTION:
             self._document.remove(row)
 
+    @Slot()
+    def mark_clip_in(self) -> None:
+        """Start the representative clip at the frame on screen."""
+        self._document.mark_clip_in(self._player.current_index)
+
+    @Slot()
+    def mark_clip_out(self) -> None:
+        """End the representative clip at the frame on screen, including it."""
+        self._document.mark_clip_out(self._player.current_index)
+
     def video_closed(self) -> None:
         """Return to the empty state after the source is unloaded."""
         self._view.set_source_size(None)
@@ -223,6 +283,7 @@ class ReplicateTab(QWidget):
             self._slider.setRange(0, 0)
             self._slider.setValue(0)
         self._timecode.setText("—")
+        self._refresh_clip()
 
     # ---- player -----------------------------------------------------------
 
@@ -235,6 +296,7 @@ class ReplicateTab(QWidget):
             self._slider.setValue(0)
         self._set_transport_enabled(True)
         self._update_timecode(0)
+        self._refresh_clip()
 
     @Slot(int, QImage)
     def _on_frame_changed(self, index: int, image: QImage) -> None:
@@ -282,6 +344,42 @@ class ReplicateTab(QWidget):
         self._play_button.setEnabled(enabled)
         self._slider.setEnabled(enabled)
         self._hint.setEnabled(enabled)
+        self._mark_in_button.setEnabled(enabled)
+        self._mark_out_button.setEnabled(enabled)
+
+    # ---- representative clip ---------------------------------------------
+
+    @Slot()
+    def _refresh_clip(self) -> None:
+        """Repaint the strip and restate the span in words.
+
+        Both, on every change, because they answer different questions: the
+        strip says where in the video the clip sits and the label says how long
+        it is, and VISION step 4 asks the user to hold a five-to-ten-second
+        span. A band whose width is a fraction of a scroll bar cannot be read
+        in seconds, so it is written out.
+        """
+        clip = self._document.clip
+        self._strip.set_clip(clip)
+        self._clear_clip_button.setEnabled(clip is not None)
+
+        metadata = self._player.metadata
+        if clip is None or metadata is None:
+            self._clip_label.setText(_CLIP_HINT)
+            return
+
+        span = f"frames {clip.start:,}-{clip.end - 1:,}  ·  {clip.frame_count:,} frames"
+        if metadata.fps > 0.0:
+            # `end` and not `end - 1`: the clip runs up to the start of the
+            # frame after its last, which is the timecode a user reading a
+            # duration off two marks expects to subtract.
+            span = (
+                f"{format_timecode(metadata.timestamp_of(clip.start))} - "
+                f"{format_timecode(metadata.timestamp_of(clip.end))}  ·  "
+                f"{clip.frame_count / metadata.fps:.1f} s  ·  "
+                f"{clip.frame_count:,} frames"
+            )
+        self._clip_label.setText(f"Clip  {span}")
 
     # ---- replicates -------------------------------------------------------
 

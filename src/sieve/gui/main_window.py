@@ -173,12 +173,36 @@ class MainWindow(QMainWindow):
         self._start_action.triggered.connect(lambda: self._player.seek(0))
         playback_menu.addAction(self._start_action)
 
+        playback_menu.addSeparator()
+
+        # I and O, which is what every editor binds them to. Bare letters are
+        # safe here for the same reason period and comma are: they are window
+        # shortcuts, and `_on_editor_open_changed` hands them back the moment a
+        # table cell is being typed into.
+        self._mark_in_action = QAction("Mark Clip &In", self)
+        self._mark_in_action.setShortcut(QKeySequence("I"))
+        self._mark_in_action.setEnabled(False)
+        self._mark_in_action.triggered.connect(self._replicate_tab.mark_clip_in)
+        playback_menu.addAction(self._mark_in_action)
+
+        self._mark_out_action = QAction("Mark Clip &Out", self)
+        self._mark_out_action.setShortcut(QKeySequence("O"))
+        self._mark_out_action.setEnabled(False)
+        self._mark_out_action.triggered.connect(self._replicate_tab.mark_clip_out)
+        playback_menu.addAction(self._mark_out_action)
+
+        self._clear_clip_action = QAction("&Clear Clip", self)
+        self._clear_clip_action.setEnabled(False)
+        self._clear_clip_action.triggered.connect(self._document.clear_clip)
+        playback_menu.addAction(self._clear_clip_action)
+
     def _connect(self) -> None:
         self._player.opened.connect(self._on_opened)
         self._player.failed.connect(self._on_failed)
         self._player.scrub_degraded.connect(self._on_scrub_degraded)
         self._replicate_tab.editor_open_changed.connect(self._on_editor_open_changed)
         self._preferences.changed.connect(self._on_preferences_changed)
+        self._document.clip_changed.connect(self._on_clip_changed)
 
     # ---- commands --------------------------------------------------------
 
@@ -243,7 +267,7 @@ class MainWindow(QMainWindow):
         # Recorded on success rather than on the open attempt: a path that
         # failed to decode is not one to hand back at the next launch.
         self._preferences.last_video = metadata.path
-        self._document.bind_source(metadata.width, metadata.height)
+        self._document.bind_source(metadata.width, metadata.height, metadata.frame_count)
         self._set_video_actions_enabled(True)
         self.setWindowTitle(f"SIEVE — {metadata.path.name}")
         self.statusBar().showMessage(
@@ -265,12 +289,23 @@ class MainWindow(QMainWindow):
     def _on_preferences_changed(self) -> None:
         self._player.apply_preferences(self._preferences)
 
+    @Slot()
+    def _on_clip_changed(self) -> None:
+        """There is only something to clear once something has been marked."""
+        self._clear_clip_action.setEnabled(self._document.clip is not None)
+
     @Slot(bool)
     def _on_editor_open_changed(self, editing: bool) -> None:
-        """Yield the space and delete keys to a cell editor while one is open."""
+        """Yield the typing keys to a cell editor while one is open.
+
+        Space and delete, and now I and O — a rename typed into the table
+        would otherwise mark a clip once per vowel.
+        """
         has_video = self._player.metadata is not None
         self._play_action.setEnabled(has_video and not editing)
         self._delete_action.setEnabled(not editing)
+        self._mark_in_action.setEnabled(has_video and not editing)
+        self._mark_out_action.setEnabled(has_video and not editing)
 
     def _set_video_actions_enabled(self, enabled: bool) -> None:
         for action in (
@@ -279,6 +314,8 @@ class MainWindow(QMainWindow):
             self._next_frame_action,
             self._previous_frame_action,
             self._start_action,
+            self._mark_in_action,
+            self._mark_out_action,
         ):
             action.setEnabled(enabled)
 

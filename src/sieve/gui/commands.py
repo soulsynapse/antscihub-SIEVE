@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtGui import QUndoCommand
 
+from sieve.core.pipeline_model import ClipRange
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
 
@@ -101,3 +102,33 @@ class SetReplicateROI(QUndoCommand):
         """Restore the previous geometry."""
         if self._previous is not None:
             self._document.apply_replace(self._index, self._previous)
+
+
+class SetClip(QUndoCommand):
+    """Move, place, or drop the representative clip.
+
+    One command for all three because they are one edit to one field, and the
+    caller already knows which of them it is — the text it passes is what the
+    Edit menu reads back. Splitting it into `SetClipIn`/`SetClipOut`/`ClearClip`
+    would be three classes whose `redo` bodies are the same assignment, and the
+    in/out asymmetry the user sees lives in the document's mark rules, not here.
+
+    The displaced range is captured on `redo` rather than at construction, for
+    the same reason the replicate commands do it: a redo after other edits must
+    displace what is there *then*, not what was there when the click happened.
+    """
+
+    def __init__(self, document: ReplicateDocument, clip: ClipRange | None, text: str) -> None:
+        super().__init__(text)
+        self._document = document
+        self._clip = clip
+        self._previous: ClipRange | None = None
+
+    def redo(self) -> None:
+        """Apply the new range."""
+        self._previous = self._document.clip
+        self._document.apply_clip(self._clip)
+
+    def undo(self) -> None:
+        """Restore the range this displaced, including no range at all."""
+        self._document.apply_clip(self._previous)

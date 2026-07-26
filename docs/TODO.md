@@ -95,16 +95,16 @@ SCAFFOLD's five command modules are deliberately unwritten: each wraps a
 `pipeline/` module that does not exist, and they arrive with it. See
 `docs/completed-todo/2026.07.25-build-the-cli.md`.
 
-Items under **Independent of the stack** gate nothing and can be taken whenever.
+The tab now cuts time as well as space. In and out points are marked at the
+playhead, painted on a strip under the transport, and clamped to the source;
+`ReplicateDocument.clip` is where they live and `SetClip` is the only thing
+that writes it. `pipeline/preview.py` therefore has a span to be given when it
+is built, and does not have to invent one. See
+`docs/completed-todo/2026.07.25-representative-clip-range.md`.
 
-## Representative clip range
-
-The tab cuts space; the workflow also needs the 5–10 s clip that in-pipeline
-tuning runs against. In/out points on the transport bar. Storage is settled —
-`ClipRange` is on `Project`, half-open frame indices — so what is left is the
-transport-bar UI and feeding `pipeline/preview.py`.
-
-Read: `docs/VISION.md` step 4, `src/sieve/gui/replicate_tab.py`.
+No item in the build order remains. What is left is under **Independent of the
+stack** below — those gate nothing and can be taken whenever — and in
+`docs/LATER.md`, whose triggers are what promote work back to this file.
 
 ---
 
@@ -124,11 +124,13 @@ This is independent of the CLI despite SCAFFOLD's "CLI before further GUI
 work". That rule exists so the executor stays the single execution path, and
 reading and writing a document touches no execution path at all.
 
-The awkward part is `bind_source`, which clears replicates and history on every
-open because geometry in one video's pixel space cannot carry to another.
-Loading a project has to populate the set *after* that clear without pushing
-undo commands, so it needs a load path beside the command-facing primitives
-rather than through them.
+The awkward part is `bind_source`, which clears replicates, clip, and history
+on every open because geometry in one video's pixel space — or its frame index
+space — cannot carry to another. Loading a project has to populate all of that
+*after* that clear without pushing undo commands, so it needs a load path
+beside the command-facing primitives rather than through them.
+`ReplicateDocument.clip` is the third field it has to restore, alongside the
+replicate set and the pipeline.
 
 Read: `src/sieve/gui/{document,main_window}.py`, `src/sieve/core/pipeline_model.py`.
 

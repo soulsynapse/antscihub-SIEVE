@@ -14,6 +14,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  QT_QPA_PLATFORM: offscreen
+
 jobs:
   quality:
     name: Quality gate and benchmarks
@@ -36,10 +39,8 @@ jobs:
           python-version: "3.11"
           enable-cache: true
 
-      - name: Create and sync the uv environment
-        run: |
-          uv venv sieve --python 3.11
-          uv pip install --python ./sieve/bin/python -e ".[dev]"
+      - name: Sync the uv environment
+        run: uv sync --locked --extra gui --group dev-gui
 
       - name: Run the supported CI sessions
-        run: ./sieve/bin/python -m nox -s checks benchmark
+        run: uv run --no-sync nox -s checks benchmark

@@ -16,7 +16,9 @@ toml
 
 toml
 
-`[tool.uv.dev-dependencies] dev = [     "pytest",     "pytest-benchmark",     "hypothesis",     "nox",     "ruff",     "pyright",     "viztracer",     "py-spy",     "jaxtyping", ] dev-gui = [     "pytest-qt", ]`
+`[dependency-groups] dev = [     "pytest",     "pytest-benchmark",     "hypothesis",     "nox",     "ruff",     "pyright",     "viztracer",     "py-spy",     "jaxtyping", ] dev-gui = [     "pytest-qt", ]`
+
+PEP 735 dependency groups, not `[tool.uv.dev-dependencies]` (legacy) and not a `dev` extra. `dev` is synced by default; `dev-gui` is opt-in via `--group dev-gui`.
 
 ## Build System
 
@@ -34,12 +36,12 @@ toml
 |`napari`|Image/video viewers|
 |`pyqtgraph`|Graphs, benchmark HUD|
 |`numpy`|CPU backend, NDArray typing|
-|`cupy`|GPU backend (only v1 GPU path)|
+|`cupy-cuda12x`|GPU backend (only v1 GPU path); the wheel distribution, not the `cupy` sdist|
 |`pydantic[v2]`|Filter/pipeline models, JSON Schema gen, app config|
 |`pyyaml`|Pipeline files|
 |`typer`|CLI|
 |`structlog`|Structured logging, JSON Lines|
-|`opencv-python-headless`|Decode (VideoCapture)|
+|`opencv-python-headless>=4.10,<5`|Decode (VideoCapture). Held below 5.x — decoder identity feeds cache keys, so a major bump invalidates them and may change seek behaviour|
 |`zarr>=3`|Materialized arrays (format 3, sharding)|
 |`duckdb`|Embedded results query engine|
 |`pyarrow`|Parquet analytical results|

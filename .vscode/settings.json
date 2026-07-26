@@ -1,3 +1,5 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}\\sieve\\Scripts\\python.exe"
+  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"]
 }

@@ -1,5 +1,4 @@
 .venv/
-/sieve/
 .nox/
 dist/
 build/
@@ -7,6 +6,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
 videos-testing/
 tests/results/
 tests/fixtures/decoder-corpus/

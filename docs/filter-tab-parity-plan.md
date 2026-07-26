@@ -395,7 +395,12 @@ Ordered bottom-up along the layer stack; each sized to TODO.md rule 3 and
 written to be liftable into `docs/TODO.md`. Tests pin the load-bearing
 claim (rule 7).
 
-### Item 1 — Wavelet and detection math (`core/`)
+### Item 1 — Wavelet and detection math (`core/`) — DONE
+
+Landed 2026.07.26; see
+`docs/completed-todo/2026.07.26-wavelet-and-detection-math.md`. As specified
+below, plus `morlet_band_power` (the memory-bounded band sum, pinned
+bit-for-bit against the cube slice) and `gate_intervals`; minus nothing.
 
 `src/sieve/core/wavelet.py`, `src/sieve/core/detection.py` + unit/property
 tests. Port the v1 semantics of § 3 as Qt-free, cv2-free pure functions:

@@ -7,6 +7,10 @@ requires-python = ">=3.11,<3.14"
 
 dependencies = [
     "numpy>=2.0",
+    # core/wavelet.py: scipy.fft keeps float32 single-precision, pads to fast
+    # composite lengths, and threads across block columns — numpy.fft has none
+    # of the three and v1 measured the difference at ~10x on (T, B) series.
+    "scipy>=1.14",
     "pydantic>=2.0",
     "pydantic-settings",
     "pyyaml",

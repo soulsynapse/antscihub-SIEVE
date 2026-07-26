@@ -23,30 +23,35 @@ Run it: `uv run sieve-gui` or `uv run sieve-gui videos-testing/<clip>.MP4`.
 5.3K clip: open 213 ms, 40-seek scrub burst settles in 172 ms, playback holds
 real-time speed at 36.5 rendered fps, undo/redo round-trips all four commands.
 
-Not committed — awaiting permission.
-
 ---
 
-## GUI tests
+## Done — GUI tests (2026-07-25)
 
-`tests/gui/` has a `conftest.py` and nothing else. The tab was verified by a
-throwaway script, which is not a regression test.
+`tests/gui/` now carries 85 pytest-qt tests: undo/redo round trips for all four
+commands including identity survival, `ReplicateTableModel.setData` routing and
+its rejection paths, the `VideoView` letterboxed coordinate mapping and drag
+interpretation, and the editor guard end to end through a real `MainWindow`
+with the synthetic video open. Shared mouse-event helpers live in
+`tests/gui/qt_input.py`. 133 tests pass; `ruff` and `lint-imports` clean.
 
-Cover with pytest-qt (`QT_QPA_PLATFORM=offscreen`, CI already sets it):
-undo/redo across `AddReplicate`, `RemoveReplicate`, `RenameReplicate`,
-`SetReplicateROI`; `ReplicateTableModel.setData` routing through the undo
-stack and rejecting a zero-extent ROI; `VideoView` widget↔source coordinate
-round-trip; `EditingAwareDelegate` disabling the space bar while a cell editor
-is open.
+Two things changed outside the tests. `VideoView._content_rect/_to_source/
+_to_widget` are now public (`content_rect`, `to_source`, `to_widget`) — the
+mapping is the widget's service to its callers, and box-dragging will need it
+for hit-testing. And the `pytestmark` in `tests/gui/conftest.py` was inert:
+pytest reads `pytestmark` from test modules and classes only, so the `gui`
+marker is now declared per module.
 
-Read: `src/sieve/gui/{document,commands,replicate_table,video_view}.py`.
+Checked by mutation: breaking the editor guard, the letterbox offset, or the
+rename's undo push each fails a test.
 
 ## Pyright on gui
 
-`nox -s typecheck` has not been run since `gui/` was added. PySide6 stubs
-under `typeCheckingMode = "strict"` (see `pyproject.toml`) will need either
-fixes or a scoped relaxation for `src/sieve/gui/**`. Pick one deliberately;
-don't leave the session failing.
+`nox -s typecheck` fails: 8 errors under `typeCheckingMode = "strict"`, all in
+`src/` — 3 in `gui/replicate_tab.py`, 2 in `gui/main_window.py`, 2 in
+`decode/reader.py`, 1 in `core/types.py`. `tests/` is clean, so this is not a
+stub problem across the board and a blanket relaxation for `src/sieve/gui/**`
+would be overkill. Read the 8 and fix or scope them deliberately; don't leave
+the session failing.
 
 ## Scrub budget miss
 

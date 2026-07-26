@@ -10,7 +10,8 @@ pytest.importorskip("PySide6", reason="requires the gui extra")
 
 from sieve.gui.document import ReplicateDocument
 
-pytestmark = pytest.mark.gui
+# The `gui` marker is declared per module, not here: pytest reads `pytestmark`
+# from test modules and classes only, so a conftest-level one is silently inert.
 
 
 @pytest.fixture

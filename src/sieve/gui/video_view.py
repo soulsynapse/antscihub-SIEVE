@@ -102,7 +102,7 @@ class VideoView(QWidget):
 
     # ---- geometry --------------------------------------------------------
 
-    def _content_rect(self) -> QRectF:
+    def content_rect(self) -> QRectF:
         """Aspect-fit rectangle the source occupies inside this widget."""
         if self._source_size is None:
             return QRectF(self.rect())
@@ -121,12 +121,12 @@ class VideoView(QWidget):
             height,
         )
 
-    def _to_source(self, point: QPointF) -> tuple[int, int]:
+    def to_source(self, point: QPointF) -> tuple[int, int]:
         """Widget point to source pixel, clamped inside the frame."""
         if self._source_size is None:
             return (0, 0)
         source_width, source_height = self._source_size
-        content = self._content_rect()
+        content = self.content_rect()
         if content.width() <= 0 or content.height() <= 0:
             return (0, 0)
         x = (point.x() - content.x()) / content.width() * source_width
@@ -136,12 +136,12 @@ class VideoView(QWidget):
             int(min(max(round(y), 0), source_height)),
         )
 
-    def _to_widget(self, roi: ROI) -> QRectF:
+    def to_widget(self, roi: ROI) -> QRectF:
         """Source-pixel ROI to widget rectangle."""
         if self._source_size is None:
             return QRectF()
         source_width, source_height = self._source_size
-        content = self._content_rect()
+        content = self.content_rect()
         scale_x = content.width() / source_width
         scale_y = content.height() / source_height
         return QRectF(
@@ -154,7 +154,7 @@ class VideoView(QWidget):
     def _replicate_at(self, point: QPointF) -> int:
         """Topmost replicate containing `point`, or `NO_SELECTION`."""
         for index in reversed(range(len(self._replicates))):
-            if self._to_widget(self._replicates[index].roi).contains(point):
+            if self.to_widget(self._replicates[index].roi).contains(point):
                 return index
         return NO_SELECTION
 
@@ -194,8 +194,8 @@ class VideoView(QWidget):
             self.selection_requested.emit(self._replicate_at(QPointF(end)))
             return
 
-        x0, y0 = self._to_source(QPointF(origin))
-        x1, y1 = self._to_source(QPointF(end))
+        x0, y0 = self.to_source(QPointF(origin))
+        x1, y1 = self.to_source(QPointF(end))
         roi = ROI.from_corners(x0, y0, x1, y1)
         if roi.width > 0 and roi.height > 0:
             self.roi_drawn.emit(roi)
@@ -222,7 +222,7 @@ class VideoView(QWidget):
             painter.end()
             return
 
-        content = self._content_rect()
+        content = self.content_rect()
         painter.fillRect(content, _BACKGROUND)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.drawImage(content, self._image)
@@ -247,7 +247,7 @@ class VideoView(QWidget):
         for index, replicate in enumerate(self._replicates):
             selected = index == self._selected
             colour = _BOX_SELECTED if selected else _BOX
-            rect = self._to_widget(replicate.roi)
+            rect = self.to_widget(replicate.roi)
 
             painter.setPen(QPen(colour, 2.0 if selected else 1.0))
             painter.setBrush(Qt.BrushStyle.NoBrush)

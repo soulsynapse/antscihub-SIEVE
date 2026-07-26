@@ -84,6 +84,9 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # Qt's virtuals are camelCase. Renaming them would stop them being overrides.
 "src/sieve/gui/*" = ["N802"]
+# Same, for the layout sketches under `mockups/`. They subclass QWidget to show
+# what a panel would look like and override the same virtuals for it.
+"mockups/**" = ["N802"]
 # Budget labels are copied verbatim from docs/ARCHITECTURE.md, en dash and all,
 # because tests/bench/test_budget_table.py compares them character for character.
 "src/sieve/bench/budgets.py" = ["RUF001"]

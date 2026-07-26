@@ -9,4 +9,4 @@ __pycache__/
 .ruff_cache/
 videos-testing/
 tests/results/
-tests/fixtures/decoder-corpus/
+tests/fixtures/decoder-corpus/mockups/renders/

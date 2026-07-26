@@ -60,7 +60,7 @@ packages = ["src/sieve"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["src", "tests"]
+src = ["src", "tests", "tools"]
 
 [tool.ruff.lint]
 select = [
@@ -85,7 +85,13 @@ select = [
 "src/sieve/bench/budgets.py" = ["RUF001"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "tools"]
+# `tools/` is not a package and is not installed; both pyright and pytest need
+# telling where the doc-index generator lives so its test can import it.
+# `src` is listed alongside it because setting `extraPaths` at all replaces
+# pyright's src-layout inference — without it, `sieve` resolves to the editable
+# install in site-packages and every import becomes a missing-stub error.
+extraPaths = ["src", "tools"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
@@ -93,6 +99,7 @@ typeCheckingMode = "strict"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tools"]
 addopts = "--strict-markers --strict-config"
 markers = [
     "slow: excluded from the fast feedback loop",

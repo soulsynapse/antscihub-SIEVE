@@ -10,10 +10,6 @@ import nox
 nox.options.default_venv_backend = "none"
 nox.options.sessions = ["checks"]
 
-# pytest exits 5 when it collects nothing. The suite is still being built out,
-# so an empty collection is not yet a failure.
-NO_TESTS_COLLECTED = 5
-
 
 @nox.session
 def lint(session: nox.Session) -> None:
@@ -35,14 +31,16 @@ def imports(session: nox.Session) -> None:
 
 
 @nox.session
+def docs(session: nox.Session) -> None:
+    """Regenerate `.index.md` for the atomized doc folders."""
+    session.run("python", "tools/doc_index.py", *session.posargs)
+
+
+@nox.session
 def tests(session: nox.Session) -> None:
-    """Test suite, excluding benchmarks."""
-    session.run(
-        "pytest",
-        "--benchmark-disable",
-        *session.posargs,
-        success_codes=[0, NO_TESTS_COLLECTED],
-    )
+    """Full test suite. `--benchmark-disable` still runs the budget checks —
+    it drops the timing rounds, not the assertions."""
+    session.run("pytest", "--benchmark-disable", *session.posargs)
 
 
 @nox.session
@@ -56,10 +54,12 @@ def checks(session: nox.Session) -> None:
 
 @nox.session
 def benchmark(session: nox.Session) -> None:
-    """Latency budget checks."""
-    session.run(
-        "pytest",
-        "--benchmark-only",
-        *session.posargs,
-        success_codes=[0, NO_TESTS_COLLECTED],
-    )
+    """Latency budget checks, timed for real.
+
+    Selected by marker rather than by `--benchmark-only` alone: that flag
+    *skips* the rest of the suite, so a session with no budget checks left in
+    it would report green on 181 skips. `-m benchmark` collects nothing
+    instead, and pytest's exit code 5 is no longer forgiven — deleting the
+    checks now breaks the gate, which is the whole point of having one.
+    """
+    session.run("pytest", "-m", "benchmark", "--benchmark-only", *session.posargs)

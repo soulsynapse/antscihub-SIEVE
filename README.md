@@ -37,10 +37,16 @@ Prefix commands with `uv run` instead of activating the venv:
 
 ```
 uv run pytest                  # test suite
-uv run nox -s checks           # ruff + pyright + pytest — the CI gate
+uv run nox -s checks           # ruff + pyright + import contracts + pytest — the CI gate
 uv run nox -s benchmark        # latency budget checks
+uv run nox -s docs             # regenerate docs/*/.index.md from entry frontmatter
 uv run python -c "import sieve"
 ```
+
+`docs/completed-todo/` and `docs/findings/` hold one file per item, each with
+YAML frontmatter and a `YYYY.MM.DD-` prefix. Their `.index.md` tables are
+generated from that frontmatter by `tools/doc_index.py` — never edited by hand,
+and `checks` fails when one is stale.
 
 `uv run` re-syncs the env first if it has drifted from the lockfile, so you cannot accidentally run against a stale environment. Activating (`.venv\Scripts\activate`) still works and is what VSCode does — you just lose that guarantee.
 

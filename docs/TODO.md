@@ -6,92 +6,77 @@
 2. Todo items are written so you don't have to load all the docs, when possible.
 3. Todo items scope target is <150k context window
 4. When todo items are done, do the commit and let the user know they can clear.
+5. **Completion is atomic.** A finished item is *moved*, not marked: delete its
+   section here and write one file at `docs/completed-todo/YYYY.MM.DD-name.md`
+   from `docs/completed-todo/_TEMPLATE.md`. One file per item. This file
+   therefore only ever contains work that is not done.
+6. **Measurements go to `docs/findings/`, not into the completed entry.** A
+   completed entry says what was built; a finding says what is true about the
+   system and outlives the code that prompted it. Write the finding, link to
+   it. Then `uv run nox -s docs` to rebuild both `.index.md` files.
 
 ---
 
-## Done — Replicate tab (2026-07-25)
+## Stale frame on reopen
 
-Built: `core/` (ROI, Frame, ChannelSpec, VideoMetadata, Replicate,
-ReplicateSet) · `decode/` (VideoReader, decoder_identity) · `bench/budgets.py`
-· `gui/` (Replicate tab, 50/50 splitter, File/Edit/Playback menus,
-drag-to-cut, threaded decode, QUndoStack) · `.importlinter` with 4 contracts
-wired into `nox -s checks`.
+`VideoPlayer._reset_source_state` clears `_in_flight`, but a `frame_ready`
+already queued from the decode thread still arrives and hits the
+`request is None` branch in `_on_frame_ready`, which displays it — a frame
+from the *previous* video painted into the new one's viewport. Self-corrects
+one decode later, so it is a flash rather than corruption, but it is the one
+ordering case `_sequence` does not cover.
 
-Run it: `uv run sieve-gui` or `uv run sieve-gui videos-testing/<clip>.MP4`.
+Fix is a generation counter bumped in `_reset_source_state`, stamped on
+`_Request`, checked on arrival. `tests/gui/test_player_scrub.py` drives the
+real decode thread, so it is testable there.
 
-48 tests pass. `ruff` and `lint-imports` clean. Verified headless against the
-5.3K clip: open 213 ms, 40-seek scrub burst settles in 172 ms, playback holds
-real-time speed at 36.5 rendered fps, undo/redo round-trips all four commands.
+Read: `src/sieve/gui/player.py` (lines ~320-390).
 
----
+## Property tests or drop Hypothesis
 
-## Done — GUI tests (2026-07-25)
+`tests/property/` is an empty package and `hypothesis` is a dev dependency
+with zero users — coverage that reads as existing and does not. Either write
+the four that earn it (`ROI.clamped_to` always lands inside bounds with
+positive extent, `ROI.from_corners` is corner-order-independent,
+`ScrubPolicy.snap` is idempotent, `ReplicateSet.next_default_name` never
+collides) or delete the directory and the dependency together.
 
-`tests/gui/` now carries 85 pytest-qt tests: undo/redo round trips for all four
-commands including identity survival, `ReplicateTableModel.setData` routing and
-its rejection paths, the `VideoView` letterboxed coordinate mapping and drag
-interpretation, and the editor guard end to end through a real `MainWindow`
-with the synthetic video open. Shared mouse-event helpers live in
-`tests/gui/qt_input.py`. 133 tests pass; `ruff` and `lint-imports` clean.
+Read: `src/sieve/core/types.py`, `src/sieve/gui/scrub_policy.py`.
 
-Two things changed outside the tests. `VideoView._content_rect/_to_source/
-_to_widget` are now public (`content_rect`, `to_source`, `to_widget`) — the
-mapping is the widget's service to its callers, and box-dragging will need it
-for hit-testing. And the `pytestmark` in `tests/gui/conftest.py` was inert:
-pytest reads `pytestmark` from test modules and classes only, so the `gui`
-marker is now declared per module.
+## Three small GUI fixes
 
-Checked by mutation: breaking the editor guard, the letterbox offset, or the
-rename's undo push each fails a test.
+Each is ~10 lines, all found in the same audit, all in `gui/`.
 
-## Done — Pyright strict (2026-07-25)
+1. `ReplicateTableModel.setData` returns `True` for a rename the document
+   rejected (empty or unchanged). Qt reads that as "the model changed" and the
+   user gets no feedback. The geometry path twelve lines below already returns
+   `False` correctly.
+2. `Preferences._store` dedupes by comparing a raw stored value against a
+   typed one — the exact mismatch `_as_bool`/`_as_float` exist to absorb. Works
+   on the Windows registry, always misses on INI. Route it through the same
+   coercion or delete the guard and say `changed` may fire spuriously.
+3. Rename `gui/frame_cache.py` -> display-proxy naming. It and the eventual
+   `pipeline/cache.py` are unrelated objects (frame index vs. content hash) and
+   neither name says so. Cheap now, confusing once both exist.
 
-`nox -s typecheck` is clean: 0 errors, no `# type: ignore`, no per-directory
-relaxation. All 8 were real, and each was fixed at the source rather than
-silenced.
+Read: `src/sieve/gui/{replicate_table,preferences,frame_cache}.py`.
 
-One was a latent bug. `ChannelSpec.count` shadowed `str.count` on a `StrEnum`,
-so `ChannelSpec.BGR.count("b")` returned 3 instead of 1 — any caller treating
-the spec as the string it is would have been silently wrong. Renamed to
-`channel_count`, with a test pinning `str.count` intact.
+## Qt-free coalescer
 
-The rest were honesty fixes: `_downscale` claimed `NDArray[uint8]` while doing
-nothing to guarantee it (now `NDArray[Any]`, matching its input); `read()`
-tested `data is None` alongside `not ok`, which OpenCV never produces
-separately; `setShortcuts` was handed a bare `StandardKey` (now wrapped in
-`QKeySequence`); and three `selectionModel() is None` guards in
-`ReplicateTab` were dead — `setModel` runs in the constructor before any of
-them.
+**Do this immediately before the first `pipeline/` commit, not after.**
 
-134 tests pass; `ruff`, `lint-imports`, and `pyright` all clean.
+`VideoPlayer._request/_issue/_drain` plus `_on_frame_ready` is ~50 lines of
+cross-thread ordering — one in flight, one pending, intent-aware supersession,
+monotonic display sequence — welded to `QImage` and `Signal`.
+`pipeline/preview.py` needs the identical discipline against filtered frames
+under `slider_to_preview`, which is the same 100 ms ceiling. Two copies will
+diverge on exactly the behaviour the budget table pins.
 
-## Done — Scrub budget and Preferences (2026-07-25)
+`ScrubPolicy` is the pattern: Qt-free, tested by feeding it numbers rather
+than by driving a GUI. Extract to the same shape, leave it in `gui/` until
+there is somewhere lower to put it.
 
-The budget miss is closed, by measurement rather than by amendment alone. Both
-remaining escape hatches were probed and shut: hardware acceleration does not
-engage in this OpenCV build, and keyframe alignment buys nothing (no sawtooth
-in seek cost across 150 consecutive targets). The seek is 46.7 ms of a 67.8 ms
-total and has no knob.
-
-So `scrub_to_repaint` moved 50 → 100 ms and is now *enforced by degrading*:
-`gui/scrub_policy.py` watches the median of the last 5 scrub round trips and,
-above budget, snaps drag targets to a 1 s grid that `gui/frame_cache.py`
-serves for free. New `scrub_settle` budget (250 ms) covers the release, which
-always decodes the exact frame. Coalescing now carries request *intent* —
-a pending exact seek is never dropped for a later drag position, which was a
-real bug the tests caught.
-
-Also added: `gui/preferences.py` (QSettings, 3 settings, all consumed),
-`gui/preferences_dialog.py` (Edit → Preferences…, applies on change), and
-`gui/toast.py` — the bottom-right notice that tells the user once when coarse
-mode engages.
-
-181 tests pass; `ruff`, `pyright`, and `lint-imports` clean.
-
-Note the naming: the notice says "coarse seek", not "keyframe seek", because
-the measurement says keyframe alignment is not the mechanism.
-
-Read: `docs/FINDINGS.md` §"The seek is irreducible".
+Read: `src/sieve/gui/{player,scrub_policy}.py`.
 
 ## Persist replicates
 
@@ -141,5 +126,7 @@ Read: `docs/SCAFFOLD.md` `cli/` section, `.importlinter`.
 - **`gui/state.py`** from SCAFFOLD was not created. Scrub position and playing
   state live in `VideoPlayer`; a separate object would duplicate them. Create
   it when there is UI state with no natural owner (panel layout, zoom).
-- **`ARCHITECTURE-TREE.md`** does not exist. `FINDINGS.md` is absorbing
-  measurement-driven decisions. Merge or split deliberately.
+- **`ARCHITECTURE-TREE.md`** does not exist, and no longer obviously should.
+  `docs/findings/` now holds the measurement-driven decisions one file at a
+  time, and `docs/completed-todo/` holds what was built. Revisit only if
+  something needs saying that neither of those can carry.

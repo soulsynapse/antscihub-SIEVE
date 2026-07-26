@@ -47,33 +47,101 @@ expressible". That consequence is now rejected — it is a key component, not an
 acceptable simplification, and the docstring is wrong rather than merely
 narrow.
 
-The model is **lateral inheritance from a configured baseline**. A node holds
-the baseline params; a replicate may override any subset of them. To the user
-every replicate looks identical until one is adjusted, and the replicate list
-marks which ones deviate from the rest.
+The model is **lateral inheritance from a moving default**. The workflow it
+serves: you draw replicates, click into one, and it zooms you to the filter tab.
+You tune detection there. The next replicate you click into opens showing the
+last one's settings, so twelve arenas are configured once unless one of them
+needs to differ.
 
-The awkward part is the identity line, and it is genuinely awkward. Today every
-field on `Node` feeds the cache key and `params` is one dict per node.
-Overrides mean the cache key is keyed on `(node, replicate)` and the effective
-params are a resolution — baseline merged with override — rather than a stored
-value. So:
+Two writes per edit, and the second is the whole trick. Editing replicate `R`
+stores an override on `R` *and* overwrites `Node.params`. A replicate with no
+override resolves to `Node.params`, which therefore always holds the most
+recently configured values. Twelve arenas, configuring rep 1 to `X` then rep 2
+to `Y`:
 
-1. Where overrides live. Not on `Node` (twelve arenas would make one node carry
-   twelve dicts and the fan-out stops being a fan-out), and probably on
-   `Replicate` as `overrides: dict[node_id, dict[str, Any]]`. That keeps the
-   fan-out shape and puts the deviation next to the thing that deviates.
+| | rep 1 | rep 2 | reps 3-12 | `Node.params` |
+| --- | --- | --- | --- | --- |
+| drawn | — | — | — | filter defaults |
+| rep 1 set to X | X | — | — | X |
+| rep 2 opens showing | | X | | |
+| rep 2 set to Y | X | Y | — | Y |
+| rep 3 opens showing | | | Y | |
+
+Untouched replicates follow the newest edit rather than pinning to the first
+one. The cost is real and was accepted knowingly: editing rep 2 silently
+changes ten replicates nobody was looking at. What it buys is that inheritance
+needs no record of what was clicked in what order — an un-overridden replicate
+resolves to a value stored in the document, so the artifact stays reproducible
+without a visit log, and GUI interaction history stays out of it.
+
+`Node.params` consequently stops meaning "the parameters" and starts meaning
+"the default for replicates that have not been configured". It must not enter a
+cache key on its own: a project where every replicate carries an override never
+reads it, and hashing it would invalidate all twelve entries every time it
+moved.
+
+1. Where overrides live. Not on `Node` — twelve arenas would make one node
+   carry twelve dicts and the fan-out stops being a fan-out. On `Replicate`, as
+   `overrides: dict[node_id, dict[str, Any]]`, which keeps the fan-out shape and
+   puts the deviation next to the thing that deviates.
 2. The resolution function is what `cache_key.py` hashes, and it must be the
-   only definition of "effective params" — a second one in the GUI is how a
-   preview and a batch run stop agreeing.
-3. Sparse by construction. An override that stores every parameter cannot tell
-   "the user set this to the same value" from "the user never touched it",
-   which is exactly the distinction the replicate list renders.
+   only definition of "effective params" anywhere. A second one in the GUI is
+   how a preview and a batch run stop agreeing.
+3. Sparse by construction. An override storing every parameter cannot tell "the
+   user set this to the same value" from "the user never touched it", and that
+   distinction is exactly what the replicate table renders.
 
-The GUI half — deviation markers in the replicate list, and later something in
-the filter tab — comes after the model. Do not build the markers first; they
-are a view of a resolution that does not exist yet.
+## Replicate equivalence groups
+
+The replicate table's rendering of the above, and derived on every read rather
+than stored — a cached group number is a number that goes stale. Walk
+replicates in order, hash each one's resolved params, assign the next integer
+on first sight of a new hash: the first replicate gets 1, everything matching it
+gets 1, the first that differs gets 2, everything matching *that* gets 2.
+
+`Project.replicates` is already documented as ordered and meaningful, so the
+numbering is stable for a given document. It is not stable across edits, and
+that is the trap: editing replicate 1 renumbers every group below it. The
+numbers are positional labels, not identities. Nothing durable may reference
+one — output paths, sink names, and report keys use `replicate_id`.
+
+Depends on the resolution function above, so it does not stand alone. The
+filter-tab surfacing of the same information comes later and is out of scope
+here.
 
 Read: `src/sieve/core/{pipeline_model,replicates}.py`, `docs/VISION.md` step 2.
+
+## Spatial context declaration
+
+`core/filter_base.py`, and the same shape as the rate gap that item closed:
+`warmup_frames` declares how much *temporal* context a filter needs, and
+nothing declares how much *spatial* context it needs. The crop is to space what
+the decimator is to time.
+
+It bites on entering a replicate. The intended behaviour is that the filter tab
+previews against the parent frame until the replicate's crop has been
+materialized in the background, which keeps the click responsive. That
+substitution is sound for some filters and silently wrong for others:
+
+- **Local kernels** — blur, morphology, wavelet bands. Computing on the parent
+  and then cropping equals computing on a crop expanded by the kernel radius and
+  then trimming. Identical given margin; wrong only in a border band of width
+  *r* without it.
+- **Whole-frame statistics** — Otsu and any auto-threshold, histogram
+  normalization, per-frame mean subtraction, a background model fit over the
+  frame. The parent's statistic is taken over the whole arena field, the
+  replicate's over one arena. This is not a border effect. Every pixel differs,
+  and the preview the user tuned detection against is not the run they get once
+  the crop lands.
+
+The second class is where thresholds get set, which is the worst possible place
+for a silent substitution. A declaration — a context radius for local filters,
+and something that marks a filter as needing the whole frame — lets the executor
+crop with margin where that is equivalent and refuse the parent-frame preview
+where it is not. `warmup_frames`' own docstring is the model for how to phrase
+"how much context, in what unit".
+
+Read: `docs/findings/2026.07.25-the-crop-is-a-spatial-warmup.md`.
 
 ## First filter and discovery
 

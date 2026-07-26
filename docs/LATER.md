@@ -103,6 +103,16 @@ shape has a different trigger and they are unlikely to arrive together:
   on `Edge` first. That is a change to the saved artifact and to every edge ever
   written, which `filter_base.py`'s `StreamSpec` docstring already prices.
 
+**A fourth shape is not deferred, and this entry used to imply it was.** A
+*stateful streaming* filter — one frame in, one frame out, carrying what it
+learned from the last frame — is refused by nothing and expressible by nothing:
+the executor runs it happily and `Kernel` has nowhere to keep the state. It is
+the only one of the four whose supporting machinery is already built and
+property-tested (`warmup_frames`, `source_warmup_frames`, `lead_in_shortfall`),
+so the lead-in is currently decoded and discarded on behalf of state that
+cannot exist. That makes it takeable rather than deferred, and it has moved to
+`TODO.md` as "A kernel that can remember". The three shapes above stay here.
+
 Read: `src/sieve/backend/dispatch.py` `Kernel`,
 `src/sieve/pipeline/executor.py` `UnrunnableNodeError`.
 
@@ -216,3 +226,166 @@ that tracked coverage would reopen the question.
 
 Read: `src/sieve/pipeline/cache.py`, `docs/SCAFFOLD.md` `pipeline/`,
 `storage/`.
+
+## Materialization, and what non-negotiable #1 currently asserts
+
+**Why not now.** "Filesystem is truth *at rest*" is the first non-negotiable and
+nothing in this repo has ever been at rest: `MemoryFrameStore` is a dict, no
+sink writes, and `sieve run` refuses a project that declares one. So the rule is
+presently a statement about a state the system cannot enter, which is not a
+violation — during interactive tuning truth is *supposed* to live in memory —
+but it does mean the rule has never been tested by anything.
+
+VISION step 1 describes the dumbest version of the product as a folder per
+transformation, and step 4's economy argument turns on "save the representative
+few seconds to the child layer, and because things are deterministic it still
+represents what you're trying to do". Both are `pipeline/materialize.py` plus
+`storage/zarr_store.py`. Writing them now means choosing a Zarr v3 chunk and
+shard layout against zero workloads, and the layout is the whole decision — a
+chunking that suits sequential playback is the wrong one for random access by
+replicate, and nobody has yet run the access pattern that would say which
+matters.
+
+**What would make it the right time.** A tuning session slow enough that the
+user wants a compaction checkpoint — which is downstream of the preview loop in
+`TODO.md`, because until previews are re-run interactively there is nothing to
+buy back. The first measurement to take is what a session's intermediates
+actually weigh, and it belongs in `docs/findings/`.
+
+**Related and settled enough to record:** compaction is user-initiated, never
+automatic per step. ARCHITECTURE says so and VISION's "you can save that
+representative few seconds" is a user gesture. An automatic policy would be a
+second answer to the eviction question above.
+
+Read: `docs/SCAFFOLD.md` `pipeline/materialize.py` and `storage/`,
+`src/sieve/pipeline/cache.py`, `docs/VISION.md` steps 1 and 4.
+
+## Process isolation for filter execution
+
+**Why not now.** `execute` runs in the calling process. One filter exists, it is
+NumPy over a decoded array, and the failure modes it has are exceptions a
+`try`/`except` already contains. `workers/` buys crash isolation, and there is
+nothing yet whose crash would take anything down.
+
+The cost is not one module: SCAFFOLD reserves four, and the reason is that a
+process boundary is a serialization boundary. Frames are ~47 MB on the reference
+source, so the transport has to be shared memory rather than pickle, which means
+a named-segment lifecycle and a versioned protocol with negotiation at startup —
+`shm_transport.py` and `protocol.py` are not incidental to `manager.py`.
+
+**What would make it the right time.** A kernel that can take the process down
+rather than raise: `cv2` can segfault on malformed input and a CuPy kernel can
+wedge a context, so the trigger is most likely the first OpenCV-heavy filter or
+the GPU work above. Cooperative cancellation is the other trigger and the more
+likely one in practice — a full-video run the user wants to stop mid-frame
+cannot be interrupted by anything in-process short of checking a flag between
+frames, which is fine until a single frame is slow.
+
+**The thing to not get wrong when it lands:** the GUI reaches `workers/` only
+through `pipeline/`, per `.importlinter`. A worker handle that surfaces in `gui/`
+is how the "GUI is a view over the executor, never a second execution path" rule
+fails quietly.
+
+Read: `docs/SCAFFOLD.md` `workers/`, `.importlinter` layers contract,
+`src/sieve/pipeline/executor.py`.
+
+## HPC handoff, and review mode
+
+**Why not now.** Both are readers of durable outputs and there are none. `sieve
+run` refuses a project that declares a `Sink`, so a job that ran on a cluster
+would produce nothing to bring home and a review tool would open nothing. These
+are downstream of **Sink writers** above and of materialization, and are listed
+together because they share that one gate.
+
+The architectural decision they rest on is already made and does not need
+revisiting: HPC is not a special path. It consumes the same serialized DAG the
+CLI does, which is what non-negotiable #2 is for. So `hpc/handoff.py` is job
+script generation from an artifact that already exists, not a second executor,
+and its size is proportional to how many schedulers it must speak rather than to
+anything about SIEVE.
+
+**What would make it the right time.** For HPC: a dataset that does not fit in a
+local session, plus at least one sink. VISION is explicit that most projects
+will not need it and that the requirement is only that SIEVE be *ready* — so the
+trigger is a real user with a real cluster, not a milestone. For review mode:
+the first durable output worth interpreting, which is the same trigger the
+coverage lanes above have.
+
+**Worth recording now**, because it constrains the sweep design later: VISION's
+HPC wizard toggles things like whether a compaction checkpoint happens, on the
+grounds that a cluster's memory may make it unnecessary. That makes compaction a
+*plan* property rather than a fact about the artifact, and an artifact that
+hard-codes it is one the wizard cannot edit.
+
+Read: `docs/SCAFFOLD.md` `hpc/` and `review/`, `docs/VISION.md` steps 6 and 7,
+the **Sink writers** entry above.
+
+## A pipeline editor, and whether it is a list or a graph
+
+**Why not now.** One filter exists. Every graph anybody can currently build is a
+chain of one node, and a visual editor for that is a label.
+
+**The design question that has no answer yet, and is the actual reason to
+wait.** VISION step 4 describes the user-facing object as an *operations
+history* — an ordered list you add to, with the current operation selected and
+its controls beside it. ARCHITECTURE and `core/pipeline_model.py` say the model
+is a DAG, and `dag.py` enforces it. Both are right: a linear chain is a
+degenerate DAG, and the linear presentation is what makes the tool legible to
+someone who is not thinking in graphs. What is undecided is whether they are one
+widget that degrades to a list or two views over one model, and that cannot be
+settled by argument — it is settled by watching what a user does the first time
+a graph branches.
+
+**What would make it the right time.** A graph that is not a chain, which means
+a multi-upstream filter, which means the named-port change to `Edge` in the
+kernel-protocol entry above. Until then the operations list VISION asks for is
+buildable as an ordinary list widget over `Dag.order` and does not need this
+question answered.
+
+Read: `src/sieve/core/pipeline_model.py`, `src/sieve/pipeline/dag.py`,
+`docs/VISION.md` step 4, `docs/SCAFFOLD.md` `gui/pipeline_editor.py`.
+
+## Application config, and where the boundary with Preferences falls
+
+**Why not now.** SCAFFOLD reserves `core/config.py` for pydantic-settings with
+CLI > env > file precedence, and there is nothing to put in it. The two
+configuration surfaces that exist are `gui/preferences.py`, which holds machine
+preferences in `QSettings` and is deliberately GUI-only per non-negotiable #2,
+and Typer flags on the CLI. Neither wants a third source today.
+
+**The decision, which is why this is an entry rather than a missing file.** The
+boundary between the two is undrawn. `proxy_width` is a preference — it is a
+statement about this machine's decode budget and must never travel with a
+project. A cache size limit or a default backend preference is arguably the
+same, and arguably app config that the CLI needs too and `QSettings` cannot
+carry to a headless node. Drawing that line against zero settings would draw it
+somewhere arbitrary, and the failure mode is the one preferences.py's module
+docstring already warns about: a setting that travels to another machine as an
+assertion about hardware it has never seen.
+
+**What would make it the right time.** The first setting the CLI and the GUI
+both need to read. Cache bounds and backend selection policy are the two
+candidates, and both are downstream of entries above.
+
+Read: `src/sieve/gui/preferences.py` module docstring, `docs/SCAFFOLD.md`
+`core/config.py`, `docs/ARCHITECTURE.md` non-negotiable #2.
+
+## Profiling as a module
+
+**Why not now.** `viztracer` and `py-spy` are in the dev group and imported by
+nothing. Every measurement in `docs/findings/` so far came from timing a named
+interval directly — the seek cost, the colour conversion, the scrub round trip
+— and each of those was a hypothesis with an obvious place to put a
+`perf_counter`. A profiler earns its place when the question is *where did the
+time go*, and that question has not been asked yet.
+
+**What would make it the right time.** A budget miss whose cause is not obvious
+from the span that reported it. The metric bus in `TODO.md` is what makes that
+situation reachable: once spans are published against budget keys, a miss
+arrives with a key and no explanation, and that is exactly the gap
+`bench/profiling.py` fills. The two tools are complementary and both are already
+declared — VizTracer for phase structure, py-spy for sampling a process nobody
+instrumented — so this is wiring, not a choice.
+
+Read: `docs/SCAFFOLD.md` `bench/profiling.py`, `docs/findings/`,
+`pyproject.toml` dev group.

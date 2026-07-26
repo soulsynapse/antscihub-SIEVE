@@ -107,9 +107,178 @@ still carries no clip at all. The arithmetic is Qt-free in
 when it is built, and does not have to invent one. See
 `docs/completed-todo/2026.07.26-the-timeline-replaces-the-transport.md`.
 
-No item in the build order remains. What is left is under **Independent of the
-stack** below — those gate nothing and can be taken whenever — and in
-`docs/LATER.md`, whose triggers are what promote work back to this file.
+What remains is the in-pipeline regime, which has budgets, a plan, an executor,
+and no code that can reach any of it. The five items below are the tuning loop
+VISION step 4 describes, in dependency order: each says what it is gated on, so
+an item can be taken out of order when its gate is already clear rather than
+because it is next in the list.
+
+## The metric bus
+
+`bench/budgets.py` declares eight latency ceilings and `assert_within` has no
+caller outside its own module. Two pre-pipeline budgets are checked by
+`tests/bench/test_perf_regression.py` against the player; `cut_to_ready` and
+all four in-pipeline budgets are checked by nothing and *cannot* be, because
+nothing in the repo emits a timing. Non-negotiable #4 says a miss is a defect,
+and a budget nothing can miss is not a commitment.
+
+`bench/metrics.py` from SCAFFOLD is the collection bus: something the executor
+and the preview publish spans to, and something a consumer subscribes to.
+Qt-free — the `headless` contract already forbids `PySide6` in `sieve.bench`,
+and the QObject adapter that bridges it to signals is a separate item below.
+
+The two design points that are not obvious:
+
+- **A span, not a counter.** Every budget in the table is a duration between
+  two named events; a bus of scalar gauges would make each caller do its own
+  `perf_counter` arithmetic, which is the arithmetic the budget keys exist to
+  standardise. Publishing `(key, elapsed_ms)` against `BUDGETS` keys means a
+  miss is detectable by the bus rather than by each call site remembering to
+  ask.
+- **Subscription cannot be allowed to cost the thing it measures.** The bus is
+  in the path of a 100 ms budget. Whatever it does per span happens inside the
+  interval being timed.
+
+Taken first because it is small, has no gate, and every item below reports
+through it. Instrumenting the preview afterwards is a retrofit of the thing
+whose whole purpose is being observable.
+
+Read: `src/sieve/bench/budgets.py`, `tests/bench/test_perf_regression.py`,
+`docs/SCAFFOLD.md` `bench/`, `.importlinter` `headless`.
+
+## The representative-clip preview
+
+**Gated on: nothing.** The metric bus above should land first so this is born
+instrumented, but the two do not otherwise depend on each other.
+
+`pipeline/preview.py` is the last unwritten module in the layer stack and three
+things in this repo were already built pointing at it. `gui/coalescer.py` was
+extracted Qt-free so preview inherits the two slots, the rank rule, and the
+source stamp rather than reimplementing them. `pipeline/plan.py`'s docstring
+says preview needs the same lead-in arithmetic and that `source_warmup_frames`
+is the only thing that should compute it. `ReplicateDocument.window` is the
+span, and it exists so preview does not have to invent one.
+
+What it is: a run of `execute` over the working window that can be re-run on a
+parameter edit without re-decoding what did not change, coalesced so a slider
+drag discards the renders nobody would have seen. `slider_to_preview` (100 ms)
+and `full_preview_render` (3 s) are its budgets and are what say whether it
+works.
+
+The thing to get right, because it is the reason this is a module and not a
+loop in the GUI: **a parameter edit invalidates a suffix of the graph, not the
+graph.** `cache_key.py` already derives keys that include upstream hashes, so
+the nodes above an edited one keep their entries and the nodes below lose
+theirs. A preview that re-runs from the source on every edit will meet the 3 s
+budget on the one filter that exists and miss it on the third.
+
+`cli/preview_cmd.py` arrives with this. SCAFFOLD's five command modules were
+deliberately left at three because each wraps a `pipeline/` module that does
+not exist yet, and `sieve preview` is the headless run of exactly this — which
+is also what keeps the GUI from becoming a second execution path.
+
+Read: `src/sieve/pipeline/{plan,executor,cache,cache_key}.py`,
+`src/sieve/gui/coalescer.py`, `docs/completed-todo/2026.07.25-executor.md`,
+`docs/completed-todo/2026.07.26-the-timeline-replaces-the-transport.md`.
+
+## A kernel that can remember
+
+**Gated on: nothing, but worth little before the preview above can show it.**
+
+`core/filter_base.py` carries the most carefully built arithmetic in the repo:
+`warmup_frames` converted sink-to-root through each node's `output_rate`,
+monotone in its second argument, property-tested in
+`tests/property/test_warmup.py`, with `ExecutionPlan.lead_in_shortfall`
+reporting a window too near the start of the source to warm. `plan.py` decodes
+the lead-in and `executor.py` discards it.
+
+No filter declares a nonzero `warmup_frames`, and none can use one if it did:
+`Kernel` is `(frame, params) -> Frame`, positional-only, with nowhere to put
+state. A warmup exists to settle state across frames. So the lead-in is
+currently decoded and thrown away on behalf of state the protocol cannot hold,
+and every test of that arithmetic is a test of a function with no consumer.
+
+`LATER.md`'s "A kernel protocol that is not one frame in, one frame out" names
+three shapes — `Mode.WINDOWED`, rate-changing, and multi-upstream — and this is
+not one of them. A stateful streaming filter *is* one frame in, one frame out.
+It only needs somewhere to keep what it learned from the last one, which is the
+cheapest of the four changes and the only one that validates work already paid
+for.
+
+Two halves, and the second is what stops the first being designed against
+nothing:
+
+1. Somewhere for per-run kernel state to live. It belongs to the *run*, not to
+   the kernel object — two replicates previewing the same node concurrently are
+   two states, and a kernel that closes over its own would silently mix them.
+   That is the constraint the shape has to satisfy; `dispatch.py`'s reasoning
+   about not inventing a signature before a filter needs one applies here as
+   much as it does to WINDOWED, so this item writes the filter too.
+2. One temporal filter declaring a nonzero `warmup_frames`. An exponential
+   moving-average background model is the smallest honest one: it is VISION
+   step 3's category C, its warmup is nominally infinite so it must declare a
+   settled-within-epsilon number and say which epsilon in its docstring —
+   exactly the case `filter_base.py` describes and nothing exercises — and
+   background subtraction is what VISION step 1 names first.
+
+This is also the second filter, which most of `LATER.md` is waiting on: several
+entries there trigger on "a filter that needs it", and one filter that is
+stateless, rate-preserving, single-upstream, and float-free triggers none of
+them.
+
+Read: `src/sieve/backend/dispatch.py` `Kernel`,
+`src/sieve/core/filter_base.py` `warmup_frames`/`source_warmup_frames`,
+`src/sieve/pipeline/plan.py` `lead_in_shortfall`,
+`src/sieve/filters/downsample.py`, `docs/LATER.md` kernel-protocol entry.
+
+## The first live graph tick
+
+**Gated on: the metric bus and the preview.** Both, genuinely — this is the
+adapter between them and the screen, and has nothing to bridge until they
+exist.
+
+`gui/executor_adapter.py` is defined in ARCHITECTURE as the *only* coupling
+point between the executor and Qt: a QObject that subscribes to the bus and
+re-emits as signals. Everything else in `gui/` learns about a run through it.
+`gui/graph_hud.py` is the pyqtgraph view — `pyqtgraph` is already in the `gui`
+extra and imported by nothing.
+
+`filter_to_first_tick` (2 s) and `slider_to_graph` (200 ms) are the budgets,
+and the first of them is the one that has never been measurable: it is the
+whole "you get feedback on how expensive this is getting" claim in VISION step
+4, and until something ticks, that claim has no implementation.
+
+VISION also asks for a vertical bar showing where in the clip the graph is
+currently at. `gui/timeline_bar.py` already draws a playhead over a span and
+`gui/timeline_model.py` holds that arithmetic Qt-free; the graph's cursor is
+the same value in a second view, not a second source of truth.
+
+Read: `src/sieve/gui/{timeline_bar,timeline_model}.py`,
+`src/sieve/bench/budgets.py` in-pipeline entries, `docs/SCAFFOLD.md`
+`gui/graph_hud.py` and `gui/executor_adapter.py`, `docs/VISION.md` step 4.
+
+## The three-way overlay
+
+**Gated on: the preview.** It is a view over previewed frames and has nothing
+to show without them.
+
+VISION step 4 asks the viewport to switch between three things: the raw video,
+the full current state with every operation applied, and the contribution of
+the *current* operation relative to the one immediately before it. The third is
+the one that carries the product's argument — it is how a user sees what a
+filter bought — and it is also the one that needs two frames from different
+nodes at the same source index, which is a demand on the preview's cache rather
+than on the painter.
+
+This is where the napari question under **Deferred decisions** below gets
+answered rather than re-asked. The present viewport is a `QWidget` +
+`QPainter`, and the entry says napari earns its place when the preview needs
+layered overlays with independent opacity. That is this item. Adopt it here or
+drop it from the `gui` extra — either is fine, and leaving it installed and
+unused a third time is not.
+
+Read: `src/sieve/gui/video_view.py`, `docs/VISION.md` step 4, the napari entry
+under **Deferred decisions** below.
 
 ---
 
@@ -137,7 +306,12 @@ Read: `src/sieve/gui/{video_view,commands}.py`.
   `QWidget` + `QPainter`: ~150 lines, no dependency, full control over ROI
   overlay and letterboxing. napari earns its place when the preview needs
   layered overlays with independent opacity (VISION step 4's three-way overlay
-  switch). Adopt it there or drop it from the extra.
+  switch). Adopt it there or drop it from the extra. That moment now has an
+  item — **The three-way overlay** above — so this bullet is answered there
+  rather than deferred a third time.
+- **`pyqtgraph` is in the `gui` extra and imported by nothing**, for the same
+  reason and with the same resolution: **The first live graph tick** above is
+  where it is used or dropped.
 - **`gui/state.py`** from SCAFFOLD was not created. Scrub position and playing
   state live in `VideoPlayer`; a separate object would duplicate them. Create
   it when there is UI state with no natural owner (panel layout, zoom).

@@ -490,7 +490,19 @@ clamps instead); a 1-frame gate run paints ≥ 1 px at any width; a drag
 starting 9 px from a handle scrubs instead of grabbing; solo state lives
 in the state model, not the widget.
 
-### Item 6 — Chain model and the stack UI (`gui/`)
+### Item 6 — Chain model and the stack UI (`gui/`) — model half landed
+
+The Qt-free half exists (2026.07.26): `gui/chain_model.py` holds the kinds,
+the non-throwing `grade()`, `runnable_prefix()` (Pipeline + edges from the
+ok node-backed prefix), `DetectorState` (frozen; unset count threshold =
+disarmed; `default()` = wide bands, D = 1 s), `recompute()` gluing item 1's
+functions with the cheap-tier `band_power=` reuse hook, `LiveChain`
+(`grades`/`pipeline`/`detection_reachable`/`without`/`reset`), and
+`parity_chain()`. Tests in `tests/unit/test_chain_model.py`. This also
+settles the § 8 open decision: the model lives in `chain_model.py`, not a
+SCAFFOLD `gui/state.py`. Still to build: captions, the stack widgets (cards,
+stage headers, hover swap/x, conflict repair, seam affordances), and the
+document/player/runner wiring.
 
 The Qt-free chain/detector model: ordered steps where the prefix maps to
 `Pipeline` nodes and the temporal/detection suffix maps to detector state

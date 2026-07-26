@@ -301,10 +301,10 @@ class Dag:
         self,
         *,
         source: str,
-        backend: Backend,
+        backend: Backend | Mapping[str, Backend],
         replicate: Replicate | None = None,
     ) -> dict[str, str]:
-        """Every cacheable node's key, for one replicate on one backend.
+        """Every cacheable node's key, for one replicate.
 
         The traversal `cache_key.py` names and declines to own. One pass in
         topological order, so each node's upstreams are already keyed when it is
@@ -325,9 +325,16 @@ class Dag:
                 builds one. Taken as a string rather than a `Path` so that a
                 caller that already computed it does not stat the file twice,
                 and so this stays runnable against footage that is not present.
-            backend: Where these nodes run. One backend for the whole walk; a
-                graph split across two is two walks, which is what the per-node
-                shape of `node_key` already allows.
+            backend: Where each node runs. One `Backend` means all of them; a
+                mapping gives it per `node_id` and must be total over `order`.
+
+                *This argument used to be a single `Backend`, documented as "a
+                graph split across two is two walks". That was wrong and the
+                sentence is corrected rather than deleted: a downstream key
+                folds in its upstreams' keys, so two independent walks can only
+                describe two disconnected subgraphs. A chain whose backend
+                changes partway is one walk in which the backend varies, which
+                is what the per-node shape of `node_key` actually allows.*
             replicate: The replicate being processed. Its ROI enters at the
                 root through `source_key`. `None` is the baseline a project
                 with no fan-out runs.
@@ -339,6 +346,7 @@ class Dag:
             ValidationError: if a node's resolved parameters are not valid for
                 its filter — the one check this module does not do up front,
                 done here because this is where they would enter a hash.
+            KeyError: if `backend` is a mapping missing a node in `order`.
         """
         root_key = source_key(source, None if replicate is None else replicate.roi)
         keys: dict[str, str] = {}
@@ -355,7 +363,7 @@ class Dag:
                     node,
                     spec=self.specs[node.node_id],
                     upstream=upstream,
-                    backend=backend,
+                    backend=(backend[node.node_id] if isinstance(backend, Mapping) else backend),
                     replicate=replicate,
                 )
             except NotCacheableError:

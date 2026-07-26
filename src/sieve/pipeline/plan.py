@@ -75,7 +75,19 @@ class ExecutionPlan:
     #: Source frames to decode ahead of `span.start` so every node is warmed.
     #: The maximum over the graph, not per node: one decode feeds all of them.
     lead_in: int
-    backend: Backend
+    #: Where each node runs, per `node_id`. Total over `dag.order`.
+    #:
+    #: **Per node rather than one for the graph**, because `dispatch.py` holds
+    #: that "a filter with a CPU kernel and no GPU kernel is complete, not
+    #: deficient" — and a single backend on the plan makes it deficient the
+    #: moment anything asks for GPU, since one CPU-only node in a chain would
+    #: fail the whole run. The selection is a *plan-time* decision and the key
+    #: is derived from what was selected, which is what lets the executor
+    #: refuse to fall back: by the time it runs, there is nothing left to fall
+    #: back from. Uniform today, because no GPU kernel exists to make it
+    #: otherwise; the shape is here so the day one lands is not the day every
+    #: caller changes.
+    backends: Mapping[str, Backend]
     replicate: Replicate | None
 
     @classmethod
@@ -85,7 +97,7 @@ class ExecutionPlan:
         *,
         source: str,
         span: ClipRange,
-        backend: Backend,
+        backend: Backend | Mapping[str, Backend],
         replicate: Replicate | None = None,
     ) -> ExecutionPlan:
         """Derive the run of `dag` over `span`.
@@ -102,7 +114,10 @@ class ExecutionPlan:
                 the container and this module may not open one. A caller with a
                 `Project` whose `clip` is `None` builds the full-length range
                 from the reader's metadata.
-            backend: Where these nodes run.
+            backend: Where each node runs. A single `Backend` assigns all of
+                them, which is the whole of what a caller wants until a graph
+                genuinely spans two; a mapping assigns them individually and
+                must cover every node.
             replicate: The replicate being processed. Its ROI enters the keys at
                 the root and its overrides enter every node's params. `None` is
                 the baseline a project with no fan-out runs.
@@ -111,6 +126,10 @@ class ExecutionPlan:
             ValidationError: if any node's resolved parameters are not valid for
                 its filter.
             ValueError: if any node declares a non-positive output rate.
+            KeyError: if `backend` is a mapping and a node is missing from it.
+                Refused rather than defaulted: a node silently falling to CPU
+                because a caller forgot it would key correctly and run on the
+                wrong device, which is a performance bug with no symptom.
         """
         params = {
             node.node_id: dag.specs[node.node_id].params_model.model_validate(
@@ -118,13 +137,17 @@ class ExecutionPlan:
             )
             for node in dag.order
         }
+        backends = {
+            node.node_id: (backend[node.node_id] if isinstance(backend, Mapping) else backend)
+            for node in dag.order
+        }
         return cls(
             dag=dag,
             span=span,
             params=params,
-            keys=dag.node_keys(source=source, backend=backend, replicate=replicate),
+            keys=dag.node_keys(source=source, backend=backends, replicate=replicate),
             lead_in=_lead_in(dag, params),
-            backend=backend,
+            backends=backends,
             replicate=replicate,
         )
 
@@ -164,6 +187,14 @@ class ExecutionPlan:
         return self.lead_in_shortfall == 0
 
     # ---- queries ---------------------------------------------------------
+
+    def backend_for(self, node_id: str) -> Backend:
+        """Where `node_id` runs.
+
+        Raises:
+            KeyError: if no node in this graph carries it.
+        """
+        return self.backends[node_id]
 
     def key(self, node_id: str) -> str | None:
         """`node_id`'s cache key, or `None` if it may not be cached at all.

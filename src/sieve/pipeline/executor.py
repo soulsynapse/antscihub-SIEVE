@@ -19,12 +19,14 @@ reader is a `FrameSource` rather than a `VideoReader` for the same reason the
 store is a protocol: a run over materialized frames (VISION step 4) is the same
 executor with a different source, not a mode.
 
-**The backend is pinned to the plan's.** `KernelRegistry.select` is asked for
-`plan.backend` alone rather than for a preference order, because the plan's
-keys already have that backend hashed into them for every filter that is not
-`backend_agnostic`. Letting the registry fall back to CPU here would write
-GPU-keyed entries containing CPU output, which is the one cache failure that is
-silent.
+**The backend is the plan's, per node.** `KernelRegistry.select` is asked for
+`plan.backend_for(node_id)` alone rather than for a preference order, because
+the plan's keys already have that backend hashed into them for every filter
+that is not `backend_agnostic`. Letting the registry fall back to CPU here
+would write GPU-keyed entries containing CPU output, which is the one cache
+failure that is silent. Choosing is the plan's job precisely so that by the
+time execution starts there is nothing left to choose — a fallback here could
+only ever contradict a key that has already been derived.
 
 **A crop on every root, every frame.** The replicate's ROI is what the graph
 consumes; the materialized crop VISION step 4 offers is a faster route to the
@@ -210,7 +212,7 @@ def _bind(plan: ExecutionPlan, kernels: KernelRegistry) -> dict[str, Kernel[Any]
             )
         # A one-element preference: see the module docstring. A fallback here
         # would write entries keyed on a backend that did not produce them.
-        bindings[node.node_id] = kernels.select(spec, (plan.backend,)).run
+        bindings[node.node_id] = kernels.select(spec, (plan.backend_for(node.node_id),)).run
     return bindings
 
 

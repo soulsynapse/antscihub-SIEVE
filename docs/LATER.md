@@ -54,15 +54,14 @@ VISION's detection and tracking steps are the likely first candidates;
   by every consumer. Nothing in the system knows where a frame lives, so a GPU
   kernel doing its own `asarray`/`asnumpy` round-trips per node. See the
   arithmetic below.
-- **Per-node backend selection.** `ExecutionPlan` pins one backend for the
-  whole graph, so a GPU plan over a graph with one CPU-only node raises
-  `NoKernelError` and the run dies — which contradicts `dispatch.py`'s "a
-  filter with a CPU kernel and no GPU kernel is complete, not deficient".
-  Selection belongs at plan time, per node, with the key derived from what was
-  selected; then the executor runs the plan's choice and the no-fallback rule
-  stays intact because there is nothing left to fall back from.
-  `Dag.node_keys` already anticipates this: "a graph split across two is two
-  walks, which is what the per-node shape of `node_key` already allows."
+- **Automatic backend selection.** `ExecutionPlan.backends` already carries a
+  backend per node and the keys are derived from it, so a mixed graph runs and
+  keys correctly today — see
+  `docs/completed-todo/2026.07.25-per-node-backend.md`. What is missing is
+  anything that *chooses*: a caller must state the mapping, and nothing walks
+  the kernel shelf against `DEFAULT_PREFERENCE` to build one. That resolution
+  needs a policy — fastest available per node, or fewest transfers across the
+  graph — and the second is the right answer only once residency below exists.
 - **Cache locality.** Does `FrameStore` hold device arrays or host arrays?
   Device exhausts VRAM over a tuning session; host makes every hit an upload.
   This has no obvious answer and should not be given one without a workload.

@@ -65,6 +65,30 @@ def tag_cpu(frame: Frame, params: TagParams) -> Frame:
 
 
 @register_filter(
+    filter_id="cpu_only",
+    version="1.0.0",
+    summary="A filter nobody wrote a GPU kernel for, which is not a defect.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    cost=COST,
+    registry=SHELF,
+)
+class CpuOnlyParams(ParamsBase):
+    pass
+
+
+def cpu_only_cpu(frame: Frame, params: CpuOnlyParams) -> Frame:
+    """Registered by hand rather than by `@kernel`, which binds to `KERNELS`.
+
+    The mixed-backend test needs this on its own shelf alongside a GPU kernel
+    for another filter, and `@kernel` has no way to say "not the default shelf"
+    without a registry argument this module would then have to thread through
+    every fixture.
+    """
+    return Frame(data=frame.data, index=frame.index, channels=frame.channels)
+
+
+@register_filter(
     filter_id="span",
     version="1.0.0",
     summary="Needs a window, so nothing can call it.",
@@ -357,6 +381,76 @@ def test_a_gpu_run_is_not_served_the_cpu_runs_cache_entries(
         np.array_equal(cpu["t"].data, gpu["t"].data)
         for cpu, gpu in zip(cpu_results, gpu_results, strict=True)
     )
+
+
+def test_one_graph_can_span_two_backends(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A CPU-only node in a chain does not make the whole run impossible.
+
+    `dispatch.py` holds that a filter with a CPU kernel and no GPU kernel is
+    complete rather than deficient. A single backend on the plan contradicts
+    that: asking for GPU over a chain containing one CPU-only filter would
+    raise and the run would die, even though every node has *a* kernel. Per
+    node, the chain runs — each node keyed on the backend that actually
+    produced it, which is why the keys below differ from the all-CPU plan's at
+    the GPU node and, through the ancestry fold, at everything downstream of it.
+    """
+    monkeypatch.setattr("sieve.backend.dispatch.runtime_available", _every_backend_runs)
+    monkeypatch.setattr(cache_key, "backend_identity", _pretend_identity)
+
+    shelf = KernelRegistry()
+    shelf.register(SHELF.get("tag", "1.0.0"), Backend.CPU, tag_cpu)
+    shelf.register(SHELF.get("cpu_only", "1.0.0"), Backend.CPU, cpu_only_cpu)
+
+    def tag_gpu(frame: Frame, params: TagParams) -> Frame:
+        CALLS.append((frame.index, -params.amount))  # negative marks the GPU path
+        return Frame(data=frame.data, index=frame.index, channels=frame.channels)
+
+    shelf.register(SHELF.get("tag", "1.0.0"), Backend.GPU, tag_gpu)
+
+    pipeline = Pipeline(
+        nodes=(node("g"), node("c", "cpu_only")),
+        edges=(Edge(upstream="g", downstream="c"),),
+    )
+    mixed = ExecutionPlan.build(
+        Dag.build(pipeline, SHELF),
+        source=SOURCE,
+        span=DEFAULT_SPAN,
+        backend={"g": Backend.GPU, "c": Backend.CPU},
+    )
+
+    assert mixed.backend_for("g") is Backend.GPU
+    assert mixed.backend_for("c") is Backend.CPU
+
+    results = run(mixed, ListSource(), kernels=shelf)
+
+    assert len(results) == 3
+    # The GPU kernel ran for `g`; nothing fell back to `tag_cpu` for it.
+    assert all(amount < 0 for index, amount in CALLS if index >= DEFAULT_SPAN.start)
+
+    # `c` runs on CPU in both plans and is still keyed differently, because its
+    # key folds in `g`'s. A per-node backend that stopped at the node itself
+    # would leave the downstream sharing entries across two different runs.
+    uniform = ExecutionPlan.build(
+        Dag.build(pipeline, SHELF), source=SOURCE, span=DEFAULT_SPAN, backend=Backend.CPU
+    )
+    assert mixed.keys["g"] != uniform.keys["g"]
+    assert mixed.keys["c"] != uniform.keys["c"]
+
+
+def test_a_backend_mapping_missing_a_node_is_refused() -> None:
+    """Defaulting the absent one would run it on the wrong device, correctly keyed.
+
+    A performance bug with no symptom: the entry is right, the result is right,
+    and the only evidence is that the run was slower than it should have been.
+    """
+    pipeline = Pipeline(nodes=(node("a"), node("b")))
+    with pytest.raises(KeyError):
+        ExecutionPlan.build(
+            Dag.build(pipeline, SHELF),
+            source=SOURCE,
+            span=DEFAULT_SPAN,
+            backend={"a": Backend.CPU},
+        )
 
 
 def test_a_node_with_no_kernel_for_the_plans_backend_says_so() -> None:

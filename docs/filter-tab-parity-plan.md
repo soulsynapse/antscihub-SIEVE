@@ -415,7 +415,14 @@ Claims: a pure tone concentrates power in the nearest scale row;
 `windowed_mean` at clip edges divides by true window length; `band_indices`
 on an empty span returns exactly one scale.
 
-### Item 2 — Preprocessing filters (`filters/`)
+### Item 2 — Preprocessing filters (`filters/`) — DONE
+
+Landed 2026.07.26; see
+`docs/completed-todo/2026.07.26-rescale-and-normalize-filters.md`. The § 8
+open decision went to a new `rescale` filter (disjoint parameter space and
+geometry from `downsample`). One addition beyond the spec: normalize's
+statistics come from the gray *projection* on color frames so the downstream
+gray series is exactly v1's normalized gray.
 
 `rescale.py` + `.md` (or params-v2 of `downsample` — one-paragraph
 decision in the module docstring), `normalize.py` + `.md`, tests.

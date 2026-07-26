@@ -160,38 +160,61 @@ decode speed as an open question without reading
 that work is deliberately not an item, because taking it means choosing a route
 and no measurement chooses one.
 
+The GUI now computes a frame. `gui/preview_runner.py` holds a `PreviewSession`
+on a thread of its own, renders the document's graph over the working window,
+and emits what each frame cost keyed by its source index;
+`gui/executor_adapter.py` is the one place that knows both `bench/metrics.py`
+and Qt, and gets a `Sample` from a publishing thread to the GUI thread by queued
+signal. `filter_to_first_tick` therefore has a producer for the first time —
+armed when a non-empty graph is first submitted, published when the first frame
+has crossed to the GUI thread, which is what makes it a number about what the
+user waited for rather than about what the render did. Nothing below needs to
+invent a render thread, a cancellation, or a per-frame series: it takes
+`PreviewRunner`. See
+`docs/completed-todo/2026.07.26-the-first-live-graph-tick.md`.
+
 The two items below are what is left of the tuning loop VISION step 4 describes.
 Both were gated on the preview and neither is any longer.
 
-## The first live graph tick
+## The graph HUD
 
-**Gated on: nothing.** Both halves are clear — `bench/metrics.py` exists and
-`MetricBus.subscribe` is the shape the adapter wraps, and `pipeline/preview.py`
-publishes `slider_to_preview` and `full_preview_render` through the `measure`
-callable its caller passes in, which is a `MetricBus.measure` in every real
-front end.
+**Gated on: nothing.** The producer it draws exists.
+`gui/preview_runner.py` renders the working window on the render thread and
+emits `frame_cost(source index, ms)` per frame on the GUI thread, plus
+`render_started(revision)` when a series is about to be replaced and
+`render_finished(PreviewRender)` when it is complete. `gui/executor_adapter.py`
+carries the bus's whole-render samples across the same boundary. Both are
+tested; neither is drawn anywhere. See
+`docs/completed-todo/2026.07.26-the-first-live-graph-tick.md`.
 
-`gui/executor_adapter.py` is defined in ARCHITECTURE as the *only* coupling
-point between the executor and Qt: a QObject that subscribes to the bus and
-re-emits as signals. `Subscriber` is called on the publishing thread, so the
-adapter's job is specifically to get from there to the GUI thread — a queued
-signal emission, which is the reason the bus does not try to do it itself. Everything else in `gui/` learns about a run through it.
-`gui/graph_hud.py` is the pyqtgraph view — `pyqtgraph` is already in the `gui`
-extra and imported by nothing.
+`gui/graph_hud.py` is the pyqtgraph view. **x is the source frame index across
+the working window and y is milliseconds for that frame** — not sample arrival
+order, which is the axis a naive HUD over `MetricBus` would have and which
+cannot carry the next paragraph. `pyqtgraph` is in the `gui` extra and imported
+by nothing; this is where it is adopted or dropped, and leaving it installed and
+unused a third time is not an option.
 
-`filter_to_first_tick` (2 s) and `slider_to_graph` (200 ms) are the budgets,
-and the first of them is the one that has never been measurable: it is the
-whole "you get feedback on how expensive this is getting" claim in VISION step
-4, and until something ticks, that claim has no implementation.
+VISION asks for a vertical bar showing where in the clip the graph is currently
+at, and with that axis it is the playhead: `gui/timeline_bar.py` already draws
+it over a span and `gui/timeline_model.py` holds the arithmetic Qt-free, so the
+graph's cursor is `VideoPlayer.frame_changed` in a second view rather than a
+second source of truth.
 
-VISION also asks for a vertical bar showing where in the clip the graph is
-currently at. `gui/timeline_bar.py` already draws a playhead over a span and
-`gui/timeline_model.py` holds that arithmetic Qt-free; the graph's cursor is
-the same value in a second view, not a second source of truth.
+Two things the runner settled that this inherits. **The series is replaced, not
+appended to** — `render_started` carries a revision and a superseded render's
+frames never arrive, so the HUD holds one window's worth of points and clears on
+that signal rather than deciding for itself what is stale. And **the repaint
+must be throttled here**, not upstream: a cold render delivers six hundred
+frames and a HUD repainting per point would spend the GUI thread on paint while
+the render thread waits behind it on the event queue.
 
-Read: `src/sieve/gui/{timeline_bar,timeline_model}.py`,
-`src/sieve/bench/budgets.py` in-pipeline entries, `docs/SCAFFOLD.md`
-`gui/graph_hud.py` and `gui/executor_adapter.py`, `docs/VISION.md` step 4.
+`filter_to_first_tick` (2 s) now has a producer and `slider_to_graph` (200 ms)
+does not — it is gated on a parameter control existing at all, and is written up
+in `docs/LATER.md` rather than left here.
+
+Read: `src/sieve/gui/preview_runner.py` signals,
+`src/sieve/gui/{timeline_bar,timeline_model}.py`, `docs/SCAFFOLD.md`
+`gui/graph_hud.py`, `docs/VISION.md` step 4.
 
 ## The three-way overlay
 
@@ -250,8 +273,10 @@ Read: `src/sieve/gui/{video_view,commands}.py`.
   item — **The three-way overlay** above — so this bullet is answered there
   rather than deferred a third time.
 - **`pyqtgraph` is in the `gui` extra and imported by nothing**, for the same
-  reason and with the same resolution: **The first live graph tick** above is
-  where it is used or dropped.
+  reason and with the same resolution: **The graph HUD** above is where it is
+  used or dropped. That item is no longer waiting on anything to plot — the
+  series exists and is emitted — so the next pass at it either adopts the
+  dependency or writes the view with `QPainter` and drops it from the extra.
 - **`gui/state.py`** from SCAFFOLD was not created. Scrub position and playing
   state live in `VideoPlayer`; a separate object would duplicate them. Create
   it when there is UI state with no natural owner (panel layout, zoom).

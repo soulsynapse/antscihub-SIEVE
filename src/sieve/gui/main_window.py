@@ -35,14 +35,18 @@ from PySide6.QtWidgets import (
 from yaml import YAMLError
 
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Project, project_path_for
+from sieve.core.replicates import Replicate
 from sieve.core.types import VideoMetadata
 from sieve.gui.document import ReplicateDocument
+from sieve.gui.executor_adapter import ExecutorAdapter
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.preferences_dialog import PreferencesDialog
+from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.replicate_tab import ReplicateTab
 from sieve.gui.timeline_bar import TimelineBar
 from sieve.gui.toast import Toast
+from sieve.pipeline.preview import PreviewRender
 
 VIDEO_FILTER = (
     "Video files (*.mp4 *.MP4 *.mov *.MOV *.avi *.AVI *.mkv *.MKV *.m4v *.mpg *.mpeg *.wmv);;"
@@ -92,6 +96,14 @@ class MainWindow(QMainWindow):
         self._document = ReplicateDocument(self)
         self._replicate_tab = ReplicateTab(self._player, self._document, self)
         self._timeline = TimelineBar(self._player, self._document, self)
+
+        # The graph side of the window. Nothing draws these yet — `graph_hud.py`
+        # is the next item — so what they produce reaches the user as one status
+        # line. That is deliberately thin and deliberately present: it is the
+        # difference between a render path that is exercised every time a
+        # project with a graph is opened and one that only tests run.
+        self._preview = PreviewRunner(self)
+        self._metrics = ExecutorAdapter(parent=self)
 
         # The project as last read or written, and where from. `_project`
         # carries the fields the document does not edit, so a save can put them
@@ -279,6 +291,20 @@ class MainWindow(QMainWindow):
         self._replicate_tab.editor_open_changed.connect(self._on_editor_open_changed)
         self._preferences.changed.connect(self._on_preferences_changed)
         self._document.clip_changed.connect(self._on_clip_changed)
+
+        # Three things make a preview stale and all three arrive as signals:
+        # the reader becoming ready, the graph changing, and the working window
+        # moving. `request_render` supersedes whatever is outstanding, so
+        # dragging the window's spin box submits many and computes the last —
+        # which is why the window may connect all three without a timer of its
+        # own.
+        self._preview.opened.connect(self._refresh_preview)
+        self._preview.open_failed.connect(self._on_preview_unavailable)
+        self._preview.render_finished.connect(self._on_render_finished)
+        self._preview.render_failed.connect(self._on_render_failed)
+        self._document.grouping_changed.connect(self._refresh_preview)
+        self._document.clip_changed.connect(self._refresh_preview)
+
         # The stack is the dirty flag. Every user edit is a command on it by
         # construction (see `document.py`), so there is no second place a change
         # can come from and no bookkeeping to keep in step — which is also why
@@ -545,6 +571,7 @@ class MainWindow(QMainWindow):
         if not self.confirm_discard():
             return
         self._player.close()
+        self._preview.close()
         self._document.unbind_source()
         self._replicate_tab.video_closed()
         self._timeline.video_closed()
@@ -562,6 +589,10 @@ class MainWindow(QMainWindow):
         # Recorded on success rather than on the open attempt: a path that
         # failed to decode is not one to hand back at the next launch.
         self._preferences.last_video = metadata.path
+        # Before the document is bound, so the reader is already opening while
+        # the project below is applied. `open` is asynchronous and the graph
+        # arrives synchronously; the runner's `opened` is what closes the gap.
+        self._preview.open(metadata.path)
         self._document.bind_source(
             metadata.width, metadata.height, metadata.frame_count, metadata.fps
         )
@@ -591,6 +622,66 @@ class MainWindow(QMainWindow):
         # whatever the user opened next.
         self._pending_project = None
         self._warn(message)
+
+    # ---- the graph -------------------------------------------------------
+
+    @Slot()
+    def _refresh_preview(self) -> None:
+        """Re-render the working window through whatever graph the document holds.
+
+        Refused by the runner when there is no footage or no node, which is
+        every state the application is in until a project with a graph is
+        opened — so this is a no-op far more often than it is a render, and
+        deliberately not guarded here as well. One place decides what is worth
+        rendering.
+        """
+        window = self._document.window
+        if window is None:
+            return
+        self._preview.request_render(self._document.pipeline, window, self._previewed_replicate())
+
+    def _previewed_replicate(self) -> Replicate | None:
+        """Which arena the preview runs over: the first, or the whole frame.
+
+        The same default `sieve preview` takes, and for the same reason — a
+        preview is one viewport and the fan-out belongs to a run. Following the
+        table's selection is the obvious next move and is not this item's: it
+        needs the arena's identity in the graph HUD's axis label to mean
+        anything, which is the item after this one.
+        """
+        replicates = self._document.all()
+        return replicates[0] if replicates else None
+
+    @Slot(object)
+    def _on_render_finished(self, render: PreviewRender) -> None:
+        """Say what the render covered and how much of it the store already had.
+
+        The reuse share rather than a duration, because the duration is on the
+        bus and the share is the number that says whether the session is doing
+        what `pipeline/preview.py` claims: a second render after an edit
+        reporting 0% is the failure that module is written against, and it is
+        invisible in the frames.
+        """
+        self.statusBar().showMessage(
+            f"Graph: {render.frames} frames {render.span.start}:{render.span.end}  ·  "
+            f"{render.computed} computed, {render.from_cache} cached "
+            f"({render.reuse:.0%} reuse)"
+        )
+
+    @Slot(str)
+    def _on_render_failed(self, message: str) -> None:
+        """A graph that will not run says so in the status bar and nowhere else.
+
+        Not a dialog. The graph arrives from a project file rather than from
+        anything the user just did, so a modal here would interrupt them over a
+        decision they did not make — and the preview failing does not stop them
+        scrubbing, cutting, or drawing arenas.
+        """
+        self.statusBar().showMessage(f"Graph cannot run: {message}")
+
+    @Slot(str)
+    def _on_preview_unavailable(self, message: str) -> None:
+        self.statusBar().showMessage(f"No preview: {message}")
 
     @Slot()
     def _on_scrub_degraded(self) -> None:
@@ -648,6 +739,11 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self._player.shutdown()
+        # The adapter before the runner: the runner's last act is to abandon a
+        # render, and a subscription still live on a QObject Qt is about to
+        # delete is the one way a shutdown can crash rather than merely wait.
+        self._metrics.close()
+        self._preview.shutdown()
         super().closeEvent(event)
 
 

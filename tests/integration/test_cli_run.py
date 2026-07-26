@@ -100,7 +100,12 @@ def test_a_dry_run_never_opens_the_video(
     def refuse(*args: object, **kwargs: object) -> object:
         raise AssertionError("--dry-run opened the video")
 
-    monkeypatch.setattr("sieve.cli.run_cmd.VideoReader", refuse)
+    # Both doors into the container, because there are two now: the reader the
+    # run loop decodes through, and the one `span_for` falls back to when a
+    # project has no clip. Patching only the first would leave the second able to
+    # open a video on the path this test exists to keep closed.
+    monkeypatch.setattr("sieve.cli.run_cmd.frame_source", refuse)
+    monkeypatch.setattr("sieve.cli.common.VideoReader", refuse)
 
     result = runner.invoke(app, ["run", str(project), "--dry-run"])
 

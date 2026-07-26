@@ -39,15 +39,15 @@ from typing import Annotated
 import typer
 
 from sieve.backend.dispatch import Backend, NoKernelError
-from sieve.cli.common import load_project, refuse, span_for
+from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
 from sieve.core.pipeline_model import Project
 from sieve.core.replicates import Replicate
-from sieve.decode.reader import VideoDecodeError, VideoReader
+from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore, NullFrameStore
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag, GraphError
-from sieve.pipeline.executor import UnrunnableNodeError, execute
+from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan
 
 
@@ -78,6 +78,7 @@ def run_project(
     no_cache: Annotated[
         bool, typer.Option("--no-cache", help="Compute every frame, reuse nothing.")
     ] = False,
+    workers: Annotated[int | None, WORKERS_OPTION] = None,
 ) -> None:
     """Run a project's pipeline over its representative clip.
 
@@ -114,12 +115,12 @@ def run_project(
         return
 
     store: FrameStore = NullFrameStore() if no_cache else MemoryFrameStore()
-    with VideoReader(video) as reader:
+    with frame_source(video, workers) as reader:
         for plan in plans:
             _execute_one(plan, reader, store)
 
 
-def _execute_one(plan: ExecutionPlan, reader: VideoReader, store: FrameStore) -> None:
+def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) -> None:
     """Run one replicate's plan and print what it did.
 
     Counted rather than collected: the executor yields a `FrameResult` per

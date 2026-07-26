@@ -145,16 +145,23 @@ after an edit is 3.3 ms against a cold render's 1350 ms. See
 `docs/completed-todo/2026.07.26-the-representative-clip-preview.md`.
 
 Measuring that put a number on the cold render, and chasing why it was 22 ms per
-frame produced the item below it: the footage decodes in 1.2 ms and ffmpeg
-converts a full frame in another 1.25 ms across seventeen cores, so
-`VideoReader.read`'s 26 ms is a single-threaded convert on the calling thread and
-roughly 9x is available without changing a pixel. See
-`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md`, which
-supersedes the finding the completed entry was written against.
+frame took the reader as far as it goes. `decode/prefetch.py` reads a span on N
+threads for a measured 1.61x — 24.50 ms/frame to 15.25 — and `--workers` on both
+commands is where a cluster sets it, absent from the project document because
+machine capability is not part of a reproducible artifact. What the same
+investigation established is that the *remaining* 6x is not a threading problem:
+the wall past four workers is a 47.6 MB BGR array allocated and freed per frame,
+so the routes that would reach ffmpeg's 2.95 ms are the ones where the frame gets
+smaller — cropping before the convert, or the luma plane alone — and each of those
+changes what a pixel is and needs a cache generation. Nothing below should treat
+decode speed as an open question without reading
+`docs/findings/2026.07.26-threading-the-reads-buys-1.6x-and-stops.md` and
+`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md` first;
+that work is deliberately not an item, because taking it means choosing a route
+and no measurement chooses one.
 
-The three items below are what is left of the tuning loop VISION step 4
-describes, plus the reader work that measuring it turned up. The first two were
-gated on the preview and neither is any longer.
+The two items below are what is left of the tuning loop VISION step 4 describes.
+Both were gated on the preview and neither is any longer.
 
 ## The first live graph tick
 
@@ -212,53 +219,6 @@ unused a third time is not.
 
 Read: `src/sieve/gui/video_view.py`, `docs/VISION.md` step 4, the napari entry
 under **Deferred decisions** below.
-
-## Read frames faster than one at a time
-
-**Gated on: a decision, not on code.** Every number is measured and in
-`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md`; what
-is not decided is which of four routes to take, and that decision is not a
-performance question. Do not start this without reading that finding's route
-table — three of the four change what `read(i)` returns, and `decoder_identity()`
-is folded into `source_key`, so a route that moves a pixel invalidates every
-cache entry in existence and must say so.
-
-What is true: decode is 1.16 ms per frame and `VideoReader.read` is 26.0 ms.
-ffmpeg does the same decode plus the same full-frame YUV420→BGR24 convert in
-2.95 ms because it threads the convert over ~17 cores;
-`VideoCapture::retrieve` converts on the calling thread, on one core, and adds
-about 12 ms of its own on top of what a bare `cv2.cvtColor` of the same buffer
-costs. So the cold cost of every span in this system — a preview window, a
-`sieve run` — is a reader that converts 15.9 megapixels to show the graph 0.63 of
-one.
-
-**Throughput and latency are not the same fix here, and choosing a route is
-choosing which one improves.** Threading the reads raises the rate a span is
-decoded at and does nothing for a single frame: one scrub still pays one
-single-threaded convert, so `scrub_to_repaint` and `open_to_first_frame` are
-untouched by it. Converting less — a crop, or luma only — is the only thing that
-moves a lone frame. A route picked for the preview's budgets can therefore leave
-the pre-pipeline ones exactly where they are, which is worth knowing before the
-work starts rather than after.
-
-The route that changes nothing semantically is N `VideoCapture` handles
-positioned at strides through `decode_range`, each performing the identical
-`read()`, reassembled in order: every frame stays byte-identical, no key moves,
-and the ceiling is the ~3 ms threaded conversion costs. `pipeline/executor.py`
-walks `decode_range` strictly forward and already takes a `FrameSource` protocol
-rather than a `VideoReader`, so a prefetching source is a drop-in and nothing
-above it changes — which is what that protocol was for.
-
-The cheapest route is `CAP_PROP_CONVERT_RGB = 0`: 8.22 ms instead of 26.0 for
-one property set, returning exactly the luma plane, which is what every filter in
-this repo actually reads. It is a contract change rather than an optimisation —
-`ChannelSpec.GRAY` and `ArraySpec` can express it, and `decoder_identity()` has
-to carry it.
-
-Read: `src/sieve/decode/{reader,identity}.py`,
-`src/sieve/pipeline/{executor,cache_key}.py`,
-`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md`,
-`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
 
 ---
 

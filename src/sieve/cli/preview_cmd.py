@@ -43,10 +43,10 @@ import typer
 from sieve.backend.dispatch import Backend, NoKernelError
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import MetricBus, Recorder
-from sieve.cli.common import load_project, refuse, span_for
+from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
 from sieve.core.pipeline_model import ClipRange, Pipeline, Project
 from sieve.core.replicates import Replicate
-from sieve.decode.reader import VideoDecodeError, VideoReader
+from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
@@ -96,6 +96,7 @@ def preview_project(
     check: Annotated[
         bool, typer.Option("--check", help="Exit non-zero if any render missed its budget.")
     ] = False,
+    workers: Annotated[int | None, WORKERS_OPTION] = None,
 ) -> None:
     """Render a project's representative clip and report what it cost.
 
@@ -126,7 +127,7 @@ def preview_project(
     recorder = Recorder()
     bus.subscribe(recorder.record)
 
-    with VideoReader(video) as reader:
+    with frame_source(video, workers) as reader:
         session = PreviewSession(
             source=source,
             reader=reader,

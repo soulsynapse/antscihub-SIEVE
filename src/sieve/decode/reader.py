@@ -5,7 +5,10 @@ come back as 8-bit BGR because that is what `VideoCapture` gives us and what
 the cache key assumes; a high-bit-depth path would be a separate reader.
 
 The seek strategy exists because of a lopsided cost profile, measured on a
-5312x2988 59.94 fps H.264 source:
+5312x2988 59.94 fps source (mpeg4 Simple Profile at 183 Mbps — this docstring
+said H.264 until `ffprobe` was pointed at the file, and the correction matters
+because it is why hardware decode never engaged; see
+`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md`):
 
     grab()                     ~1.3 ms   (demux + decode, no colour convert)
     retrieve()                ~29 ms     (YUV -> BGR convert and copy)
@@ -17,6 +20,14 @@ grabbing through the gap rather than seeking: below `GRAB_FORWARD_LIMIT`
 frames that is strictly cheaper than asking the container to seek, and it also
 avoids the keyframe-rounding errors that make `POS_FRAMES` unreliable on some
 codecs.
+
+**That conversion is single-threaded and OpenCV gives no way to reach it
+separately, which is what `prefetch.py` is for.** ffmpeg performs the identical
+convert at 1.25 ms per frame by spreading it over the machine; nothing here can,
+because `retrieve()` does it on the calling thread before handing back an array.
+So the parallelism is one level up — N of these readers, one per thread — and
+every frame stays byte-identical, which is what lets it be turned on without
+touching `decoder_identity()`.
 """
 
 from __future__ import annotations

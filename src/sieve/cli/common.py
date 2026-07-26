@@ -21,7 +21,37 @@ import typer
 from pydantic import ValidationError
 
 from sieve.core.pipeline_model import ClipRange, Project
+from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoReader
+
+#: The `--workers` option, shared by every command that decodes a span.
+#:
+#: One definition because it is one decision: how much of this machine the run
+#: may use. VISION step 6 puts machine capability on the command line rather than
+#: in the project document, so this is where it lives and there is no
+#: corresponding field on `Project` — a `threads:` key in the artifact would make
+#: one machine's allocation part of another machine's reproducible run.
+#:
+#: A batch script passes `--workers $SLURM_CPUS_PER_TASK`. `resolve_workers`
+#: deliberately does not read that variable itself.
+WORKERS_OPTION = typer.Option(
+    "--workers",
+    min=1,
+    help="Decode threads. Defaults to what this process is allowed, capped. "
+    "1 is the sequential reader.",
+)
+
+
+def frame_source(video: Path, workers: int | None) -> PrefetchFrameSource:
+    """The reader a span is decoded through, however many threads it gets.
+
+    Always a `PrefetchFrameSource`, including at one worker, so that `--workers 1`
+    is the same code path with an empty window rather than a second reader class
+    the option switches between. `VideoReader` is what it is built out of, so the
+    frames are byte-identical at any count — which is why this can be the default
+    without a cache generation.
+    """
+    return PrefetchFrameSource(video, workers=workers)
 
 
 def refuse(message: str) -> typer.Exit:

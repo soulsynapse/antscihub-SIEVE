@@ -25,23 +25,30 @@ sieve/
 │       │   │   # Everything downstream pattern-matches on these — no stringly-typed metadata.
 │       │   │
 │       │   ├── filter_base.py
-│       │   │   # Abstract base class defining the filter contract.
-│       │   │   # LOAD-BEARING CRITERIA (agent designs the shape, but must satisfy):
-│       │   │   #   - Single source of truth for params (GUI/CLI/YAML/cache all read from it)
-│       │   │   #   - Declared I/O typing (dtype, channels, dimensionality) for static graph validation
-│       │   │   #   - Explicit warmup_frames (0 for stateless; preview uses this)
-│       │   │   #   - Streaming vs windowed declaration (executor uses for pipelining)
-│       │   │   #   - Determinism flag (cache and bench layer depend on it)
-│       │   │   #   - Cost estimate (wall-time/frame, peak memory) for HUD predictions
-│       │   │   #   - Backend registry (cpu_numpy, gpu_cupy — filter doesn't pick, dispatcher does)
-│       │   │   #   - Colocated guidance.md per filter
-│       │   │   #   - Decorator-driven registration at import time
-│       │   │   #   - Explicit semver; bump invalidates cache for that node
-│       │   │   #   - Primary params subset (1-3) for GUI default view; rest behind "Advanced"
+│       │   │   # FilterSpec, ParamsBase, ArraySpec, Mode. The contract, as data.
+│       │   │   # LOAD-BEARING: this is a *spec*, never an implementation. Nothing
+│       │   │   # here executes, so a saved DAG validates structurally with no
+│       │   │   # filters installed. Kernels live in filters/, one per backend.
+│       │   │   # A spec must carry:
+│       │   │   #   - params_model: one pydantic model, the single source of truth
+│       │   │   #     (GUI widgets, CLI flags, YAML, and cache key all read it)
+│       │   │   #   - accepts/emits ArraySpec (dtype, channels, dims) for static validation
+│       │   │   #   - warmup_frames — 0 for stateless; the executor sums these along
+│       │   │   #     the path, and an IIR's value is a settled-within-epsilon choice
+│       │   │   #   - mode: STREAMING vs WINDOWED (executor uses it for pipelining)
+│       │   │   #   - deterministic: same backend, same input, same output. Gates caching.
+│       │   │   #   - backend_agnostic: CPU and GPU kernels agree bit for bit. Gates whether
+│       │   │   #     backend identity enters the cache key. False for float kernels; claiming
+│       │   │   #     it requires an equivalence test.
+│       │   │   #   - cost estimate (wall-time/frame, peak memory) for HUD predictions
+│       │   │   #   - explicit semver; bump invalidates cache for that node
+│       │   │   #   - primary params subset (1-3) for GUI default view; rest behind "Advanced"
 │       │   │
 │       │   ├── filter_registry.py
-│       │   │   # Discovery and registration of filter classes from the filters/ package.
-│       │   │   # Decorator-based. Adding a decorated class in filters/ is sufficient.
+│       │   │   # The registry container and lookup, by (filter_id, version).
+│       │   │   # Populated from above by decorators at import time — core defines the
+│       │   │   # shelf, filters/ puts things on it. Adding a decorated class in
+│       │   │   # filters/ is sufficient; nothing here enumerates them.
 │       │   │
 │       │   ├── pipeline_model.py
 │       │   │   # Pydantic v2 model for the serializable pipeline DAG artifact.
@@ -71,15 +78,18 @@ sieve/
 │       │   ├── __init__.py
 │       │   │
 │       │   ├── dispatch.py
-│       │   │   # CPU/GPU selection policy. Picks backend per filter invocation.
+│       │   │   # Device policy: given a filter's declared backends and the machine,
+│       │   │   # pick one. A dict lookup on (filter_id, backend_name) plus a policy.
 │       │   │   # DECISION: CuPy is the only v1 GPU backend. No Torch unless isolated worker.
-│       │   │   # Filters declare which backends they implement; dispatcher picks.
+│       │   │   # LOAD-BEARING: holds no filter's implementation. If adding a filter
+│       │   │   # required editing a file here, non-negotiable #3 would be broken.
 │       │   │
-│       │   ├── cpu.py
-│       │   │   # NumPy NDArray execution path. Array API-compatible kernels.
+│       │   ├── namespace.py
+│       │   │   # Array-API namespace resolution (numpy vs cupy) and host/device transfer.
 │       │   │
-│       │   └── gpu.py
-│       │       # CuPy execution path. Only GPU backend in v1.
+│       │   └── identity.py
+│       │       # Backend identity string for cache keys, mirroring decode/identity.py.
+│       │       # Enters the key for every filter that is not backend_agnostic.
 │       │
 │       ├── pipeline/
 │       │   ├── __init__.py
@@ -243,14 +253,13 @@ sieve/
 │       │
 │       └── filters/
 │           ├── __init__.py
+│           │   # pkgutil scan over this package's modules at import, so a decorated
+│           │   # class in a new module is discovered with no edit here.
 │           │
-│           ├── _registry.py
-│           │   # Package-level scan populating filter_registry on import.
+│           ├── downsample.py          # FilterSpec + @kernel("cpu") + optional @kernel("gpu")
+│           ├── downsample.md          # Guidance, found by convention. A test asserts it exists.
 │           │
-│           └── _example/
-│               ├── __init__.py
-│               ├── filter.py          # Reference filter implementation. New filters copy this pattern.
-│               └── guidance.md        # Colocated markdown. One per filter. Rendered in GUI guidance panel.
+│           └── optical_flow.py        # May import cv2 or cupy. The spec above it stays pure.
 │
 └── tests/
     ├── __init__.py

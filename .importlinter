@@ -17,7 +17,8 @@ layers =
     sieve.gui | (sieve.cli)
     sieve.bench
     (sieve.pipeline) | (sieve.workers)
-    sieve.decode | (sieve.storage)
+    (sieve.filters)
+    sieve.decode | (sieve.storage) | (sieve.backend)
     sieve.core
 
 [importlinter:contract:core-purity]
@@ -42,12 +43,19 @@ forbidden_modules =
     PySide6
 
 [importlinter:contract:opencv-containment]
-name = OpenCV is confined to the decode layer
+name = OpenCV stays out of core, bench, and the GUI
 type = forbidden
 # Direct imports only: reaching a decoded frame *through* `sieve.decode` is
 # the supported path. What this forbids is a second module learning to drive
 # VideoCapture itself, which is how decoder identity stops being one string
 # and cache keys stop meaning anything.
+#
+# `sieve.filters` is deliberately absent from the sources below. A filter
+# kernel calling `cv2.calcOpticalFlowFarneback` never touches a container, a
+# seek, or decoder identity, so the rationale above does not reach it. What
+# keeps such a kernel honest is the spec it hangs off: a declared version that
+# enters the cache key, and `backend_agnostic = False` so the backend identity
+# does too.
 allow_indirect_imports = True
 source_modules =
     sieve.core

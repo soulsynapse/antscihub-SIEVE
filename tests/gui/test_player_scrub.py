@@ -19,6 +19,8 @@ import pytest
 from PySide6.QtGui import QImage
 from pytestqt.qtbot import QtBot
 
+from sieve.bench.metrics import MetricBus
+from sieve.bench.metrics import Recorder as MetricRecorder
 from sieve.core.types import VideoMetadata
 from sieve.gui.player import VideoPlayer
 from sieve.gui.scrub_policy import SAMPLE_WINDOW, ScrubPolicy
@@ -288,3 +290,38 @@ class TestPreferences:
             assert not instance.is_scrub_degraded
         finally:
             instance.shutdown()
+
+
+class TestMetrics:
+    def test_a_scrub_round_trip_reaches_the_bus(self, qtbot: QtBot, synthetic_video: Path) -> None:
+        """`scrub_to_repaint` is published, and only for scrubs.
+
+        The budget table has declared this ceiling since before there was a
+        player; what it has never had is a producer, so nothing outside
+        `ScrubPolicy`'s private decision could observe the number. Pinning the
+        kind matters as much as pinning that anything arrives: playback ticks
+        and exact seeks travel the same slot and are not what this budget
+        describes, so publishing them would put a different distribution into
+        the series a gate reads.
+        """
+        bus = MetricBus()
+        recorder = MetricRecorder()
+        bus.subscribe(recorder.record)
+
+        instance = VideoPlayer(metrics=bus)
+        opened: list[VideoMetadata] = []
+        instance.opened.connect(opened.append)
+        instance.open(str(synthetic_video))
+        qtbot.waitUntil(lambda: bool(opened), timeout=OPEN_TIMEOUT_MS)
+
+        try:
+            # The open published nothing: its first frame is an EXACT request.
+            assert len(recorder) == 0
+
+            instance.scrub(23)
+            qtbot.waitUntil(lambda: instance.current_index == 23, timeout=FRAME_TIMEOUT_MS)
+        finally:
+            instance.shutdown()
+
+        assert recorder.keys == ("scrub_to_repaint",)
+        assert recorder.median_ms("scrub_to_repaint") > 0.0

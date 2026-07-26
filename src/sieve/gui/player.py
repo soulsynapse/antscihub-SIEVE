@@ -49,6 +49,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtGui import QImage
 
 from sieve.bench.budgets import BUDGETS
+from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.pipeline_model import ClipRange
 from sieve.core.types import VideoMetadata
 from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
@@ -92,6 +93,7 @@ class VideoPlayer(QObject):
         parent: QObject | None = None,
         *,
         policy: ScrubPolicy | None = None,
+        metrics: MetricBus | None = None,
     ) -> None:
         super().__init__(parent)
 
@@ -106,6 +108,10 @@ class VideoPlayer(QObject):
         # meet the budget the default policy never degrades, which is correct
         # behaviour and useless as a test.
         self._policy = policy if policy is not None else ScrubPolicy(_SCRUB_BUDGET_MS)
+        # Injectable for the reason above and for one more: a test that asserts
+        # on what was published must not hear another test's player, and the
+        # process-wide bus is shared by construction.
+        self._metrics = METRICS if metrics is None else metrics
 
         self._playing = False
         self._play_anchor_time = 0.0
@@ -378,10 +384,18 @@ class VideoPlayer(QObject):
 
         # Measured after the emit so the synchronous view update counts. The
         # repaint itself is asynchronous and is not captured here.
-        if arrival.request.kind is RequestKind.SCRUB and self._policy.observe(
-            self._coalescer.round_trip_ms()
-        ):
-            self.scrub_degraded.emit()
+        #
+        # The same number goes two places and they are not the same question.
+        # `ScrubPolicy` asks whether *this session* should degrade, which is a
+        # decision with a hysteresis and a memory; the bus asks only what this
+        # round trip cost, which is what `scrub_to_repaint` names and what a HUD
+        # or a gate reads. Publishing the policy's verdict instead would give a
+        # consumer the conclusion and not the measurement.
+        if arrival.request.kind is RequestKind.SCRUB:
+            round_trip_ms = self._coalescer.round_trip_ms()
+            self._metrics.publish("scrub_to_repaint", round_trip_ms)
+            if self._policy.observe(round_trip_ms):
+                self.scrub_degraded.emit()
 
         self._issue(self._coalescer.drain())
 

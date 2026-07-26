@@ -107,49 +107,25 @@ still carries no clip at all. The arithmetic is Qt-free in
 when it is built, and does not have to invent one. See
 `docs/completed-todo/2026.07.26-the-timeline-replaces-the-transport.md`.
 
+A timing now has somewhere to go. `bench/metrics.py` is the Qt-free collection
+bus — publishers hand it `(budget key, elapsed_ms)`, consumers subscribe, and
+the sample is judged against `BUDGETS` on the way past — and `gui/player.py` is
+its first producer. Nothing below needs to invent a callback to report through
+or a place to compare a duration against a ceiling. See
+`docs/completed-todo/2026.07.26-the-metric-bus.md`.
+
 What remains is the in-pipeline regime, which has budgets, a plan, an executor,
-and no code that can reach any of it. The five items below are the tuning loop
-VISION step 4 describes, in dependency order: each says what it is gated on, so
-an item can be taken out of order when its gate is already clear rather than
-because it is next in the list.
-
-## The metric bus
-
-`bench/budgets.py` declares eight latency ceilings and `assert_within` has no
-caller outside its own module. Two pre-pipeline budgets are checked by
-`tests/bench/test_perf_regression.py` against the player; `cut_to_ready` and
-all four in-pipeline budgets are checked by nothing and *cannot* be, because
-nothing in the repo emits a timing. Non-negotiable #4 says a miss is a defect,
-and a budget nothing can miss is not a commitment.
-
-`bench/metrics.py` from SCAFFOLD is the collection bus: something the executor
-and the preview publish spans to, and something a consumer subscribes to.
-Qt-free — the `headless` contract already forbids `PySide6` in `sieve.bench`,
-and the QObject adapter that bridges it to signals is a separate item below.
-
-The two design points that are not obvious:
-
-- **A span, not a counter.** Every budget in the table is a duration between
-  two named events; a bus of scalar gauges would make each caller do its own
-  `perf_counter` arithmetic, which is the arithmetic the budget keys exist to
-  standardise. Publishing `(key, elapsed_ms)` against `BUDGETS` keys means a
-  miss is detectable by the bus rather than by each call site remembering to
-  ask.
-- **Subscription cannot be allowed to cost the thing it measures.** The bus is
-  in the path of a 100 ms budget. Whatever it does per span happens inside the
-  interval being timed.
-
-Taken first because it is small, has no gate, and every item below reports
-through it. Instrumenting the preview afterwards is a retrofit of the thing
-whose whole purpose is being observable.
-
-Read: `src/sieve/bench/budgets.py`, `tests/bench/test_perf_regression.py`,
-`docs/SCAFFOLD.md` `bench/`, `.importlinter` `headless`.
+a metric bus, and no code that can reach any of it. The four items below are the
+tuning loop VISION step 4 describes, in dependency order: each says what it is
+gated on, so an item can be taken out of order when its gate is already clear
+rather than because it is next in the list.
 
 ## The representative-clip preview
 
-**Gated on: nothing.** The metric bus above should land first so this is born
-instrumented, but the two do not otherwise depend on each other.
+**Gated on: nothing.** `bench/metrics.py` exists, so this is born instrumented
+rather than retrofitted — publish `slider_to_preview` and `full_preview_render`
+to a `MetricBus` the caller passes in, the way `gui/player.py` publishes
+`scrub_to_repaint`. See `docs/completed-todo/2026.07.26-the-metric-bus.md`.
 
 `pipeline/preview.py` is the last unwritten module in the layer stack and three
 things in this repo were already built pointing at it. `gui/coalescer.py` was
@@ -233,13 +209,16 @@ Read: `src/sieve/backend/dispatch.py` `Kernel`,
 
 ## The first live graph tick
 
-**Gated on: the metric bus and the preview.** Both, genuinely — this is the
-adapter between them and the screen, and has nothing to bridge until they
-exist.
+**Gated on: the preview.** The metric bus half of this gate is clear —
+`bench/metrics.py` exists and `MetricBus.subscribe` is the shape the adapter
+wraps. What is still missing is anything publishing an in-pipeline span, which
+is the preview.
 
 `gui/executor_adapter.py` is defined in ARCHITECTURE as the *only* coupling
 point between the executor and Qt: a QObject that subscribes to the bus and
-re-emits as signals. Everything else in `gui/` learns about a run through it.
+re-emits as signals. `Subscriber` is called on the publishing thread, so the
+adapter's job is specifically to get from there to the GUI thread — a queued
+signal emission, which is the reason the bus does not try to do it itself. Everything else in `gui/` learns about a run through it.
 `gui/graph_hud.py` is the pyqtgraph view — `pyqtgraph` is already in the `gui`
 extra and imported by nothing.
 

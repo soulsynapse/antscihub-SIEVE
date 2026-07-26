@@ -1,8 +1,14 @@
-"""Top-level window: menus, tabs, and the wiring between them.
+"""Top-level window: menus, tabs, the timeline, and the wiring between them.
 
 Tabs follow the workflow order from VISION.md. Only Replicate exists so far;
 the rest are added as they are built rather than stubbed, so the tab bar is
 never a promise the application cannot keep.
+
+The timeline is *below* the tab widget and outside it, which is the point of it:
+it spans the whole asset and says the same thing whichever tab is showing, so
+"where am I, and what span am I working on" has one answer instead of one per
+tab. That is also why the central widget is a container rather than the tabs
+themselves — the tabs are a page, and the timeline is the window's floor.
 
 The window is also where a project becomes a file. It holds the two things the
 document deliberately does not — which file the document was read from, and the
@@ -23,6 +29,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QTabWidget,
+    QVBoxLayout,
     QWidget,
 )
 from yaml import YAMLError
@@ -34,6 +41,7 @@ from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.preferences_dialog import PreferencesDialog
 from sieve.gui.replicate_tab import ReplicateTab
+from sieve.gui.timeline_bar import TimelineBar
 from sieve.gui.toast import Toast
 
 VIDEO_FILTER = (
@@ -83,6 +91,7 @@ class MainWindow(QMainWindow):
         self._player = VideoPlayer(self)
         self._document = ReplicateDocument(self)
         self._replicate_tab = ReplicateTab(self._player, self._document, self)
+        self._timeline = TimelineBar(self._player, self._document, self)
 
         # The project as last read or written, and where from. `_project`
         # carries the fields the document does not edit, so a save can put them
@@ -99,7 +108,14 @@ class MainWindow(QMainWindow):
 
         tabs = QTabWidget()
         tabs.addTab(self._replicate_tab, "Replicate")
-        self.setCentralWidget(tabs)
+
+        central = QWidget()
+        stack = QVBoxLayout(central)
+        stack.setContentsMargins(0, 0, 0, 0)
+        stack.setSpacing(0)
+        stack.addWidget(tabs, 1)
+        stack.addWidget(self._timeline)
+        self.setCentralWidget(central)
 
         # Constructed after the central widget so it stacks above it, and
         # parented to the window rather than the tab so it survives a tab
@@ -217,6 +233,10 @@ class MainWindow(QMainWindow):
         self._previous_frame_action.triggered.connect(lambda: self._player.step(-1))
         playback_menu.addAction(self._previous_frame_action)
 
+        # The start of the *window*, not of the asset. Every position the
+        # transport can reach is inside the window now, so "go to start" has
+        # only one meaning it could still have — and `seek` clamps it there
+        # regardless of what is passed.
         self._start_action = QAction("Go to &Start", self)
         self._start_action.setShortcut(QKeySequence.StandardKey.MoveToStartOfDocument)
         self._start_action.setEnabled(False)
@@ -229,16 +249,22 @@ class MainWindow(QMainWindow):
         # safe here for the same reason period and comma are: they are window
         # shortcuts, and `_on_editor_open_changed` hands them back the moment a
         # table cell is being typed into.
+        #
+        # What they mean has changed with the model behind them: I *moves* the
+        # window here keeping its length, and O sets where it ends. The labels
+        # keep saying in and out because that is the gesture every editor has
+        # taught the user, and the length being held is the surprise that stops
+        # being one after the first press.
         self._mark_in_action = QAction("Mark Clip &In", self)
         self._mark_in_action.setShortcut(QKeySequence("I"))
         self._mark_in_action.setEnabled(False)
-        self._mark_in_action.triggered.connect(self._replicate_tab.mark_clip_in)
+        self._mark_in_action.triggered.connect(self.move_window_to_playhead)
         playback_menu.addAction(self._mark_in_action)
 
         self._mark_out_action = QAction("Mark Clip &Out", self)
         self._mark_out_action.setShortcut(QKeySequence("O"))
         self._mark_out_action.setEnabled(False)
-        self._mark_out_action.triggered.connect(self._replicate_tab.mark_clip_out)
+        self._mark_out_action.triggered.connect(self.end_window_at_playhead)
         playback_menu.addAction(self._mark_out_action)
 
         self._clear_clip_action = QAction("&Clear Clip", self)
@@ -260,6 +286,21 @@ class MainWindow(QMainWindow):
         self._document.undo_stack.cleanChanged.connect(self._on_clean_changed)
 
     # ---- commands --------------------------------------------------------
+
+    @Slot()
+    def move_window_to_playhead(self) -> None:
+        """Put the working window's start at the frame on screen.
+
+        Here rather than on the timeline bar because the playhead belongs to the
+        player and the window belongs to the document, and the bar is a view of
+        both. A keystroke that needs one of each is the window's to route.
+        """
+        self._document.move_window_to(self._player.current_index)
+
+    @Slot()
+    def end_window_at_playhead(self) -> None:
+        """End the working window after the frame on screen, including it."""
+        self._document.end_window_at(self._player.current_index)
 
     @Slot()
     def show_preferences(self) -> None:
@@ -506,6 +547,7 @@ class MainWindow(QMainWindow):
         self._player.close()
         self._document.unbind_source()
         self._replicate_tab.video_closed()
+        self._timeline.video_closed()
         self._set_video_actions_enabled(False)
         self._project = None
         self._project_path = None
@@ -520,7 +562,9 @@ class MainWindow(QMainWindow):
         # Recorded on success rather than on the open attempt: a path that
         # failed to decode is not one to hand back at the next launch.
         self._preferences.last_video = metadata.path
-        self._document.bind_source(metadata.width, metadata.height, metadata.frame_count)
+        self._document.bind_source(
+            metadata.width, metadata.height, metadata.frame_count, metadata.fps
+        )
         self._set_video_actions_enabled(True)
         self.statusBar().showMessage(
             f"{metadata.path.name}  ·  {metadata.width}x{metadata.height}  ·  "

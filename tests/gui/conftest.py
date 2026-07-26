@@ -17,9 +17,14 @@ from sieve.gui.document import ReplicateDocument
 
 
 #: Length of the source the `document` fixture binds. Named because the clip
-#: tests assert against it: a mark past the end lands here, and an in point on
-#: its own runs to here.
+#: tests assert against it: a mark past the end lands here, and a window pushed
+#: off the end comes to rest against it.
 SOURCE_FRAMES = 1000
+
+#: Frame rate the same source is bound at. Named for the same reason: the
+#: default working window is ten *seconds*, so the length of the window a test
+#: starts with is this number times ten.
+SOURCE_FPS = 30.0
 
 
 def answering(button: QMessageBox.StandardButton) -> Callable[..., QMessageBox.StandardButton]:
@@ -48,9 +53,9 @@ def no_modal_dialogs(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def document(qapp: object) -> Iterator[ReplicateDocument]:
-    """A fresh document bound to a 1000x800 source, 1000 frames long."""
+    """A fresh document bound to a 1000x800 source, 1000 frames at 30 fps."""
     del qapp
     doc = ReplicateDocument()
-    doc.bind_source(1000, 800, SOURCE_FRAMES)
+    doc.bind_source(1000, 800, SOURCE_FRAMES, SOURCE_FPS)
     yield doc
     doc.deleteLater()

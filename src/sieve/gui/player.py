@@ -21,6 +21,16 @@ budget the player snaps drag targets to a coarse grid and serves them from
 decision lives in `ScrubPolicy`; releasing the slider always decodes the exact
 frame regardless of mode.
 
+**A bounded transport.** Every position the player can reach is inside the
+working window, and playback loops within it rather than running to the end of
+the asset. That is what makes the window the unit of work VISION step 4 asks
+for: the user picks the ten seconds that matter and the transport stops being
+able to leave them. The window arrives from the document through `set_window`,
+and the arithmetic — which frame is shown last before the loop, and where a
+playhead the window has moved out from under goes — is in `timeline_model.py`,
+because it is off-by-one work and belongs somewhere a test can reach it without
+a decode thread.
+
 **Wall-clock playback.** The reference source is 5312x2988 at 59.94 fps and
 decodes at roughly 34 fps, so real-time playback is not achievable and never
 will be for footage like this. The player therefore drives from elapsed wall
@@ -39,12 +49,14 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtGui import QImage
 
 from sieve.bench.budgets import BUDGETS
+from sieve.core.pipeline_model import ClipRange
 from sieve.core.types import VideoMetadata
 from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
 from sieve.gui.decode_worker import DecodeWorker
 from sieve.gui.frame_cache import FrameCache
 from sieve.gui.preferences import Preferences
 from sieve.gui.scrub_policy import ScrubPolicy
+from sieve.gui.timeline_model import playback_step
 
 #: How often playback re-evaluates which frame the clock is on. Finer than any
 #: source frame rate we expect, so the limit on smoothness is decode, not this.
@@ -85,6 +97,7 @@ class VideoPlayer(QObject):
 
         self._metadata: VideoMetadata | None = None
         self._current_index = 0
+        self._window: ClipRange | None = None
         self._coalescer = RequestCoalescer()
 
         self._cache = FrameCache()
@@ -137,6 +150,11 @@ class VideoPlayer(QObject):
         return self._policy.is_degraded
 
     @property
+    def window(self) -> ClipRange | None:
+        """The span the transport is confined to, or None for the whole asset."""
+        return self._window
+
+    @property
     def fps(self) -> float:
         """Effective frame rate, substituting a fallback for unusable metadata."""
         if self._metadata is None or self._metadata.fps <= 0.0:
@@ -168,8 +186,30 @@ class VideoPlayer(QObject):
         self._reset_source_state()
         self._close_requested.emit()
 
+    def set_window(self, window: ClipRange | None) -> None:
+        """Confine the transport to `window`, or to the whole asset for None.
+
+        The playhead follows. A window moved out from under it would otherwise
+        leave the viewport showing a frame the transport can no longer reach,
+        and the next play would jump somewhere the user did not ask to go — so
+        the move is made visible immediately, at the frame nearest where they
+        were.
+        """
+        self._window = window
+        if self._metadata is None:
+            return
+        bounded = self._clamp(self._current_index)
+        if bounded != self._current_index:
+            self.seek(bounded)
+
     def seek(self, index: int) -> None:
-        """Jump to exactly `index`, re-anchoring playback there if it is running."""
+        """Jump to exactly `index`, re-anchoring playback there if it is running.
+
+        Clamped into the window, not merely into the source: a seek is how every
+        caller reaches a frame, so this is the one place that has to hold for
+        "the playhead is always inside the window" to be true. Reaching a frame
+        outside it means moving the window first.
+        """
         self._go_to(index, RequestKind.EXACT)
 
     def scrub(self, index: int) -> None:
@@ -187,11 +227,12 @@ class VideoPlayer(QObject):
         self.seek(self._current_index + delta)
 
     def play(self) -> None:
-        """Start playback. Rewinds to the start if parked on the last frame."""
+        """Start playback. Rewinds to the window's start if parked on its last frame."""
         if self._metadata is None or self._playing:
             return
-        if self._current_index >= self._metadata.frame_count - 1:
-            self._current_index = 0
+        window = self._bounds()
+        if self._current_index >= window.end - 1:
+            self._current_index = window.start
         self._playing = True
         self._anchor_playback(self._current_index)
         self._tick_timer_id = self.startTimer(TICK_INTERVAL_MS)
@@ -224,20 +265,25 @@ class VideoPlayer(QObject):
     # ---- internals -------------------------------------------------------
 
     def timerEvent(self, event: object) -> None:
-        """Advance to whatever frame the wall clock says we should be on."""
+        """Advance to whatever frame the wall clock says we should be on.
+
+        The window is what the clock is folded into: playback loops rather than
+        stopping at the end, because the window is a span the user chose to
+        watch repeatedly and pausing them at its last frame makes them press
+        play once per viewing.
+        """
         del event
         if not self._playing or self._metadata is None:
             return
 
         elapsed = perf_counter() - self._play_anchor_time
         target = self._play_anchor_index + int(elapsed * self.fps)
+        step = playback_step(target, self._current_index, self._bounds())
 
-        if target >= self._metadata.frame_count:
-            self.pause()
-            self._request(self._metadata.frame_count - 1, RequestKind.EXACT)
-            return
-        if target != self._current_index or self._coalescer.in_flight is not None:
-            self._request(target, RequestKind.PLAYBACK)
+        if step.rewound:
+            self._anchor_playback(step.index)
+        if step.index != self._current_index or self._coalescer.in_flight is not None:
+            self._request(step.index, RequestKind.PLAYBACK)
 
     def _go_to(self, index: int, kind: RequestKind) -> None:
         if self._metadata is None:
@@ -265,14 +311,30 @@ class VideoPlayer(QObject):
         self._play_anchor_time = perf_counter()
         self._play_anchor_index = index
 
+    def _bounds(self) -> ClipRange:
+        """The window, or the whole asset when none has been set.
+
+        A `ClipRange` either way, so nothing downstream branches on the absence.
+        The absence is a real state — the player is constructed before any
+        document has a source — and answering it with the asset's own span keeps
+        the unbounded transport a special case of the bounded one rather than a
+        second code path.
+        """
+        if self._window is not None:
+            return self._window
+        frames = self._metadata.frame_count if self._metadata is not None else 1
+        return ClipRange(start=0, end=max(frames, 1))
+
     def _clamp(self, index: int) -> int:
         if self._metadata is None:
             return 0
-        return max(0, min(index, self._metadata.frame_count - 1))
+        window = self._bounds()
+        return max(window.start, min(index, window.end - 1))
 
     def _reset_source_state(self) -> None:
         self._metadata = None
         self._current_index = 0
+        self._window = None
         self._coalescer.new_generation()
         self._cache.clear()
         self._policy.reset()

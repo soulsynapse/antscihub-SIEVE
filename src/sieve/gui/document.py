@@ -30,6 +30,7 @@ from sieve.gui.commands import (
     SetClip,
     SetReplicateROI,
 )
+from sieve.gui.timeline_model import containing, effective_window, ended_at, fitted, moved_to
 
 
 class ReplicateDocument(QObject):
@@ -47,6 +48,12 @@ class ReplicateDocument(QObject):
     grouping_changed = Signal()
     #: The representative clip was placed, moved, or dropped.
     clip_changed = Signal()
+    #: A source was bound or unbound, so the length and frame rate everything
+    #: is measured against have changed. Distinct from `structure_changed`,
+    #: which also fires for every added row: the timeline's whole horizontal
+    #: axis is the source's length, and rebuilding it per replicate would reset
+    #: the window controls under a user who is typing into them.
+    source_changed = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -54,6 +61,7 @@ class ReplicateDocument(QObject):
         self._pipeline = Pipeline()
         self._source_size: tuple[int, int] | None = None
         self._source_frames = 0
+        self._source_fps = 0.0
         self._clip: ClipRange | None = None
         self.undo_stack = QUndoStack(self)
 
@@ -81,6 +89,32 @@ class ReplicateDocument(QObject):
         return self._source_frames
 
     @property
+    def source_fps(self) -> float:
+        """Frame rate of the bound source, zero when nothing is bound.
+
+        Held only so a window has a length before the user has chosen one —
+        ten seconds is a count of frames and there is no other way to know how
+        many. Nothing else here is in the time domain.
+        """
+        return self._source_fps
+
+    @property
+    def window(self) -> ClipRange | None:
+        """The span the timeline shows and playback is bounded by.
+
+        `clip` below, or the default window until the user has chosen one. The
+        fallback is derived on every read rather than written into `_clip`,
+        which is the difference between a *tuning-session* rule and a document
+        rule: a project saved straight after opening a video must still come
+        back with `clip` unset, because that is what makes `plan.py` run the
+        whole video and what the HPC handoff produces by dropping the field.
+        Resolving it on open would make an unset clip unreachable from the GUI.
+
+        `None` only when nothing is bound.
+        """
+        return effective_window(self._clip, self._source_frames, self._source_fps)
+
+    @property
     def clip(self) -> ClipRange | None:
         """The representative span tuning runs against, or None for all of it.
 
@@ -90,6 +124,9 @@ class ReplicateDocument(QObject):
         `clip` is `None`. Keeping the absence here means a project saved before
         the user marked anything does not come back claiming they marked
         everything.
+
+        This is what a project is saved from; `window` above is what the user is
+        looking at. The two differ exactly while nothing has been chosen.
         """
         return self._clip
 
@@ -131,7 +168,7 @@ class ReplicateDocument(QObject):
         self._pipeline = pipeline
         self.grouping_changed.emit()
 
-    def bind_source(self, width: int, height: int, frame_count: int = 0) -> None:
+    def bind_source(self, width: int, height: int, frame_count: int = 0, fps: float = 0.0) -> None:
         """Attach to a new source video, discarding replicates and history.
 
         Replicates are geometry in one video's pixel space; carrying them
@@ -144,7 +181,10 @@ class ReplicateDocument(QObject):
         different moment or no moment at all. `frame_count` is what the marks
         are clamped against, and defaults to zero so a caller that does not know
         it gets a document where no clip can be set rather than one where a mark
-        lands somewhere unverifiable.
+        lands somewhere unverifiable. `fps` is what makes the default window ten
+        *seconds* rather than a frame count; a caller that does not know it gets
+        a window over the whole asset, which is the honest answer when nothing
+        has said how long a second is.
 
         The graph goes with them. It is not geometry and would survive the
         reinterpretation, but a replicate's deviation is keyed by node id, so
@@ -153,7 +193,9 @@ class ReplicateDocument(QObject):
         """
         self._source_size = (width, height)
         self._source_frames = max(frame_count, 0)
+        self._source_fps = max(fps, 0.0)
         self._reset()
+        self.source_changed.emit()
         self.structure_changed.emit()
         self.clip_changed.emit()
 
@@ -161,7 +203,9 @@ class ReplicateDocument(QObject):
         """Detach from any source video."""
         self._source_size = None
         self._source_frames = 0
+        self._source_fps = 0.0
         self._reset()
+        self.source_changed.emit()
         self.structure_changed.emit()
         self.clip_changed.emit()
 
@@ -241,9 +285,7 @@ class ReplicateDocument(QObject):
         anything. Clamping it to the last frame instead would hand back a
         one-frame clip nobody marked.
         """
-        if clip is None or self._source_frames <= 0 or clip.start >= self._source_frames:
-            return None
-        return ClipRange(start=clip.start, end=min(clip.end, self._source_frames))
+        return fitted(clip, self._source_frames)
 
     # ---- user intents ----------------------------------------------------
 
@@ -272,56 +314,74 @@ class ReplicateDocument(QObject):
             return
         self.undo_stack.push(SetReplicateROI(self, index, fitted))
 
-    def mark_clip_in(self, frame: int) -> None:
-        """Start the representative clip at `frame`.
+    def move_window_to(self, frame: int) -> None:
+        """Move the working window so it starts at `frame`, holding its length.
 
-        With no clip yet the out point goes to the end of the source, which is
-        what an in point on its own means: everything from here. With a clip
-        already placed the out point is kept — unless the user has just marked
-        in at or past it, in which case they have decisively left the old span
-        and it is the *out* point that is stale, so it returns to the end of the
-        source. Refusing the mark instead would be a click that does nothing and
-        says nothing; clamping it to one frame short of the out point would
-        silently give them a span they did not ask for.
+        The in point, and the reason the window is an origin and a length rather
+        than two marks. The user's gesture is "keep the ten seconds I chose, put
+        them here"; two independent indices cannot express it, because an in
+        point moved past the out point has to invent an out point and every
+        answer to that question is a span nobody asked for. A window pushed off
+        the end of the source rests against it at full length — see
+        `timeline_model.moved_to`.
         """
-        if self._source_frames <= 0:
+        window = self.window
+        if window is None:
             return
-        start = self._bounded(frame)
-        end = self._source_frames
-        if self._clip is not None and self._clip.end > start:
-            end = self._clip.end
-        self._push_clip(ClipRange(start=start, end=end), "Set Clip In")
+        self._push_clip(moved_to(window, frame, self._source_frames), "Move Window")
 
-    def mark_clip_out(self, frame: int) -> None:
-        """End the representative clip after `frame`, inclusive of it.
+    def end_window_at(self, frame: int) -> None:
+        """End the window after `frame`, inclusive of it. This is the resize.
 
         The user presses this on the frame they want *last*; `ClipRange` is
-        half-open. That `+ 1` is the whole translation, and it lives here rather
-        than in the caller so that every front end marking an out point agrees
-        on which frame the user meant. The mirror of `mark_clip_in`'s rule
-        applies: an out point at or before the in point sends the in point back
-        to the head of the source.
+        half-open. That `+ 1` lives in `timeline_model.ended_at` rather than in
+        the caller so that every front end marking an out point agrees on which
+        frame the user meant.
         """
         if self._source_frames <= 0:
             return
-        end = self._bounded(frame) + 1
-        start = 0
-        if self._clip is not None and self._clip.start < end:
-            start = self._clip.start
-        self._push_clip(ClipRange(start=start, end=end), "Set Clip Out")
+        self._push_clip(ended_at(self.window, frame, self._source_frames), "Set Window End")
+
+    def set_window_length(self, frames: int) -> None:
+        """Give the window `frames` frames, keeping its origin where it is.
+
+        The numeric field on the timeline row. Growing a window at the end of
+        the source slides its origin back rather than refusing the number, for
+        the same reason a move clamps rather than shortens: the length is what
+        the user typed and the origin is what they did not.
+        """
+        window = self.window
+        if window is None:
+            return
+        length = min(max(frames, 1), self._source_frames)
+        origin = min(window.start, self._source_frames - length)
+        self._push_clip(ClipRange(start=origin, end=origin + length), "Set Window Length")
+
+    def bring_window_to(self, frame: int) -> None:
+        """Move the window the least distance that puts `frame` inside it.
+
+        What a click outside the window on the timeline means. A no-op when the
+        frame is already inside, which is what makes a click *inside* the window
+        a plain seek — the strip does not have to decide which gesture it was.
+        """
+        window = self.window
+        if window is None:
+            return
+        self._push_clip(containing(window, frame, self._source_frames), "Move Window")
 
     def clear_clip(self) -> None:
-        """Drop the clip, returning to no choice made."""
+        """Drop the user's choice, returning the window to the default.
+
+        Not "no window": `window` above falls back, so the timeline always has
+        one. What is cleared is the *claim* that this span was chosen, which is
+        the thing the saved project carries.
+        """
         self._push_clip(None, "Clear Clip")
 
     def _push_clip(self, clip: ClipRange | None, text: str) -> None:
         if clip == self._clip:
             return
         self.undo_stack.push(SetClip(self, clip, text))
-
-    def _bounded(self, frame: int) -> int:
-        """A frame index trimmed onto the bound source."""
-        return min(max(frame, 0), self._source_frames - 1)
 
     # ---- command-facing primitives ---------------------------------------
     # Called only by the commands in `commands.py`. Nothing else may mutate.

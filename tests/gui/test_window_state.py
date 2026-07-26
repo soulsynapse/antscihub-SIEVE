@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QSlider
+from PySide6.QtWidgets import QSlider, QTabWidget
 from pytestqt.qtbot import QtBot
 
 from sieve.gui.document import ReplicateDocument
@@ -23,6 +23,8 @@ from sieve.gui.main_window import MainWindow
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.replicate_tab import ReplicateTab
+from sieve.gui.timeline_bar import TimelineStrip
+from sieve.gui.video_view import VideoView
 
 pytestmark = pytest.mark.gui
 
@@ -99,18 +101,43 @@ class TestTopSplit:
 
         player.shutdown()
 
-    def test_the_transport_stays_with_the_player(
+    def test_the_left_pane_is_the_picture_and_nothing_else(
         self, qtbot: QtBot, document: ReplicateDocument
     ) -> None:
-        """The scrubber belongs to the left pane. If it ever spans the window,
-        it starts implying it drives whatever is built on the right."""
+        """No transport inside the tab, in either pane.
+
+        The seeker is one band across the bottom of the window now
+        (`gui/timeline_bar.py`). A tab that kept its own would answer "where am
+        I" once per tab, and the copies drift the first time one is moved
+        without the other.
+        """
         player = VideoPlayer()
         tab = ReplicateTab(player, document)
         qtbot.addWidget(tab)
 
+        assert tab.findChild(QSlider) is None
+        assert tab.findChild(TimelineStrip) is None
+
         player_pane = tab.top_splitter.widget(0)
         assert player_pane is not None
-        assert player_pane.findChild(QSlider) is not None
-        assert tab.tools_panel.findChild(QSlider) is None
+        assert player_pane.findChild(VideoView) is not None
 
         player.shutdown()
+
+    def test_the_timeline_is_below_the_tabs_and_outside_them(
+        self, qtbot: QtBot, window: MainWindow
+    ) -> None:
+        """One band, parented to the window, under every tab rather than in one."""
+        window.resize(1200, 900)
+        with qtbot.waitExposed(window):
+            window.show()
+
+        tabs = window.findChild(QTabWidget)
+        strip = window.findChild(TimelineStrip)
+        assert tabs is not None
+        assert strip is not None
+        assert not tabs.isAncestorOf(strip)
+
+        tabs_bottom = tabs.mapTo(window, tabs.rect().bottomLeft()).y()
+        strip_top = strip.mapTo(window, strip.rect().topLeft()).y()
+        assert strip_top >= tabs_bottom

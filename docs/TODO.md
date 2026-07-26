@@ -95,12 +95,17 @@ SCAFFOLD's five command modules are deliberately unwritten: each wraps a
 `pipeline/` module that does not exist, and they arrive with it. See
 `docs/completed-todo/2026.07.25-build-the-cli.md`.
 
-The tab now cuts time as well as space. In and out points are marked at the
-playhead, painted on a strip under the transport, and clamped to the source;
-`ReplicateDocument.clip` is where they live and `SetClip` is the only thing
-that writes it. `pipeline/preview.py` therefore has a span to be given when it
-is built, and does not have to invent one. See
-`docs/completed-todo/2026.07.25-representative-clip-range.md`.
+The application now cuts time as well as space, and does it from one place. A
+full-width band below the tabs spans the whole asset and carries the working
+window and the playhead; the window holds its length under every edit, bounds
+playback, and is the only thing `player.py` will let the playhead be inside.
+`ReplicateDocument.clip` is still where a *chosen* span lives and `SetClip` is
+still the only thing that writes it — `window` is the derived view that falls
+back to ten seconds until the user chooses, so a project saved before they do
+still carries no clip at all. The arithmetic is Qt-free in
+`gui/timeline_model.py`. `pipeline/preview.py` therefore has a span to be given
+when it is built, and does not have to invent one. See
+`docs/completed-todo/2026.07.26-the-timeline-replaces-the-transport.md`.
 
 No item in the build order remains. What is left is under **Independent of the
 stack** below — those gate nothing and can be taken whenever — and in
@@ -111,56 +116,6 @@ stack** below — those gate nothing and can be taken whenever — and in
 # Independent of the stack
 
 These gate nothing below them and can be taken at any point.
-
-## The timeline replaces the transport
-
-**The standard.** One full-width band across the bottom of the window, below
-the tabs and outside them, is the user's anchor: it spans the whole asset, it
-carries the working window, the playhead, and — as they arrive — what has been
-examined and what was found. It is present in every tab and says the same thing
-in each, so the answer to "where am I and what is the state of this clip" never
-depends on which tab is showing. It **supersedes** the per-video seeker: the
-slider and `ClipStrip` under the viewport go away, and `replicate_tab.py`'s
-left pane becomes the picture and nothing else.
-
-**What is buildable now** — navigation and the window. The layers that paint
-results are in `LATER.md`, gated on there being results to paint.
-
-1. **The clip is a window, not two marks.** Mark-in / mark-out are two
-   independent indices, so `mark_clip_in` past the out point releases the out
-   point to the end of the source and the span's *length* changes. The user's
-   gesture is "keep the ten seconds, move them", which the current model cannot
-   express. Origin plus held length replaces it.
-2. **The window bounds playback.** `[start, stop)` loops, the last frame shown
-   before looping is `stop - 1`, and the playhead is always inside it.
-   `player.py` has never heard of the clip.
-3. **The strip is the position control.** Click inside the window: seek. Click
-   outside: move the window so the clicked frame is in it, preserving length
-   and clamping at the ends, then seek. Drag scrubs continuously but decodes
-   coalesce to the newest position — press, move, and release are three
-   different claims and V1 emits three signals for that reason.
-4. **The row above it** carries Play, window start, window length, and the
-   timestamp — hard right, per the reference. Full width, with the strip under
-   it.
-5. On open there is **always** a window: 10 s, or the whole asset if shorter,
-   playhead at its start, paused.
-
-`ClipRange(start, end)` stays as it is. `(start, end)` and `(start, length)`
-carry identical information and `frame_count` is already `end - start`, so
-which one is held constant under an edit is an interaction rule and not a
-storage one: no schema change, and `pipeline/plan.py` keeps reading a half-open
-span. Point 5 is a *tuning-session* rule and must not become a document rule —
-`Project.clip = None` meaning "the whole video" is what `plan.py` falls back on
-and what the HPC handoff produces by dropping the field.
-
-**Geometry goes in a Qt-free model**, tested by feeding it calls, the way
-`gui/coalescer.py` is. Frame↔column mapping, the window-move rule, and the
-clamp are arithmetic, and they are the part that is wrong at the first and last
-frame of every video if it is written inline in a `paintEvent`.
-
-Read: `src/sieve/gui/{document,clip_bar,replicate_tab,player,coalescer}.py`,
-and in V1 `gui/explorers/detection_timeline.py` — `_Strip` for the paint and
-scrub contract, `DetectionNavigator` for the readout around it.
 
 ## Three small GUI fixes
 

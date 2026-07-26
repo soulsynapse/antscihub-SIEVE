@@ -65,27 +65,13 @@ scope-of-edit control it was meant to choose a default for is required whether
 arenas cluster or spread. Reasoning in
 `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
 
+The coalescer that gated the two items below is extracted:
+`gui/coalescer.py` holds the two slots, the rank rule, the display ordering,
+and the source stamp, Qt-free and tested by feeding it calls, so
+`pipeline/preview.py` inherits that discipline rather than reimplementing it.
+See `docs/completed-todo/2026.07.25-qt-free-coalescer.md`.
+
 Items under **Independent of the stack** gate nothing and can be taken whenever.
-
-## Qt-free coalescer
-
-**Prerequisite of the executor and preview items below, not of the pure ones
-above.** The earlier note said "before the first `pipeline/` commit"; that was
-a proxy for "before anything decodes frames under a budget", and `cache_key.py`
-and `dag.py` do neither.
-
-`VideoPlayer._request/_issue/_drain` plus `_on_frame_ready` is ~50 lines of
-cross-thread ordering — one in flight, one pending, intent-aware supersession,
-monotonic display sequence — welded to `QImage` and `Signal`.
-`pipeline/preview.py` needs the identical discipline against filtered frames
-under `slider_to_preview`, which is the same 100 ms ceiling. Two copies will
-diverge on exactly the behaviour the budget table pins.
-
-`ScrubPolicy` is the pattern: Qt-free, tested by feeding it numbers rather
-than by driving a GUI. Extract to the same shape, leave it in `gui/` until
-there is somewhere lower to put it.
-
-Read: `src/sieve/gui/{player,scrub_policy}.py`.
 
 ## Executor
 

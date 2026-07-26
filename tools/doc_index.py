@@ -172,7 +172,7 @@ def _cell(value: object) -> str:
         return ""
     if isinstance(value, bool):
         return "yes" if value else "no"
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         items = cast(Sequence[Any], value)
         parts = [_cell(item) for item in items]
         return ", ".join(part for part in parts if part)

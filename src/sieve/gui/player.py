@@ -3,21 +3,14 @@
 Three things make this more than a timer.
 
 **Request coalescing.** At most one decode request is in flight and at most one
-is pending. A scrub that outruns the decoder therefore discards the frames
-nobody would have seen instead of queueing them, so releasing the slider shows
-the frame under the cursor rather than replaying the drag. This is what keeps
-perceived scrub latency near the cost of one decode no matter how fast the
-user moves.
-
-Requests carry *why* they were made, which is what the single pending slot is
-really for. A drag position is a guess the user is still refining and may be
-snapped or dropped; the frame under a released slider is a commitment. Both
-compete for the same slot, latest wins, but only the guesses are allowed to be
-approximate — a pending exact request is never discarded in favour of a later
-drag position, and only scrub round trips are timed for the degradation
-decision below. Requests also carry *which source* they were made against,
-because closing a video does not recall the decode already running against it;
-the frame still arrives, and without that stamp it would be shown.
+is pending, so a scrub that outruns the decoder discards the frames nobody
+would have seen instead of queueing them. The discipline — the two slots, the
+rank rule that keeps a released slider from being displaced by a later drag,
+the display ordering, and the source stamp that stops a closed video's frame
+being painted into the next one — lives in `RequestCoalescer`, because
+`pipeline/preview.py` needs the identical rules under the identical budget.
+What stays here is everything that needs Qt or a decoder: the thread, the
+cache, the transport, and the latency the policy below is fed.
 
 **Adaptive coarse scrubbing.** Coalescing bounds how *far behind* a scrub can
 fall; it does nothing about the cost of the one decode it still has to do. On
@@ -40,8 +33,6 @@ be the wrong tradeoff.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum, auto
 from time import perf_counter
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
@@ -49,6 +40,7 @@ from PySide6.QtGui import QImage
 
 from sieve.bench.budgets import BUDGETS
 from sieve.core.types import VideoMetadata
+from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
 from sieve.gui.decode_worker import DecodeWorker
 from sieve.gui.frame_cache import FrameCache
 from sieve.gui.preferences import Preferences
@@ -64,36 +56,6 @@ FALLBACK_FPS = 30.0
 #: The latency that defines "not keeping up", taken from the budget table so
 #: the trigger and the documented ceiling cannot drift apart.
 _SCRUB_BUDGET_MS = BUDGETS["scrub_to_repaint"].limit_ms
-
-
-class RequestKind(StrEnum):
-    """Why a frame was asked for. Governs snapping, caching, and timing."""
-
-    #: A committed position: a released slider, a step, a menu action. Must
-    #: land on exactly this frame.
-    EXACT = auto()
-    #: A drag position. May be snapped to the coarse grid, and is the only
-    #: kind whose latency counts toward the degradation decision.
-    SCRUB = auto()
-    #: Driven by the playback clock. Never snapped, never cached — playback
-    #: walks the whole timeline and would evict everything a scrub warmed.
-    PLAYBACK = auto()
-
-
-@dataclass(frozen=True, slots=True)
-class _Request:
-    """One decode request.
-
-    `sequence` orders displays within a source, not decodes. `generation`
-    identifies the source: it says which video the request was made against,
-    which `sequence` cannot, because a frame from the previous video is not
-    late — it is answering a question nobody is asking any more.
-    """
-
-    index: int
-    kind: RequestKind
-    sequence: int
-    generation: int
 
 
 class VideoPlayer(QObject):
@@ -123,18 +85,7 @@ class VideoPlayer(QObject):
 
         self._metadata: VideoMetadata | None = None
         self._current_index = 0
-        self._in_flight: _Request | None = None
-        self._in_flight_at = 0.0
-        self._pending: _Request | None = None
-
-        # Monotonic display ordering. A cache hit can overtake an in-flight
-        # decode, and the decode must not then repaint the older frame over it.
-        self._sequence = 0
-        self._displayed_sequence = 0
-
-        # Which source requests are being made against. Bumped on every open
-        # or close; a frame stamped with an older one is discarded on arrival.
-        self._generation = 0
+        self._coalescer = RequestCoalescer()
 
         self._cache = FrameCache()
         # Injectable so the degradation path can be exercised against a
@@ -285,7 +236,7 @@ class VideoPlayer(QObject):
             self.pause()
             self._request(self._metadata.frame_count - 1, RequestKind.EXACT)
             return
-        if target != self._current_index or self._in_flight is not None:
+        if target != self._current_index or self._coalescer.in_flight is not None:
             self._request(target, RequestKind.PLAYBACK)
 
     def _go_to(self, index: int, kind: RequestKind) -> None:
@@ -295,28 +246,17 @@ class VideoPlayer(QObject):
         self._anchor_playback(index)
 
         target = self._clamp(self._policy.snap(index)) if kind is RequestKind.SCRUB else index
-        if self._display_cached(target, supersedes_scrub=kind is RequestKind.SCRUB):
+        if self._display_cached(target, kind):
             return
         self._request(target, kind)
 
-    def _display_cached(self, index: int, *, supersedes_scrub: bool) -> bool:
+    def _display_cached(self, index: int, kind: RequestKind) -> bool:
         """Show a cached frame if we have one. This is the free path."""
         image = self._cache.get(index)
         if image is None:
             return False
 
-        # A pending drag position is now stale — we have shown something the
-        # user asked for more recently. A pending exact request is a
-        # commitment and survives.
-        if (
-            supersedes_scrub
-            and self._pending is not None
-            and self._pending.kind is RequestKind.SCRUB
-        ):
-            self._pending = None
-
-        self._sequence += 1
-        self._displayed_sequence = self._sequence
+        self._coalescer.served_without_decode(kind)
         self._current_index = index
         self.frame_changed.emit(index, image)
         return True
@@ -333,44 +273,18 @@ class VideoPlayer(QObject):
     def _reset_source_state(self) -> None:
         self._metadata = None
         self._current_index = 0
-        self._generation += 1
-        # `_in_flight` deliberately survives. The decode thread is already
-        # working on it and will emit `frame_ready` regardless; leaving the
-        # slot occupied is what keeps "one outstanding decode" and "in flight
-        # is not None" the same statement, so `_drain` still issues the new
-        # source's first request at the right moment. The generation stamp,
-        # not a cleared slot, is what stops the frame being shown.
-        self._pending = None
+        self._coalescer.new_generation()
         self._cache.clear()
         self._policy.reset()
 
     def _request(self, index: int, kind: RequestKind) -> None:
         """Ask the decode thread for a frame, coalescing against any in flight."""
-        self._sequence += 1
-        request = _Request(
-            index=index,
-            kind=kind,
-            sequence=self._sequence,
-            generation=self._generation,
-        )
-        if self._in_flight is not None:
-            self._pending = request
-            return
-        self._issue(request)
+        self._issue(self._coalescer.request(index, kind))
 
-    def _issue(self, request: _Request) -> None:
-        self._in_flight = request
-        # Timed from issue, not from creation: a request that waited its turn
-        # in the pending slot did not take that long to decode, and charging
-        # it the wait would degrade the player for being busy.
-        self._in_flight_at = perf_counter()
-        self._frame_requested.emit(request.index)
-
-    def _drain(self) -> None:
-        self._in_flight = None
-        if self._pending is not None:
-            request, self._pending = self._pending, None
-            self._issue(request)
+    def _issue(self, request: Request | None) -> None:
+        """Send to the decode thread whatever the coalescer decided to issue."""
+        if request is not None:
+            self._frame_requested.emit(request.index)
 
     @Slot(VideoMetadata)
     def _on_opened(self, metadata: VideoMetadata) -> None:
@@ -382,44 +296,37 @@ class VideoPlayer(QObject):
 
     @Slot(int, QImage)
     def _on_frame_ready(self, index: int, image: QImage) -> None:
-        request = self._in_flight
+        arrival = self._coalescer.arrived()
 
         # A frame from a source we have closed or replaced. Not merely late:
         # showing it paints the old video into the new one's viewport, and
         # caching it would hand that frame back at the same index later. Drop
         # it whole — no display, no cache, no latency sample — but still drain,
         # because the slot it occupies is the new source's turn to use.
-        if request is None or request.generation != self._generation:
-            self._drain()
+        if arrival.stale or arrival.request is None:
+            self._issue(self._coalescer.drain())
             return
 
-        if request.kind is not RequestKind.PLAYBACK:
+        if arrival.request.kind is not RequestKind.PLAYBACK:
             self._cache.put(index, image)
 
-        # Suppress a decode that a cache hit has already overtaken; repainting
-        # it would move the viewport backwards under the user's cursor. An
-        # exact request is exempt: it is a position the user committed to, and
-        # dropping it because a drag position arrived first strands them on a
-        # grid point they never asked for.
-        display = request.kind is RequestKind.EXACT or request.sequence > self._displayed_sequence
-        self._displayed_sequence = max(self._displayed_sequence, request.sequence)
-
-        if display:
+        if arrival.display:
             self._current_index = index
             self.frame_changed.emit(index, image)
 
         # Measured after the emit so the synchronous view update counts. The
         # repaint itself is asynchronous and is not captured here.
-        elapsed_ms = (perf_counter() - self._in_flight_at) * 1000.0
-        if request.kind is RequestKind.SCRUB and self._policy.observe(elapsed_ms):
+        if arrival.request.kind is RequestKind.SCRUB and self._policy.observe(
+            self._coalescer.round_trip_ms()
+        ):
             self.scrub_degraded.emit()
 
-        self._drain()
+        self._issue(self._coalescer.drain())
 
     @Slot(str)
     def _on_failed(self, message: str) -> None:
-        # Clearing in-flight here matters: a decode error that left the slot
-        # occupied would wedge every later request behind it.
-        self._drain()
+        # Draining here matters: a decode error that left the slot occupied
+        # would wedge every later request behind it.
+        self._issue(self._coalescer.drain())
         self.pause()
         self.failed.emit(message)

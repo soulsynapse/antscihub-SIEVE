@@ -143,8 +143,16 @@ Two declarations on the spec are easy to get wrong and expensive to fix later:
   neither do two OpenCV SIMD paths — so it defaults to false, and claiming it
   requires an equivalence test.
 
-**Warmup accumulates along the path, not per node.** The executor sums
-`warmup_frames` over the topological path feeding a preview, requests
-`[clip_start − total, clip_end]`, and discards the lead-in. An IIR filter's
-warmup is nominally infinite, so the number a filter declares is a
-settled-to-within-epsilon choice, and its docstring says which epsilon.
+**Warmup accumulates along the path, not per node**, and it does not simply
+sum. `warmup_frames` is denominated in a filter's own *input* frames, so a
+rate-changing node between two others leaves them speaking different index
+spaces: five frames of warmup behind a 10:1 decimator is fifty source frames,
+not five. `core.source_warmup_frames` walks the path sink to root, converting
+`need` to `ceil(need / output_rate)` at each node, and is the only thing that
+should — the executor requests `[clip_start − total, clip_end]` from it and
+discards the lead-in. A plain sum compiles, runs, and under-warms every
+temporal filter behind a decimator by the decimation factor, rendering a
+plausible frame while doing it.
+
+An IIR filter's warmup is nominally infinite, so the number a filter declares
+is a settled-to-within-epsilon choice, and its docstring says which epsilon.

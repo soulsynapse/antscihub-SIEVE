@@ -455,7 +455,13 @@ a uniform translation of textured input yields flow_speed ≈ speed·fps and
 change_energy > 0; an aperture-degenerate input yields flow_speed exactly
 0, not noise.
 
-### Item 4 — Per-frame delivery and the single-frame path (`pipeline/` + `gui/`)
+### Item 4 — Per-frame delivery and the single-frame path (`pipeline/` + `gui/`) — DONE
+
+Landed 2026.07.26; see
+`docs/completed-todo/2026.07.26-per-frame-delivery-and-single-frame-path.md`.
+`pipeline/` needed no change (`Consumer` already existed on both paths); the
+runner grew `consumer=` on `request_render`, `request_frame`, and
+`gui/series_collector.py`.
 
 Expose the existing `Consumer` hook through `request_render` so a caller
 receives per-frame node outputs on the render thread; add a Qt-free

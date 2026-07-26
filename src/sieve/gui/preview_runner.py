@@ -88,7 +88,7 @@ from sieve.filters import discover
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
-from sieve.pipeline.preview import PreviewRender, PreviewSession
+from sieve.pipeline.preview import Consumer, PreviewRender, PreviewSession
 
 #: The budget this module exists to give a producer. A literal for the reason
 #: `pipeline/preview.py` uses literals — except here it is not a layering
@@ -152,6 +152,17 @@ class RenderRequest:
     pipeline: Pipeline
     window: ClipRange
     replicate: Replicate | None
+    #: Called with every `FrameResult` **on the render thread**, inside the
+    #: timed spans and after the staleness check — so a superseded render's
+    #: frames never reach it. This is how a series consumer (the detector's
+    #: `SeriesCollector`) sees node outputs without them crossing a queued
+    #: signal as six hundred separate events. It must be cheap and must not
+    #: touch Qt widgets; heavy work belongs after `render_finished`.
+    consumer: Consumer | None = None
+    #: When set, render this single source frame instead of the window — the
+    #: 100 ms `render_frame` path, which is what a wizard's hover-preview and
+    #: a paused-playhead repaint ask for.
+    frame_index: int | None = None
 
 
 class _RenderWorker(QObject):
@@ -225,16 +236,22 @@ class _RenderWorker(QObject):
 
         def on_frame(result: FrameResult) -> None:
             nonlocal previous
-            # Checked before the emit, so a render abandoned between two frames
-            # contributes nothing at all rather than a truncated series.
+            # Checked before the consumer and the emit, so a render abandoned
+            # between two frames contributes nothing at all rather than a
+            # truncated series.
             if not self._wanted.is_current(request.revision):
                 raise _AbandonedError
+            if request.consumer is not None:
+                request.consumer(result)
             now = perf_counter()
             self.frame_timed.emit(request.revision, result.index, (now - previous) * 1000.0)
             previous = now
 
         try:
-            rendered = session.render_window(request.pipeline, on_frame)
+            if request.frame_index is None:
+                rendered = session.render_window(request.pipeline, on_frame)
+            else:
+                rendered = session.render_frame(request.pipeline, request.frame_index, on_frame)
         except _AbandonedError:
             self.render_abandoned.emit(request.revision)
         except (
@@ -455,6 +472,7 @@ class PreviewRunner(QObject):
         pipeline: Pipeline,
         window: ClipRange,
         replicate: Replicate | None = None,
+        consumer: Consumer | None = None,
     ) -> bool:
         """Render `window` through `pipeline`, superseding anything outstanding.
 
@@ -464,6 +482,10 @@ class PreviewRunner(QObject):
         footage the player has already got, for a graph that has nothing to say
         about it. It is also what makes "first filter" a real event — the arm
         below is exactly the moment the answer to this stops being `False`.
+
+        `consumer` receives every `FrameResult` **on the render thread**; see
+        `RenderRequest.consumer` for the contract. Pair it with a
+        `SeriesCollector` started from `render_started` to assemble a series.
         """
         if not self._opened or not pipeline.nodes:
             return False
@@ -471,21 +493,64 @@ class PreviewRunner(QObject):
         if not self._ticked and self._armed_at is None:
             self._armed_at = perf_counter()
 
-        self._revision += 1
-        # Before either branch: declaring the new revision is what abandons an
-        # in-flight one, and it is also what a request that goes straight out
-        # needs true before the worker reads its first frame.
-        self._wanted.set(self._revision)
-        request = RenderRequest(
-            revision=self._revision, pipeline=pipeline, window=window, replicate=replicate
+        self._submit(
+            RenderRequest(
+                revision=self._next_revision(),
+                pipeline=pipeline,
+                window=window,
+                replicate=replicate,
+                consumer=consumer,
+            )
         )
+        return True
+
+    def request_frame(
+        self,
+        pipeline: Pipeline,
+        index: int,
+        replicate: Replicate | None = None,
+        consumer: Consumer | None = None,
+    ) -> bool:
+        """Render the single source frame `index` — the 100 ms path.
+
+        Same submission machinery as `request_render` (latest wins, so a hover
+        that outruns its renders never queues more than one), but deliberately
+        not the `filter_to_first_tick` arm: a wizard's hover-preview is not
+        the tab's first graph tick, and arming here would publish a number
+        about the wrong interval.
+        """
+        if not self._opened or not pipeline.nodes:
+            return False
+        self._submit(
+            RenderRequest(
+                revision=self._next_revision(),
+                pipeline=pipeline,
+                window=ClipRange(start=index, end=index + 1),
+                replicate=replicate,
+                consumer=consumer,
+                frame_index=index,
+            )
+        )
+        return True
+
+    def _next_revision(self) -> int:
+        """Bump and declare the newest revision.
+
+        Before the request is built: declaring the new revision is what
+        abandons an in-flight one, and it is also what a request that goes
+        straight out needs true before the worker reads its first frame.
+        """
+        self._revision += 1
+        self._wanted.set(self._revision)
+        return self._revision
+
+    def _submit(self, request: RenderRequest) -> None:
         if self._in_flight is None:
             self._issue(request)
         else:
             # The worker notices at its next frame boundary and reports back;
             # `_settle` is what issues this.
             self._pending = request
-        return True
 
     def _issue(self, request: RenderRequest) -> None:
         self._in_flight = request

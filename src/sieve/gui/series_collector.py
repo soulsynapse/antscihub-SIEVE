@@ -1,0 +1,118 @@
+"""Assemble one node's per-frame outputs into a (T, ny, nx) series.
+
+The live tab's detector runs on a *series* — the Morlet transform needs the
+whole working window of `block_signal` grids at once — and the runner delivers
+frames one at a time on the render thread. This is the bridge: a consumer
+appends rows as they arrive, the GUI takes the assembled array when the render
+finishes, and revisions are how the two sides agree about staleness without
+sharing a flag (the same discipline `preview_runner.py` documents).
+
+Qt-free deliberately: everything here is arithmetic over indices and arrays,
+and the tests that pin the staleness rules should not need an event loop.
+Thread-safety is one lock around the row list — `add` runs on the render
+thread, `start`/`take` on the GUI thread, and none of them holds the lock
+across anything slower than an append.
+
+The frame axis is the *span's*, not the decode's: `execute` yields only
+frames at or after `plan.span.start` (the warmup lead-in is consumed and
+discarded inside the executor), so the first `add` of a revision defines
+`start_index` and everything after it must be contiguous. A gap means frames
+were lost between the render thread and here, and the collector refuses to
+hand out a series with a silent hole where a detection could have been.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from threading import Lock
+
+import numpy as np
+from numpy.typing import NDArray
+
+from sieve.pipeline.executor import FrameResult
+
+
+@dataclass(frozen=True, slots=True)
+class CollectedSeries:
+    """One revision's assembled series, aligned to source frame indices."""
+
+    #: Source index of `data[0]` — the rendered span's start.
+    start_index: int
+    #: `(T, ny, nx)` float32.
+    data: NDArray[np.float32]
+
+
+class SeriesCollector:
+    """Rows in on the render thread, one array out on the GUI thread.
+
+    One collector watches one node. The stack builds one per graph-producing
+    step; a wizard's provisional render gets its own instance rather than a
+    shared one, per the parity plan's no-shared-widgets learning applied to
+    state.
+    """
+
+    def __init__(self, node_id: str) -> None:
+        self._node_id = node_id
+        self._lock = Lock()
+        self._revision: int | None = None
+        self._start: int | None = None
+        self._rows: list[NDArray[np.float32]] = []
+
+    @property
+    def node_id(self) -> str:
+        """The node whose outputs this assembles."""
+        return self._node_id
+
+    def start(self, revision: int) -> None:
+        """A new render is about to produce frames; everything older is dead.
+
+        Wire to `PreviewRunner.render_started`. Rows a superseded render
+        manages to deliver after this are discarded by the revision check in
+        `add`, which is what makes the served series never contain them.
+        """
+        with self._lock:
+            self._revision = revision
+            self._start = None
+            self._rows = []
+
+    def add(self, revision: int, result: FrameResult) -> None:
+        """One frame's outputs, on the render thread.
+
+        A revision that is not the current one contributes nothing — not a
+        partial row, not a stale tail. A result that does not carry this
+        node's output is ignored rather than an error: a conflicted chain
+        legitimately renders a prefix that stops above the watched node.
+        """
+        frame = result.outputs.get(self._node_id)
+        if frame is None:
+            return
+        row = np.asarray(frame.data, np.float32)
+        with self._lock:
+            if revision != self._revision:
+                return
+            if self._start is None:
+                self._start = result.index
+            expected = self._start + len(self._rows)
+            if result.index != expected:
+                raise ValueError(
+                    f"series for {self._node_id!r} expected frame {expected}, got "
+                    f"{result.index}; a gap here would be a silent hole in the detector's input"
+                )
+            self._rows.append(row)
+
+    def take(self, revision: int) -> CollectedSeries | None:
+        """The finished series for `revision`, or None if it was superseded.
+
+        Wire to `PreviewRunner.render_finished` (the runner only forwards the
+        newest revision's finish, so a None here is a programming error being
+        tolerated rather than a race being hidden). Returns None too for a
+        render that produced no rows — a chain whose watched node was never
+        reached — which the caller reports as "no reachable step", not as an
+        empty detection.
+        """
+        with self._lock:
+            if revision != self._revision or self._start is None or not self._rows:
+                return None
+            return CollectedSeries(
+                start_index=self._start, data=np.stack(self._rows).astype(np.float32, copy=False)
+            )

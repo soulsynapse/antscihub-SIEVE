@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+from threading import get_ident
 from time import sleep
 
 import numpy as np
@@ -44,6 +45,7 @@ from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
 from sieve.core.types import Frame
 from sieve.gui.preview_runner import FIRST_TICK_BUDGET, PreviewRunner
+from sieve.pipeline.executor import FrameResult
 
 pytestmark = pytest.mark.gui
 
@@ -296,6 +298,46 @@ class TestRefusals:
         # The slot was freed: a real graph submitted afterwards still runs.
         assert runner.request_render(downsampling(), WINDOW)
         qtbot.waitUntil(lambda: bool(landings.finished), timeout=RENDER_TIMEOUT_MS)
+
+
+class TestPerFrameDelivery:
+    def test_a_consumer_receives_every_node_output_off_the_gui_thread(
+        self, qtbot: QtBot, runner: PreviewRunner
+    ) -> None:
+        """Item 4's delivery claim: the consumer sees `FrameResult`s — node
+        outputs included — on the render thread, in span order.
+
+        The thread assertion is the load-bearing half: a consumer marshalled
+        through a queued signal per frame would be six hundred GUI-thread
+        events per render, which is the cost the direct callback exists to
+        avoid.
+        """
+        landings = Landings(runner)
+        seen: list[tuple[int, int]] = []  # (index, thread id)
+
+        def consumer(result: FrameResult) -> None:
+            assert "small" in result.outputs
+            seen.append((result.index, get_ident()))
+
+        assert runner.request_render(downsampling(), WINDOW, consumer=consumer)
+        qtbot.waitUntil(lambda: bool(landings.finished), timeout=RENDER_TIMEOUT_MS)
+
+        assert [index for index, _ in seen] == list(range(WINDOW.start, WINDOW.end))
+        assert all(thread != get_ident() for _, thread in seen)
+
+    def test_request_frame_renders_exactly_the_asked_frame(
+        self, qtbot: QtBot, runner: PreviewRunner
+    ) -> None:
+        """The single-frame path: one result, carrying the asked index — the
+        wizard's video preview and nothing more."""
+        landings = Landings(runner)
+        seen: list[int] = []
+
+        assert runner.request_frame(downsampling(), 7, consumer=lambda r: seen.append(r.index))
+        qtbot.waitUntil(lambda: bool(landings.finished), timeout=RENDER_TIMEOUT_MS)
+
+        assert seen == [7]
+        assert landings.failures == []
 
 
 def _slow_graph(*, bias: int) -> Pipeline:

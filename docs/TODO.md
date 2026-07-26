@@ -17,21 +17,6 @@
 
 ---
 
-## Stale frame on reopen
-
-`VideoPlayer._reset_source_state` clears `_in_flight`, but a `frame_ready`
-already queued from the decode thread still arrives and hits the
-`request is None` branch in `_on_frame_ready`, which displays it — a frame
-from the *previous* video painted into the new one's viewport. Self-corrects
-one decode later, so it is a flash rather than corruption, but it is the one
-ordering case `_sequence` does not cover.
-
-Fix is a generation counter bumped in `_reset_source_state`, stamped on
-`_Request`, checked on arrival. `tests/gui/test_player_scrub.py` drives the
-real decode thread, so it is testable there.
-
-Read: `src/sieve/gui/player.py` (lines ~320-390).
-
 ## Property tests or drop Hypothesis
 
 `tests/property/` is an empty package and `hypothesis` is a dev dependency

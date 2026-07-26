@@ -134,6 +134,54 @@ class TestCoalescing:
             instance.shutdown()
 
 
+class TestSourceChange:
+    """A decode outlives the source it was asked for. It must not outlive it visibly.
+
+    Both tests here start a decode and then change the source in the same turn
+    of the event loop, so the reset is guaranteed to happen before the queued
+    `frame_ready` is delivered — which is precisely the ordering that made the
+    old frame land in the new source's viewport.
+    """
+
+    def test_a_frame_decoded_before_a_close_is_not_shown(
+        self, qtbot: QtBot, synthetic_video: Path
+    ) -> None:
+        instance, recorder = open_player(qtbot, synthetic_video)
+        try:
+            instance.seek(30)
+            instance.close()
+
+            qtbot.wait(300)
+            assert recorder.indices == [0], "a closed player displayed a frame"
+            assert instance.current_index == 0
+        finally:
+            instance.shutdown()
+
+    def test_a_frame_decoded_before_a_reopen_is_not_shown(
+        self, qtbot: QtBot, synthetic_video: Path
+    ) -> None:
+        instance, recorder = open_player(qtbot, synthetic_video)
+        try:
+            instance.seek(30)
+
+            opened: list[VideoMetadata] = []
+            instance.opened.connect(opened.append)
+            instance.open(str(synthetic_video))
+            qtbot.waitUntil(lambda: bool(opened), timeout=OPEN_TIMEOUT_MS)
+            qtbot.waitUntil(lambda: len(recorder.indices) > 1, timeout=FRAME_TIMEOUT_MS)
+
+            qtbot.wait(300)
+            assert recorder.indices == [0, 0], "frame 30 of the old source was painted"
+
+            # The stale frame must not have been cached either: index 30 in the
+            # new source is a decode, not a hit, and a hit would repaint inside
+            # this call.
+            instance.scrub(30)
+            assert instance.current_index == 0
+        finally:
+            instance.shutdown()
+
+
 def degrade(qtbot: QtBot, player: VideoPlayer) -> None:
     """Scrub until the injected policy gives up on exactness."""
     for index in range(1, SAMPLE_WINDOW + 1):

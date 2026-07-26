@@ -15,7 +15,9 @@ snapped or dropped; the frame under a released slider is a commitment. Both
 compete for the same slot, latest wins, but only the guesses are allowed to be
 approximate — a pending exact request is never discarded in favour of a later
 drag position, and only scrub round trips are timed for the degradation
-decision below.
+decision below. Requests also carry *which source* they were made against,
+because closing a video does not recall the decode already running against it;
+the frame still arrives, and without that stamp it would be shown.
 
 **Adaptive coarse scrubbing.** Coalescing bounds how *far behind* a scrub can
 fall; it does nothing about the cost of the one decode it still has to do. On
@@ -80,11 +82,18 @@ class RequestKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class _Request:
-    """One decode request. `sequence` orders displays, not decodes."""
+    """One decode request.
+
+    `sequence` orders displays within a source, not decodes. `generation`
+    identifies the source: it says which video the request was made against,
+    which `sequence` cannot, because a frame from the previous video is not
+    late — it is answering a question nobody is asking any more.
+    """
 
     index: int
     kind: RequestKind
     sequence: int
+    generation: int
 
 
 class VideoPlayer(QObject):
@@ -122,6 +131,10 @@ class VideoPlayer(QObject):
         # decode, and the decode must not then repaint the older frame over it.
         self._sequence = 0
         self._displayed_sequence = 0
+
+        # Which source requests are being made against. Bumped on every open
+        # or close; a frame stamped with an older one is discarded on arrival.
+        self._generation = 0
 
         self._cache = FrameCache()
         # Injectable so the degradation path can be exercised against a
@@ -320,7 +333,13 @@ class VideoPlayer(QObject):
     def _reset_source_state(self) -> None:
         self._metadata = None
         self._current_index = 0
-        self._in_flight = None
+        self._generation += 1
+        # `_in_flight` deliberately survives. The decode thread is already
+        # working on it and will emit `frame_ready` regardless; leaving the
+        # slot occupied is what keeps "one outstanding decode" and "in flight
+        # is not None" the same statement, so `_drain` still issues the new
+        # source's first request at the right moment. The generation stamp,
+        # not a cleared slot, is what stops the frame being shown.
         self._pending = None
         self._cache.clear()
         self._policy.reset()
@@ -328,7 +347,12 @@ class VideoPlayer(QObject):
     def _request(self, index: int, kind: RequestKind) -> None:
         """Ask the decode thread for a frame, coalescing against any in flight."""
         self._sequence += 1
-        request = _Request(index=index, kind=kind, sequence=self._sequence)
+        request = _Request(
+            index=index,
+            kind=kind,
+            sequence=self._sequence,
+            generation=self._generation,
+        )
         if self._in_flight is not None:
             self._pending = request
             return
@@ -360,7 +384,16 @@ class VideoPlayer(QObject):
     def _on_frame_ready(self, index: int, image: QImage) -> None:
         request = self._in_flight
 
-        if request is not None and request.kind is not RequestKind.PLAYBACK:
+        # A frame from a source we have closed or replaced. Not merely late:
+        # showing it paints the old video into the new one's viewport, and
+        # caching it would hand that frame back at the same index later. Drop
+        # it whole — no display, no cache, no latency sample — but still drain,
+        # because the slot it occupies is the new source's turn to use.
+        if request is None or request.generation != self._generation:
+            self._drain()
+            return
+
+        if request.kind is not RequestKind.PLAYBACK:
             self._cache.put(index, image)
 
         # Suppress a decode that a cache hit has already overtaken; repainting
@@ -368,13 +401,8 @@ class VideoPlayer(QObject):
         # exact request is exempt: it is a position the user committed to, and
         # dropping it because a drag position arrived first strands them on a
         # grid point they never asked for.
-        if request is None:
-            display = True
-        else:
-            display = (
-                request.kind is RequestKind.EXACT or request.sequence > self._displayed_sequence
-            )
-            self._displayed_sequence = max(self._displayed_sequence, request.sequence)
+        display = request.kind is RequestKind.EXACT or request.sequence > self._displayed_sequence
+        self._displayed_sequence = max(self._displayed_sequence, request.sequence)
 
         if display:
             self._current_index = index
@@ -383,8 +411,7 @@ class VideoPlayer(QObject):
         # Measured after the emit so the synchronous view update counts. The
         # repaint itself is asynchronous and is not captured here.
         elapsed_ms = (perf_counter() - self._in_flight_at) * 1000.0
-        scrubbing = request is not None and request.kind is RequestKind.SCRUB
-        if scrubbing and self._policy.observe(elapsed_ms):
+        if request.kind is RequestKind.SCRUB and self._policy.observe(elapsed_ms):
             self.scrub_degraded.emit()
 
         self._drain()

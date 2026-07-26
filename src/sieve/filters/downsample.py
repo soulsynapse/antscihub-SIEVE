@@ -41,7 +41,10 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
     # does not have, and constraining `accepts` would reject frames it handles.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
     cost=CostEstimate(
-        seconds_per_megapixel=0.002,
+        # 0.33 ms/MP measured on 1080p BGR with `anti_alias` on, 0.14 ms with it
+        # off. The declaration takes the slower path because it is the default,
+        # and a static number cannot branch on a parameter.
+        seconds_per_megapixel=0.00035,
         # Input plus an output that is at most a quarter of it, no scratch.
         # Static, so it takes the largest value any legal `factor` produces.
         peak_bytes_per_input_byte=1.25,

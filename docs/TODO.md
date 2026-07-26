@@ -39,6 +39,12 @@ writes. `cache_key.py` therefore has something to hash that is not `Node.params`
 The replicate table renders which arenas that deviation has actually separated,
 derived on every read, so the GUI is no longer silent about it.
 
+`sieve.filters` and `sieve.backend` are no longer parenthesised in
+`.importlinter`: one filter exists, registers itself by being importable, and is
+found by a `pkgutil` scan that names nothing. So the cache key below has a real
+params model to canonicalize and a real `backend_identity` to include — see
+`docs/completed-todo/2026.07.25-first-filter-and-discovery.md`.
+
 The per-replicate threshold-spread probe that sat at the top of this list is
 gone, not deferred: it would have measured one rack under one backlight, and the
 scope-of-edit control it was meant to choose a default for is required whether
@@ -46,30 +52,6 @@ arenas cluster or spread. Reasoning in
 `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
 
 Items under **Independent of the stack** gate nothing and can be taken whenever.
-
-## First filter and discovery
-
-`sieve/filters/` — above `core/`, below `pipeline/`, free to import `cv2` and
-`cupy`. One module per filter: the spec plus its kernels, colocated, one
-`@kernel` per backend. A filter with no GPU kernel is complete; the dispatcher
-falls back rather than the filter branching.
-
-Kernels colocate rather than living in a shared `backend/cpu.py` for a specific
-reason: if adding a filter meant editing a shared file, non-negotiable #3 is
-already broken. `backend/` holds device policy, namespace resolution, and a
-backend identity string — never an implementation.
-
-Ship exactly one filter: downsample. Trivially checkable, actually useful,
-exercises params, declared I/O, and streaming mode. Discovery is a `pkgutil`
-scan over the package at import; guidance markdown is found by convention as
-`<module>.md`.
-
-Three tests, no more: params round-trip through JSON, cache key stable across
-process restarts (this is what catches an accidental `hash()` or object id),
-and every discovered filter has its markdown — the machine-checked form of
-guardrail §3.
-
-Read: `docs/AUTO-GUARDRAILS.md` §3, `.importlinter`.
 
 ## Cache key
 
@@ -85,7 +67,8 @@ the node's dict, which is now only the default unconfigured replicates inherit.
 Guardrail §5 belongs here: changing a parameter on one branch must not
 invalidate a sibling branch.
 
-Read: `docs/AUTO-GUARDRAILS.md` §5, `src/sieve/decode/identity.py`.
+Read: `docs/AUTO-GUARDRAILS.md` §5, `src/sieve/decode/identity.py`,
+`src/sieve/backend/identity.py`.
 
 ## DAG validation
 

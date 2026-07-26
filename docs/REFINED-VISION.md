@@ -26,4 +26,25 @@ The ideal case is that the project doesn't move video files into new folders and
 
 ## Replicates
 
-The replicates tab has the video, the tab bottom seeker, and a replicates table spanning the bottom half. 
+The replicates tab has the video, the tab bottom seeker, and a replicates table spanning the bottom half.
+
+The top half has the video on the left and settings and information on the right. 
+
+The settings and information should be able to point to the parent as well as other information useful at the replicate stage. 
+
+The right panel is also where the cropping tools live. The basic behavior should be a toggle between drawn and a stamp. The stamp needs to be drawn first or can be entered by dimensions.
+
+When the user first sets a replicate, it can be dragged around by the cursor. Scrolling in or out magnifies the video so they can position it carefully, but doesn't zoom out more than the natural resizing to fit the box. While it isn't locked in, the dimensions have enterable numbers.
+
+When the replicate box is set (either individually or via a "set all" or clicking into a replicate, it begins processing it. Left click on a replicate is the same as accepting it, and begins the crop, and moves the user over to the filters tab.
+
+Right click on the video in the filters tab goes back up to the source. Left click on the video in the filters tab advances forward in outputs.
+
+Back on the replicate tab, the full width replicate table is the replicate status. It should have the progress bar for the crop, at the very least, and the list of outputs defined by the DAG, and whether they exist.
+
+---
+
+## Filter tab
+
+At the top of the window, there is a breadcrumbs trail for how deep onto outputs the user is. Outputs are when the user has decided they want some kind of output, and it materializes in that replicates folder as a new folder. Going into that folder, SIEVE only works with what is in that folder and doesn't know what is above it. If there is a video of a binary mask from a detection filter, then that is all that it has to work with. Any prior resource can be passed down with symbolic links. What is past forward is defined by what the user configures as the outputs, which is always the last item of the DAG in the filter view.
+

@@ -140,13 +140,21 @@ Nothing below needs to invent a re-render, a store lifetime, or a way to
 publish a span: it takes `PreviewSession`. Two things it settled that the two
 items below inherit — the coalescing belongs to the GUI panel rather than to
 `pipeline/` because `gui/coalescer.py` is above that layer, and the 3 s ceiling
-is met by the store and not by the filters, which a cold 5–10 s window of the
-reference footage cannot do at any filter cost. See
-`docs/completed-todo/2026.07.26-the-representative-clip-preview.md` and
-`docs/findings/2026.07.26-the-preview-budget-is-a-decode-budget.md`.
+is met by the *store* rather than by anything being fast, since a warm re-render
+after an edit is 3.3 ms against a cold render's 1350 ms. See
+`docs/completed-todo/2026.07.26-the-representative-clip-preview.md`.
 
-The two items below are what is left of the tuning loop VISION step 4
-describes. Both were gated on the preview and neither is any longer.
+Measuring that put a number on the cold render, and chasing why it was 22 ms per
+frame produced the item below it: the footage decodes in 1.2 ms and ffmpeg
+converts a full frame in another 1.25 ms across seventeen cores, so
+`VideoReader.read`'s 26 ms is a single-threaded convert on the calling thread and
+roughly 9x is available without changing a pixel. See
+`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md`, which
+supersedes the finding the completed entry was written against.
+
+The three items below are what is left of the tuning loop VISION step 4
+describes, plus the reader work that measuring it turned up. The first two were
+gated on the preview and neither is any longer.
 
 ## The first live graph tick
 
@@ -204,6 +212,44 @@ unused a third time is not.
 
 Read: `src/sieve/gui/video_view.py`, `docs/VISION.md` step 4, the napari entry
 under **Deferred decisions** below.
+
+## Read frames faster than one at a time
+
+**Gated on: a decision, not on code.** Every number is measured and in
+`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md`; what
+is not decided is which of four routes to take, and that decision is not a
+performance question. Do not start this without reading that finding's route
+table — three of the four change what `read(i)` returns, and `decoder_identity()`
+is folded into `source_key`, so a route that moves a pixel invalidates every
+cache entry in existence and must say so.
+
+What is true: decode is 1.16 ms per frame and `VideoReader.read` is 26.0 ms.
+ffmpeg does the same decode plus the same full-frame YUV420→BGR24 convert in
+2.95 ms because it threads the convert over ~17 cores;
+`VideoCapture::retrieve` converts on the calling thread, on one core, and adds
+about 12 ms of its own on top of what a bare `cv2.cvtColor` of the same buffer
+costs. So the cold cost of every span in this system — a preview window, a
+`sieve run`, an `open_to_first_frame` — is a reader that converts 15.9
+megapixels to show the graph 0.63 of one.
+
+The route that changes nothing semantically is N `VideoCapture` handles
+positioned at strides through `decode_range`, each performing the identical
+`read()`, reassembled in order: every frame stays byte-identical, no key moves,
+and the ceiling is the ~3 ms threaded conversion costs. `pipeline/executor.py`
+walks `decode_range` strictly forward and already takes a `FrameSource` protocol
+rather than a `VideoReader`, so a prefetching source is a drop-in and nothing
+above it changes — which is what that protocol was for.
+
+The cheapest route is `CAP_PROP_CONVERT_RGB = 0`: 8.22 ms instead of 26.0 for
+one property set, returning exactly the luma plane, which is what every filter in
+this repo actually reads. It is a contract change rather than an optimisation —
+`ChannelSpec.GRAY` and `ArraySpec` can express it, and `decoder_identity()` has
+to carry it.
+
+Read: `src/sieve/decode/{reader,identity}.py`,
+`src/sieve/pipeline/{executor,cache_key}.py`,
+`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md`,
+`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
 
 ---
 

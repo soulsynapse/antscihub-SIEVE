@@ -5,7 +5,18 @@ Zarr, or subprocess. That is machine-checked by the import contracts in
 `.importlinter` rather than by review.
 """
 
-from sieve.core.filter_base import ArraySpec, CostEstimate, FilterSpec, Mode, ParamsBase
+from sieve.core.filter_base import (
+    UNCHANGED_RATE,
+    ArraySpec,
+    CostEstimate,
+    FilterSpec,
+    Mode,
+    ParamsBase,
+    StreamKind,
+    StreamSpec,
+    TableSpec,
+    source_warmup_frames,
+)
 from sieve.core.filter_registry import (
     REGISTRY,
     DuplicateFilterError,
@@ -33,6 +44,7 @@ __all__ = [
     "REGISTRY",
     "ROI",
     "SCHEMA_VERSION",
+    "UNCHANGED_RATE",
     "ArraySpec",
     "ChannelSpec",
     "ClipRange",
@@ -51,8 +63,12 @@ __all__ = [
     "ReplicateSet",
     "Sink",
     "SourceRef",
+    "StreamKind",
+    "StreamSpec",
+    "TableSpec",
     "UnknownFilterError",
     "VideoMetadata",
     "project_path_for",
     "register_filter",
+    "source_warmup_frames",
 ]

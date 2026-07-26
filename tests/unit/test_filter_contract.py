@@ -8,6 +8,8 @@ wrong version of a filter an old pipeline named.
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
 from sieve.core.filter_base import (
@@ -16,6 +18,8 @@ from sieve.core.filter_base import (
     FilterSpec,
     Mode,
     ParamsBase,
+    TableSpec,
+    source_warmup_frames,
 )
 from sieve.core.filter_registry import (
     DuplicateFilterError,
@@ -35,6 +39,24 @@ class SampleParams(ParamsBase):
     anti_alias: bool = True
 
 
+class DecimateParams(ParamsBase):
+    """Keeps every `stride`-th frame: rate changes, frame size does not."""
+
+    stride: int = 10
+
+    def output_rate(self) -> Fraction:
+        return Fraction(1, self.stride)
+
+
+class DownsampleParams(ParamsBase):
+    """Halves both axes per `factor`: frame size changes, rate does not."""
+
+    factor: int = 2
+
+    def frame_bytes_ratio(self) -> float:
+        return 1.0 / (self.factor**2)
+
+
 def make_spec(**overrides: object) -> FilterSpec:
     fields: dict[str, object] = {
         "filter_id": "downsample",
@@ -47,6 +69,14 @@ def make_spec(**overrides: object) -> FilterSpec:
     }
     fields.update(overrides)
     return FilterSpec(**fields)  # pyright: ignore[reportArgumentType]
+
+
+#: The three specs the rate and storage tests chain. Built once at module scope
+#: because constructing them is what several tests do *before* the thing they
+#: are about, not part of it.
+DECIMATOR = make_spec(filter_id="decimate", params_model=DecimateParams, rate_changing=True)
+DOWNSAMPLER = make_spec(filter_id="downsample", params_model=DownsampleParams)
+IIR = make_spec(filter_id="iir", warmup_frames=5)
 
 
 class TestFilterSpec:
@@ -79,6 +109,50 @@ class TestFilterSpec:
         )
 
 
+class TestRate:
+    def test_warmup_behind_a_decimator_is_counted_in_source_frames(self) -> None:
+        # The whole reason rate is declared. Five frames of warmup downstream
+        # of a 10:1 decimator is fifty source frames; ARCHITECTURE's plain sum
+        # says fifteen, and the resulting preview renders an IIR that never
+        # settled rather than failing in any visible way.
+        path = [(DECIMATOR, DecimateParams()), (IIR, SampleParams())]
+
+        assert source_warmup_frames(path) == 50
+        assert sum(spec.warmup_frames for spec, _ in path) == 5  # what a sum would have said
+
+    def test_rate_is_read_from_params_not_from_the_spec(self) -> None:
+        # The factor is a parameter, so two nodes sharing one spec must be able
+        # to disagree. A constant on the spec could not express this at all.
+        by_three = source_warmup_frames(
+            [(DECIMATOR, DecimateParams(stride=3)), (IIR, SampleParams())]
+        )
+        assert by_three == 15
+
+    def test_undeclared_rate_change_is_refused_at_registration(self) -> None:
+        # Without this the gap reopens silently: a decimator whose spec forgot
+        # `rate_changing` computes a correct rate that nothing is obliged to
+        # consult, which is indistinguishable from having no rate at all.
+        with pytest.raises(ValueError, match="overrides output_rate"):
+            make_spec(params_model=DecimateParams)
+        with pytest.raises(ValueError, match="does not override output_rate"):
+            make_spec(rate_changing=True)
+
+
+class TestStoredBytes:
+    def test_stored_size_multiplies_rate_by_frame_size(self) -> None:
+        # Two filters that know nothing about each other: one drops nine frames
+        # in ten, the other quarters what is left. Applying either alone is off
+        # by the other's factor, which is the shape of the storage prediction
+        # VISION step 4 asks for and step 5 drives a suggestion off.
+        chained = DECIMATOR.stored_bytes_ratio(DecimateParams()) * DOWNSAMPLER.stored_bytes_ratio(
+            DownsampleParams()
+        )
+        assert chained == pytest.approx(1 / 40)
+        # Working set is a different quantity and stays one: `CostEstimate`
+        # describes what is held at once, not what is written.
+        assert DOWNSAMPLER.cost.peak_bytes_per_input_byte == 2.0
+
+
 class TestArraySpec:
     def test_disjoint_channel_sets_do_not_chain(self) -> None:
         gray_only = ArraySpec(channels=(ChannelSpec.GRAY,))
@@ -94,6 +168,23 @@ class TestArraySpec:
     def test_overlap_is_enough(self) -> None:
         accepts = ArraySpec(dtypes=("uint8", "float32"))
         assert accepts.admits(ArraySpec(dtypes=("float32", "float64")))
+
+
+class TestStreamKind:
+    def test_rows_and_frames_never_chain_in_either_direction(self) -> None:
+        # The one mismatch a wildcard cannot rescue: a detector emitting
+        # coordinates has nothing an array input can consume, and unstated
+        # dtypes on the array side do not make it admissible.
+        assert not ArraySpec().admits(TableSpec())
+        assert not TableSpec().admits(ArraySpec())
+
+    def test_missing_columns_are_rejected_where_missing_dtypes_are_not(self) -> None:
+        # Columns are conjunctive and dtype sets are disjunctive: a filter that
+        # needs `x` and `y` cannot run on a table that supplies only `x`, while
+        # one accepting uint8 or float32 runs on either.
+        assert TableSpec(columns=("x", "y")).admits(TableSpec(columns=("frame", "x", "y")))
+        assert not TableSpec(columns=("x", "y")).admits(TableSpec(columns=("frame", "x")))
+        assert TableSpec(columns=("x", "y")).admits(TableSpec())
 
 
 class TestParamsBase:

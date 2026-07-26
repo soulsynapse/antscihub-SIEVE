@@ -24,45 +24,56 @@
 # Build order
 
 The items below are ordered by the layer stack in `ARCHITECTURE.md`, not by
-appeal. Everything unbuilt sits above `core/`. Neither of the two
-non-negotiables that gated on a core module still does: #3 "filter = one class
-+ one markdown" has `core/filter_base.py` and `core/filter_registry.py`, and #2
-"pipeline is a data structure" now has `core/pipeline_model.py`. The layer
-below `pipeline/` is therefore complete, and DAG, cache keys, executor, and CLI
-can be written against a settled artifact rather than ahead of one.
+appeal. Neither of the two non-negotiables that gated on a core module still
+does: #3 "filter = one class + one markdown" has `core/filter_base.py` and
+`core/filter_registry.py`, and #2 "pipeline is a data structure" now has
+`core/pipeline_model.py`. The filter contract can express rate, stream kind,
+and output size, so `dag.py`'s edge check and the executor's warmup arithmetic
+both have declarations to be written against.
+
+One `core/` item remains, and it is first because it changes what a cache key
+is made of: per-replicate parameter deviation. Writing `cache_key.py` before it
+means writing it twice, since the thing hashed stops being `Node.params` and
+becomes a resolution of baseline against override.
 
 Items under **Independent of the stack** gate nothing and can be taken whenever.
 
-## Filter contract: rate, stream kind, output size
+## Per-replicate parameter deviation
 
-`core/filter_base.py`. Three things VISION requires of filters are
-inexpressible in `FilterSpec`, and all three were found while writing the
-pipeline artifact against VISION rather than by a filter hitting them —
-`sieve.filters` is still empty, so nothing is broken yet.
+`core/pipeline_model.py` currently says replicates are a source-level fan-out
+and states the consequence plainly: "every replicate is processed with
+identical parameters, so a dim arena needing its own threshold is not
+expressible". That consequence is now rejected — it is a key component, not an
+acceptable simplification, and the docstring is wrong rather than merely
+narrow.
 
-Must land before `pipeline/dag.py`'s edge check and before the executor's
-warmup accumulation, because both are specified in terms of declarations that
-do not exist:
+The model is **lateral inheritance from a configured baseline**. A node holds
+the baseline params; a replicate may override any subset of them. To the user
+every replicate looks identical until one is adjusted, and the replicate list
+marks which ones deviate from the rest.
 
-1. **Rate.** Nothing says a filter changes its output frame rate. ARCHITECTURE
-   says to sum `warmup_frames` along the path and decode `[start − total,
-   end]`, and summing is only valid in one unit — five frames of warmup behind
-   a 10:1 decimator is fifty source frames. An executor written from the
-   current specification under-warms every temporal filter behind a decimator
-   by the decimation factor, and renders a plausible frame while doing it.
-2. **Stream kind.** `ArraySpec` describes arrays. VISION step 1 wants
-   coordinates as CSV, and duckdb/pyarrow are already dependencies, so a
-   detection filter emits a table that `emits:` cannot describe.
-3. **Output size.** `CostEstimate.peak_bytes_per_input_byte` is a working set,
-   not stored bytes, so nothing can predict what a checkpoint costs on disk —
-   which VISION step 4 asks for directly and step 5 drives a suggestion off.
+The awkward part is the identity line, and it is genuinely awkward. Today every
+field on `Node` feeds the cache key and `params` is one dict per node.
+Overrides mean the cache key is keyed on `(node, replicate)` and the effective
+params are a resolution — baseline merged with override — rather than a stored
+value. So:
 
-Design note: 1 and 3 are close to the same declaration, since output frames per
-input frame is most of output bytes per input byte. Also open — whether
-decimation is a filter at all, or a decode-time setting, which would move the
-index-space conversion into `decode/` where one already happens.
+1. Where overrides live. Not on `Node` (twelve arenas would make one node carry
+   twelve dicts and the fan-out stops being a fan-out), and probably on
+   `Replicate` as `overrides: dict[node_id, dict[str, Any]]`. That keeps the
+   fan-out shape and puts the deviation next to the thing that deviates.
+2. The resolution function is what `cache_key.py` hashes, and it must be the
+   only definition of "effective params" — a second one in the GUI is how a
+   preview and a batch run stop agreeing.
+3. Sparse by construction. An override that stores every parameter cannot tell
+   "the user set this to the same value" from "the user never touched it",
+   which is exactly the distinction the replicate list renders.
 
-Read: `docs/findings/2026.07.25-the-filter-contract-cannot-type-vision.md`.
+The GUI half — deviation markers in the replicate list, and later something in
+the filter tab — comes after the model. Do not build the markers first; they
+are a view of a resolution that does not exist yet.
+
+Read: `src/sieve/core/{pipeline_model,replicates}.py`, `docs/VISION.md` step 2.
 
 ## First filter and discovery
 
@@ -94,6 +105,10 @@ Read: `docs/AUTO-GUARDRAILS.md` §3, `.importlinter`.
 canonical_params_json, backend_id unless backend_agnostic)`, with decoder
 identity entering at the root node only. Canonical means `model_dump(mode=
 "json")` with sorted keys.
+
+`canonical_params_json` is the *resolved* params for this node and replicate,
+not `Node.params` — see the per-replicate deviation item, which is why this one
+waits on it.
 
 Guardrail §5 belongs here: changing a parameter on one branch must not
 invalidate a sibling branch.

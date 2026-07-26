@@ -44,13 +44,21 @@ as command-line options, while what the wizard *tidies* is this document with
 compaction runs the same graph without it, and over the whole video rather than
 the tuning span. Both are one field, which is the shape that split argues for.
 
-**Replicates are a source-level fan-out, not graph nodes.** One pipeline runs
-once per replicate. The consequence is deliberate and worth stating: every
-replicate is processed with identical parameters, so a dim arena needing its
-own threshold is not expressible. The alternative — one root node per replicate
-— makes the ordinary case (one chain, twelve arenas) twelve subgraphs the GUI
-has to generate and keep in step, and buys a divergence no workflow has asked
-for yet.
+**Replicates are a source-level fan-out.** One pipeline runs once per
+replicate, which keeps the ordinary case (one chain, twelve arenas) a single
+graph rather than twelve subgraphs the GUI has to generate and keep in step.
+The alternative considered and rejected was one root node per replicate.
+
+*This paragraph used to continue "every replicate is processed with identical
+parameters, so a dim arena needing its own threshold is not expressible", and
+called that consequence deliberate. It is not — see the "Per-replicate
+parameter deviation" item in `docs/TODO.md`. A replicate is to inherit a
+node's baseline parameters laterally and may override any subset, appearing
+identical until adjusted. The fan-out shape above survives that; what does not
+survive is the assumption below that a node's `params` is the whole of what
+gets hashed. Nothing in this module implements the override yet, and the
+sentence is recorded rather than deleted so the change reads as a reversal
+rather than as something nobody had thought about.*
 """
 
 from __future__ import annotations

@@ -11,15 +11,26 @@ layer stays pure.
 The spec is also the single source of truth for a filter's parameters. GUI
 widgets, CLI flags, YAML, and the cache key all read `params_model`; none of
 them carries a second copy of the field list that could drift from it.
+
+**Three declarations are params-derived rather than constants**, because the
+quantity they describe *is* a parameter: a decimator's factor, a downsampler's
+scale. `output_rate` and `frame_bytes_ratio` are therefore methods on
+`ParamsBase` with 1:1 defaults, not fields on `FilterSpec`. They stay pure —
+data in, exact number out, no kernel, no codec — so `dag.py` and the executor
+can evaluate them on a machine with nothing installed, which is the property
+the whole split exists to preserve.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, ClassVar
+from fractions import Fraction
+from typing import Any, ClassVar, TypeAlias
 
 from pydantic import BaseModel, ConfigDict
 
@@ -50,6 +61,27 @@ class Mode(StrEnum):
     WINDOWED = "windowed"
 
 
+class StreamKind(StrEnum):
+    """What sort of thing travels along an edge.
+
+    A sibling of the shape declarations rather than a field on one, because the
+    two kinds have nothing in common to declare — a table has no dtype and an
+    array has no columns — and a single type carrying both field sets would be
+    half-empty whichever kind it was describing.
+    """
+
+    #: Frames: an `ArraySpec` describes it.
+    ARRAY = "array"
+    #: Rows: a `TableSpec` describes it. VISION step 1's "coordinates of that
+    #: specific color as a csv and enough information to stick it into R".
+    TABLE = "table"
+
+
+#: Rate `1`, allocated once. `Fraction` is immutable, so every unchanged filter
+#: can share it, and `output_rate() is UNCHANGED_RATE` is a cheap fast path.
+UNCHANGED_RATE = Fraction(1, 1)
+
+
 class ParamsBase(BaseModel):
     """Base for every filter's parameter model.
 
@@ -77,6 +109,44 @@ class ParamsBase(BaseModel):
         """
         return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
 
+    def output_rate(self) -> Fraction:
+        """Output frames per input frame, exactly.
+
+        `Fraction`, not `float`: this is the divisor in the warmup conversion
+        below, and `ceil(5 / 0.1)` is 50 only until the day the factor is 3.
+        An exact rational makes the arithmetic answer the question asked rather
+        than one binary rounding away from it.
+
+        Overridden by any filter whose output stops being indexed like its
+        input — a 10:1 decimator returns `Fraction(1, 10)`. Overriding it
+        obliges the spec to set `rate_changing=True`; `FilterSpec` refuses the
+        pair otherwise, because the failure this closes is a decimator that
+        simply forgot to say so, and that failure is silent.
+
+        A filter that consumes frames and emits a table still has a rate: rows
+        per input frame is not what this measures, and such a filter leaves it
+        at 1 unless it also drops frames. Downstream of a table there is
+        nothing left to warm up.
+        """
+        return UNCHANGED_RATE
+
+    def frame_bytes_ratio(self) -> float:
+        """Bytes of one output frame per byte of one input frame.
+
+        The spatial half of output size, kept apart from `output_rate`'s
+        temporal half so that neither has to know about the other: a
+        downsampler overrides this with `1 / factor**2` and says nothing about
+        rate, a decimator overrides rate and says nothing about size, and
+        `FilterSpec.stored_bytes_ratio` multiplies them.
+
+        Unlike `output_rate` this is a `float` and is deliberately not
+        cross-checked against anything on the spec. It feeds VISION step 4's
+        storage HUD and step 5's compaction suggestion and never a correctness
+        decision, so an undeclared override is a wrong prediction rather than a
+        wrong result — the asymmetry with rate is the point.
+        """
+        return 1.0
+
 
 @dataclass(frozen=True, slots=True)
 class ArraySpec:
@@ -92,11 +162,13 @@ class ArraySpec:
     will.
     """
 
+    kind: ClassVar[StreamKind] = StreamKind.ARRAY
+
     #: NumPy dtype names, e.g. `("uint8", "float32")`.
     dtypes: tuple[str, ...] = ()
     channels: tuple[ChannelSpec, ...] = ()
 
-    def admits(self, produced: ArraySpec) -> bool:
+    def admits(self, produced: StreamSpec) -> bool:
         """Whether an upstream node emitting `produced` may feed this one.
 
         Deliberately permissive: it is false only when the two sets are
@@ -104,7 +176,13 @@ class ArraySpec:
         static check exists to reject graphs that *cannot* work, and rejecting
         one that merely cannot be proven to work would make declaring `dtypes`
         at all a liability.
+
+        A kind mismatch is the one thing that is never a wildcard. Rows are not
+        frames under any parameterization, so a table upstream of an array
+        input is provably disjoint no matter what either side left unstated.
         """
+        if not isinstance(produced, ArraySpec):
+            return False
         return self._compatible(self.dtypes, produced.dtypes) and self._compatible(
             self.channels, produced.channels
         )
@@ -117,6 +195,55 @@ class ArraySpec:
 
 
 @dataclass(frozen=True, slots=True)
+class TableSpec:
+    """Rows rather than frames: detections, coordinates, per-frame summaries.
+
+    VISION step 1 asks for "the coordinates of that specific color as a csv and
+    enough information to stick it into R" as a first-class output, and duckdb
+    and pyarrow are already dependencies, so this is a stream the graph carries
+    rather than only a thing a sink writes.
+
+    `columns` is conjunctive where `ArraySpec`'s sets are disjunctive, and the
+    difference is not an oversight. A filter listing `("uint8", "float32")`
+    accepts *either*; a filter listing `("x", "y")` needs *both*, because a
+    column that is absent cannot be substituted by one that is present. Empty
+    still means unconstrained on both sides.
+
+    No dtypes per column. The reason is `ArraySpec.ndim`'s reason: the useful
+    check is whether the column is there at all, and a type declaration that
+    can disagree with the table actually produced is one that eventually will.
+    """
+
+    kind: ClassVar[StreamKind] = StreamKind.TABLE
+
+    #: Required of an upstream when this is an `accepts`; guaranteed to
+    #: downstreams when it is an `emits`. Empty means unconstrained.
+    columns: tuple[str, ...] = ()
+
+    def admits(self, produced: StreamSpec) -> bool:
+        """Whether an upstream node emitting `produced` may feed this one."""
+        if not isinstance(produced, TableSpec):
+            return False
+        if not self.columns or not produced.columns:
+            return True
+        return set(self.columns) <= set(produced.columns)
+
+
+#: What an edge may carry. A union rather than a base class with two subclasses:
+#: there is no shared field to inherit, and the one shared operation — `admits`
+#: — has no shared implementation either, since columns and dtypes are compared
+#: on opposite logics. `kind` exists so a rejection can be *named* ("an array
+#: cannot feed a table input"); the narrowing itself goes through `isinstance`,
+#: which is what a type checker can follow.
+#:
+#: One stream per node, still. A detector that wants to emit both an overlay
+#: frame and a coordinate table needs named ports on `Edge`, which is a change
+#: to the saved artifact and to every edge ever written — worth making when a
+#: filter actually needs it, and not before.
+StreamSpec: TypeAlias = ArraySpec | TableSpec
+
+
+@dataclass(frozen=True, slots=True)
 class CostEstimate:
     """Order-of-magnitude cost, for predicting a run before making it.
 
@@ -125,6 +252,14 @@ class CostEstimate:
     would be wrong for every resolution but the one it was measured at. These
     drive HUD predictions and scheduling hints, never a correctness decision,
     so a factor-of-two error is tolerable and a missing declaration is not.
+
+    Nothing here predicts *stored* bytes, and nothing here can: what a
+    checkpoint costs on disk depends on the decimation factor and the
+    downsample scale, which are parameters and not properties of the kernel.
+    That prediction is `FilterSpec.stored_bytes_ratio`, which reads the two
+    params methods. `peak_bytes_per_input_byte` below is a working set — what
+    the kernel needs held at once — and the two differ by an order of magnitude
+    for exactly the filters VISION step 4 puts in front of everything else.
     """
 
     #: Wall-clock seconds to process one megapixel on the reference CPU.
@@ -142,16 +277,27 @@ class FilterSpec:
     version: str
     summary: str
     params_model: type[ParamsBase]
-    accepts: ArraySpec
-    emits: ArraySpec
+    accepts: StreamSpec
+    emits: StreamSpec
     cost: CostEstimate
     mode: Mode = Mode.STREAMING
-    #: Frames the filter must consume before its output is trustworthy. The
-    #: executor sums these along the topological path feeding a request rather
-    #: than applying them per node. An IIR's true warmup is infinite, so a
+    #: Frames the filter must consume before its output is trustworthy, counted
+    #: in this filter's *input* frames — "must consume" is the unit. Warmup
+    #: accumulates along the topological path feeding a request, but it does not
+    #: simply sum: a rate-changing node between two others makes the two speak
+    #: different index spaces. `source_warmup_frames` does the conversion, and
+    #: is the only thing that should. An IIR's true warmup is infinite, so a
     #: nonzero value here is a settled-to-within-epsilon choice and the
     #: filter's docstring says which epsilon.
     warmup_frames: int = 0
+    #: This filter's output is not indexed like its input — a decimator. Must
+    #: agree with whether `params_model` overrides `output_rate`, and the
+    #: agreement is checked below. Declaring it is not redundant with the
+    #: override: the override is what computes the conversion, and this is what
+    #: makes forgetting to write one an error at registration rather than a
+    #: preview that renders, is under-warmed by the decimation factor, and
+    #: looks entirely plausible.
+    rate_changing: bool = False
     #: Same backend, same input, same output. Gates whether the node may be
     #: cached at all.
     deterministic: bool = True
@@ -189,6 +335,21 @@ class FilterSpec:
             raise ValueError(
                 f"{self.filter_id}: primary_params names no such field: {sorted(unknown)}"
             )
+        # Comparing the function objects, not calling them: a params model with
+        # required fields cannot be instantiated here, and the question is
+        # whether an override exists at all rather than what it returns.
+        overrides = self.params_model.output_rate is not ParamsBase.output_rate
+        if self.rate_changing and not overrides:
+            raise ValueError(
+                f"{self.filter_id}: rate_changing is set but {self.params_model.__name__} does not "
+                "override output_rate, so nothing can convert a downstream warmup into source "
+                "frames"
+            )
+        if overrides and not self.rate_changing:
+            raise ValueError(
+                f"{self.filter_id}: {self.params_model.__name__} overrides output_rate but the "
+                "spec does not declare rate_changing"
+            )
 
     @property
     def version_tuple(self) -> tuple[int, int, int]:
@@ -211,3 +372,64 @@ class FilterSpec:
     def cacheable(self) -> bool:
         """Whether this node's output may be reused from a cache entry."""
         return self.deterministic
+
+    @staticmethod
+    def stored_bytes_ratio(params: ParamsBase) -> float:
+        """Bytes written per byte consumed, if this node were materialized.
+
+        The two halves of output size multiplied: how many output frames there
+        are per input frame, and how big one of them is. A 10:1 decimator in
+        front of a 2x downsampler stores a fortieth of what it was handed, and
+        neither filter had to know about the other to say so.
+
+        A prediction for VISION step 4's storage readout and step 5's
+        compaction suggestion, never an input to a cache key or a decision
+        about what to compute. `static` because it reads nothing off the spec —
+        it is here rather than beside the two methods it calls so that the
+        composition is defined once, where a caller holding a spec will find it.
+        """
+        return float(params.output_rate()) * params.frame_bytes_ratio()
+
+
+#: One step of a path: a filter and the parameters it was configured with. The
+#: params are not optional — half of what a step contributes is params-derived.
+PathStep: TypeAlias = "tuple[FilterSpec, ParamsBase]"
+
+
+def source_warmup_frames(path: Sequence[PathStep]) -> int:
+    """Lead-in to decode, in *source* frames, for a path ordered root to sink.
+
+    ARCHITECTURE says the executor "sums `warmup_frames` over the topological
+    path feeding a preview, requests `[clip_start - total, clip_end]`, and
+    discards the lead-in". Summing is the right idea in the wrong unit, and the
+    unit only matters once something changes rate. Walking sink to root instead:
+    a requirement of `need` frames at a node's output costs `ceil(need / rate)`
+    at its input, and the node's own `warmup_frames` is already denominated
+    there. Five frames of warmup behind a 10:1 decimator is fifty source frames,
+    not five, and the error a plain sum makes is silent — the preview renders,
+    an IIR that should have settled produces a plausible frame, and the tuning
+    done against it is wrong rather than absent.
+
+    Lives here rather than in `pipeline/executor.py` for two reasons: it needs
+    no graph, only an order someone else established, so it is testable without
+    an executor; and the conversion belongs beside the declaration that defines
+    the unit, where a second copy is less likely to be written.
+
+    Args:
+        path: `(spec, params)` from the root node to the requesting node,
+            inclusive. An empty path needs no lead-in.
+
+    Returns:
+        Frames to decode before `clip_start`.
+
+    Raises:
+        ValueError: if any node reports a non-positive output rate, which would
+            mean an output frame the source could never supply enough input for.
+    """
+    need = Fraction(0)
+    for spec, params in reversed(path):
+        rate = params.output_rate()
+        if rate <= 0:
+            raise ValueError(f"{spec.filter_id}: output_rate must be positive, got {rate}")
+        need = Fraction(math.ceil(need / rate) + spec.warmup_frames)
+    return int(need)

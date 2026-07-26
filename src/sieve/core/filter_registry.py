@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from typing import TypeVar
 
-from sieve.core.filter_base import ArraySpec, CostEstimate, FilterSpec, Mode, ParamsBase
+from sieve.core.filter_base import CostEstimate, FilterSpec, Mode, ParamsBase, StreamSpec
 
 #: The decorator returns the class it was given, not `ParamsBase` — erasing the
 #: subclass would cost every filter's own fields their static types at the one
@@ -114,11 +114,12 @@ def register_filter(
     filter_id: str,
     version: str,
     summary: str,
-    accepts: ArraySpec,
-    emits: ArraySpec,
+    accepts: StreamSpec,
+    emits: StreamSpec,
     cost: CostEstimate,
     mode: Mode = Mode.STREAMING,
     warmup_frames: int = 0,
+    rate_changing: bool = False,
     deterministic: bool = True,
     backend_agnostic: bool = False,
     primary_params: tuple[str, ...] = (),
@@ -147,6 +148,7 @@ def register_filter(
             cost=cost,
             mode=mode,
             warmup_frames=warmup_frames,
+            rate_changing=rate_changing,
             deterministic=deterministic,
             backend_agnostic=backend_agnostic,
             primary_params=primary_params,

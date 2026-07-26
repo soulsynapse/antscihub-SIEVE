@@ -14,7 +14,7 @@ include_external_packages = True
 name = Layered architecture
 type = layers
 layers =
-    sieve.gui | (sieve.cli)
+    sieve.gui | sieve.cli
     sieve.bench
     sieve.pipeline | (sieve.workers)
     sieve.filters
@@ -34,9 +34,13 @@ forbidden_modules =
     multiprocessing
 
 [importlinter:contract:headless]
-name = pipeline, bench, decode, filters, and backend run without a GUI toolkit
+name = the CLI, pipeline, bench, decode, filters, and backend run without a GUI toolkit
 type = forbidden
 source_modules =
+    # The CLI is the front end whose whole point is being usable where Qt is
+    # not installed — a cluster node, a container, a login shell. It sits at the
+    # same layer as `sieve.gui` and so the layers contract cannot say this.
+    sieve.cli
     sieve.pipeline
     sieve.bench
     sieve.decode
@@ -64,5 +68,10 @@ source_modules =
     sieve.core
     sieve.bench
     sieve.gui
+    # Both front ends, for one reason: reaching a frame goes through
+    # `sieve.decode`, so a `cv2` import here would be a command that had started
+    # driving `VideoCapture` on its own — a second seek strategy, and a second
+    # decoder identity that no cache key would know about.
+    sieve.cli
 forbidden_modules =
     cv2

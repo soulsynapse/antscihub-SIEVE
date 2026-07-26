@@ -43,6 +43,17 @@ uv run nox -s docs             # regenerate docs/*/.index.md from entry frontmat
 uv run python -c "import sieve"
 ```
 
+The product's own commands are `sieve` (headless — needs no extra) and
+`sieve-gui` (needs `--extra gui`):
+
+```
+uv run sieve inspect                        # every installed filter
+uv run sieve inspect downsample             # its declaration and its guidance
+uv run sieve run arena.sieve.yaml --dry-run # what a run would decode and key
+uv run sieve run arena.sieve.yaml           # the same executor the GUI uses
+uv run sieve-gui                            # the desktop app
+```
+
 Work in flight is `docs/TODO.md` — scoped, startable items. Work that is real
 and deliberately not being done yet is `docs/LATER.md`, where each entry carries
 the trigger that would make it takeable; entries move from there to `TODO.md`

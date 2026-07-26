@@ -85,20 +85,17 @@ cache lookup; it takes these. `Mode.WINDOWED`, rate-changing, and multi-upstream
 nodes are refused at run time until `Kernel` grows a second signature. See
 `docs/completed-todo/2026.07.25-executor.md`.
 
+The CLI that had to precede further GUI work exists. `sieve inspect` prints a
+filter's declaration and its guidance, `sieve run` executes a YAML project
+through `pipeline/executor.py`, and `sieve.cli` is no longer parenthesised in
+`.importlinter` — it is bound by the headless and opencv-containment contracts
+as well as by the layer stack. The executor now has a caller that cannot reach
+a frame any other way, which is what the SCAFFOLD ordering was for. Three of
+SCAFFOLD's five command modules are deliberately unwritten: each wraps a
+`pipeline/` module that does not exist, and they arrive with it. See
+`docs/completed-todo/2026.07.25-build-the-cli.md`.
+
 Items under **Independent of the stack** gate nothing and can be taken whenever.
-
-## Build the CLI
-
-`SCAFFOLD.md` calls the CLI the canonical run path, "built and tested before
-GUI". It cannot literally precede a GUI that already exists, but it must
-precede any further GUI work, because it is what keeps the executor honest as
-the single path.
-
-`sieve inspect` first — it proves discovery end to end in ~30 lines and turns
-the layer contract's optional `sieve.cli` into a real one. Then `sieve run`
-over a YAML artifact.
-
-Read: `docs/SCAFFOLD.md` `cli/`, `.importlinter`.
 
 ## Representative clip range
 

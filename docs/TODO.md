@@ -39,26 +39,13 @@ writes. `cache_key.py` therefore has something to hash that is not `Node.params`
 The replicate table renders which arenas that deviation has actually separated,
 derived on every read, so the GUI is no longer silent about it.
 
+The per-replicate threshold-spread probe that sat at the top of this list is
+gone, not deferred: it would have measured one rack under one backlight, and the
+scope-of-edit control it was meant to choose a default for is required whether
+arenas cluster or spread. Reasoning in
+`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
+
 Items under **Independent of the stack** gate nothing and can be taken whenever.
-
-## Per-replicate threshold spread
-
-A probe, not a build, and it gates nothing — but it says whether the deviation
-machinery is the ordinary path or the escape hatch, and that decides a set of
-GUI defaults. Take one parent frame from `videos-testing/`,
-compute Otsu on the whole frame, compute Otsu on each replicate crop of that
-same frame, and compare.
-
-If the per-arena thresholds cluster tightly, per-replicate deviation is a
-feature that exists for the rare case and the GUI should optimize for the twelve
-identical arenas. If they spread widely, deviation is the ordinary path and the
-equivalence-group display is load-bearing rather than reassuring. That is a
-different set of defaults, and the measurement costs an afternoon against
-machinery that costs weeks.
-
-Write it to `docs/findings/`, not into a completed entry.
-
-Read: `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` open questions.
 
 ## First filter and discovery
 

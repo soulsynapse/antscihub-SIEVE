@@ -112,27 +112,41 @@ stack** below — those gate nothing and can be taken whenever — and in
 
 These gate nothing below them and can be taken at any point.
 
-## Open and save a project
+## The clip is a window, not two marks
 
-`core/pipeline_model.py` exists, so replicates *can* persist; nothing in the
-GUI yet does it, and they still die with the window. Needs File > Open Project
-/ Save / Save As, a dirty flag driven off `QUndoStack.cleanChanged`, and a
-prompt on close. Opening a video offers its `project_path_for` neighbour when
-one exists.
+The representative span is currently mark-in / mark-out: two independent frame
+indices set at the playhead, producing an inert band painted under a
+full-length transport. V1 has it as a *window* — an origin plus a length, where
+the length is what is held and the origin is what slides — and the difference
+is the whole interaction, not a spelling. `mark_clip_in` past the out point
+releases the out point to the end of the source, so SIEVE cannot express
+"keep the ten seconds, move them", which is the gesture the user actually
+performs.
 
-This is independent of the CLI despite SCAFFOLD's "CLI before further GUI
-work". That rule exists so the executor stays the single execution path, and
-reading and writing a document touches no execution path at all.
+Three things follow from that and none of them exist here:
 
-The awkward part is `bind_source`, which clears replicates, clip, and history
-on every open because geometry in one video's pixel space — or its frame index
-space — cannot carry to another. Loading a project has to populate all of that
-*after* that clear without pushing undo commands, so it needs a load path
-beside the command-facing primitives rather than through them.
-`ReplicateDocument.clip` is the third field it has to restore, alongside the
-replicate set and the pipeline.
+1. The window **bounds playback**. `[start, stop)` loops, the last frame shown
+   before looping is `stop - 1`, and the current frame is always inside it.
+   SIEVE's clip constrains nothing — `player.py` has never heard of it.
+2. **Two timelines.** The transport spans the *window*; a whole-asset bar
+   underneath carries the window as its thumb plus a frame cursor. Clicking
+   inside the window seeks; clicking outside moves the window so the clicked
+   frame is in it, preserving length, then seeks. `clip_bar.py`'s `ClipStrip`
+   is a paint layer with no gestures at all.
+3. On open there is **always** a window — 10 s, or the whole asset if shorter,
+   playhead at its start, paused.
 
-Read: `src/sieve/gui/{document,main_window}.py`, `src/sieve/core/pipeline_model.py`.
+`ClipRange(start, end)` stays as it is: `(start, end)` and `(start, length)`
+carry identical information and `frame_count` is already `end - start`, so
+which one is held constant under an edit is an interaction rule and not a
+storage one. No schema change, and `pipeline/plan.py` keeps reading a half-open
+span. Point 3 is a *tuning-session* rule and must not become a document rule —
+`Project.clip = None` meaning "the whole video" is what `plan.py` falls back on
+and what the HPC handoff produces by dropping the field.
+
+Read: `src/sieve/gui/{document,clip_bar,replicate_tab,player}.py`, and
+`antscihub-optical-flow-detector/docs/Isolate tab handoff/1-Build-the-player.md`
+§5–§7, which is the version this is being brought in line with.
 
 ## Three small GUI fixes
 

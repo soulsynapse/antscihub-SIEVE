@@ -3,12 +3,19 @@
 Tabs follow the workflow order from VISION.md. Only Replicate exists so far;
 the rest are added as they are built rather than stubbed, so the tab bar is
 never a promise the application cannot keep.
+
+The window is also where a project becomes a file. It holds the two things the
+document deliberately does not — which file the document was read from, and the
+parts of the artifact the GUI cannot edit (`source`, `checkpoints`, `outputs`) —
+because both are answers about *this session*, and a document that carried them
+would be back to keeping GUI state in the pipeline artifact.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import ValidationError
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
@@ -18,7 +25,9 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QWidget,
 )
+from yaml import YAMLError
 
+from sieve.core.pipeline_model import PROJECT_SUFFIX, Project, project_path_for
 from sieve.core.types import VideoMetadata
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.player import VideoPlayer
@@ -31,6 +40,13 @@ VIDEO_FILTER = (
     "Video files (*.mp4 *.MP4 *.mov *.MOV *.avi *.AVI *.mkv *.MKV *.m4v *.mpg *.mpeg *.wmv);;"
     "All files (*)"
 )
+
+PROJECT_FILTER = f"SIEVE projects (*{PROJECT_SUFFIX});;All files (*)"
+
+#: Asked before anything that discards the document. Names the file rather than
+#: the concept where there is one, because "this project" is ambiguous the
+#: moment a user has two open in two windows.
+UNSAVED_PROMPT = "There are unsaved changes to {name}."
 
 #: Shown once, when the player gives up on decoding every drag position. Says
 #: what changed, why, and where to refuse it — in that order, because the user
@@ -68,6 +84,19 @@ class MainWindow(QMainWindow):
         self._document = ReplicateDocument(self)
         self._replicate_tab = ReplicateTab(self._player, self._document, self)
 
+        # The project as last read or written, and where from. `_project`
+        # carries the fields the document does not edit, so a save can put them
+        # back rather than dropping them; `None` means the video was opened on
+        # its own and no file has been chosen yet.
+        self._project: Project | None = None
+        self._project_path: Path | None = None
+        # A project read from disk but not yet applied, because the video it
+        # names is still opening. `open` is asynchronous and `bind_source`
+        # clears the document when it lands, so there is no way to populate
+        # first — the project has to wait for the clear it would otherwise be
+        # erased by.
+        self._pending_project: tuple[Project, Path] | None = None
+
         tabs = QTabWidget()
         tabs.addTab(self._replicate_tab, "Replicate")
         self.setCentralWidget(tabs)
@@ -96,6 +125,27 @@ class MainWindow(QMainWindow):
         self._open_action.setShortcut(QKeySequence.StandardKey.Open)
         self._open_action.triggered.connect(self.open_video_dialog)
         file_menu.addAction(self._open_action)
+
+        self._open_project_action = QAction("Open &Project…", self)
+        self._open_project_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        self._open_project_action.triggered.connect(self.open_project_dialog)
+        file_menu.addAction(self._open_project_action)
+
+        file_menu.addSeparator()
+
+        self._save_action = QAction("&Save Project", self)
+        self._save_action.setShortcut(QKeySequence.StandardKey.Save)
+        self._save_action.setEnabled(False)
+        self._save_action.triggered.connect(self.save_project)
+        file_menu.addAction(self._save_action)
+
+        self._save_as_action = QAction("Save Project &As…", self)
+        self._save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
+        self._save_as_action.setEnabled(False)
+        self._save_as_action.triggered.connect(self.save_project_as)
+        file_menu.addAction(self._save_as_action)
+
+        file_menu.addSeparator()
 
         self._close_action = QAction("&Close Video", self)
         self._close_action.setShortcut(QKeySequence.StandardKey.Close)
@@ -203,6 +253,11 @@ class MainWindow(QMainWindow):
         self._replicate_tab.editor_open_changed.connect(self._on_editor_open_changed)
         self._preferences.changed.connect(self._on_preferences_changed)
         self._document.clip_changed.connect(self._on_clip_changed)
+        # The stack is the dirty flag. Every user edit is a command on it by
+        # construction (see `document.py`), so there is no second place a change
+        # can come from and no bookkeeping to keep in step — which is also why
+        # `load_project` and a save both end by declaring it clean.
+        self._document.undo_stack.cleanChanged.connect(self._on_clean_changed)
 
     # ---- commands --------------------------------------------------------
 
@@ -223,6 +278,8 @@ class MainWindow(QMainWindow):
     @Slot()
     def open_video_dialog(self) -> None:
         """Prompt for a video file and load it."""
+        if not self.confirm_discard():
+            return
         start_directory = ""
         remembered = self._preferences.last_video
         if remembered is not None and remembered.parent.is_dir():
@@ -230,6 +287,197 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Open Video", start_directory, VIDEO_FILTER)
         if path:
             self.open_video(Path(path))
+
+    @Slot()
+    def open_project_dialog(self) -> None:
+        """Prompt for a project file and load it, video and all."""
+        if not self.confirm_discard():
+            return
+        start = self._project_path.parent if self._project_path is not None else None
+        if start is None:
+            remembered = self._preferences.last_video
+            start = remembered.parent if remembered is not None else None
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Project", str(start) if start is not None else "", PROJECT_FILTER
+        )
+        if path:
+            self.open_project(Path(path))
+
+    def open_project(self, path: Path) -> None:
+        """Read the project at `path` and put the application in its state.
+
+        The video comes first and the document is populated afterwards, which is
+        forced rather than chosen: `bind_source` clears replicates, clip, and
+        graph, so anything written before the source landed would be erased by
+        the source landing. `_pending_project` is what carries the document
+        across that gap.
+
+        A project whose video is already the one on screen skips the reopen
+        entirely — this is the path the neighbour offer below takes, and
+        re-decoding a file that is already open to arrive at the same frame is
+        several seconds of nothing.
+        """
+        project = self._read_project(path)
+        if project is None:
+            return
+        video = project.source_path(path)
+        if not video.is_file():
+            self._warn(f"{path.name} names a video that is not there:\n{video}")
+            return
+        metadata = self._player.metadata
+        if metadata is not None and metadata.path.resolve() == video:
+            self._adopt_project(project, path)
+            return
+        self._pending_project = (project, path)
+        self.open_video(video)
+
+    @Slot()
+    def save_project(self) -> bool:
+        """Write to the file this project came from, choosing one if there is none.
+
+        Returns whether anything was written — `confirm_discard` needs the
+        answer, because a Save the user backed out of at the file dialog must
+        not be treated as consent to discard.
+        """
+        if self._project_path is None:
+            return self.save_project_as()
+        return self._write_project(self._project_path)
+
+    @Slot()
+    def save_project_as(self) -> bool:
+        """Prompt for a location and write there, adopting it as the project's home."""
+        metadata = self._player.metadata
+        if metadata is None:
+            return False
+        default = self._project_path or project_path_for(metadata.path)
+        chosen, _ = QFileDialog.getSaveFileName(self, "Save Project", str(default), PROJECT_FILTER)
+        if not chosen:
+            return False
+        return self._write_project(_with_project_suffix(Path(chosen)))
+
+    def confirm_discard(self) -> bool:
+        """Ask about unsaved edits before something throws them away.
+
+        Returns whether to proceed. Guards every path that replaces or drops the
+        document — opening a video, opening a project, closing the video, and
+        closing the window — because each of them silently destroyed a session's
+        work before this existed.
+        """
+        if self._document.undo_stack.isClean():
+            return True
+        name = self._project_path.name if self._project_path is not None else "this project"
+        answer = QMessageBox.warning(
+            self,
+            "SIEVE",
+            UNSAVED_PROMPT.format(name=name),
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if answer == QMessageBox.StandardButton.Cancel:
+            return False
+        if answer == QMessageBox.StandardButton.Save:
+            return self.save_project()
+        return True
+
+    # ---- project plumbing ------------------------------------------------
+
+    def _read_project(self, path: Path) -> Project | None:
+        """Parse the project at `path`, reporting why not rather than raising.
+
+        The three failures are distinct and all ordinary: the file is gone, it
+        is not YAML, or it is YAML that does not describe a project. None of
+        them is a bug, and all of them arrive at the same place — a user who
+        picked the wrong file, or a good file this build is too old to read.
+        """
+        try:
+            return Project.load(path)
+        except (OSError, YAMLError, ValidationError) as error:
+            self._warn(f"Cannot open {path.name}:\n{error}")
+            return None
+
+    def _adopt_project(self, project: Project, path: Path) -> None:
+        """Take `project` as the document, with `path` as its home."""
+        self._document.load_project(project)
+        self._project = project
+        self._project_path = path
+        self._document.undo_stack.setClean()
+        self._update_title()
+
+    def _write_project(self, path: Path) -> bool:
+        """Assemble the document into a project file at `path`."""
+        metadata = self._player.metadata
+        if metadata is None:
+            return False
+
+        base = self._project
+        if base is None:
+            base = Project.for_video(metadata.path, path.parent)
+        elif self._project_path is not None:
+            # Unconditionally, without comparing the directories: rebasing onto
+            # the directory a project is already anchored to is a no-op, and the
+            # comparison that would skip it is a path-equality test — the kind
+            # that is wrong across a symlink and right in every test.
+            base = base.relocated(self._project_path.parent, path.parent)
+
+        try:
+            project = self._document.apply_to(base)
+            project.save(path)
+        except (OSError, ValidationError) as error:
+            self._warn(f"Cannot save {path.name}:\n{error}")
+            return False
+
+        self._project = project
+        self._project_path = path
+        self._document.undo_stack.setClean()
+        self._update_title()
+        self.statusBar().showMessage(f"Saved {path.name}")
+        return True
+
+    def _offer_neighbour_project(self, video: Path) -> None:
+        """Offer the project filed beside a video the user opened directly.
+
+        VISION step 1 puts the project at the root of the source's own folder,
+        so this file existing is the normal case for footage that has been
+        worked on before. Offered rather than opened: the user asked for a
+        video, and silently restoring twelve replicates they cannot see the
+        provenance of is a worse surprise than one question.
+        """
+        path = project_path_for(video)
+        if not path.is_file():
+            return
+        answer = QMessageBox.question(
+            self,
+            "SIEVE",
+            f"{path.name} sits beside this video.\nOpen it?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.open_project(path)
+
+    def _update_title(self) -> None:
+        """Restate what is open and whether it is saved.
+
+        `[*]` is Qt's modified placeholder, expanded by `setWindowModified` into
+        whatever the platform's convention is. With nothing open the title has
+        no placeholder and nothing can be dirty, because a document with no
+        source has no commands on its stack.
+        """
+        metadata = self._player.metadata
+        if metadata is None:
+            self.setWindowTitle("SIEVE")
+            return
+        subject = metadata.path.name
+        if self._project_path is not None:
+            subject = f"{subject}  ·  {self._project_path.name}"
+        self.setWindowTitle(f"SIEVE — {subject}[*]")
+
+    def _warn(self, message: str) -> None:
+        """Say it in the status bar and in a dialog the user has to dismiss."""
+        self.statusBar().showMessage(message.replace("\n", "  "))
+        QMessageBox.warning(self, "SIEVE", message)
 
     def restore_last_video(self) -> bool:
         """Reopen the video from the previous session, if it is still there.
@@ -252,12 +500,17 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def close_video(self) -> None:
-        """Unload the current video and its replicates."""
+        """Unload the current video, its replicates, and the project they were in."""
+        if not self.confirm_discard():
+            return
         self._player.close()
         self._document.unbind_source()
         self._replicate_tab.video_closed()
         self._set_video_actions_enabled(False)
-        self.setWindowTitle("SIEVE")
+        self._project = None
+        self._project_path = None
+        self._pending_project = None
+        self._update_title()
         self.statusBar().showMessage("Open a video to begin  ·  Ctrl+O")
 
     # ---- player feedback -------------------------------------------------
@@ -269,16 +522,31 @@ class MainWindow(QMainWindow):
         self._preferences.last_video = metadata.path
         self._document.bind_source(metadata.width, metadata.height, metadata.frame_count)
         self._set_video_actions_enabled(True)
-        self.setWindowTitle(f"SIEVE — {metadata.path.name}")
         self.statusBar().showMessage(
             f"{metadata.path.name}  ·  {metadata.width}x{metadata.height}  ·  "
             f"{metadata.fps:.2f} fps  ·  {metadata.frame_count:,} frames"
         )
 
+        # Read and cleared before either branch runs: the neighbour offer can
+        # open a project of its own, and a pending entry still sitting here
+        # would be applied to the wrong video by the next open.
+        pending = self._pending_project
+        self._pending_project = None
+        if pending is not None:
+            self._adopt_project(*pending)
+            return
+        self._project = None
+        self._project_path = None
+        self._update_title()
+        self._offer_neighbour_project(metadata.path)
+
     @Slot(str)
     def _on_failed(self, message: str) -> None:
-        self.statusBar().showMessage(message)
-        QMessageBox.warning(self, "SIEVE", message)
+        # The pending project goes with it. Its video did not open, so there is
+        # nothing for it to be a project *of*, and holding it would apply it to
+        # whatever the user opened next.
+        self._pending_project = None
+        self._warn(message)
 
     @Slot()
     def _on_scrub_degraded(self) -> None:
@@ -295,6 +563,10 @@ class MainWindow(QMainWindow):
         self._clear_clip_action.setEnabled(self._document.clip is not None)
 
     @Slot(bool)
+    def _on_clean_changed(self, clean: bool) -> None:
+        self.setWindowModified(not clean)
+
+    @Slot(bool)
     def _on_editor_open_changed(self, editing: bool) -> None:
         """Yield the typing keys to a cell editor while one is open.
 
@@ -309,6 +581,8 @@ class MainWindow(QMainWindow):
 
     def _set_video_actions_enabled(self, enabled: bool) -> None:
         for action in (
+            self._save_action,
+            self._save_as_action,
             self._close_action,
             self._play_action,
             self._next_frame_action,
@@ -320,6 +594,27 @@ class MainWindow(QMainWindow):
             action.setEnabled(enabled)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Stop the decode thread before the window goes away."""
+        """Offer to save, then stop the decode thread before the window goes away.
+
+        The prompt comes first and can refuse the close outright. Shutting the
+        player down before asking would leave a window the user chose to keep
+        with a dead decoder in it.
+        """
+        if not self.confirm_discard():
+            event.ignore()
+            return
         self._player.shutdown()
         super().closeEvent(event)
+
+
+def _with_project_suffix(path: Path) -> Path:
+    """`path` renamed to end in `.sieve.yaml`.
+
+    A file dialog hands back whatever was typed, and `project_path_for` is a
+    convention other code reads: a project saved as `arena.yaml` would never be
+    found beside its video again. The double suffix is why `with_suffix` cannot
+    do this.
+    """
+    if path.name.endswith(PROJECT_SUFFIX):
+        return path
+    return path.with_name(path.stem + PROJECT_SUFFIX)

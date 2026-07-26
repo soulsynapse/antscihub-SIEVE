@@ -20,7 +20,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QUndoStack
 
-from sieve.core.pipeline_model import ClipRange, Pipeline, equivalence_groups
+from sieve.core.pipeline_model import ClipRange, Pipeline, Project, equivalence_groups
 from sieve.core.replicates import Replicate, ReplicateSet
 from sieve.core.types import ROI
 from sieve.gui.commands import (
@@ -171,6 +171,79 @@ class ReplicateDocument(QObject):
         self._pipeline = Pipeline()
         self._clip = None
         self.undo_stack.clear()
+
+    # ---- project ---------------------------------------------------------
+
+    def load_project(self, project: Project) -> None:
+        """Fill the document from a saved project, replacing whatever is here.
+
+        The load path the command-facing primitives below could not be. It
+        writes all three fields at once and records no history, because a load
+        has no prior state for Ctrl+Z to return to — the document it is
+        replacing belongs to a source that has already been unbound.
+
+        Ordering is why this exists as its own method rather than as a sequence
+        of calls from the window. `bind_source` clears replicates, clip, and
+        graph, and it must: geometry in one video's pixel space cannot carry to
+        another. Opening a project opens its video first, so the clear always
+        lands *between* reading the file and populating from it, and anything
+        that went through `add_roi` or `mark_clip_in` would be wiped by the very
+        bind that made the source known.
+
+        Everything is refitted to the source actually bound rather than trusted.
+        A project names its video by path, and a path is not a promise about
+        dimensions or length — footage re-encoded at another resolution, or
+        truncated, would otherwise return as replicates hanging off the frame
+        and a clip pointing past the end of it.
+        """
+        self._replicates = ReplicateSet(
+            replicate.with_roi(self._fit(replicate.roi)) for replicate in project.replicates
+        )
+        self._pipeline = project.pipeline
+        self._clip = self._fit_clip(project.clip)
+        self.undo_stack.clear()
+        self.structure_changed.emit()
+        self.grouping_changed.emit()
+        self.clip_changed.emit()
+
+    def apply_to(self, project: Project) -> Project:
+        """`project` carrying this document's replicates, clip, and graph.
+
+        A copy of something else rather than a project built from nothing, and
+        that is the whole point: `source`, `checkpoints`, and `outputs` are
+        fields the GUI cannot edit, so a save that assembled a fresh `Project`
+        would silently drop every sink a project was opened with. Handing back
+        the document it came from is what keeps open-save-reopen identical in
+        the parts nothing touched.
+
+        The graph goes last because `with_pipeline` is the validating one, and
+        by then it can see the replicates whose overrides have to name nodes in
+        it.
+
+        Raises:
+            ValidationError: if the graph no longer carries a node something
+                references. Nothing in the GUI edits the graph yet, so this is
+                unreachable today and deliberately not caught here — a save
+                that cannot name what went wrong is worse than one that raises.
+        """
+        return (
+            project.with_replicates(tuple(self._replicates))
+            .with_clip(self._clip)
+            .with_pipeline(self._pipeline)
+        )
+
+    def _fit_clip(self, clip: ClipRange | None) -> ClipRange | None:
+        """A saved span trimmed onto the bound source, or `None` if none of it lands.
+
+        `None` out is a different statement from `None` in, and both are honest:
+        it means the span that was saved covers no frame of the video that is
+        actually open, which is the state a user is in before they have chosen
+        anything. Clamping it to the last frame instead would hand back a
+        one-frame clip nobody marked.
+        """
+        if clip is None or self._source_frames <= 0 or clip.start >= self._source_frames:
+            return None
+        return ClipRange(start=clip.start, end=min(clip.end, self._source_frames))
 
     # ---- user intents ----------------------------------------------------
 

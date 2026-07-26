@@ -17,17 +17,6 @@
 
 ---
 
-## Property tests or drop Hypothesis
-
-`tests/property/` is an empty package and `hypothesis` is a dev dependency
-with zero users — coverage that reads as existing and does not. Either write
-the four that earn it (`ROI.clamped_to` always lands inside bounds with
-positive extent, `ROI.from_corners` is corner-order-independent,
-`ScrubPolicy.snap` is idempotent, `ReplicateSet.next_default_name` never
-collides) or delete the directory and the dependency together.
-
-Read: `src/sieve/core/types.py`, `src/sieve/gui/scrub_policy.py`.
-
 ## Three small GUI fixes
 
 Each is ~10 lines, all found in the same audit, all in `gui/`.

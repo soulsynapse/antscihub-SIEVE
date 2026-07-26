@@ -21,7 +21,10 @@ from uuid import uuid4
 from sieve.core.types import ROI
 
 DEFAULT_NAME_STEM = "Replicate"
-_DEFAULT_NAME_PATTERN = re.compile(rf"^{DEFAULT_NAME_STEM} (\d+)$")
+# `[1-9]\d*`, not `\d+`: a hand-typed "Replicate 01" is a different name from
+# "Replicate 1", so treating it as number 1 would retire a name that is still
+# free and break the "lowest unused" contract below.
+_DEFAULT_NAME_PATTERN = re.compile(rf"^{DEFAULT_NAME_STEM} ([1-9]\d*)$")
 
 
 def _new_id() -> str:

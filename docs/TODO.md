@@ -229,8 +229,17 @@ ffmpeg does the same decode plus the same full-frame YUV420→BGR24 convert in
 `VideoCapture::retrieve` converts on the calling thread, on one core, and adds
 about 12 ms of its own on top of what a bare `cv2.cvtColor` of the same buffer
 costs. So the cold cost of every span in this system — a preview window, a
-`sieve run`, an `open_to_first_frame` — is a reader that converts 15.9
-megapixels to show the graph 0.63 of one.
+`sieve run` — is a reader that converts 15.9 megapixels to show the graph 0.63 of
+one.
+
+**Throughput and latency are not the same fix here, and choosing a route is
+choosing which one improves.** Threading the reads raises the rate a span is
+decoded at and does nothing for a single frame: one scrub still pays one
+single-threaded convert, so `scrub_to_repaint` and `open_to_first_frame` are
+untouched by it. Converting less — a crop, or luma only — is the only thing that
+moves a lone frame. A route picked for the preview's budgets can therefore leave
+the pre-pipeline ones exactly where they are, which is worth knowing before the
+work starts rather than after.
 
 The route that changes nothing semantically is N `VideoCapture` handles
 positioned at strides through `decode_range`, each performing the identical

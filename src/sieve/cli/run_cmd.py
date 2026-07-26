@@ -37,10 +37,10 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from pydantic import ValidationError
 
 from sieve.backend.dispatch import Backend, NoKernelError
-from sieve.core.pipeline_model import ClipRange, Project
+from sieve.cli.common import load_project, refuse, span_for
+from sieve.core.pipeline_model import Project
 from sieve.core.replicates import Replicate
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.filters import discover
@@ -88,20 +88,20 @@ def run_project(
             project declaring outputs nothing can yet write.
     """
     discover()
-    project = _load(project_path)
+    project = load_project(project_path)
     _refuse_sinks(project)
     video = project.source_path(project_path)
 
     try:
         dag = Dag.build(project.pipeline)
     except GraphError as error:
-        raise _refuse(str(error)) from error
+        raise refuse(str(error)) from error
     try:
         source = source_identity(video)
     except OSError as error:
-        raise _refuse(f"source video is not where the project says: {video}") from error
+        raise refuse(f"source video is not where the project says: {video}") from error
 
-    span = _span(project, frames, video, dry_run=dry_run)
+    span = span_for(project, frames, video, dry_run=dry_run)
     targets = _targets(project, replicate_ids)
     plans = [
         ExecutionPlan.build(dag, source=source, span=span, backend=backend, replicate=target)
@@ -140,76 +140,23 @@ def _execute_one(plan: ExecutionPlan, reader: VideoReader, store: FrameStore) ->
             computed += 1
             hits += len(result.from_cache)
     except (UnrunnableNodeError, NoKernelError) as error:
-        raise _refuse(str(error)) from error
+        raise refuse(str(error)) from error
     except VideoDecodeError as error:
-        raise _refuse(f"{label}: {error}") from error
+        raise refuse(f"{label}: {error}") from error
     nodes = computed * len(plan.dag.order)
     typer.echo(
         f"{label}: {computed} frames, {nodes - hits} node outputs computed, {hits} from cache"
     )
 
 
-def _load(path: Path) -> Project:
-    """Parse the project, or refuse with pydantic's own message.
-
-    Not reformatted: `ValidationError` already names the field and the reason,
-    and a summary of it would be a second, worse description of a document this
-    module does not define.
-    """
-    try:
-        return Project.load(path)
-    except ValidationError as error:
-        raise _refuse(f"{path} is not a valid project:\n{error}") from error
-
-
 def _refuse_sinks(project: Project) -> None:
     """Refuse a project whose declared outputs nothing can write yet."""
     if project.outputs:
         listed = ", ".join(f"{sink.format} -> {sink.path}" for sink in project.outputs)
-        raise _refuse(
+        raise refuse(
             f"this project declares outputs ({listed}) and no writer exists yet, so a run would "
             "compute every frame and write none of them. Remove them to run the graph anyway."
         )
-
-
-def _span(project: Project, frames: str | None, video: Path, *, dry_run: bool) -> ClipRange:
-    """Which frames to run: the flag, else the project's clip, else the video.
-
-    The last of those is the only one that needs the container open, which is
-    why it is last and why `--dry-run` refuses instead of reaching it. A clip
-    is what a project is normally run over — it is VISION step 4's tuning span
-    — so the fallback is the uncommon path rather than the default.
-    """
-    if frames is not None:
-        return _parse_span(frames)
-    if project.clip is not None:
-        return project.clip
-    if dry_run:
-        raise _refuse(
-            "this project has no clip, so the span comes from the video's length — which "
-            "--dry-run does not open. Pass --frames START:END."
-        )
-    with VideoReader(video) as reader:
-        return ClipRange(start=0, end=reader.metadata.frame_count)
-
-
-def _parse_span(frames: str) -> ClipRange:
-    """`START:END` as a half-open range.
-
-    Colon-separated rather than two options, because the two numbers are one
-    quantity and a shell history holding `--frames 100:400` is legible in a way
-    that `--start 100 --end 400` is not. Half-open, matching `ClipRange`, which
-    is what the executor is written against — a CLI that took an inclusive end
-    would be the one place in the system where a range means something else.
-    """
-    start, separator, end = frames.partition(":")
-    if not separator:
-        raise _refuse(f"--frames takes START:END, got {frames!r}")
-    try:
-        parsed = ClipRange(start=int(start), end=int(end))
-    except ValueError as error:
-        raise _refuse(f"--frames {frames!r}: {error}") from error
-    return parsed
 
 
 def _targets(project: Project, replicate_ids: Sequence[str] | None) -> tuple[Replicate | None, ...]:
@@ -231,7 +178,7 @@ def _targets(project: Project, replicate_ids: Sequence[str] | None) -> tuple[Rep
     selected = tuple(rep for rep in project.replicates if rep.replicate_id in wanted)
     missing = wanted - {rep.replicate_id for rep in selected}
     if missing:
-        raise _refuse(f"no such replicate: {', '.join(sorted(missing))}")
+        raise refuse(f"no such replicate: {', '.join(sorted(missing))}")
     return selected
 
 
@@ -261,15 +208,3 @@ def _describe(plan: ExecutionPlan) -> str:
             f"{plan.params[node.node_id].canonical_json()}"
         )
     return "\n".join(lines)
-
-
-def _refuse(message: str) -> typer.Exit:
-    """Print `message` to stderr and hand back the exception to raise.
-
-    Returning rather than raising so that every refusal in this module reads
-    `raise _refuse(...)` — a helper that raised would be a control-flow jump a
-    reader has to know about, and one that a type checker cannot see ends the
-    function.
-    """
-    typer.echo(message, err=True)
-    return typer.Exit(1)

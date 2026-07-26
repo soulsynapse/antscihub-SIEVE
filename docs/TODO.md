@@ -76,6 +76,14 @@ and the source stamp, Qt-free and tested by feeding it calls, so
 `pipeline/preview.py` inherits that discipline rather than reimplementing it.
 See `docs/completed-todo/2026.07.25-qt-free-coalescer.md`.
 
+*The last clause of that paragraph was wrong and is left standing rather than
+edited: `pipeline/preview.py` cannot inherit anything from `gui/coalescer.py`,
+because the layers contract puts `sieve.gui` above `sieve.pipeline`. The
+extraction is still load-bearing and the beneficiary is the GUI's preview panel,
+which will coalesce renders the way `player.py` coalesces frame requests —
+reasoning in
+`docs/completed-todo/2026.07.26-the-representative-clip-preview.md`.*
+
 The graph now runs. `pipeline/plan.py` derives everything about a run that is
 knowable before a frame is decoded — resolved params, keys, and the source
 lead-in as a backward max over `Dag.order` — `pipeline/cache.py` holds the store
@@ -124,55 +132,29 @@ not the obvious one: see
 assuming a cache key could carry it. Also see
 `docs/completed-todo/2026.07.26-a-kernel-that-can-remember.md`.
 
-What remains is the in-pipeline regime, which has budgets, a plan, an executor,
-a metric bus, two filters, and no code that can reach any of it. The three items
-below are the tuning loop VISION step 4 describes, in dependency order: each
-says what it is gated on, so an item can be taken out of order when its gate is
-already clear rather than because it is next in the list.
+The in-pipeline regime now runs. `pipeline/preview.py` re-renders the working
+window on a parameter edit and pays only for the nodes below the edit — 3.3 ms
+where the cold render was 1350 ms — and `sieve preview` is its headless caller,
+so both in-pipeline budgets have a producer and `--check` is an exit code.
+Nothing below needs to invent a re-render, a store lifetime, or a way to
+publish a span: it takes `PreviewSession`. Two things it settled that the two
+items below inherit — the coalescing belongs to the GUI panel rather than to
+`pipeline/` because `gui/coalescer.py` is above that layer, and the 3 s ceiling
+is met by the store and not by the filters, which a cold 5–10 s window of the
+reference footage cannot do at any filter cost. See
+`docs/completed-todo/2026.07.26-the-representative-clip-preview.md` and
+`docs/findings/2026.07.26-the-preview-budget-is-a-decode-budget.md`.
 
-## The representative-clip preview
-
-**Gated on: nothing.** `bench/metrics.py` exists, so this is born instrumented
-rather than retrofitted — publish `slider_to_preview` and `full_preview_render`
-to a `MetricBus` the caller passes in, the way `gui/player.py` publishes
-`scrub_to_repaint`. See `docs/completed-todo/2026.07.26-the-metric-bus.md`.
-
-`pipeline/preview.py` is the last unwritten module in the layer stack and three
-things in this repo were already built pointing at it. `gui/coalescer.py` was
-extracted Qt-free so preview inherits the two slots, the rank rule, and the
-source stamp rather than reimplementing them. `pipeline/plan.py`'s docstring
-says preview needs the same lead-in arithmetic and that `source_warmup_frames`
-is the only thing that should compute it. `ReplicateDocument.window` is the
-span, and it exists so preview does not have to invent one.
-
-What it is: a run of `execute` over the working window that can be re-run on a
-parameter edit without re-decoding what did not change, coalesced so a slider
-drag discards the renders nobody would have seen. `slider_to_preview` (100 ms)
-and `full_preview_render` (3 s) are its budgets and are what say whether it
-works.
-
-The thing to get right, because it is the reason this is a module and not a
-loop in the GUI: **a parameter edit invalidates a suffix of the graph, not the
-graph.** `cache_key.py` already derives keys that include upstream hashes, so
-the nodes above an edited one keep their entries and the nodes below lose
-theirs. A preview that re-runs from the source on every edit will meet the 3 s
-budget on the one filter that exists and miss it on the third.
-
-`cli/preview_cmd.py` arrives with this. SCAFFOLD's five command modules were
-deliberately left at three because each wraps a `pipeline/` module that does
-not exist yet, and `sieve preview` is the headless run of exactly this — which
-is also what keeps the GUI from becoming a second execution path.
-
-Read: `src/sieve/pipeline/{plan,executor,cache,cache_key}.py`,
-`src/sieve/gui/coalescer.py`, `docs/completed-todo/2026.07.25-executor.md`,
-`docs/completed-todo/2026.07.26-the-timeline-replaces-the-transport.md`.
+The two items below are what is left of the tuning loop VISION step 4
+describes. Both were gated on the preview and neither is any longer.
 
 ## The first live graph tick
 
-**Gated on: the preview.** The metric bus half of this gate is clear —
-`bench/metrics.py` exists and `MetricBus.subscribe` is the shape the adapter
-wraps. What is still missing is anything publishing an in-pipeline span, which
-is the preview.
+**Gated on: nothing.** Both halves are clear — `bench/metrics.py` exists and
+`MetricBus.subscribe` is the shape the adapter wraps, and `pipeline/preview.py`
+publishes `slider_to_preview` and `full_preview_render` through the `measure`
+callable its caller passes in, which is a `MetricBus.measure` in every real
+front end.
 
 `gui/executor_adapter.py` is defined in ARCHITECTURE as the *only* coupling
 point between the executor and Qt: a QObject that subscribes to the bus and
@@ -198,8 +180,12 @@ Read: `src/sieve/gui/{timeline_bar,timeline_model}.py`,
 
 ## The three-way overlay
 
-**Gated on: the preview.** It is a view over previewed frames and has nothing
-to show without them.
+**Gated on: nothing.** It is a view over previewed frames, and
+`PreviewSession.render_window` delivers them one at a time to a consumer the
+caller passes in — which is the shape a viewport wants. The demand this item
+makes that nothing else does is two frames from *different nodes* at the same
+source index: `FrameResult` already carries every node's output for one frame,
+so the demand is satisfied by indexing it rather than by a second render.
 
 VISION step 4 asks the viewport to switch between three things: the raw video,
 the full current state with every operation applied, and the contribution of

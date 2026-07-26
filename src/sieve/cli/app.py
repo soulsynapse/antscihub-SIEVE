@@ -20,6 +20,7 @@ import typer
 
 from sieve import __version__
 from sieve.cli.inspect_cmd import inspect_filters
+from sieve.cli.preview_cmd import preview_project
 from sieve.cli.run_cmd import run_project
 
 app = typer.Typer(
@@ -34,6 +35,7 @@ app = typer.Typer(
 
 app.command("inspect")(inspect_filters)
 app.command("run")(run_project)
+app.command("preview")(preview_project)
 
 
 def _print_version(value: bool) -> None:

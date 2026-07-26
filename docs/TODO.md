@@ -24,6 +24,11 @@
    It is what makes the work visible while it is happening rather than only in
    the diff, and an item whose steps cannot be listed up front is an item whose
    scope has not been read yet.
+9. **Work that is real but not yet timely goes to `docs/LATER.md`.** Rules 2
+   and 3 are what this file is: an item here is scoped and startable. Something
+   understood, wanted, and deliberately deferred fails both and would sit here
+   growing stale — so it is written there instead, with the trigger that makes
+   it takeable, and *moved* here when the trigger fires.
 
 ---
 

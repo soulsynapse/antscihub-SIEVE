@@ -43,6 +43,11 @@ uv run nox -s docs             # regenerate docs/*/.index.md from entry frontmat
 uv run python -c "import sieve"
 ```
 
+Work in flight is `docs/TODO.md` — scoped, startable items. Work that is real
+and deliberately not being done yet is `docs/LATER.md`, where each entry carries
+the trigger that would make it takeable; entries move from there to `TODO.md`
+rather than being copied.
+
 `docs/completed-todo/` and `docs/findings/` hold one file per item, each with
 YAML frontmatter and a `YYYY.MM.DD-` prefix. Their `.index.md` tables are
 generated from that frontmatter by `tools/doc_index.py` — never edited by hand,

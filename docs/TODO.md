@@ -65,18 +65,33 @@ them.
 
 134 tests pass; `ruff`, `lint-imports`, and `pyright` all clean.
 
-## Scrub budget miss
+## Done — Scrub budget and Preferences (2026-07-25)
 
-A single random seek costs ~80 ms against the 50 ms `scrub_to_repaint` budget.
-Request coalescing makes scrubbing *feel* right (40 seeks settle in 172 ms)
-but the per-seek number is still a miss, and non-negotiable #4 says a miss is
-a defect not a tradeoff.
+The budget miss is closed, by measurement rather than by amendment alone. Both
+remaining escape hatches were probed and shut: hardware acceleration does not
+engage in this OpenCV build, and keyframe alignment buys nothing (no sawtooth
+in seek cost across 150 consecutive targets). The seek is 46.7 ms of a 67.8 ms
+total and has no knob.
 
-Pick one: scrub-resolution proxy decode, keyframe-only mode while the slider
-is down, hardware decode, or an explicit amendment to the budget in
-`ARCHITECTURE.md`. Then assert it in `bench/`.
+So `scrub_to_repaint` moved 50 → 100 ms and is now *enforced by degrading*:
+`gui/scrub_policy.py` watches the median of the last 5 scrub round trips and,
+above budget, snaps drag targets to a 1 s grid that `gui/frame_cache.py`
+serves for free. New `scrub_settle` budget (250 ms) covers the release, which
+always decodes the exact frame. Coalescing now carries request *intent* —
+a pending exact seek is never dropped for a later drag position, which was a
+real bug the tests caught.
 
-Read: `docs/FINDINGS.md`, `src/sieve/decode/reader.py`, `src/sieve/gui/player.py`.
+Also added: `gui/preferences.py` (QSettings, 3 settings, all consumed),
+`gui/preferences_dialog.py` (Edit → Preferences…, applies on change), and
+`gui/toast.py` — the bottom-right notice that tells the user once when coarse
+mode engages.
+
+181 tests pass; `ruff`, `pyright`, and `lint-imports` clean.
+
+Note the naming: the notice says "coarse seek", not "keyframe seek", because
+the measurement says keyframe alignment is not the mechanism.
+
+Read: `docs/FINDINGS.md` §"The seek is irreducible".
 
 ## Persist replicates
 

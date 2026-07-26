@@ -80,14 +80,14 @@ def test_keys_are_unique_and_match_their_entries() -> None:
 
 class TestCheck:
     def test_within_budget_passes(self) -> None:
-        check("scrub_to_repaint", 49.0)
+        check("scrub_to_repaint", 99.0)
 
     def test_exactly_at_budget_passes(self) -> None:
-        check("scrub_to_repaint", 50.0)
+        check("scrub_to_repaint", 100.0)
 
     def test_over_budget_raises_with_the_overage(self) -> None:
         with pytest.raises(BudgetMissError, match="exceeds"):
-            check("scrub_to_repaint", 51.0)
+            check("scrub_to_repaint", 101.0)
 
     def test_unknown_key_raises(self) -> None:
         with pytest.raises(KeyError):

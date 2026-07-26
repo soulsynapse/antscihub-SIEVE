@@ -55,7 +55,22 @@ BUDGETS: dict[str, Budget] = _table(
         key="scrub_to_repaint",
         label="Scrub/seek → frame repaint",
         regime=Regime.PRE_PIPELINE,
-        limit_ms=50.0,
+        # 100 ms is the classic threshold for a response reading as
+        # instantaneous rather than as a delay (Miller 1968; Card, Moran &
+        # Newell's ~0.1 s perceptual cycle). It is also the trigger: sustained
+        # scrub latency above this is what flips the player into coarse mode,
+        # so this number is enforced by degradation, not by hope. See
+        # `gui/scrub_policy.py` and the note under the table in ARCHITECTURE.md.
+        limit_ms=100.0,
+    ),
+    Budget(
+        key="scrub_settle",
+        label="Scrub release → exact frame",
+        regime=Regime.PRE_PIPELINE,
+        # Releasing the slider must land on the exact frame under the cursor,
+        # however coarse the drag was. Worst case is one in-flight decode we
+        # cannot cancel plus the exact one: two seeks on the reference source.
+        limit_ms=250.0,
     ),
     Budget(
         key="cut_to_ready",

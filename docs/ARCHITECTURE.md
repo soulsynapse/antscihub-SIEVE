@@ -54,7 +54,8 @@ enforced by review.
 ```
 PRE-PIPELINE (feels like a video editor)
   Open file → first frame:        < 500 ms
-  Scrub/seek → frame repaint:     < 50 ms
+  Scrub/seek → frame repaint:     < 100 ms
+  Scrub release → exact frame:    < 250 ms
   Cut confirmed → ready:          < 200 ms
 
 IN-PIPELINE (feels like direct manipulation)
@@ -63,6 +64,18 @@ IN-PIPELINE (feels like direct manipulation)
   Slider drag → graph update:      < 200 ms
   Full preview render (5–10s clip): < 3 s
 ```
+
+The two scrub budgets are a pair, and they are what makes non-negotiable #4
+hold rather than being quietly excepted. A random seek into 5.3K H.264 costs
+~68 ms of which ~47 ms is the container seek itself — irreducible through
+OpenCV, and slower still on a slower machine. So *during* a drag the player is
+held to 100 ms by degrading rather than by decoding faster: when sustained
+scrub latency exceeds the budget it snaps targets to a coarse time grid and
+serves them from a frame cache, which is a cache hit and costs nothing. On
+release the exact frame under the cursor is always decoded, and that is the
+second budget. Coarse mode is user-visible and can be disabled in Preferences;
+the budget then stands unmet on that machine by the user's explicit choice,
+which is a preference, not a silent tradeoff.
 
 ---
 

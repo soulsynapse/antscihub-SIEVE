@@ -22,11 +22,23 @@ from PySide6.QtWidgets import (
 from sieve.core.types import VideoMetadata
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.player import VideoPlayer
+from sieve.gui.preferences import Preferences
+from sieve.gui.preferences_dialog import PreferencesDialog
 from sieve.gui.replicate_tab import ReplicateTab
+from sieve.gui.toast import Toast
 
 VIDEO_FILTER = (
     "Video files (*.mp4 *.MP4 *.mov *.MOV *.avi *.AVI *.mkv *.MKV *.m4v *.mpg *.mpeg *.wmv);;"
     "All files (*)"
+)
+
+#: Shown once, when the player gives up on decoding every drag position. Says
+#: what changed, why, and where to refuse it — in that order, because the user
+#: is mid-drag and will read the first clause and nothing else.
+COARSE_SCRUB_NOTICE = (
+    "Switching to coarse seek to keep scrubbing snappy. You'll land on the "
+    "exact frame when you release. If you never want SIEVE to do this, you "
+    "can turn it off under Preferences."
 )
 
 
@@ -38,6 +50,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SIEVE")
         self.resize(1280, 900)
 
+        self._preferences = Preferences(parent=self)
+        self._preferences_dialog: PreferencesDialog | None = None
+
         self._player = VideoPlayer(self)
         self._document = ReplicateDocument(self)
         self._replicate_tab = ReplicateTab(self._player, self._document, self)
@@ -46,9 +61,20 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._replicate_tab, "Replicate")
         self.setCentralWidget(tabs)
 
+        # Constructed after the central widget so it stacks above it, and
+        # parented to the window rather than the tab so it survives a tab
+        # change and sits in the window's corner rather than the tab's.
+        self._toast = Toast(self)
+
         self._build_menus()
         self._connect()
+        self._player.apply_preferences(self._preferences)
         self.statusBar().showMessage("Open a video to begin  ·  Ctrl+O")
+
+    @property
+    def preferences(self) -> Preferences:
+        """The application's preference store."""
+        return self._preferences
 
     # ---- menus -----------------------------------------------------------
 
@@ -95,6 +121,16 @@ class MainWindow(QMainWindow):
         self._delete_action.triggered.connect(self._replicate_tab.delete_selected)
         edit_menu.addAction(self._delete_action)
 
+        edit_menu.addSeparator()
+
+        self._preferences_action = QAction("&Preferences…", self)
+        self._preferences_action.setShortcut(QKeySequence.StandardKey.Preferences)
+        # Qt moves this to the application menu on platforms that have one,
+        # which is why it is safe to put it under Edit unconditionally.
+        self._preferences_action.setMenuRole(QAction.MenuRole.PreferencesRole)
+        self._preferences_action.triggered.connect(self.show_preferences)
+        edit_menu.addAction(self._preferences_action)
+
         playback_menu = self.menuBar().addMenu("&Playback")
 
         self._play_action = QAction("&Play / Pause", self)
@@ -129,9 +165,25 @@ class MainWindow(QMainWindow):
     def _connect(self) -> None:
         self._player.opened.connect(self._on_opened)
         self._player.failed.connect(self._on_failed)
+        self._player.scrub_degraded.connect(self._on_scrub_degraded)
         self._replicate_tab.editor_open_changed.connect(self._on_editor_open_changed)
+        self._preferences.changed.connect(self._on_preferences_changed)
 
     # ---- commands --------------------------------------------------------
+
+    @Slot()
+    def show_preferences(self) -> None:
+        """Open the preferences pane, reusing it if it is already up.
+
+        Modeless and kept alive between openings: the settings in it change
+        how the video behaves, so the user needs the window and the pane on
+        screen at the same time to judge what they did.
+        """
+        if self._preferences_dialog is None:
+            self._preferences_dialog = PreferencesDialog(self._preferences, self)
+        self._preferences_dialog.show()
+        self._preferences_dialog.raise_()
+        self._preferences_dialog.activateWindow()
 
     @Slot()
     def open_video_dialog(self) -> None:
@@ -171,6 +223,15 @@ class MainWindow(QMainWindow):
     def _on_failed(self, message: str) -> None:
         self.statusBar().showMessage(message)
         QMessageBox.warning(self, "SIEVE", message)
+
+    @Slot()
+    def _on_scrub_degraded(self) -> None:
+        """Tell the user the drag just started meaning something slightly different."""
+        self._toast.show_message(COARSE_SCRUB_NOTICE)
+
+    @Slot()
+    def _on_preferences_changed(self) -> None:
+        self._player.apply_preferences(self._preferences)
 
     @Slot(bool)
     def _on_editor_open_changed(self, editing: bool) -> None:

@@ -1,13 +1,30 @@
 """Playback and seek control on the GUI thread.
 
-Two things make this more than a timer.
+Three things make this more than a timer.
 
-**Request coalescing.** At most one decode request is in flight at a time and
-at most one is pending. A scrub that outruns the decoder therefore discards
-the frames nobody would have seen instead of queueing them, so releasing the
-slider shows the frame under the cursor rather than replaying the drag. This
-is what keeps perceived scrub latency near the cost of one decode no matter
-how fast the user moves.
+**Request coalescing.** At most one decode request is in flight and at most one
+is pending. A scrub that outruns the decoder therefore discards the frames
+nobody would have seen instead of queueing them, so releasing the slider shows
+the frame under the cursor rather than replaying the drag. This is what keeps
+perceived scrub latency near the cost of one decode no matter how fast the
+user moves.
+
+Requests carry *why* they were made, which is what the single pending slot is
+really for. A drag position is a guess the user is still refining and may be
+snapped or dropped; the frame under a released slider is a commitment. Both
+compete for the same slot, latest wins, but only the guesses are allowed to be
+approximate — a pending exact request is never discarded in favour of a later
+drag position, and only scrub round trips are timed for the degradation
+decision below.
+
+**Adaptive coarse scrubbing.** Coalescing bounds how *far behind* a scrub can
+fall; it does nothing about the cost of the one decode it still has to do. On
+the reference source that is ~68 ms, most of it an irreducible container seek,
+and on a slower machine it is worse. When sustained scrub latency exceeds the
+budget the player snaps drag targets to a coarse grid and serves them from
+`FrameCache`, which costs nothing because a cache hit does not seek. The
+decision lives in `ScrubPolicy`; releasing the slider always decodes the exact
+frame regardless of mode.
 
 **Wall-clock playback.** The reference source is 5312x2988 at 59.94 fps and
 decodes at roughly 34 fps, so real-time playback is not achievable and never
@@ -21,13 +38,19 @@ be the wrong tradeoff.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import StrEnum, auto
 from time import perf_counter
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtGui import QImage
 
+from sieve.bench.budgets import BUDGETS
 from sieve.core.types import VideoMetadata
 from sieve.gui.decode_worker import DecodeWorker
+from sieve.gui.frame_cache import FrameCache
+from sieve.gui.preferences import Preferences
+from sieve.gui.scrub_policy import ScrubPolicy
 
 #: How often playback re-evaluates which frame the clock is on. Finer than any
 #: source frame rate we expect, so the limit on smoothness is decode, not this.
@@ -35,6 +58,33 @@ TICK_INTERVAL_MS = 8
 
 #: Frame rate assumed when the container reports a nonsensical one.
 FALLBACK_FPS = 30.0
+
+#: The latency that defines "not keeping up", taken from the budget table so
+#: the trigger and the documented ceiling cannot drift apart.
+_SCRUB_BUDGET_MS = BUDGETS["scrub_to_repaint"].limit_ms
+
+
+class RequestKind(StrEnum):
+    """Why a frame was asked for. Governs snapping, caching, and timing."""
+
+    #: A committed position: a released slider, a step, a menu action. Must
+    #: land on exactly this frame.
+    EXACT = auto()
+    #: A drag position. May be snapped to the coarse grid, and is the only
+    #: kind whose latency counts toward the degradation decision.
+    SCRUB = auto()
+    #: Driven by the playback clock. Never snapped, never cached — playback
+    #: walks the whole timeline and would evict everything a scrub warmed.
+    PLAYBACK = auto()
+
+
+@dataclass(frozen=True, slots=True)
+class _Request:
+    """One decode request. `sequence` orders displays, not decodes."""
+
+    index: int
+    kind: RequestKind
+    sequence: int
 
 
 class VideoPlayer(QObject):
@@ -45,17 +95,40 @@ class VideoPlayer(QObject):
     frame_changed = Signal(int, QImage)
     playing_changed = Signal(bool)
 
+    #: Emitted once per session, when sustained scrub latency has forced the
+    #: player into coarse mode. The window owns the wording of the notice.
+    scrub_degraded = Signal()
+
     _open_requested = Signal(str)
     _frame_requested = Signal(int)
+    _proxy_width_changed = Signal(int)
     _close_requested = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        parent: QObject | None = None,
+        *,
+        policy: ScrubPolicy | None = None,
+    ) -> None:
         super().__init__(parent)
 
         self._metadata: VideoMetadata | None = None
         self._current_index = 0
-        self._in_flight: int | None = None
-        self._pending: int | None = None
+        self._in_flight: _Request | None = None
+        self._in_flight_at = 0.0
+        self._pending: _Request | None = None
+
+        # Monotonic display ordering. A cache hit can overtake an in-flight
+        # decode, and the decode must not then repaint the older frame over it.
+        self._sequence = 0
+        self._displayed_sequence = 0
+
+        self._cache = FrameCache()
+        # Injectable so the degradation path can be exercised against a
+        # threshold a test can actually cross. On a machine fast enough to
+        # meet the budget the default policy never degrades, which is correct
+        # behaviour and useless as a test.
+        self._policy = policy if policy is not None else ScrubPolicy(_SCRUB_BUDGET_MS)
 
         self._playing = False
         self._play_anchor_time = 0.0
@@ -69,6 +142,7 @@ class VideoPlayer(QObject):
 
         self._open_requested.connect(self._worker.open)
         self._frame_requested.connect(self._worker.request_frame)
+        self._proxy_width_changed.connect(self._worker.set_proxy_width)
         self._close_requested.connect(self._worker.close)
         self._worker.opened.connect(self._on_opened)
         self._worker.failed.connect(self._on_failed)
@@ -94,39 +168,54 @@ class VideoPlayer(QObject):
         return self._playing
 
     @property
+    def is_scrub_degraded(self) -> bool:
+        """Whether drag targets are currently being snapped to the coarse grid."""
+        return self._policy.is_degraded
+
+    @property
     def fps(self) -> float:
         """Effective frame rate, substituting a fallback for unusable metadata."""
         if self._metadata is None or self._metadata.fps <= 0.0:
             return FALLBACK_FPS
         return self._metadata.fps
 
+    # ---- configuration ---------------------------------------------------
+
+    def apply_preferences(self, preferences: Preferences) -> None:
+        """Adopt the user's settings. Safe to call at any time."""
+        self._policy.set_allow_degrade(preferences.adaptive_scrub)
+        self._policy.set_coarse_interval_seconds(preferences.coarse_interval_seconds)
+        # Cached frames are proxies at the old width, so they are the wrong
+        # size the moment the width changes and must not be served again.
+        self._cache.clear()
+        self._proxy_width_changed.emit(preferences.proxy_width)
+
     # ---- transport -------------------------------------------------------
 
     def open(self, path: str) -> None:
         """Load a video. `opened` or `failed` follows."""
         self.pause()
-        self._metadata = None
-        self._current_index = 0
-        self._in_flight = None
-        self._pending = None
+        self._reset_source_state()
         self._open_requested.emit(path)
 
     def close(self) -> None:
         """Unload the current video."""
         self.pause()
-        self._metadata = None
-        self._current_index = 0
-        self._in_flight = None
-        self._pending = None
+        self._reset_source_state()
         self._close_requested.emit()
 
     def seek(self, index: int) -> None:
-        """Jump to `index`, re-anchoring playback there if it is running."""
-        if self._metadata is None:
-            return
-        index = self._clamp(index)
-        self._anchor_playback(index)
-        self._request(index)
+        """Jump to exactly `index`, re-anchoring playback there if it is running."""
+        self._go_to(index, RequestKind.EXACT)
+
+    def scrub(self, index: int) -> None:
+        """Follow a drag to `index`.
+
+        Approximate by permission: while the player is degraded this shows the
+        nearest frame on the coarse grid instead. Call `seek` when the drag
+        ends — that is what guarantees the user lands where they let go.
+        """
+        self._go_to(index, RequestKind.SCRUB)
 
     def step(self, delta: int) -> None:
         """Move `delta` frames from the current position. Pauses first."""
@@ -181,10 +270,43 @@ class VideoPlayer(QObject):
 
         if target >= self._metadata.frame_count:
             self.pause()
-            self._request(self._metadata.frame_count - 1)
+            self._request(self._metadata.frame_count - 1, RequestKind.EXACT)
             return
         if target != self._current_index or self._in_flight is not None:
-            self._request(target)
+            self._request(target, RequestKind.PLAYBACK)
+
+    def _go_to(self, index: int, kind: RequestKind) -> None:
+        if self._metadata is None:
+            return
+        index = self._clamp(index)
+        self._anchor_playback(index)
+
+        target = self._clamp(self._policy.snap(index)) if kind is RequestKind.SCRUB else index
+        if self._display_cached(target, supersedes_scrub=kind is RequestKind.SCRUB):
+            return
+        self._request(target, kind)
+
+    def _display_cached(self, index: int, *, supersedes_scrub: bool) -> bool:
+        """Show a cached frame if we have one. This is the free path."""
+        image = self._cache.get(index)
+        if image is None:
+            return False
+
+        # A pending drag position is now stale — we have shown something the
+        # user asked for more recently. A pending exact request is a
+        # commitment and survives.
+        if (
+            supersedes_scrub
+            and self._pending is not None
+            and self._pending.kind is RequestKind.SCRUB
+        ):
+            self._pending = None
+
+        self._sequence += 1
+        self._displayed_sequence = self._sequence
+        self._current_index = index
+        self.frame_changed.emit(index, image)
+        return True
 
     def _anchor_playback(self, index: int) -> None:
         self._play_anchor_time = perf_counter()
@@ -195,31 +317,76 @@ class VideoPlayer(QObject):
             return 0
         return max(0, min(index, self._metadata.frame_count - 1))
 
-    def _request(self, index: int) -> None:
+    def _reset_source_state(self) -> None:
+        self._metadata = None
+        self._current_index = 0
+        self._in_flight = None
+        self._pending = None
+        self._cache.clear()
+        self._policy.reset()
+
+    def _request(self, index: int, kind: RequestKind) -> None:
         """Ask the decode thread for a frame, coalescing against any in flight."""
+        self._sequence += 1
+        request = _Request(index=index, kind=kind, sequence=self._sequence)
         if self._in_flight is not None:
-            self._pending = index
+            self._pending = request
             return
-        self._in_flight = index
-        self._frame_requested.emit(index)
+        self._issue(request)
+
+    def _issue(self, request: _Request) -> None:
+        self._in_flight = request
+        # Timed from issue, not from creation: a request that waited its turn
+        # in the pending slot did not take that long to decode, and charging
+        # it the wait would degrade the player for being busy.
+        self._in_flight_at = perf_counter()
+        self._frame_requested.emit(request.index)
 
     def _drain(self) -> None:
         self._in_flight = None
         if self._pending is not None:
-            next_index, self._pending = self._pending, None
-            self._request(next_index)
+            request, self._pending = self._pending, None
+            self._issue(request)
 
     @Slot(VideoMetadata)
     def _on_opened(self, metadata: VideoMetadata) -> None:
         self._metadata = metadata
         self._current_index = 0
+        self._policy.set_fps(metadata.fps)
         self.opened.emit(metadata)
-        self._request(0)
+        self._request(0, RequestKind.EXACT)
 
     @Slot(int, QImage)
     def _on_frame_ready(self, index: int, image: QImage) -> None:
-        self._current_index = index
-        self.frame_changed.emit(index, image)
+        request = self._in_flight
+
+        if request is not None and request.kind is not RequestKind.PLAYBACK:
+            self._cache.put(index, image)
+
+        # Suppress a decode that a cache hit has already overtaken; repainting
+        # it would move the viewport backwards under the user's cursor. An
+        # exact request is exempt: it is a position the user committed to, and
+        # dropping it because a drag position arrived first strands them on a
+        # grid point they never asked for.
+        if request is None:
+            display = True
+        else:
+            display = (
+                request.kind is RequestKind.EXACT or request.sequence > self._displayed_sequence
+            )
+            self._displayed_sequence = max(self._displayed_sequence, request.sequence)
+
+        if display:
+            self._current_index = index
+            self.frame_changed.emit(index, image)
+
+        # Measured after the emit so the synchronous view update counts. The
+        # repaint itself is asynchronous and is not captured here.
+        elapsed_ms = (perf_counter() - self._in_flight_at) * 1000.0
+        scrubbing = request is not None and request.kind is RequestKind.SCRUB
+        if scrubbing and self._policy.observe(elapsed_ms):
+            self.scrub_degraded.emit()
+
         self._drain()
 
     @Slot(str)

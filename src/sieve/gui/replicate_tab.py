@@ -156,6 +156,7 @@ class ReplicateTab(QWidget):
 
         self._play_button.clicked.connect(self._player.toggle_play)
         self._slider.valueChanged.connect(self._on_slider_value_changed)
+        self._slider.sliderReleased.connect(self._on_slider_released)
 
         self._view.roi_drawn.connect(self._document.add_roi)
         self._view.selection_requested.connect(self._select_row)
@@ -222,7 +223,22 @@ class ReplicateTab(QWidget):
 
     @Slot(int)
     def _on_slider_value_changed(self, value: int) -> None:
-        self._player.seek(value)
+        """Follow the handle.
+
+        A value change with the handle down is a drag position — a guess the
+        user is still refining, which the player may approximate to keep up.
+        A change with the handle up came from a click on the groove, a wheel,
+        or an arrow key, and every one of those is a committed position.
+        """
+        if self._slider.isSliderDown():
+            self._player.scrub(value)
+        else:
+            self._player.seek(value)
+
+    @Slot()
+    def _on_slider_released(self) -> None:
+        """Land on the exact frame under the cursor, however coarse the drag was."""
+        self._player.seek(self._slider.value())
 
     def _update_timecode(self, index: int) -> None:
         metadata = self._player.metadata

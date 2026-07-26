@@ -44,11 +44,53 @@ Measured: a burst of 40 seeks settled on the final target in **172 ms** —
 roughly two decodes, not forty. Queued, the same burst would have taken ~3.2 s
 and shown 38 frames nobody asked for.
 
-**Open question flagged rather than answered:** the single-seek number is
-still a budget miss under the strict reading of non-negotiable #4. Options not
-yet explored are a proxy/scrub-resolution decode pass, a keyframe-only scrub
-mode while the slider is down, or a hardware decoder. This needs a decision
-before the scrub budget can be asserted in `bench/` rather than described here.
+The options left open here — proxy decode, keyframe-only scrubbing, hardware
+decode — were measured and mostly closed. See the next entry.
+
+## The seek is irreducible, so the budget is met by asking for less
+
+Measured 2026-07-25 on the same source and build. The question was which of
+the escape hatches from the previous entry actually exists.
+
+| Probe | Result |
+|---|---|
+| `set(POS_FRAMES)` alone, random far target | **46.7 ms** median (min 29, max 202) |
+| `grab()` after that seek | 0.4 ms |
+| `retrieve()` (YUV → BGR) | 21.1 ms |
+| Seek + grab + retrieve | 67.8 ms median, 226 ms worst |
+| `CAP_PROP_CONVERT_RGB = 0` | 61.5 ms — saves ~6 ms, returns an unusable `8UC1` buffer |
+| `VIDEO_ACCELERATION_ANY` | backend reports `HW_ACCELERATION = 0.0`; timing unchanged |
+
+Two of the three hatches are shut. Hardware acceleration does not engage in
+`opencv-python-headless`, and skipping the colour conversion buys 9% at the
+cost of the frame. **The seek itself is ~70% of the cost and there is no knob
+for it.**
+
+Keyframe-only scrubbing was closed by a separate probe. Sweeping seek cost
+across 150 consecutive targets should show a sawtooth if the cost were
+av_seek-to-keyframe plus forward decode through the GOP — cheap on keyframes,
+rising between them. There is no sawtooth: cost is 43–124 ms with no
+periodicity at any offset. **Aligning a seek to a keyframe buys nothing here**,
+so "keyframe seek" cannot be implemented as a cheaper seek. What it can be is
+*fewer* seeks.
+
+So the budget moved to 100 ms and is now met by degrading rather than by
+decoding faster. `ScrubPolicy` watches the median of the last 5 scrub round
+trips; above budget it snaps drag targets to a 1-second grid, and `FrameCache`
+serves the repeats. The first pass over a region costs the same as before; the
+grid is small and stable, so every later visit is a cache hit at no cost at
+all — and a cache hit does not seek, which is the entire point. Releasing the
+slider always decodes the exact frame, so coarse mode costs accuracy only
+while the mouse is down.
+
+The reference machine does *not* degrade on this clip: 68 ms median is inside
+the 100 ms budget, which is the correct outcome and the reason the degradation
+tests inject a policy with a threshold they can actually cross.
+
+**Still open:** a sparse pre-decoded thumbnail track, which is what an NLE
+actually does and what would make the *first* pass over a region cheap too.
+Not built — it needs a place to put the thumbnails, which is the same decision
+as where a project file lives.
 
 ## Open → first frame has headroom
 

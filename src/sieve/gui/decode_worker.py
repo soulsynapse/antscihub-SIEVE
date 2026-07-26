@@ -21,9 +21,10 @@ from PySide6.QtGui import QImage
 from sieve.core.types import VideoMetadata
 from sieve.decode.reader import VideoDecodeError, VideoReader
 
-#: Frames are decoded at proxy resolution for display. 1280 is wide enough
+#: Starting proxy width, used until a preference arrives. 1280 is wide enough
 #: that the viewport, not the proxy, is the limit on what a user can see, and
-#: narrow enough that the resample stays under a millisecond or two.
+#: narrow enough that the resample stays under a millisecond or two. The user
+#: can change it; see `gui/preferences.py`.
 PROXY_WIDTH = 1280
 
 
@@ -37,6 +38,16 @@ class DecodeWorker(QObject):
     def __init__(self) -> None:
         super().__init__()
         self._reader: VideoReader | None = None
+        self._proxy_width = PROXY_WIDTH
+
+    @Slot(int)
+    def set_proxy_width(self, width: int) -> None:
+        """Change the display decode width. Takes effect on the next frame.
+
+        Frames already delivered keep the width they were decoded at, so the
+        caller is responsible for discarding anything it cached.
+        """
+        self._proxy_width = max(width, 1)
 
     @Slot(str)
     def open(self, path: str) -> None:
@@ -62,7 +73,7 @@ class DecodeWorker(QObject):
         if reader is None:
             return
         try:
-            frame = reader.read(index, max_width=PROXY_WIDTH)
+            frame = reader.read(index, max_width=self._proxy_width)
         except VideoDecodeError as error:
             self.failed.emit(str(error))
             return

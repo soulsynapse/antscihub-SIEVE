@@ -32,10 +32,10 @@ sieve = "sieve.cli.app:app"
 sieve-gui = "sieve.gui.app:main"
 
 [project.optional-dependencies]
+# QPainter is the plot layer (parity plan § 2, plot contracts): pyqtgraph and
+# napari sat here unused through three items and are dropped, not adopted.
 gui = [
     "PySide6",
-    "napari",
-    "pyqtgraph",
 ]
 gpu = [
     "cupy-cuda12x",

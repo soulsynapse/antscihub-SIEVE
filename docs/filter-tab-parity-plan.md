@@ -474,7 +474,16 @@ Claims: a superseded render never contributes rows to the served series;
 the collected frame axis aligns with `plan.span` (lead-in excluded);
 per-frame delivery does not regress `slider_to_preview`.
 
-### Item 5 — Plot widgets (`gui/`)
+### Item 5 — Plot widgets (`gui/`) — DONE
+
+Landed 2026.07.26; see `docs/completed-todo/2026.07.26-plot-widgets.md`.
+`gui/band_plot.py` is the shared base and the gesture contract's one home;
+`scalogram_plot.py` / `density_plot.py` / `count_plot.py` / `block_heat.py`
+are the views, all `TimelineStrip`-shaped. The § 8 colormap decision went to
+the mockup's stops (the § 2 structure — one sequential ramp per surface,
+green status-only — was already settled). pyqtgraph and napari are out of
+the gui extra. As specified below, one nuance added: `set_band` is ignored
+for the handle mid-drag, so a slow cheap-tier echo cannot fight the gesture.
 
 Shared QPainter base (series/heatmap painting, log/log1p axes, two band
 handles with the § 2 gesture rules, drag/commit signals, gate-span
@@ -586,7 +595,9 @@ detection spans to display.
 
 - **Item 2:** new `rescale` filter vs params-v2 of `downsample`.
 - **Item 5:** colormap stops — v1's ramps vs restyle (the mockup palettes
-  were explicitly not the decision).
+  were explicitly not the decision). *Settled at item time: the mockup's
+  stops, kept — they satisfy the § 2 structure and v1's ramps carried no
+  meaning worth porting.*
 - **Item 6:** `detector_state.py` vs the SCAFFOLD-reserved `gui/state.py`;
   whether knob-settle and band-drag interactions get ARCHITECTURE.md
   budget rows (recommended: yes, here).

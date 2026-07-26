@@ -187,12 +187,13 @@ carries the bus's whole-render samples across the same boundary. Both are
 tested; neither is drawn anywhere. See
 `docs/completed-todo/2026.07.26-the-first-live-graph-tick.md`.
 
-`gui/graph_hud.py` is the pyqtgraph view. **x is the source frame index across
+`gui/graph_hud.py` is the view. **x is the source frame index across
 the working window and y is milliseconds for that frame** — not sample arrival
 order, which is the axis a naive HUD over `MetricBus` would have and which
-cannot carry the next paragraph. `pyqtgraph` is in the `gui` extra and imported
-by nothing; this is where it is adopted or dropped, and leaving it installed and
-unused a third time is not an option.
+cannot carry the next paragraph. The dependency question this item used to
+carry is closed: the filter-tab plot family (`gui/band_plot.py` and its
+subclasses) settled QPainter as the plot layer and `pyqtgraph` is out of the
+`gui` extra, so this view is written over `BandPlot`'s conventions.
 
 VISION asks for a vertical bar showing where in the clip the graph is currently
 at, and with that axis it is the playhead: `gui/timeline_bar.py` already draws
@@ -265,18 +266,14 @@ Read: `src/sieve/gui/{video_view,commands}.py`.
 
 ## Deferred decisions
 
-- **napari is in the `gui` extra but unused.** The viewport is a plain
-  `QWidget` + `QPainter`: ~150 lines, no dependency, full control over ROI
-  overlay and letterboxing. napari earns its place when the preview needs
-  layered overlays with independent opacity (VISION step 4's three-way overlay
-  switch). Adopt it there or drop it from the extra. That moment now has an
-  item — **The three-way overlay** above — so this bullet is answered there
-  rather than deferred a third time.
-- **`pyqtgraph` is in the `gui` extra and imported by nothing**, for the same
-  reason and with the same resolution: **The graph HUD** above is where it is
-  used or dropped. That item is no longer waiting on anything to plot — the
-  series exists and is emitted — so the next pass at it either adopts the
-  dependency or writes the view with `QPainter` and drops it from the extra.
+- **napari and `pyqtgraph` are out of the `gui` extra** (parity plan item 5,
+  2026.07.26): the filter-tab plot family landed as QPainter widgets over
+  `gui/band_plot.py`, which settled the plot layer, and both dependencies had
+  sat installed and unused through three items. **The graph HUD** above is
+  therefore a QPainter view by construction. **The three-way overlay** still
+  owns its own question — if layered overlays with independent opacity turn
+  out to need napari, that item re-adds it deliberately rather than
+  inheriting it silently.
 - **`gui/state.py`** from SCAFFOLD was not created. Scrub position and playing
   state live in `VideoPlayer`; a separate object would duplicate them. Create
   it when there is UI state with no natural owner (panel layout, zoom).

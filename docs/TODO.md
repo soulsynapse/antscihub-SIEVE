@@ -14,19 +14,27 @@ Bundle these together to not have to do the full test/gate suites for minor thin
 
 If any of these are a compounding bug - something that will cause something else to be rewritten if not immediately addressed, address it at the first availability. If it is better at a different time, move it to later, otherwise, todo is fine.
 
-- The right side panel of filters should be insensitive to mouse scrolls - accidentally scrolling up and down that menu shouldn't also automatically result in a rescale box jumping down or up, normalize changing, block number changing, etc. (noticed <=2026.07.27)
-- Spacebar should generally work across the board - if something is changed, like a drop menu or whatever else, spacebar should start working again. (noticed <=2026.07.27)
-- Blocks in band has the cap at inf but depending on operations done it might have a line that is just crushed to the bottom (noticed <=2026.07.27)
-- Band power in block may randomly give out if block signal block number is low enough (noticed <=2026.07.27)
-- Video should auto play (noticed <=2026.07.27)
-- Right click on the video in the filter tab should take it back to the replicate tab full view (noticed <=2026.07.27)
-- Instead of shift to peek, it should just let you hover with mouse to peek (noticed <=2026.07.27)
-- Stamp should be the default once one is drawn. Stamp should be the default if the user clicks, and if the user tries to drag click it should let it draw. It should stamp based on the highlighted replicate. (noticed <=2026.07.27)
-- If the user sets the replicate and tries to change it, it should ask for confirmation as a box. (noticed <=2026.07.27)
-- If the user draws boxes and undoes it, then clicks into a replicate, the ratio is wrong (noticed <=2026.07.27)
-- It shouldn't ask to save the project or load the project. But it should automatically keep project history so if the user messes stuff up it can roll back. (noticed <=2026.07.27)
-- The zoom function should work on the replicate tab too. (noticed <=2026.07.27)
-- We had a beautiful bottom bar previously but it's now gone (noticed <=2026.07.27)
+The thirteen below were read against the code on 2026.07.27 and each now has a
+file in `docs/todo/` holding the diagnosis, the file:line anchors, and the
+ordering. A bullet here is the noticed-date record and a pointer; the item is
+the home. **Suggested order:** the four compounding ones first
+(ratio-after-undo → wheel → spacebar → band power), then the save/history
+policy decision, then the composite-view batch as one pass (zoom first, for its
+geometry), then stamp, then the rest.
+
+- The right side panel of filters should be insensitive to mouse scrolls - accidentally scrolling up and down that menu shouldn't also automatically result in a rescale box jumping down or up, normalize changing, block number changing, etc. (noticed <=2026.07.27) → `todo/wheel-over-the-panel.md`
+- Spacebar should generally work across the board - if something is changed, like a drop menu or whatever else, spacebar should start working again. (noticed <=2026.07.27) → `todo/spacebar-dies-on-focus.md`
+- Blocks in band has the cap at inf but depending on operations done it might have a line that is just crushed to the bottom (noticed <=2026.07.27) → `todo/blocks-in-band-autoscale.md`
+- Band power in block may randomly give out if block signal block number is low enough (noticed <=2026.07.27) → `todo/band-power-at-small-block-size.md`
+- Video should auto play (noticed <=2026.07.27) → `todo/video-autoplays.md`
+- Right click on the video in the filter tab should take it back to the replicate tab full view (noticed <=2026.07.27) → `todo/right-click-back-to-the-replicate-tab.md`
+- Instead of shift to peek, it should just let you hover with mouse to peek (noticed <=2026.07.27) → `todo/hover-to-peek.md`
+- Stamp should be the default once one is drawn. Stamp should be the default if the user clicks, and if the user tries to drag click it should let it draw. It should stamp based on the highlighted replicate. (noticed <=2026.07.27) → `todo/stamp-as-the-default-gesture.md`
+- If the user sets the replicate and tries to change it, it should ask for confirmation as a box. (noticed <=2026.07.27) → `todo/confirm-before-changing-the-replicate.md`
+- If the user draws boxes and undoes it, then clicks into a replicate, the ratio is wrong (noticed <=2026.07.27) → `todo/ratio-wrong-after-undo.md`
+- It shouldn't ask to save the project or load the project. But it should automatically keep project history so if the user messes stuff up it can roll back. (noticed <=2026.07.27) → `todo/no-save-prompts-keep-history.md`
+- The zoom function should work on the replicate tab too. (noticed <=2026.07.27) → `todo/zoom-on-the-composite-view.md`
+- We had a beautiful bottom bar previously but it's now gone (noticed <=2026.07.27) → `todo/the-bottom-bar-that-went-missing.md`
 
 ## Keeping this file small
 

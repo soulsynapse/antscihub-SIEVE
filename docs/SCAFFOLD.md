@@ -1,299 +1,177 @@
-SIEVE — Projected final repository scaffold.
+# SCAFFOLD — where things live
 
-This is an estimate of how the repo should look in it's final state, more or less.
+This file answers one question: **where does this module go?**
 
+It is in two halves, and the split is the point. **Built** is what exists;
+**Projected** is what the architecture intends and nothing has needed yet.
+`tests/docs/test_scaffold.py` asserts both halves — every path under Built must
+exist, every path under Projected must not. So this file cannot quietly drift
+the way its predecessor did: it named a napari viewer and a visual DAG editor
+for two weeks after both were rejected, and named five packages that were never
+written, while omitting twenty-seven GUI modules that were.
+
+When you add a module, add its line to Built. When you build something Projected
+named, move the line. The test tells you if you forgot.
+
+Annotations are one line and say what the module *owns*, not what it contains.
+The load-bearing reasoning lives in `docs/ARCHITECTURE.md` and in the module's
+own docstring.
+
+---
+
+## Built
+
+```tree
+pyproject.toml                          # deps, ruff, pyright strict, pytest config, entry points
+noxfile.py                              # the gates; `checks` is the default session
+.importlinter                           # machine-checked layer contract
+.github/workflows/ci.yml                # runs `nox -s checks benchmark`
+CLAUDE.md                               # agent routing doc — the only doc loaded automatically
+tools/doc_index.py                      # generates docs/*/.index.md from frontmatter
+
+src/sieve/core/types.py                 # Frame, ROI, value objects everything pattern-matches on
+src/sieve/core/filter_base.py           # THE FILTER CONTRACT: FilterSpec, ParamsBase, Mode, warmup arithmetic
+src/sieve/core/filter_registry.py       # the shelf; filters/ puts things on it via decorator
+src/sieve/core/pipeline_model.py        # THE SAVED ARTIFACT: pydantic DAG, schema v2 with Edge.port
+src/sieve/core/replicates.py            # replicate identity, overrides, resolved_params, equivalence groups
+src/sieve/core/detection.py             # windowed_mean + detect_gate, the detection chain tail
+src/sieve/core/wavelet.py               # morlet_band_power, default_freqs (capped at 0.45*fps)
+
+src/sieve/decode/reader.py              # the only path to a frame; OpenCV VideoCapture, pinned
+src/sieve/decode/prefetch.py            # threaded span reads, measured 1.61x and no further
+src/sieve/decode/identity.py            # decoder identity string feeding the cache key
+
+src/sieve/backend/dispatch.py           # device policy only; holds no kernel
+src/sieve/backend/identity.py           # backend identity for keys of non-backend_agnostic filters
+
+src/sieve/filters/__init__.py           # pkgutil scan; names no filter module (a test enforces this)
+src/sieve/filters/downsample.py         # anti-aliased spatial decimation
+src/sieve/filters/rescale.py            # intensity rescale
+src/sieve/filters/normalize.py          # per-frame global illumination removal
+src/sieve/filters/background_ema.py     # first stateful filter; the twin to copy for new stateful ones
+src/sieve/filters/block_signal.py       # change_energy, flow_speed, coherence — the 3D structure tensor
+src/sieve/filters/temporal_baseline.py  # per-cell median/MAD null; the units thresholds are denominated in
+
+src/sieve/pipeline/dag.py               # resolve, reject cycles and untypeable edges, one topological order
+src/sieve/pipeline/plan.py              # everything knowable before a frame decodes: params, keys, lead-in
+src/sieve/pipeline/cache_key.py         # key derivation; ports bind upstream keys so a-b != b-a
+src/sieve/pipeline/cache.py             # store protocol
+src/sieve/pipeline/executor.py          # THE ONE EXECUTION PATH. CLI, GUI, and HPC all call this
+src/sieve/pipeline/preview.py           # PreviewSession: re-render the working window, pay only below the edit
+
+src/sieve/bench/budgets.py              # the budget table; character-exact against ARCHITECTURE.md
+src/sieve/bench/metrics.py              # Qt-free metric bus; judges samples against BUDGETS on the way past
+
+src/sieve/cli/app.py                    # Typer entry point
+src/sieve/cli/common.py                 # shared option plumbing
+src/sieve/cli/inspect_cmd.py            # `sieve inspect` — a filter's declaration and its guidance
+src/sieve/cli/run_cmd.py                # `sieve run` — execute a YAML project
+src/sieve/cli/preview_cmd.py            # `sieve preview` — headless window render, --check is an exit code
+
+src/sieve/gui/app.py                    # QApplication bootstrap
+src/sieve/gui/main_window.py            # tabs, the cross-tab timeline, panel orchestration
+src/sieve/gui/document.py               # ReplicateDocument: the edited project, clip, selection
+src/sieve/gui/commands.py               # QUndoCommands; the only writers of document state
+src/sieve/gui/wizard.py                 # project creation flow
+src/sieve/gui/wizard_model.py           # its Qt-free half
+src/sieve/gui/replicate_tab.py          # video + tools panel + replicate table
+src/sieve/gui/replicate_table.py        # per-replicate rows, numeric ROI entry
+src/sieve/gui/video_view.py             # box draw/select/paint and the source<->widget mapping
+src/sieve/gui/filter_tab.py             # the tuning surface: composite, chain, plots
+src/sieve/gui/chain_stack.py            # the step cards
+src/sieve/gui/chain_model.py            # its Qt-free half
+src/sieve/gui/param_form.py             # widgets generated from a filter's params model
+src/sieve/gui/composite_view.py         # the step composite: output over input at one opacity
+src/sieve/gui/preview_runner.py         # holds a PreviewSession on its own thread; emits per-frame cost
+src/sieve/gui/executor_adapter.py       # the ONLY place that knows both bench/metrics and Qt
+src/sieve/gui/player.py                 # playback, scrub, frame requests
+src/sieve/gui/decode_worker.py          # decode off the GUI thread
+src/sieve/gui/proxy_cache.py            # coarse-grid frame cache serving the scrub budget
+src/sieve/gui/scrub_policy.py           # when to degrade to the coarse grid; Qt-free
+src/sieve/gui/coalescer.py              # two slots, rank rule, source stamp; Qt-free
+src/sieve/gui/timeline_bar.py           # the full-width band: working window and playhead
+src/sieve/gui/timeline_model.py         # its Qt-free arithmetic
+src/sieve/gui/band_plot.py              # the base plot widget the rest specialize
+src/sieve/gui/graph_hud.py              # per-frame cost series; BandPlot with handles suppressed
+src/sieve/gui/scalogram_plot.py         # morlet scalogram with draggable band handles
+src/sieve/gui/count_plot.py             # windowed block count with the detection threshold handle
+src/sieve/gui/density_plot.py           # detection density
+src/sieve/gui/block_heat.py             # per-block heat map
+src/sieve/gui/series_collector.py       # accumulates per-frame series for the plots
+src/sieve/gui/preferences.py            # persisted user preferences
+src/sieve/gui/preferences_dialog.py     # their editor
+src/sieve/gui/toast.py                  # transient notices
+
+tests/conftest.py                       # synthetic_video: frame n has blue = n*5, so seeks are assertable
+tests/gui/conftest.py                   # importorskip PySide6, modal-dialog muzzle, document fixture
+tests/property/conftest.py              # the hypothesis "property" profile, deadline disabled
+tests/docs/test_doc_index.py            # index staleness is a test failure
+tests/docs/test_scaffold.py             # this file's two halves are a test failure
+tests/bench/test_budget_table.py        # ARCHITECTURE.md <-> budgets.py, bidirectional
+tests/unit/test_filter_discovery.py     # non-negotiable #3, AST-checked
+tests/unit/test_cache_key.py            # cache isolation between sibling branches
 ```
-sieve/
-├── pyproject.toml
-├── noxfile.py
-├── README.md
-│
-├── docs/
-│   ├── ARCHITECTURE.md              # North star: commitments, latency budgets, component boundaries
-│   └── ARCHITECTURE-TREE.md         # Navigatable decision log (what was chosen and why)
-│
-├── src/
-│   └── sieve/
-│       ├── __init__.py
-│       │
-│       ├── core/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── types.py
-│       │   │   # Frame, ROI, and metadata value objects shared across all layers.
-│       │   │   # LOAD-BEARING: Frame carries dtype, shape, channel spec.
-│       │   │   # Everything downstream pattern-matches on these — no stringly-typed metadata.
-│       │   │
-│       │   ├── filter_base.py
-│       │   │   # FilterSpec, ParamsBase, ArraySpec, Mode. The contract, as data.
-│       │   │   # LOAD-BEARING: this is a *spec*, never an implementation. Nothing
-│       │   │   # here executes, so a saved DAG validates structurally with no
-│       │   │   # filters installed. Kernels live in filters/, one per backend.
-│       │   │   # A spec must carry:
-│       │   │   #   - params_model: one pydantic model, the single source of truth
-│       │   │   #     (GUI widgets, CLI flags, YAML, and cache key all read it)
-│       │   │   #   - accepts/emits ArraySpec (dtype, channels, dims) for static validation
-│       │   │   #   - warmup_frames — 0 for stateless; the executor sums these along
-│       │   │   #     the path, and an IIR's value is a settled-within-epsilon choice
-│       │   │   #   - mode: STREAMING vs WINDOWED (executor uses it for pipelining)
-│       │   │   #   - deterministic: same backend, same input, same output. Gates caching.
-│       │   │   #   - backend_agnostic: CPU and GPU kernels agree bit for bit. Gates whether
-│       │   │   #     backend identity enters the cache key. False for float kernels; claiming
-│       │   │   #     it requires an equivalence test.
-│       │   │   #   - cost estimate (wall-time/frame, peak memory) for HUD predictions
-│       │   │   #   - explicit semver; bump invalidates cache for that node
-│       │   │   #   - primary params subset (1-3) for GUI default view; rest behind "Advanced"
-│       │   │
-│       │   ├── filter_registry.py
-│       │   │   # The registry container and lookup, by (filter_id, version).
-│       │   │   # Populated from above by decorators at import time — core defines the
-│       │   │   # shelf, filters/ puts things on it. Adding a decorated class in
-│       │   │   # filters/ is sufficient; nothing here enumerates them.
-│       │   │
-│       │   ├── pipeline_model.py
-│       │   │   # Pydantic v2 model for the serializable pipeline DAG artifact.
-│       │   │   # LOAD-BEARING: Given this artifact + source video path, any executor
-│       │   │   # (CLI, GUI, HPC) reproduces the run. No implicit state.
-│       │   │   # Serializes to YAML. Pydantic generates JSON Schema for validation.
-│       │   │
-│       │   ├── config.py
-│       │   │   # pydantic-settings app config.
-│       │   │   # Precedence: CLI flags > env vars > config file.
-│       │   │
-│       │   └── constants.py
-│       │       # Immutable constants: hash version seeds, cache format version.
-│       │
-│       ├── decode/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── reader.py
-│       │   │   # OpenCV VideoCapture wrapper. Pinned v1 decoder.
-│       │   │   # DECISION: Seek accuracy chosen over source bit-depth preservation.
-│       │   │
-│       │   └── identity.py
-│       │       # Decoder identity string for cache key derivation.
-│       │       # Changing decoder version invalidates all downstream cache entries.
-│       │
-│       ├── backend/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── dispatch.py
-│       │   │   # Device policy: given a filter's declared backends and the machine,
-│       │   │   # pick one. A dict lookup on (filter_id, backend_name) plus a policy.
-│       │   │   # DECISION: CuPy is the only v1 GPU backend. No Torch unless isolated worker.
-│       │   │   # LOAD-BEARING: holds no filter's implementation. If adding a filter
-│       │   │   # required editing a file here, non-negotiable #3 would be broken.
-│       │   │
-│       │   ├── namespace.py
-│       │   │   # Array-API namespace resolution (numpy vs cupy) and host/device transfer.
-│       │   │
-│       │   └── identity.py
-│       │       # Backend identity string for cache keys, mirroring decode/identity.py.
-│       │       # Enters the key for every filter that is not backend_agnostic.
-│       │
-│       ├── pipeline/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── dag.py
-│       │   │   # DAG construction, validation, cycle detection, topological sort.
-│       │   │   # Rejects invalid graphs statically using filter I/O type declarations.
-│       │   │
-│       │   ├── executor.py
-│       │   │   # The single shared executor. CLI, GUI, and HPC all use this identically.
-│       │   │   # LOAD-BEARING: GUI adds a view over this — never a separate execution path.
-│       │   │
-│       │   ├── cache.py
-│       │   │   # Content-addressed intermediate cache (memory-resident during tuning).
-│       │   │   # Keys include upstream hashes + filter params + decoder identity.
-│       │   │   # Non-deterministic filters are legal but flagged for correct cache behavior.
-│       │   │
-│       │   ├── cache_key.py
-│       │   │   # Hash derivation logic.
-│       │   │   # Inputs: upstream node hashes, filter version, filter params, decoder identity.
-│       │   │
-│       │   ├── preview.py
-│       │   │   # Representative-clip preview mode.
-│       │   │   # Handles temporal filter warmup (consumes warmup_frames before visible clip).
-│       │   │   # SPEED REGIME: "In-pipeline" — slider to graph update must feel direct.
-│       │   │
-│       │   └── materialize.py
-│       │       # User-initiated compaction from memory cache to Zarr v3 on disk.
-│       │       # Never automatic. User decides when intermediates are worth persisting.
-│       │
-│       ├── storage/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── zarr_store.py
-│       │   │   # Zarr v3 materialized arrays. Filesystem-is-truth.
-│       │   │   # DECISION: No Zarr v2 compatibility path.
-│       │   │
-│       │   └── sharding.py
-│       │       # Workload-specific Zarr v3 sharding configuration.
-│       │
-│       ├── workers/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── manager.py
-│       │   │   # Supervision of long-lived multiprocessing.Process compute workers.
-│       │   │   # Crash isolation: a filter crash cannot take down the host process.
-│       │   │
-│       │   ├── protocol.py
-│       │   │   # Versioned bidirectional IPC message protocol.
-│       │   │   # Version negotiation on worker startup.
-│       │   │
-│       │   ├── shm_transport.py
-│       │   │   # Named shared-memory frame transport between parent and workers.
-│       │   │   # Zero-copy where possible.
-│       │   │
-│       │   └── process.py
-│       │       # Single worker subprocess lifecycle: spawn, heartbeat, teardown.
-│       │       # Cooperative cancellation with escalation to SIGTERM then SIGKILL.
-│       │
-│       ├── bench/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── budgets.py
-│       │   │   # Latency budget table. Source of truth for both speed regimes.
-│       │   │   # LOAD-BEARING: Budget misses are defects, not accepted tradeoffs.
-│       │   │   # Tested against ARCHITECTURE.md values by test_budget_table.py.
-│       │   │
-│       │   ├── metrics.py
-│       │   │   # Metric collection bus. No Qt dependency — runs headless.
-│       │   │   # GUI's executor_adapter bridges this to Qt signals.
-│       │   │
-│       │   └── profiling.py
-│       │       # VizTracer phase timelines + py-spy live sampling integration.
-│       │       # Complementary: VizTracer for structure, py-spy for production sampling.
-│       │
-│       ├── observe/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── logging.py
-│       │   │   # structlog JSON Lines setup for parent process.
-│       │   │
-│       │   ├── log_aggregator.py
-│       │   │   # Parent-side aggregation of per-worker JSON log streams.
-│       │   │   # Dedicated per-worker stderr capture to separate file descriptors.
-│       │   │
-│       │   ├── ctf.py
-│       │   │   # Per-process CTF trace files with post-hoc merge.
-│       │   │
-│       │   └── results.py
-│       │       # Parquet writer for authoritative results dataset.
-│       │       # DuckDB queries over Parquet and JSON Lines.
-│       │       # HPC: immutable result fragments with explicit compaction.
-│       │
-│       ├── cli/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── app.py
-│       │   │   # Typer entry point. The canonical run path — built and tested before GUI.
-│       │   │
-│       │   ├── run.py
-│       │   │   # `sieve run` — execute a pipeline DAG from YAML.
-│       │   │
-│       │   ├── inspect_cmd.py
-│       │   │   # `sieve inspect` — print filter metadata and guidance.
-│       │   │
-│       │   ├── preview_cmd.py
-│       │   │   # `sieve preview` — headless representative-clip execution with metrics.
-│       │   │
-│       │   ├── materialize_cmd.py
-│       │   │   # `sieve materialize` — compact intermediates to Zarr v3.
-│       │   │
-│       │   └── hpc_cmd.py
-│       │       # `sieve hpc` — generate job scripts from the serialized DAG.
-│       │
-│       ├── gui/
-│       │   ├── __init__.py
-│       │   │   # BOUNDARY: Qt stays in this package. Nothing outside imports PySide6.
-│       │   │
-│       │   ├── app.py
-│       │   │   # PySide6 QApplication bootstrap.
-│       │   │
-│       │   ├── main_window.py
-│       │   │   # Top-level window layout and panel orchestration.
-│       │   │
-│       │   ├── viewer.py
-│       │   │   # napari widget for video/image frame display.
-│       │   │
-│       │   ├── graph_hud.py
-│       │   │   # pyqtgraph real-time benchmark HUD overlay.
-│       │   │
-│       │   ├── pipeline_editor.py
-│       │   │   # Visual DAG editor. Edits the same pipeline_model as CLI/YAML.
-│       │   │
-│       │   ├── preview_panel.py
-│       │   │   # Live representative-clip preview with direct-manipulation feel.
-│       │   │
-│       │   ├── executor_adapter.py
-│       │   │   # QObject adapter: bridges bench/metrics bus → Qt signals.
-│       │   │   # This is the only coupling point between executor and Qt.
-│       │   │
-│       │   └── state.py
-│       │       # UI-only ephemeral state (scrub position, zoom, panel layout).
-│       │       # Never persisted to pipeline artifact. Never affects execution.
-│       │
-│       ├── hpc/
-│       │   ├── __init__.py
-│       │   │
-│       │   ├── handoff.py
-│       │   │   # Serialize pipeline DAG → cluster job script.
-│       │   │   # Same artifact CLI consumes; HPC is not a special path.
-│       │   │
-│       │   └── sweep.py
-│       │       # Resource sweep semantics for batch parameter exploration.
-│       │       # Immutable result fragments; explicit compaction to Parquet.
-│       │
-│       ├── review/
-│       │   ├── __init__.py
-│       │   │
-│       │   └── output.py
-│       │       # Post-run review-mode data contract (Step 7 of workflow vision).
-│       │
-│       └── filters/
-│           ├── __init__.py
-│           │   # pkgutil scan over this package's modules at import, so a decorated
-│           │   # class in a new module is discovered with no edit here.
-│           │
-│           ├── downsample.py          # FilterSpec + @kernel("cpu") + optional @kernel("gpu")
-│           ├── downsample.md          # Guidance, found by convention. A test asserts it exists.
-│           │
-│           └── optical_flow.py        # May import cv2 or cupy. The spec above it stays pure.
-│
-└── tests/
-    ├── __init__.py
-    ├── conftest.py                    # Shared fixtures; fast/slow markers; conditional CUDA/GL sessions
-    │
-    ├── unit/
-    │   ├── __init__.py
-    │   ├── test_types.py
-    │   ├── test_filter_base.py
-    │   ├── test_pipeline_model.py
-    │   ├── test_cache_key.py
-    │   ├── test_dag.py
-    │   ├── test_dispatch.py
-    │   ├── test_protocol.py
-    │   ├── test_shm_transport.py
-    │   └── test_config.py
-    │
-    ├── integration/
-    │   ├── __init__.py
-    │   ├── test_executor.py
-    │   ├── test_worker_lifecycle.py
-    │   ├── test_materialize.py
-    │   └── test_decode.py
-    │
-    ├── bench/
-    │   ├── __init__.py
-    │   ├── test_budget_table.py       # Asserts budgets.py matches ARCHITECTURE.md values
-    │   └── test_perf_regression.py    # pytest-benchmark latency checks
-    │
-    ├── property/
-    │   ├── __init__.py
-    │   └── test_filter_contract.py    # Hypothesis: any conforming filter satisfies contract invariants
-    │
-    └── gui/
-        ├── __init__.py
-        └── test_executor_adapter.py   # pytest-qt: signal emission correctness (dev-gui only)
+
+Directories not listed line by line, because their contents are conventional and
+the test only guards the named files: `tests/unit/` (29 modules), `tests/gui/`
+(18), `tests/integration/` (5), `tests/property/` (4).
+
+---
+
+## Projected — not built
+
+Each line is a module the architecture intends and nothing has yet needed. None
+of these exists; the test asserts that, so a line here is a promise, not a lie.
+Where a deferral has *reasoning and a trigger*, that reasoning lives in
+`docs/LATER.md` and is named in the annotation — this file only says where the
+file would go.
+
+```tree
+src/sieve/core/config.py                # pydantic-settings app config — LATER.md "Application config"
+src/sieve/core/constants.py             # hash seeds, cache format version (currently inline)
+src/sieve/backend/namespace.py          # array-API namespace resolution — LATER.md "GPU execution"
+src/sieve/pipeline/materialize.py       # memory cache -> Zarr compaction — LATER.md "Materialization"
+src/sieve/storage/zarr_store.py         # Zarr v3 arrays, filesystem-is-truth — LATER.md "Materialization"
+src/sieve/storage/sharding.py           # workload-specific sharding
+src/sieve/workers/manager.py            # crash isolation — LATER.md "Process isolation"
+src/sieve/workers/protocol.py           # versioned IPC
+src/sieve/workers/shm_transport.py      # shared-memory frame transport
+src/sieve/workers/process.py            # worker lifecycle, cooperative cancellation
+src/sieve/observe/logging.py            # structlog JSON Lines
+src/sieve/observe/log_aggregator.py     # per-worker stream merge
+src/sieve/observe/results.py            # Parquet results dataset
+src/sieve/bench/profiling.py            # VizTracer + py-spy — LATER.md "Profiling as a module"
+src/sieve/hpc/handoff.py                # DAG -> job script — LATER.md "HPC handoff, and review mode"
+src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
+src/sieve/review/output.py              # VISION step 7 review contract — LATER.md "HPC handoff, and review mode"
+src/sieve/cli/materialize_cmd.py        # arrives with pipeline/materialize.py
+src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
+src/sieve/gui/state.py                  # only when UI state has no natural owner; see TODO.md deferred decisions
 ```
+
+`.importlinter` already declares `(sieve.workers)` and `(sieve.storage)` in
+parentheses, so the layer contract governs them from their first commit rather
+than being widened afterwards to accommodate them. When one is built, drop the
+parentheses in the same commit that moves its line up.
+
+---
+
+## Rejected — do not build these
+
+The previous version of this file named all three, and an agent following it
+would have written code that three separate decisions had already refused.
+
+- **`gui/viewer.py` (napari)** and **`gui/pipeline_editor.py` (visual DAG
+  editor)**. The plot layer settled as QPainter widgets over `band_plot.py`, and
+  the one item that still owned a napari question — the three-way overlay —
+  answered it by collapsing to two layers and one opacity slider. Re-adding
+  either needs a new demand, not a revisit. See `docs/TODO.md` *Deferred
+  decisions* and `docs/LATER.md` *A pipeline editor, and whether it is a list
+  or a graph*.
+- **`docs/ARCHITECTURE-TREE.md`**. `docs/findings/` holds measurement-driven
+  decisions one file at a time and `docs/completed-todo/` holds what was built;
+  nothing was left for a third log to carry.
+- **`src/sieve/docs/*.md`** — the eight interface specs `SIEVE-HANDOFF.md` used
+  to ask for. That directory never existed. The contracts live in module
+  docstrings with their reasoning in the matching completed-todo entry, which is
+  the arrangement that survived; the handoff now says so.

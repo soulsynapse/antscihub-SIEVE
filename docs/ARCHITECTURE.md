@@ -16,23 +16,37 @@ In-pipeline speed — from dragging a slider to seeing the graph update. The int
 ├───────────────────────────────────────┤
 │  bench/                               │  Observation (latency checks)
 ├───────────────────────────────────────┤
-│  pipeline/     workers/               │  Orchestration (DAG, executor, cache)
+│  pipeline/    (workers/)              │  Orchestration (DAG, executor, cache)
 ├───────────────────────────────────────┤
 │  filters/                             │  Filter specs + their kernels
 ├───────────────────────────────────────┤
-│  decode/    storage/    backend/      │  Decode / file I/O / device policy
+│  decode/   (storage/)   backend/      │  Decode / file I/O / device policy
 ├───────────────────────────────────────┤
 │  core/      (types, filter contract)  │  Pure logic — no imports from above
 └───────────────────────────────────────┘
 ```
 
+Parenthesised packages do not exist yet. They are named here and declared in
+`.importlinter` before their first commit, so the contract governs them on
+arrival rather than being widened afterwards to accommodate them. `docs/SCAFFOLD.md`
+lists them under **Projected**, and a test fails if one quietly lands without
+the line moving.
+
 The enforced consequences: `core/` imports nothing above it and no
-Qt, Zarr, or subprocess. `pipeline/` does not import Qt. `bench/` does not
-import Qt, so headless and CLI runs can observe without a GUI toolkit — the
-QObject adapter over the metric bus lives in `gui/`. `gui/` reaches `workers/`
-only through `pipeline/`. This is the mechanism that makes CLI and HPC parity
-real rather than aspirational; a violation is a product regression rather than
-a style problem.
+Qt, Zarr, or subprocess. `pipeline/`, `bench/`, and `cli/` do not import Qt, so
+headless and CLI runs can observe without a GUI toolkit — the QObject adapter
+over the metric bus lives in `gui/`. This is the mechanism that makes CLI and
+HPC parity real rather than aspirational; a violation is a product regression
+rather than a style problem.
+
+One thing this diagram implies that the linter does *not* yet check: that `gui/`
+reaches `workers/` only through `pipeline/`. Because `pipeline/` and `(workers/)`
+are siblings on one tier, the layers contract makes them mutually independent —
+which forbids `pipeline → workers`, the very path the intent requires, and says
+nothing about `gui → workers`, the one it forbids. Neither matters while
+`workers/` does not exist, and both have to be settled in the commit that
+creates it. Recorded in `docs/AUTO-GUARDRAILS.md` §1 as the open half of that
+guardrail.
 
 A filter is two things, and that split is what puts them on different tiers.
 Its **spec** is data — id, semver, params model, declared I/O, warmup,
@@ -95,22 +109,25 @@ which is a preference, not a silent tradeoff.
 
 ## Import Boundaries
 
-- `core/` — no Qt, no Zarr, no subprocess, no imports from upper layers
-- `pipeline/` — no Qt (CLI and HPC must run headless)
-- `bench/` — no Qt (headless benchmarks)
-- `gui/` — reaches pipeline through `pipeline/` public API only, and `workers/` only
-  through `pipeline/`
-- `core/` — holds the filter *contract*, never a filter implementation, so it
-  stays free of `cv2` and `cupy` without constraining what a kernel may call
-- `filters/` — one module per filter: spec plus its kernels, colocated. May
+- `core/` — no Qt, no Zarr, no subprocess, no imports from upper layers. Holds
+  the filter *contract*, never a filter implementation, so it stays free of
+  `cv2` and `cupy` without constraining what a kernel may call
+- `pipeline/`, `bench/`, `cli/`, `decode/`, `filters/`, `backend/` — no Qt. CLI
+  and HPC must run headless, and `cli/` needs saying separately because it sits
+  on `gui/`'s tier, where the layers contract cannot reach it
+- `core/`, `bench/`, `gui/`, `cli/` — no `cv2`
+- `filters/` — one module per filter: spec plus its kernels, colocated. May
   import `cv2` and `cupy`; may not import `pipeline/` or anything above it
-- `decode/` — the only package that imports `cv2`. Reaching a frame any other
-  way is how decoder identity stops being one string and cache keys stop
-  meaning anything.
+- `decode/` — the only package that may reach a *frame*. That is a narrower
+  claim than "the only package that imports `cv2`", and the narrower one is the
+  load-bearing one: a kernel calling `cv2.GaussianBlur` touches no container, no
+  seek, and no decoder identity, whereas a second path to a frame is how decoder
+  identity stops being one string and cache keys stop meaning anything. What
+  keeps a filter's `cv2` honest instead is its declared spec version in the
+  cache key plus `backend_agnostic = False`.
 
-`.importlinter` is the machine-checked form of this list. Layers parenthesised
-there are declared before they exist, so the contract governs them from their
-first commit rather than being widened afterwards to accommodate them.
+`.importlinter` is the machine-checked form of this list, contract by contract,
+and it is the authority wherever the two disagree.
 
 ---
 

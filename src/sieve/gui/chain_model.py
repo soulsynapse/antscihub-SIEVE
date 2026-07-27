@@ -57,10 +57,11 @@ from sieve.filters.block_signal import resolve_block
 
 FloatArray = NDArray[np.floating[Any]]
 
-#: How the two extraction signals read on their card and quick-switch.
+#: How the extraction signals read on their card and quick-switch.
 SIGNAL_LABELS: dict[str, str] = {
     "change_energy": "change energy (Jtt)",
     "flow_speed": "LK optical flow",
+    "coherence": "coherence (0-1)",
 }
 
 

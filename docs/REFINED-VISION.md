@@ -294,6 +294,14 @@ size" — and it is the same class of mistake, arriving from the other direction
 I would build this **before** the accumulator in **C**, because it is smaller,
 has no state, and it tests whether the harder thing is needed at all.
 
+*Correction (2026.07.26, when the item landed):* the scalar drafted above
+reads the wrong eigenvalue pair. For a translating 2-D texture both λ₁ and λ₂
+are spatial energy and `((λ₁-λ₂)/(λ₁+λ₂))²` scores it ~0.16, failing this
+section's own test; the signature of coherent translation is the null
+direction, λ₃ ≈ 0, and the shipped scalar is Haussecker & Spies' spatial
+coherency `((λ₂-λ₃)/(λ₂+λ₃))²`. Derivation and measurements in
+`docs/findings/2026.07.26-the-specs-coherence-formula-fails-its-own-test.md`.
+
 → `TODO.md`, **Coherence as a third block signal**.
 
 ## C. The accumulator: decay, touch, and the equation underneath them

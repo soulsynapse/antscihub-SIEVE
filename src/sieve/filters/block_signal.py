@@ -17,6 +17,16 @@ semantics-intact:
   speed `hypot(u, v) * fps` in px/s, *then* block-reduced. The solve precedes
   reduction so the aperture problem is not coupled to the user's block size.
   Needs all six products, ~4x change_energy's cost.
+* **coherence** (new in SIEVE): all six components block-reduced into one
+  3x3 tensor per block, then eigendecomposed — reduction *precedes* the
+  decomposition, the mirror of flow_speed's constraint, because a per-pixel
+  tensor is near rank-one and only block aggregation of mixed orientations
+  makes the spectrum informative. Emits Haussecker & Spies' spatial
+  coherency `((lam2 - lam3) / (lam2 + lam3))^2` in [0, 1]: a single
+  translation explains the block's change iff the tensor has a null
+  direction (lam3 ~ 0), so walking reads near 1 and in-place change
+  (grooming, flicker) near 0. Same six blurs as flow_speed plus a few
+  hundred 3x3 eigensolves.
 
 One filter with a `signal` parameter rather than two filters: the two share
 the state, the gradient, and the reduction, and the tab's quick-switch swaps
@@ -102,6 +112,9 @@ class Signal(StrEnum):
     CHANGE_ENERGY = "change_energy"
     #: Lucas-Kanade speed in px/s. All six products, ~4x the cost.
     FLOW_SPEED = "flow_speed"
+    #: Spatial coherency of the block tensor in [0, 1]: does one translation
+    #: explain this block's change? All six products, flow_speed's cost tier.
+    COHERENCE = "coherence"
 
 
 @register_filter(
@@ -114,8 +127,10 @@ class Signal(StrEnum):
     cost=CostEstimate(
         # Dominated by the Gaussian blurs. v1's change-only pass measured the
         # products + one blur at ~7% of a full six-component pass; this
-        # declaration takes the flow_speed path (six blurs and the solve)
-        # because a static number cannot branch on a parameter.
+        # declaration takes the six-blur tier shared by flow_speed and
+        # coherence because a static number cannot branch on a parameter.
+        # (Coherence's eigensolves are a few hundred 3x3 symmetric matrices
+        # per frame — not the cost.)
         seconds_per_megapixel=0.012,
         # Worst case (flow_speed): the gray frame, the previous frame, six
         # product planes and their blurs reusing storage, plus u/v/speed.
@@ -187,6 +202,8 @@ def block_signal_cpu(frame: Frame, params: BlockSignalParams, state: BlockSignal
     elif params.signal is Signal.CHANGE_ENERGY:
         it = gray - prev
         out = _block_mean(_blur(it * it), block, ny, nx)
+    elif params.signal is Signal.COHERENCE:
+        out = _coherence(prev, gray, block, ny, nx)
     else:
         out = _block_mean(_flow_speed(prev, gray, params.fps), block, ny, nx)
 
@@ -236,6 +253,57 @@ def _flow_speed(prev: FloatArray, gray: FloatArray, fps: float) -> NDArray[np.fl
     u = -(yy * xt - xy * yt) * inv
     v = -(xx * yt - xy * xt) * inv
     return (np.hypot(u, v) * fps).astype(np.float32)
+
+
+def _coherence(
+    prev: FloatArray, gray: FloatArray, block: int, ny: int, nx: int
+) -> NDArray[np.float32]:
+    """Spatial coherency of the block-reduced 3D structure tensor, in [0, 1].
+
+    All six blurred products are block-mean reduced *first* — six numbers per
+    block — and the 3x3 symmetric eigensolve runs on the block tensor. The
+    order is load-bearing, the mirror of the LK constraint above: a per-pixel
+    tensor is near rank-one (one gradient direction), so decomposing before
+    reduction reads every pixel as coherent and averaging those verdicts
+    destroys exactly the anisotropy being measured. Only aggregation over a
+    block lets mixed motion directions raise the small eigenvalues.
+
+    The scalar is Haussecker & Spies' spatial coherency
+    `((lam2 - lam3) / (lam2 + lam3))^2` with `lam1 >= lam2 >= lam3`: a single
+    translation `(u, v)` explains all change in a block iff every space-time
+    gradient is orthogonal to `(u, v, 1)`, i.e. iff the tensor has a null
+    direction — `lam3 ~ 0` against a nonzero `lam2`. Opposing or in-place
+    motion fills the spectrum and drives it to 0. (The spec's draft formula
+    `((lam1 - lam2) / (lam1 + lam2))^2` fails its own translation test — see
+    `docs/findings/` on the coherence formula.)
+
+    Blocks with exactly zero temporal change would score a vacuous 1 (the
+    t-axis itself is the null direction); they report 0 instead — the same
+    honesty as flow_speed's determinant guard.
+    """
+    it = gray - prev
+    grads = np.gradient(gray)
+    iy = np.asarray(grads[0], np.float32)
+    ix = np.asarray(grads[1], np.float32)
+    tensor = np.empty((ny, nx, 3, 3), np.float32)
+    products: dict[tuple[int, int], FloatArray] = {
+        (0, 0): ix * ix,
+        (1, 1): iy * iy,
+        (2, 2): it * it,
+        (0, 1): ix * iy,
+        (0, 2): ix * it,
+        (1, 2): iy * it,
+    }
+    for (row, col), plane in products.items():
+        reduced = _block_mean(_blur(plane), block, ny, nx)
+        tensor[:, :, row, col] = reduced
+        tensor[:, :, col, row] = reduced
+    lam = np.maximum(np.linalg.eigvalsh(tensor), 0.0)  # ascending: lam3, lam2, lam1
+    lam3, lam2 = lam[..., 0], lam[..., 1]
+    denom = lam2 + lam3
+    safe = denom > 0.0
+    coh = np.where(safe, ((lam2 - lam3) / np.where(safe, denom, 1.0)) ** 2, 0.0)
+    return np.where(tensor[:, :, 2, 2] > 0.0, coh, 0.0).astype(np.float32)
 
 
 def _block_mean(field: FloatArray, block: int, ny: int, nx: int) -> NDArray[np.float32]:

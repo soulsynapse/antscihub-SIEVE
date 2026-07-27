@@ -48,9 +48,12 @@ def textured() -> NDArray[np.float32]:
     return cast(NDArray[np.float32], cv2.GaussianBlur(rough, (0, 0), 3.0))
 
 
-def test_static_input_is_exactly_zero_for_both_signals() -> None:
+def test_static_input_is_exactly_zero_for_every_signal() -> None:
+    # Coherence is the interesting case: with zero temporal change the t-axis
+    # is a null direction of the tensor and the raw scalar would read a
+    # vacuous 1. The zero-change gate is what this pins.
     still = textured()
-    for signal in (Signal.CHANGE_ENERGY, Signal.FLOW_SPEED):
+    for signal in Signal:
         params = BlockSignalParams(signal=signal, block=16, fps=FPS)
         outs = run_frames([still, still, still], params)
         for out in outs:
@@ -85,6 +88,39 @@ def test_aperture_degenerate_input_reports_exactly_zero_not_noise() -> None:
 
     speed = run_frames(frames, BlockSignalParams(signal=Signal.FLOW_SPEED, block=16, fps=FPS))[2]
     np.testing.assert_array_equal(speed, 0.0)
+
+
+def test_coherence_separates_translation_from_change_in_place() -> None:
+    # The two poles of the discriminant: a texture translating as a piece has
+    # a rank-deficient block tensor (one (u, v) explains everything) and must
+    # score near 1; the same texture with an independent pattern added in
+    # place has no translation that explains its change and must score near 0.
+    field = textured()
+    params = BlockSignalParams(signal=Signal.COHERENCE, block=16, fps=FPS)
+
+    walking = run_frames([np.roll(field, i, axis=1) for i in range(3)], params)[2]
+    assert float(np.median(walking[1:-1, 1:-1])) > 0.8
+
+    gen = np.random.default_rng(9)
+    pattern = cv2.GaussianBlur(gen.uniform(0, 255, field.shape).astype(np.float32), (0, 0), 3.0)
+    flicker = cast(NDArray[np.float32], field + 0.5 * (pattern - float(pattern.mean())))
+    grooming = run_frames([field, flicker, field], params)[2]
+    assert float(np.median(grooming[1:-1, 1:-1])) < 0.2
+
+
+def test_opposing_motions_in_one_block_read_incoherent() -> None:
+    # Two halves of a single 96 px block translating in opposite directions:
+    # each pixel is locally coherent, the block is not. This is the test that
+    # fails if the eigendecomposition is moved before the block reduction —
+    # per-pixel tensors are near rank-one, every pixel votes "coherent", and
+    # averaging those votes scores this block high (measured 0.50 against the
+    # correct order's 0.01).
+    field = textured()
+    moved = np.vstack([np.roll(field[:48], 2, axis=1), np.roll(field[48:], -2, axis=1)])
+    params = BlockSignalParams(signal=Signal.COHERENCE, block=96, fps=FPS)
+    out = run_frames([field, moved], params)[1]
+    assert out.shape == (1, 1)
+    assert float(out[0, 0]) < 0.2
 
 
 def test_block_resolution_is_the_one_source_of_grid_truth() -> None:

@@ -212,35 +212,16 @@ flagship example, the artifact-touching change comes early because migrations ge
 worse with age, and the units come before the filter whose thresholds are
 denominated in them.
 
-## Coherence as a third block signal
-
-**Gated on: nothing.** `filters/block_signal.py` already forms five of the six
-unique components of the 3D spatiotemporal structure tensor on the `flow_speed`
-path (`xx, yy, xy, xt, yt`) and the sixth on the `change_energy` path — its
-docstring says so explicitly. This item forms all six together and reads the
-eigenstructure.
-
-**What it is for.** Grooming and walking both produce high `change_energy`; what
-separates them is whether the change *advects*. One dominant eigenvalue means an
-oriented structure in (x, y, t), i.e. coherent translation — walking. Two
-comparable eigenvalues mean change in place — grooming. Emit
-`c = ((λ₁-λ₂)/(λ₁+λ₂))²` in [0, 1] as a third `Signal` member, and grooming
-becomes "high energy, low coherence" with no state and no time constants.
-
-**The one thing to not get backwards:** block-reduce the *tensor* — six numbers
-per block — and eigendecompose after. Averaging eigenvalues across a block
-destroys the anisotropy being measured. This is the same class of constraint the
-module already documents for the LK solve ("the solve precedes reduction so the
-aperture problem is not coupled to the user's block size"), arriving from the
-other direction, and it is what a test should pin: a synthetic translating
-texture must score near 1 and a synthetic in-place flicker near 0, and the test
-fails if the reduction and the decomposition are swapped.
-
-Cost declaration goes up to the `flow_speed` tier (six blurs) since a static
-number cannot branch on the parameter; the eigensolves are a few hundred 3×3
-symmetric matrices and are not the cost.
-
-Read: `src/sieve/filters/block_signal.py`, `docs/REFINED-VISION.md` **B**.
+The stateless discriminant that led this section is built: `block_signal` now
+emits `coherence` — how much of a block's change one translation explains, in
+[0, 1] — so "high `change_energy`, low `coherence`" is a grooming detector
+with no state and no time constants. The scalar shipped is *not* the one the
+spec drafted: `((λ₁-λ₂)/(λ₁+λ₂))²` fails its own translation test, and the
+correct pair is the smaller two — see
+`docs/findings/2026.07.26-the-specs-coherence-formula-fails-its-own-test.md`
+and `docs/completed-todo/2026.07.26-coherence-as-a-third-block-signal.md`.
+Whether it makes the motion history filter unnecessary for the flagship
+example is now a question real footage can answer from the quick-switch.
 
 ## Multi-upstream kernels
 

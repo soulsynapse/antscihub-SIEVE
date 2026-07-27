@@ -19,6 +19,14 @@ what "moving" means for the experiment:
   block only scores when its texture visibly moves as a piece; flicker and
   shimmer that `change_energy` counts are largely invisible to it. Choose it
   when the event is locomotion and the noise is light.
+- **`coherence`** measures how much of a block's change one translation
+  explains, on a fixed 0-1 scale. A block whose texture moves as a piece
+  scores near 1; a block changing in place — grooming legs, antennal
+  flicker, anything oscillating — scores near 0. It carries no magnitude at
+  all, which is the point: pair it with `change_energy`, and "high energy,
+  low coherence" is a grooming detector with no state and no time constants.
+  Being a pure ratio, it is also the one signal whose thresholds transfer
+  across lighting and gain unchanged.
 
 Blocks with no resolvable texture report `flow_speed` of exactly zero — the
 honest answer under the aperture problem, not noise. A smooth arena floor
@@ -26,11 +34,11 @@ scoring zero means "nothing measurable here", not "nothing happened".
 
 ## Parameters
 
-### `signal` (`change_energy` | `flow_speed`)
+### `signal` (`change_energy` | `flow_speed` | `coherence`)
 
 Which read of the tensor leaves the node. Swapping it changes the *units*
-of everything downstream (energy vs px/s), so thresholds tuned on one do not
-mean anything on the other.
+of everything downstream (energy vs px/s vs a dimensionless ratio), so
+thresholds tuned on one do not mean anything on another.
 
 ### `block` (0-1024, default 0 = auto)
 
@@ -60,11 +68,20 @@ crossing the arena lights up a path of blocks in sequence.
 It does not output an image you can watch directly. The output is a block
 grid; the tab's video panel renders it as an overlay on the footage.
 
+`coherence` does not detect on its own. It answers "what kind of change",
+not "how much": a nearly static block with a whisper of sensor noise can
+legitimately read high, because whatever negligible change is there may well
+be consistent with one translation. Blocks with exactly zero change report
+0 rather than that vacuous 1, but the working rule is to gate coherence
+against `change_energy`, never to threshold it alone.
+
 ## Cost
 
 Dominated by the Gaussian blur of the tensor products (the blur is the
 tensor's spatial window). `change_energy` blurs one plane; `flow_speed`
-blurs five and solves a 2x2 system per pixel, ~4x the cost. Both are
-~realtime at a typical working resolution, which is why this step is
-recomputed rather than cached (it carries the previous frame as state, and
-stateful nodes are uncacheable by contract).
+blurs five and solves a 2x2 system per pixel; `coherence` blurs six and
+eigendecomposes one 3x3 matrix per block (a few hundred tiny solves — not
+the cost), so the last two sit at ~4x `change_energy`. All are ~realtime at
+a typical working resolution, which is why this step is recomputed rather
+than cached (it carries the previous frame as state, and stateful nodes are
+uncacheable by contract).

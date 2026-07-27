@@ -31,6 +31,20 @@ three grid sliders quantize to 0.2 steps so the two alphas can be matched by
 feel. Holding Shift peeks: every overlay drops and the frame underneath is
 all there is.
 
+**The wheel magnifies, and the grid is magnified with the picture.** Blocks
+are the size of the biology, so at a realistic block count a cell is a few
+screen pixels and the overlay is unreadable at the fit. The magnifier is
+`gui/zoom.Magnifier`, the same one the replicate tab's viewport uses, and the
+reason it is shared is that the pane and that viewport now have one mapping
+rule between them: `_content_rect` is the fit and only the floor the view is
+clamped against, `view_rect` is where everything paints. *Everything* — the
+two images and the grid go into the same rectangle, so registration between
+cell and pixel is not maintained at every zoom so much as unable to come
+apart. Hit-testing reads that rectangle too, and additionally refuses points
+outside the fit: a magnified grid extends under the letterbox, where nothing
+is painted, and a click on bare panel must not solo the cell that would have
+been there.
+
 **A grid click emits; it never applies.** `solo_toggled` carries the block
 index (or None for un-solo) and the drawn solo marker moves only when
 `set_block_state` says so — solo lives in the state model, and a widget that
@@ -46,7 +60,16 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QEvent, QObject, QPointF, QRect, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QKeyEvent, QMouseEvent, QPainter, QPaintEvent, QPen
+from PySide6.QtGui import (
+    QColor,
+    QImage,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QWheelEvent,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -58,6 +81,7 @@ from PySide6.QtWidgets import (
 )
 
 from sieve.gui.band_plot import ACCENT, DIM, PANEL, TEXT, plot_font
+from sieve.gui.zoom import Magnifier
 
 FloatArray = NDArray[np.floating[Any]]
 
@@ -119,6 +143,8 @@ class _CompositePane(QWidget):
     solo_toggled = Signal(object)
     #: The hovered block index, or None off the grid. The view's footer reads it.
     hover_changed = Signal(object)
+    #: The magnification changed, as a multiple of the fit scale.
+    zoom_changed = Signal(float)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -141,6 +167,8 @@ class _CompositePane(QWidget):
         self.scale_max = 1.0
         #: Shift is held: every overlay drops so the frame can be read bare.
         self.peek = False
+        #: Zoom and pan, shared with the replicate tab's viewport.
+        self.magnifier = Magnifier()
         self.setMouseTracking(True)
         self.setMinimumHeight(160)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -167,16 +195,31 @@ class _CompositePane(QWidget):
             height,
         )
 
+    def view_rect(self) -> QRectF:
+        """Where everything paints: the fit magnified and panned.
+
+        The one rectangle the images, the grid, and the hit test all read, so
+        the overlay cannot drift off the pixels it describes.
+        """
+        return self.magnifier.view_rect(self._content_rect())
+
     def grid_rect(self) -> QRectF:
         """Where the grid paints: the same rectangle the images fill."""
-        return self._content_rect()
+        return self.view_rect()
 
     def block_at(self, pos: QPointF) -> int | None:
-        """The block under `pos`, or None outside the grid (or with none on)."""
+        """The block under `pos`, or None outside the grid (or with none on).
+
+        Two containment tests, not one. A magnified grid runs off under the
+        letterbox, and the cells out there are clipped away at paint time — so
+        a point the fit does not contain is over bare panel whatever the grid
+        rect says, and answering with the cell that would have been there
+        would solo a block the user cannot see.
+        """
         if not self.grid_on:
             return None
         g = self.grid_rect()
-        if not g.contains(pos) or g.isEmpty():
+        if not g.contains(pos) or g.isEmpty() or not self._content_rect().contains(pos):
             return None
         ny, nx = self.grid
         col = min(int((pos.x() - g.left()) / g.width() * nx), nx - 1)
@@ -184,6 +227,37 @@ class _CompositePane(QWidget):
         return row * nx + col
 
     # ---- input -----------------------------------------------------------
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        """Magnify about the cursor, never below the fit.
+
+        Nothing scrollable encloses this pane — the card column that made a
+        wheel ambiguous is the other half of the tab — so the gesture is free
+        here and needs no focus first. See `gui/wheel_steps.py` for the rule
+        that decides which knobs yield the wheel and why this one does not.
+        """
+        detents = event.angleDelta().y() / 120.0
+        if detents == 0.0:
+            super().wheelEvent(event)
+            return
+        if self.magnifier.wheel(detents, event.position(), self._content_rect()):
+            self.zoom_changed.emit(self.magnifier.zoom)
+            self._refresh_hover(event.position())
+            self.update()
+        event.accept()
+
+    def reset_zoom(self) -> None:
+        """Return to the fitted view."""
+        if self.magnifier.reset():
+            self.zoom_changed.emit(self.magnifier.zoom)
+            self.update()
+
+    def _refresh_hover(self, pos: QPointF) -> None:
+        """Re-read the block under a stationary cursor after the map moved."""
+        hover = self.block_at(pos)
+        if hover != self.hover:
+            self.hover = hover
+            self.hover_changed.emit(hover)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         hover = self.block_at(event.position())
@@ -223,16 +297,22 @@ class _CompositePane(QWidget):
             )
             painter.end()
             return
+        # Everything after this is clipped to the fitted box, so a magnified
+        # view spills into the letterbox no more than a fitted one does — and
+        # `block_at`'s second containment test is the same boundary read from
+        # the input side.
+        painter.setClipRect(content)
+        view = self.view_rect()
         if self.base is not None:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-            painter.drawImage(content, self.base)
+            painter.drawImage(view, self.base)
         if self.over is not None and not self.peek:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
             painter.setOpacity(self.opacity)
-            painter.drawImage(content, self.over)
+            painter.drawImage(view, self.over)
             painter.setOpacity(1.0)
         if self.grid_on and not self.peek:
-            self._paint_grid(painter, content)
+            self._paint_grid(painter, view)
         painter.end()
 
     def _paint_grid(self, painter: QPainter, g: QRectF) -> None:
@@ -299,6 +379,8 @@ class StepCompositeView(QWidget):
         self._pane = _CompositePane()
         self._pane.solo_toggled.connect(self.solo_toggled)
         self._pane.hover_changed.connect(self._on_hover)
+        # The header states the magnification, so it repaints when it moves.
+        self._pane.zoom_changed.connect(self._on_zoom)
 
         self._slider = QSlider(Qt.Orientation.Horizontal)
         self._slider.setRange(0, 100)
@@ -421,6 +503,11 @@ class StepCompositeView(QWidget):
         self._pane.scale_max = max(value, 1e-12)
         self._pane.update()
 
+    def reset_zoom(self) -> None:
+        """Return to the fitted view — a new source is a new picture."""
+        self._pane.reset_zoom()
+        self.update()
+
     # ---- reading (for the tab and for tests) -----------------------------
 
     @property
@@ -457,6 +544,11 @@ class StepCompositeView(QWidget):
     def heat_slider(self) -> QSlider:
         """The heatmap layer's alpha control."""
         return self._heat_slider
+
+    @property
+    def zoom(self) -> float:
+        """Magnification as a multiple of the fit scale. 1.0 is fitted."""
+        return self._pane.magnifier.zoom
 
     @property
     def peeking(self) -> bool:
@@ -508,6 +600,11 @@ class StepCompositeView(QWidget):
         else:
             self._tag.setText(self._grid_caption)
 
+    def _on_zoom(self, zoom: float) -> None:
+        """The header states the magnification, so it repaints when it moves."""
+        del zoom
+        self.update()
+
     def _on_hover(self, block: object) -> None:
         del block
         self._update_tag()
@@ -540,5 +637,10 @@ class StepCompositeView(QWidget):
             title = f"{title} — {self._caption.upper()}"
         if self._pane.grid_on:
             title = f"{title} — CLICK TO SOLO · SHIFT PEEKS"
+        # Magnified is a state a user can forget they are in, and at 8x a grid
+        # shows a handful of cells that look like the whole thing. The header
+        # says so; scrolling out returns exactly to the fit.
+        if self._pane.magnifier.magnified:
+            title = f"{title} — {self._pane.magnifier.zoom:.1f}X"
         painter.drawText(QRect(10, 4, self.width() - 20, 14), 0, title)
         painter.end()

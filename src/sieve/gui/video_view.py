@@ -12,9 +12,10 @@ widget: it is a function of the widget size and the source size and nothing
 else. `view_rect` is where the source is actually *painted*, which is
 `content_rect` magnified about a pan centre. Every mapping goes through
 `view_rect`; `content_rect` survives as the thing `view_rect` is clamped
-against, and that clamp is the whole zoom-floor rule. Scrolling out can never
-produce a `view_rect` smaller than the fit, because at zoom 1.0 the two
-expressions are not merely close but the same object — see `view_rect`.
+against, and that clamp is the whole zoom-floor rule. The clamp itself lives
+in `gui/zoom.Magnifier`, which is where its reasoning is — this widget owns
+the fit and the source-pixel units, and the magnifier owns everything between
+them.
 
 **Adjustment is for the selected replicate only.** A dozen arenas each wearing
 eight handles is an unreadable overlay, and the tab's other rule settles it
@@ -46,6 +47,20 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
+from sieve.gui.zoom import MAX_ZOOM, MIN_ZOOM, ZOOM_STEP, Magnifier
+
+__all__ = [
+    "HANDLE_GRAB_PX",
+    "HANDLE_PAINT_PX",
+    "MAX_ZOOM",
+    "MIN_DRAG_PX",
+    "MIN_ZOOM",
+    "NO_SELECTION",
+    "ZOOM_STEP",
+    "CropMode",
+    "Handle",
+    "VideoView",
+]
 
 #: A press-and-release shorter than this in both axes is a click, not a drag.
 #: Below it there is no meaningful box, and treating it as one produces
@@ -57,15 +72,6 @@ MIN_DRAG_PX = 6
 #: slightly larger than it is.
 HANDLE_GRAB_PX = 7.0
 HANDLE_PAINT_PX = 4.0
-
-#: Magnification is bounded below by the fit — the vision's rule, and the reason
-#: the floor is 1.0 rather than some pixel scale: 1.0 *is* fit, whatever the
-#: widget size happens to be. The ceiling is where a source pixel is large
-#: enough to place unambiguously and further zoom buys nothing.
-MIN_ZOOM = 1.0
-MAX_ZOOM = 16.0
-#: Multiplier per wheel detent.
-ZOOM_STEP = 1.25
 
 _BACKGROUND = QColor(24, 24, 27)
 _LETTERBOX = QColor(16, 16, 18)
@@ -185,10 +191,7 @@ class VideoView(QWidget):
         self._gesture_serial = 0
         self._mode = CropMode.DRAW
         self._stamp_size: tuple[int, int] | None = None
-        self._zoom = MIN_ZOOM
-        #: Pan centre, in normalized source coordinates. Meaningless at zoom
-        #: 1.0, where the clamp in `view_rect` overrides it entirely.
-        self._centre = QPointF(0.5, 0.5)
+        self._magnifier = Magnifier()
         self._hint = "File ▸ Open Video…   (Ctrl+O)"
 
     # ---- content ---------------------------------------------------------
@@ -259,14 +262,12 @@ class VideoView(QWidget):
     @property
     def zoom(self) -> float:
         """Magnification as a multiple of the fit scale. 1.0 is fitted."""
-        return self._zoom
+        return self._magnifier.zoom
 
     def reset_zoom(self) -> None:
         """Return to the fitted view."""
-        self._centre = QPointF(0.5, 0.5)
-        if self._zoom != MIN_ZOOM:
-            self._zoom = MIN_ZOOM
-            self.zoom_changed.emit(self._zoom)
+        if self._magnifier.reset():
+            self.zoom_changed.emit(self._magnifier.zoom)
         self.update()
 
     # ---- geometry --------------------------------------------------------
@@ -297,46 +298,25 @@ class VideoView(QWidget):
     def view_rect(self) -> QRectF:
         """Where the source is painted: `content_rect` magnified and panned.
 
-        Two properties this has to hold, and both come out of the clamp rather
-        than out of a guard the caller has to remember:
-
-        At zoom 1.0 it returns `content_rect` itself, so a wheel-out storm
-        leaves the frame *exactly* fitted rather than fitted to within a float
-        epsilon. That exactness is what the round-trip mapping tests stand on.
-
-        Above 1.0 the rect is clamped to cover `content_rect`, so the magnified
-        source always fills the letterbox and there is no pan that reveals a
-        gap. The clamp is what enforces it: the pan centre is a request, and
-        this is the only place that decides what the request resolves to, which
-        is why nothing else clamps `_centre`.
+        The magnifier holds the clamp and the reasoning for it; with no source
+        there is no magnification to apply, so the fit is returned unchanged.
         """
         fit = self.content_rect()
-        if self._source_size is None or self._zoom <= MIN_ZOOM:
+        if self._source_size is None:
             return fit
-
-        width = fit.width() * self._zoom
-        height = fit.height() * self._zoom
-        x = min(max(fit.center().x() - self._centre.x() * width, fit.right() - width), fit.left())
-        y = min(max(fit.center().y() - self._centre.y() * height, fit.bottom() - height), fit.top())
-        return QRectF(x, y, width, height)
+        return self._magnifier.view_rect(fit)
 
     def source_at(self, point: QPointF) -> QPointF:
         """Widget point as a source coordinate, unrounded and unclamped.
 
-        The mapping the zoom anchor needs: rounding here would make a wheel
-        under a stationary cursor creep, because each step would re-anchor to a
-        slightly different source point than the last one landed on.
+        The magnifier speaks in normalized content coordinates; source pixels
+        are this widget's own unit, so the scaling happens here.
         """
         if self._source_size is None:
             return QPointF()
         source_width, source_height = self._source_size
-        view = self.view_rect()
-        if view.width() <= 0 or view.height() <= 0:
-            return QPointF()
-        return QPointF(
-            (point.x() - view.x()) / view.width() * source_width,
-            (point.y() - view.y()) / view.height() * source_height,
-        )
+        normalized = self._magnifier.at(point, self.content_rect())
+        return QPointF(normalized.x() * source_width, normalized.y() * source_height)
 
     def to_source(self, point: QPointF) -> tuple[int, int]:
         """Widget point to source pixel, clamped inside the frame."""
@@ -419,13 +399,7 @@ class VideoView(QWidget):
     # ---- input -----------------------------------------------------------
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        """Magnify about the cursor, never below the fit.
-
-        Anchoring on the cursor rather than the centre is what makes the
-        magnifier usable for placement: the arena the user is looking at stays
-        under the pointer while it grows, so they do not have to chase it with
-        a pan after every detent.
-        """
+        """Magnify about the cursor, never below the fit."""
         if self._source_size is None:
             super().wheelEvent(event)
             return
@@ -434,34 +408,10 @@ class VideoView(QWidget):
             super().wheelEvent(event)
             return
 
-        anchor = event.position()
-        source = self.source_at(anchor)
-        zoom = min(max(self._zoom * (ZOOM_STEP**detents), MIN_ZOOM), MAX_ZOOM)
-        if zoom != self._zoom:
-            self._zoom = zoom
-            self._recentre_on(source, anchor)
-            self.zoom_changed.emit(zoom)
+        if self._magnifier.wheel(detents, event.position(), self.content_rect()):
+            self.zoom_changed.emit(self._magnifier.zoom)
             self.update()
         event.accept()
-
-    def _recentre_on(self, source: QPointF, anchor: QPointF) -> None:
-        """Pan so that source point `source` lands at widget point `anchor`.
-
-        Inverts `view_rect`'s placement for `_centre`. The result is a request,
-        not a resolved value — `view_rect` clamps it, and near an edge the
-        anchor consequently does not hold, which is correct: there is nothing
-        beyond the frame edge to slide into view.
-        """
-        source_width, source_height = self._source_size or (0, 0)
-        fit = self.content_rect()
-        width = fit.width() * self._zoom
-        height = fit.height() * self._zoom
-        if width <= 0 or height <= 0 or source_width <= 0 or source_height <= 0:
-            return
-        self._centre = QPointF(
-            (fit.center().x() - anchor.x()) / width + source.x() / source_width,
-            (fit.center().y() - anchor.y()) / height + source.y() / source_height,
-        )
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         """Begin a gesture: resize a handle, move the selected box, or draw.

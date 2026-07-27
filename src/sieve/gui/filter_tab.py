@@ -1694,6 +1694,9 @@ class FilterTab(QWidget):
         self._composite.set_frames(None, None)
         self._composite.set_notice("")
         self._composite.set_block_state(np.zeros(1, np.float32), np.zeros(1, bool), None)
+        # A magnification is a view of *this* footage and does not carry to the
+        # next one, exactly as the replicate viewport's does not.
+        self._composite.reset_zoom()
         self._hud.set_span(0, 0)
         self._hud.begin()
         self._sync_widgets_from_chain()

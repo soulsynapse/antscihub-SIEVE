@@ -54,6 +54,20 @@ _settling("settle5", 5)
 
 
 @register_filter(
+    filter_id="join1",
+    version="1.0.0",
+    summary="Two frames in, one out, after a frame of settling.",
+    accepts={"left": ArraySpec(), "right": ArraySpec()},
+    emits=ArraySpec(),
+    cost=COST,
+    warmup_frames=1,
+    registry=SHELF,
+)
+class Join1Params(ParamsBase):
+    pass
+
+
+@register_filter(
     filter_id="decimate",
     version="1.0.0",
     summary="Keep one frame in `factor`.",
@@ -89,7 +103,17 @@ def node(node_id: str, filter_id: str, **params: object) -> Node:
 
 
 def edges(*pairs: str) -> tuple[Edge, ...]:
-    return tuple(Edge(upstream=pair.split(">")[0], downstream=pair.split(">")[1]) for pair in pairs)
+    """`"a>b"` for each edge, or `"a>b:left"` to name the port it feeds."""
+    built: list[Edge] = []
+    for pair in pairs:
+        upstream, target = pair.split(">")
+        downstream, _, port = target.partition(":")
+        built.append(
+            Edge(upstream=upstream, downstream=downstream, port=port)
+            if port
+            else Edge(upstream=upstream, downstream=downstream)
+        )
+    return tuple(built)
 
 
 #: The span these tests run over unless they are about the span. A module-level
@@ -122,15 +146,19 @@ def test_lead_in_is_the_longest_path_not_the_whole_graph() -> None:
     1+3+1 = 5, so the graph wants 7 — decoding once feeds both branches. Summing
     every node's declaration instead gives 10, which is the mistake this pins:
     it is not a crash, it is three frames of extra decode per request, forever.
+
+    `d` is a two-port join because it has to be — a node with two upstreams
+    declares two ports now — and its warmup is denominated at its own input
+    exactly as a single-input filter's is, so the arithmetic is unchanged.
     """
     pipeline = Pipeline(
         nodes=(
             node("a", "settle1"),
             node("b", "settle5"),
             node("c", "settle3"),
-            node("d", "settle1"),
+            node("d", "join1"),
         ),
-        edges=edges("a>b", "a>c", "b>d", "c>d"),
+        edges=edges("a>b", "a>c", "b>d:left", "c>d:right"),
     )
     assert plan_for(pipeline).lead_in == 7
     # And the walk agrees with the definition it is an optimization of.

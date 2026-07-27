@@ -26,7 +26,7 @@ kernel with no state to keep is unchanged, unwrapped, and pays nothing.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from importlib.util import find_spec
@@ -78,6 +78,32 @@ class Kernel(Protocol[ParamsT_contra]):
     def __call__(self, frame: Frame, params: ParamsT_contra, /) -> Frame: ...
 
 
+class MergingKernel(Protocol[ParamsT_contra]):
+    """One frame per input port in, one frame out, on one backend.
+
+    The second signature `Kernel`'s docstring declined to invent early, arrived
+    with the filter class that needs it: every discriminant in REFINED-VISION's
+    temporal chain combines two streams at one node, and a combination cannot
+    be expressed one frame at a time. The frames arrive as a mapping keyed by
+    the port names the spec declared on `accepts`, because position would make
+    edge-declaration order semantic — `a - b` versus `b - a` decided by which
+    line of YAML came first.
+
+    Which shape the executor calls is decided by the spec's `input_ports`, not
+    by inspecting the callable: a spec declaring one port gets `Kernel`'s
+    calling convention, more than one gets this. The registration decorators
+    enforce the pairing at import, so a mismatch is an error where the filter
+    is written rather than at the first frame.
+
+    The other two shapes that entry deferred stay deferred: a span in
+    (`Mode.WINDOWED`) and sometimes-nothing out (`rate_changing`) each need a
+    decision about what the executor does with the answer, and no filter needs
+    either yet.
+    """
+
+    def __call__(self, frames: Mapping[str, Frame], params: ParamsT_contra, /) -> Frame: ...
+
+
 class StatefulKernel(Protocol[ParamsT_contra, StateT_contra]):
     """The same shape, plus somewhere to keep what the last frame taught it.
 
@@ -121,11 +147,11 @@ class KernelBinding:
     """
 
     backend: Backend
-    run: Kernel[Any] | StatefulKernel[Any, Any]
+    run: Kernel[Any] | StatefulKernel[Any, Any] | MergingKernel[Any]
     #: How to make one run's state, or `None` for a kernel that keeps none.
     state_factory: Callable[[], Any] | None = None
 
-    def start(self) -> Kernel[Any]:
+    def start(self) -> Kernel[Any] | MergingKernel[Any]:
         """A callable for exactly one run, with its own state if it needs any.
 
         Called once per `execute`, not once per frame — the state has to see
@@ -139,7 +165,7 @@ class KernelBinding:
         the function it named.
         """
         if self.state_factory is None:
-            return cast(Kernel[Any], self.run)
+            return cast("Kernel[Any] | MergingKernel[Any]", self.run)
         stateful = cast(StatefulKernel[Any, Any], self.run)
         state = self.state_factory()
         return lambda frame, params: stateful(frame, params, state)
@@ -176,7 +202,7 @@ class KernelRegistry:
         self,
         spec: FilterSpec,
         backend: Backend,
-        run: Kernel[Any] | StatefulKernel[Any, Any],
+        run: Kernel[Any] | StatefulKernel[Any, Any] | MergingKernel[Any],
         *,
         state_factory: Callable[[], Any] | None = None,
     ) -> None:
@@ -286,7 +312,10 @@ def kernel(
     Raises:
         TypeError: if `params_model` carries no spec — it was never decorated
             with `@register_filter`, so there is no id, version, or declared
-            I/O for this kernel to be the implementation of.
+            I/O for this kernel to be the implementation of. Also if the spec
+            declares more than one input port: the executor would call this
+            kernel with a mapping it is not written to take, so the mismatch is
+            named here, at import, rather than at the first frame.
     """
     spec = params_model.__filter_spec__
     if spec is None:
@@ -294,8 +323,52 @@ def kernel(
             f"{params_model.__name__} has no filter spec: @kernel implements a registered filter, "
             "so the params class it names must carry @register_filter"
         )
+    if len(spec.input_ports) > 1:
+        raise TypeError(
+            f"{spec.filter_id} declares input ports {sorted(spec.input_ports)}, so its kernel "
+            "is called with a mapping of them — register it with @merging_kernel"
+        )
 
     def decorate(run: Kernel[ParamsT]) -> Kernel[ParamsT]:
+        (registry if registry is not None else KERNELS).register(spec, backend, run)
+        return run
+
+    return decorate
+
+
+def merging_kernel(
+    params_model: type[ParamsT],
+    backend: Backend,
+    *,
+    registry: KernelRegistry | None = None,
+) -> Callable[[MergingKernel[ParamsT]], MergingKernel[ParamsT]]:
+    """Decorate a mapping-taking function as `params_model`'s kernel on `backend`.
+
+    `kernel`'s mirror for a filter whose spec declares more than one input
+    port. A separate decorator for `stateful_kernel`'s reason: the two decorate
+    functions of different first-argument type, and one decorator typed as the
+    union would let a one-frame kernel be registered for a two-port filter and
+    fail at the first frame rather than at import.
+
+    Raises:
+        TypeError: if `params_model` carries no spec, as `kernel`. Also if the
+            spec declares only one input port — such a filter's kernel is
+            called with a bare frame, and registering it here would hand it a
+            mapping.
+    """
+    spec = params_model.__filter_spec__
+    if spec is None:
+        raise TypeError(
+            f"{params_model.__name__} has no filter spec: @merging_kernel implements a registered "
+            "filter, so the params class it names must carry @register_filter"
+        )
+    if len(spec.input_ports) < 2:
+        raise TypeError(
+            f"{spec.filter_id} declares one input port, so its kernel is called with a bare "
+            "frame — register it with @kernel"
+        )
+
+    def decorate(run: MergingKernel[ParamsT]) -> MergingKernel[ParamsT]:
         (registry if registry is not None else KERNELS).register(spec, backend, run)
         return run
 
@@ -325,7 +398,10 @@ def stateful_kernel(
         registry: the shelf to register on. Defaults to the process-wide one.
 
     Raises:
-        TypeError: if `params_model` carries no spec, as `kernel`.
+        TypeError: if `params_model` carries no spec, as `kernel`. Also if the
+            spec declares more than one input port: a stateful *merging* kernel
+            is a protocol nothing has needed yet, and it should be invented by
+            the filter that needs it rather than here.
         ValueError: if the spec does not declare `stateful`. See
             `KernelRegistry.register`.
     """
@@ -334,6 +410,11 @@ def stateful_kernel(
         raise TypeError(
             f"{params_model.__name__} has no filter spec: @stateful_kernel implements a registered "
             "filter, so the params class it names must carry @register_filter"
+        )
+    if len(spec.input_ports) > 1:
+        raise TypeError(
+            f"{spec.filter_id} declares input ports {sorted(spec.input_ports)}, and no stateful "
+            "merging protocol exists yet — the filter that needs one should bring its signature"
         )
 
     def decorate(run: StatefulKernel[ParamsT, StateT]) -> StatefulKernel[ParamsT, StateT]:

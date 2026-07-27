@@ -12,16 +12,21 @@ object. An `is_valid()` on an already-constructed graph would make the checked
 and unchecked cases the same type, and the executor would be one forgotten call
 away from walking a cycle.
 
-**Four rejections, in a fixed order**, because the first useful message is the
+**Five rejections, in a fixed order**, because the first useful message is the
 one to give: an unresolved filter is reported before a cycle, since a graph
 half of whose nodes name nothing has no meaningful cycle to describe; a cycle
-is reported before an edge's types, since ordering the type check needs the
-sort that the cycle check produces.
+is reported before port wiring, since ordering the later checks needs the sort
+that the cycle check produces; and wiring is reported before an edge's types,
+since an edge feeding a port the filter does not declare has no `accepts` to
+check a type against.
 
 1. Every `(filter_id, version)` resolves against the registry.
 2. The graph is acyclic.
-3. Every edge chains: the downstream's `accepts` admits the upstream's `emits`.
-4. Nothing else. Parameters are *not* validated here — that happens in
+3. Every node's incoming edges fill its declared input ports exactly — no
+   unknown port, no unfilled port, and a merging filter is never a root.
+4. Every edge chains: what the downstream's port `accepts` admits the
+   upstream's `emits`.
+5. Nothing else. Parameters are *not* validated here — that happens in
    `cache_key.node_key`, against `spec.params_model`, at the point where a wrong
    parameter would enter a hash. A second validation pass would be a second
    answer to whether a graph is runnable.
@@ -90,8 +95,24 @@ class CycleError(GraphError):
         super().__init__(f"pipeline contains a cycle among nodes: {', '.join(self.nodes)}")
 
 
+class PortWiringError(GraphError):
+    """A node's incoming edges do not line up with its declared input ports.
+
+    Three shapes, one error: an edge names a port the filter does not declare,
+    a declared port has no edge feeding it, or a filter declaring several ports
+    sits at a root — where the one stream available is the source, and there is
+    no rule for which port it would fill that is not a guess. All three are
+    facts about declarations, so all three are available with nothing installed
+    but the filter's spec.
+    """
+
+    def __init__(self, node_id: str, message: str) -> None:
+        self.node_id = node_id
+        super().__init__(message)
+
+
 class EdgeTypeError(GraphError):
-    """An edge carries something its downstream cannot consume.
+    """An edge carries something its downstream's port cannot consume.
 
     The rejection the I/O declarations exist to enable: it is available before
     a frame is decoded, on a machine with no codec, which is what makes a
@@ -100,12 +121,14 @@ class EdgeTypeError(GraphError):
     """
 
     def __init__(
-        self, upstream: str, downstream: str, emits: StreamSpec, accepts: StreamSpec
+        self, upstream: str, downstream: str, port: str, emits: StreamSpec, accepts: StreamSpec
     ) -> None:
         self.upstream = upstream
         self.downstream = downstream
+        self.port = port
         super().__init__(
-            f"{upstream} emits {emits}, which {downstream} does not accept ({accepts})"
+            f"{upstream} emits {emits}, which {downstream} does not accept "
+            f"on port {port!r} ({accepts})"
         )
 
 
@@ -131,6 +154,12 @@ class Dag:
     upstreams: Mapping[str, tuple[str, ...]]
     #: Downstream node ids per `node_id`. Total over `order`.
     downstreams: Mapping[str, tuple[str, ...]]
+    #: Which upstream feeds each of a node's input ports: `node_id` to
+    #: `port -> upstream node_id`. Total over `order` — a root maps to `{}`.
+    #: The port-resolved view of `upstreams`, and the one the executor and the
+    #: cache key read, because for a merging filter *which port* a stream
+    #: arrives on is part of what the node computes: a minus b is not b minus a.
+    ports: Mapping[str, Mapping[str, str]]
 
     @classmethod
     def build(cls, pipeline: Pipeline, registry: FilterRegistry | None = None) -> Dag:
@@ -146,19 +175,23 @@ class Dag:
             UnresolvedFilterError: if any node names a filter that is not
                 registered at that version.
             CycleError: if the graph is cyclic.
+            PortWiringError: if any node's incoming edges do not fill its
+                declared input ports exactly.
             EdgeTypeError: if any edge's endpoints cannot be connected.
         """
         shelf = REGISTRY if registry is None else registry
         specs = cls._resolve(pipeline, shelf)
-        upstreams, downstreams = cls._adjacency(pipeline)
+        upstreams, downstreams, ports = cls._adjacency(pipeline)
         order = cls._topological(pipeline, upstreams, downstreams)
-        cls._check_edges(order, specs, upstreams)
+        cls._check_ports(order, specs, ports)
+        cls._check_edges(order, specs, ports)
         return cls(
             pipeline=pipeline,
             order=order,
             specs=specs,
             upstreams=upstreams,
             downstreams=downstreams,
+            ports=ports,
         )
 
     # ---- construction ----------------------------------------------------
@@ -183,22 +216,31 @@ class Dag:
     @staticmethod
     def _adjacency(
         pipeline: Pipeline,
-    ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
-        """Both directions, both total over the node set.
+    ) -> tuple[
+        dict[str, tuple[str, ...]],
+        dict[str, tuple[str, ...]],
+        dict[str, dict[str, str]],
+    ]:
+        """Both directions plus the port view, all total over the node set.
 
         Built as lists and frozen on the way out so that edge order is the
         document's. Nothing downstream depends on that order — `node_key` sorts
         its upstreams, precisely so it cannot — but a traversal whose output
-        order is the document's is one whose diffs are readable.
+        order is the document's is one whose diffs are readable. The port
+        mapping cannot lose an edge to a key collision: `Pipeline` has already
+        refused two edges feeding one port.
         """
         up: dict[str, list[str]] = {node.node_id: [] for node in pipeline.nodes}
         down: dict[str, list[str]] = {node.node_id: [] for node in pipeline.nodes}
+        ports: dict[str, dict[str, str]] = {node.node_id: {} for node in pipeline.nodes}
         for edge in pipeline.edges:
             up[edge.downstream].append(edge.upstream)
             down[edge.upstream].append(edge.downstream)
+            ports[edge.downstream][edge.port] = edge.upstream
         return (
             {node_id: tuple(ids) for node_id, ids in up.items()},
             {node_id: tuple(ids) for node_id, ids in down.items()},
+            ports,
         )
 
     @staticmethod
@@ -246,17 +288,63 @@ class Dag:
         return tuple(ordered)
 
     @staticmethod
+    def _check_ports(
+        order: Sequence[Node],
+        specs: Mapping[str, FilterSpec],
+        ports: Mapping[str, Mapping[str, str]],
+    ) -> None:
+        """Every node's incoming edges against its declared input ports.
+
+        Exact agreement, both directions, because both failures are silent at
+        run time otherwise: an edge into an undeclared port is a stream the
+        kernel would never read, and an unfilled port is an argument the kernel
+        would be called without. A node with no incoming edge is a root and is
+        exempt from filling — the source fills its one port — but a filter
+        declaring several ports cannot sit there, because the source is one
+        stream and choosing which port receives it would be a guess this module
+        is not entitled to make.
+        """
+        for node in order:
+            declared = specs[node.node_id].input_ports
+            fed = ports[node.node_id]
+            if not fed:
+                if len(declared) > 1:
+                    raise PortWiringError(
+                        node.node_id,
+                        f"{node.node_id} declares input ports {sorted(declared)} but has no "
+                        "incoming edge; the source is one stream, so a merging filter cannot "
+                        "be a root",
+                    )
+                continue
+            unknown = sorted(set(fed) - set(declared))
+            if unknown:
+                raise PortWiringError(
+                    node.node_id,
+                    f"{node.node_id} has edges into {unknown}, which "
+                    f"{specs[node.node_id].filter_id} does not declare "
+                    f"(its ports: {sorted(declared)})",
+                )
+            unfilled = sorted(set(declared) - set(fed))
+            if unfilled:
+                raise PortWiringError(
+                    node.node_id,
+                    f"{node.node_id} leaves {unfilled} unfilled; every declared port needs "
+                    "an edge, because the kernel will be called with all of them",
+                )
+
+    @staticmethod
     def _check_edges(
         order: Sequence[Node],
         specs: Mapping[str, FilterSpec],
-        upstreams: Mapping[str, tuple[str, ...]],
+        ports: Mapping[str, Mapping[str, str]],
     ) -> None:
-        """Every edge, in topological order.
+        """Every edge, in topological order, against the port it feeds.
 
         The order is not needed for correctness — an edge check is local — but
         it decides *which* mismatch is reported first in a graph with several,
         and reporting the earliest is what lets a user fix a chain from the top
-        rather than from wherever a dict happened to start.
+        rather than from wherever a dict happened to start. Within a node,
+        edge-declaration order, for the same reason.
 
         A root's input is unchecked, and deliberately: what feeds it is the
         replicate's cropped source, which is an array of whatever the decoder
@@ -265,11 +353,12 @@ class Dag:
         with none.
         """
         for node in order:
-            accepts = specs[node.node_id].accepts
-            for upstream_id in upstreams[node.node_id]:
+            declared = specs[node.node_id].input_ports
+            for port, upstream_id in ports[node.node_id].items():
+                accepts = declared[port]
                 emits = specs[upstream_id].emits
                 if not accepts.admits(emits):
-                    raise EdgeTypeError(upstream_id, node.node_id, emits, accepts)
+                    raise EdgeTypeError(upstream_id, node.node_id, port, emits, accepts)
 
     # ---- queries ---------------------------------------------------------
 
@@ -351,13 +440,18 @@ class Dag:
         root_key = source_key(source, None if replicate is None else replicate.roi)
         keys: dict[str, str] = {}
         for node in self.order:
-            parents = self.upstreams[node.node_id]
-            if parents:
-                if any(parent not in keys for parent in parents):
+            fed = self.ports[node.node_id]
+            if fed:
+                if any(parent not in keys for parent in fed.values()):
                     continue
-                upstream = [keys[parent] for parent in parents]
+                upstream = {port: keys[parent] for port, parent in fed.items()}
             else:
-                upstream = [root_key]
+                # A root's one port is fed by the source. Keyed under its
+                # declared name rather than a fixed one, so that the key means
+                # what the kernel will actually be handed — `_check_ports` has
+                # already refused a multi-port root.
+                (port,) = self.specs[node.node_id].input_ports
+                upstream = {port: root_key}
             try:
                 keys[node.node_id] = node_key(
                     node,

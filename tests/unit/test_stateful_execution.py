@@ -30,11 +30,14 @@ together, but the *shelf* is local so that nothing here depends on what
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 import pytest
 
 from sieve.backend.dispatch import (
     Backend,
+    Kernel,
     KernelRegistry,
     stateful_kernel,
 )
@@ -299,7 +302,10 @@ def test_start_mints_a_state_per_call_and_leaves_stateless_kernels_alone() -> No
     shelved.register(stateless_spec, Backend.CPU, downsample_cpu)
 
     binding = shelved.select(EMA_SPEC, (Backend.CPU,))
-    one, two = binding.start(), binding.start()
+    # The cast narrows `start()`'s return past the merging shape: the EMA is a
+    # single-port filter, so what comes back takes a bare frame.
+    one = cast("Kernel[Any]", binding.start())
+    two = cast("Kernel[Any]", binding.start())
 
     frame = Frame(data=np.full((HEIGHT, WIDTH), 200, np.uint8), index=0, channels=ChannelSpec.GRAY)
     params = BackgroundEmaParams(alpha=0.5)

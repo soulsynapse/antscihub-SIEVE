@@ -160,6 +160,68 @@ class TestPurity:
             Project.from_yaml(f"schema_version: {SCHEMA_VERSION + 1}\nsource: {{path: a.MP4}}\n")
 
 
+class TestPorts:
+    def test_a_version_1_document_loads_with_every_edge_on_the_default_port(self) -> None:
+        # The migration path, pinned: every edge written before ports existed
+        # fed the one input a single-input filter has, and that is what the
+        # default *means*. A build that ever changes DEFAULT_PORT or drops the
+        # default breaks every saved project silently — this is the test that
+        # makes it loud.
+        text = """
+schema_version: 1
+source: {path: arena.MP4}
+pipeline:
+  nodes:
+    - {node_id: n1, filter_id: blur, version: 1.0.0}
+    - {node_id: n2, filter_id: blur, version: 1.0.0}
+  edges:
+    - {upstream: n1, downstream: n2}
+"""
+        project = Project.from_yaml(text)
+
+        assert project.pipeline.edges[0].port == "in"
+        # And a re-save speaks the current schema, port spelled out.
+        assert "port: in" in project.to_yaml()
+
+    def test_two_edges_may_not_feed_one_port(self) -> None:
+        # Structural, not registry-aware: whatever the filter turns out to be,
+        # one input carries one stream. This is what replaced the old
+        # duplicate-edge check, which it subsumes.
+        nodes = tuple(
+            Node(node_id=node_id, filter_id="blur", version="1.0.0") for node_id in ("a", "b", "c")
+        )
+        with pytest.raises(ValidationError, match="two edges feed"):
+            Pipeline(
+                nodes=nodes,
+                edges=(
+                    Edge(upstream="a", downstream="c"),
+                    Edge(upstream="b", downstream="c"),
+                ),
+            )
+
+    def test_one_upstream_may_feed_two_ports_of_one_downstream(self) -> None:
+        # A stream compared against itself is a graph someone will draw, and
+        # nothing structural is wrong with it. The old exact-duplicate check
+        # would have allowed one of these edges and refused the other for the
+        # wrong reason.
+        nodes = tuple(
+            Node(node_id=node_id, filter_id="blur", version="1.0.0") for node_id in ("a", "d")
+        )
+        pipeline = Pipeline(
+            nodes=nodes,
+            edges=(
+                Edge(upstream="a", downstream="d", port="left"),
+                Edge(upstream="a", downstream="d", port="right"),
+            ),
+        )
+
+        assert len(pipeline.edges) == 2
+
+    def test_a_port_that_cannot_survive_yaml_and_shells_is_refused(self) -> None:
+        with pytest.raises(ValidationError, match="port must match"):
+            Edge(upstream="a", downstream="b", port="Left Channel")
+
+
 class TestReferentialIntegrity:
     def test_an_edge_naming_no_node_is_refused(self) -> None:
         with pytest.raises(ValidationError, match="edge names no such node"):

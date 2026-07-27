@@ -52,23 +52,37 @@ WARMUPS = (0, 1, 2, 7)
 RATES = (Fraction(1, 1), Fraction(1, 2), Fraction(1, 10), Fraction(2, 3), Fraction(3, 2))
 
 
-def _spec_id(warmup: int, rate: Fraction) -> str:
-    return f"w{warmup}_r{rate.numerator}_{rate.denominator}"
+#: The most upstreams a generated node can have: one per earlier node in a
+#: seven-node graph. A filter declares its input ports, so a node with `k`
+#: parents needs a spec with `k` ports registered ahead of time.
+MAX_ARITY = 6
 
 
-def _register(warmup: int, rate: Fraction) -> type[ParamsBase]:
-    """One filter per `(warmup, rate)` pair, since both are declarations.
+def _spec_id(warmup: int, rate: Fraction, arity: int) -> str:
+    return f"w{warmup}_r{rate.numerator}_{rate.denominator}_a{arity}"
+
+
+def _register(warmup: int, rate: Fraction, arity: int) -> type[ParamsBase]:
+    """One filter per `(warmup, rate, arity)` triple, since all three are declarations.
 
     Two shapes rather than one parameterized shape, because `FilterSpec`
     refuses a filter that overrides `output_rate` without declaring
     `rate_changing` — a rate-changing filter at rate 1 is not a thing the
     contract allows, and working around that here would be testing a graph the
-    system cannot hold.
+    system cannot hold. Arity joined the id when ports became declarations:
+    the wiring rules demand a node's incoming edges fill its ports exactly, so
+    a two-parent node must name a two-port filter. The lead-in walk treats
+    every upstream alike — `warmup_frames` is denominated at *the node's*
+    input — which is why one warmup covers all `arity` ports.
     """
     common: dict[str, Any] = {
         "version": "1.0.0",
         "summary": "Settles, and maybe resamples.",
-        "accepts": ArraySpec(),
+        # The mapping form even at arity 1, so the generator speaks one port
+        # vocabulary: every edge feeds `p<index>`, whatever the arity. A bare
+        # `ArraySpec()` here would name the single port `in` and the wiring
+        # check would refuse the generator's `p0`.
+        "accepts": {f"p{port}": ArraySpec() for port in range(arity)},
         "emits": ArraySpec(),
         "cost": COST,
         "warmup_frames": warmup,
@@ -76,13 +90,13 @@ def _register(warmup: int, rate: Fraction) -> type[ParamsBase]:
     }
     if rate == 1:
 
-        @register_filter(filter_id=_spec_id(warmup, rate), **common)
+        @register_filter(filter_id=_spec_id(warmup, rate, arity), **common)
         class Unchanged(ParamsBase):
             pass
 
         return Unchanged
 
-    @register_filter(filter_id=_spec_id(warmup, rate), rate_changing=True, **common)
+    @register_filter(filter_id=_spec_id(warmup, rate, arity), rate_changing=True, **common)
     class Resampling(ParamsBase):
         #: A `ClassVar` and not a field: the rate is part of this filter's
         #: identity, and a field would let a document set it, which would make
@@ -97,9 +111,13 @@ def _register(warmup: int, rate: Fraction) -> type[ParamsBase]:
 
 for _warmup in WARMUPS:
     for _rate in RATES:
-        _register(_warmup, _rate)
+        for _arity in range(1, MAX_ARITY + 1):
+            _register(_warmup, _rate, _arity)
 
-_FILTER_IDS = tuple(_spec_id(w, r) for w in WARMUPS for r in RATES)
+_FILTER_IDS_BY_ARITY = {
+    arity: tuple(_spec_id(w, r, arity) for w in WARMUPS for r in RATES)
+    for arity in range(1, MAX_ARITY + 1)
+}
 
 
 @st.composite
@@ -108,22 +126,26 @@ def dags(draw: st.DrawFn) -> Pipeline:
 
     Edges from a lower index to a higher one cannot form a cycle, so every
     generated graph is valid by construction and Hypothesis spends its budget
-    on shapes rather than on rediscovering `CycleError`.
+    on shapes rather than on rediscovering `CycleError`. Parents are drawn
+    before the filter because the filter's arity must match: `k` parents fill
+    the `k` ports of a `k`-ary filter, one each, in index order.
     """
     count = draw(st.integers(min_value=1, max_value=7))
     nodes: list[Node] = []
     edges: list[Edge] = []
     for index in range(count):
-        filter_id = draw(st.sampled_from(_FILTER_IDS))
-        nodes.append(Node(node_id=f"n{index}", filter_id=filter_id, version="1.0.0"))
-        for parent in draw(
+        parents = draw(
             st.lists(
                 st.integers(min_value=0, max_value=index - 1) if index else st.nothing(),
                 max_size=index,
                 unique=True,
             )
-        ):
-            edges.append(Edge(upstream=f"n{parent}", downstream=f"n{index}"))
+        )
+        arity = max(1, len(parents))
+        filter_id = draw(st.sampled_from(_FILTER_IDS_BY_ARITY[arity]))
+        nodes.append(Node(node_id=f"n{index}", filter_id=filter_id, version="1.0.0"))
+        for port, parent in enumerate(parents):
+            edges.append(Edge(upstream=f"n{parent}", downstream=f"n{index}", port=f"p{port}"))
     return Pipeline(nodes=tuple(nodes), edges=tuple(edges))
 
 

@@ -19,7 +19,13 @@ from sieve.core.pipeline_model import Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
 from sieve.pipeline.cache_key import node_key, source_key
-from sieve.pipeline.dag import CycleError, Dag, EdgeTypeError, UnresolvedFilterError
+from sieve.pipeline.dag import (
+    CycleError,
+    Dag,
+    EdgeTypeError,
+    PortWiringError,
+    UnresolvedFilterError,
+)
 
 COST = CostEstimate(seconds_per_megapixel=0.001)
 SOURCE = "footage|1|2"
@@ -58,6 +64,19 @@ class DetectParams(ParamsBase):
 
 
 @register_filter(
+    filter_id="minus",
+    version="1.0.0",
+    summary="Left minus right, so which port is which matters.",
+    accepts={"left": ArraySpec(), "right": ArraySpec()},
+    emits=ArraySpec(),
+    cost=COST,
+    registry=SHELF,
+)
+class MinusParams(ParamsBase):
+    pass
+
+
+@register_filter(
     filter_id="jitter",
     version="1.0.0",
     summary="Frames in, frames out, never the same ones twice.",
@@ -76,22 +95,35 @@ def node(node_id: str, filter_id: str = "blur", version: str = "1.0.0", **params
 
 
 def edges(*pairs: str) -> tuple[Edge, ...]:
-    """`"a>b"` for each edge, because a diamond is four of them."""
-    return tuple(Edge(upstream=pair.split(">")[0], downstream=pair.split(">")[1]) for pair in pairs)
+    """`"a>b"` for each edge, or `"a>b:left"` to name the port it feeds."""
+    built: list[Edge] = []
+    for pair in pairs:
+        upstream, target = pair.split(">")
+        downstream, _, port = target.partition(":")
+        built.append(
+            Edge(upstream=upstream, downstream=downstream, port=port)
+            if port
+            else Edge(upstream=upstream, downstream=downstream)
+        )
+    return tuple(built)
 
 
 def diamond(**overrides: str) -> Pipeline:
     """a ─┬─> b ─┬─> d, the smallest graph with a node that has two upstreams.
            └─> c ─┘
 
-    `overrides` swaps one node's filter id, which is how the type-mismatch and
+    `d` is a `minus`, taking `b` on `left` and `c` on `right` — a two-upstream
+    node has to declare two ports now, and making the merge non-commutative is
+    what lets the key tests below say the ports are load-bearing. `overrides`
+    swaps one node's filter id, which is how the type-mismatch and
     non-determinism tests differ from the baseline by exactly one thing.
     """
     return Pipeline(
         nodes=tuple(
-            node(node_id, overrides.get(node_id, "blur")) for node_id in ("a", "b", "c", "d")
+            node(node_id, overrides.get(node_id, default))
+            for node_id, default in (("a", "blur"), ("b", "blur"), ("c", "blur"), ("d", "minus"))
         ),
-        edges=edges("a>b", "a>c", "b>d", "c>d"),
+        edges=edges("a>b", "a>c", "b>d:left", "c>d:right"),
     )
 
 
@@ -137,12 +169,45 @@ class TestRejections:
 
     def test_rows_may_not_feed_an_input_that_wants_frames(self) -> None:
         # The whole point of declaring I/O: rejected statically, with no codec,
-        # no frame, and no backend. `b` emits a table into `d`, which accepts
-        # arrays — provably disjoint under every parameterization of both.
+        # no frame, and no backend. `b` emits a table into `d`'s `left`, which
+        # accepts arrays — provably disjoint under every parameterization of
+        # both. The rejection names the port, because a merging filter's other
+        # input may be fine and "which of the two" is the fix.
         with pytest.raises(EdgeTypeError) as raised:
             Dag.build(diamond(b="detect"), SHELF)
 
         assert (raised.value.upstream, raised.value.downstream) == ("b", "d")
+        assert raised.value.port == "left"
+
+    def test_an_edge_into_a_port_the_filter_does_not_declare_is_refused(self) -> None:
+        # Silent at run time otherwise: the kernel reads the ports it declared,
+        # so a stream wired to a misspelled name would simply never be read.
+        graph = Pipeline(
+            nodes=(node("a"), node("b"), node("d", "minus")),
+            edges=edges("a>d:left", "b>d:rigth"),
+        )
+
+        with pytest.raises(PortWiringError, match="rigth"):
+            Dag.build(graph, SHELF)
+
+    def test_a_declared_port_left_unfilled_is_refused(self) -> None:
+        # The kernel is called with every declared port, so an unfilled one is
+        # an argument the executor would have nothing to pass.
+        graph = Pipeline(
+            nodes=(node("a"), node("d", "minus")),
+            edges=edges("a>d:left"),
+        )
+
+        with pytest.raises(PortWiringError, match=r"\['right'\] unfilled"):
+            Dag.build(graph, SHELF)
+
+    def test_a_merging_filter_cannot_sit_at_a_root(self) -> None:
+        # The source is one stream; which of `minus`'s two ports would receive
+        # it is not this module's guess to make.
+        graph = Pipeline(nodes=(node("d", "minus"),))
+
+        with pytest.raises(PortWiringError, match="cannot be a root"):
+            Dag.build(graph, SHELF)
 
 
 class TestOrder:
@@ -187,7 +252,7 @@ class TestKeyWalk:
 
         keys = dag.node_keys(source=SOURCE, backend=Backend.CPU, replicate=arena)
 
-        def by_hand(node_id: str, upstream: list[str]) -> str:
+        def by_hand(node_id: str, upstream: dict[str, str]) -> str:
             return node_key(
                 dag.pipeline.node(node_id),
                 spec=dag.spec(node_id),
@@ -196,11 +261,35 @@ class TestKeyWalk:
                 replicate=arena,
             )
 
-        expected = {"a": by_hand("a", [source_key(SOURCE, ARENA)])}
-        expected["b"] = by_hand("b", [expected["a"]])
-        expected["c"] = by_hand("c", [expected["a"]])
-        expected["d"] = by_hand("d", [expected["b"], expected["c"]])
+        expected = {"a": by_hand("a", {"in": source_key(SOURCE, ARENA)})}
+        expected["b"] = by_hand("b", {"in": expected["a"]})
+        expected["c"] = by_hand("c", {"in": expected["a"]})
+        expected["d"] = by_hand("d", {"left": expected["b"], "right": expected["c"]})
         assert keys == expected
+
+    def test_swapping_a_merges_ports_moves_its_key_and_only_its_key(self) -> None:
+        # The reason the fold is `[port, key]` pairs rather than a sorted list
+        # of keys: `b - c` and `c - b` are fed by the same two upstream keys
+        # and are not the same computation. A sorted-keys fold would give the
+        # two wirings one key and serve one's frames as the other's — the
+        # silent direction of `cache_key.py`'s asymmetry rule. Everything
+        # *above* the merge is untouched, because a wiring edit below a node
+        # has no path into its ancestry.
+        #
+        # `b` and `c` carry different radii on purpose. Two identical blurs of
+        # one upstream share a key *by design* — same computation, same bytes —
+        # and swapping the ports of two equal keys genuinely is the same
+        # computation, so the baseline diamond would pass this test vacuously.
+        nodes = (node("a"), node("b", radius=5), node("c", radius=7), node("d", "minus"))
+        forward_graph = Pipeline(nodes=nodes, edges=edges("a>b", "a>c", "b>d:left", "c>d:right"))
+        swapped_graph = Pipeline(nodes=nodes, edges=edges("a>b", "a>c", "b>d:right", "c>d:left"))
+        forward = Dag.build(forward_graph, SHELF).node_keys(source=SOURCE, backend=Backend.CPU)
+        swapped = Dag.build(swapped_graph, SHELF).node_keys(source=SOURCE, backend=Backend.CPU)
+
+        assert swapped["d"] != forward["d"]
+        assert {k: v for k, v in swapped.items() if k != "d"} == {
+            k: v for k, v in forward.items() if k != "d"
+        }
 
     def test_an_uncacheable_node_takes_its_descendants_and_nobody_else(self) -> None:
         # `b` cannot be keyed, so `d` — which consumes it — cannot be either,

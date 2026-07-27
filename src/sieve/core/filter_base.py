@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from fractions import Fraction
@@ -49,6 +49,18 @@ SEMVER_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 #: Lowercase identifier. It appears in cache keys, YAML, and CLI arguments, so
 #: it may not depend on case folding or shell quoting to stay itself.
 FILTER_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+
+#: The input port a single-input filter listens on, and the port an `Edge`
+#: that names none feeds. One name, defined here, because it appears in three
+#: places that must agree: the normalized form of `FilterSpec.accepts`, the
+#: default on `Edge.port`, and every cache key's upstream fold — a second
+#: spelling in any of them is a graph that validates and a key that misses.
+DEFAULT_PORT = "in"
+
+#: Port names share the filter-id spelling rule for the same reason sink
+#: formats do: they enter cache keys and saved documents, where case folding
+#: and quoting are not to be relied on.
+PORT_PATTERN = FILTER_ID_PATTERN
 
 
 class Mode(StrEnum):
@@ -257,10 +269,13 @@ class TableSpec:
 #: cannot feed a table input"); the narrowing itself goes through `isinstance`,
 #: which is what a type checker can follow.
 #:
-#: One stream per node, still. A detector that wants to emit both an overlay
-#: frame and a coordinate table needs named ports on `Edge`, which is a change
-#: to the saved artifact and to every edge ever written — worth making when a
-#: filter actually needs it, and not before.
+#: One *output* stream per node, still. Input ports arrived with the temporal
+#: chain — `Edge.port` names which of a downstream's declared inputs an edge
+#: feeds, and `FilterSpec.accepts` may be a mapping of them — but a detector
+#: that wants to emit both an overlay frame and a coordinate table needs the
+#: same treatment on the *emits* side, and that half is still deliberately
+#: unbuilt: no filter needs it, and the artifact change it forces should wait
+#: for the one that does.
 StreamSpec: TypeAlias = ArraySpec | TableSpec
 
 
@@ -298,7 +313,12 @@ class FilterSpec:
     version: str
     summary: str
     params_model: type[ParamsBase]
-    accepts: StreamSpec
+    #: What each input port consumes. A bare `StreamSpec` is the one-input
+    #: case and means `{DEFAULT_PORT: spec}` — every existing filter keeps its
+    #: declaration unchanged — and a mapping is a merging filter naming its
+    #: ports. Read through `input_ports`, which does that normalization once;
+    #: nothing downstream should branch on which form was written.
+    accepts: StreamSpec | Mapping[str, StreamSpec]
     emits: StreamSpec
     cost: CostEstimate
     mode: Mode = Mode.STREAMING
@@ -357,6 +377,18 @@ class FilterSpec:
     primary_params: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
+        if isinstance(self.accepts, Mapping):
+            if not self.accepts:
+                raise ValueError(
+                    f"{self.filter_id}: accepts is an empty mapping — a filter with no input "
+                    "port consumes nothing, and a source is not a filter"
+                )
+            bad = [name for name in self.accepts if not PORT_PATTERN.match(name)]
+            if bad:
+                raise ValueError(
+                    f"{self.filter_id}: port names must match {PORT_PATTERN.pattern!r}, "
+                    f"got {sorted(bad)}"
+                )
         if not FILTER_ID_PATTERN.match(self.filter_id):
             raise ValueError(
                 f"filter_id must match {FILTER_ID_PATTERN.pattern!r}, got {self.filter_id!r}"
@@ -395,6 +427,20 @@ class FilterSpec:
                 f"{self.filter_id}: {self.params_model.__name__} overrides output_rate but the "
                 "spec does not declare rate_changing"
             )
+
+    @property
+    def input_ports(self) -> Mapping[str, StreamSpec]:
+        """`accepts`, always as port name to spec.
+
+        The one place the bare-`StreamSpec` shorthand is expanded. `dag.py`
+        checks edge types against this, the executor decides one-frame versus
+        mapping call shape by its length, and both must agree on what the
+        single port is called — which is why the name is `DEFAULT_PORT` and not
+        a literal here.
+        """
+        if isinstance(self.accepts, Mapping):
+            return self.accepts
+        return {DEFAULT_PORT: self.accepts}
 
     @property
     def version_tuple(self) -> tuple[int, int, int]:

@@ -198,7 +198,7 @@ closed with it: two layers and one slider is QPainter. See
 
 # The temporal chain
 
-The four items below are what REFINED-VISION's closing section — "Temporal
+The items below are what REFINED-VISION's closing section — "Temporal
 signal-amplification-of-kind" — decomposes into once it is read as a specification
 rather than as a sketch. That reading is written up beneath the vision itself, in
 `docs/REFINED-VISION.md` under **What "signal amplification of kind" is, and what
@@ -223,48 +223,23 @@ and `docs/completed-todo/2026.07.26-coherence-as-a-third-block-signal.md`.
 Whether it makes the motion history filter unnecessary for the flagship
 example is now a question real footage can answer from the quick-switch.
 
-## Multi-upstream kernels
-
-**Gated on: nothing, and it gates everything else in this section.** Promoted
-from `LATER.md`'s "A kernel protocol that is not one frame in, one frame out" on
-2026.07.26 — that entry asked for "a filter that actually needs one" as the
-trigger, and REFINED-VISION's temporal section is nothing but combinations. The
-other two shapes in that entry, `Mode.WINDOWED` and `rate_changing`, stay
-deferred: they have separate triggers and no reason to arrive together.
-
-**Why it is unavoidable rather than convenient.** Every kind-amplifier worth
-building is a combination of channels — that is what makes it a discriminant
-rather than a filter. "High energy AND low coherence", "accumulated signal gated
-against its own baseline", "score compared against its null" are all two-input
-nodes. `pipeline/executor.py` raises `UnrunnableNodeError` on any node with more
-than one upstream, so the whole section is currently unbuildable.
-
-**What it involves.** `core/filter_base.py`'s `StreamSpec` docstring already
-prices the central change: **named ports on `Edge`**, which touches the saved
-artifact and every edge ever written, so it wants a migration path decided rather
-than discovered. Then a second `Kernel` signature taking a mapping of port name
-to `Frame`; `dag.py`'s edge type-check running per port rather than per node;
-`plan.py`'s lead-in becoming a backward max over *all* upstreams of a node rather
-than the one; and `executor.py` holding a frame from each upstream until every
-port for an index has arrived — which is the first place in the executor where
-two streams have to be *aligned by index* rather than consumed in order, and is
-the part most likely to be got subtly wrong when the two upstreams have different
-`warmup_frames`.
-
-The precedent `background_ema` set applies and is worth stating up front:
-whatever a merging kernel needs to be handed, it is handed by
-`KernelBinding.start` and not by a registry entry.
-
-Read: `src/sieve/core/filter_base.py` `StreamSpec`,
-`src/sieve/backend/dispatch.py` `Kernel`/`StatefulKernel`,
-`src/sieve/pipeline/executor.py` `UnrunnableNodeError`,
-`src/sieve/pipeline/{dag,plan}.py`, `docs/REFINED-VISION.md` **G**.
+Multi-upstream kernels, the item that gated the rest of this section, landed
+on 2026.07.26: `Edge.port` names the input it feeds (schema version 2, and a
+version-1 document loads unchanged), a merging filter declares its ports as a
+mapping on `accepts`, `MergingKernel` takes port name to `Frame`, and the key
+fold binds each upstream key to its port so `a - b` and `b - a` are two
+computations. Two of the anticipated costs turned out to be already paid —
+`plan.py`'s lead-in was always a backward max over all upstreams, and the
+executor's lockstep per-index loop aligns a merge's inputs with no new
+machinery. `Mode.WINDOWED` and `rate_changing` stay refused, and `emits` is
+still one stream per node. See
+`docs/completed-todo/2026.07.26-multi-upstream-kernels.md`.
 
 ## Per-block temporal baseline
 
-**Gated on: nothing to build it, but it is worth more after multi-upstream
-lands**, because the natural consumer is a node that takes the signal and its
-baseline as two ports rather than one that recomputes the baseline internally.
+**Gated on: nothing.** Multi-upstream has landed, so the natural consumer — a
+node that takes the signal and its baseline as two ports rather than one that
+recomputes the baseline internally — is now expressible.
 
 **The problem.** `change_energy` is in (intensity)²/frame, so its magnitude
 depends on illumination, gain, exposure, and animal-substrate contrast. A

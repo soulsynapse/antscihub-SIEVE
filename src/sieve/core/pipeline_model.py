@@ -83,13 +83,25 @@ from uuid import uuid4
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from sieve.core.filter_base import FILTER_ID_PATTERN, SEMVER_PATTERN
+from sieve.core.filter_base import (
+    DEFAULT_PORT,
+    FILTER_ID_PATTERN,
+    PORT_PATTERN,
+    SEMVER_PATTERN,
+)
 from sieve.core.replicates import Replicate
 
 #: Bumped when a saved document stops being readable by this code unchanged. A
 #: reader refuses a document from the future rather than guessing at it: the
 #: failure mode of guessing is a run that completes and is wrong.
-SCHEMA_VERSION = 1
+#:
+#: 2: `Edge` gained `port` (2026-07-26, multi-upstream kernels). A version-1
+#: document loads unchanged — the field defaults to `DEFAULT_PORT`, which is
+#: exactly what every edge meant before ports existed — but every save now
+#: writes `port` on every edge, and a version-1 build's `extra="forbid"` would
+#: report that as a stray field. The bump turns that parse error into the
+#: message this constant exists to give.
+SCHEMA_VERSION = 2
 
 #: Project files are named `<video stem>.sieve.yaml` and live *beside* the
 #: video they describe. VISION step 1 fixes the layout — a source in a folder,
@@ -286,10 +298,30 @@ def resolved_params(node: Node, replicate: Replicate | None = None) -> dict[str,
 
 
 class Edge(_Artifact):
-    """`upstream`'s output feeds `downstream`'s input, both by `node_id`."""
+    """`upstream`'s output feeds one of `downstream`'s input ports.
+
+    `port` names which one, in the downstream filter's own vocabulary — a
+    merging filter declares its ports on `FilterSpec.accepts`, and whether this
+    name is one of them is `dag.py`'s check, for the module docstring's reason:
+    this document must stay readable where the filter is not installed. What
+    *is* checked here is spelling, and structurally on `Pipeline`, that no two
+    edges feed one port.
+
+    The default is what makes schema version 1 documents load unchanged: every
+    edge written before ports existed fed the one input a single-input filter
+    has, and `DEFAULT_PORT` is that input's name.
+    """
 
     upstream: str
     downstream: str
+    port: str = DEFAULT_PORT
+
+    @field_validator("port")
+    @classmethod
+    def _known_shape_port(cls, value: str) -> str:
+        if not PORT_PATTERN.match(value):
+            raise ValueError(f"port must match {PORT_PATTERN.pattern!r}, got {value!r}")
+        return value
 
     @model_validator(mode="after")
     def _not_a_self_loop(self) -> Self:
@@ -381,8 +413,18 @@ class Pipeline(_Artifact):
             for endpoint in (edge.upstream, edge.downstream):
                 if endpoint not in seen:
                     raise ValueError(f"edge names no such node: {endpoint!r}")
-        if len({(edge.upstream, edge.downstream) for edge in self.edges}) != len(self.edges):
-            raise ValueError("duplicate edge")
+        # One producer per port, and it subsumes the old duplicate-edge check:
+        # two identical edges collide here too. Feeding one downstream twice on
+        # *different* ports stays legal — a stream compared against itself is a
+        # graph someone will legitimately draw. Whether the port exists on the
+        # filter is dag.py's question; that two streams cannot share one input
+        # is true of every filter that will ever be installed.
+        fed: set[tuple[str, str]] = set()
+        for edge in self.edges:
+            target = (edge.downstream, edge.port)
+            if target in fed:
+                raise ValueError(f"two edges feed {edge.downstream!r} on port {edge.port!r}")
+            fed.add(target)
         return self
 
     def __contains__(self, node_id: str) -> bool:

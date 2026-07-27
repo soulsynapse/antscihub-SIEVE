@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 
 from sieve.backend.dispatch import Backend
@@ -57,7 +57,11 @@ from sieve.decode.identity import decoder_identity
 #: form that stops being canonical — as opposed to when an input changes. Without
 #: it the only way to correct a key that was missing an input would be to touch
 #: every input by hand.
-HASH_VERSION = 1
+#:
+#: 2: the upstream fold gained port names (2026-07-26, multi-upstream kernels).
+#: A sorted list of upstream keys could not tell `a - b` from `b - a`; the fold
+#: is now `[port, key]` pairs, which changes every node key's derivation.
+HASH_VERSION = 2
 
 #: 32 bytes of BLAKE2b. Not a security boundary — nothing here defends against a
 #: crafted collision — so the size is chosen against accidental collision, where
@@ -142,7 +146,7 @@ def node_key(
     node: Node,
     *,
     spec: FilterSpec,
-    upstream: Sequence[str],
+    upstream: Mapping[str, str],
     backend: Backend,
     replicate: Replicate | None = None,
 ) -> str:
@@ -166,12 +170,13 @@ def node_key(
         node: The graph node. Its `filter_id` and `version` must match `spec`.
         spec: The registered filter, resolved by the caller — `dag.py` does this
             against a `FilterRegistry` and the executor carries the result.
-        upstream: Keys of the nodes feeding this one, or the `source_key` for a
-            root. Sorted before hashing: with no named ports on `Edge`, a node's
-            inputs are a set, and a key that moved when two edges were declared
-            in the other order would invalidate on an edit that changed nothing.
-            When ports arrive they join the key and order stops mattering
-            anyway.
+        upstream: Port name to the key of the node feeding it — the
+            `source_key` under the root's one declared port for a root. The
+            port names are *in* the digest, bound to their keys, because which
+            port a stream arrives on is part of what a merging node computes:
+            `a - b` and `b - a` are fed by the same two keys and are not the
+            same computation. Hashed as sorted pairs, so edge declaration
+            order still cannot move a key.
         backend: Where this node runs. Absent from the key exactly when the
             filter has claimed its kernels agree bit for bit.
         replicate: The replicate being processed; `None` for the node's
@@ -197,7 +202,7 @@ def node_key(
     params = spec.params_model.model_validate(resolved_params(node, replicate))
     return _digest(
         "node",
-        sorted(upstream),
+        sorted([port, key] for port, key in upstream.items()),
         node.filter_id,
         node.version,
         params.canonical_json(),

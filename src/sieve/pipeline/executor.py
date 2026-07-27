@@ -52,9 +52,9 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
-from sieve.backend.dispatch import KERNELS, Kernel, KernelRegistry
+from sieve.backend.dispatch import KERNELS, Kernel, KernelRegistry, MergingKernel
 from sieve.core.filter_base import Mode
 from sieve.core.pipeline_model import Node
 from sieve.core.types import ROI, Frame
@@ -71,11 +71,13 @@ class UnrunnableNodeError(RuntimeError):
     and that is a property of the executor rather than of the document, so it is
     raised here and at run time rather than by `Dag.build` or `ExecutionPlan`.
 
-    Three causes, all one root cause: `Kernel` is one frame in, one frame out.
-    A `WINDOWED` filter needs a span, a `rate_changing` filter needs to emit
-    nothing for some inputs, and a node with two upstreams needs two frames.
-    `dispatch.py` declines to invent the second protocol before a filter needs
-    one, so this names the gap instead of guessing at it.
+    Two causes, one root cause: `Kernel` is one frame in, one frame out. A
+    `WINDOWED` filter needs a span, and a `rate_changing` filter needs to emit
+    nothing for some inputs. `dispatch.py` declines to invent those protocols
+    before a filter needs one, so this names the gap instead of guessing at it.
+    A node with several upstreams was the third cause until the temporal chain
+    needed one; `MergingKernel` is its protocol now, and the executor hands it
+    a frame per declared port.
     """
 
 
@@ -175,9 +177,17 @@ def execute(
                 outputs[node.node_id] = cached
                 hits.add(node.node_id)
                 continue
-            parents = plan.dag.upstreams[node.node_id]
-            if parents:
-                incoming = outputs[parents[0]]
+            fed = plan.dag.ports[node.node_id]
+            incoming: Frame | Mapping[str, Frame]
+            if len(fed) > 1:
+                # A merging node takes a frame per port. No alignment machinery:
+                # every node in this loop computes the same source index in
+                # lockstep, so its upstreams' outputs for `index` — however
+                # different their warmup, and whether computed or served from
+                # the store — are already in `outputs` by topological order.
+                incoming = {port: outputs[parent] for port, parent in fed.items()}
+            elif fed:
+                incoming = outputs[next(iter(fed.values()))]
             else:
                 if source is None:
                     # The one place the reader is touched, and only once per
@@ -187,7 +197,7 @@ def execute(
                     decoded = reader.read(index)
                     source = decoded if roi is None else _crop(decoded, roi)
                 incoming = source
-            produced = _run_node(node, incoming, plan, bindings)
+            produced = _run_node(node, incoming, index, plan, bindings)
             outputs[node.node_id] = produced
             if key is not None:
                 keep.put(key, index, produced)
@@ -195,7 +205,9 @@ def execute(
             yield FrameResult(index=index, outputs=outputs, from_cache=frozenset(hits))
 
 
-def _bind(plan: ExecutionPlan, kernels: KernelRegistry) -> dict[str, Kernel[Any]]:
+def _bind(
+    plan: ExecutionPlan, kernels: KernelRegistry
+) -> dict[str, Kernel[Any] | MergingKernel[Any]]:
     """Resolve every node to the callable that implements it, or refuse.
 
     Up front, over the whole graph, before a frame is read. The alternative —
@@ -214,7 +226,7 @@ def _bind(plan: ExecutionPlan, kernels: KernelRegistry) -> dict[str, Kernel[Any]
     lifetime, which is also the right one: a caller that cancels a preview by
     abandoning the iterator drops the half-warmed background model with it.
     """
-    bindings: dict[str, Kernel[Any]] = {}
+    bindings: dict[str, Kernel[Any] | MergingKernel[Any]] = {}
     for node in plan.dag.order:
         spec = plan.dag.spec(node.node_id)
         if spec.mode is not Mode.STREAMING:
@@ -226,12 +238,6 @@ def _bind(plan: ExecutionPlan, kernels: KernelRegistry) -> dict[str, Kernel[Any]
             raise UnrunnableNodeError(
                 f"{node.node_id} ({spec.filter_id} {spec.version}) is rate-changing, and the "
                 "kernel protocol has no way to emit nothing for an input frame"
-            )
-        if len(plan.dag.upstreams[node.node_id]) > 1:
-            raise UnrunnableNodeError(
-                f"{node.node_id} ({spec.filter_id} {spec.version}) has "
-                f"{len(plan.dag.upstreams[node.node_id])} upstreams, and the kernel protocol takes "
-                "one frame — a merging filter needs named ports on Edge first"
             )
         # A one-element preference: see the module docstring. A fallback here
         # would write entries keyed on a backend that did not produce them.
@@ -256,7 +262,11 @@ def _crop(frame: Frame, roi: ROI) -> Frame:
 
 
 def _run_node(
-    node: Node, incoming: Frame, plan: ExecutionPlan, bindings: Mapping[str, Kernel[Any]]
+    node: Node,
+    incoming: Frame | Mapping[str, Frame],
+    index: int,
+    plan: ExecutionPlan,
+    bindings: Mapping[str, Kernel[Any] | MergingKernel[Any]],
 ) -> Frame:
     """One kernel call, with the frame index checked on the way out.
 
@@ -266,14 +276,26 @@ def _run_node(
     as a different frame's result. That is a wrong answer from cache, which
     `cache_key.py`'s asymmetry rule says is the failure to spend a comparison
     on. A filter that genuinely reindexes is `rate_changing` and was already
-    refused above.
+    refused above. Checked against the loop's index rather than the input's,
+    which for a merging node is also the assertion that its inputs were
+    aligned — every frame handed over carries `index` or something upstream
+    already failed this same check.
+
+    The two casts are the executor trusting the registration guards: which
+    calling convention a node gets is decided by its spec's `input_ports`, and
+    `@kernel` / `@merging_kernel` refused at import any pairing where the
+    callable disagrees with that declaration.
     """
-    produced = bindings[node.node_id](incoming, plan.params[node.node_id])
-    if produced.index != incoming.index:
+    params = plan.params[node.node_id]
+    if isinstance(incoming, Frame):
+        produced = cast("Kernel[Any]", bindings[node.node_id])(incoming, params)
+    else:
+        produced = cast("MergingKernel[Any]", bindings[node.node_id])(incoming, params)
+    if produced.index != index:
         spec = plan.dag.spec(node.node_id)
         raise UnrunnableNodeError(
             f"{node.node_id} ({spec.filter_id} {spec.version}) returned frame "
-            f"{produced.index} for input frame {incoming.index}; a streaming filter preserves "
+            f"{produced.index} for input frame {index}; a streaming filter preserves "
             "the index, and the cache is keyed on it"
         )
     return produced

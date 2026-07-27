@@ -12,7 +12,7 @@ than the newer one shadowing the older.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from typing import TypeVar
 
 from sieve.core.filter_base import CostEstimate, FilterSpec, Mode, ParamsBase, StreamSpec
@@ -114,7 +114,7 @@ def register_filter(
     filter_id: str,
     version: str,
     summary: str,
-    accepts: StreamSpec,
+    accepts: StreamSpec | Mapping[str, StreamSpec],
     emits: StreamSpec,
     cost: CostEstimate,
     mode: Mode = Mode.STREAMING,

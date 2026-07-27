@@ -10,10 +10,12 @@ is read rather than after half a clip has been decoded.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import numpy as np
 import pytest
 
-from sieve.backend.dispatch import Backend, KernelRegistry, NoKernelError, kernel
+from sieve.backend.dispatch import Backend, KernelRegistry, NoKernelError, kernel, merging_kernel
 from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
@@ -86,6 +88,29 @@ def cpu_only_cpu(frame: Frame, params: CpuOnlyParams) -> Frame:
     every fixture.
     """
     return Frame(data=frame.data, index=frame.index, channels=frame.channels)
+
+
+@register_filter(
+    filter_id="minus",
+    version="1.0.0",
+    summary="Left minus right, so a swapped wiring is a different result.",
+    accepts={"left": ArraySpec(), "right": ArraySpec()},
+    emits=ArraySpec(),
+    cost=COST,
+    registry=SHELF,
+)
+class MinusParams(ParamsBase):
+    pass
+
+
+@merging_kernel(MinusParams, Backend.CPU, registry=KERNELS)
+def minus_cpu(frames: Mapping[str, Frame], params: MinusParams) -> Frame:
+    left, right = frames["left"], frames["right"]
+    # The alignment claim, asserted where it would break: the executor may
+    # never hand a merge two different source frames, whatever the two
+    # branches' warmups are.
+    assert left.index == right.index, f"misaligned merge: {left.index} vs {right.index}"
+    return Frame(data=left.data - right.data, index=left.index, channels=left.channels)
 
 
 @register_filter(
@@ -277,25 +302,73 @@ def test_a_windowed_node_is_refused_before_anything_is_read() -> None:
     assert not source.reads
 
 
-def test_a_merging_node_is_refused_because_a_kernel_takes_one_frame() -> None:
-    """A diamond is a valid graph and is not a runnable one yet.
+def _merge_pipeline(left_from: str, right_from: str) -> Pipeline:
+    """Two roots into one `minus`: `a` adds 10 to the source, `b` adds 1.
 
-    `Dag` accepts it — two upstreams chain fine — and the plan for it is useful.
-    What is missing is named ports on `Edge`, without which a kernel cannot be
-    told which of its two inputs is which.
+    Which root feeds which port is the argument, because the pair of tests
+    below differ in exactly that.
     """
-    plan = plan_for(
-        Pipeline(
-            nodes=(node("a"), node("b"), node("c"), node("d")),
-            edges=tuple(
-                Edge(upstream=up, downstream=down)
-                for up, down in (("a", "b"), ("a", "c"), ("b", "d"), ("c", "d"))
-            ),
-        )
+    return Pipeline(
+        nodes=(node("a", amount=10), node("b", amount=1), node("d", "minus")),
+        edges=(
+            Edge(upstream=left_from, downstream="d", port="left"),
+            Edge(upstream=right_from, downstream="d", port="right"),
+        ),
     )
 
-    with pytest.raises(UnrunnableNodeError, match="named ports"):
-        run(plan, ListSource())
+
+def test_a_merging_node_gets_a_frame_per_port_and_the_ports_mean_something() -> None:
+    """The wiring decides the pixels: `a - b` is 9 everywhere, `b - a` is not.
+
+    The end-to-end statement of what named ports bought. A positional or
+    sorted-upstream convention would give these two graphs the same result —
+    and the same cache key — so the assertion that the swapped wiring differs
+    is the one that fails if ports ever stop reaching the kernel.
+    """
+    forward = plan_for(_merge_pipeline("a", "b"))
+    swapped = plan_for(_merge_pipeline("b", "a"))
+    assert forward.keys["d"] != swapped.keys["d"]
+
+    forward_results = run(forward, ListSource())
+    swapped_results = run(swapped, ListSource())
+
+    # Source frame n is intensity n%200; both branches see every frame, so the
+    # difference is exactly the difference of the two amounts, everywhere.
+    assert all((result["d"].data == 9).all() for result in forward_results)
+    # uint8 arithmetic wraps: (n+1) - (n+10) is 247, and that is fine — the
+    # claim is only that the swapped wiring is a different computation.
+    assert all((result["d"].data == 247).all() for result in swapped_results)
+
+
+def test_a_merge_below_branches_of_unequal_warmup_sees_aligned_settled_inputs() -> None:
+    """The part the TODO item called most likely to be got subtly wrong.
+
+    `a` feeds `d` directly; the other branch goes through a second tag, so the
+    two paths into the merge want different lead-ins (3 versus 6). The plan
+    takes the max once for the whole graph and the loop computes every node at
+    every index, so the merge's two inputs are the same source frame from the
+    first lead-in frame on — which `minus_cpu` asserts on every call.
+    """
+    deep = Pipeline(
+        nodes=(
+            node("a", amount=10),
+            node("b", amount=1),
+            node("mid", amount=0),
+            node("d", "minus"),
+        ),
+        edges=(
+            Edge(upstream="a", downstream="d", port="left"),
+            Edge(upstream="b", downstream="mid"),
+            Edge(upstream="mid", downstream="d", port="right"),
+        ),
+    )
+    plan = plan_for(deep)
+    assert plan.lead_in == 6
+
+    results = run(plan, ListSource())
+
+    assert [result.index for result in results] == [20, 21, 22]
+    assert all((result["d"].data == 9).all() for result in results)
 
 
 def test_the_backend_is_pinned_to_the_plans(monkeypatch: pytest.MonkeyPatch) -> None:

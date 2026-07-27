@@ -81,7 +81,7 @@ def keys_for(project: Project, replicate: Replicate | None) -> dict[str, str]:
         return node_key(
             project.pipeline.node(node_id),
             spec=SPEC,
-            upstream=[upstream],
+            upstream={"in": upstream},
             backend=Backend.CPU,
             replicate=replicate,
         )
@@ -155,16 +155,37 @@ class TestInputs:
         # machine.
         node = make_node("a", radius=3)
         agnostic = make_spec(backend_agnostic=True)
-        keyed = node_key(node, spec=SPEC, upstream=[], backend=Backend.CPU)
-        unkeyed = node_key(node, spec=agnostic, upstream=[], backend=Backend.CPU)
+        keyed = node_key(node, spec=SPEC, upstream={}, backend=Backend.CPU)
+        unkeyed = node_key(node, spec=agnostic, upstream={}, backend=Backend.CPU)
 
         def pretend(backend: Backend) -> str:
             return f"pretend-{backend}"
 
         monkeypatch.setattr(cache_key, "backend_identity", pretend)
 
-        assert node_key(node, spec=SPEC, upstream=[], backend=Backend.CPU) != keyed
-        assert node_key(node, spec=agnostic, upstream=[], backend=Backend.CPU) == unkeyed
+        assert node_key(node, spec=SPEC, upstream={}, backend=Backend.CPU) != keyed
+        assert node_key(node, spec=agnostic, upstream={}, backend=Backend.CPU) == unkeyed
+
+    def test_which_port_a_stream_arrives_on_is_part_of_the_computation(self) -> None:
+        # The silent direction again: `a - b` and `b - a` are fed by the same
+        # two upstream keys, and a fold that hashed the keys alone would give
+        # the two wirings one entry — one served as the other, plausible frames,
+        # no symptom. Binding key to port is what separates them; hashing the
+        # pairs *sorted* is what keeps edge-declaration order from mattering,
+        # which is the second assertion.
+        node = make_node("a", radius=3)
+        forward = node_key(
+            node, spec=SPEC, upstream={"left": "k1", "right": "k2"}, backend=Backend.CPU
+        )
+        swapped = node_key(
+            node, spec=SPEC, upstream={"left": "k2", "right": "k1"}, backend=Backend.CPU
+        )
+        reordered = node_key(
+            node, spec=SPEC, upstream={"right": "k2", "left": "k1"}, backend=Backend.CPU
+        )
+
+        assert forward != swapped
+        assert forward == reordered
 
     def test_an_omitted_parameter_and_its_default_are_one_computation(self) -> None:
         # Canonical, not merely deterministic. The params are validated before
@@ -175,8 +196,8 @@ class TestInputs:
         spelled_out = make_node("a", radius=3, sigma=1.0)
         implied = make_node("a")
 
-        assert node_key(spelled_out, spec=SPEC, upstream=[], backend=Backend.CPU) == node_key(
-            implied, spec=SPEC, upstream=[], backend=Backend.CPU
+        assert node_key(spelled_out, spec=SPEC, upstream={}, backend=Backend.CPU) == node_key(
+            implied, spec=SPEC, upstream={}, backend=Backend.CPU
         )
 
     def test_refuses_a_key_it_cannot_stand_behind(self) -> None:
@@ -185,9 +206,9 @@ class TestInputs:
         # what propagates: the downstream gets no upstream hash to fold in, so
         # the whole subtree is uncacheable without anything computing that.
         with pytest.raises(NotCacheableError, match="not deterministic"):
-            node_key(node, spec=make_spec(deterministic=False), upstream=[], backend=Backend.CPU)
+            node_key(node, spec=make_spec(deterministic=False), upstream={}, backend=Backend.CPU)
         # A spec for the wrong filter would key this node's output under
         # another filter's identity, which is the one mistake that produces a
         # confidently wrong cache hit rather than a miss.
         with pytest.raises(ValueError, match="node names"):
-            node_key(node, spec=make_spec(version="2.0.0"), upstream=[], backend=Backend.CPU)
+            node_key(node, spec=make_spec(version="2.0.0"), upstream={}, backend=Backend.CPU)

@@ -5,8 +5,8 @@ Each test pins one of item 5's load-bearing claims. The gesture boundary
 meanings; unbounded-vs-clamped is the difference between a band that shapes a
 signal and a frequency band the transform would silently correct; the 1 px
 gate floor is what keeps a single-frame detection visible at any zoom; and
-solo living in the state model is what keeps the heat panel and the density
-plot from ever disagreeing about which block is soloed.
+solo living in the state model is what keeps the composite's grid overlay and
+the density plot from ever disagreeing about which block is soloed.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pytestqt.qtbot import QtBot
 
 from sieve.core.wavelet import default_freqs
 from sieve.gui.band_plot import GRAB_PX
-from sieve.gui.block_heat import BlockHeatPanel
+from sieve.gui.composite_view import StepCompositeView
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.density_plot import DensityPlot
 from sieve.gui.scalogram_plot import ScalogramPlot
@@ -143,37 +143,43 @@ class TestTheGateFloor:
         assert rects[0].width() >= 1.0
 
 
+def _grid_view(qtbot: QtBot) -> StepCompositeView:
+    view = StepCompositeView()
+    qtbot.addWidget(view)
+    view.resize(420, 360)
+    view.set_grid_visible(True)
+    view.set_grid(4, 4)
+    view.set_block_state(np.zeros(16, np.float32), np.zeros(16, bool), None)
+    view.show()
+    return view
+
+
 class TestSoloLivesInTheStateModel:
     def test_a_click_emits_and_does_not_apply_itself(self, qtbot: QtBot) -> None:
         """Clicking the same block twice emits the same index twice — the
-        panel's own solo moved nowhere, because only `set_state` moves it."""
-        panel = BlockHeatPanel()
-        qtbot.addWidget(panel)
-        panel.resize(400, 320)
-        panel.set_grid(4, 4)
-        panel.set_state(np.zeros(16, np.float32), np.zeros(16, bool), None)
+        pane's own solo moved nowhere, because only `set_block_state` moves it."""
+        view = _grid_view(qtbot)
         emitted: list[object] = []
-        panel.solo_toggled.connect(emitted.append)
+        view.solo_toggled.connect(emitted.append)
 
-        g = panel.grid_rect()
+        pane = view.pane
+        g = pane.grid_rect()
         cell = QPointF(g.left() + g.width() * 3.0 / 8.0, g.top() + g.height() * 3.0 / 8.0)
-        block = panel.block_at(cell)
-        qt_input.click(panel, cell)
-        qt_input.click(panel, cell)
+        block = pane.block_at(cell)
+        qt_input.click(pane, cell)
+        qt_input.click(pane, cell)
         assert emitted == [block, block]
 
     def test_once_the_state_model_confirms_the_same_click_untoggles(self, qtbot: QtBot) -> None:
-        panel = BlockHeatPanel()
-        qtbot.addWidget(panel)
-        panel.resize(400, 320)
-        panel.set_grid(4, 4)
-        g = panel.grid_rect()
+        view = _grid_view(qtbot)
+        pane = view.pane
+        g = pane.grid_rect()
         cell = QPointF(g.left() + g.width() * 3.0 / 8.0, g.top() + g.height() * 3.0 / 8.0)
-        block = panel.block_at(cell)
+        block = pane.block_at(cell)
         assert block is not None
-        panel.set_state(np.zeros(16, np.float32), np.zeros(16, bool), block)
+        view.set_block_state(np.zeros(16, np.float32), np.zeros(16, bool), block)
         emitted: list[object] = []
-        panel.solo_toggled.connect(emitted.append)
+        view.solo_toggled.connect(emitted.append)
 
-        qt_input.click(panel, cell)
+        qt_input.click(pane, cell)
         assert emitted == [None]

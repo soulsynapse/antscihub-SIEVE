@@ -17,12 +17,15 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QImage
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtGui import QImage, QKeyEvent
+from PySide6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
 from sieve.bench.metrics import MetricBus
 from sieve.core.types import ROI
+from sieve.gui.band_plot import PANEL
+from sieve.gui.composite_view import GRID_STEPS, StepCompositeView
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import FilterTab
 from sieve.gui.player import VideoPlayer
@@ -51,6 +54,7 @@ class _StubRunner(QObject):
         self.window_renders: list[object] = []
         self.frame_renders: list[int] = []
         self.consumers: list[object] = []
+        self.frame_consumers: list[object] = []
 
     def request_render(
         self, pipeline: object, window: object, replicate: object, consumer: object = None
@@ -65,6 +69,7 @@ class _StubRunner(QObject):
     ) -> bool:
         self.revision += 1
         self.frame_renders.append(index)
+        self.frame_consumers.append(consumer)
         # The real runner's idle path: `_issue` emits `render_started`
         # synchronously, before `request_frame` returns. The HUD test below
         # pins a race that only exists on this path, so the stub must keep it.
@@ -178,7 +183,11 @@ def test_the_pair_paints_at_the_playhead_frame_not_at_render_finished(
 
     stub.frame_cost.emit(0, 5.0)
     base, over = tab.composite.frames()
-    assert base is not None and over is not None, "the pair waited for render_finished"
+    assert base is not None, "the pair waited for render_finished"
+    # The default target is the block step, whose output is a grid, not an
+    # image: the pane draws it itself, so `over` stays empty and the grid is on.
+    assert over is None
+    assert tab.composite.pane.grid_on
 
 
 def test_a_composite_refresh_leaves_the_hud_series_alone(
@@ -211,28 +220,97 @@ def test_a_composite_refresh_leaves_the_hud_series_alone(
     assert tab.hud.costs() == ((3, 25.0),), "the composite refresh touched the HUD"
 
 
-def test_the_heat_panels_context_frame_is_the_replicates_crop(
-    tab: FilterTab, document: ReplicateDocument, player: VideoPlayer
+def test_a_first_step_targets_base_is_the_replicates_crop(
+    tab: FilterTab, stub: _StubRunner, document: ReplicateDocument, player: VideoPlayer
 ) -> None:
-    """The grid says *where inside the replicate*, so the frame under it must
-    be the replicate's crop, not the parent footage the graph never saw.
+    """The overlay says *where inside the replicate*, so the frame under it
+    must be the replicate's crop, not the parent footage the graph never saw.
 
-    Two ways this can silently regress: the ROI is in source pixels
-    (1000x800 here) while the player frame may be a half-size proxy, so the
-    crop must scale; and a selection change moves the ROI while the playhead
-    stands still, so switching replicates must re-crop the held frame without
-    waiting for the next frame_changed.
+    The one composite base that comes from the player rather than the render
+    is the first step's input, and the ROI is in source pixels (1000x800
+    here) while the player frame may be a half-size proxy — so the crop must
+    scale by the image's actual size.
     """
+    card = tab.stack.card_for("rescale")
+    assert card is not None
+    card.mousePressEvent(None)
+
     document.add_roi(ROI(x=200, y=100, width=300, height=200))
-    document.select(0)
+    document.select(0)  # selection change resubmits the window render
+    stub.render_finished.emit(object())  # so the playhead refresh below runs
     player.frame_changed.emit(3, QImage(500, 400, QImage.Format.Format_RGB32))
 
-    held = tab.heat.context_frame
-    assert held is not None
-    assert (held.width(), held.height()) == (150, 100), "the crop ignored the proxy scale"
+    grab = stub.frame_consumers[-1]
+    assert grab is not None
+    node = next(s.node for s in tab.chain.steps if s.step_id == "rescale")
+    assert node is not None
+    outputs = {node.node_id: SimpleNamespace(data=np.full((8, 8), 100, np.uint8))}
+    grab(SimpleNamespace(index=3, outputs=outputs))  # type: ignore[operator]
+    stub.frame_cost.emit(3, 0.1)
 
-    document.add_roi(ROI(x=0, y=0, width=400, height=400))
-    document.select(1)
-    held = tab.heat.context_frame
-    assert held is not None
-    assert (held.width(), held.height()) == (200, 200), "the selection change did not re-crop"
+    base, _ = tab.composite.frames()
+    assert base is not None
+    assert (base.width(), base.height()) == (150, 100), "the crop ignored the proxy scale"
+
+
+def test_border_alpha_zero_separates_blocks_and_equal_alphas_read_as_a_mass(
+    qtbot: QtBot,
+) -> None:
+    """The see-through contract of the grid overlay.
+
+    Ring and interior are disjoint pixel regions at independent alphas: with
+    the border slider at zero, neighbouring in-band fills must leave bare
+    background between them (separated blocks); raising the border to the
+    fill's alpha must paint that seam (one mass). Pixels, not flags — a
+    compositing change that blended ring over fill would pass any flag test
+    and still break the equal-alphas read.
+    """
+    view = StepCompositeView()
+    qtbot.addWidget(view)
+    view.resize(400, 400)
+    view.set_grid_visible(True)
+    view.set_grid(2, 2)
+    view.set_block_state(np.full(4, 5.0, np.float32), np.ones(4, bool), None)
+    view.fill_slider.setValue(GRID_STEPS)  # 1.0
+    view.line_slider.setValue(0)
+    view.show()
+
+    pane = view.pane
+    g = pane.grid_rect()
+    seam_x = int(g.left() + g.width() / 2.0)
+    row_y = int(g.top() + g.height() / 4.0)
+    strip = range(seam_x - 2, seam_x + 3)
+
+    image = pane.grab().toImage()
+    assert any(image.pixelColor(x, row_y) == PANEL for x in strip), (
+        "no bare background at the seam — the blocks are not separated"
+    )
+    interior = image.pixelColor(int(g.left() + g.width() / 4.0), row_y)
+    assert interior != PANEL, "the in-band interior is not filled"
+
+    view.line_slider.setValue(GRID_STEPS)  # equal alphas
+    image = pane.grab().toImage()
+    assert all(image.pixelColor(x, row_y) != PANEL for x in strip), (
+        "bare background survived equal alphas — the mass has seams"
+    )
+
+
+def test_holding_shift_peeks_under_every_overlay(qtbot: QtBot) -> None:
+    """Shift down hides the grid; shift up restores it — from anywhere, since
+    the filter listens at the application rather than at one focus target."""
+    view = StepCompositeView()
+    qtbot.addWidget(view)
+    view.set_grid_visible(True)
+    view.show()
+
+    def shift(kind: QEvent.Type) -> None:
+        # Through sendEvent so the application-level filter runs, exactly as
+        # it would for a real key press routed to any focused widget.
+        event = QKeyEvent(kind, Qt.Key.Key_Shift, Qt.KeyboardModifier.ShiftModifier)
+        QApplication.sendEvent(view.pane, event)
+
+    assert not view.peeking
+    shift(QEvent.Type.KeyPress)
+    assert view.peeking
+    shift(QEvent.Type.KeyRelease)
+    assert not view.peeking

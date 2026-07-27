@@ -1,7 +1,8 @@
 """The filter tab: the live chain on the right, where the signal is on the left.
 
-Item 6's assembly (parity plan § 2). The left column is the step composite,
-the block-heat panel, the green windowed-count graph, and the detection
+Item 6's assembly (parity plan § 2). The left column is the step composite —
+which also carries the block grid overlay, since the composite absorbed the
+block-heat panel — the green windowed-count graph, and the detection
 window D row; the right column is `ChainStackView` over one `LiveChain`
 value; the graphs live in the card of the step that produces them. The
 cross-tab seeker stays outside every tab (`main_window.py`), exactly as it
@@ -71,7 +72,6 @@ from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.wavelet import default_freqs
 from sieve.filters.block_signal import resolve_block
 from sieve.gui.band_plot import DIM
-from sieve.gui.block_heat import BlockHeatPanel
 from sieve.gui.chain_model import (
     SIGNAL_LABELS,
     ChainKind,
@@ -87,7 +87,7 @@ from sieve.gui.chain_model import (
     snapped_band_label,
 )
 from sieve.gui.chain_stack import ChainStackView
-from sieve.gui.composite_view import StepCompositeView, grid_to_qimage
+from sieve.gui.composite_view import StepCompositeView
 from sieve.gui.concurrency import DETECTOR_WORKERS
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.density_plot import DensityPlot
@@ -115,10 +115,6 @@ KNOB_BUDGET = "knob_to_graphs"
 #: since the detector derives partial passes is the latency a user actually
 #: waits through before there is something to read.
 FIRST_PARTIAL_BUDGET = "knob_to_first_partial"
-
-#: The high percentile of the window's band power that reads as full heat on
-#: the block panel — fixed across the window so brightness holds its meaning.
-_HEAT_PERCENTILE = 99.5
 
 _CHAIN_INCOMPLETE = "chain incomplete — see the stack"
 _DISARMED = "disarmed — place the count threshold"
@@ -238,7 +234,6 @@ class FilterTab(QWidget):
 
     def _build_widgets(self) -> None:
         self._composite = StepCompositeView()
-        self._heat = BlockHeatPanel()
         self._count = CountPlot()
         self._scalogram = ScalogramPlot()
         self._scalogram.setMinimumHeight(160)
@@ -288,8 +283,7 @@ class FilterTab(QWidget):
 
         left = QVBoxLayout()
         left.setSpacing(4)
-        left.addWidget(self._composite, 3)
-        left.addWidget(self._heat, 3)
+        left.addWidget(self._composite, 6)
         left.addWidget(self._count, 2)
         left.addLayout(d_row)
         left.addWidget(self._hud, 1)
@@ -338,7 +332,7 @@ class FilterTab(QWidget):
         self._density.band_committed.connect(self._on_value_band)
         self._count.band_changed.connect(self._on_count_band)
         self._count.band_committed.connect(self._on_count_band)
-        self._heat.solo_toggled.connect(self._on_solo)
+        self._composite.solo_toggled.connect(self._on_solo)
         self._d_slider.valueChanged.connect(self._on_window_frames)
         self._centered.toggled.connect(self._on_centered)
 
@@ -397,11 +391,6 @@ class FilterTab(QWidget):
     def composite(self) -> StepCompositeView:
         """The step composite pane, for the window and for tests."""
         return self._composite
-
-    @property
-    def heat(self) -> BlockHeatPanel:
-        """The block-heat panel, for tests asserting on its context frame."""
-        return self._heat
 
     @property
     def selected_step(self) -> str | None:
@@ -734,7 +723,8 @@ class FilterTab(QWidget):
                 self._count.set_notice("no reachable detection step")
             else:
                 self._count.set_notice("no series yet — waiting for a render")
-            self._heat.set_caption("")
+            self._composite.set_grid_caption("")
+            self._composite.set_block_state(np.zeros(1, np.float32), np.zeros(1, bool), None)
             if not temporal_ok or not detection_ok:
                 self._summary.setText(_CHAIN_INCOMPLETE)
             else:
@@ -792,10 +782,9 @@ class FilterTab(QWidget):
             self._count.set_notice("no reachable detection step")
 
         ny, nx = self._grid
-        self._heat.set_grid(ny, nx)
-        self._heat.set_scale_max(float(np.percentile(update.band_power, _HEAT_PERCENTILE)))
-        self._heat.set_caption(f"{signal} · {ny}x{nx} blocks")
-        self._apply_heat_state()
+        self._composite.set_grid(ny, nx)
+        self._composite.set_grid_caption(f"{signal} · {ny}x{nx} blocks · click to solo")
+        self._apply_block_state()
 
         if not temporal_ok or not detection_ok:
             self._summary.setText(_CHAIN_INCOMPLETE)
@@ -840,8 +829,8 @@ class FilterTab(QWidget):
             playhead=self._playhead,
         )
 
-    def _apply_heat_state(self) -> None:
-        """The heat panel's per-playhead row: fill, in-band mask, solo."""
+    def _apply_block_state(self) -> None:
+        """The grid overlay's per-playhead row: values, in-band mask, solo."""
         update = self._update
         if update is None or self._series_start is None:
             return
@@ -850,7 +839,7 @@ class FilterTab(QWidget):
         values = update.band_power[row]
         lo, hi = self._chain.detector.value_band
         in_band = (values >= lo) & (values <= hi)
-        self._heat.set_state(values, in_band, self._chain.detector.solo_block)
+        self._composite.set_block_state(values, in_band, self._chain.detector.solo_block)
 
     def _signal_label(self) -> str:
         step = self._block_step()
@@ -970,12 +959,14 @@ class FilterTab(QWidget):
         if target is None:
             self._composite.set_caption("")
             self._composite.set_notice("no runnable step to compose")
+            self._composite.set_grid_visible(False)
             return
         _, step = target
         caption = step.title
         if step.step_id != self._selected_step:
             caption = f"{step.title} (deepest rendered)"
         self._composite.set_caption(caption)
+        self._composite.set_grid_visible(step.kind_out is ChainKind.BLOCK_SERIES)
 
     def _composite_grabber(self):
         """A consumer that catches the composite pair as frames fly past.
@@ -1042,24 +1033,16 @@ class FilterTab(QWidget):
             self._composite_revisions.discard(expected)
 
     def _apply_composite(self, base: np.ndarray | None, over: np.ndarray, is_grid: bool) -> None:
-        """Convert the grabbed pair on the GUI thread and hand it to the pane."""
-        base_image = self._cropped_player_frame() if base is None else frame_to_qimage(base)
-        if is_grid:
-            over_image: QImage | None = grid_to_qimage(over, self._grid_scale(over))
-        else:
-            over_image = frame_to_qimage(over)
-        self._composite.set_frames(base_image, over_image)
+        """Convert the grabbed pair on the GUI thread and hand it to the pane.
 
-    def _grid_scale(self, over: np.ndarray) -> float:
-        """The value that reads as full heat in a block-grid overlay.
-
-        The window's series percentile when one has been collected — the heat
-        panel's fixed-scale discipline, in the raw signal's units — and the
-        frame's own max before the first series lands.
+        A block-grid output has no image to overlay: the pane draws the grid
+        itself, vectorially, from the detector state `_apply_block_state`
+        feeds it — so here the grid case is just the base frame and a flag.
         """
-        if self._series2d is not None:
-            return float(np.percentile(self._series2d, _HEAT_PERCENTILE))
-        return float(np.max(over)) if over.size else 1.0
+        base_image = self._cropped_player_frame() if base is None else frame_to_qimage(base)
+        over_image = None if is_grid else frame_to_qimage(over)
+        self._composite.set_frames(base_image, over_image)
+        self._composite.set_grid_visible(is_grid)
 
     def _cropped_player_frame(self) -> QImage | None:
         """The player's frame as the first step's input: replicate-cropped.
@@ -1410,7 +1393,7 @@ class FilterTab(QWidget):
         self._series_pending = False
         self._composite.set_frames(None, None)
         self._composite.set_notice("")
-        self._heat.set_frame(None)
+        self._composite.set_block_state(np.zeros(1, np.float32), np.zeros(1, bool), None)
         self._hud.set_span(0, 0)
         self._hud.begin()
         self._sync_widgets_from_chain()
@@ -1420,20 +1403,17 @@ class FilterTab(QWidget):
 
     @Slot()
     def _on_selection_changed(self) -> None:
-        """A replicate change moves the ROI while the playhead frame stands
-        still, so the heat panel's context frame re-crops here rather than
-        waiting for the next frame_changed."""
-        self._heat.set_frame(self._cropped_player_frame())
+        """A replicate change invalidates like a window move: resubmit, and
+        the render's consumer re-grabs the composite pair over the new crop."""
         self.resubmit()
 
     @Slot(int, QImage)
     def _on_frame_changed(self, index: int, image: QImage) -> None:
         self._playhead = index
         self._frame_image = image
-        self._heat.set_frame(self._cropped_player_frame())
         for plot in (self._scalogram, self._density, self._count, self._hud):
             plot.set_playhead(index)
-        self._apply_heat_state()
+        self._apply_block_state()
         self._refresh_composite()
 
 

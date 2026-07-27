@@ -82,7 +82,7 @@ src/sieve/gui/filter_tab.py             # the tuning surface: composite, chain, 
 src/sieve/gui/chain_stack.py            # the step cards
 src/sieve/gui/chain_model.py            # its Qt-free half
 src/sieve/gui/param_form.py             # widgets generated from a filter's params model
-src/sieve/gui/composite_view.py         # the step composite: output over input at one opacity
+src/sieve/gui/composite_view.py         # the step composite: output over input, plus the block grid overlay
 src/sieve/gui/preview_runner.py         # holds a PreviewSession on its own thread; emits per-frame cost
 src/sieve/gui/detector_worker.py        # derives the detector off the GUI thread so graphs fill as frames land
 src/sieve/gui/concurrency.py            # the one declaration of how the session divides the machine
@@ -99,7 +99,6 @@ src/sieve/gui/graph_hud.py              # per-frame cost series; BandPlot with h
 src/sieve/gui/scalogram_plot.py         # morlet scalogram with draggable band handles
 src/sieve/gui/count_plot.py             # windowed block count with the detection threshold handle
 src/sieve/gui/density_plot.py           # detection density
-src/sieve/gui/block_heat.py             # per-block heat map
 src/sieve/gui/series_collector.py       # accumulates per-frame series for the plots
 src/sieve/gui/preferences.py            # persisted user preferences
 src/sieve/gui/preferences_dialog.py     # their editor

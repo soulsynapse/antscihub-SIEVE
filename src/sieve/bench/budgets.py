@@ -192,7 +192,7 @@ BUDGETS: dict[str, Budget] = _table(
 #: `tests/bench/test_perf_regression.py`, so they have a benchmark but no
 #: runtime publisher — a regression is caught on the bench, never in a session.
 #: `cut_to_ready` and `slider_to_graph` have neither, and `slider_to_graph` is
-#: waiting on there being a slider at all (`docs/LATER.md`).
+#: waiting on there being a slider at all (`docs/todo/slider-to-graph.md`).
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
     {
         "open_to_first_frame",

@@ -157,7 +157,8 @@ write, and `cache_key.py` refuses to key what it cannot describe.
 
 The specific instances that *will* be checkable have their checks written when
 the thing they guard lands — the unexamined-versus-quiet rendering rule most of
-all, which `docs/LATER.md` names as V1's standing failure and which is inherited
+all, which `docs/todo/coverage-and-detection-lanes.md` names as V1's standing
+failure and which is inherited
 by three widgets that do not exist yet.
 
 ---

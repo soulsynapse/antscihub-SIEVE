@@ -130,27 +130,27 @@ the test only guards the named files: `tests/unit/` (29 modules), `tests/gui/`
 Each line is a module the architecture intends and nothing has yet needed. None
 of these exists; the test asserts that, so a line here is a promise, not a lie.
 Where a deferral has *reasoning and a trigger*, that reasoning lives in
-`docs/LATER.md` and is named in the annotation — this file only says where the
-file would go.
+the matching `docs/todo/` item and is named in the annotation — this file only
+says where the file would go.
 
 ```tree
-src/sieve/core/config.py                # pydantic-settings app config — LATER.md "Application config"
+src/sieve/core/config.py                # pydantic-settings app config — todo/application-config.md
 src/sieve/core/constants.py             # hash seeds, cache format version (currently inline)
-src/sieve/backend/namespace.py          # array-API namespace resolution — LATER.md "GPU execution"
-src/sieve/pipeline/materialize.py       # memory cache -> Zarr compaction — LATER.md "Materialization"
-src/sieve/storage/zarr_store.py         # Zarr v3 arrays, filesystem-is-truth — LATER.md "Materialization"
+src/sieve/backend/namespace.py          # array-API namespace resolution — todo/gpu-execution.md
+src/sieve/pipeline/materialize.py       # memory cache -> Zarr compaction — todo/materialization.md
+src/sieve/storage/zarr_store.py         # Zarr v3 arrays, filesystem-is-truth — todo/materialization.md
 src/sieve/storage/sharding.py           # workload-specific sharding
-src/sieve/workers/manager.py            # crash isolation — LATER.md "Process isolation"
+src/sieve/workers/manager.py            # crash isolation — todo/process-isolation.md
 src/sieve/workers/protocol.py           # versioned IPC
 src/sieve/workers/shm_transport.py      # shared-memory frame transport
 src/sieve/workers/process.py            # worker lifecycle, cooperative cancellation
 src/sieve/observe/logging.py            # structlog JSON Lines
 src/sieve/observe/log_aggregator.py     # per-worker stream merge
 src/sieve/observe/results.py            # Parquet results dataset
-src/sieve/bench/profiling.py            # VizTracer + py-spy — LATER.md "Profiling as a module"
-src/sieve/hpc/handoff.py                # DAG -> job script — LATER.md "HPC handoff, and review mode"
+src/sieve/bench/profiling.py            # VizTracer + py-spy — todo/profiling-as-a-module.md
+src/sieve/hpc/handoff.py                # DAG -> job script — todo/hpc-handoff-and-review-mode.md
 src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
-src/sieve/review/output.py              # VISION step 7 review contract — LATER.md "HPC handoff, and review mode"
+src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
 src/sieve/cli/materialize_cmd.py        # arrives with pipeline/materialize.py
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see TODO.md deferred decisions
@@ -173,8 +173,7 @@ would have written code that three separate decisions had already refused.
   the one item that still owned a napari question — the three-way overlay —
   answered it by collapsing to two layers and one opacity slider. Re-adding
   either needs a new demand, not a revisit. See `docs/TODO.md` *Deferred
-  decisions* and `docs/LATER.md` *A pipeline editor, and whether it is a list
-  or a graph*.
+  decisions* and `docs/todo/pipeline-editor-list-or-graph.md`.
 - **`docs/ARCHITECTURE-TREE.md`**. `docs/findings/` holds measurement-driven
   decisions one file at a time and `docs/completed-todo/` holds what was built;
   nothing was left for a third log to carry.

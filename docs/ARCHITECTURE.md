@@ -315,17 +315,17 @@ And the standing obligations it creates, each recorded where the work is:
 
 - A temporal decimator must carry its own anti-alias lowpass, because decimating
   without one folds high-frequency behaviour into the measured band and it arrives
-  disguised as something slower. `docs/LATER.md`, kernel-protocol entry.
+  disguised as something slower. `docs/todo/kernel-protocol-beyond-one-frame.md`.
 - Unexamined and examined-and-quiet must never render alike. That collapse — a
-  false negative wearing the costume of a result — is named in `docs/LATER.md` as
-  V1's standing failure, and it is inherited by three separate widgets that do not
+  false negative wearing the costume of a result — is named in
+  `docs/todo/coverage-and-detection-lanes.md` as V1's standing failure, and it is inherited by three separate widgets that do not
   exist yet.
 - A detection count that grows with clip length for no biological reason is a
-  reproducibility bug that looks like a finding. `docs/LATER.md`, surrogate
-  calibration.
+  reproducibility bug that looks like a finding.
+  `docs/todo/surrogate-calibration.md`.
 - Faded must mean frozen. A dimmed stage whose parameters still accept edits is
-  decoration wearing the costume of a state. `docs/LATER.md`, click-through
-  navigation entry.
+  decoration wearing the costume of a state.
+  `docs/todo/click-through-navigation.md`.
 
 **Enforced by:** nothing mechanical, and it probably cannot be. It is a rule for
 review and for design, and its value is that it gives the recurring objection one
@@ -381,7 +381,7 @@ split into its two halves; the line itself does not move.
 Real intentions that govern no code path today. They are here rather than in the
 table above because a rule that cannot currently be violated cannot be relied on,
 and stating one as an invariant is how three unbuilt checks read as done for two
-weeks. Each has its trigger and reasoning in `docs/LATER.md`.
+weeks. Each has its trigger and reasoning in a `docs/todo/` item.
 
 - **Filesystem is truth at rest.** Materialized artifacts should read without
   SIEVE running — VISION step 1's folder per transformation. Nothing in this repo
@@ -397,7 +397,7 @@ weeks. Each has its trigger and reasoning in `docs/LATER.md`.
   ancestry above a crossed boundary is frozen (rule 6's mirror direction) because
   editing it would be editing the identity of something now at rest. It returns
   to the table above when that item lands. Reasoning and trigger:
-  `docs/LATER.md`, the materialization and click-through entries.
+  `docs/todo/materialization.md` and `docs/todo/click-through-navigation.md`.
 - **GPU execution.** `backend/dispatch.py` carries a complete `Backend` type
   system, per-node backend selection, and `DEFAULT_PREFERENCE = (GPU, CPU)`. There
   are zero GPU kernels; every filter registers CPU. `runtime_available` is a

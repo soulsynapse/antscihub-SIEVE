@@ -44,7 +44,8 @@ from sieve.gui.timeline_model import Geometry
 
 #: Height of the band. Tall enough to be a target for a mouse rather than a
 #: hairline to be aimed at, and sized now for the coverage and detection lanes
-#: that land in it later (`docs/LATER.md`) rather than grown when they arrive.
+#: that land in it later (`docs/todo/coverage-and-detection-lanes.md`) rather
+#: than grown when they arrive.
 STRIP_HEIGHT = 44
 
 #: Vertical inset of the painted track inside that height.

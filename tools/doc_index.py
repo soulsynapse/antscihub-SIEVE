@@ -9,7 +9,7 @@ it has drifted from the files it describes.
 
 The primer exists because transcript mining put ~11% of active session time
 into re-orientation (see `findings/2026.07.27-session-time-is-generation-not-
-tools.md`): it condenses what TODO.md, LATER.md, and the two indexes would
+tools.md`): it condenses what TODO.md, `todo/`, and the two indexes would
 each be opened for at session start into one generated read. It deliberately
 holds nothing unique — every line is derived, so it can never be the home of
 a fact.
@@ -284,17 +284,6 @@ def render_state(root: Path = DOCS_ROOT) -> str:
         lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name}) — {gate}")
 
     lines += ["", f"**Bugs and tweaks queued in `TODO.md`:** {len(bugs)}"]
-    later = root / "LATER.md"
-    if later.exists():
-        remaining = sum(
-            1 for line in later.read_text(encoding="utf-8").splitlines() if line.startswith("## ")
-        )
-        lines += [
-            "",
-            f"**`LATER.md` still holds {remaining} sections not yet migrated to "
-            "`todo/` — see `todo/migrate-later-into-item-files.md`.**",
-        ]
-
     lines += [
         "",
         "**Last completed** (full list in `completed-todo/.index.md`):",

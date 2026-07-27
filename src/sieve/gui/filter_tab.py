@@ -79,10 +79,13 @@ from sieve.gui.chain_stack import ChainStackView
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.density_plot import DensityPlot
 from sieve.gui.document import ReplicateDocument
+from sieve.gui.param_form import param_rows
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.scalogram_plot import ScalogramPlot
 from sieve.gui.series_collector import CollectedSeries, SeriesCollector
+from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
+from sieve.gui.wizard_model import catalog
 
 #: The two interaction budgets this tab produces (ARCHITECTURE.md rows).
 BAND_DRAG_BUDGET = "band_drag_repaint"
@@ -133,6 +136,24 @@ class FilterTab(QWidget):
         #: being timed — the `knob_to_graphs` arm, same shape as the runner's
         #: first-tick arm.
         self._knob_armed_at: float | None = None
+
+        # The wizard (plan item 7). One at a time; the snapshot is what
+        # Cancel restores, and the provisional id is what the stack dashes.
+        self._wizard: StepWizard | None = None
+        self._wizard_snapshot: LiveChain | None = None
+        self._provisional_id: str | None = None
+        #: One-slot mailbox for the wizard's video frame: the render thread
+        #: drops the grabbed array in, `_on_render_finished` converts it on
+        #: the GUI thread. A list because slot replacement is atomic enough
+        #: under the lock the collector already provides for the series path.
+        self._grab: list[np.ndarray] = []
+        #: Card bodies for committed non-parity steps, built from the params
+        #: model on first commit and persistent like the hand-built rows.
+        self._extra_bodies: dict[str, QWidget] = {}
+        #: The § 8 settlement: value bands are remembered per signal, because
+        #: a Jtt-tuned band silently reinterpreted in LK units was the mockup
+        #: cycle's clearest foot-gun (`mockups/tab --shot lk`).
+        self._value_band_memory: dict[str, tuple[float, float]] = {}
 
         self._build_widgets()
         self._build_layout()
@@ -336,12 +357,35 @@ class FilterTab(QWidget):
         # worker checks before calling it), so a refused submit simply leaves
         # the closure dead.
         expected = self._runner.revision + 1
-        self._runner.request_render(
-            self._chain.pipeline(),
-            window,
-            replicate,
-            consumer=lambda result: collector.add(expected, result),
-        )
+        grabber = self._grabber(self._chain) if self._wizard is not None else None
+
+        def feed(result: object) -> None:
+            collector.add(expected, result)  # type: ignore[arg-type]
+            if grabber is not None:
+                grabber(result)
+
+        self._runner.request_render(self._chain.pipeline(), window, replicate, consumer=feed)
+
+    def _grabber(self, chain: LiveChain):
+        """A consumer that catches the wizard's video frame as it flies past.
+
+        Runs on the render thread inside the window render the tab was
+        submitting anyway — the wizard's video is one of the frames the
+        graphs already paid for, not a second render.
+        """
+        window = self._document.window
+        node_id = last_image_node_id(chain)
+        if window is None or node_id is None:
+            return None
+        want = min(max(self._playhead, window.start), window.end - 1)
+        slot = self._grab
+
+        def grab(result: object) -> None:
+            frame = getattr(result, "outputs", {}).get(node_id)
+            if frame is not None and getattr(result, "index", None) == want:
+                slot[:] = [np.asarray(frame.data)]
+
+        return grab
 
     @Slot(int)
     def _collector_start(self, revision: int) -> None:
@@ -350,6 +394,8 @@ class FilterTab(QWidget):
     @Slot(object)
     def _on_render_finished(self, render: object) -> None:
         del render
+        if self._wizard is not None and self._grab:
+            self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
         series = self._collector.take(self._runner.revision)
         if series is None:
             # A render whose prefix stopped above the extraction step — the
@@ -425,6 +471,7 @@ class FilterTab(QWidget):
                 self._summary.setText(_CHAIN_INCOMPLETE)
             else:
                 self._summary.setText("")
+            self._push_wizard_state(None, 0, 0, temporal_ok, detection_ok)
             return
 
         start = self._series.start_index
@@ -484,6 +531,34 @@ class FilterTab(QWidget):
             self._summary.setText(f"{len(update.intervals)} detections · {gated:.1f} s")
 
         self._stack.update_captions(self._captions())
+        self._push_wizard_state(update, start, frames, temporal_ok, detection_ok)
+
+    def _push_wizard_state(
+        self,
+        update: DetectorUpdate | None,
+        start: int,
+        frames: int,
+        temporal_ok: bool,
+        detection_ok: bool,
+    ) -> None:
+        """The wizard's own plots repaint from the same derivation the tab's did.
+
+        Shared state, separate views (plan learning 6): a band dragged on
+        either copy lands here through the same handlers, and both copies
+        repaint from the one `DetectorUpdate`.
+        """
+        if self._wizard is None:
+            return
+        self._wizard.apply_state(
+            update=update,
+            start=start,
+            frames=frames,
+            detector=self._chain.detector,
+            fps=self._fps(),
+            temporal_ok=temporal_ok,
+            detection_ok=detection_ok,
+            playhead=self._playhead,
+        )
 
     def _apply_heat_state(self) -> None:
         """The heat panel's per-playhead row: fill, in-band mask, solo."""
@@ -514,17 +589,20 @@ class FilterTab(QWidget):
 
     def _rebuild_stack(self) -> None:
         captions = self._captions()
+        bodies: dict[str, tuple[QWidget, ...]] = {
+            "rescale": (self._rescale_row,),
+            "normalize": (self._normalize_row,),
+            "block_signal": (self._block_row, self._signal_row),
+            "morlet_band": (self._scalogram, self._density),
+            "windowed_count": (self._detect_note,),
+        }
+        bodies.update({step_id: (body,) for step_id, body in self._extra_bodies.items()})
         self._stack.rebuild(
             self._chain.steps,
             self._chain.grades(),
             [captions[step.step_id] for step in self._chain.steps],
-            {
-                "rescale": (self._rescale_row,),
-                "normalize": (self._normalize_row,),
-                "block_signal": (self._block_row, self._signal_row),
-                "morlet_band": (self._scalogram, self._density),
-                "windowed_count": (self._detect_note,),
-            },
+            bodies,
+            provisional=self._provisional_id,
         )
 
     def _sync_widgets_from_chain(self) -> None:
@@ -582,11 +660,28 @@ class FilterTab(QWidget):
         self._knob_edited()
 
     def _on_signal_switch(self, signal_id: str) -> None:
-        """The quick-switch: swap the extraction in place, bands kept."""
+        """The quick-switch: swap the extraction in place, value band per signal.
+
+        The § 8 settlement: the frequency band is in Hz and carries over, but
+        the value band is in the signal's own units — a Jtt-tuned threshold
+        read in LK px/s is the mockup cycle's clearest silent misread — so
+        each signal remembers its own and starts wide open the first time.
+        """
+        step = self._block_step()
+        old_signal = (
+            str(step.node.params.get("signal", "")) if step is not None and step.node else ""
+        )
         for other_id, button in self._signal_buttons.items():
             button.setChecked(other_id == signal_id)
+        detector = self._chain.detector
+        if old_signal and old_signal != signal_id:
+            self._value_band_memory[old_signal] = detector.value_band
+            restored = self._value_band_memory.get(signal_id, DetectorState().value_band)
+            self._set_detector(replace(detector, value_band=restored))
         self._set_node_params("block_signal", signal=signal_id)
-        self.status_message.emit(f"signal → {SIGNAL_LABELS[signal_id]} (bands kept)")
+        self.status_message.emit(
+            f"signal → {SIGNAL_LABELS[signal_id]} (value band remembered per signal)"
+        )
         self._knob_edited()
 
     # ---- detector edits (tab-side: pure recompute) -----------------------
@@ -653,14 +748,159 @@ class FilterTab(QWidget):
 
     @Slot(str)
     def _on_swap_requested(self, step_id: str) -> None:
-        self.status_message.emit(
-            f"swap '{step_id}' — the helper arrives with the wizard (plan item 7)"
-        )
+        self._open_wizard(step_id)
 
     @Slot(int)
     def _on_insert_requested(self, seam: int) -> None:
-        del seam
-        self.status_message.emit("insert here — the helper arrives with the wizard (plan item 7)")
+        self._open_wizard(seam)
+
+    # ---- the wizard --------------------------------------------------------
+
+    @property
+    def wizard(self) -> StepWizard | None:
+        """The open wizard, None otherwise. For the window and for tests."""
+        return self._wizard
+
+    def _open_wizard(self, target: int | str) -> None:
+        """Open the inset helper over this tab for `target` (seam or step id).
+
+        The snapshot taken here is the whole Cancel mechanism: `LiveChain` is
+        frozen all the way down, so restoring it *is* restoring the chain,
+        the detector, and everything the plots render from them.
+        """
+        if self._wizard is not None:
+            return
+        self._wizard_snapshot = self._chain
+        wizard = StepWizard(self._chain, target, parent=self)
+        self._wizard = wizard
+
+        wizard.chain_proposed.connect(self._on_chain_proposed)
+        wizard.hover_preview.connect(self._on_hover_preview)
+        wizard.hover_ended.connect(self._on_hover_ended)
+        wizard.accepted.connect(self._on_wizard_accepted)
+        wizard.cancelled.connect(self._on_wizard_cancelled)
+
+        # The wizard's own plot instances speak the same signals to the same
+        # handlers as the tab's — that is what "bound to shared state" means.
+        for plot in (wizard.density, wizard.count):
+            plot.pressed.connect(self._player.seek)
+            plot.scrubbed.connect(self._player.scrub)
+            plot.committed.connect(self._player.seek)
+        wizard.density.band_changed.connect(self._on_value_band)
+        wizard.density.band_committed.connect(self._on_value_band)
+        wizard.count.band_changed.connect(self._on_count_band)
+        wizard.count.band_committed.connect(self._on_count_band)
+        wizard.d_slider.valueChanged.connect(self._on_window_frames)
+        wizard.centered.toggled.connect(self._on_centered)
+
+        wizard.setGeometry(self.rect())
+        wizard.show()
+        wizard.raise_()
+        wizard.setFocus()
+        wizard.start()
+
+    def _on_chain_proposed(self, chain: LiveChain, step_id: str) -> None:
+        """The expensive tier: adopt the provisional chain and render it.
+
+        The provisional step is really in the chain — dashed card, real
+        render, real graphs — which is what makes the preview honest and the
+        Add button a formality rather than a leap.
+        """
+        self._chain = chain
+        self._provisional_id = step_id
+        self._sync_widgets_from_chain()
+        self._rebuild_stack()
+        self._apply()
+        self._knob_armed_at = perf_counter()
+        self.resubmit()
+
+    def _on_hover_preview(self, chain: LiveChain) -> None:
+        """The cheap tier: one frame of a hypothetical, video pane only."""
+        window = self._document.window
+        if window is None:
+            return
+        grab = self._grabber(chain)
+        if grab is None:
+            return
+        want = min(max(self._playhead, window.start), window.end - 1)
+        replicates = self._document.all()
+        replicate = replicates[0] if replicates else None
+        self._runner.request_frame(chain.pipeline(), want, replicate, consumer=grab)
+
+    def _on_hover_ended(self) -> None:
+        """The pointer left the candidates: the video returns to the selection."""
+        if self._wizard is None:
+            return
+        self._on_hover_preview(self._chain)
+
+    def _on_wizard_accepted(self) -> None:
+        """Add: the provisional step solidifies; the chain is already rendered."""
+        step_id = self._provisional_id
+        self._close_wizard()
+        if step_id is not None:
+            self._ensure_body(step_id)
+            self.status_message.emit(f"added '{step_id}'")
+        self._rebuild_stack()
+
+    def _on_wizard_cancelled(self) -> None:
+        """Cancel/Esc: everything exactly as it was, from the snapshot value."""
+        snapshot = self._wizard_snapshot
+        self._close_wizard()
+        if snapshot is not None and snapshot is not self._chain:
+            self._chain = snapshot
+            self._sync_widgets_from_chain()
+        self._rebuild_stack()
+        self._apply()
+        self.status_message.emit("wizard cancelled — chain restored")
+        self.resubmit()
+
+    def _close_wizard(self) -> None:
+        wizard = self._wizard
+        self._wizard = None
+        self._wizard_snapshot = None
+        self._provisional_id = None
+        self._grab.clear()
+        if wizard is not None:
+            wizard.hide()
+            wizard.deleteLater()
+
+    def _ensure_body(self, step_id: str) -> None:
+        """A committed non-parity step gets a card body built from its model.
+
+        The parity five have hand-built bodies; anything else the wizard can
+        insert gets `param_form` rows so its parameters live in its card like
+        every other step's (plan § 2). Persistent like the hand-built rows —
+        created once, borrowed by every rebuild after.
+        """
+        step = next((s for s in self._chain.steps if s.step_id == step_id), None)
+        if step is None or step.node is None or step_id in self._extra_bodies:
+            return
+        if step_id in ("rescale", "normalize", "block_signal", "morlet_band", "windowed_count"):
+            return
+        entry = next((e for e in catalog() if e.entry_id == step_id), None)
+        hidden = entry.hidden_params if entry is not None else frozenset[str]()
+        host = QWidget()
+        column = QVBoxLayout(host)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(4)
+
+        def edited(name: str, value: object, sid: str = step_id) -> None:
+            self._on_extra_param(sid, name, value)
+
+        for row in param_rows(step.node, hidden, edited):
+            column.addWidget(row)
+        self._extra_bodies[step_id] = host
+
+    def _on_extra_param(self, step_id: str, name: str, value: object) -> None:
+        """A committed extra step's card edit: same tail as every upstream knob."""
+        steps = tuple(
+            replace(s, node=s.node.model_copy(update={"params": {**s.node.params, name: value}}))
+            if s.step_id == step_id and s.node is not None
+            else s
+            for s in self._chain.steps
+        )
+        self._chain = replace(self._chain, steps=steps)
+        self._knob_edited()
 
     @Slot(str)
     def _on_remove(self, step_id: str) -> None:
@@ -674,6 +914,7 @@ class FilterTab(QWidget):
     def _on_reset(self) -> None:
         """Parameters-not-structure: knobs and detector back, the chain stays."""
         self._chain = self._chain.reset(self._defaults)
+        self._value_band_memory.clear()
         self._sync_widgets_from_chain()
         self._scalogram.clear_band()
         self._density.set_band(*self._chain.detector.value_band)
@@ -686,9 +927,17 @@ class FilterTab(QWidget):
 
     # ---- source lifecycle ------------------------------------------------
 
+    def resizeEvent(self, event: object) -> None:
+        super().resizeEvent(event)  # type: ignore[arg-type]
+        if self._wizard is not None:
+            self._wizard.setGeometry(self.rect())
+
     @Slot()
     def _on_source_changed(self) -> None:
         """A new source: fresh chain at its frame rate, everything cleared."""
+        if self._wizard is not None:
+            self._close_wizard()
+        self._value_band_memory.clear()
         fps = self._fps()
         self._chain = parity_chain(fps)
         self._defaults = parity_chain(fps)

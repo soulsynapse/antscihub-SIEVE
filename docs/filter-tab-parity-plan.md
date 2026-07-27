@@ -69,7 +69,7 @@ the step that produces it:
 |---|---|
 | rescale | Downsample spinbox (float scale, v1 semantics) |
 | normalize | mode combo (`off` / `zscore`) |
-| block signal | Block spinbox (`0 = auto (N)`) + the **quick-switch**: Jtt \| LK as two checkable buttons that swap the step in place, one click, bands kept |
+| block signal | Block spinbox (`0 = auto (N)`) + the **quick-switch**: Jtt \| LK as two checkable buttons that swap the step in place, one click; frequency band kept, value band remembered per signal (§ 8, settled) |
 | morlet band | the scalogram and the band-power density graph, embedded |
 | windowed count | threshold/D caption; its graph is *promoted* under the video per the target, and the card says so |
 
@@ -530,7 +530,17 @@ count plot reports why; a knob change while a render is in flight yields
 exactly one final recompute with the last value; Reset restores documented
 defaults, clears bands, disarms, and does not touch chain structure.
 
-### Item 7 — The wizard (`gui/`)
+### Item 7 — The wizard (`gui/`) — DONE
+
+Landed 2026.07.26; see `docs/completed-todo/2026.07.26-the-wizard.md`.
+`gui/wizard_model.py` (Qt-free catalog/candidates/guidance parser),
+`gui/wizard.py` (the inset), `gui/param_form.py` (settings rows from any
+params model). The wizard proposes whole `LiveChain` values and the tab
+remains the one render owner; hover rides the single-frame path and the
+video frame is grabbed out of the window render the selection already pays
+for. Both § 8 questions settled — per-signal value-band memory (implemented
+on the quick-switch too), and the wizard hosts video + density + count, no
+scalogram. `mockups/insertion` and `mockups/tab` deleted.
 
 Per § 2: provisional insertion as a second `Pipeline` value through the
 existing runner (learning 3), candidates from the chain model's kinds with
@@ -611,7 +621,11 @@ detection spans to display.
   Jtt-tuned threshold silently reinterpreted in LK units); v1 remembered
   value bands per (region, channel). Per-signal memory is probably right.
   Also: the `repeatable` rule (learning 8), and whether the wizard hosts
-  the scalogram too (currently video + band power + count).
+  the scalogram too (currently video + band power + count). *Settled at
+  item time: per-signal value-band memory (frequency and count threshold
+  are unit-stable and carry over); `repeatable` is a per-entry flag, false
+  everywhere until a real chain needs repetition; the wizard hosts
+  video + density + count and no scalogram.*
 - **Item 8:** `lanes` vs `split`; seeker scrub outside the working
   window — clamp (mocked) vs move-the-window.
 - Whether the superseded `mockups/filter_tab.py` (the operations-list

@@ -144,11 +144,14 @@ class StepCard(QWidget):
         grade: StepGrade,
         caption: str,
         parent: QWidget | None = None,
+        *,
+        provisional: bool = False,
     ) -> None:
         super().__init__(parent)
         self.step = step
         self.grade = grade
         self.caption = caption
+        self.provisional = provisional
         self._hot = False
 
         conflicted = grade.status is Status.CONFLICT
@@ -221,7 +224,12 @@ class StepCard(QWidget):
         unreached = self.grade.status is Status.UNREACHED
 
         painter.setBrush(_PANEL_HOT if (self._hot and not unreached) else PANEL)
-        painter.setPen(QPen(CONFLICT if conflicted else LINE, 1.0))
+        edge = QPen(CONFLICT if conflicted else LINE, 1.0)
+        if self.provisional:
+            # The dashed card: in the chain for real — rendered, graded,
+            # graphed — but not yet committed. The wizard's Add solidifies it.
+            edge = QPen(DIM, 1.0, Qt.PenStyle.DashLine)
+        painter.setPen(edge)
         painter.drawRoundedRect(rect, 6, 6)
         if conflicted:
             painter.setBrush(CONFLICT)
@@ -239,11 +247,11 @@ class StepCard(QWidget):
         painter.setPen(dim)
         painter.setFont(plot_font(8))
         painter.drawText(QRectF(18, 24, rect.width() - 140, 15), 0, self.caption)
-        if unreached:
+        if unreached or self.provisional:
             painter.drawText(
                 QRectF(rect.width() - 130, 24, 118, 15),
                 int(Qt.AlignmentFlag.AlignRight),
-                "unreached",
+                "unreached" if unreached else "provisional",
             )
         if conflicted:
             painter.setPen(CONFLICT)
@@ -308,8 +316,14 @@ class ChainStackView(QWidget):
         grades: Sequence[StepGrade],
         captions: Sequence[str],
         bodies: Mapping[str, Sequence[QWidget]],
+        provisional: str | None = None,
     ) -> None:
         """Reconstruct the column for `steps`, borrowing `bodies` into cards.
+
+        `provisional` names the one step the wizard is still configuring; its
+        card draws dashed and says so. Everything else about it is ordinary —
+        it grades, it renders, its body embeds — because the provisional step
+        being *really in the chain* is what makes the preview honest.
 
         `bodies` maps step ids to the tab's persistent widgets, embedded in
         chain order into each card's body. Widgets borrowed by the previous
@@ -339,7 +353,7 @@ class ChainStackView(QWidget):
             if step.stage not in seen_stages:
                 seen_stages.add(step.stage)
                 self._column.addWidget(StageHeader(step.stage))
-            card = StepCard(step, grade, caption)
+            card = StepCard(step, grade, caption, provisional=step.step_id == provisional)
             card.swap_clicked.connect(self.swap_requested)
             card.remove_clicked.connect(self.remove_requested)
             if grade.status is Status.OK:

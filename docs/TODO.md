@@ -34,7 +34,7 @@ geometry), then stamp, then the rest.
 - If the user draws boxes and undoes it, then clicks into a replicate, the ratio is wrong (noticed <=2026.07.27) → `todo/ratio-wrong-after-undo.md`
 - It shouldn't ask to save the project or load the project. But it should automatically keep project history so if the user messes stuff up it can roll back. (noticed <=2026.07.27) → `todo/no-save-prompts-keep-history.md`
 - The zoom function should work on the replicate tab too. (noticed <=2026.07.27) → `todo/zoom-on-the-composite-view.md`
-- We had a beautiful bottom bar previously but it's now gone (noticed <=2026.07.27) → `todo/the-bottom-bar-that-went-missing.md`
+- We had a beautiful bottom bar previously but it's now gone (noticed <=2026.07.27) → `todo/seeker-upgrades.md`. Not a regression: `gui/timeline_bar.py` is the v2 base (its `STRIP_HEIGHT` comment reserves room for the lanes) and the loaded seeker in `mockups/seeker/` was never built. Resolved 2026.07.27; the item it duplicated is deleted.
 
 ## Keeping this file small
 

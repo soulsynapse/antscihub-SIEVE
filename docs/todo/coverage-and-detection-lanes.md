@@ -54,3 +54,39 @@ Carries a readout: "47% of the clip examined · 3 detections · 1.2 s detected �
 without one.
 
 Read: V1 `gui/explorers/detection_timeline.py`, `gui/track_store.py`.
+
+---
+
+## Detection ticks came here on 2026.07.27, and why
+
+Item 8 of `docs/filter-tab-parity-plan.md` was split that day: the bracket and
+the hover bubble stayed open in `docs/todo/seeker-upgrades.md`, and **detection
+ticks and the `|<` / `>|` jumps moved here**, because they share this item's
+trigger rather than the seeker's absence of one.
+
+Ticks look free and are not. Detections exist only over the **working window**:
+`gui/series_collector.py`'s frame axis is the rendered span's, `execute` yields
+only frames at or after `plan.span.start`, and nothing anywhere persists a
+detection outside the span currently rendered. A strip painting ticks from that
+would show them across the ten seconds under the window and nothing across the
+other twenty minutes — which reads as *no detections there*.
+
+That is this item's own rule failing through a third route. The two collapses
+already named above arrive through the palette and through the axis; this one
+arrives through the **extent of the record**, and it is the same false negative
+in the same costume. So ticks do not ship before coverage: the unexamined
+stretch must be visibly empty at the moment the first tick is drawn, or the
+first tick is a lie about everywhere it is not.
+
+Both are downstream of one thing — the executor recording, per replicate and
+per frame, that it ran and under which resolved params. That is already this
+item's `gated_on` line, unchanged; ticks are a fifth array off the same record
+(`detected`, beside `measure`, `gate`, `covered`, `current`), not a second
+subsystem.
+
+Two constraints for tick rendering, both from the mockup contract in
+`docs/filter-tab-parity-plan.md` §Seeker: ticks are floored to 1 px so a
+one-frame detection stays visible at any zoom, and green remains a status
+colour used for nothing else. The variant is settled as `lanes`, so ticks share
+the strip's top edge with the window header — watch that seam, since it is the
+one thing `mockups/seeker/README.md` flagged as possibly too crowded.

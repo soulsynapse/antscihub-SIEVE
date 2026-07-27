@@ -1,10 +1,18 @@
-"""Generate `.index.md` for the atomized documentation folders.
+"""Generate `.index.md` for the atomized documentation folders, plus
+`docs/.state.md`, the one-read session primer.
 
 `docs/completed-todo/` and `docs/findings/` hold one file per item, each with
 YAML frontmatter. A folder of thirty such files is unnavigable without a
 summary, and a hand-maintained summary is a summary that is wrong — so the
 index is derived, never edited, and `tests/docs/test_doc_index.py` fails when
 it has drifted from the files it describes.
+
+The primer exists because transcript mining put ~11% of active session time
+into re-orientation (see `findings/2026.07.27-session-time-is-generation-not-
+tools.md`): it condenses what TODO.md, LATER.md, and the two indexes would
+each be opened for at session start into one generated read. It deliberately
+holds nothing unique — every line is derived, so it can never be the home of
+a fact.
 
 That is the same discipline `tests/bench/test_budget_table.py` applies to
 `ARCHITECTURE.md`: prose that restates data is checked against the data.
@@ -211,13 +219,84 @@ def render(spec: IndexSpec, entries: Sequence[Entry]) -> str:
     return "\n".join(lines) + "\n"
 
 
+STATE_NAME = ".state.md"
+
+
+def bug_bullets(todo_lines: Sequence[str]) -> list[str]:
+    """Bullet lines of TODO.md's `## Bugs and tweaks` section."""
+    bullets: list[str] = []
+    inside = False
+    for line in todo_lines:
+        if line.startswith("## Bugs and tweaks"):
+            inside = True
+        elif inside and line.startswith("#"):
+            break
+        elif inside and line.startswith("- "):
+            bullets.append(line)
+    return bullets
+
+
+def _open_item_headings(todo_lines: Sequence[str]) -> list[str]:
+    """`##` headings under TODO.md's `# Open items`, stopping at the first
+    horizontal rule — what follows it (deferred decisions) is not open work."""
+    headings: list[str] = []
+    inside = False
+    for line in todo_lines:
+        if line.strip() == "# Open items":
+            inside = True
+        elif inside and (line.strip() == "---" or (line.startswith("# ") and headings)):
+            break
+        elif inside and line.startswith("## "):
+            headings.append(line.removeprefix("## ").strip())
+    return headings
+
+
+def render_state(root: Path = DOCS_ROOT) -> str:
+    """Build `docs/.state.md` from TODO.md, LATER.md, and the two indexes."""
+    todo = (root / "TODO.md").read_text(encoding="utf-8").splitlines()
+    later = (root / "LATER.md").read_text(encoding="utf-8").splitlines()
+    bugs = bug_bullets(todo)
+    items = _open_item_headings(todo)
+    deferred = [line.removeprefix("## ").strip() for line in later if line.startswith("## ")]
+
+    by_dir = {spec.directory: spec for spec in SPECS}
+    completed = collect(root / "completed-todo", by_dir["completed-todo"].required)
+    findings = collect(root / "findings", by_dir["findings"].required)
+
+    lines = [
+        GENERATED_NOTICE,
+        "",
+        "# Repo state — the one-read session primer",
+        "",
+        "Every line here is derived; nothing is unique to this file. It exists",
+        "so a session orients in one read instead of four.",
+        "",
+        f"**Open items ({len(items)})** — bodies in `TODO.md`:",
+        "",
+        *[f"- {item}" for item in items],
+        "",
+        f"**Bugs and tweaks queued:** {len(bugs)} "
+        f"&nbsp;&nbsp;**Deferred in `LATER.md`:** {len(deferred)}",
+        "",
+        "**Last completed** (full list in `completed-todo/.index.md`):",
+        "",
+    ]
+    for entry in completed[:3]:
+        lines.append(f"- {_cell(entry.fields.get('date'))} — {_cell(entry.fields.get('title'))}")
+    lines += ["", "**Latest finding:**", ""]
+    for entry in findings[:1]:
+        lines.append(f"- {_cell(entry.fields.get('title'))} — {_cell(entry.fields.get('verdict'))}")
+    return "\n".join(lines) + "\n"
+
+
 def build(root: Path = DOCS_ROOT) -> Iterator[tuple[Path, str]]:
-    """Yield `(index path, desired content)` for every configured folder."""
+    """Yield `(path, desired content)` for every generated doc."""
     for spec in SPECS:
         directory = root / spec.directory
         if not directory.is_dir():
             raise FrontmatterError(f"{directory}: indexed folder does not exist")
         yield directory / INDEX_NAME, render(spec, collect(directory, spec.required))
+    yield root / STATE_NAME, render_state(root)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

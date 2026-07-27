@@ -14,6 +14,7 @@ Read the file that answers your question, not all of them.
 
 | Question | File |
 |---|---|
+| What is the state of play right now, in one read? | `docs/.state.md` — generated; read it before TODO.md |
 | What am I building, and what is the workflow supposed to feel like? | `docs/VISION.md`, then `docs/REFINED-VISION.md` |
 | What are the invariants, layers, and latency budgets? | `docs/ARCHITECTURE.md` |
 | Where does this module go? | `docs/SCAFFOLD.md` (machine-checked; see below) |
@@ -75,8 +76,10 @@ force — nothing in the repo has ever been at rest. See `docs/ARCHITECTURE.md`.
    its place only when it pins something an example cannot state.
 5. **Run the gate**: `uv run nox -s checks`. It must pass.
 6. **Complete atomically.** Delete the item's section from `TODO.md` and write
-   `docs/completed-todo/YYYY.MM.DD-name.md` from that folder's `_TEMPLATE.md`.
-   Never mark an item done in place — a finished item is *moved*.
+   `docs/completed-todo/YYYY.MM.DD-name.md` from that folder's `_TEMPLATE.md` —
+   `uv run python tools/complete_item.py <slug>` scaffolds it with the
+   frontmatter and git-derived file lists filled in. Never mark an item done in
+   place — a finished item is *moved*.
 7. **Measurements go to `docs/findings/`**, never into the completed entry. A
    completed entry says what was built; a finding says what is true about the
    system and outlives the code that prompted it.

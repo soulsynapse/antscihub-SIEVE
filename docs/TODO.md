@@ -7,10 +7,24 @@ The loop that governs this file — checklist before the first edit, gate, atomi
 completion, findings kept separate, commit and push — is in `CLAUDE.md`. This
 file holds only what an item is and which items are open.
 
-## Written by user, not agent, 2026.07.27 at 1pm
-Bug fixes: bundle these together to keep context window sane
+## Bugs and tweaks
+Bundle these together to not have to do the full test/gate suites for minor things. Tag them when you notice the diff with the date and time so you know when they popped up and you can track them — the format is `(noticed YYYY.MM.DD)`, and `tests/docs/test_todo_hygiene.py` fails on an untagged entry. `<=` marks the ones that predate the rule.
 
-- 
+If any of these are a compounding bug - something that will cause something else to be rewritten if not immediately addressed, address it at the first availability. If it is better at a different time, move it to later, otherwise, todo is fine.
+
+- The right side panel of filters should be insensitive to mouse scrolls - accidentally scrolling up and down that menu shouldn't also automatically result in a rescale box jumping down or up, normalize changing, block number changing, etc. (noticed <=2026.07.27)
+- Spacebar should generally work across the board - if something is changed, like a drop menu or whatever else, spacebar should start working again. (noticed <=2026.07.27)
+- Blocks in band has the cap at inf but depending on operations done it might have a line that is just crushed to the bottom (noticed <=2026.07.27)
+- Band power in block may randomly give out if block signal block number is low enough (noticed <=2026.07.27)
+- Video should auto play (noticed <=2026.07.27)
+- Right click on the video in the filter tab should take it back to the replicate tab full view (noticed <=2026.07.27)
+- Instead of shift to peek, it should just let you hover with mouse to peek (noticed <=2026.07.27)
+- Stamp should be the default once one is drawn. Stamp should be the default if the user clicks, and if the user tries to drag click it should let it draw. It should stamp based on the highlighted replicate. (noticed <=2026.07.27)
+- If the user sets the replicate and tries to change it, it should ask for confirmation as a box. (noticed <=2026.07.27)
+- If the user draws boxes and undoes it, then clicks into a replicate, the ratio is wrong (noticed <=2026.07.27)
+- It shouldn't ask to save the project or load the project. But it should automatically keep project history so if the user messes stuff up it can roll back. (noticed <=2026.07.27)
+- The zoom function should work on the replicate tab too. (noticed <=2026.07.27)
+- We had a beautiful bottom bar previously but it's now gone (noticed <=2026.07.27)
 
 ## What an item here looks like
 

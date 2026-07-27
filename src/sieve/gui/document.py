@@ -17,16 +17,33 @@ whole window rather than one table in it.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QUndoStack
 
-from sieve.core.pipeline_model import ClipRange, Pipeline, Project, equivalence_groups
+from sieve.core.pipeline_model import (
+    ClipRange,
+    DetectorSettings,
+    Node,
+    Pipeline,
+    Project,
+    edited_detector,
+    edited_params,
+    equivalence_groups,
+    resolved_detector,
+    resolved_params,
+)
 from sieve.core.replicates import Replicate, ReplicateSet
 from sieve.core.types import ROI
 from sieve.gui.commands import (
     AddReplicate,
+    EditDetector,
+    EditTuningParams,
     RemoveReplicate,
     RenameReplicate,
+    ResetTuning,
     SetClip,
     SetReplicateROI,
     SetReplicateROIs,
@@ -55,6 +72,20 @@ class ReplicateDocument(QObject):
     #: axis is the source's length, and rebuilding it per replicate would reset
     #: the window controls under a user who is typing into them.
     source_changed = Signal()
+    #: A node baseline or a parameter pin moved — a knob edit, its undo, or a
+    #: reset. The tab re-resolves what the selected replicate runs with and
+    #: re-renders; no payload names *which* node, because a reset moves them
+    #: all and the tab resubmits the whole prefix either way.
+    tuning_changed = Signal()
+    #: The detector baseline or a detector pin moved. Separate from
+    #: `tuning_changed` because the response differs in kind: parameters
+    #: re-run extraction through the runner, the detector re-derives over the
+    #: retained series.
+    detector_changed = Signal()
+    #: The graph's *structure* was replaced — a load, or a step added,
+    #: swapped, or removed. Views rebuild from the pipeline rather than
+    #: re-resolving values into an existing shape.
+    pipeline_changed = Signal()
     #: A different replicate is the one being tuned — or none is. Not emitted
     #: when a removal above the selection merely shifts its row number: the
     #: arena on screen is the same arena, and a re-render of it would say
@@ -65,6 +96,7 @@ class ReplicateDocument(QObject):
         super().__init__(parent)
         self._replicates = ReplicateSet()
         self._pipeline = Pipeline()
+        self._detector: DetectorSettings | None = None
         self._source_size: tuple[int, int] | None = None
         self._source_frames = 0
         self._source_fps = 0.0
@@ -172,6 +204,44 @@ class ReplicateDocument(QObject):
         """
         return self._pipeline
 
+    @property
+    def detector(self) -> DetectorSettings | None:
+        """The detector baseline, or None while nothing has been tuned.
+
+        What a save writes. The GUI never renders this directly — it renders
+        `resolved_detector_for`, which is this resolved against the selected
+        replicate with the never-tuned fallback applied.
+        """
+        return self._detector
+
+    def detector_baseline(self) -> DetectorSettings:
+        """The baseline an edit diffs against: tuned, or the source's defaults.
+
+        The fallback is derived on every read rather than written into
+        `_detector`, for `window`'s reason one section up: a project saved
+        before anyone touched the detector must come back with `detector`
+        unset, and resolving the fallback into the field would make that
+        state unreachable. "One second of D" needs the frame rate, which is
+        why this is a method on the document and not a constant on the model.
+        """
+        return self._detector or DetectorSettings.default_for(self._source_fps)
+
+    def resolved_node_params(self, node_id: str) -> dict[str, Any]:
+        """What `node_id` runs with for the selected replicate.
+
+        A lookup around `resolved_params` — the one definition — against the
+        selection, because "the values on screen" is always a question about
+        the arena being tuned.
+
+        Raises:
+            KeyError: if `node_id` names nothing.
+        """
+        return resolved_params(self._pipeline.node(node_id), self.selected_replicate)
+
+    def resolved_detector_for_selection(self) -> DetectorSettings:
+        """The detector values the selected replicate runs with."""
+        return resolved_detector(self.detector_baseline(), self.selected_replicate)
+
     def equivalence_groups(self) -> tuple[int, ...]:
         """Group number per row, derived on every call.
 
@@ -182,7 +252,7 @@ class ReplicateDocument(QObject):
         correct answer to "which of these run the same thing" when the answer is
         "nothing yet".
         """
-        return equivalence_groups(self._pipeline, self._replicates.as_list())
+        return equivalence_groups(self._pipeline, self._replicates.as_list(), self._detector)
 
     # ---- lifecycle -------------------------------------------------------
 
@@ -197,6 +267,42 @@ class ReplicateDocument(QObject):
         if pipeline == self._pipeline:
             return
         self._pipeline = pipeline
+        self.grouping_changed.emit()
+
+    def sync_structure(self, pipeline: Pipeline) -> None:
+        """Adopt `pipeline`'s structure, keeping the baselines this document owns.
+
+        The tab's structural edits — a step added, swapped, or removed — land
+        here. Incoming nodes whose id the document already carries keep the
+        *document's* parameters: the tab's copy of a node holds the values
+        resolved for the selected replicate, and adopting those as the
+        baseline would silently promote one arena's pins to the default for
+        all of them. A node the document has never seen is genuinely new and
+        its parameters are its freshly minted defaults, which is exactly what
+        a baseline starts as.
+
+        Pins naming nodes the new structure lost are dropped, because the
+        artifact refuses them (`Project._references_resolve`) — a deviation on
+        a deleted node is a parameter set nothing will ever read. Dropped
+        outside undo, as the structural edit itself is: the wizard's Cancel is
+        its own restore path, and a removal is offered no way back today.
+
+        Not a command and not undoable, for `set_pipeline`'s reason.
+        """
+        nodes = tuple(
+            self._pipeline.node(node.node_id) if node.node_id in self._pipeline else node
+            for node in pipeline.nodes
+        )
+        merged = pipeline.model_copy(update={"nodes": nodes})
+        surviving = {node.node_id for node in nodes}
+        pruned = ReplicateSet(
+            replicate.with_overrides_limited_to(surviving) for replicate in self._replicates
+        )
+        if merged == self._pipeline and pruned.as_list() == self._replicates.as_list():
+            return
+        self._pipeline = merged
+        self._replicates = pruned
+        self.pipeline_changed.emit()
         self.grouping_changed.emit()
 
     def bind_source(self, width: int, height: int, frame_count: int = 0, fps: float = 0.0) -> None:
@@ -241,9 +347,10 @@ class ReplicateDocument(QObject):
         self.clip_changed.emit()
 
     def _reset(self) -> None:
-        """Drop replicates, clip, graph, selection, and history silently."""
+        """Drop replicates, clip, graph, detector, selection, and history silently."""
         self._replicates.clear()
         self._pipeline = Pipeline()
+        self._detector = None
         self._clip = None
         self._selected = None
         self.undo_stack.clear()
@@ -276,6 +383,7 @@ class ReplicateDocument(QObject):
             replicate.with_roi(self._fit(replicate.roi)) for replicate in project.replicates
         )
         self._pipeline = project.pipeline
+        self._detector = project.detector
         self._clip = self._fit_clip(project.clip)
         # The first row, not none: a loaded project must open looking at *an*
         # arena, and with nothing remembered in the file the first is the only
@@ -286,9 +394,13 @@ class ReplicateDocument(QObject):
         self.grouping_changed.emit()
         self.clip_changed.emit()
         self.selection_changed.emit()
+        # Last, so a view rebuilding its chain from the graph already sees
+        # the restored selection and resolves the right arena's values.
+        self.pipeline_changed.emit()
+        self.detector_changed.emit()
 
     def apply_to(self, project: Project) -> Project:
-        """`project` carrying this document's replicates, clip, and graph.
+        """`project` carrying this document's replicates, clip, detector, and graph.
 
         A copy of something else rather than a project built from nothing, and
         that is the whole point: `source`, `checkpoints`, and `outputs` are
@@ -310,6 +422,7 @@ class ReplicateDocument(QObject):
         return (
             project.with_replicates(tuple(self._replicates))
             .with_clip(self._clip)
+            .with_detector(self._detector)
             .with_pipeline(self._pipeline)
         )
 
@@ -342,6 +455,78 @@ class ReplicateDocument(QObject):
             return
         self._selected = index
         self.selection_changed.emit()
+
+    def edit_params(self, changes_by_node: Mapping[str, Mapping[str, Any]], text: str) -> None:
+        """Tune node parameters for the arena being looked at.
+
+        The GUI's entry to the two-write mechanism: the submitted fields move
+        each node's baseline, and whatever actually changed against what the
+        selected replicate resolved to is pinned on it — so an untouched
+        arena keeps following, and a touched one deviates by exactly the
+        fields touched. Submit only what the user edited; see
+        `core.pipeline_model.edited_params` for why a whole resolved view
+        must not be submitted.
+
+        A no-op edit — every submitted value already resolved — pushes
+        nothing, so re-committing a spinbox does not stack history.
+
+        Raises:
+            KeyError: if a node id names nothing in the graph.
+        """
+        if not self._would_change(changes_by_node):
+            return
+        self.undo_stack.push(EditTuningParams(self, self._selected, changes_by_node, text))
+
+    def _would_change(self, changes_by_node: Mapping[str, Mapping[str, Any]]) -> bool:
+        replicate = self.selected_replicate
+        for node_id, params in changes_by_node.items():
+            node = self._pipeline.node(node_id)
+            if replicate is None:
+                if {**node.params, **params} != node.params:
+                    return True
+            else:
+                moved, pinned = edited_params(node, replicate, params)
+                if moved.params != node.params or pinned.overrides != replicate.overrides:
+                    return True
+        return False
+
+    def edit_detector(
+        self, changes: Mapping[str, Any], text: str, *, gesture: int | None = None
+    ) -> None:
+        """Tune the detector for the arena being looked at.
+
+        `edit_params` for the detection suffix, with `set_roi`'s gesture
+        contract: steps of one continuous drag share a token and collapse to
+        a single undo entry; a discrete edit passes nothing and stands alone.
+
+        Raises:
+            ValidationError: if `changes` names no such field or misfits one.
+        """
+        baseline = self.detector_baseline()
+        replicate = self.selected_replicate
+        if replicate is None:
+            moved = DetectorSettings.model_validate({**baseline.model_dump(), **changes})
+            unchanged = self._detector is not None and moved == self._detector
+        else:
+            moved, pinned = edited_detector(baseline, replicate, changes)
+            unchanged = (
+                self._detector is not None
+                and moved == self._detector
+                and pinned.detector_overrides == replicate.detector_overrides
+            )
+        if unchanged:
+            return
+        self.undo_stack.push(EditDetector(self, self._selected, changes, text, gesture=gesture))
+
+    def reset_tuning(self, defaults_by_node: Mapping[str, Mapping[str, Any]]) -> None:
+        """Return named baselines to their defaults and drop every pin.
+
+        One undo entry however many replicates were following their own
+        values, for `set_all_to_size`'s reason. `defaults_by_node` names the
+        nodes that *have* defaults — a step the user inserted is absent and
+        keeps its parameters.
+        """
+        self.undo_stack.push(ResetTuning(self, defaults_by_node))
 
     def add_roi(self, roi: ROI) -> None:
         """Append a replicate covering `roi`, named with the next free default."""
@@ -545,6 +730,58 @@ class ReplicateDocument(QObject):
         """Replace the clip without recording history."""
         self._clip = clip
         self.clip_changed.emit()
+
+    def apply_params(
+        self, nodes: Mapping[str, Node], index: int | None, replicate: Replicate | None
+    ) -> None:
+        """Substitute node baselines, and one replicate's pins, without history.
+
+        `index` and `replicate` arrive together or not at all: a document
+        with no replicates tunes only baselines, and a command undoing a pin
+        must restore the row it pinned on whatever is selected *now*.
+        """
+        substituted = tuple(nodes.get(node.node_id, node) for node in self._pipeline.nodes)
+        self._pipeline = self._pipeline.model_copy(update={"nodes": substituted})
+        if index is not None and replicate is not None:
+            self._replicates.replace_at(index, replicate)
+        self.tuning_changed.emit()
+        self.grouping_changed.emit()
+
+    def apply_detector(
+        self,
+        settings: DetectorSettings | None,
+        index: int | None,
+        replicate: Replicate | None,
+    ) -> None:
+        """Replace the detector baseline, and one replicate's pins, without history.
+
+        `settings` may be None because an undo of the first-ever detector
+        edit restores the never-tuned state, which is a real state a save
+        must be able to write.
+        """
+        self._detector = settings
+        if index is not None and replicate is not None:
+            self._replicates.replace_at(index, replicate)
+        self.detector_changed.emit()
+        self.grouping_changed.emit()
+
+    def apply_tuning_state(
+        self,
+        pipeline: Pipeline,
+        detector: DetectorSettings | None,
+        replicates: tuple[Replicate, ...],
+    ) -> None:
+        """Replace the whole tuning state without history — Reset and its undo.
+
+        Wholesale because that is what the command captured; the replicate
+        count never changes here, so no structural signal fires.
+        """
+        self._pipeline = pipeline
+        self._detector = detector
+        self._replicates = ReplicateSet(replicates)
+        self.tuning_changed.emit()
+        self.detector_changed.emit()
+        self.grouping_changed.emit()
 
     def _fit(self, roi: ROI) -> ROI:
         """Trim an ROI to the source frame.

@@ -20,7 +20,7 @@ is the only place that can see both.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Collection, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, Self
 from uuid import uuid4
@@ -40,6 +40,11 @@ def _new_id() -> str:
 
 def _no_overrides() -> dict[str, dict[str, Any]]:
     """An empty deviation map, typed — `default_factory=dict` infers nothing."""
+    return {}
+
+
+def _no_detector_overrides() -> dict[str, Any]:
+    """An empty detector deviation, typed for the same reason."""
     return {}
 
 
@@ -70,6 +75,16 @@ class Replicate:
     #: anyway; two replicates differing only in overrides hash alike and
     #: compare unequal, which is the correct pair of answers.
     overrides: dict[str, dict[str, Any]] = field(default_factory=_no_overrides, hash=False)
+    #: The detector's deviation, `{field_name: value}` — `overrides`' twin for
+    #: the tab-side detection settings, which belong to no node and so cannot
+    #: live in the mapping above without inventing a node id nothing runs.
+    #: Sparse for the same reason: a field absent here follows the project's
+    #: detector baseline as it moves, so one arena can hold its own count
+    #: threshold while still following every later edit to the frequency band.
+    #: Which field names are legal is the artifact's question
+    #: (`pipeline_model.DetectorSettings`), one layer up, exactly as node
+    #: override keys are resolved against the graph there and not here.
+    detector_overrides: dict[str, Any] = field(default_factory=_no_detector_overrides, hash=False)
 
     def renamed(self, name: str) -> Self:
         """Copy carrying a new display name and the same identity."""
@@ -112,6 +127,36 @@ class Replicate:
         if node_id not in self.overrides:
             return self
         return replace(self, overrides={k: v for k, v in self.overrides.items() if k != node_id})
+
+    def with_overrides_limited_to(self, node_ids: Collection[str]) -> Self:
+        """Copy keeping only the deviations that still name a real node.
+
+        The prune a structural edit performs: a pin on a node the graph lost
+        is a parameter set nothing will ever read, and the artifact refuses
+        to save one. Returns `self` unchanged when nothing is stale, so an
+        identity check can tell "pruned" from "already clean".
+        """
+        kept = {k: v for k, v in self.overrides.items() if k in node_ids}
+        if kept == self.overrides:
+            return self
+        return replace(self, overrides=kept)
+
+    def with_detector_pins(self, changes: Mapping[str, Any]) -> Self:
+        """Copy whose detector deviation is merged with `changes`.
+
+        Merged, not replaced, for `with_override`'s reason: an edit names only
+        the fields it touched, and replacing would un-pin every other field
+        this arena had deviated on.
+        """
+        if not changes:
+            return self
+        return replace(self, detector_overrides={**self.detector_overrides, **changes})
+
+    def without_detector_pins(self) -> Self:
+        """Copy that follows the detector baseline again — the way back."""
+        if not self.detector_overrides:
+            return self
+        return replace(self, detector_overrides={})
 
 
 class ReplicateSet:

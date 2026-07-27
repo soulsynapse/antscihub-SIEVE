@@ -16,12 +16,18 @@ for free and is otherwise refreshed by a single-frame request at the
 playhead, suppressed while a window render the graphs need is outstanding so
 the refresh stream can never displace it from the runner's pending slot.
 
-**One value, replaced on every edit.** The tab holds the current `LiveChain`
-and replaces it — knob edits rewrite node params, removals go through
-`without`, Reset through `reset`. The stack is redrawn from the value, the
-`Pipeline` handed to the runner is derived from the value, and the detector
-maths read the value, so there is no second place a parameter lives (the plan's
-"knob state lives in the tab", held to one attribute).
+**One value, replaced on every edit — and the document is where tuning lives.**
+The tab holds the current `LiveChain` and replaces it, but since replicates
+remember their settings the chain is the *resolved view* of what the selected
+arena runs with, not the store: a knob edit goes down to the document as a
+two-write command (`edit_params`/`edit_detector` — baseline moved, diff pinned
+on the selected replicate) and comes back through `tuning_changed`/
+`detector_changed`, where `_refresh_from_document` re-resolves the chain. The
+stack is redrawn from the value, the `Pipeline` handed to the runner is derived
+from the value, and the detector maths read the value — one attribute still,
+one owner underneath it. Structure stays tab-owned and reaches the document
+through `sync_structure`; drags and the soloed block stay tab-local (the drag
+tier repaints, the release commits; soloing is looking, not tuning).
 
 **Render plumbing is item 4's, used as designed.** Every chain change submits
 the runnable prefix through `PreviewRunner.request_render` with a consumer
@@ -48,7 +54,9 @@ incomplete — see the stack".
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
+from itertools import count
 from math import isfinite
 from time import perf_counter
 
@@ -106,7 +114,7 @@ from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.scalogram_plot import ScalogramPlot
 from sieve.gui.series_collector import SeriesCollector
 from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
-from sieve.gui.wizard_model import catalog
+from sieve.gui.wizard_model import catalog, chain_from_pipeline
 
 #: The two interaction budgets this tab produces (ARCHITECTURE.md rows).
 BAND_DRAG_BUDGET = "band_drag_repaint"
@@ -227,6 +235,11 @@ class FilterTab(QWidget):
         #: a Jtt-tuned band silently reinterpreted in LK units was the mockup
         #: cycle's clearest foot-gun (`mockups/tab --shot lk`).
         self._value_band_memory: dict[str, tuple[float, float]] = {}
+        #: Gesture tokens for the D slider, `SetReplicateROI`'s discipline:
+        #: one token per press, so a drag across detents merges to one undo
+        #: entry and two separate drags stay two.
+        self._gestures = count(1)
+        self._d_gesture: int | None = None
 
         self._build_widgets()
         self._build_layout()
@@ -306,6 +319,12 @@ class FilterTab(QWidget):
         # A replicate change invalidates exactly as a window move does: the
         # render goes through the runner's latest-wins submission unchanged.
         self._document.selection_changed.connect(self._on_selection_changed)
+        # The document is where tuning lives now; every edit — from this tab,
+        # from Ctrl+Z, from a future panel — comes back through these three,
+        # and the tab re-resolves what the selected replicate runs with.
+        self._document.tuning_changed.connect(self._on_tuning_changed)
+        self._document.detector_changed.connect(self._on_detector_changed)
+        self._document.pipeline_changed.connect(self._on_pipeline_changed)
         self._runner.opened.connect(self.resubmit)
         self._runner.render_started.connect(self._collector_start)
         self._runner.render_started.connect(self._hud_begin)
@@ -333,11 +352,16 @@ class FilterTab(QWidget):
             plot.committed.connect(self._player.seek)
         self._scalogram.band_changed.connect(self._on_freq_drag)
         self._scalogram.band_committed.connect(self._on_freq_commit)
-        self._density.band_changed.connect(self._on_value_band)
+        # Drag and commit are different tiers *and* different stores now: a
+        # drag repaints from the tab's local value, the release is what the
+        # document records — one undo entry per placed band, none per twitch.
+        self._density.band_changed.connect(self._on_value_drag)
         self._density.band_committed.connect(self._on_value_band)
-        self._count.band_changed.connect(self._on_count_band)
+        self._count.band_changed.connect(self._on_count_drag)
         self._count.band_committed.connect(self._on_count_band)
         self._composite.solo_toggled.connect(self._on_solo)
+        self._d_slider.sliderPressed.connect(self._on_d_pressed)
+        self._d_slider.sliderReleased.connect(self._on_d_released)
         self._d_slider.valueChanged.connect(self._on_window_frames)
         self._centered.toggled.connect(self._on_centered)
 
@@ -438,6 +462,153 @@ class FilterTab(QWidget):
 
     def _set_detector(self, detector: DetectorState) -> None:
         self._chain = replace(self._chain, detector=detector)
+
+    # ---- the document round trip -----------------------------------------
+    # Tuning lives on the document: an edit goes down as a two-write command
+    # (baseline moved, diff pinned on the selected replicate), and the tab
+    # hears the change back through `tuning_changed` / `detector_changed` and
+    # re-resolves. One path whether the edit came from a knob, Ctrl+Z, or a
+    # replicate switch — the chain value is the *view* of what the selected
+    # arena runs with, never a second store of it.
+
+    def _node_id_for(self, filter_id: str) -> str | None:
+        for step in self._chain.steps:
+            if step.node is not None and step.node.filter_id == filter_id:
+                return step.node.node_id
+        return None
+
+    def _submit_params(self, changes_by_filter: dict[str, dict[str, object]], text: str) -> None:
+        """Route a knob edit through the document, or locally while it cannot land.
+
+        The local fallback covers a chain the document has not adopted — a
+        provisional wizard step, or a session with nothing open — where the
+        same edit is a plain rewrite of the tab's value, exactly as before
+        the document owned tuning.
+        """
+        by_node: dict[str, Mapping[str, object]] = {}
+        for filter_id, params in changes_by_filter.items():
+            node_id = self._node_id_for(filter_id)
+            if node_id is None or node_id not in self._document.pipeline:
+                by_node = {}
+                break
+            by_node[node_id] = params
+        if not by_node:
+            for filter_id, params in changes_by_filter.items():
+                self._set_node_params(filter_id, **params)
+            self._knob_edited()
+            return
+        index = self._document.undo_stack.index()
+        self._knob_armed_at = perf_counter()
+        self._document.edit_params(by_node, text)
+        if self._document.undo_stack.index() == index:
+            # A no-op edit pushed nothing and nothing will re-render, so the
+            # armed budget clock must not survive to time the next render.
+            self._knob_armed_at = None
+
+    def _submit_detector(
+        self, changes: dict[str, object], text: str, *, gesture: int | None = None
+    ) -> None:
+        """Route a committed detector edit through the document, or keep it local.
+
+        Local while a wizard is open: its detector edits are provisional
+        exactly as its step is, and Cancel restores them from the snapshot —
+        the net change reaches the document once, on Add
+        (`_on_wizard_accepted`).
+        """
+        if self._wizard is not None or not len(self._document.pipeline.nodes):
+            detector = self._chain.detector
+            updated = replace(detector, **changes)
+            if updated.freq_band == detector.freq_band:
+                self._cheap_retune(updated)
+            else:
+                self._set_detector(updated)
+                self._derive(reuse_band_power=False)
+            return
+        self._document.edit_detector(changes, text, gesture=gesture)
+
+    @Slot()
+    def _on_tuning_changed(self) -> None:
+        """Node baselines or pins moved: re-resolve, then re-run extraction."""
+        self._refresh_from_document()
+        self.resubmit()
+
+    @Slot()
+    def _on_detector_changed(self) -> None:
+        """The detector moved: re-resolve, re-derive at the cheapest honest tier."""
+        previous = self._chain.detector
+        resolved = DetectorState.from_settings(
+            self._document.resolved_detector_for_selection(),
+            solo_block=previous.solo_block,
+        )
+        if resolved == previous:
+            return
+        self._set_detector(resolved)
+        self._sync_widgets_from_chain()
+        self._stack.update_captions(self._captions())
+        self._derive(reuse_band_power=resolved.freq_band == previous.freq_band)
+
+    @Slot()
+    def _on_pipeline_changed(self) -> None:
+        """The document's graph was replaced — a load, or an edit echoed back.
+
+        The echo case is identified by identity: a structure the tab itself
+        just synced carries the tab's own node ids, and rebuilding around
+        them would only discard the tab-side state it already has. A loaded
+        graph carries ids this chain has never held, and the stack regrows
+        around it — steps, bodies, collector, everything.
+        """
+        document_ids = [node.node_id for node in self._document.pipeline.nodes]
+        chain_ids = [step.node.node_id for step in self._chain.steps if step.node is not None]
+        if document_ids == chain_ids:
+            return
+        try:
+            rebuilt = chain_from_pipeline(self._document.pipeline, self._fps())
+        except ValueError as error:
+            # Refused, and said so, rather than drawn wrong — and the
+            # document's graph is left alone: the tab only writes structure
+            # on its own structural edits, so what was loaded stays loadable.
+            self.status_message.emit(f"cannot display the loaded graph: {error}")
+            return
+        self._chain = rebuilt
+        self._defaults = parity_chain(self._fps())
+        for step in rebuilt.steps:
+            if step.node is not None:
+                self._ensure_body(step.step_id)
+        self._refresh_from_document()
+        self._collector = SeriesCollector(self._block_node_id() or "")
+        self._selected_step = None
+        self._rebuild_stack()
+        self._apply()
+        self.resubmit()
+
+    def _refresh_from_document(self) -> None:
+        """Re-resolve every tuned value for the selected replicate into the chain.
+
+        Parameters through `resolved_node_params`, the detector through
+        `resolved_detector_for_selection` — the core definitions, so the
+        knobs, the captions, and the render can never disagree with what a
+        batch run of this arena would use. The soloed block survives because
+        it is looking, not tuning, and lives only here.
+        """
+        document = self._document
+        steps = tuple(
+            replace(
+                step,
+                node=step.node.model_copy(
+                    update={"params": document.resolved_node_params(step.node.node_id)}
+                ),
+            )
+            if step.node is not None and step.node.node_id in document.pipeline
+            else step
+            for step in self._chain.steps
+        )
+        detector = DetectorState.from_settings(
+            document.resolved_detector_for_selection(),
+            solo_block=self._chain.detector.solo_block,
+        )
+        self._chain = replace(self._chain, steps=steps, detector=detector)
+        self._sync_widgets_from_chain()
+        self._stack.update_captions(self._captions())
 
     # ---- rendering -------------------------------------------------------
 
@@ -1089,20 +1260,18 @@ class FilterTab(QWidget):
     def _on_downsample(self, scale: float) -> None:
         # Scale enters twice on purpose: rescale performs it, block_signal's
         # auto-block resolution and fps/scale bookkeeping depend on it.
-        self._set_node_params("rescale", scale=scale)
-        self._set_node_params("block_signal", scale=scale)
         self._block.setSpecialValueText(f"auto ({resolve_block(0, scale)})")
-        self._knob_edited()
+        self._submit_params(
+            {"rescale": {"scale": scale}, "block_signal": {"scale": scale}}, "Set Downsample"
+        )
 
     @Slot(str)
     def _on_normalize(self, mode: str) -> None:
-        self._set_node_params("normalize", mode=mode)
-        self._knob_edited()
+        self._submit_params({"normalize": {"mode": mode}}, "Set Normalize")
 
     @Slot(int)
     def _on_block(self, block: int) -> None:
-        self._set_node_params("block_signal", block=block)
-        self._knob_edited()
+        self._submit_params({"block_signal": {"block": block}}, "Set Block Size")
 
     def _on_signal_switch(self, signal_id: str) -> None:
         """The quick-switch: swap the extraction in place, value band per signal.
@@ -1111,6 +1280,11 @@ class FilterTab(QWidget):
         the value band is in the signal's own units — a Jtt-tuned threshold
         read in LK px/s is the mockup cycle's clearest silent misread — so
         each signal remembers its own and starts wide open the first time.
+
+        One macro, because it is one gesture that lawfully writes two things
+        — the signal parameter and the restored value band — and Ctrl+Z
+        returning the signal while leaving the other signal's band in place
+        would recreate exactly the misread the memory exists to prevent.
         """
         step = self._block_step()
         old_signal = (
@@ -1118,16 +1292,32 @@ class FilterTab(QWidget):
         )
         for other_id, button in self._signal_buttons.items():
             button.setChecked(other_id == signal_id)
+        if old_signal == signal_id:
+            return
         detector = self._chain.detector
-        if old_signal and old_signal != signal_id:
+        restored = detector.value_band
+        if old_signal:
             self._value_band_memory[old_signal] = detector.value_band
             restored = self._value_band_memory.get(signal_id, DetectorState().value_band)
-            self._set_detector(replace(detector, value_band=restored))
-        self._set_node_params("block_signal", signal=signal_id)
+        node_id = self._node_id_for("block_signal")
+        if node_id is not None and node_id in self._document.pipeline and self._wizard is None:
+            stack = self._document.undo_stack
+            stack.beginMacro(f"Switch Signal to {SIGNAL_LABELS[signal_id]}")
+            try:
+                if restored != detector.value_band:
+                    self._document.edit_detector({"value_band": restored}, "Set Value Band")
+                self._knob_armed_at = perf_counter()
+                self._document.edit_params({node_id: {"signal": signal_id}}, "Set Signal")
+            finally:
+                stack.endMacro()
+        else:
+            if restored != detector.value_band:
+                self._set_detector(replace(detector, value_band=restored))
+            self._set_node_params("block_signal", signal=signal_id)
+            self._knob_edited()
         self.status_message.emit(
             f"signal → {SIGNAL_LABELS[signal_id]} (value band remembered per signal)"
         )
-        self._knob_edited()
 
     # ---- detector edits (tab-side: pure recompute) -----------------------
 
@@ -1155,39 +1345,72 @@ class FilterTab(QWidget):
         self._stack.update_captions(self._captions())
 
     def _on_freq_commit(self, lo: float, hi: float) -> None:
-        self._set_detector(replace(self._chain.detector, freq_band=(lo, hi)))
-        self._derive(reuse_band_power=False)
+        # The drag tier has usually written this band into the chain already
+        # (handles move live), so the document echo compares equal and skips —
+        # correctly, except that the *transform* has not run for it. When the
+        # echo cannot see the change, the full derivation is owed here.
+        already = self._chain.detector.freq_band == (lo, hi)
+        self._submit_detector({"freq_band": (lo, hi)}, "Set Frequency Band")
+        if already:
+            self._derive(reuse_band_power=False)
 
-    def _on_value_band(self, lo: float, hi: float) -> None:
+    def _on_value_drag(self, lo: float, hi: float) -> None:
+        """The drag tier: live repaint from the local value, no history."""
         self._cheap_retune(replace(self._chain.detector, value_band=(lo, hi)))
 
-    def _on_count_band(self, lo: float, hi: float) -> None:
-        """Counts from the plot, a fraction into the state — the one crossing.
+    def _on_value_band(self, lo: float, hi: float) -> None:
+        self._submit_detector({"value_band": (lo, hi)}, "Set Value Band")
+
+    def _count_frac_for(self, lo: float, hi: float) -> tuple[float, float] | None:
+        """Counts from the plot as fractions of the region — the one crossing.
 
         The first drag on the parked handles is what arms the detector; there
         is no separate control (plot contracts, § 2).
         """
         update = self._update
         if update is None:
-            return
+            return None
         blocks = update.band_power.shape[1]
-        frac = (
+        return (
             lo / blocks if isfinite(lo) else max(lo, 0.0),
             hi / blocks if isfinite(hi) else hi,
         )
-        self._cheap_retune(replace(self._chain.detector, count_frac=frac))
+
+    def _on_count_drag(self, lo: float, hi: float) -> None:
+        """The drag tier of the count threshold, `_on_value_drag`'s twin."""
+        frac = self._count_frac_for(lo, hi)
+        if frac is not None:
+            self._cheap_retune(replace(self._chain.detector, count_frac=frac))
+
+    def _on_count_band(self, lo: float, hi: float) -> None:
+        frac = self._count_frac_for(lo, hi)
+        if frac is not None:
+            self._submit_detector({"count_frac": frac}, "Set Count Threshold")
 
     def _on_solo(self, block: object) -> None:
+        # Looking, not tuning: solo never reaches the document or a save.
         solo = block if isinstance(block, int) else None
         self._cheap_retune(replace(self._chain.detector, solo_block=solo))
 
+    @Slot()
+    def _on_d_pressed(self) -> None:
+        self._d_gesture = next(self._gestures)
+
+    @Slot()
+    def _on_d_released(self) -> None:
+        self._d_gesture = None
+
     @Slot(int)
     def _on_window_frames(self, frames: int) -> None:
-        self._cheap_retune(replace(self._chain.detector, window_frames=max(frames, 1)))
+        self._submit_detector(
+            {"window_frames": max(frames, 1)},
+            "Set Detection Window",
+            gesture=self._d_gesture,
+        )
 
     @Slot(bool)
     def _on_centered(self, centered: bool) -> None:
-        self._cheap_retune(replace(self._chain.detector, centered=centered))
+        self._submit_detector({"centered": centered}, "Set Centered")
 
     # ---- structure -------------------------------------------------------
 
@@ -1231,10 +1454,12 @@ class FilterTab(QWidget):
             plot.pressed.connect(self._player.seek)
             plot.scrubbed.connect(self._player.scrub)
             plot.committed.connect(self._player.seek)
-        wizard.density.band_changed.connect(self._on_value_band)
+        wizard.density.band_changed.connect(self._on_value_drag)
         wizard.density.band_committed.connect(self._on_value_band)
-        wizard.count.band_changed.connect(self._on_count_band)
+        wizard.count.band_changed.connect(self._on_count_drag)
         wizard.count.band_committed.connect(self._on_count_band)
+        wizard.d_slider.sliderPressed.connect(self._on_d_pressed)
+        wizard.d_slider.sliderReleased.connect(self._on_d_released)
         wizard.d_slider.valueChanged.connect(self._on_window_frames)
         wizard.centered.toggled.connect(self._on_centered)
 
@@ -1278,12 +1503,28 @@ class FilterTab(QWidget):
         self._on_hover_preview(self._chain)
 
     def _on_wizard_accepted(self) -> None:
-        """Add: the provisional step solidifies; the chain is already rendered."""
+        """Add: the provisional step solidifies; the chain is already rendered.
+
+        This is also where the wizard's provisional tuning reaches the
+        document, in one place and only on Add: the new structure through
+        `sync_structure` (the minted node's parameters become its baseline),
+        and the *net* detector change against the snapshot as one edit —
+        pinned and defaulted exactly as if it had been made on the tab, which
+        it semantically was.
+        """
         step_id = self._provisional_id
+        snapshot = self._wizard_snapshot
         self._close_wizard()
         if step_id is not None:
             self._ensure_body(step_id)
             self.status_message.emit(f"added '{step_id}'")
+        self._document.sync_structure(self._chain.pipeline())
+        if snapshot is not None and len(self._document.pipeline.nodes):
+            before = snapshot.detector.as_settings_changes()
+            after = self._chain.detector.as_settings_changes()
+            changes = {name: value for name, value in after.items() if before[name] != value}
+            if changes:
+                self._document.edit_detector(changes, "Tune Detection")
         self._rebuild_stack()
 
     def _on_wizard_cancelled(self) -> None:
@@ -1336,7 +1577,17 @@ class FilterTab(QWidget):
         self._extra_bodies[step_id] = host
 
     def _on_extra_param(self, step_id: str, name: str, value: object) -> None:
-        """A committed extra step's card edit: same tail as every upstream knob."""
+        """A committed extra step's card edit: same route as every upstream knob."""
+        step = next((s for s in self._chain.steps if s.step_id == step_id), None)
+        if step is None or step.node is None:
+            return
+        if step.node.node_id in self._document.pipeline:
+            index = self._document.undo_stack.index()
+            self._knob_armed_at = perf_counter()
+            self._document.edit_params({step.node.node_id: {name: value}}, f"Set {name}")
+            if self._document.undo_stack.index() == index:
+                self._knob_armed_at = None
+            return
         steps = tuple(
             replace(s, node=s.node.model_copy(update={"params": {**s.node.params, name: value}}))
             if s.step_id == step_id and s.node is not None
@@ -1349,6 +1600,7 @@ class FilterTab(QWidget):
     @Slot(str)
     def _on_remove(self, step_id: str) -> None:
         self._chain = self._chain.without(step_id)
+        self._document.sync_structure(self._chain.pipeline())
         self.status_message.emit(f"removed '{step_id}'")
         self._rebuild_stack()
         self._derive(reuse_band_power=True)
@@ -1356,10 +1608,27 @@ class FilterTab(QWidget):
 
     @Slot()
     def _on_reset(self) -> None:
-        """Parameters-not-structure: knobs and detector back, the chain stays."""
-        self._chain = self._chain.reset(self._defaults)
+        """Parameters-not-structure: knobs and detector back, the chain stays.
+
+        Through the document as one undo entry, so a reset that unpinned
+        twelve arenas comes back with one Ctrl+Z. The nodes named are the
+        ones the defaults chain knows; an inserted step keeps its parameters,
+        exactly as the local reset always treated it.
+        """
         self._value_band_memory.clear()
-        self._sync_widgets_from_chain()
+        default_steps = {s.step_id: s for s in self._defaults.steps}
+        defaults_by_node: dict[str, Mapping[str, object]] = {}
+        for step in self._chain.steps:
+            if step.node is None or step.node.node_id not in self._document.pipeline:
+                continue
+            default = default_steps.get(step.step_id)
+            if default is not None and default.node is not None:
+                defaults_by_node[step.node.node_id] = dict(default.node.params)
+        if defaults_by_node or self._document.detector is not None:
+            self._document.reset_tuning(defaults_by_node)
+        else:
+            self._chain = self._chain.reset(self._defaults)
+            self._sync_widgets_from_chain()
         self._scalogram.clear_band()
         self._density.set_band(*self._chain.detector.value_band)
         self._count.clear_band()
@@ -1385,6 +1654,11 @@ class FilterTab(QWidget):
         fps = self._fps()
         self._chain = parity_chain(fps)
         self._defaults = parity_chain(fps)
+        # Seed the fresh graph into the document so the first knob edit has a
+        # baseline to move — this is what makes a save carry the chain even
+        # when nothing was ever tuned. The echo returns with the tab's own
+        # node ids and `_on_pipeline_changed` recognizes and skips it.
+        self._document.sync_structure(self._chain.pipeline())
         self._collector = SeriesCollector(self._block_node_id() or "")
         self._series_start = None
         self._series2d = None
@@ -1409,8 +1683,15 @@ class FilterTab(QWidget):
 
     @Slot()
     def _on_selection_changed(self) -> None:
-        """A replicate change invalidates like a window move: resubmit, and
-        the render's consumer re-grabs the composite pair over the new crop."""
+        """A different arena is under tuning: its settings return with it.
+
+        Re-resolve first, then render — the knobs, captions, and bands must
+        already show what *this* replicate runs with when its first frame
+        arrives, or the screen would briefly claim the old arena's tuning
+        over the new arena's footage. The render itself invalidates like a
+        window move and rides the runner's latest-wins submission.
+        """
+        self._refresh_from_document()
         self.resubmit()
 
     @Slot(int, QImage)

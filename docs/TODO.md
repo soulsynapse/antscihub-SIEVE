@@ -7,6 +7,11 @@ The loop that governs this file — checklist before the first edit, gate, atomi
 completion, findings kept separate, commit and push — is in `CLAUDE.md`. This
 file holds only what an item is and which items are open.
 
+## Written by user, not agent, 2026.07.27 at 1pm
+Bug fixes: bundle these together to keep context window sane
+
+- 
+
 ## What an item here looks like
 
 1. A short name, under five words.
@@ -47,7 +52,7 @@ re-derive it. Full reasoning is in the linked entry, and
 |---|---|---|
 | Filter contract | `core/filter_base.py` | `FilterSpec.warmup_frames` is the *bound* over the legal parameter range; `ParamsBase.warmup_frames` is the *configured need*. `node_warmup_frames` picks. Declaring only the bound charges every run for the worst case (7199 frames, in the case that forced the split). |
 | Warmup along a path | `core.source_warmup_frames` | It does **not** sum. It walks sink to root converting `need` to `ceil(need / output_rate)`. A plain sum compiles, runs, and under-warms every temporal filter behind a decimator while rendering a plausible frame. |
-| Saved artifact | `core/pipeline_model.py` | Schema v2. `Edge.port` names the input it feeds; a v1 document still loads. |
+| Saved artifact | `core/pipeline_model.py` | Schema v3. `Edge.port` names the input it feeds; `Project.detector` and the pin fields landed in v3; v1 and v2 documents still load. |
 | Filter discovery | `core/filter_registry.py`, `filters/__init__.py` | A `pkgutil` scan that names nothing. Never add a filter to an import list — a test AST-parses for exactly that. |
 | Graph validation and order | `pipeline/dag.py` | One topological order per document, not per traversal. Take `Dag.order`; do not sort a graph again. |
 | Pre-run derivation | `pipeline/plan.py` | Resolved params, keys, and the source lead-in as a backward max over `Dag.order`. |
@@ -69,6 +74,8 @@ re-derive it. Full reasoning is in the linked entry, and
 | One drag, one undo | `gui/commands.py` | `SetReplicateROI` merges on a per-press token, and `mergeWith` keeps the *first* command's displaced value. A test that drags with a single mouse-move cannot see any of this — the second event is a no-op `set_roi` and the count is 1 either way. |
 | One action, many rows | `gui/commands.py` `SetReplicateROIs` | Merging cannot produce this. `mergeWith` only joins commands naming the *same* row, so a loop pushing one command per replicate is one undo entry per replicate whatever token it carries. A batch edit is one command holding many rows. |
 | Slide versus trim | `core/types.py` `ROI.placed_in` | The rule that a region keeps its exact extent and moves, used by both the stamp and "Set all". `clamped_to` is the other rule and trims. Reaching for the wrong one at the frame edge silently makes a rack non-uniform while every number on screen says it worked. |
+| Settings memory | `core/pipeline_model.py` `edited_params` / `edited_detector` | The two-write edit: pin the diff on the replicate being looked at, move the baseline for everyone following. Submit only the fields touched — a whole resolved view drags a deviated arena's pins into the baseline. The GUI routes through `ReplicateDocument.edit_params`/`edit_detector`; the tab's `LiveChain` is the resolved *view*, never a second store. |
+| Detector in the artifact | `core/pipeline_model.py` `DetectorSettings` | Schema v3. Bands, count threshold, and D live on `Project.detector` with field-level pins in `Replicate.detector_overrides`; `solo_block` is looking, not tuning, and stays out. `None` means never tuned — do not resolve the fps-derived default into the field. |
 
 ---
 

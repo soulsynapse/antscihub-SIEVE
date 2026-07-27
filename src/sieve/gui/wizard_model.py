@@ -35,9 +35,17 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from sieve.core.filter_registry import REGISTRY, UnknownFilterError
-from sieve.core.pipeline_model import Node
+from sieve.core.pipeline_model import Node, Pipeline
 from sieve.filters import discover, guidance_path
-from sieve.gui.chain_model import ChainKind, ChainStep, LiveChain, Stage, Status, grade
+from sieve.gui.chain_model import (
+    ChainKind,
+    ChainStep,
+    DetectorState,
+    LiveChain,
+    Stage,
+    Status,
+    grade,
+)
 
 #: Disable reasons, verbatim from the mockup's success criteria. A candidate
 #: with an empty reason is enabled.
@@ -387,6 +395,86 @@ def swap_step(
     step = build_step(entry, chain, carried or None)
     steps = (*chain.steps[:position], step, *chain.steps[position + 1 :])
     return replace(chain, steps=steps), step.step_id
+
+
+def chain_from_pipeline(pipeline: Pipeline, fps: float) -> LiveChain:
+    """The `LiveChain` a saved graph renders as: its nodes, plus the tab-side suffix.
+
+    `runnable_prefix`'s inverse, for the load path — a project carries the
+    node-backed prefix and the tab has to grow its stack back around it. Node
+    *identity* is kept, not reminted: the loaded ids are what replicate
+    overrides pin against and what cache entries are keyed on, and a chain
+    that reminted them would orphan both.
+
+    The suffix is appended from the catalog because the artifact cannot carry
+    it — the temporal filter and detection steps are not nodes — and a chain
+    without them would open with its graphs unreachable.
+
+    Raises:
+        ValueError: if the graph is not the linear chain the tab can host, or
+            names a filter the catalog has no entry for. Refused rather than
+            approximated: a stack silently missing a loaded step would look
+            better-founded than it is.
+    """
+    by_filter = {e.filter_id: e for e in catalog() if e.filter_id is not None}
+    steps: list[ChainStep] = []
+    for node in _linear_order(pipeline):
+        entry = by_filter.get(node.filter_id)
+        if entry is None:
+            raise ValueError(f"no catalog entry for filter {node.filter_id!r}")
+        steps.append(
+            ChainStep(
+                step_id=entry.entry_id,
+                title=entry.title,
+                stage=entry.stage,
+                kind_in=entry.kind_in,
+                kind_out=entry.kind_out,
+                node=node,
+            )
+        )
+    for entry in catalog():
+        if entry.filter_id is None:
+            steps.append(
+                ChainStep(
+                    step_id=entry.entry_id,
+                    title=entry.title,
+                    stage=entry.stage,
+                    kind_in=entry.kind_in,
+                    kind_out=entry.kind_out,
+                )
+            )
+    # The default detector, not a resolved one: the caller holds the document
+    # and resolves the selected replicate's values in immediately after —
+    # this function knows graphs, not selections.
+    return LiveChain(steps=tuple(steps), detector=DetectorState.default(fps), fps=fps)
+
+
+def _linear_order(pipeline: Pipeline) -> tuple[Node, ...]:
+    """The pipeline's nodes root to sink, refusing anything but one path.
+
+    Deliberately not `dag.py`'s topological order: that one exists for
+    execution and tolerates every DAG, while the stack can only host a chain
+    — one root, one edge out of each node. Accepting a genuine DAG here and
+    flattening it would draw a stack whose seams lie about what feeds what.
+
+    Raises:
+        ValueError: if the graph branches, merges, or is disconnected.
+    """
+    if not pipeline.nodes:
+        return ()
+    downstream_of = {edge.upstream: edge.downstream for edge in pipeline.edges}
+    if len(downstream_of) != len(pipeline.edges):
+        raise ValueError("graph branches — not a chain the stack can host")
+    fed = {edge.downstream for edge in pipeline.edges}
+    roots = [node for node in pipeline.nodes if node.node_id not in fed]
+    if len(roots) != 1:
+        raise ValueError(f"expected one root, found {len(roots)}")
+    ordered: list[Node] = [roots[0]]
+    while ordered[-1].node_id in downstream_of:
+        ordered.append(pipeline.node(downstream_of[ordered[-1].node_id]))
+    if len(ordered) != len(pipeline.nodes):
+        raise ValueError("graph is disconnected — not a chain the stack can host")
+    return tuple(ordered)
 
 
 # ---- guidance -----------------------------------------------------------------

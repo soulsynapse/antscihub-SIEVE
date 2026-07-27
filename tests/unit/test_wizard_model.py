@@ -9,6 +9,9 @@ a removed suffix step exists. Guidance parsing is pinned against a shipped
 
 from __future__ import annotations
 
+import pytest
+
+from sieve.core.pipeline_model import Edge, Node, Pipeline
 from sieve.gui.chain_model import Status, grade, parity_chain
 from sieve.gui.wizard_model import (
     BREAKS_BELOW,
@@ -16,6 +19,7 @@ from sieve.gui.wizard_model import (
     candidates_for_insert,
     candidates_for_swap,
     catalog,
+    chain_from_pipeline,
     guidance_for,
     insert_step,
     swap_step,
@@ -93,3 +97,47 @@ def test_guidance_comes_from_the_shipped_markdown() -> None:
     assert "crop" in guidance.not_do
     assert guidance.when_to_use and guidance.cost
     assert guidance.summary  # the registered spec's one-liner
+
+
+def test_chain_from_pipeline_inverts_runnable_prefix_keeping_node_identity() -> None:
+    """A saved graph regrows the stack it came from, ids intact, suffix restored.
+
+    Identity is the load-bearing half: replicate overrides pin against node
+    ids and cache entries key on them, so a reconstruction that reminted ids
+    would orphan every pin a project was saved with.
+    """
+    saved = parity_chain(30.0).pipeline()
+
+    rebuilt = chain_from_pipeline(saved, 30.0)
+
+    assert rebuilt.pipeline() == saved
+    assert [s.step_id for s in rebuilt.steps] == [
+        "rescale",
+        "normalize",
+        "block_signal",
+        "morlet_band",
+        "windowed_count",
+    ]
+    assert [s.node.node_id for s in rebuilt.steps if s.node is not None] == [
+        n.node_id for n in saved.nodes
+    ]
+
+
+def test_chain_from_pipeline_refuses_what_the_stack_cannot_host() -> None:
+    """A branching graph and an unknown filter are refused, not approximated."""
+    a = Node(filter_id="rescale", version="1.0.0")
+    b = Node(filter_id="normalize", version="1.0.0")
+    c = Node(filter_id="block_signal", version="1.0.0")
+    branching = Pipeline(
+        nodes=(a, b, c),
+        edges=(
+            Edge(upstream=a.node_id, downstream=b.node_id),
+            Edge(upstream=a.node_id, downstream=c.node_id, port="b"),
+        ),
+    )
+    with pytest.raises(ValueError, match="branches"):
+        chain_from_pipeline(branching, 30.0)
+
+    unknown = Pipeline(nodes=(Node(filter_id="mystery", version="1.0.0"),))
+    with pytest.raises(ValueError, match="mystery"):
+        chain_from_pipeline(unknown, 30.0)

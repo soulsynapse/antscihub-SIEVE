@@ -51,7 +51,7 @@ from sieve.core.detection import (
     inband_count,
     windowed_mean,
 )
-from sieve.core.pipeline_model import Edge, Node, Pipeline
+from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
 from sieve.core.wavelet import band_indices, default_freqs, morlet_band_power
 from sieve.filters.block_signal import resolve_block
 
@@ -207,6 +207,39 @@ class DetectorState:
     def default(cls, fps: float) -> DetectorState:
         """The documented defaults: wide-open bands, disarmed, D of one second."""
         return cls(window_frames=max(1, round(fps)))
+
+    def as_settings_changes(self) -> dict[str, Any]:
+        """This state as `DetectorSettings` fields — what a document edit submits.
+
+        `solo_block` is deliberately absent: soloing is looking, not tuning,
+        and the artifact refuses to carry it (`core.pipeline_model`'s module
+        docstring). Prefer submitting a *subset* of this — only the fields
+        the gesture touched — for `edited_params`' baseline-drag reason.
+        """
+        return {
+            "freq_band": self.freq_band,
+            "value_band": self.value_band,
+            "count_frac": self.count_frac,
+            "window_frames": self.window_frames,
+            "centered": self.centered,
+        }
+
+    @classmethod
+    def from_settings(cls, settings: DetectorSettings, *, solo_block: int | None) -> DetectorState:
+        """The live state a resolved artifact value renders as.
+
+        `solo_block` is threaded through from the state being replaced,
+        because the artifact does not carry it and a replicate switch must
+        not silently un-solo the block the user is inspecting.
+        """
+        return cls(
+            freq_band=settings.freq_band,
+            value_band=settings.value_band,
+            count_frac=settings.count_frac,
+            window_frames=settings.window_frames,
+            centered=settings.centered,
+            solo_block=solo_block,
+        )
 
 
 @dataclass(frozen=True, slots=True)

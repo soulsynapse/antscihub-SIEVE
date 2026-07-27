@@ -74,6 +74,7 @@ for replicates that pin every parameter and never read it.
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
@@ -101,7 +102,13 @@ from sieve.core.replicates import Replicate
 #: writes `port` on every edge, and a version-1 build's `extra="forbid"` would
 #: report that as a stray field. The bump turns that parse error into the
 #: message this constant exists to give.
-SCHEMA_VERSION = 2
+#:
+#: 3: `Project` gained `detector` and `Replicate` gained `detector_overrides`
+#: (2026-07-27, replicates remember their settings). A version-2 document
+#: loads unchanged — no detector was ever tuned, which is exactly what the
+#: defaults say — but every save now writes both fields, and a version-2
+#: build would report them as stray for the same reason as above.
+SCHEMA_VERSION = 3
 
 #: Project files are named `<video stem>.sieve.yaml` and live *beside* the
 #: video they describe. VISION step 1 fixes the layout — a source in a folder,
@@ -229,6 +236,87 @@ class ClipRange(_Artifact):
         return self.end - self.start
 
 
+class DetectorSettings(_Artifact):
+    """The detection suffix's tuned values: bands, count threshold, window D.
+
+    The temporal filter and detection steps are not pipeline nodes — they are
+    derivation over the extracted series (`gui/chain_model.py` holds the live
+    twin of this model) — so their tuning cannot ride `Node.params` and needs
+    its own home in the artifact. It gets one because these values decide what
+    is *claimed as an event*: two machines agreeing about the graph but not
+    the thresholds are not agreeing about the run.
+
+    This is `Node.params`' analog, not a GUI snapshot: it is the *default for
+    replicates that have not been configured*, it moves on every edit (see
+    `edited_detector`), and a replicate deviates from it field by field
+    through `Replicate.detector_overrides`. What is deliberately absent is
+    anything about *looking* — the soloed block, the playhead — for the module
+    docstring's reason.
+
+    Bands are stored in the units the plots drag them in, edges permitted
+    infinite (YAML `.inf`), and the count threshold is a fraction of the
+    region's blocks or None for disarmed — None is "nothing is claimed", not
+    "everything passes", and it must survive a save as itself.
+    """
+
+    #: Frequency band in Hz over the Morlet bank; handles clamp to the bank.
+    freq_band: tuple[float, float] = (0.0, math.inf)
+    #: Value band over band power, in the extracted signal's own units.
+    value_band: tuple[float, float] = (-math.inf, math.inf)
+    #: Count threshold as fractions of region blocks, or None = disarmed.
+    count_frac: tuple[float, float] | None = None
+    #: Detection window D, in frames.
+    window_frames: int = 30
+    centered: bool = True
+
+    @model_validator(mode="after")
+    def _bands_ordered(self) -> Self:
+        for name in ("freq_band", "value_band", "count_frac"):
+            band: tuple[float, float] | None = getattr(self, name)
+            if band is not None and band[0] > band[1]:
+                raise ValueError(f"{name} must be ordered, got {band}")
+        if self.freq_band[0] < 0:
+            raise ValueError(f"freq_band must be non-negative, got {self.freq_band}")
+        if self.window_frames < 1:
+            raise ValueError(f"window_frames must be at least 1, got {self.window_frames}")
+        return self
+
+    @classmethod
+    def default_for(cls, fps: float) -> Self:
+        """The untuned state: wide-open bands, disarmed, D of one second.
+
+        The one field a default cannot be written down for without the frame
+        rate is D — "one second" is a frame count only once a source says how
+        long a second is — which is why this exists as a constructor rather
+        than as field defaults alone.
+        """
+        return cls(window_frames=max(1, round(fps)) if fps > 0 else 30)
+
+
+def resolved_detector(
+    settings: DetectorSettings, replicate: Replicate | None = None
+) -> DetectorSettings:
+    """The detector values `replicate` actually runs with.
+
+    `resolved_params`' twin, and the only definition of "effective detector"
+    for the same reason: the GUI shows this, a headless run will gate on this,
+    and a second merge anywhere is how the two stop agreeing.
+
+    Validated rather than merely merged, because the pins are an opaque
+    mapping from a file: a pin naming a real field but carrying nonsense (a
+    reversed band, a zero window) must fail here, at the one place every
+    reader passes through, not wherever the value is first used.
+
+    Raises:
+        ValidationError: if a pinned value does not fit its field.
+    """
+    if replicate is None or not replicate.detector_overrides:
+        return settings
+    return DetectorSettings.model_validate(
+        {**settings.model_dump(), **replicate.detector_overrides}
+    )
+
+
 class Node(_Artifact):
     """One filter application, named but not resolved.
 
@@ -295,6 +383,48 @@ def resolved_params(node: Node, replicate: Replicate | None = None) -> dict[str,
     if replicate is None:
         return dict(node.params)
     return {**node.params, **replicate.overrides.get(node.node_id, {})}
+
+
+def edited_params(
+    node: Node, replicate: Replicate, params: Mapping[str, Any]
+) -> tuple[Node, Replicate]:
+    """One parameter edit's two writes: the pin, and the moved default.
+
+    The mechanism `Project.with_param_edit` documents, extracted so a caller
+    holding the pieces rather than a `Project` — the GUI document — performs
+    the identical edit rather than a paraphrase of it. Only the parameters
+    that actually changed against what `replicate` resolved to are pinned;
+    everything submitted moves the baseline.
+
+    A caller should submit only the fields the user touched. Submitting a
+    deviated replicate's *whole* resolved view would drag its previously
+    pinned values into the baseline and change every following replicate for
+    fields nobody edited.
+    """
+    before = resolved_params(node, replicate)
+    changed = {
+        name: value for name, value in params.items() if name not in before or before[name] != value
+    }
+    updated = node.model_copy(update={"params": {**node.params, **params}})
+    return updated, replicate.with_override(node.node_id, changed)
+
+
+def edited_detector(
+    settings: DetectorSettings, replicate: Replicate, changes: Mapping[str, Any]
+) -> tuple[DetectorSettings, Replicate]:
+    """`edited_params` for the detector: pin the diff, move the baseline.
+
+    Same two writes, same sparsity rule, same caveat about submitting only
+    what was touched. The moved baseline is validated as a whole, so an edit
+    that would leave it inconsistent fails before either write lands.
+
+    Raises:
+        ValidationError: if `changes` names no such field or misfits one.
+    """
+    moved = DetectorSettings.model_validate({**settings.model_dump(), **changes})
+    before = resolved_detector(settings, replicate)
+    changed = {name: value for name, value in changes.items() if getattr(before, name) != value}
+    return moved, replicate.with_detector_pins(changed)
 
 
 class Edge(_Artifact):
@@ -442,7 +572,11 @@ class Pipeline(_Artifact):
         raise KeyError(node_id)
 
 
-def _params_fingerprint(nodes: Sequence[Node], replicate: Replicate | None) -> str:
+def _params_fingerprint(
+    nodes: Sequence[Node],
+    replicate: Replicate | None,
+    detector: DetectorSettings | None,
+) -> str:
     """Canonical text standing for everything `replicate` runs the graph with.
 
     Two replicates are in the same equivalence group exactly when this string
@@ -461,14 +595,22 @@ def _params_fingerprint(nodes: Sequence[Node], replicate: Replicate | None) -> s
         TypeError: if a parameter value cannot enter JSON — which is the same
             failure `Project.to_yaml` would give it, named at the same place.
     """
+    resolved = resolved_detector(detector or DetectorSettings(), replicate)
     return json.dumps(
-        [[node.node_id, resolved_params(node, replicate)] for node in nodes],
+        [
+            [[node.node_id, resolved_params(node, replicate)] for node in nodes],
+            resolved.model_dump(),
+        ],
         sort_keys=True,
         separators=(",", ":"),
     )
 
 
-def equivalence_groups(pipeline: Pipeline, replicates: Sequence[Replicate]) -> tuple[int, ...]:
+def equivalence_groups(
+    pipeline: Pipeline,
+    replicates: Sequence[Replicate],
+    detector: DetectorSettings | None = None,
+) -> tuple[int, ...]:
     """Group number per replicate, positionally, counting from 1.
 
     Walk in order and assign the next unused integer on first sight of a set of
@@ -498,11 +640,18 @@ def equivalence_groups(pipeline: Pipeline, replicates: Sequence[Replicate]) -> t
     stays in its group, because `with_param_edit` diffs before it pins and so
     stores nothing — the group tracks what a replicate *runs with*, not whether
     a user has visited it.
+
+    `detector` enters the fingerprint alongside the graph, because a pinned
+    count threshold makes two arenas claim different events from identical
+    series — "run the same thing" has to mean detection too, or the table
+    says "same" about arenas whose outputs will differ. `None` fingerprints
+    every replicate against the field defaults, which groups correctly: with
+    no baseline to deviate from, only the pins can differ.
     """
     groups: dict[str, int] = {}
     numbers: list[int] = []
     for replicate in replicates:
-        fingerprint = _params_fingerprint(pipeline.nodes, replicate)
+        fingerprint = _params_fingerprint(pipeline.nodes, replicate, detector)
         numbers.append(groups.setdefault(fingerprint, len(groups) + 1))
     return tuple(numbers)
 
@@ -524,6 +673,13 @@ class Project(_Artifact):
     #: The span tuning runs against. `None` means the whole video.
     clip: ClipRange | None = None
     pipeline: Pipeline = Pipeline()
+    #: The detection suffix's tuned baseline, or None while nothing has been
+    #: tuned. None is `clip`'s distinction one section over: a project saved
+    #: before anyone touched the detector must not come back claiming
+    #: wide-open bands were *chosen* — and the untuned window D is derived
+    #: from the frame rate (`DetectorSettings.default_for`), which only the
+    #: bound source knows.
+    detector: DetectorSettings | None = None
     #: Node ids whose output is materialized to disk — VISION step 4's "save
     #: that representative few seconds to the child layer". A run without them
     #: produces identical results and merely recomputes more, which is why they
@@ -556,6 +712,16 @@ class Project(_Artifact):
                 if node_id not in self.pipeline:
                     raise ValueError(
                         f"replicate {replicate.replicate_id!r} overrides no such node: {node_id!r}"
+                    )
+            for field_name in replicate.detector_overrides:
+                # The detector twin of the check above: a pin on a field that
+                # does not exist is a value nothing will ever read. Value
+                # validity is `resolved_detector`'s job; spelling is structure
+                # and belongs here.
+                if field_name not in DetectorSettings.model_fields:
+                    raise ValueError(
+                        f"replicate {replicate.replicate_id!r} pins no such detector "
+                        f"field: {field_name!r}"
                     )
         for node_id in self.checkpoints:
             if node_id not in self.pipeline:
@@ -696,7 +862,7 @@ class Project(_Artifact):
         pairing the graph with the replicate set itself is the step where a
         second answer gets invented.
         """
-        return equivalence_groups(self.pipeline, self.replicates)
+        return equivalence_groups(self.pipeline, self.replicates, self.detector)
 
     def with_param_edit(self, node_id: str, replicate_id: str, params: Mapping[str, Any]) -> Self:
         """Configure `node_id` for one replicate, and move the default with it.
@@ -733,14 +899,7 @@ class Project(_Artifact):
         """
         node = self.pipeline.node(node_id)
         target = self.replicate(replicate_id)
-        before = resolved_params(node, target)
-        changed = {
-            name: value
-            for name, value in params.items()
-            if name not in before or before[name] != value
-        }
-        edited = target.with_override(node_id, changed)
-        updated_node = node.model_copy(update={"params": {**node.params, **params}})
+        updated_node, edited = edited_params(node, target, params)
         return self._replacing(node, updated_node, target, edited)
 
     def with_param_reset(self, node_id: str, replicate_id: str) -> Self:
@@ -755,6 +914,28 @@ class Project(_Artifact):
         node = self.pipeline.node(node_id)
         target = self.replicate(replicate_id)
         return self._replacing(node, node, target, target.without_override(node_id))
+
+    def with_detector(self, detector: DetectorSettings | None) -> Self:
+        """Copy carrying a different detector baseline, including none."""
+        return self.model_copy(update={"detector": detector})
+
+    def with_detector_edit(self, replicate_id: str, changes: Mapping[str, Any]) -> Self:
+        """Configure the detector for one replicate, moving the default with it.
+
+        `with_param_edit` for the detection suffix — the same two writes with
+        the same consequences, through `edited_detector`. A project whose
+        detector was never tuned edits against the field defaults; a GUI
+        holding a frame rate should seed the baseline first so "one second of
+        D" diffs as itself rather than as a deviation from 30.
+
+        Raises:
+            KeyError: if `replicate_id` names nothing.
+            ValidationError: if `changes` names no such field or misfits one.
+        """
+        target = self.replicate(replicate_id)
+        moved, edited = edited_detector(self.detector or DetectorSettings(), target, changes)
+        replicates = tuple(edited if r is target else r for r in self.replicates)
+        return self.model_copy(update={"detector": moved, "replicates": replicates})
 
     def _replacing(
         self, node: Node, new_node: Node, replicate: Replicate, new_replicate: Replicate

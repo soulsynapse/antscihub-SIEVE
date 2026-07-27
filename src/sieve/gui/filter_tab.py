@@ -267,6 +267,9 @@ class FilterTab(QWidget):
         self._player.frame_changed.connect(self._on_frame_changed)
         self._document.source_changed.connect(self._on_source_changed)
         self._document.clip_changed.connect(self.resubmit)
+        # A replicate change invalidates exactly as a window move does: the
+        # render goes through the runner's latest-wins submission unchanged.
+        self._document.selection_changed.connect(self.resubmit)
         self._runner.opened.connect(self.resubmit)
         self._runner.render_started.connect(self._collector_start)
         self._runner.render_started.connect(self._hud_begin)
@@ -407,8 +410,7 @@ class FilterTab(QWidget):
         if node_id is not None and node_id != self._collector.node_id:
             self._collector = SeriesCollector(node_id)
         collector = self._collector
-        replicates = self._document.all()
-        replicate = replicates[0] if replicates else None
+        replicate = self._document.selected_replicate
         # The submission the consumer belongs to is the next revision; read
         # on the GUI thread immediately before the submit, so nothing can
         # intervene. The consumer never runs for a superseded revision (the
@@ -872,8 +874,7 @@ class FilterTab(QWidget):
         if window is None or grab is None:
             return
         want = min(max(self._playhead, window.start), window.end - 1)
-        replicates = self._document.all()
-        replicate = replicates[0] if replicates else None
+        replicate = self._document.selected_replicate
         expected = self._runner.revision + 1
         if self._runner.request_frame(self._chain.pipeline(), want, replicate, consumer=grab):
             self._composite_revisions.add(expected)
@@ -901,20 +902,20 @@ class FilterTab(QWidget):
     def _cropped_player_frame(self) -> QImage | None:
         """The player's frame as the first step's input: replicate-cropped.
 
-        The graph runs over the first replicate's crop when one exists, so the
-        source the composite shows under the first step's output must be the
-        same region — otherwise the overlay would sit on footage the graph
+        The graph runs over the selected replicate's crop when one exists, so
+        the source the composite shows under the first step's output must be
+        the same region — otherwise the overlay would sit on footage the graph
         never saw. The ROI is in source pixels and the player's image may be a
         proxy, so the rectangle scales by the image's actual size.
         """
         image = self._frame_image
         if image is None:
             return None
-        replicates = self._document.all()
+        replicate = self._document.selected_replicate
         source = self._document.source_size
-        if not replicates or source is None:
+        if replicate is None or source is None:
             return image
-        roi = replicates[0].roi
+        roi = replicate.roi
         scale_x = image.width() / source[0]
         scale_y = image.height() / source[1]
         rect = QRect(
@@ -1116,8 +1117,7 @@ class FilterTab(QWidget):
         if grab is None:
             return
         want = min(max(self._playhead, window.start), window.end - 1)
-        replicates = self._document.all()
-        replicate = replicates[0] if replicates else None
+        replicate = self._document.selected_replicate
         self._runner.request_frame(chain.pipeline(), want, replicate, consumer=grab)
 
     def _on_hover_ended(self) -> None:

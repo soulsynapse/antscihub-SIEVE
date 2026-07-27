@@ -312,13 +312,13 @@ do: to be where a crop is *shaped* — a stamp, a drag, a magnifier, numbers —
 and to be where a replicate is *chosen*, which is the act that sends the user
 to the filter tab with that arena under them.
 
-They are ordered, and for once the cheap one is first because it is also the
-one that makes the tab mean anything. The executor has cropped per replicate
-since it was written — `executor.py` takes `plan.replicate.roi`, crops each
-decoded frame before any root node sees it, and `cache_key.py` folds that ROI
-into the source key — and the GUI has never chosen which one. `filter_tab.py`
-reads `replicates[0]` in three places. Every tool in the second item shapes a
-box that, until the first item lands, nothing downstream will ever look at.
+The first of the two — the cheap one, and the one that made the tab mean
+anything — landed on 2026.07.27: the selection lives on `ReplicateDocument`,
+the filter tab renders it, a table-row click selects while a video-box click
+accepts and navigates, and a removal that merely renumbers the selected row
+deliberately does not re-render. See
+`docs/completed-todo/2026.07.27-the-selected-replicate-is-the-one-being-tuned.md`.
+The crop-tools item below inherits a tab whose boxes are finally looked at.
 
 Two things that section describes are deliberately not here. The replicate
 table's "progress bar for the crop, and the list of outputs defined by the DAG,
@@ -327,56 +327,6 @@ and whether they exist" is a claim about files nothing writes, and it went to
 the trigger that would make it takeable. And the **project interface** section
 above it — a folder of videos, one video per folder, symlinks rather than moves
 — is a tab that does not exist yet rather than a change to this one.
-
-## The selected replicate is the one being tuned
-
-**Gated on: nothing, and everything about this tab is worth less until it
-lands.** The vision's sentence is "Left click on a replicate is the same as
-accepting it, and begins the crop, and moves the user over to the filters tab."
-
-**What "begins the crop" turns out to mean, which is the first thing to get
-straight.** Not a background job with a progress bar. The crop is applied per
-frame at the graph's root, in memory, by the executor — that is settled and
-argued in `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`, and a
-*materialized* crop is a `Project.checkpoints` entry that is contractually
-never hashed and that nothing currently writes. So accepting a replicate is a
-submit, not a job: it sets the replicate on the preview path and re-renders.
-Anyone who builds a progress bar here first has built a bar for a job that does
-not exist.
-
-**What it involves.** `ReplicateTab` already knows its selected row and already
-emits nothing about it. The three `replicates[0] if replicates else None` sites
-in `filter_tab.py` become one selection the document or the window owns —
-whichever, it is *one*, because two answers to "which arena am I looking at"
-is the same failure the transport had before the timeline replaced it. The
-render goes through `PreviewRunner.request_render` unchanged; the coalescing
-and abandon rules are already written against a caller that submits faster than
-renders finish, and a replicate change invalidates exactly as a window move
-does.
-
-**The tab switch needs plumbing that does not exist.** `main_window.py` builds
-its `QTabWidget` as a *local variable* and keeps no reference, and nothing in
-`src/` calls `setCurrentIndex` or `setCurrentWidget`. That is a two-line fix and
-it is worth naming because it is the kind of thing that reads as already-there.
-
-**The one judgement call.** A left click that both selects and navigates leaves
-no way to select a replicate while staying on this tab — which is what the user
-wants when they are drawing the next twelve. The vision says left click accepts;
-the workable reading is that clicking a *row in the table* selects, and it is
-the click on the **video** that accepts and navigates, which also mirrors the
-filter tab's click-to-navigate gesture from the same document.
-
-**Tests worth writing:** selecting row N renders N's pixels rather than row 0's
-(the current bug, and it would pass today by accident on any single-replicate
-project — so the test needs two replicates with different ROIs); and a
-replicate change submits through the runner's one pending slot rather than
-racing a window render, which is the discipline the step composite item
-established.
-
-Read: `src/sieve/gui/{replicate_tab,filter_tab,main_window,preview_runner}.py`,
-`src/sieve/pipeline/{executor,preview}.py`,
-`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`,
-`docs/REFINED-VISION.md` **Replicates**.
 
 ## Crop tools: the stamp, the drag, and the magnifier
 

@@ -118,15 +118,18 @@ class MainWindow(QMainWindow):
         # erased by.
         self._pending_project: tuple[Project, Path] | None = None
 
-        tabs = QTabWidget()
-        tabs.addTab(self._replicate_tab, "Replicate")
-        tabs.addTab(self._filter_tab, "Filter")
+        # Kept as an attribute because accepting a replicate navigates: the
+        # click on a box in the replicate tab lands the user on the filter tab,
+        # and a tab widget held only by a local variable can be told nothing.
+        self._tabs = QTabWidget()
+        self._tabs.addTab(self._replicate_tab, "Replicate")
+        self._tabs.addTab(self._filter_tab, "Filter")
 
         central = QWidget()
         stack = QVBoxLayout(central)
         stack.setContentsMargins(0, 0, 0, 0)
         stack.setSpacing(0)
-        stack.addWidget(tabs, 1)
+        stack.addWidget(self._tabs, 1)
         stack.addWidget(self._timeline)
         self.setCentralWidget(central)
 
@@ -290,6 +293,7 @@ class MainWindow(QMainWindow):
         self._player.failed.connect(self._on_failed)
         self._player.scrub_degraded.connect(self._on_scrub_degraded)
         self._replicate_tab.editor_open_changed.connect(self._on_editor_open_changed)
+        self._replicate_tab.replicate_accepted.connect(self._on_replicate_accepted)
         self._preferences.changed.connect(self._on_preferences_changed)
         self._document.clip_changed.connect(self._on_clip_changed)
 
@@ -329,6 +333,19 @@ class MainWindow(QMainWindow):
     def end_window_at_playhead(self) -> None:
         """End the working window after the frame on screen, including it."""
         self._document.end_window_at(self._player.current_index)
+
+    @Slot(int)
+    def _on_replicate_accepted(self, row: int) -> None:
+        """Accepting a replicate is a submit and a change of tab, not a job.
+
+        The selection has already reached the document — the filter tab's
+        re-render is on its way through the runner — so all that is left is
+        the navigation the vision's sentence ends with. See
+        `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` for why
+        there is no progress bar here.
+        """
+        self._tabs.setCurrentWidget(self._filter_tab)
+        self.statusBar().showMessage(f"Tuning {self._document.at(row).name}")
 
     @Slot()
     def show_preferences(self) -> None:

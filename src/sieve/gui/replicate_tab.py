@@ -44,11 +44,28 @@ _DRAW_HINT = "Drag on the video to cut a replicate.  Click a box to select it."
 
 
 class ReplicateTab(QWidget):
-    """Viewport and replicate table for one source video."""
+    """Viewport and replicate table for one source video.
+
+    The selected replicate lives on the document, not here: the filter tab
+    renders whichever arena is selected, so a selection kept in this tab's
+    table would be a second answer to "which arena am I looking at". The
+    table pushes clicks into `ReplicateDocument.select` and repaints from
+    `selection_changed` — it has to, because the model resets wholesale on
+    every structure change and a reset clears the view's own selection.
+
+    Two gestures, two meanings (REFINED-VISION, Replicates): a click on a
+    table *row* selects, which is what the user wants while drawing the next
+    twelve boxes; a click on a box in the *video* accepts it — selects and
+    asks the window to move over to the filter tab with that arena under it.
+    """
 
     #: True while a table cell editor is open. Window shortcuts that collide
     #: with typing (space, delete) are disabled for the duration.
     editor_open_changed = Signal(bool)
+    #: A box on the video was clicked: the replicate at this row is accepted,
+    #: and the window should show the filter tab. The selection itself has
+    #: already gone through the document by the time this fires.
+    replicate_accepted = Signal(int)
 
     def __init__(
         self,
@@ -150,11 +167,11 @@ class ReplicateTab(QWidget):
         self._player.frame_changed.connect(self._on_frame_changed)
 
         self._view.roi_drawn.connect(self._document.add_roi)
-        self._view.selection_requested.connect(self._select_row)
+        self._view.selection_requested.connect(self._on_video_clicked)
 
         self._document.structure_changed.connect(self._refresh_overlay)
         self._document.replicate_changed.connect(self._refresh_overlay)
-        self._document.replicate_added.connect(self._select_row)
+        self._document.selection_changed.connect(self._sync_selection)
 
         # `setModel` above guarantees a selection model exists from here on.
         self._table.selectionModel().selectionChanged.connect(self._on_table_selection_changed)
@@ -166,11 +183,14 @@ class ReplicateTab(QWidget):
     # ---- window-facing actions -------------------------------------------
 
     def selected_row(self) -> int:
-        """Currently selected replicate row, or `NO_SELECTION`."""
-        selection = self._table.selectionModel()
-        if not selection.hasSelection():
-            return NO_SELECTION
-        return selection.currentIndex().row()
+        """Currently selected replicate row, or `NO_SELECTION`.
+
+        Read from the document rather than from the table: the table's own
+        selection dies on every model reset, and this method is what the
+        window's Delete action believes.
+        """
+        index = self._document.selected_index
+        return NO_SELECTION if index is None else index
 
     @Slot()
     def delete_selected(self) -> None:
@@ -202,22 +222,48 @@ class ReplicateTab(QWidget):
     @Slot()
     def _refresh_overlay(self) -> None:
         self._view.set_replicates(self._document.all())
-        self._delete_button.setEnabled(self.selected_row() != NO_SELECTION)
+        # The model reset that redrew the table also cleared its selection;
+        # the document's answer survived, so put it back on screen.
+        self._sync_selection()
+
+    @Slot()
+    def _sync_selection(self) -> None:
+        """Repaint every view of the document's selection, table included."""
+        row = self.selected_row()
+        selection = self._table.selectionModel()
+        if row == NO_SELECTION:
+            selection.clearSelection()
+        elif selection.currentIndex().row() != row or not selection.hasSelection():
+            self._table.selectRow(row)
+            self._table.scrollTo(self._model.index(row, 0))
+        self._view.set_selected(row)
+        self._delete_button.setEnabled(row != NO_SELECTION)
 
     @Slot(int)
-    def _select_row(self, row: int) -> None:
-        selection = self._table.selectionModel()
-        if row == NO_SELECTION or row >= len(self._document):
-            selection.clearSelection()
+    def _on_video_clicked(self, row: int) -> None:
+        """A click on a box accepts that replicate; empty space is a miss.
+
+        Accept is the vision's sentence — select it, and hand the user to the
+        filter tab with it under them. A miss changes nothing: "no replicate
+        selected" is not a state the tuning loop has a rendering for, so
+        deselection is not a gesture this tab offers.
+        """
+        if row == NO_SELECTION:
             return
-        self._table.selectRow(row)
-        self._table.scrollTo(self._model.index(row, 0))
+        self._document.select(row)
+        self.replicate_accepted.emit(row)
 
     @Slot(QItemSelection, QItemSelection)
     def _on_table_selection_changed(
         self, selected: QItemSelection, deselected: QItemSelection
     ) -> None:
+        """A table click becomes the document's selection — and only a click.
+
+        An *emptied* table selection is pushed nowhere: the model clears the
+        view's selection on every reset, and treating that echo as a user
+        gesture would drop the document's answer every time a box is drawn.
+        """
         del selected, deselected
-        row = self.selected_row()
-        self._view.set_selected(row)
-        self._delete_button.setEnabled(row != NO_SELECTION)
+        selection = self._table.selectionModel()
+        if selection.hasSelection():
+            self._document.select(selection.currentIndex().row())

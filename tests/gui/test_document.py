@@ -164,6 +164,52 @@ class TestSetROI:
         assert document.undo_stack.count() == before
 
 
+class TestSelection:
+    """The one answer to "which arena am I looking at", kept on a real row.
+
+    The signal discipline is the load-bearing half: `selection_changed` drives
+    a re-render in the filter tab, so an emit for a removal that merely shifts
+    the selected row's number would clear the HUD and re-render the same arena
+    for nothing — while a removal of the selected row itself must emit,
+    because the arena on screen genuinely changed.
+    """
+
+    def test_removing_above_shifts_silently_removing_selected_emits(
+        self, document: ReplicateDocument
+    ) -> None:
+        document.add_roi(BOX)
+        document.add_roi(OTHER_BOX)
+        document.select(1)
+        selected = document.selected_replicate
+        emitted: list[None] = []
+        document.selection_changed.connect(lambda: emitted.append(None))
+
+        document.remove(0)
+        assert document.selected_replicate == selected, "the selected arena changed"
+        assert emitted == [], "a row shift re-rendered the same arena"
+
+        document.remove(0)
+        assert document.selected_index is None
+        assert len(emitted) == 1
+
+    def test_an_insert_selects_the_inserted_row(self, document: ReplicateDocument) -> None:
+        """The box just drawn is the one about to be named or accepted —
+        and undoing a delete restores the deleted arena as the selection."""
+        document.add_roi(BOX)
+        document.add_roi(OTHER_BOX)
+        assert document.selected_index == 1
+
+        document.remove(1)
+        assert document.selected_index == 0
+        document.undo_stack.undo()
+        assert document.selected_index == 1
+
+    def test_select_refuses_rows_that_do_not_exist(self, document: ReplicateDocument) -> None:
+        document.add_roi(BOX)
+        document.select(5)
+        assert document.selected_index == 0
+
+
 class TestHistory:
     def test_a_mixed_session_unwinds_and_replays(self, document: ReplicateDocument) -> None:
         document.add_roi(BOX)

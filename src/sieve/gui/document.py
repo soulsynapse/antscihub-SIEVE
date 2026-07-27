@@ -54,6 +54,11 @@ class ReplicateDocument(QObject):
     #: axis is the source's length, and rebuilding it per replicate would reset
     #: the window controls under a user who is typing into them.
     source_changed = Signal()
+    #: A different replicate is the one being tuned — or none is. Not emitted
+    #: when a removal above the selection merely shifts its row number: the
+    #: arena on screen is the same arena, and a re-render of it would say
+    #: nothing new. Views that track the *row* resync on `structure_changed`.
+    selection_changed = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -63,6 +68,7 @@ class ReplicateDocument(QObject):
         self._source_frames = 0
         self._source_fps = 0.0
         self._clip: ClipRange | None = None
+        self._selected: int | None = None
         self.undo_stack = QUndoStack(self)
 
     # ---- reading ---------------------------------------------------------
@@ -77,6 +83,30 @@ class ReplicateDocument(QObject):
     def all(self) -> list[Replicate]:
         """Snapshot of every replicate, in order."""
         return self._replicates.as_list()
+
+    @property
+    def selected_index(self) -> int | None:
+        """Row of the replicate being tuned, or None when there are none.
+
+        The one answer to "which arena am I looking at". The executor has
+        cropped per replicate since it was written; this is the selection that
+        decides which crop, so it is here rather than on a view — two views
+        each keeping their own answer is the failure the transport had before
+        the timeline replaced it. None only while the document holds no
+        replicates: every mutation below keeps the selection on a real row
+        while one exists.
+        """
+        return self._selected
+
+    @property
+    def selected_replicate(self) -> Replicate | None:
+        """The replicate being tuned, or None when there are none.
+
+        What the preview path takes: the filter tab hands exactly this to
+        `PreviewRunner`, and None means the graph runs over the whole frame —
+        which is the honest reading of a project with no arenas cut yet.
+        """
+        return None if self._selected is None else self._replicates[self._selected]
 
     @property
     def source_size(self) -> tuple[int, int] | None:
@@ -210,10 +240,11 @@ class ReplicateDocument(QObject):
         self.clip_changed.emit()
 
     def _reset(self) -> None:
-        """Drop replicates, clip, graph, and history without announcing anything."""
+        """Drop replicates, clip, graph, selection, and history silently."""
         self._replicates.clear()
         self._pipeline = Pipeline()
         self._clip = None
+        self._selected = None
         self.undo_stack.clear()
 
     # ---- project ---------------------------------------------------------
@@ -245,10 +276,15 @@ class ReplicateDocument(QObject):
         )
         self._pipeline = project.pipeline
         self._clip = self._fit_clip(project.clip)
+        # The first row, not none: a loaded project must open looking at *an*
+        # arena, and with nothing remembered in the file the first is the only
+        # unarbitrary one.
+        self._selected = 0 if len(self._replicates) else None
         self.undo_stack.clear()
         self.structure_changed.emit()
         self.grouping_changed.emit()
         self.clip_changed.emit()
+        self.selection_changed.emit()
 
     def apply_to(self, project: Project) -> Project:
         """`project` carrying this document's replicates, clip, and graph.
@@ -288,6 +324,23 @@ class ReplicateDocument(QObject):
         return fitted(clip, self._source_frames)
 
     # ---- user intents ----------------------------------------------------
+
+    def select(self, index: int) -> None:
+        """Make the replicate at `index` the one being tuned.
+
+        Not a command and not undoable, for `set_pipeline`'s reason: it does
+        not change what a save writes, only which arena the session is looking
+        at, and a Ctrl+Z that hopped the selection around between real edits
+        would be undoing things the user never thinks of as edits.
+
+        A row that does not exist is refused rather than read as "none": there
+        is no deselection gesture, because "no replicate selected" is not a
+        state the tuning loop has a rendering for while replicates exist.
+        """
+        if not 0 <= index < len(self._replicates) or index == self._selected:
+            return
+        self._selected = index
+        self.selection_changed.emit()
 
     def add_roi(self, roi: ROI) -> None:
         """Append a replicate covering `roi`, named with the next free default."""
@@ -394,15 +447,41 @@ class ReplicateDocument(QObject):
     # Called only by the commands in `commands.py`. Nothing else may mutate.
 
     def apply_insert(self, index: int, replicate: Replicate) -> None:
-        """Insert without recording history."""
+        """Insert without recording history. The inserted row is selected.
+
+        Selecting it is what the tab did for the user's sake — the box just
+        drawn is the one they are about to name or accept — and it holds for a
+        redo for the same reason. Set before the emits so a view resyncing on
+        `structure_changed` already sees the new answer.
+        """
         self._replicates.insert(index, replicate)
+        changed = self._selected != index
+        self._selected = index
         self.structure_changed.emit()
         self.replicate_added.emit(index)
+        if changed:
+            self.selection_changed.emit()
 
     def apply_remove(self, index: int) -> Replicate:
-        """Remove without recording history."""
+        """Remove without recording history, keeping the selection on a real row.
+
+        A removal above the selection shifts its row without changing which
+        arena is selected, so nothing re-renders; removing the selected row
+        itself falls to the nearest survivor, which is a genuinely different
+        arena and says so.
+        """
         removed = self._replicates.remove_at(index)
+        changed = False
+        if self._selected is not None:
+            if self._selected == index:
+                survivor = min(index, len(self._replicates) - 1)
+                self._selected = survivor if survivor >= 0 else None
+                changed = True
+            elif self._selected > index:
+                self._selected -= 1
         self.structure_changed.emit()
+        if changed:
+            self.selection_changed.emit()
         return removed
 
     def apply_replace(self, index: int, replicate: Replicate) -> Replicate:

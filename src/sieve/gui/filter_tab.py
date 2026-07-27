@@ -79,6 +79,7 @@ from sieve.gui.chain_stack import ChainStackView
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.density_plot import DensityPlot
 from sieve.gui.document import ReplicateDocument
+from sieve.gui.graph_hud import GraphHud
 from sieve.gui.param_form import param_rows
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preview_runner import PreviewRunner
@@ -172,6 +173,7 @@ class FilterTab(QWidget):
         self._density = DensityPlot()
         self._density.setMinimumHeight(160)
         self._stack = ChainStackView()
+        self._hud = GraphHud()
 
         # The D row under the count graph.
         self._d_slider = QSlider(Qt.Orientation.Horizontal)
@@ -217,6 +219,7 @@ class FilterTab(QWidget):
         left.addWidget(self._heat, 3)
         left.addWidget(self._count, 2)
         left.addLayout(d_row)
+        left.addWidget(self._hud, 1)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 4)
@@ -230,6 +233,8 @@ class FilterTab(QWidget):
         self._document.clip_changed.connect(self.resubmit)
         self._runner.opened.connect(self.resubmit)
         self._runner.render_started.connect(self._collector_start)
+        self._runner.render_started.connect(self._hud_begin)
+        self._runner.frame_cost.connect(self._hud.add_cost)
         self._runner.render_finished.connect(self._on_render_finished)
 
         self._stack.reset_clicked.connect(self._on_reset)
@@ -245,7 +250,7 @@ class FilterTab(QWidget):
 
         # The gesture contract: handle drags in two tiers, everything else a
         # playhead the player owns.
-        for plot in (self._scalogram, self._density, self._count):
+        for plot in (self._scalogram, self._density, self._count, self._hud):
             plot.pressed.connect(self._player.seek)
             plot.scrubbed.connect(self._player.scrub)
             plot.committed.connect(self._player.seek)
@@ -295,6 +300,11 @@ class FilterTab(QWidget):
     def summary_text(self) -> str:
         """The detections summary under the count graph."""
         return self._summary.text()
+
+    @property
+    def hud(self) -> GraphHud:
+        """The per-frame cost plot. The window connects the bus's samples to it."""
+        return self._hud
 
     # ---- the chain value -------------------------------------------------
 
@@ -390,6 +400,21 @@ class FilterTab(QWidget):
     @Slot(int)
     def _collector_start(self, revision: int) -> None:
         self._collector.start(revision)
+
+    @Slot(int)
+    def _hud_begin(self, revision: int) -> None:
+        """A new render replaces the HUD's series — the runner said so.
+
+        The span is re-read from the document rather than from the request:
+        the HUD's x axis is the working window, and a single-frame render (a
+        wizard hover) is one dot at its place in that window, not a window of
+        its own.
+        """
+        del revision
+        window = self._document.window
+        if window is not None:
+            self._hud.set_span(window.start, window.frame_count)
+        self._hud.begin()
 
     @Slot(object)
     def _on_render_finished(self, render: object) -> None:
@@ -949,6 +974,8 @@ class FilterTab(QWidget):
         self._playhead = 0
         self._knob_armed_at = None
         self._heat.set_frame(None)
+        self._hud.set_span(0, 0)
+        self._hud.begin()
         self._sync_widgets_from_chain()
         self._rebuild_stack()
         self._apply()
@@ -958,7 +985,7 @@ class FilterTab(QWidget):
     def _on_frame_changed(self, index: int, image: QImage) -> None:
         self._playhead = index
         self._heat.set_frame(image)
-        for plot in (self._scalogram, self._density, self._count):
+        for plot in (self._scalogram, self._density, self._count, self._hud):
             plot.set_playhead(index)
         self._apply_heat_state()
 

@@ -302,6 +302,11 @@ class MainWindow(QMainWindow):
         self._preview.render_failed.connect(self._on_render_failed)
         self._filter_tab.status_message.connect(self.statusBar().showMessage)
 
+        # The bus's whole-render verdicts reach the HUD here rather than in
+        # the tab, because the adapter is the window's — the tab keeps not
+        # knowing that the bus has a Qt side at all.
+        self._metrics.sample.connect(self._filter_tab.hud.show_sample)
+
         # The stack is the dirty flag. Every user edit is a command on it by
         # construction (see `document.py`), so there is no second place a change
         # can come from and no bookkeeping to keep in step — which is also why

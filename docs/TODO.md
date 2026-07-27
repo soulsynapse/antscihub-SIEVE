@@ -173,49 +173,17 @@ invent a render thread, a cancellation, or a per-frame series: it takes
 `PreviewRunner`. See
 `docs/completed-todo/2026.07.26-the-first-live-graph-tick.md`.
 
-The two items below are what is left of the tuning loop VISION step 4 describes.
-Both were gated on the preview and neither is any longer.
+The per-frame series is now drawn. `gui/graph_hud.py` plots what each frame of
+the working window cost — source index on x, milliseconds on y, the playhead as
+its cursor — sits in the filter tab's left column under the D row, clears on
+`render_started` rather than deciding staleness for itself, throttles its own
+repaint to one trailing flush per burst, and is the first thing to draw the
+bus's whole-render verdicts, red on a miss. It is `BandPlot` with the handle
+machinery suppressed, so a drag on a cost spike scrubs to it. See
+`docs/completed-todo/2026.07.26-the-graph-hud.md`.
 
-## The graph HUD
-
-**Gated on: nothing.** The producer it draws exists.
-`gui/preview_runner.py` renders the working window on the render thread and
-emits `frame_cost(source index, ms)` per frame on the GUI thread, plus
-`render_started(revision)` when a series is about to be replaced and
-`render_finished(PreviewRender)` when it is complete. `gui/executor_adapter.py`
-carries the bus's whole-render samples across the same boundary. Both are
-tested; neither is drawn anywhere. See
-`docs/completed-todo/2026.07.26-the-first-live-graph-tick.md`.
-
-`gui/graph_hud.py` is the view. **x is the source frame index across
-the working window and y is milliseconds for that frame** — not sample arrival
-order, which is the axis a naive HUD over `MetricBus` would have and which
-cannot carry the next paragraph. The dependency question this item used to
-carry is closed: the filter-tab plot family (`gui/band_plot.py` and its
-subclasses) settled QPainter as the plot layer and `pyqtgraph` is out of the
-`gui` extra, so this view is written over `BandPlot`'s conventions.
-
-VISION asks for a vertical bar showing where in the clip the graph is currently
-at, and with that axis it is the playhead: `gui/timeline_bar.py` already draws
-it over a span and `gui/timeline_model.py` holds the arithmetic Qt-free, so the
-graph's cursor is `VideoPlayer.frame_changed` in a second view rather than a
-second source of truth.
-
-Two things the runner settled that this inherits. **The series is replaced, not
-appended to** — `render_started` carries a revision and a superseded render's
-frames never arrive, so the HUD holds one window's worth of points and clears on
-that signal rather than deciding for itself what is stale. And **the repaint
-must be throttled here**, not upstream: a cold render delivers six hundred
-frames and a HUD repainting per point would spend the GUI thread on paint while
-the render thread waits behind it on the event queue.
-
-`filter_to_first_tick` (2 s) now has a producer and `slider_to_graph` (200 ms)
-does not — it is gated on a parameter control existing at all, and is written up
-in `docs/LATER.md` rather than left here.
-
-Read: `src/sieve/gui/preview_runner.py` signals,
-`src/sieve/gui/{timeline_bar,timeline_model}.py`, `docs/SCAFFOLD.md`
-`gui/graph_hud.py`, `docs/VISION.md` step 4.
+The item below is what is left of the tuning loop VISION step 4 describes. It
+was gated on the preview and no longer is.
 
 ## The three-way overlay
 

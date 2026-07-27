@@ -83,10 +83,15 @@ def stub() -> _StubRunner:
 @pytest.fixture
 def tab(
     qtbot: QtBot, player: VideoPlayer, document: ReplicateDocument, stub: _StubRunner
-) -> FilterTab:
+) -> Iterator[FilterTab]:
     instance = FilterTab(player, document, stub, metrics=MetricBus())  # type: ignore[arg-type]
     qtbot.addWidget(instance)
-    return instance
+    yield instance
+    # The tab owns the detector thread, so it carries the same
+    # shutdown obligation the player and the runner do. Without
+    # this every tab built here leaks a QThread and the suite
+    # wedges a few modules later.
+    instance.shutdown()
 
 
 def test_selection_defaults_to_the_tail_and_targets_the_deepest_rendered_step(

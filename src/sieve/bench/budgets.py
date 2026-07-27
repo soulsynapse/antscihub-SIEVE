@@ -122,6 +122,26 @@ BUDGETS: dict[str, Budget] = _table(
         # meets it after the first render.
         limit_ms=3000.0,
     ),
+    Budget(
+        key="knob_to_first_partial",
+        label="Knob settle → graphs start filling",
+        regime=Regime.IN_PIPELINE,
+        # `knob_to_graphs` above is the *complete* graph, and once the detector
+        # derives partial passes that is no longer the interval a user waits
+        # through — they are reading a filling graph long before the window is
+        # rendered. Both are real and they answer different questions: this one
+        # is "when could I start reading it", that one is "when is it complete
+        # and trustworthy". Kept as two rows rather than one redefined row,
+        # because redefining it would silently rewrite what the findings
+        # already written against `knob_to_graphs` measured.
+        #
+        # 500 ms rather than the 100 ms perceptual threshold: the first partial
+        # cannot precede the first frames plus one transform over them, and a
+        # ceiling nothing can meet is not a budget. It is the same order as
+        # `open_to_first_frame` and for the same reason — this is a "something
+        # is happening" latency, not a per-gesture one.
+        limit_ms=500.0,
+    ),
 )
 
 

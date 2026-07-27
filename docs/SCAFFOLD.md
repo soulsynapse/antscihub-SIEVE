@@ -84,6 +84,8 @@ src/sieve/gui/chain_model.py            # its Qt-free half
 src/sieve/gui/param_form.py             # widgets generated from a filter's params model
 src/sieve/gui/composite_view.py         # the step composite: output over input at one opacity
 src/sieve/gui/preview_runner.py         # holds a PreviewSession on its own thread; emits per-frame cost
+src/sieve/gui/detector_worker.py        # derives the detector off the GUI thread so graphs fill as frames land
+src/sieve/gui/concurrency.py            # the one declaration of how the session divides the machine
 src/sieve/gui/executor_adapter.py       # the ONLY place that knows both bench/metrics and Qt
 src/sieve/gui/player.py                 # playback, scrub, frame requests
 src/sieve/gui/decode_worker.py          # decode off the GUI thread

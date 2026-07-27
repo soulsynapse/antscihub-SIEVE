@@ -132,10 +132,19 @@ class ScalogramPlot(BandPlot):
         painter.fillRect(r, QColor(*SCALO_STOPS[0]))
         if self._norm is None:
             return
-        if self._image is None or self._image_width != r.width():
-            self._image = self._reduced(r.width())
-            self._image_width = r.width()
-        painter.drawImage(QRectF(r), self._image)
+        # The surface covers the frames it was given, which while a render
+        # fills is a prefix of the axis — so it is drawn into `content_rect`
+        # and the rest of the frame stays the empty ramp floor. The COI fade
+        # `_reduced` already applies at both ends then tells the truth about
+        # the cut for free: the trailing wedge of a partial record really is
+        # pad artifact, and it is drawn as exactly that.
+        target = self.content_rect()
+        if target.width() <= 0:
+            return
+        if self._image is None or self._image_width != target.width():
+            self._image = self._reduced(target.width())
+            self._image_width = target.width()
+        painter.drawImage(QRectF(target), self._image)
         painter.setPen(DIM)
         painter.setFont(plot_font(7))
         low, high = self._range()

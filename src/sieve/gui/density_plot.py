@@ -100,8 +100,9 @@ class DensityPlot(BandPlot):
 
     def paint_content(self, painter: QPainter, r: QRect) -> None:
         painter.fillRect(r, QColor(*DENSITY_STOPS[0]))
-        if self._image is not None:
-            painter.drawImage(QRectF(r), self._image)
+        target = self.content_rect()
+        if self._image is not None and target.width() > 0:
+            painter.drawImage(QRectF(target), self._image)
         if self._solo is None or self._count <= 0:
             return
         painter.setPen(QPen(ACCENT, 1.4))

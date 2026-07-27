@@ -736,6 +736,10 @@ class MainWindow(QMainWindow):
         # delete is the one way a shutdown can crash rather than merely wait.
         self._metrics.close()
         self._preview.shutdown()
+        # After the preview: the detector is fed by the render thread's frames,
+        # so stopping it first would leave the runner delivering to a tab whose
+        # worker thread has already gone.
+        self._filter_tab.shutdown()
         super().closeEvent(event)
 
 

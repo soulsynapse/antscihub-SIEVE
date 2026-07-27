@@ -86,6 +86,28 @@ def windowed_mean(count: FloatArray, window: int, centered: bool) -> NDArray[np.
     return ((c[hi] - c[lo]) / neff).astype(np.float32)
 
 
+def settled_frames(n_frames: int, window: int, centered: bool) -> int:
+    """How many leading frames of a *truncated* series already have their final
+    windowed mean — the second frontier, after `wavelet.settled_frames`.
+
+    `window_bounds` clamps `hi` to the record's length and divides by the true
+    count, which is exactly right at the *clip's* end and wrong at a frontier
+    that is still moving: a centered window near the cut averages fewer frames
+    than it asked for and reports a value that changes when the rest arrive. So
+    a centered window settles `window - window // 2 - 1` frames back, and a
+    trailing window — which never reads forward — settles everywhere.
+
+    This is about a record still being filled. A caller that has the whole
+    window in hand must not apply it: there the truncation is the clip, and the
+    edge means what it says.
+    """
+    if n_frames <= 0:
+        return 0
+    if not centered or window <= 1:
+        return n_frames
+    return max(0, n_frames - (window - window // 2) + 1)
+
+
 def count_band_to_counts(frac_lo: float, frac_hi: float, region_blocks: int) -> tuple[float, float]:
     """The one place a fractional count band becomes block counts.
 

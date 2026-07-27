@@ -35,6 +35,13 @@ W0 = 6.0
 FloatArray = NDArray[np.floating[Any]]
 ComplexArray = NDArray[np.complexfloating[Any, Any]]
 
+#: Default thread count handed to `scipy.fft`: every core this process may use.
+#: A whole-clip pass, a CLI run, and a headless parity check all want the whole
+#: machine, and `core/` holds no policy about who else might want it — a caller
+#: that must leave room says so, which is what `gui/concurrency.py` does and
+#: the only place in the tree that needs to.
+ALL_CORES = -1
+
 
 # scipy.fft's stubs return `tuple[Dispatchable]` under strict pyright; these
 # three wrappers are where that unknowability is contained, so the transform
@@ -45,17 +52,17 @@ def _fast_len(n: int) -> int:
     )
 
 
-def _fft_time_axis(x: FloatArray, n: int) -> ComplexArray:
+def _fft_time_axis(x: FloatArray, n: int, workers: int) -> ComplexArray:
     return cast(
         ComplexArray,
-        _fft.fft(x, n=n, axis=0, workers=-1),  # pyright: ignore[reportUnknownMemberType]
+        _fft.fft(x, n=n, axis=0, workers=workers),  # pyright: ignore[reportUnknownMemberType]
     )
 
 
-def _ifft_time_axis(buf: ComplexArray) -> ComplexArray:
+def _ifft_time_axis(buf: ComplexArray, workers: int) -> ComplexArray:
     return cast(
         ComplexArray,
-        _fft.ifft(buf, axis=0, workers=-1, overwrite_x=True),  # pyright: ignore[reportUnknownMemberType]
+        _fft.ifft(buf, axis=0, workers=workers, overwrite_x=True),  # pyright: ignore[reportUnknownMemberType]
     )
 
 
@@ -91,12 +98,92 @@ def coi_edge_samples(freqs_hz: FloatArray, fs: float) -> FloatArray:
     return coi_efolding_s(freqs_hz) * float(fs)
 
 
+#: E-folding times of zero-padding applied before the FFT, so the record does
+#: not circularly wrap onto itself.
+#:
+#: This was one — the e-folding time itself — and one is not the support. An
+#: e-folding is a single decay constant, so at the record's end the wavelet
+#: still has ~37% of its amplitude left, and `next_fast_len` was leaving a gap
+#: of ~56 frames against a 0.5 Hz wavelet whose meaningful support is over
+#: twice that. A strong event near one end therefore wrapped onto the other:
+#: measured at **2.4% of full band-power scale** on a burst placed against the
+#: cut, which is far more than enough to flip a marginally placed detection
+#: gate at the opposite end of the window.
+#:
+#: Three, because that is where it stops mattering: the same measurement gives
+#: 1.5e-5 at two and 3.0e-7 at three, and 4 and 6 sit at the same 1.7e-7 float32
+#: floor. The cost is a few hundred extra samples in one FFT.
+#:
+#: The whole-clip path had this defect too and it was merely less visible —
+#: a working window the user has positioned *on* an event is exactly the case
+#: that puts strong signal against a record boundary.
+PAD_EFOLDINGS = 3.0
+
+#: E-folding times a partial record holds back before calling a frame settled.
+#:
+#: Two, not one, and the difference is measured rather than argued.
+#: `coi_efolding_s` is a *decay scale* — its own docstring says contamination
+#: decays through the wedge rather than stopping at its edge — so treating one
+#: e-folding as a boundary leaves real pad leakage inside the region a caller
+#: was told is final.
+#:
+#: Measured against a whole-record reference (and *after* `PAD_EFOLDINGS`, whose
+#: wraparound otherwise swamps this): at one e-folding the worst error inside
+#: the frontier sits exactly at the last settled index — the trailing pad, still
+#: leaking — at ~1.5e-3 of full band-power scale. At two it falls to ~4e-5 and
+#: the worst index *moves into the interior*, where it is FFT-length
+#: discretization rather than the cut. Three buys nothing further. Two is
+#: therefore where the frontier stops being the limiting factor.
+#: `docs/findings/` carries the table.
+#:
+#: The cost is trailing graph: ~5.5 s at 0.5 Hz against ~2.7 s. It is charged
+#: against the *band's* lowest frequency, so a detector tuned to a real
+#: behavioural band pays a fraction of that — only the wide-open default band
+#: pays the worst case, and only for gating, since the curve still draws.
+COI_SETTLE_EFOLDINGS = 2.0
+
+
+def settled_frames(n_frames: int, fs: float, freqs_hz: FloatArray) -> int:
+    """How many leading frames of a *truncated* record already have their final
+    power — i.e. the frontier a partial transform may be read up to.
+
+    `morlet_power` zero-pads past the end of whatever record it is handed, so
+    for a record still being filled the trailing wedge is not merely
+    untrustworthy, it is *provisional*: those coefficients change when the next
+    frames arrive and the pad moves. Everything before the widest e-folding
+    time in `freqs_hz` is already final and will survive the record growing.
+
+    Pass the *band's* frequencies, not the whole bank. Contamination at the cut
+    comes from the daughters actually summed, so a detector tuned to a high
+    band settles close to the frontier where one reaching down to 0.5 Hz needs
+    seconds of it — and denominating this on the bank instead would hold back
+    graph the transform had already finished with.
+
+    The wedge is `COI_SETTLE_EFOLDINGS` e-folding times wide, not one; see that
+    constant for the measurement that set it.
+
+    A record shorter than its own COI has nothing settled, which is 0 rather
+    than a negative frontier a caller would have to remember to clamp.
+    """
+    edge = coi_edge_samples(np.asarray(freqs_hz, np.float64), fs)
+    if n_frames <= 0 or edge.size == 0:
+        # An empty bank settles nothing rather than raising on `max`. Callers
+        # coming through `band_indices` cannot produce one — it snaps to the
+        # nearest scale rather than returning an empty span — but this is
+        # public `core/` arithmetic and refusing to answer is worse than
+        # answering conservatively.
+        return 0
+    return max(0, n_frames - int(np.ceil(float(edge.max()) * COI_SETTLE_EFOLDINGS)))
+
+
 def default_freqs(fps: float, fmin: float = 0.5, fmax: float = 25.0, n: int = 24) -> FloatArray:
     """Log-spaced frequency bank, capped below Nyquist (0.45 · fps)."""
     return np.geomspace(fmin, min(fmax, 0.45 * fps), n)
 
 
-def morlet_power(x: FloatArray, fs: float, freqs_hz: FloatArray) -> NDArray[np.float32]:
+def morlet_power(
+    x: FloatArray, fs: float, freqs_hz: FloatArray, *, workers: int = ALL_CORES
+) -> NDArray[np.float32]:
     """Morlet scalogram power. ``x`` (T,) or (T, B) → (F, T) or (F, T, B) float32.
 
     Loops frequencies to bound memory; each is one FFT-domain multiply plus an
@@ -104,6 +191,11 @@ def morlet_power(x: FloatArray, fs: float, freqs_hz: FloatArray) -> NDArray[np.f
     e-folding support so the ends see zeros instead of circularly wrapping
     onto the other end of the record, then rounds up to a fast composite
     length.
+
+    ``workers`` is passed to `scipy.fft` and defaults to every core, which is
+    what a batch or headless caller should have. An interactive caller sharing
+    the machine with decode threads passes a cap; see `gui/concurrency.py`. It
+    changes only how fast the answer arrives, never the answer.
     """
     x32 = np.asarray(x, np.float32)
     squeeze = x32.ndim == 1
@@ -112,16 +204,16 @@ def morlet_power(x: FloatArray, fs: float, freqs_hz: FloatArray) -> NDArray[np.f
     n_frames = x32.shape[0]
     dt = 1.0 / fs
     scales = morlet_scales(freqs_hz)
-    support = int(np.ceil(coi_efolding_s(freqs_hz).max() / dt))
+    support = int(np.ceil(coi_efolding_s(freqs_hz).max() / dt * PAD_EFOLDINGS))
     n = _fast_len(n_frames + support)
-    xf = _fft_time_axis(x32, n)  # complex64
+    xf = _fft_time_axis(x32, n, workers)  # complex64
     omega = 2.0 * np.pi * np.fft.fftfreq(n, d=dt)
     heavi = omega > 0
     out = np.empty((len(scales), *x32.shape), np.float32)
     buf = np.empty_like(xf)  # reused scratch: xf * daughter
     for i, s in enumerate(scales):
         np.multiply(xf, _daughter(float(s), omega, heavi, dt)[:, None], out=buf)
-        w = _ifft_time_axis(buf)[:n_frames]
+        w = _ifft_time_axis(buf, workers)[:n_frames]
         out[i] = w.real**2 + w.imag**2
     return out[:, :, 0] if squeeze else out
 
@@ -160,6 +252,8 @@ def morlet_band_power(
     i: int,
     j: int,
     block_chunk: int = 512,
+    *,
+    workers: int = ALL_CORES,
 ) -> NDArray[np.float32]:
     """Scalogram power summed over frequency rows ``[i, j)``. ``x`` (T,) or
     (T, B) → (T,) or (T, B) float32.
@@ -170,6 +264,9 @@ def morlet_band_power(
     full-cube slice exactly — the property the test pins), yet transforms only
     the band's scales, chunked over block columns so a whole-clip pass stays
     memory-bounded.
+
+    ``workers`` is `morlet_power`'s, for the same reason and with the same
+    default: every core unless the caller has someone to leave room for.
     """
     x32 = np.asarray(x, np.float32)
     squeeze = x32.ndim == 1
@@ -182,7 +279,7 @@ def morlet_band_power(
     if band.size == 0:
         k = int(np.clip(i, 0, len(scales_all) - 1))
         band = scales_all[k : k + 1]
-    support = int(np.ceil(coi_efolding_s(freqs_hz).max() / dt))
+    support = int(np.ceil(coi_efolding_s(freqs_hz).max() / dt * PAD_EFOLDINGS))
     n = _fast_len(n_frames + support)
     omega = 2.0 * np.pi * np.fft.fftfreq(n, d=dt)
     heavi = omega > 0
@@ -191,12 +288,12 @@ def morlet_band_power(
     chunk = max(1, block_chunk)
     for c0 in range(0, n_blocks, chunk):
         c1 = min(n_blocks, c0 + chunk)
-        xf = _fft_time_axis(x32[:, c0:c1], n)
+        xf = _fft_time_axis(x32[:, c0:c1], n, workers)
         acc = np.zeros((n_frames, c1 - c0), np.float32)
         buf = np.empty_like(xf)
         for d in daughters:
             np.multiply(xf, d[:, None], out=buf)
-            w = _ifft_time_axis(buf)[:n_frames]
+            w = _ifft_time_axis(buf, workers)[:n_frames]
             acc += w.real**2 + w.imag**2
         out[:, c0:c1] = acc
     return out[:, 0] if squeeze else out

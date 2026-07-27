@@ -71,7 +71,7 @@ enforced by review.
 |2|Pipeline is a data structure|Serializable DAG. No GUI-only state in the pipeline artifact.|
 |3|Filter = one class + one markdown|Discovery is automatic. No registration elsewhere.|
 |4|No latency budget misses|A miss is a defect, not a tradeoff.|
-|5|No regime tradeoffs|Don't improve pre-pipeline at cost to in-pipeline or vice versa.|
+|5|No regime tradeoffs|No consumer improves its latency at another's expense — across the two regimes or within one. See *Dividing the machine*.|
 
 ---
 
@@ -91,6 +91,7 @@ IN-PIPELINE (feels like direct manipulation)
   Full preview render (5–10s clip): < 3 s
   Band drag → graphs repaint:      < 50 ms
   Knob settle → graphs rebuilt:    < 3 s
+  Knob settle → graphs start filling: < 500 ms
 ```
 
 The two scrub budgets are a pair, and they are what makes non-negotiable #4
@@ -104,6 +105,37 @@ release the exact frame under the cursor is always decoded, and that is the
 second budget. Coarse mode is user-visible and can be disabled in Preferences;
 the budget then stands unmet on that machine by the user's explicit choice,
 which is a preference, not a silent tradeoff.
+
+---
+
+## Dividing the machine
+
+Non-negotiable #5 was written as a two-body rule — pre-pipeline against
+in-pipeline — and stayed self-enforcing only while there were two things
+competing for cores. There are three. The player decodes on a thread, the
+preview decodes on a pool, and `gui/detector_worker.py` runs the Morlet
+transform on a third to fill the graphs while a render is still in flight. The
+two-body phrasing has no slot for the case that actually bites: a third
+consumer starving *both* of the other two.
+
+The old phrasing also could not catch the specific way it would have been
+broken here. `scipy.fft` defaults to every core, so a derivation thread added
+without thought takes the whole machine, and the symptom is not a failure but a
+scrub that stutters — a pre-pipeline budget quietly bought with an in-pipeline
+nicety, which is the exact trade #5 exists to forbid.
+
+So the rule reads over consumers rather than over regimes, and the arithmetic
+is declared in one place instead of argued in three comments.
+`gui/concurrency.py` holds the split and `tests/unit/test_concurrency.py`
+asserts the sum leaves the machine a core for the GUI thread. A fourth
+consumer, or a raised constant, fails a test rather than degrading a budget
+somebody measures three commits later.
+
+`core/` deliberately holds none of this and defaults to every core.
+A CLI run, a whole-clip pass, and a headless parity check on a cluster node
+have nobody to leave room for, and a cap living in `core/` would throttle
+precisely the runs that should saturate a node. Policy about sharing a machine
+belongs to the process that is sharing one.
 
 ---
 

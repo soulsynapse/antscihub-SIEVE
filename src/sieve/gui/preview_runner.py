@@ -85,6 +85,7 @@ from sieve.core.replicates import Replicate
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
+from sieve.gui.concurrency import PREVIEW_WORKERS as _PREVIEW_WORKERS
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
@@ -96,13 +97,13 @@ from sieve.pipeline.preview import Consumer, PreviewRender, PreviewSession
 #: key is what turns a misspelling into a failure rather than a dead metric.
 FIRST_TICK_BUDGET = "filter_to_first_tick"
 
-#: Decode threads the preview's reader gets. Lower than `prefetch.py`'s inferred
-#: cap of four on purpose: the player already owns a decode thread on the same
-#: footage, the reads-ahead hold full-resolution frames — 47.6 MB each on the
-#: reference source — and a preview that made scrubbing stutter would be trading
-#: an in-pipeline budget for a pre-pipeline one, which ARCHITECTURE.md
-#: non-negotiable #4 calls a defect rather than a tuning choice.
-PREVIEW_WORKERS = 2
+#: Re-exported so this module's call site reads as it always did. The number
+#: and the reasoning moved to `gui/concurrency.py` when the detector's FFT
+#: became a third consumer of the same cores: one constant justified against
+#: one other consumer stops being a rule the moment there are three, and
+#: non-negotiable #5 is arithmetic that should add up in a place a test can
+#: reach.
+PREVIEW_WORKERS = _PREVIEW_WORKERS
 
 
 class _AbandonedError(Exception):

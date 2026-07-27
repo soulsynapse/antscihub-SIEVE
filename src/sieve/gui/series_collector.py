@@ -100,6 +100,30 @@ class SeriesCollector:
                 )
             self._rows.append(row)
 
+    def snapshot(self, revision: int) -> CollectedSeries | None:
+        """Whatever `revision` has assembled *so far*, or None if superseded.
+
+        The partial-detector path: the render thread is still appending, and
+        this hands the GUI a contiguous prefix of the series to derive from
+        while it does. The returned array is a fresh stack, so the rows the
+        collector goes on appending are not aliased into a consumer that is
+        about to FFT them on another thread.
+
+        The prefix is contiguous by construction — `add` refuses a gap — so a
+        snapshot is always a real record of `[start_index, start_index + T)`
+        and never a series with a hole standing in for frames still in flight.
+        What it is *not* is final: the trailing frames are inside the
+        transform's cone of influence and change as the record grows, which is
+        `core.wavelet.settled_frames`' business to say and the caller's to
+        render honestly.
+        """
+        with self._lock:
+            if revision != self._revision or self._start is None or not self._rows:
+                return None
+            return CollectedSeries(
+                start_index=self._start, data=np.stack(self._rows).astype(np.float32, copy=False)
+            )
+
     def take(self, revision: int) -> CollectedSeries | None:
         """The finished series for `revision`, or None if it was superseded.
 
@@ -109,10 +133,9 @@ class SeriesCollector:
         render that produced no rows — a chain whose watched node was never
         reached — which the caller reports as "no reachable step", not as an
         empty detection.
+
+        Identical to `snapshot` in what it computes and different in what it
+        claims: this one is called when the render is over, so the record is
+        the whole working window and nothing in it is provisional.
         """
-        with self._lock:
-            if revision != self._revision or self._start is None or not self._rows:
-                return None
-            return CollectedSeries(
-                start_index=self._start, data=np.stack(self._rows).astype(np.float32, copy=False)
-            )
+        return self.snapshot(revision)

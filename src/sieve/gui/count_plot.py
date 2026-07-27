@@ -30,7 +30,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QPointF, QRect, Qt
-from PySide6.QtGui import QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
 from sieve.gui.band_plot import DETECT, DIM, BandPlot, plot_font
@@ -91,14 +91,26 @@ class CountPlot(BandPlot):
 
     def paint_content(self, painter: QPainter, r: QRect) -> None:
         if self._windowed is not None and self._count > 0:
-            painter.setPen(QPen(DETECT if self._armed else DIM, 1.6))
+            base = QColor(DETECT if self._armed else DIM)
             frames = len(self._windowed)
             step = max(1, frames // max(r.width(), 1))
+            settled = self.settled_frames
+            indices = list(range(0, frames, step))
             points = [
                 QPointF(self.x_of(self._start + t), self.y_of(float(self._windowed[t])))
-                for t in range(0, frames, step)
+                for t in indices
             ]
-            for a, b in pairwise(points):
+            # Past the settled frontier the value is still moving: it is inside
+            # the transform's cone of influence at the record's cut and will be
+            # redrawn when the next frames land. Faded rather than withheld —
+            # the shape is real and worth watching arrive, and the fade is the
+            # same claim the scalogram's COI ramp makes on the same frames.
+            # The gate underpaint the base draws stops at the frontier instead,
+            # because a detection is navigation and must not blink in and out.
+            provisional = QColor(base)
+            provisional.setAlpha(70)
+            for (a, b), t in zip(pairwise(points), indices[1:], strict=True):
+                painter.setPen(QPen(base if t < settled else provisional, 1.6))
                 painter.drawLine(a, b)
         if self._notice:
             painter.setPen(DIM)

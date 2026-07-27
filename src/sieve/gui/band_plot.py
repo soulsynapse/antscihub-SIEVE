@@ -148,6 +148,12 @@ class BandPlot(QWidget):
         super().__init__(parent)
         self._start = 0
         self._count = 0
+        # How much of the span holds data, and how much of *that* is final.
+        # `None` means "all of it" — the whole-record case, which is every
+        # caller that hands over a finished series and need not know these
+        # exist. See `set_filled`.
+        self._filled: int | None = None
+        self._settled: int | None = None
         self._playhead = 0
         self._band: tuple[float, float] | None = None
         self._gate: NDArray[np.bool_] | None = None
@@ -164,6 +170,36 @@ class BandPlot(QWidget):
         self._start = start
         self._count = max(count, 0)
         self.update()
+
+    def set_filled(self, filled: int | None, settled: int | None = None) -> None:
+        """How many frames of the span hold data, and how many of those are final.
+
+        The x axis is the *working window* while a render fills it, not the
+        frames collected so far — an axis that grew with the data would slide
+        every curve leftward on each pass and make a filling graph read as a
+        moving one. So the span is set once from the window and the data
+        occupies a prefix of it, which `content_rect` is the geometry of.
+
+        `settled` is the frontier past which values are provisional: inside the
+        transform's cone of influence at the record's cut, still changing as
+        frames arrive. Subclasses fade beyond it. `None` for either means the
+        whole span, which is what a finished render sets and what a plot that
+        has never heard of a partial pass keeps.
+        """
+        self._filled = None if filled is None else max(filled, 0)
+        self._settled = None if settled is None else max(settled, 0)
+        self.update()
+
+    @property
+    def filled_frames(self) -> int:
+        """Frames of the span that hold data. The whole span unless told otherwise."""
+        return self._count if self._filled is None else min(self._filled, self._count)
+
+    @property
+    def settled_frames(self) -> int:
+        """Frames of the span whose values are final. Never more than `filled_frames`."""
+        filled = self.filled_frames
+        return filled if self._settled is None else min(self._settled, filled)
 
     def set_playhead(self, frame: int) -> None:
         """Move the playhead to source frame `frame`."""
@@ -231,6 +267,25 @@ class BandPlot(QWidget):
         r = self.plot_rect()
         span = max(self._count - 1, 1)
         return r.left() + (frame - self._start) / span * r.width()
+
+    def content_rect(self) -> QRect:
+        """The part of `plot_rect` the data actually covers.
+
+        `plot_rect` for a full record; a left-anchored prefix of it while one
+        fills. The image plots draw into this rather than into the whole frame,
+        because `drawImage` stretches to whatever rectangle it is handed and a
+        half-filled window stretched across the full width would be a graph
+        that lies about *when* — the one axis this tab cannot afford to be
+        wrong about.
+        """
+        r = self.plot_rect()
+        filled = self.filled_frames
+        if self._count <= 0 or filled >= self._count:
+            return r
+        if filled <= 0:
+            return QRect(r.left(), r.top(), 0, r.height())
+        right = self.x_of(self._start + filled - 1)
+        return QRect(r.left(), r.top(), max(round(right - r.left()), 1), r.height())
 
     def frame_of(self, x: float) -> int:
         """x pixel → source frame, clamped to the span."""

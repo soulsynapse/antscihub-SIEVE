@@ -68,7 +68,7 @@ from PySide6.QtWidgets import (
 )
 
 from sieve.bench.metrics import METRICS, MetricBus
-from sieve.core.wavelet import default_freqs, morlet_power
+from sieve.core.wavelet import default_freqs
 from sieve.filters.block_signal import resolve_block
 from sieve.gui.band_plot import DIM
 from sieve.gui.block_heat import BlockHeatPanel
@@ -90,19 +90,30 @@ from sieve.gui.chain_stack import ChainStackView
 from sieve.gui.composite_view import StepCompositeView, grid_to_qimage
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.density_plot import DensityPlot
+from sieve.gui.detector_worker import (
+    DetectorRequest,
+    DetectorResult,
+    DetectorRunner,
+    gate_to,
+    settled_for,
+)
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.graph_hud import GraphHud
 from sieve.gui.param_form import param_rows
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.scalogram_plot import ScalogramPlot
-from sieve.gui.series_collector import CollectedSeries, SeriesCollector
+from sieve.gui.series_collector import SeriesCollector
 from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
 from sieve.gui.wizard_model import catalog
 
 #: The two interaction budgets this tab produces (ARCHITECTURE.md rows).
 BAND_DRAG_BUDGET = "band_drag_repaint"
 KNOB_BUDGET = "knob_to_graphs"
+#: The other end of the same arm: when the graphs *started* filling, which
+#: since the detector derives partial passes is the latency a user actually
+#: waits through before there is something to read.
+FIRST_PARTIAL_BUDGET = "knob_to_first_partial"
 
 #: The high percentile of the window's band power that reads as full heat on
 #: the block panel — fixed across the window so brightness holds its meaning.
@@ -139,16 +150,41 @@ class FilterTab(QWidget):
         self._chain = parity_chain(30.0)
         self._defaults = parity_chain(30.0)
         self._collector = SeriesCollector(self._block_node_id() or "")
-        self._series: CollectedSeries | None = None
+        #: Source index of `_series2d[0]`. Only the origin is kept — the
+        #: arrays themselves arrive with each derivation, paired with the
+        #: update derived from them.
+        self._series_start: int | None = None
         self._series2d: np.ndarray | None = None
         self._grid: tuple[int, int] = (1, 1)
         self._update: DetectorUpdate | None = None
         self._pooled_power: np.ndarray | None = None
         self._playhead = 0
+        #: Derives the detector off the GUI thread so the graphs can fill while
+        #: the render is still producing frames. Owns a thread; `shutdown` is
+        #: required, and the window calls it from `closeEvent`.
+        self._detector = DetectorRunner(self)
+        self._detector.ready.connect(self._on_detector_ready)
+        #: The x axis the plots are drawn against while a render fills it: the
+        #: whole working window, set once when the render is submitted. An axis
+        #: that grew with the data would slide every curve leftward on each
+        #: partial pass and make a filling graph read as a moving one.
+        self._span: tuple[int, int] = (0, 0)
+        #: Frames of the span the collected series covers, and how many of
+        #: those are final. Both are the whole span once a render finishes.
+        self._filled = 0
+        self._settled = 0
+        #: Whether the series backing `_update` came from a finished render.
+        #: The summary says "filling" until it does, and the cheap tier reads
+        #: it to know whether the frontier it recomputes is still moving.
+        self._series_final = False
         #: When the last upstream knob was edited, or None when nothing is
         #: being timed — the `knob_to_graphs` arm, same shape as the runner's
         #: first-tick arm.
         self._knob_armed_at: float | None = None
+        #: Whether this arm already published `knob_to_first_partial`. One per
+        #: arm: the budget names the *first* readable graph, and republishing
+        #: it on every later pass would turn a latency into a throughput.
+        self._partial_published = False
 
         # The step composite's state. The selection is sticky by id and falls
         # back to the tail — "a chain stack that always has a selected step"
@@ -305,6 +341,15 @@ class FilterTab(QWidget):
         self._d_slider.valueChanged.connect(self._on_window_frames)
         self._centered.toggled.connect(self._on_centered)
 
+    def shutdown(self) -> None:
+        """Stop the detector thread. Call before the application exits.
+
+        The same obligation `PreviewRunner.shutdown` and `VideoPlayer.shutdown`
+        carry, for the same reason: a `QThread` still running when Qt tears the
+        widget tree down is a crash rather than a leak.
+        """
+        self._detector.shutdown()
+
     # ---- reading (for the window and for tests) --------------------------
 
     @property
@@ -429,6 +474,14 @@ class FilterTab(QWidget):
 
         if self._runner.request_render(self._chain.pipeline(), window, replicate, consumer=feed):
             self._series_pending = True
+            # The axis is the window, from now until the render is replaced.
+            # Set here rather than on the first partial so that an empty plot
+            # already has the right x extent and the first curve to arrive
+            # lands where it will stay.
+            self._span = (window.start, window.frame_count)
+            self._filled = 0
+            self._settled = 0
+            self._series_final = False
 
     def _grabber(self, chain: LiveChain):
         """A consumer that catches the wizard's video frame as it flies past.
@@ -454,6 +507,9 @@ class FilterTab(QWidget):
     @Slot(int)
     def _collector_start(self, revision: int) -> None:
         self._collector.start(revision)
+        # Same stamp, both sides: a partial pass still deriving for the render
+        # this one replaces is finished but never painted.
+        self._detector.set_revision(revision)
 
     @Slot(int)
     def _hud_begin(self, revision: int) -> None:
@@ -499,6 +555,37 @@ class FilterTab(QWidget):
         if self._runner.revision in self._composite_revisions:
             return
         self._hud.add_cost(index, elapsed_ms)
+        self._kick_partial()
+
+    def _kick_partial(self, *, final: bool = False) -> None:
+        """Derive the graphs over the prefix collected so far, if worth doing.
+
+        The pacing loop, and deliberately not a timer: a pass is submitted only
+        when the detector thread is idle, so the partial rate settles at
+        `render_time / recompute_time` with no interval for anyone to tune. A
+        cheap chain nearly streams, an expensive one steps, and neither can
+        spend more than half its wall clock deriving. A fixed cadence would
+        have to be wrong in one of those two directions.
+
+        A pass is skipped when no new frames have arrived since the last one:
+        the same prefix would produce the same graph, and a `frame_cost` for a
+        node above the watched one delivers no rows at all.
+        """
+        if not final and (self._detector.busy or not self._series_pending):
+            return
+        series = self._collector.snapshot(self._runner.revision)
+        if series is None or (not final and series.data.shape[0] <= self._filled):
+            return
+        self._detector.submit(
+            DetectorRequest(
+                revision=self._runner.revision,
+                series=series.data,
+                start_index=series.start_index,
+                fps=self._fps(),
+                state=self._chain.detector,
+                final=final,
+            )
+        )
 
     @Slot(object)
     def _on_render_finished(self, render: object) -> None:
@@ -508,22 +595,58 @@ class FilterTab(QWidget):
             self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
         if self._composite_grab:
             self._apply_composite(*self._composite_grab.pop())
-        series = self._collector.take(self._runner.revision)
-        if series is None:
+        if self._collector.take(self._runner.revision) is None:
             # A render whose prefix stopped above the extraction step — the
             # graphs have nothing new; `_apply` already says why.
             return
-        self._series = series
-        data = series.data
-        self._grid = (int(data.shape[1]), int(data.shape[2]))
-        self._series2d = data.reshape(data.shape[0], -1)
-        freqs = default_freqs(self._fps())
-        self._pooled_power = morlet_power(self._series2d.mean(axis=1), self._fps(), freqs)
-        self._derive(reuse_band_power=False)
+        # The final derivation goes through the same worker as every partial
+        # one rather than being computed here. Two paths producing the graphs
+        # would be two places for the frontier arithmetic to disagree, and the
+        # last pass is exactly a partial pass that is allowed to claim the
+        # whole record — which is what `final` says.
+        self._kick_partial(final=True)
+
+    @Slot(object)
+    def _on_detector_ready(self, result: DetectorResult) -> None:
+        """One derivation landed. Repaint, and publish whichever budget it ends.
+
+        The runner has already dropped anything for a superseded revision, so
+        arriving here means this is the newest chain's graph. A partial and a
+        final result are applied identically apart from what they may claim —
+        the whole point of routing both through one path.
+        """
+        self._series_start = result.start_index
+        self._series2d = result.series2d
+        self._grid = result.grid
+        self._update = result.update
+        self._pooled_power = result.pooled_power
+        self._filled = result.frames
+        self._settled = result.settled
+        self._series_final = result.final
+
         if self._knob_armed_at is not None:
-            self._metrics.publish(KNOB_BUDGET, (perf_counter() - self._knob_armed_at) * 1000.0)
-            self._knob_armed_at = None
-        self.graphs_updated.emit()
+            elapsed = (perf_counter() - self._knob_armed_at) * 1000.0
+            # The first partial ends "when could I start reading it"; the final
+            # one ends "when was it complete". Two real intervals, two rows —
+            # see the note on `knob_to_first_partial` in `bench/budgets.py`.
+            if result.final:
+                self._metrics.publish(KNOB_BUDGET, elapsed)
+                self._knob_armed_at = None
+                self._partial_published = False
+            elif not self._partial_published:
+                self._metrics.publish(FIRST_PARTIAL_BUDGET, elapsed)
+                self._partial_published = True
+
+        self._apply()
+        if result.final:
+            self.graphs_updated.emit()
+        else:
+            # More frames have almost certainly landed while this pass ran.
+            # Kicking from here rather than only from `frame_cost` is what
+            # keeps the loop turning when the render outpaces the derivation:
+            # otherwise the next kick would find the worker busy, be skipped,
+            # and nothing would restart it.
+            self._kick_partial()
 
     @Slot(str)
     def _on_render_failed(self, message: str) -> None:
@@ -554,20 +677,28 @@ class FilterTab(QWidget):
         Anything that moves the frequency band or the series discards it.
         """
         temporal_ok, _ = self._reachable()
-        if self._series is None or self._series2d is None or not temporal_ok:
+        if self._series_start is None or self._series2d is None or not temporal_ok:
             self._update = None
             self._apply()
             return
         band_power = (
             self._update.band_power if reuse_band_power and self._update is not None else None
         )
-        self._update = recompute(
+        update = recompute(
             self._series2d,
             self._fps(),
             self._chain.detector,
-            start_index=self._series.start_index,
+            start_index=self._series_start,
             band_power=band_power,
         )
+        # The frontier is recomputed, not remembered: a D drag over a partial
+        # series moves it. Widening a centered window pulls it back, and a tab
+        # that kept the worker's last frontier would paint a gate over frames
+        # the wider window no longer settles.
+        self._settled = settled_for(
+            self._filled, self._fps(), self._chain.detector, final=self._series_final
+        )
+        self._update = gate_to(update, self._settled, self._series_start)
         self._apply()
 
     def _apply(self) -> None:
@@ -580,7 +711,7 @@ class FilterTab(QWidget):
         seconds = detector.window_frames / fps if fps > 0 else 0.0
         self._d_label.setText(f"D {detector.window_frames} fr ({seconds:.2f} s)")
 
-        if update is None or self._series is None:
+        if update is None or self._series_start is None:
             self._count.set_series(np.zeros(0, np.float32), region_blocks=1, armed=False)
             self._count.set_gate(None)
             if not temporal_ok:
@@ -597,15 +728,20 @@ class FilterTab(QWidget):
             self._push_wizard_state(None, 0, 0, temporal_ok, detection_ok)
             return
 
-        start = self._series.start_index
-        frames = self._series2d.shape[0] if self._series2d is not None else 0
+        # The axis is the working window; the data is a prefix of it. Falling
+        # back to the collected extent keeps every path that sets no span —
+        # a test driving `_apply` directly, a render that predates one — on
+        # the behaviour they had when the two were always equal.
+        start, span = self._span if self._span[1] > 0 else (self._series_start, self._filled)
+        frames = self._filled
         blocks = update.band_power.shape[1]
         signal = self._signal_label()
 
         freqs = default_freqs(fps)
         if self._pooled_power is not None:
             self._scalogram.set_power(self._pooled_power, freqs, fps)
-        self._scalogram.set_span(start, frames)
+        self._scalogram.set_span(start, span)
+        self._scalogram.set_filled(frames, self._settled)
         self._scalogram.set_playhead(self._playhead)
         self._scalogram.set_band(
             max(detector.freq_band[0], float(freqs[0])),
@@ -616,11 +752,13 @@ class FilterTab(QWidget):
         solo = detector.solo_block
         solo_trace = update.band_power[:, solo] if solo is not None and solo < blocks else None
         self._density.set_series(update.band_power, solo_trace)
-        self._density.set_span(start, frames)
+        self._density.set_span(start, span)
+        self._density.set_filled(frames, self._settled)
         self._density.set_playhead(self._playhead)
         self._density.set_band(*detector.value_band)
 
-        self._count.set_span(start, frames)
+        self._count.set_span(start, span)
+        self._count.set_filled(frames, self._settled)
         self._count.set_playhead(self._playhead)
         self._count.set_series(
             update.windowed, region_blocks=blocks, armed=detector.armed and detection_ok
@@ -651,7 +789,12 @@ class FilterTab(QWidget):
             self._summary.setText(_DISARMED)
         else:
             gated = float(update.gate.sum()) / fps if update.gate is not None else 0.0
-            self._summary.setText(f"{len(update.intervals)} detections · {gated:.1f} s")
+            # "so far" while the frontier is still moving. The count only ever
+            # grows — the gate stops at the settled frontier, so an interval
+            # here is one that will still be there when the render finishes —
+            # but a bare number would read as the whole answer.
+            suffix = "" if self._series_final else " · filling"
+            self._summary.setText(f"{len(update.intervals)} detections · {gated:.1f} s{suffix}")
 
         self._stack.update_captions(self._captions())
         self._push_wizard_state(update, start, frames, temporal_ok, detection_ok)
@@ -686,9 +829,9 @@ class FilterTab(QWidget):
     def _apply_heat_state(self) -> None:
         """The heat panel's per-playhead row: fill, in-band mask, solo."""
         update = self._update
-        if update is None or self._series is None:
+        if update is None or self._series_start is None:
             return
-        row = self._playhead - self._series.start_index
+        row = self._playhead - self._series_start
         row = min(max(row, 0), update.band_power.shape[0] - 1)
         values = update.band_power[row]
         lo, hi = self._chain.detector.value_band
@@ -895,8 +1038,8 @@ class FilterTab(QWidget):
         panel's fixed-scale discipline, in the raw signal's units — and the
         frame's own max before the first series lands.
         """
-        if self._series is not None:
-            return float(np.percentile(self._series.data, _HEAT_PERCENTILE))
+        if self._series2d is not None:
+            return float(np.percentile(self._series2d, _HEAT_PERCENTILE))
         return float(np.max(over)) if over.size else 1.0
 
     def _cropped_player_frame(self) -> QImage | None:
@@ -1235,7 +1378,7 @@ class FilterTab(QWidget):
         self._chain = parity_chain(fps)
         self._defaults = parity_chain(fps)
         self._collector = SeriesCollector(self._block_node_id() or "")
-        self._series = None
+        self._series_start = None
         self._series2d = None
         self._update = None
         self._pooled_power = None

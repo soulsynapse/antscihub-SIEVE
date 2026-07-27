@@ -52,7 +52,7 @@ from sieve.core.detection import (
     windowed_mean,
 )
 from sieve.core.pipeline_model import Edge, Node, Pipeline
-from sieve.core.wavelet import band_indices, default_freqs, morlet_band_power
+from sieve.core.wavelet import ALL_CORES, band_indices, default_freqs, morlet_band_power
 from sieve.filters.block_signal import resolve_block
 
 FloatArray = NDArray[np.floating[Any]]
@@ -236,6 +236,7 @@ def recompute(
     *,
     start_index: int = 0,
     band_power: NDArray[np.float32] | None = None,
+    workers: int = ALL_CORES,
 ) -> DetectorUpdate:
     """Item 1's functions glued into the one derivation the tab repeats.
 
@@ -246,11 +247,15 @@ def recompute(
 
     `start_index` is the series' first source frame, so intervals come back
     in absolute frames (what the seeker's ticks jump to).
+
+    `workers` caps the transform's threads. The default is every core, which
+    is what the cheap tier and a headless caller want; the partial-pass path
+    running beside two decode pools passes `concurrency.DETECTOR_WORKERS`.
     """
     freqs = default_freqs(fps)
     i, j = band_indices(freqs, state.freq_band[0], state.freq_band[1])
     if band_power is None:
-        band_power = morlet_band_power(series, fps, freqs, i, j)
+        band_power = morlet_band_power(series, fps, freqs, i, j, workers=workers)
     count = inband_count(band_power, state.value_band[0], state.value_band[1])
     windowed = windowed_mean(count, state.window_frames, state.centered)
     if state.count_frac is None:

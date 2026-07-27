@@ -55,10 +55,15 @@ def runner(qapp: object) -> Iterator[PreviewRunner]:
 @pytest.fixture
 def tab(
     qtbot: QtBot, player: VideoPlayer, document: ReplicateDocument, runner: PreviewRunner
-) -> FilterTab:
+) -> Iterator[FilterTab]:
     instance = FilterTab(player, document, runner, metrics=MetricBus())
     qtbot.addWidget(instance)
-    return instance
+    yield instance
+    # The tab owns the detector thread, so it carries the same
+    # shutdown obligation the player and the runner do. Without
+    # this every tab built here leaks a QThread and the suite
+    # wedges a few modules later.
+    instance.shutdown()
 
 
 def test_cancel_restores_the_exact_prior_state(qtbot: QtBot, tab: FilterTab) -> None:

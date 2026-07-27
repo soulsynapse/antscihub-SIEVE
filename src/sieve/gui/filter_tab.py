@@ -306,7 +306,7 @@ class FilterTab(QWidget):
         self._document.clip_changed.connect(self.resubmit)
         # A replicate change invalidates exactly as a window move does: the
         # render goes through the runner's latest-wins submission unchanged.
-        self._document.selection_changed.connect(self.resubmit)
+        self._document.selection_changed.connect(self._on_selection_changed)
         self._runner.opened.connect(self.resubmit)
         self._runner.render_started.connect(self._collector_start)
         self._runner.render_started.connect(self._hud_begin)
@@ -397,6 +397,11 @@ class FilterTab(QWidget):
     def composite(self) -> StepCompositeView:
         """The step composite pane, for the window and for tests."""
         return self._composite
+
+    @property
+    def heat(self) -> BlockHeatPanel:
+        """The block-heat panel, for tests asserting on its context frame."""
+        return self._heat
 
     @property
     def selected_step(self) -> str | None:
@@ -1408,11 +1413,19 @@ class FilterTab(QWidget):
         self._apply()
         self.resubmit()
 
+    @Slot()
+    def _on_selection_changed(self) -> None:
+        """A replicate change moves the ROI while the playhead frame stands
+        still, so the heat panel's context frame re-crops here rather than
+        waiting for the next frame_changed."""
+        self._heat.set_frame(self._cropped_player_frame())
+        self.resubmit()
+
     @Slot(int, QImage)
     def _on_frame_changed(self, index: int, image: QImage) -> None:
         self._playhead = index
         self._frame_image = image
-        self._heat.set_frame(image)
+        self._heat.set_frame(self._cropped_player_frame())
         for plot in (self._scalogram, self._density, self._count, self._hud):
             plot.set_playhead(index)
         self._apply_heat_state()

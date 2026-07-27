@@ -70,6 +70,11 @@ class BlockHeatPanel(QWidget):
 
     # ---- what it is told -------------------------------------------------
 
+    @property
+    def context_frame(self) -> QImage | None:
+        """The frame currently drawn as context, for tests asserting the crop."""
+        return self._frame
+
     def set_frame(self, frame: QImage | None) -> None:
         """The context frame at the playhead, or None before one exists."""
         self._frame = frame

@@ -22,6 +22,7 @@ from PySide6.QtGui import QImage
 from pytestqt.qtbot import QtBot
 
 from sieve.bench.metrics import MetricBus
+from sieve.core.types import ROI
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import FilterTab
 from sieve.gui.player import VideoPlayer
@@ -199,3 +200,30 @@ def test_a_composite_refresh_leaves_the_hud_series_alone(
     stub.frame_cost.emit(3, 0.2)
 
     assert tab.hud.costs() == ((3, 25.0),), "the composite refresh touched the HUD"
+
+
+def test_the_heat_panels_context_frame_is_the_replicates_crop(
+    tab: FilterTab, document: ReplicateDocument, player: VideoPlayer
+) -> None:
+    """The grid says *where inside the replicate*, so the frame under it must
+    be the replicate's crop, not the parent footage the graph never saw.
+
+    Two ways this can silently regress: the ROI is in source pixels
+    (1000x800 here) while the player frame may be a half-size proxy, so the
+    crop must scale; and a selection change moves the ROI while the playhead
+    stands still, so switching replicates must re-crop the held frame without
+    waiting for the next frame_changed.
+    """
+    document.add_roi(ROI(x=200, y=100, width=300, height=200))
+    document.select(0)
+    player.frame_changed.emit(3, QImage(500, 400, QImage.Format.Format_RGB32))
+
+    held = tab.heat.context_frame
+    assert held is not None
+    assert (held.width(), held.height()) == (150, 100), "the crop ignored the proxy scale"
+
+    document.add_roi(ROI(x=0, y=0, width=400, height=400))
+    document.select(1)
+    held = tab.heat.context_frame
+    assert held is not None
+    assert (held.width(), held.height()) == (200, 200), "the selection change did not re-crop"

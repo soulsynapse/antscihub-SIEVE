@@ -29,6 +29,7 @@ from sieve.gui.commands import (
     RenameReplicate,
     SetClip,
     SetReplicateROI,
+    SetReplicateROIs,
 )
 from sieve.gui.timeline_model import containing, effective_window, ended_at, fitted, moved_to
 
@@ -391,6 +392,38 @@ class ReplicateDocument(QObject):
         if fitted == self._replicates[index].roi:
             return
         self.undo_stack.push(SetReplicateROI(self, index, fitted, gesture=gesture, text=text))
+
+    def set_all_to_size(self, width: int, height: int) -> None:
+        """Give every replicate this extent, each held about its own centre.
+
+        `REFINED-VISION.md`'s "set all", and the gesture it serves is a rack: a
+        dozen arenas that are physically identical, cut by hand into a dozen
+        boxes that are not quite. That difference is not cosmetic. Section **D**
+        of the same document is the reason — the expected number of false
+        positives scales with blocks times frames, so two boxes of different
+        size run the *same* settings at different false-positive rates, and the
+        difference between them arrives looking like a difference between
+        colonies. Making the rack uniform is what lets one threshold mean one
+        thing across it.
+
+        The sizes come from the stamp fields rather than from the selected box,
+        so the two numbers the button is about to apply are on screen beside it
+        before it is pressed.
+
+        One undo entry for however many rows it touched, and no entry at all
+        when the rack is already uniform at this size — a button that stacks a
+        no-op onto the history every time it is pressed teaches users not to
+        press it.
+        """
+        changed = {
+            index: resized
+            for index, replicate in enumerate(self._replicates.as_list())
+            if (resized := replicate.roi.resized_in(width, height, self._source_size))
+            != replicate.roi
+        }
+        if not changed:
+            return
+        self.undo_stack.push(SetReplicateROIs(self, changed, f"Set All to {width}x{height}"))
 
     def move_window_to(self, frame: int) -> None:
         """Move the working window so it starts at `frame`, holding its length.

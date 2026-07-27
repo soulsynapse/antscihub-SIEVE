@@ -370,32 +370,14 @@ class VideoView(QWidget):
     def _placed(self, x: int, y: int, width: int, height: int) -> ROI:
         """A region of exactly `width` x `height` slid to lie inside the source.
 
-        The counterpart to `ROI.clamped_to`, and the difference is the point.
-        `clamped_to` *trims*: a region hanging off the right edge comes back
-        narrower, which is right for a typed width the frame cannot hold.
-
-        It is wrong for a placement. A stamp dropped near an edge, or a box
-        dragged into one, must keep the extent it already had — a rack is a
-        dozen arenas of identical size, and one that silently lost four pixels
-        against the frame edge would fall into a different equivalence group
-        while looking identical on screen. So this slides, and shrinks only
-        when the region is larger than the frame and there is nowhere to slide.
-
-        It takes loose integers rather than an `ROI` because the callers do not
-        have one yet: a stamp centred near the origin computes a negative `x`,
-        which `ROI.__post_init__` rejects before any clamping could run.
+        The rule itself is `ROI.placed_in`, which is where the argument for
+        sliding rather than trimming lives. It moved to typed numbers when the
+        tools panel's "Set all" needed the same rule from the document side: a
+        second copy of a clamp is how a stamp and a batch resize end up
+        disagreeing about what happens at the frame edge, which is the one place
+        either of them is interesting.
         """
-        if self._source_size is None:
-            return ROI(x=max(x, 0), y=max(y, 0), width=max(width, 1), height=max(height, 1))
-        source_width, source_height = self._source_size
-        fitted_width = min(max(width, 1), max(source_width, 1))
-        fitted_height = min(max(height, 1), max(source_height, 1))
-        return ROI(
-            x=min(max(x, 0), max(source_width - fitted_width, 0)),
-            y=min(max(y, 0), max(source_height - fitted_height, 0)),
-            width=fitted_width,
-            height=fitted_height,
-        )
+        return ROI.placed_in(x, y, width, height, self._source_size)
 
     def _replicate_at(self, point: QPointF) -> int:
         """Topmost replicate containing `point`, or `NO_SELECTION`."""

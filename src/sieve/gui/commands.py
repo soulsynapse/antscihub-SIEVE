@@ -11,6 +11,7 @@ which is the cheapest form of user-visible history there is.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from PySide6.QtGui import QUndoCommand
@@ -154,6 +155,43 @@ class SetReplicateROI(QUndoCommand):
         """Restore the previous geometry."""
         if self._previous is not None:
             self._document.apply_replace(self._index, self._previous)
+
+
+class SetReplicateROIs(QUndoCommand):
+    """Give several replicates new geometry as a single undo entry.
+
+    `SetReplicateROI` above solves one shape of "many writes, one action" — a
+    drag, which is many commands over one row collapsed by `mergeWith`. This is
+    the other shape: one action over many rows. It is deliberately *not* that
+    command in a loop, because merging cannot produce this. A merge is between
+    adjacent commands carrying the same token and the same row, so a loop that
+    pushed one command per replicate would leave one entry per replicate however
+    the tokens were arranged, and Ctrl+Z would undo a twelve-arena rack one
+    arena at a time.
+
+    The displaced replicates are captured on `redo` rather than at construction,
+    for `SetClip`'s reason: a redo after other edits has to displace what is
+    there then, not what was there when the button was pressed.
+    """
+
+    def __init__(self, document: ReplicateDocument, rois: Mapping[int, ROI], text: str) -> None:
+        super().__init__(text)
+        self._document = document
+        self._rois = dict(rois)
+        self._previous: dict[int, Replicate] = {}
+
+    def redo(self) -> None:
+        """Apply every region, keeping what each one displaced."""
+        self._previous = {}
+        for index, roi in self._rois.items():
+            current = self._document.at(index)
+            self._previous[index] = current
+            self._document.apply_replace(index, current.with_roi(roi))
+
+    def undo(self) -> None:
+        """Restore every replicate this displaced."""
+        for index, replicate in self._previous.items():
+            self._document.apply_replace(index, replicate)
 
 
 class SetClip(QUndoCommand):

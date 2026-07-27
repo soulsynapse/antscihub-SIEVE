@@ -177,6 +177,7 @@ class ReplicateTab(QWidget):
         self._tools_panel.mode_changed.connect(self._on_mode_changed)
         self._tools_panel.stamp_size_changed.connect(self._view.set_stamp_size)
         self._tools_panel.fit_requested.connect(self._view.reset_zoom)
+        self._tools_panel.set_all_requested.connect(self._document.set_all_to_size)
         self._tools_panel.editor_open_changed.connect(self.editor_open_changed)
 
         self._document.structure_changed.connect(self._refresh_overlay)

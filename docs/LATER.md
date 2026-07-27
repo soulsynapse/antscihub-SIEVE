@@ -248,6 +248,38 @@ A column listing what *could* be produced, beside no statement of what *has*
 been, is the weaker of the two claims and the one users will read as the
 stronger — so it waits and arrives with its other half.
 
+## Click-through navigation on the filter tab
+
+REFINED-VISION's replicates section ends with two sentences about a different
+tab: "Right click on the video in the filters tab goes back up to the source.
+Left click on the video in the filters tab advances forward in outputs." Neither
+exists — `gui/filter_tab.py` and `gui/composite_view.py` install no mouse
+handlers at all, and step navigation is the chain-stack list.
+
+**Why not now.** The axis being navigated is the *output* hierarchy, not the
+chain. Read the filter-tab paragraph that follows those sentences: an output is
+a folder that materializes inside the replicate's folder, and descending into
+one means SIEVE forgets everything above it. Left click therefore advances into
+a folder, and the breadcrumb trail at the top of the window is the readout of
+where that has got to. None of that exists — the same absence the entry above
+is about, arriving through a different widget.
+
+The tempting substitute is to bind the two clicks to the chain instead, which is
+expressible today: up a step and down a step, over `Dag.order`. It is the wrong
+thing to build, and not merely a partial one. A gesture that means "leave this
+context for a narrower one" and a gesture that means "look at the previous
+node's output" are different operations, and spending the click on the second
+means the first arrives later needing the binding back — after users have
+learned it. Left click on the video in the *replicate* tab already means accept
+and descend, which is the output-axis meaning; making the same click on the next
+tab mean step-through would be the one gesture in the app that changes axis
+between tabs.
+
+**What would make it the right time.** The same trigger as **Replicate status**
+above — **Sink writers**, or materialization from the other end. When a
+descent has somewhere to land, both clicks and the breadcrumb are one item, and
+it is a small one.
+
 **The constraint to not get wrong when it lands**, inherited whole from the
 coverage-lanes entry above: *absent* and *not yet computed* must not look alike.
 An output that does not exist because nobody ran the graph and an output that

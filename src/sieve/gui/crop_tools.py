@@ -81,6 +81,11 @@ class CropToolsPanel(QWidget):
     stamp_size_changed = Signal(int, int)
     #: The user asked for the fitted view back.
     fit_requested = Signal()
+    #: "Set all" was pressed, carrying the stamp size every replicate is to
+    #: take. The size travels with the signal rather than being read back off
+    #: this panel by the tab, so the numbers the user was looking at when they
+    #: pressed it are the numbers that get applied.
+    set_all_requested = Signal(int, int)
     #: A numeric field took or gave up the keyboard.
     editor_open_changed = Signal(bool)
 
@@ -99,6 +104,7 @@ class CropToolsPanel(QWidget):
         self._mode_group = QButtonGroup(self)
         self._stamp_width = _NumberField()
         self._stamp_height = _NumberField()
+        self._set_all_button = QPushButton("Set all to this size")
         self._fit_button = QPushButton("Fit")
         self._zoom_label = QLabel("1.0x")
         self._geometry_box = QGroupBox("Selected replicate")
@@ -114,6 +120,7 @@ class CropToolsPanel(QWidget):
         # breaks when a row is inserted above them.
         self._stamp_width.setObjectName("stamp-width")
         self._stamp_height.setObjectName("stamp-height")
+        self._set_all_button.setObjectName("set-all")
         self._name_label.setObjectName("replicate-name")
         self._source_label.setObjectName("source-summary")
         for name, field in self._fields.items():
@@ -160,6 +167,11 @@ class CropToolsPanel(QWidget):
         stamp.addWidget(QLabel("H"))
         stamp.addWidget(self._stamp_height, 1)
 
+        self._set_all_button.setToolTip(
+            "Give every replicate the size above, each keeping its own centre.\n"
+            "A rack is arenas of one size; boxes drawn by hand are not."
+        )
+
         self._fit_button.setToolTip("Return to the fitted view. Scroll on the video to magnify.")
         zoom = QHBoxLayout()
         zoom.setContentsMargins(0, 0, 0, 0)
@@ -171,6 +183,7 @@ class CropToolsPanel(QWidget):
         layout.addLayout(modes)
         layout.addWidget(QLabel("Stamp size"))
         layout.addLayout(stamp)
+        layout.addWidget(self._set_all_button)
         layout.addLayout(zoom)
         return box
 
@@ -199,6 +212,7 @@ class CropToolsPanel(QWidget):
         self._stamp_width.valueChanged.connect(self._on_stamp_edited)
         self._stamp_height.valueChanged.connect(self._on_stamp_edited)
         self._fit_button.clicked.connect(self.fit_requested)
+        self._set_all_button.clicked.connect(self._on_set_all_clicked)
 
         for field in self._fields.values():
             field.valueChanged.connect(self._on_geometry_edited)
@@ -265,6 +279,11 @@ class CropToolsPanel(QWidget):
         """Fill the geometry fields from the replicate being tuned."""
         replicate = self._document.selected_replicate
         self._geometry_box.setEnabled(replicate is not None)
+        # "Set all" is about the rack rather than about the selection, so it
+        # tracks the count and not `replicate`. It stays live at one replicate:
+        # resizing a rack of one is a legitimate way to type an exact size onto
+        # a box that was drawn by hand.
+        self._set_all_button.setEnabled(len(self._document) > 0)
         self._name_label.setText(replicate.name if replicate is not None else "—")
         if replicate is None:
             return
@@ -312,3 +331,8 @@ class CropToolsPanel(QWidget):
         if self._refreshing:
             return
         self.stamp_size_changed.emit(self._stamp_width.value(), self._stamp_height.value())
+
+    @Slot()
+    def _on_set_all_clicked(self) -> None:
+        """Announce the stamp size as the size every replicate is to take."""
+        self.set_all_requested.emit(self._stamp_width.value(), self._stamp_height.value())

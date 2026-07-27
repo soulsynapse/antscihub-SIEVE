@@ -67,6 +67,8 @@ re-derive it. Full reasoning is in the linked entry, and
 | Crop gestures | `gui/video_view.py` | Handles are hit-tested *before* containment, and only on the selected box. Drawing needs travel in both axes; adjusting needs it in either — a horizontal move under the both-axes rule releases as a click and navigates away. `view_rect` is the mapping, `content_rect` is only the floor it is clamped against. |
 | Placement | `gui/video_view.py` `_placed` | A stamp or a move slides against the frame edge and never trims. `ROI.clamped_to` is the *other* rule and belongs to typed numbers, not to placements. |
 | One drag, one undo | `gui/commands.py` | `SetReplicateROI` merges on a per-press token, and `mergeWith` keeps the *first* command's displaced value. A test that drags with a single mouse-move cannot see any of this — the second event is a no-op `set_roi` and the count is 1 either way. |
+| One action, many rows | `gui/commands.py` `SetReplicateROIs` | Merging cannot produce this. `mergeWith` only joins commands naming the *same* row, so a loop pushing one command per replicate is one undo entry per replicate whatever token it carries. A batch edit is one command holding many rows. |
+| Slide versus trim | `core/types.py` `ROI.placed_in` | The rule that a region keeps its exact extent and moves, used by both the stamp and "Set all". `clamped_to` is the other rule and trims. Reaching for the wrong one at the frame edge silently makes a rack non-uniform while every number on screen says it worked. |
 
 ---
 
@@ -78,11 +80,14 @@ multi-upstream kernels, and the per-block baseline have all landed, in that
 order and for the reasons that document's **Build order** section gives.
 
 That document's **Replicates** section is built as far as it can be. The
-selected replicate being the one under tuning landed 2026.07.27 and the crop
-tools the same day; what is left of the section is the table's crop progress
-and output-existence columns, which are readings of a filesystem nothing writes
-to yet and wait in `docs/LATER.md` under **Replicate status** with the trigger
-that would make them real.
+selected replicate being the one under tuning landed 2026.07.27, the crop tools
+the same day, and "set all" the same day after an audit found it was the one
+sentence of that section nothing had implemented and no file had deferred. What
+is left is the table's crop progress and output-existence columns and the
+filter tab's click-through navigation, all three of which are readings of, or
+movements between, a filesystem nothing writes to yet; they wait in
+`docs/LATER.md` under **Replicate status** and **Click-through navigation on
+the filter tab**, which share one trigger.
 
 ## The motion history filter
 

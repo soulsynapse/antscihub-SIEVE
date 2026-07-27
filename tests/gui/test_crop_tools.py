@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtWidgets import QLabel, QSpinBox
+from PySide6.QtWidgets import QLabel, QPushButton, QSpinBox
 from pytestqt.qtbot import QtBot
 
 from sieve.core.types import ROI, VideoMetadata
@@ -86,6 +86,16 @@ def _field(panel: CropToolsPanel, name: str) -> QSpinBox:
     found = panel.findChild(QSpinBox, name)
     assert found is not None, f"no field named {name}"
     return found
+
+
+def _button(panel: CropToolsPanel, name: str) -> QPushButton:
+    found = panel.findChild(QPushButton, name)
+    assert found is not None, f"no button named {name}"
+    return found
+
+
+def _centre(roi: ROI) -> tuple[float, float]:
+    return (roi.x + roi.width / 2, roi.y + roi.height / 2)
 
 
 def slow_drag(view: VideoView, start: QPointF, *waypoints: QPointF) -> None:
@@ -263,3 +273,106 @@ class TestToolsPanel:
         panel.fit_requested.emit()
 
         assert view.zoom == 1.0
+
+
+#: A box hard against the right edge of the 1000x800 source, small enough that
+#: making it match the rack has to push it left. This is the row every
+#: assertion about the frame edge below is about.
+EDGE_BOX = ROI(x=900, y=100, width=80, height=80)
+#: An ordinary interior box, hand-drawn a little off the rack's size.
+LOOSE_BOX = ROI(x=400, y=500, width=190, height=205)
+
+
+@pytest.fixture
+def rack(tab: ReplicateTab, document: ReplicateDocument) -> ReplicateDocument:
+    """Three replicates of three different sizes — a hand-cut rack."""
+    del tab
+    document.add_roi(LOOSE_BOX)
+    document.add_roi(EDGE_BOX)
+    return document
+
+
+def _set_all(panel: CropToolsPanel, width: int, height: int) -> None:
+    """Type a stamp size and press the button, as a user does."""
+    _field(panel, "stamp-width").setValue(width)
+    _field(panel, "stamp-height").setValue(height)
+    _button(panel, "set-all").click()
+
+
+class TestSetAll:
+    """`REFINED-VISION.md`'s "set all": one size across a hand-cut rack."""
+
+    def test_every_replicate_takes_the_stamp_size(
+        self, panel: CropToolsPanel, rack: ReplicateDocument
+    ) -> None:
+        """The operation itself, driven through the button rather than the document.
+
+        Through the button because the panel emitting a size the tab never
+        connects is the failure this cannot otherwise see, and it looks exactly
+        like nothing happening.
+        """
+        _set_all(panel, 200, 200)
+
+        assert [(r.roi.width, r.roi.height) for r in rack.all()] == [(200, 200)] * 3
+
+    def test_a_box_at_the_frame_edge_slides_instead_of_shrinking(
+        self, panel: CropToolsPanel, rack: ReplicateDocument
+    ) -> None:
+        """The correctness condition, and the reason `ROI.placed_in` exists.
+
+        `EDGE_BOX` centred at x=940 wants to become 200 wide, which would run
+        60 px past the right edge of a 1000 px frame. Trimming it — which is
+        what `clamped_to` and therefore `_fit` would do — returns a 160-wide box
+        and leaves the rack non-uniform in exactly the case the user pressed
+        this button to fix, while every number on screen says it worked.
+        """
+        _set_all(panel, 200, 200)
+
+        edge = rack.at(2).roi
+        assert (edge.width, edge.height) == (200, 200), "the box was trimmed, not slid"
+        assert edge.right == 1000, "the box did not come to rest against the edge"
+
+    def test_each_box_is_resized_about_its_own_centre(
+        self, panel: CropToolsPanel, rack: ReplicateDocument
+    ) -> None:
+        """Origin-preserving would compile, look right on a uniform rack, and
+        walk every box half the size difference off its arena."""
+        before = [_centre(replicate.roi) for replicate in rack.all()[:2]]
+
+        _set_all(panel, 100, 100)
+
+        after = [_centre(replicate.roi) for replicate in rack.all()[:2]]
+        # Within half a pixel: an odd size difference cannot be split evenly.
+        assert all(
+            abs(a[0] - b[0]) <= 0.5 and abs(a[1] - b[1]) <= 0.5
+            for a, b in zip(before, after, strict=True)
+        )
+
+    def test_the_whole_rack_is_one_undo_step(
+        self, panel: CropToolsPanel, rack: ReplicateDocument
+    ) -> None:
+        """Three rows, one entry, and one Ctrl+Z that returns all three.
+
+        A loop pushing `SetReplicateROI` per row passes every assertion above
+        and fails here: merging cannot collapse commands that name different
+        rows, so the user would undo a twelve-arena rack one arena at a time.
+        """
+        before_rois = [replicate.roi for replicate in rack.all()]
+        before_count = rack.undo_stack.count()
+
+        _set_all(panel, 200, 200)
+
+        assert rack.undo_stack.count() == before_count + 1
+        rack.undo_stack.undo()
+        assert [replicate.roi for replicate in rack.all()] == before_rois
+
+    def test_a_rack_already_at_that_size_records_no_history(
+        self, panel: CropToolsPanel, rack: ReplicateDocument
+    ) -> None:
+        """The second press changes nothing and must not say it did."""
+        _set_all(panel, 200, 200)
+        settled = rack.undo_stack.count()
+
+        _button(panel, "set-all").click()
+
+        assert rack.undo_stack.count() == settled

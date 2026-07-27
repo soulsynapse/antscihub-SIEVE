@@ -116,6 +116,11 @@ KNOB_BUDGET = "knob_to_graphs"
 #: waits through before there is something to read.
 FIRST_PARTIAL_BUDGET = "knob_to_first_partial"
 
+#: The high percentile of the window's band power that reads as full heat on
+#: the block grid — fixed across the window so a cell's colour holds its
+#: meaning at every playhead position.
+_HEAT_PERCENTILE = 99.5
+
 _CHAIN_INCOMPLETE = "chain incomplete — see the stack"
 _DISARMED = "disarmed — place the count threshold"
 
@@ -783,6 +788,7 @@ class FilterTab(QWidget):
 
         ny, nx = self._grid
         self._composite.set_grid(ny, nx)
+        self._composite.set_scale_max(float(np.percentile(update.band_power, _HEAT_PERCENTILE)))
         self._composite.set_grid_caption(f"{signal} · {ny}x{nx} blocks · click to solo")
         self._apply_block_state()
 

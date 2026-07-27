@@ -15,15 +15,21 @@ produced (`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` — the
 display path never feeds the graph).
 
 **The block grid lives here too, not in a second frame panel.** When the
-composed step's output is a block grid, the pane draws v1's see-through
-overlay instead of an image: every cell gets a 1 px border ring at one alpha,
-and cells inside the value band right now get their interior filled at a
-second, independent alpha — both in one slider-chosen signal color. Ring and
-interior are disjoint pixel regions, so border alpha 0 reads as separated
-blocks, and equal alphas read as one mass; that separation is the control
-surface, not a rendering accident. All three grid sliders quantize to 0.2
-steps so the two alphas can be matched by feel. Holding Shift peeks: every
-overlay drops and the frame underneath is all there is.
+composed step's output is a block grid, the pane draws the grid itself
+rather than compositing an image. Two layers, one quantity each. Under
+everything sits the heatmap: every cell coloured cold-to-hot (v1's turbo
+read) by its band power at the playhead against a fixed outside-set scale —
+`set_scale_max`'s discipline, so a cell's colour means the same thing at
+every playhead position — at one slider-set layer alpha. On top, cells
+inside the value band right now get an interior fill at one alpha and a
+1 px border ring at a second, independent alpha, both in `ACCENT`, the
+palette's one in-band colour. The ring belongs to *detected* cells only; an
+out-of-band cell is bare heat. Ring and interior are disjoint pixel regions,
+so border alpha 0 reads as separated blocks and equal alphas read as one
+mass; that separation is the control surface, not a rendering accident. All
+three grid sliders quantize to 0.2 steps so the two alphas can be matched by
+feel. Holding Shift peeks: every overlay drops and the frame underneath is
+all there is.
 
 **A grid click emits; it never applies.** `solo_toggled` carries the block
 index (or None for un-solo) and the drawn solo marker moves only when
@@ -51,7 +57,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui.band_plot import DIM, PANEL, TEXT, plot_font
+from sieve.gui.band_plot import ACCENT, DIM, PANEL, TEXT, plot_font
 
 FloatArray = NDArray[np.floating[Any]]
 
@@ -64,20 +70,46 @@ DEFAULT_OPACITY = 65
 #: be *matchable*, and a continuous slider makes equal a pixel hunt.
 GRID_STEPS = 5
 
-#: Grid slider defaults, in steps: in-band fill 0.6, border 0.2, hue 0.4 —
-#: the green of v1's in-band tint, which these sliders re-expose.
+#: Grid slider defaults, in steps: in-band fill 0.6, border 0.2, heat 0.6.
 DEFAULT_FILL_STEP = 3
 DEFAULT_LINE_STEP = 1
-DEFAULT_HUE_STEP = 2
+DEFAULT_HEAT_STEP = 3
+
+#: The heatmap's cold-to-hot stops — an approximation of the turbo ramp v1
+#: blended over the footage, so low power reads cool blue and high power
+#: reads hot red. Distinct from the scalogram's warm ramp on purpose: the
+#: scalogram is a dark surface its ramp must stay legible against; this layer
+#: sits over footage, where cold-to-hot is what v1 taught the eye.
+HEAT_STOPS: tuple[tuple[int, int, int], ...] = (
+    (48, 18, 59),
+    (69, 91, 205),
+    (62, 155, 254),
+    (24, 214, 203),
+    (72, 248, 130),
+    (164, 252, 60),
+    (226, 220, 56),
+    (254, 163, 49),
+    (239, 89, 17),
+    (194, 36, 3),
+    (122, 4, 3),
+)
 
 _HEADER = 22
 _FOOTER = 26
 _MARGIN = 6
 
 
-def _signal_color(hue: float) -> QColor:
-    """The overlay color for a hue slider position in [0, 1]."""
-    return QColor.fromHsvF(min(max(hue, 0.0), 1.0), 0.85, 0.95)
+def heat_color(t: float) -> QColor:
+    """The heatmap color for a normalized value in [0, 1], cold to hot."""
+    t = min(max(t, 0.0), 1.0) * (len(HEAT_STOPS) - 1)
+    low = min(int(t), len(HEAT_STOPS) - 2)
+    frac = t - low
+    a, b = HEAT_STOPS[low], HEAT_STOPS[low + 1]
+    return QColor(
+        round(a[0] + (b[0] - a[0]) * frac),
+        round(a[1] + (b[1] - a[1]) * frac),
+        round(a[2] + (b[2] - a[2]) * frac),
+    )
 
 
 class _CompositePane(QWidget):
@@ -104,7 +136,9 @@ class _CompositePane(QWidget):
         self.hover: int | None = None
         self.fill_alpha = DEFAULT_FILL_STEP / GRID_STEPS
         self.line_alpha = DEFAULT_LINE_STEP / GRID_STEPS
-        self.hue = DEFAULT_HUE_STEP / GRID_STEPS
+        self.heat_alpha = DEFAULT_HEAT_STEP / GRID_STEPS
+        #: The band power that reads as full heat, fixed across the window.
+        self.scale_max = 1.0
         #: Shift is held: every overlay drops so the frame can be read bare.
         self.peek = False
         self.setMouseTracking(True)
@@ -202,47 +236,54 @@ class _CompositePane(QWidget):
         painter.end()
 
     def _paint_grid(self, painter: QPainter, g: QRectF) -> None:
-        """The see-through overlay: 1 px rings on every cell, fills in band.
+        """Heatmap under, detected squares over — three independent alphas.
 
-        Ring and interior are disjoint pixel regions — the ring is the cell's
-        outer pixel, the fill starts one pixel in — so the two alphas never
-        composite over each other: border alpha 0 leaves 2 px of bare frame
-        between neighbouring fills (separated blocks), equal alphas tile the
-        in-band region seamlessly (a mass). Antialiasing stays off so a ring
-        is a square ring, not a rounded smear.
+        The heatmap tiles every cell edge to edge, coloured cold-to-hot by
+        value, at the layer's own alpha: a contiguous surface, the way v1
+        blended its colormap over the footage. The detected overlay sits on
+        top, and only on in-band cells: ring and interior are disjoint pixel
+        regions — the ring is the cell's outer pixel, the fill starts one
+        pixel in — so those two alphas never composite over each other:
+        border alpha 0 leaves the seam between neighbouring fills bare
+        (separated blocks), equal alphas tile the in-band region seamlessly
+        (a mass). Antialiasing stays off so a ring is a square ring, not a
+        rounded smear.
         """
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         ny, nx = self.grid
         cell_w, cell_h = g.width() / nx, g.height() / ny
-        color = _signal_color(self.hue)
         blocks = min(ny * nx, len(self.values), len(self.in_band))
 
+        def cell_rect(b: int) -> QRectF:
+            row, col = divmod(b, nx)
+            return QRectF(g.left() + col * cell_w, g.top() + row * cell_h, cell_w, cell_h)
+
+        if self.heat_alpha > 0.0:
+            for b in range(blocks):
+                heat = heat_color(float(self.values[b]) / max(self.scale_max, 1e-12))
+                heat.setAlphaF(self.heat_alpha)
+                painter.fillRect(cell_rect(b), heat)
+
         if self.fill_alpha > 0.0:
-            fill = QColor(color)
+            fill = QColor(ACCENT)
             fill.setAlphaF(self.fill_alpha)
             for b in range(blocks):
-                if not bool(self.in_band[b]):
-                    continue
-                row, col = divmod(b, nx)
-                cell = QRectF(g.left() + col * cell_w, g.top() + row * cell_h, cell_w, cell_h)
-                painter.fillRect(cell.adjusted(1.0, 1.0, -1.0, -1.0), fill)
+                if bool(self.in_band[b]):
+                    painter.fillRect(cell_rect(b).adjusted(1.0, 1.0, -1.0, -1.0), fill)
 
         if self.line_alpha > 0.0:
-            line = QColor(color)
+            line = QColor(ACCENT)
             line.setAlphaF(self.line_alpha)
             painter.setPen(QPen(line, 1.0))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            for b in range(ny * nx):
-                row, col = divmod(b, nx)
-                cell = QRectF(g.left() + col * cell_w, g.top() + row * cell_h, cell_w, cell_h)
-                painter.drawRect(cell.adjusted(0.5, 0.5, -0.5, -0.5))
+            for b in range(blocks):
+                if bool(self.in_band[b]):
+                    painter.drawRect(cell_rect(b).adjusted(0.5, 0.5, -0.5, -0.5))
 
         if self.solo is not None and self.solo < ny * nx:
-            row, col = divmod(self.solo, nx)
-            cell = QRectF(g.left() + col * cell_w, g.top() + row * cell_h, cell_w, cell_h)
             painter.setPen(QPen(TEXT, 1.8))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRect(cell.adjusted(1.0, 1.0, -1.0, -1.0))
+            painter.drawRect(cell_rect(self.solo).adjusted(1.0, 1.0, -1.0, -1.0))
 
 
 class StepCompositeView(QWidget):
@@ -274,11 +315,11 @@ class StepCompositeView(QWidget):
         # 0.2-step ranges on purpose — see GRID_STEPS.
         self._fill_slider = self._grid_slider(DEFAULT_FILL_STEP, "In-band fill alpha")
         self._fill_slider.valueChanged.connect(self._on_fill_alpha)
-        self._line_slider = self._grid_slider(DEFAULT_LINE_STEP, "Block border alpha")
+        self._line_slider = self._grid_slider(DEFAULT_LINE_STEP, "Detected border alpha")
         self._line_slider.valueChanged.connect(self._on_line_alpha)
-        self._hue_slider = self._grid_slider(DEFAULT_HUE_STEP, "Signal color")
-        self._hue_slider.valueChanged.connect(self._on_hue)
-        self._grid_tags = tuple(self._tag_label(text) for text in ("fill", "border", "color"))
+        self._heat_slider = self._grid_slider(DEFAULT_HEAT_STEP, "Heatmap alpha")
+        self._heat_slider.valueChanged.connect(self._on_heat_alpha)
+        self._grid_tags = tuple(self._tag_label(text) for text in ("fill", "border", "heat"))
 
         self._tag = self._tag_label("input · output")
 
@@ -288,7 +329,7 @@ class StepCompositeView(QWidget):
         footer.addStretch(1)
         for tag, slider in zip(
             self._grid_tags,
-            (self._fill_slider, self._line_slider, self._hue_slider),
+            (self._fill_slider, self._line_slider, self._heat_slider),
             strict=True,
         ):
             footer.addWidget(tag)
@@ -375,6 +416,11 @@ class StepCompositeView(QWidget):
         self._grid_caption = text
         self._update_tag()
 
+    def set_scale_max(self, value: float) -> None:
+        """The band power that reads as full heat, fixed across the window."""
+        self._pane.scale_max = max(value, 1e-12)
+        self._pane.update()
+
     # ---- reading (for the tab and for tests) -----------------------------
 
     @property
@@ -408,9 +454,9 @@ class StepCompositeView(QWidget):
         return self._line_slider
 
     @property
-    def hue_slider(self) -> QSlider:
-        """The signal color control."""
-        return self._hue_slider
+    def heat_slider(self) -> QSlider:
+        """The heatmap layer's alpha control."""
+        return self._heat_slider
 
     @property
     def peeking(self) -> bool:
@@ -439,7 +485,7 @@ class StepCompositeView(QWidget):
     def _show_grid_controls(self, on: bool) -> None:
         for tag in self._grid_tags:
             tag.setVisible(on)
-        for slider in (self._fill_slider, self._line_slider, self._hue_slider):
+        for slider in (self._fill_slider, self._line_slider, self._heat_slider):
             slider.setVisible(on)
         self._slider.setVisible(not on)
         self._readout.setVisible(not on)
@@ -479,8 +525,8 @@ class StepCompositeView(QWidget):
         self._pane.line_alpha = step / GRID_STEPS
         self._pane.update()
 
-    def _on_hue(self, step: int) -> None:
-        self._pane.hue = step / GRID_STEPS
+    def _on_heat_alpha(self, step: int) -> None:
+        self._pane.heat_alpha = step / GRID_STEPS
         self._pane.update()
 
     def paintEvent(self, event: QPaintEvent) -> None:

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from sieve import __version__
 from sieve.gui.main_window import MainWindow
+from sieve.gui.wheel_steps import WheelSteps
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,6 +26,9 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("SIEVE")
     app.setApplicationVersion(__version__)
     app.setOrganizationName("AntSciHub")
+    # One wheel detent, one step, in every slider and spinbox — see the
+    # module docstring for the acceleration rules.
+    app.installEventFilter(WheelSteps(app))
 
     window = MainWindow()
     window.show()

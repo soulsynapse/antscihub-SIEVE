@@ -273,6 +273,7 @@ def test_border_alpha_zero_separates_blocks_and_equal_alphas_read_as_a_mass(
     view.set_block_state(np.full(4, 5.0, np.float32), np.ones(4, bool), None)
     view.fill_slider.setValue(GRID_STEPS)  # 1.0
     view.line_slider.setValue(0)
+    view.heat_slider.setValue(0)  # bare seams, not heat-coloured ones
     view.show()
 
     pane = view.pane
@@ -292,6 +293,56 @@ def test_border_alpha_zero_separates_blocks_and_equal_alphas_read_as_a_mass(
     image = pane.grab().toImage()
     assert all(image.pixelColor(x, row_y) != PANEL for x in strip), (
         "bare background survived equal alphas — the mass has seams"
+    )
+
+
+def test_the_heatmap_runs_cold_to_hot_and_borders_mark_only_detected_cells(
+    qtbot: QtBot,
+) -> None:
+    """The two layers stay two layers.
+
+    The heatmap colours *every* cell by value — cold at the bottom of the
+    scale, hot at the top — regardless of the band; the border ring belongs
+    to detected cells only. A regression that gated the heat on the band, or
+    ringed every cell, passes any state test and lies on screen.
+    """
+    view = StepCompositeView()
+    qtbot.addWidget(view)
+    view.resize(400, 220)
+    view.set_grid_visible(True)
+    view.set_grid(1, 2)
+    view.set_scale_max(10.0)
+    # Left cell cold, right cell hot; neither in band.
+    view.set_block_state(np.array([0.0, 10.0], np.float32), np.zeros(2, bool), None)
+    view.heat_slider.setValue(GRID_STEPS)  # 1.0, so pixels are the ramp's own
+    view.line_slider.setValue(GRID_STEPS)
+    view.fill_slider.setValue(0)
+    view.show()
+
+    pane = view.pane
+    g = pane.grid_rect()
+    mid_y = int(g.top() + g.height() / 2.0)
+    cold_x = int(g.left() + g.width() / 4.0)
+    hot_x = int(g.left() + g.width() * 3.0 / 4.0)
+
+    image = pane.grab().toImage()
+    cold, hot = image.pixelColor(cold_x, mid_y), image.pixelColor(hot_x, mid_y)
+    assert cold != PANEL and hot != PANEL, "the heatmap skipped out-of-band cells"
+    assert cold.blue() > cold.red(), "the bottom of the scale is not cold"
+    assert hot.red() > hot.blue(), "the top of the scale is not hot"
+
+    # Border at full alpha with the heat off and nothing in band: no pixel
+    # of the cell's outer ring may be painted. Entering the band paints it.
+    view.heat_slider.setValue(0)
+    ring_rows = range(int(g.top()) - 1, int(g.top()) + 3)
+    image = pane.grab().toImage()
+    assert all(image.pixelColor(cold_x, y) == PANEL for y in ring_rows), (
+        "an out-of-band cell grew a border ring"
+    )
+    view.set_block_state(np.array([0.0, 10.0], np.float32), np.ones(2, bool), None)
+    image = pane.grab().toImage()
+    assert any(image.pixelColor(cold_x, y) != PANEL for y in ring_rows), (
+        "the ring did not appear when the cell entered the band"
     )
 
 

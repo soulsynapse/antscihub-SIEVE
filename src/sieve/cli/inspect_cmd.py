@@ -28,7 +28,7 @@ from typing import Annotated
 import typer
 
 from sieve.backend.dispatch import KERNELS
-from sieve.core.filter_base import FilterSpec
+from sieve.core.filter_base import FilterSpec, ParamsBase
 from sieve.core.filter_registry import REGISTRY, UnknownFilterError
 from sieve.filters import discover, guidance_path
 
@@ -107,6 +107,19 @@ def _list(specs: tuple[FilterSpec, ...]) -> None:
         typer.echo(f"{spec.filter_id:<{width}}  {spec.version}  {spec.summary}")
 
 
+def _warmup_note(spec: FilterSpec) -> str:
+    """Say when the number above is a bound rather than what a run pays.
+
+    `temporal_baseline` declares 7199 — a 30 s window at 240 fps — and charges a
+    default configuration 149. Printed bare, the bound reads as the lead-in every
+    run decodes, which would make the filter look unusable to exactly the reader
+    who came here to find out whether it is.
+    """
+    if spec.params_model.warmup_frames is ParamsBase.warmup_frames:
+        return ""
+    return "  (worst case; each configuration is charged its own)"
+
+
 def _describe(spec: FilterSpec, *, guidance: bool) -> str:
     """Everything `spec` declares, as text.
 
@@ -122,7 +135,7 @@ def _describe(spec: FilterSpec, *, guidance: bool) -> str:
         f"accepts           {spec.accepts}",
         f"emits             {spec.emits}",
         f"mode              {spec.mode}",
-        f"warmup_frames     {spec.warmup_frames}",
+        f"warmup_frames     {spec.warmup_frames}{_warmup_note(spec)}",
         f"rate_changing     {spec.rate_changing}",
         f"deterministic     {spec.deterministic} (cacheable: {spec.cacheable})",
         f"backend_agnostic  {spec.backend_agnostic}",

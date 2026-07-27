@@ -73,6 +73,20 @@ class DownsampleParams(ParamsBase):
         return 1.0 / (self.factor**2)
 
 
+class WindowParams(ParamsBase):
+    """A trailing window whose length *is* the lead-in.
+
+    The shape `temporal_baseline` has and the reason warmup became
+    params-derived: a static declaration would have to be the window's upper
+    bound, charged to every run whatever window it asked for.
+    """
+
+    length: int = 5
+
+    def warmup_frames(self) -> int:
+        return self.length - 1
+
+
 def make_spec(**overrides: object) -> FilterSpec:
     fields: dict[str, object] = {
         "filter_id": "downsample",
@@ -96,6 +110,8 @@ IIR = make_spec(filter_id="iir", warmup_frames=5)
 INTERPOLATOR = make_spec(
     filter_id="interpolate", params_model=InterpolateParams, rate_changing=True
 )
+#: Declares a bound of 99 and refines it per configuration.
+WINDOWED = make_spec(filter_id="window", params_model=WindowParams, warmup_frames=99)
 
 
 class TestFilterSpec:
@@ -156,6 +172,33 @@ class TestRate:
         # two roundings apart no matter how many graphs it draws.
         assert input_warmup_frames((INTERPOLATOR, InterpolateParams()), 5) == 4
         assert input_warmup_frames((INTERPOLATOR, InterpolateParams()), 6) == 4
+
+    def test_a_configured_warmup_is_charged_instead_of_the_bound(self) -> None:
+        # The point of the refinement. Without it every run of a graph holding
+        # this node decodes the bound — 99 frames here, 7199 for
+        # `temporal_baseline` — whatever window it actually asked for. The
+        # decimator is in the path because the refinement has to survive the
+        # rate conversion: 30 frames at this node's input is 300 source frames,
+        # and a refinement read anywhere other than `node_warmup_frames` would
+        # be one the conversion never saw.
+        short = [(DECIMATOR, DecimateParams()), (WINDOWED, WindowParams(length=31))]
+        long_window = [(DECIMATOR, DecimateParams()), (WINDOWED, WindowParams(length=91))]
+
+        assert source_warmup_frames(short) == 300
+        assert source_warmup_frames(long_window) == 900
+        # And the bound is what a spec-only reading would have charged both.
+        assert WINDOWED.warmup_frames == 99
+
+    def test_a_refinement_above_the_bound_is_refused(self) -> None:
+        # The silent direction, and the only one worth an exception. A bound is
+        # what `sieve inspect` prints and what a reader checks a filter's cost
+        # against; a configuration quietly needing more lead-in than the
+        # declaration admits renders a preview from a filter that never settled.
+        with pytest.raises(ValueError, match="exceeds the spec's declared bound"):
+            input_warmup_frames((WINDOWED, WindowParams(length=101)), 0)
+
+        # The bound itself is legal — it is a bound, not a strict one.
+        assert input_warmup_frames((WINDOWED, WindowParams(length=100)), 0) == 99
 
     def test_undeclared_rate_change_is_refused_at_registration(self) -> None:
         # Without this the gap reopens silently: a decimator whose spec forgot

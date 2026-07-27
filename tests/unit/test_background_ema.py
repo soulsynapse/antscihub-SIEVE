@@ -16,6 +16,7 @@ import numpy.typing as npt
 import pytest
 from pydantic import ValidationError
 
+from sieve.core.filter_base import node_warmup_frames
 from sieve.core.types import ChannelSpec, Frame
 from sieve.filters.background_ema import (
     MIN_ALPHA,
@@ -127,6 +128,21 @@ def test_the_declared_warmup_is_the_worst_case_over_the_legal_alpha_range() -> N
     # Monotone: a slower model needs more warmup, which is why the bound is the
     # worst case rather than the default.
     assert settle_frames(0.5) < settle_frames(0.1) < settle_frames(lower_bound)
+
+
+def test_a_fast_model_is_charged_its_own_warmup_rather_than_the_bound() -> None:
+    """The bound is the worst case; a run pays for the `alpha` it configured.
+
+    Until `ParamsBase.warmup_frames` existed, `alpha = 0.5` decoded 90 frames of
+    lead-in to settle a model that needs 7, and this filter's docstring argued
+    the waste was the price of a true declaration. It is not the price any more,
+    and this is the assertion that says so — it fails if the override is dropped
+    and the spec's constant silently takes over again.
+    """
+    step = (SPEC, BackgroundEmaParams(alpha=0.5))
+
+    assert node_warmup_frames(step) == settle_frames(0.5) == 7
+    assert node_warmup_frames((SPEC, BackgroundEmaParams())) == SPEC.warmup_frames
 
 
 @pytest.mark.parametrize("dtype", [np.uint8, np.uint16, np.float32, np.float64])

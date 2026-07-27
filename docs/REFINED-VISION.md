@@ -247,7 +247,17 @@ its own baseline and vanishes. That tension has no universally correct answer,
 which makes the window a primary parameter rather than a constant, and makes the
 step composite view the thing that shows a user they have set it wrong.
 
-→ `TODO.md`, **Per-block temporal baseline**.
+*Correction (2026.07.26, when the item landed):* two things above were not what
+shipped. The centred window is not available — it needs future frames, which is
+`Mode.WINDOWED`, which the executor refuses — so the estimate is trailing and
+lags a step change by about one window. And the two-port composition this
+section's item was gated on multi-upstream for is not what a baseline wants:
+standardizing needs the median *and* the MAD, `emits` is still one stream per
+node, so the composition would be two nodes each holding the same ring and
+computing the same median. It shipped as one node with an `emit` switch. See
+`docs/completed-todo/2026.07.26-per-block-temporal-baseline.md`.
+
+→ `TODO.md`, **Per-block temporal baseline** — landed 2026.07.26.
 
 ## B. The 3D structure tensor, which is already five-sixths computed
 

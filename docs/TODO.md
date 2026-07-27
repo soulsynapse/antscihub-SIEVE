@@ -235,46 +235,38 @@ machinery. `Mode.WINDOWED` and `rate_changing` stay refused, and `emits` is
 still one stream per node. See
 `docs/completed-todo/2026.07.26-multi-upstream-kernels.md`.
 
-## Per-block temporal baseline
-
-**Gated on: nothing.** Multi-upstream has landed, so the natural consumer — a
-node that takes the signal and its baseline as two ports rather than one that
-recomputes the baseline internally — is now expressible.
-
-**The problem.** `change_energy` is in (intensity)²/frame, so its magnitude
-depends on illumination, gain, exposure, and animal-substrate contrast. A
-threshold tuned on one replicate under one backlight is a number about that
-lighting rig — which collides directly with the two things SIEVE promises
-hardest: replicates sharing a pipeline, and an artifact that reproduces.
-`normalize` does not solve this and is not meant to: it removes the *global*
-per-frame illumination component and gives no per-block baseline over time.
-
-**The fix.** Estimate each block's own null over a trailing or centered window
-and emit the signal in units of deviation from it. **Robust statistics —
-median and MAD, not mean and standard deviation** — because the events are in the
-sample and would inflate the spread they are being measured against. This is the
-standard procedure in spike sorting (thresholding at k·MAD of the filtered trace)
-and the same instinct behind fMRI reporting percent signal change rather than
-scanner units. A threshold of "4 MADs above this block's baseline" transfers
-across replicates and lighting; "0.03 energy units" never will.
-
-**The parameter that has no correct value, and is therefore primary:** the
-baseline window. Too short and a sustained behaviour becomes its own baseline and
-vanishes; too long and it stops tracking drift. Same shape of argument as
-`background_ema`'s `alpha`, and the same conclusion.
-
-Read: `src/sieve/filters/normalize.md` (what it does *not* do),
-`src/sieve/filters/background_ema.py` (the warmup argument this will reuse),
-`docs/REFINED-VISION.md` **A**.
+Thresholds now have units that survive a second replicate.
+`temporal_baseline` estimates each cell's own null over a trailing window —
+median and MAD, because the events are in the sample — and emits the signal in
+deviations from it, so "4 deviations above this block's baseline" is a number
+the arena at the end of the rack can be given. It did not fit behind a static
+`warmup_frames`: a lead-in that is `window_seconds × fps − 1` has to declare
+the product of both bounds, 7199 frames, and charge it to every run. So
+`FilterSpec.warmup_frames` is now the *bound* and `ParamsBase.warmup_frames`
+the *need*, `node_warmup_frames` picks between them, and `background_ema` no
+longer decodes 83 frames nobody asked for. Nothing below needs to choose
+between a true declaration and an affordable one. Note that the item's
+anticipated two-port shape is **not** what shipped, and why —
+`emits` is still one stream per node, so a baseline node could hand over the
+median or the MAD but not both. See
+`docs/completed-todo/2026.07.26-per-block-temporal-baseline.md`.
 
 ## The motion history filter
 
 **Gated on: nothing structurally** — it is single-upstream, streaming,
 rate-preserving and stateful, which is the shape `background_ema` already
-established, down to the buffer discipline and the worst-case `warmup_frames`
-argument. It is ordered last because its thresholds want the units from
-**Per-block temporal baseline** and its output wants somewhere to be combined,
-and building it first means tuning it twice.
+established, down to the buffer discipline. It was ordered last because its
+thresholds wanted the units `temporal_baseline` now provides and its output
+wants somewhere to be combined; the first of those is settled, and the second is
+still true — nothing yet evaluates a two-signal rule.
+
+**Two things that filter already paid for.** Its `tau_seconds` has exactly
+`temporal_baseline`'s shape — a warmup that is a parameter in physical units,
+needing an `fps` to convert it — so the contract half is done and the pattern to
+copy is `TemporalBaselineParams.warmup_frames`: declare the worst case over the
+legal range on the spec, override the method with the configured need. The
+worst-case-`warmup_frames` argument this section used to point at is therefore
+no longer the argument to reuse.
 
 **What it is.** The vision's "exponential decay function and a blooming touch
 function", which is `a[t] = λ·(K ⊛ a[t−1]) + (1−λ)·s[t]` — the semi-implicit

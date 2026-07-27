@@ -14,11 +14,23 @@ them carries a second copy of the field list that could drift from it.
 
 **Three declarations are params-derived rather than constants**, because the
 quantity they describe *is* a parameter: a decimator's factor, a downsampler's
-scale. `output_rate` and `frame_bytes_ratio` are therefore methods on
-`ParamsBase` with 1:1 defaults, not fields on `FilterSpec`. They stay pure —
-data in, exact number out, no kernel, no codec — so `dag.py` and the executor
-can evaluate them on a machine with nothing installed, which is the property
-the whole split exists to preserve.
+scale, a trailing window's length. `output_rate`, `frame_bytes_ratio` and
+`warmup_frames` are therefore methods on `ParamsBase`, not (only) fields on
+`FilterSpec`. They stay pure — data in, exact number out, no kernel, no codec —
+so `dag.py` and the executor can evaluate them on a machine with nothing
+installed, which is the property the whole split exists to preserve.
+
+The three are params-derived in three different *shapes*, and the difference is
+about what a wrong answer costs. `output_rate` is cross-checked against a spec
+flag, because forgetting to declare a decimation is silent and wrong.
+`frame_bytes_ratio` is cross-checked against nothing, because it feeds a
+prediction and never a result. `warmup_frames` sits between them: the spec field
+is the *bound* — the worst case over the legal parameter range, which is what
+`sieve inspect` can print without a configuration in hand — and the method is
+this configuration's actual need, which may refine the bound downward but never
+exceed it. `node_warmup_frames` enforces that, and the asymmetry is the point: a
+refinement that is too small under-warms a filter silently, and a bound that is
+too large only wastes decode.
 """
 
 from __future__ import annotations
@@ -162,6 +174,33 @@ class ParamsBase(BaseModel):
         nothing left to warm up.
         """
         return UNCHANGED_RATE
+
+    def warmup_frames(self) -> int:
+        """Frames *this configuration* must consume before its output is good.
+
+        A refinement of `FilterSpec.warmup_frames`, which is the worst case over
+        the whole legal parameter range. Overriding is optional and the default
+        here is never read — `node_warmup_frames` takes the spec's number unless
+        an override exists — so a filter whose warmup is genuinely a constant
+        declares it once, on the spec, and nothing else.
+
+        **What it buys, and why it is not a nicety.** A static declaration has
+        to be true for every setting of every parameter, so a filter whose
+        warmup *is* a parameter declares the product of that parameter's bound
+        with every other bound it depends on. `temporal_baseline`'s window may
+        be 30 s and its footage 240 fps, so its bound is 7200 frames — a lead-in
+        every run would decode, including the one asking for a 5 s window at
+        30 fps that needs 150. `background_ema` has the same problem an order of
+        magnitude smaller and documented the waste as the price of a true
+        declaration; this is what makes the declaration true *and* tight.
+
+        Must not exceed the spec's bound, and `node_warmup_frames` refuses the
+        pair rather than trusting it. Overriding does not oblige a spec flag the
+        way `output_rate` does, because the failure modes are not comparable: an
+        undeclared rate change under-warms every downstream node silently, while
+        a warmup that was never refined merely decodes frames nobody needed.
+        """
+        return 0
 
     def frame_bytes_ratio(self) -> float:
         """Bytes of one output frame per byte of one input frame.
@@ -331,6 +370,13 @@ class FilterSpec:
     #: nonzero value here is a settled-to-within-epsilon choice and the
     #: filter's docstring says which epsilon.
     #:
+    #: **A bound, not necessarily the number a given run uses.** It is the worst
+    #: case over the legal parameter range, which is the only thing statable
+    #: without a configuration in hand and therefore the thing `sieve inspect`
+    #: prints. A filter whose warmup *is* a parameter refines it downward by
+    #: overriding `ParamsBase.warmup_frames`; `node_warmup_frames` picks between
+    #: the two and refuses a refinement that exceeds this.
+    #:
     #: Usually paired with `stateful` below, and deliberately not *required* to
     #: be. The claim this makes is "my first N outputs are untrustworthy", and
     #: kernel state is one way to have such outputs rather than the only one — a
@@ -495,12 +541,53 @@ class FilterSpec:
 PathStep: TypeAlias = "tuple[FilterSpec, ParamsBase]"
 
 
+def node_warmup_frames(step: PathStep) -> int:
+    """One node's own lead-in: the refinement if it has one, else the bound.
+
+    `FilterSpec.warmup_frames` is the worst case over the legal parameter range;
+    `ParamsBase.warmup_frames` is what this configuration actually needs. Which
+    of the two applies is decided here and nowhere else, so a caller holding a
+    `(spec, params)` never has to know that there are two numbers.
+
+    The override is detected by identity against the base method rather than by
+    a flag on the spec, exactly as `__post_init__` detects an `output_rate`
+    override — and unlike that one it is not cross-checked at registration,
+    because a params model cannot be instantiated there and the check that
+    matters needs a value rather than a signature.
+
+    Raises:
+        ValueError: if the refinement is negative, or exceeds the spec's bound.
+            The second is the one worth refusing: a bound is what `sieve inspect`
+            prints and what a reader checks a filter's cost against, and a
+            configuration quietly needing more lead-in than the declaration
+            admits is the silent direction — the preview renders, the filter has
+            not settled, and the tuning done against it is wrong rather than
+            absent.
+    """
+    spec, params = step
+    if type(params).warmup_frames is ParamsBase.warmup_frames:
+        return spec.warmup_frames
+    refined = params.warmup_frames()
+    if refined < 0:
+        raise ValueError(
+            f"{spec.filter_id}: {type(params).__name__}.warmup_frames() returned {refined}"
+        )
+    if refined > spec.warmup_frames:
+        raise ValueError(
+            f"{spec.filter_id}: {type(params).__name__}.warmup_frames() returned {refined}, "
+            f"which exceeds the spec's declared bound of {spec.warmup_frames} — the bound is the "
+            "worst case over the legal parameter range and a configuration may only refine it "
+            "downward"
+        )
+    return refined
+
+
 def input_warmup_frames(step: PathStep, output_warmup: int) -> int:
     """One node's conversion: lead-in at its input, given lead-in at its output.
 
     The single edge of the warmup arithmetic. `output_warmup` frames wanted at
     this node's output cost `ceil(output_warmup / rate)` at its input, and the
-    node's own `warmup_frames` is already denominated there, so it adds on top.
+    node's own warmup is already denominated there, so it adds on top.
 
     Extracted from `source_warmup_frames` rather than inlined in it because a
     DAG walk needs the step without the path: `pipeline/plan.py` folds this over
@@ -523,13 +610,14 @@ def input_warmup_frames(step: PathStep, output_warmup: int) -> int:
 
     Raises:
         ValueError: if the node reports a non-positive output rate, which would
-            mean an output frame no quantity of input could supply.
+            mean an output frame no quantity of input could supply; or if its
+            warmup refinement is not within its declared bound.
     """
     spec, params = step
     rate = params.output_rate()
     if rate <= 0:
         raise ValueError(f"{spec.filter_id}: output_rate must be positive, got {rate}")
-    return math.ceil(Fraction(output_warmup) / rate) + spec.warmup_frames
+    return math.ceil(Fraction(output_warmup) / rate) + node_warmup_frames(step)
 
 
 def source_warmup_frames(path: Sequence[PathStep]) -> int:

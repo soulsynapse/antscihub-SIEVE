@@ -17,18 +17,24 @@ constant.
 
 **Why `warmup_frames` is 90 and what epsilon it is settled to.** An EMA's true
 warmup is infinite: the seed frame's weight after `n` updates is `(1 - alpha)^n`,
-which is never zero. `FilterSpec.warmup_frames` is a static declaration and
-cannot read `alpha`, so it takes the worst case over the legal range — `alpha =
-0.05`, the lower bound — and the number of frames after which the seed retains
-less than **1% of the model's weight**: `ceil(ln 0.01 / ln 0.95) = 90`. At the
-default `alpha` that is exactly the bound; at `alpha = 0.5` the same 1% is
-reached in 7 frames and the other 83 are decoded and discarded for nothing. That
-waste is the price of a declaration that is true for every setting of every
-parameter, and it is the correct price: `plan.py`'s lead-in is what stops a
-tuning session being done against an unsettled model, and a lead-in that was
-right on average would be wrong exactly when `alpha` was small — which is the
-setting a user reaches for when the animals are still, which is when the
-background matters most.
+which is never zero. What the declaration takes instead is the number of frames
+after which the seed retains less than **1% of the model's weight**:
+`ceil(ln 0.01 / ln (1 - alpha))`. The spec's 90 is that at `alpha = 0.05`, the
+lower bound of the legal range — the worst case, which is what a bound printed
+without a configuration in hand has to be. `BackgroundEmaParams.warmup_frames`
+refines it to the configured `alpha`, so `alpha = 0.5` asks for the 7 frames it
+actually needs rather than 90.
+
+*That refinement did not exist when this filter was written, and the 83 frames
+it saves at `alpha = 0.5` were documented here as the correct price of a
+declaration true for every parameter setting. It stopped being the correct price
+when `temporal_baseline` arrived with the same problem an order of magnitude
+larger — a bound of 7200 frames against a typical need of 150 — and
+`core/filter_base.py` grew the params-derived half. The reasoning the old
+paragraph rested on still holds and is why the refinement may only shrink the
+bound: a lead-in that was right on average would be wrong exactly when `alpha`
+was small, which is the setting a user reaches for when the animals are still,
+which is when the background matters most.*
 
 A 90-frame lead-in is also the first one large enough that `lead_in_shortfall`
 means something: a clip starting less than 90 frames into the source cannot be
@@ -139,8 +145,9 @@ class Emit(StrEnum):
         peak_bytes_per_input_byte=14.0,
     ),
     mode=Mode.STREAMING,
-    # ceil(ln 0.01 / ln (1 - 0.05)). See the module docstring: worst case over
-    # the legal `alpha` range, because this cannot read a parameter.
+    # ceil(ln 0.01 / ln (1 - 0.05)) — the worst case over the legal `alpha`
+    # range, which is what a bound stated without a configuration has to be.
+    # `BackgroundEmaParams.warmup_frames` refines it per run.
     warmup_frames=90,
     stateful=True,
     primary_params=("alpha", "emit"),
@@ -152,10 +159,21 @@ class BackgroundEmaParams(ParamsBase):
     #: `warmup_frames` was computed at and a smaller value would make the
     #: declared lead-in a lie. Upper bound 1.0 is the degenerate case — the
     #: model is the previous frame and the output is a frame difference — which
-    #: is a legitimate thing to ask for and needs one frame of warmup, not
-    #: ninety, but is not worth a second filter.
+    #: is a legitimate thing to ask for, is not worth a second filter, and now
+    #: costs the one frame of lead-in it needs rather than the bound's ninety.
     alpha: float = Field(default=MIN_ALPHA, ge=MIN_ALPHA, le=1.0)
     emit: Emit = Emit.FOREGROUND
+
+    def warmup_frames(self) -> int:
+        """`settle_frames(alpha)` — the bound, refined to the configured model.
+
+        Equal to the spec's 90 at the default `alpha` and strictly below it
+        everywhere else, which is the direction `node_warmup_frames` permits.
+        `emit` does not enter: both halves are read off the same model, so a
+        background that has not settled and a foreground taken against it are
+        untrustworthy together.
+        """
+        return settle_frames(self.alpha)
 
 
 #: Any floating array. The accumulator is `float32` for every input dtype except

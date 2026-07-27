@@ -483,7 +483,17 @@ class FilterTab(QWidget):
         A composite frame is served almost entirely from the store, and its
         near-zero cost overwriting the render's real cost at that index would
         turn playback into an eraser for the HUD's series.
+
+        The frame mailboxes are drained here too, not only at
+        `render_finished`: the consumers fill them the moment the playhead
+        frame passes, which for a window render is usually its first frame —
+        and a first composite that waited for the window's last frame would
+        leave the pane blank for the whole first render of every source.
         """
+        if self._wizard is not None and self._grab:
+            self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
+        if self._composite_grab:
+            self._apply_composite(*self._composite_grab.pop())
         if self._runner.revision in self._composite_revisions:
             return
         self._hud.add_cost(index, elapsed_ms)

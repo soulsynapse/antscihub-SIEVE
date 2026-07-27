@@ -1,17 +1,21 @@
 """The step composite: selection targeting, the refresh guard, and the HUD.
 
-Three claims, each a distinct way the composite could quietly wreck the tab.
+Four claims, each a distinct way the composite could quietly wreck the tab.
 A wrong target would compose frames of a step the user did not select; a
 playhead refresh that ran while a window render was outstanding would
 displace the graphs' render from the runner's one pending slot and the
-series would never arrive; and a refresh that cleared the HUD would erase
-the window's cost series thirty times a second during playback.
+series would never arrive; a refresh that cleared the HUD would erase
+the window's cost series thirty times a second during playback; and a
+pair that painted only at `render_finished` would leave the pane blank
+for the whole first window render of every source.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImage
@@ -45,12 +49,14 @@ class _StubRunner(QObject):
         self.revision = 0
         self.window_renders: list[object] = []
         self.frame_renders: list[int] = []
+        self.consumers: list[object] = []
 
     def request_render(
         self, pipeline: object, window: object, replicate: object, consumer: object = None
     ) -> bool:
         self.revision += 1
         self.window_renders.append(pipeline)
+        self.consumers.append(consumer)
         return True
 
     def request_frame(
@@ -130,6 +136,39 @@ def test_a_playhead_refresh_never_displaces_a_pending_window_render(
     stub.render_finished.emit(object())
     player.frame_changed.emit(7, frame)
     assert stub.frame_renders == [7]
+
+
+def test_the_pair_paints_at_the_playhead_frame_not_at_render_finished(
+    tab: FilterTab, stub: _StubRunner
+) -> None:
+    """The first composite must not cost a whole window render.
+
+    The window render's consumer catches the pair the moment the playhead
+    frame passes — usually the window's first frame — and the pane must
+    paint it on that frame's cost tick, hundreds of frames before
+    `render_finished`. v1 drew its frame near-instantly; a pane that waits
+    for the full window is the regression this test pins.
+    """
+    stub.opened.emit()
+    consumer = stub.consumers[-1]
+    assert consumer is not None
+
+    frames = {
+        "rescale": np.full((8, 8), 100, np.uint8),
+        "normalize": np.full((8, 8), 128, np.uint8),
+        "block_signal": np.ones((2, 3), np.float32),
+    }
+    outputs = {
+        step.node.node_id: SimpleNamespace(data=frames[step.step_id])
+        for step in tab.chain.steps
+        if step.node is not None
+    }
+    consumer(SimpleNamespace(index=0, outputs=outputs))  # type: ignore[operator]
+    assert tab.composite.frames() == (None, None), "painted before the GUI thread heard"
+
+    stub.frame_cost.emit(0, 5.0)
+    base, over = tab.composite.frames()
+    assert base is not None and over is not None, "the pair waited for render_finished"
 
 
 def test_a_composite_refresh_leaves_the_hud_series_alone(

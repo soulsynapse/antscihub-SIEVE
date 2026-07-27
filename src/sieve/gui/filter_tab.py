@@ -319,6 +319,9 @@ class FilterTab(QWidget):
         # A replicate change invalidates exactly as a window move does: the
         # render goes through the runner's latest-wins submission unchanged.
         self._document.selection_changed.connect(self._on_selection_changed)
+        # ...and so does a geometry or pin edit on the arena being tuned, which
+        # is what `replicate_changed` carries — including the one an undo makes.
+        self._document.replicate_changed.connect(self._on_replicate_changed)
         # The document is where tuning lives now; every edit — from this tab,
         # from Ctrl+Z, from a future panel — comes back through these three,
         # and the tab re-resolves what the selected replicate runs with.
@@ -525,6 +528,23 @@ class FilterTab(QWidget):
                 self._derive(reuse_band_power=False)
             return
         self._document.edit_detector(changes, text, gesture=gesture)
+
+    @Slot(int)
+    def _on_replicate_changed(self, index: int) -> None:
+        """One replicate was rewritten: crop, pins, anything `Replicate` holds.
+
+        Only the selected one is on screen here, so a row nobody is tuning
+        costs nothing. When it *is* the selected one, the arena's geometry or
+        its pinned overrides moved underneath the render, and that invalidates
+        exactly as a selection change does — re-resolve, then resubmit. This is
+        the path a Ctrl+Z on a crop takes, which is why the composite used to
+        keep the pre-undo aspect: `SetReplicateROI`'s undo writes through
+        `apply_replace` and emits nothing this tab was listening for.
+        """
+        if index != self._document.selected_index:
+            return
+        self._refresh_from_document()
+        self.resubmit()
 
     @Slot()
     def _on_tuning_changed(self) -> None:

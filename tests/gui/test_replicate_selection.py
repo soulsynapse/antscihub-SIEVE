@@ -9,6 +9,12 @@ frame requests instead of riding the runner's latest-wins window submission.
 And the accept gesture could select without navigating, leaving the vision's
 sentence — click a box, land on the filter tab with that arena under you —
 half true.
+
+Three more hold the other half of the same question: not *which* arena is on
+screen but *when* what is on screen goes stale. The arena can be rewritten
+under a standing selection — a crop edit, or the undo of one — and that has
+to invalidate the render exactly as selecting a different arena does, while an
+edit to a row nobody is tuning must not.
 """
 
 from __future__ import annotations
@@ -156,6 +162,79 @@ def test_a_selection_change_rides_the_window_path_and_supersedes(
 
     assert stub.frame_replicates == [], "a selection change took the single-frame path"
     assert len(stub.window_replicates) == windows_before + 1
+
+
+def test_undoing_a_crop_edit_resubmits_the_selected_arena(
+    tab: FilterTab, stub: _StubRunner, document: ReplicateDocument
+) -> None:
+    """Ctrl+Z on a crop must put the *pre-edit* geometry back on screen.
+
+    `SetReplicateROI`'s undo writes through `apply_replace`, which emits only
+    `replicate_changed` — no selection change, no tuning change. A tab that
+    does not listen for it renders the geometry the undo just discarded, and
+    the aspect on screen is the old crop's.
+    """
+    del tab
+    document.add_roi(FIRST_BOX)
+    document.select(0)
+    stub.opened.emit()
+
+    document.set_roi(0, SECOND_BOX)
+    assert stub.window_replicates[-1] is not None
+    assert stub.window_replicates[-1].roi == SECOND_BOX
+
+    document.undo_stack.undo()
+
+    assert stub.window_replicates[-1] is not None
+    assert stub.window_replicates[-1].roi == FIRST_BOX
+
+
+def test_an_edit_to_an_unselected_arena_does_not_resubmit(
+    tab: FilterTab, stub: _StubRunner, document: ReplicateDocument
+) -> None:
+    """Only the selected arena is on screen, so only it can invalidate.
+
+    The cheap half of the same wiring: without the index test, every row's
+    geometry edit — and `set_all_to_size` writes every row — would throw a
+    full window render for an arena nobody is looking at.
+    """
+    del tab
+    document.add_roi(FIRST_BOX)
+    document.add_roi(SECOND_BOX)
+    document.select(0)
+    stub.opened.emit()
+    windows_before = len(stub.window_replicates)
+
+    document.set_roi(1, ROI(x=90, y=70, width=20, height=20))
+
+    assert len(stub.window_replicates) == windows_before
+
+
+def test_selecting_the_already_selected_row_leaves_the_tab_consistent(
+    tab: FilterTab, stub: _StubRunner, document: ReplicateDocument
+) -> None:
+    """`select` stays a no-op on the current row, and that is now harmless.
+
+    The guard at `ReplicateDocument.select` is deliberate — selection is not a
+    command, and re-emitting would make it a refresh primitive every caller
+    inherits. It was only *load-bearing* while the tab had no other way to hear
+    about a geometry edit: the gesture that papered over the missing
+    subscription was clicking the row you were already on. With
+    `replicate_changed` wired, what the tab last rendered already matches the
+    document before the re-select, and the re-select still costs nothing.
+    """
+    del tab
+    document.add_roi(FIRST_BOX)
+    document.select(0)
+    stub.opened.emit()
+    document.set_roi(0, SECOND_BOX)
+    windows_before = len(stub.window_replicates)
+
+    document.select(0)
+
+    assert len(stub.window_replicates) == windows_before, "a no-op select re-rendered"
+    assert stub.window_replicates[-1] is not None
+    assert stub.window_replicates[-1].roi == document.selected_replicate.roi  # type: ignore[union-attr]
 
 
 @pytest.fixture

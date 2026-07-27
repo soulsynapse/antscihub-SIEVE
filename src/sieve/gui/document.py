@@ -450,6 +450,11 @@ class ReplicateDocument(QObject):
         A row that does not exist is refused rather than read as "none": there
         is no deselection gesture, because "no replicate selected" is not a
         state the tuning loop has a rendering for while replicates exist.
+
+        Re-selecting the current row emits nothing, and that is kept: a re-emit
+        would make `select` a refresh primitive, which every caller would then
+        inherit. Views that must notice an edit to the selected arena listen to
+        `replicate_changed`, which is the signal that actually carries one.
         """
         if not 0 <= index < len(self._replicates) or index == self._selected:
             return

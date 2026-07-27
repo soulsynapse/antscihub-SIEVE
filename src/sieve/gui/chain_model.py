@@ -53,8 +53,15 @@ from sieve.core.detection import (
 )
 from sieve.core.pipeline_model import Edge, Node, Pipeline
 from sieve.core.wavelet import band_indices, default_freqs, morlet_band_power
+from sieve.filters.block_signal import resolve_block
 
 FloatArray = NDArray[np.floating[Any]]
+
+#: How the two extraction signals read on their card and quick-switch.
+SIGNAL_LABELS: dict[str, str] = {
+    "change_energy": "change energy (Jtt)",
+    "flow_speed": "LK optical flow",
+}
 
 
 class ChainKind(StrEnum):
@@ -260,6 +267,65 @@ def recompute(
         intervals=intervals,
         band_rows=(i, j),
     )
+
+
+def snapped_band_label(freq_band: tuple[float, float], fps: float) -> str:
+    """The *snapped* frequency band, as the scalogram title and caption render it.
+
+    Snapped, not the handle positions: `band_indices` is what the transform
+    actually uses, and the title tells the truth the transform uses (plot
+    contracts, parity plan § 2). `[i, j)` is half-open, so the upper edge is
+    row `j - 1`.
+    """
+    freqs = default_freqs(fps)
+    i, j = band_indices(freqs, freq_band[0], freq_band[1])
+    return f"band {freqs[i]:.2f}-{freqs[j - 1]:.2f} Hz"
+
+
+def caption_for(step: ChainStep, detector: DetectorState, fps: float) -> str:
+    """One line restating the step's current values.
+
+    Captions are what makes a collapsed reading of the stack complete (plan
+    § 2): every parameter a card's widgets hold is restated here in words, so
+    scanning titles and captions answers "what is this chain doing" without
+    opening anything. Node-backed steps read their captions from the node's
+    params — the same values the pipeline runs — and the tab-side suffix
+    reads from the detector, so a caption can never disagree with the value
+    it restates.
+    """
+    node = step.node
+    if node is not None:
+        if node.filter_id == "rescale":
+            return f"scale {float(node.params['scale']):.2f} · area"
+        if node.filter_id == "normalize":
+            return str(node.params["mode"])
+        if node.filter_id == "block_signal":
+            signal = str(node.params["signal"])
+            label = SIGNAL_LABELS.get(signal, signal)
+            block = int(node.params["block"])
+            scale = float(node.params["scale"])
+            shown = f"auto ({resolve_block(0, scale)})" if block == 0 else str(block)
+            return f"{label} · block {shown}"
+        return node.filter_id
+    if step.stage is Stage.TEMPORAL_FILTER:
+        return snapped_band_label(detector.freq_band, fps)
+    if step.stage is Stage.DETECTION:
+        d = detector.window_frames
+        seconds = d / fps if fps > 0 else 0.0
+        return f"D {d} fr ({seconds:.2f} s) · {_threshold_caption(detector)}"
+    return step.title
+
+
+def _threshold_caption(detector: DetectorState) -> str:
+    """The count threshold in words, fraction-denominated like the state."""
+    if detector.count_frac is None:
+        return "threshold off"
+    lo, hi = detector.count_frac
+    if math.isinf(hi):
+        return f"threshold ≥ {lo:.0%} of blocks"
+    if math.isinf(lo) or lo <= 0.0:
+        return f"threshold ≤ {hi:.0%} of blocks"
+    return f"threshold {lo:.0%}-{hi:.0%} of blocks"
 
 
 # ---- the parity chain -------------------------------------------------------

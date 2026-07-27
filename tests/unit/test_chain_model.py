@@ -17,6 +17,7 @@ from sieve.gui.chain_model import (
     ChainKind,
     DetectorState,
     Status,
+    caption_for,
     parity_chain,
     recompute,
 )
@@ -106,6 +107,29 @@ def test_reset_restores_knobs_and_disarms_but_keeps_structure() -> None:
     # Detector back to documented defaults: disarmed, D of one second.
     assert not fresh.detector.armed
     assert fresh.detector.window_frames == round(FPS)
+
+
+def test_captions_restate_the_values_the_chain_actually_holds() -> None:
+    # A collapsed reading of the stack must be complete (plan § 2): every
+    # caption restates the value its card's widgets hold, from the same
+    # source the pipeline runs — so a caption cannot drift from the truth.
+    chain = parity_chain(FPS, scale=0.25)
+    detector = replace(chain.detector, count_frac=(0.3, math.inf), window_frames=60)
+    captions = {s.step_id: caption_for(s, detector, FPS) for s in chain.steps}
+
+    assert captions["rescale"] == "scale 0.25 · area"
+    assert captions["normalize"] == "off"
+    # Auto block resolution goes through the one exported definition:
+    # 64 source px at 0.25 is 16 working px.
+    assert captions["block_signal"] == "change energy (Jtt) · block auto (16)"
+    # The wide-open default band snaps to the bank's edges — the caption
+    # tells the truth the transform uses, not the handle positions.
+    assert captions["morlet_band"].startswith("band 0.50-")
+    assert captions["windowed_count"] == "D 60 fr (2.00 s) · threshold ≥ 30% of blocks"
+
+    disarmed = DetectorState.default(FPS)
+    steps = {s.step_id: s for s in chain.steps}
+    assert "threshold off" in caption_for(steps["windowed_count"], disarmed, FPS)
 
 
 def test_kinds_are_not_derivable_from_filter_specs() -> None:

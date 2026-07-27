@@ -63,6 +63,11 @@ class CountPlot(BandPlot):
         self._armed = armed
         self.update()
 
+    @property
+    def notice(self) -> str:
+        """The current explanation line, empty when there is nothing to explain."""
+        return self._notice
+
     def set_notice(self, text: str) -> None:
         """Why there is nothing green — disarmed, or no reachable detection step.
 

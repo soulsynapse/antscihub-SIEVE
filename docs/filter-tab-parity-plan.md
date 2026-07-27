@@ -499,19 +499,21 @@ clamps instead); a 1-frame gate run paints ≥ 1 px at any width; a drag
 starting 9 px from a handle scrubs instead of grabbing; solo state lives
 in the state model, not the widget.
 
-### Item 6 — Chain model and the stack UI (`gui/`) — model half landed
+### Item 6 — Chain model and the stack UI (`gui/`) — DONE
 
-The Qt-free half exists (2026.07.26): `gui/chain_model.py` holds the kinds,
-the non-throwing `grade()`, `runnable_prefix()` (Pipeline + edges from the
-ok node-backed prefix), `DetectorState` (frozen; unset count threshold =
-disarmed; `default()` = wide bands, D = 1 s), `recompute()` gluing item 1's
-functions with the cheap-tier `band_power=` reuse hook, `LiveChain`
-(`grades`/`pipeline`/`detection_reachable`/`without`/`reset`), and
-`parity_chain()`. Tests in `tests/unit/test_chain_model.py`. This also
-settles the § 8 open decision: the model lives in `chain_model.py`, not a
-SCAFFOLD `gui/state.py`. Still to build: captions, the stack widgets (cards,
-stage headers, hover swap/x, conflict repair, seam affordances), and the
-document/player/runner wiring.
+Landed 2026.07.26 in two halves. The Qt-free half (`gui/chain_model.py`):
+kinds, the non-throwing `grade()`, `runnable_prefix()`, `DetectorState`,
+`recompute()` with the cheap-tier `band_power=` reuse hook, `LiveChain`, and
+`parity_chain()` — this settled the § 8 model-home decision (`chain_model.py`,
+not a SCAFFOLD `gui/state.py`). The back half: captions (`caption_for` /
+`snapped_band_label`, pure), `gui/chain_stack.py` (cards, stage headers with
+type chips, hover swap/x, conflict repair, seam affordances that narrate
+until item 7), and `gui/filter_tab.py` wired to document/player/runner; see
+`docs/completed-todo/2026.07.26-chain-stack-and-filter-tab.md`. Two
+deviations from the sketch below, both recorded there: the tab owns render
+submission (MainWindow's document-graph render path was subsumed), and the
+§ 8 budget-row question went yes — `band_drag_repaint` (50 ms) and
+`knob_to_graphs` (3 s) are ARCHITECTURE.md rows the tab publishes.
 
 The Qt-free chain/detector model: ordered steps where the prefix maps to
 `Pipeline` nodes and the temporal/detection suffix maps to detector state
@@ -600,7 +602,10 @@ detection spans to display.
   meaning worth porting.*
 - **Item 6:** `detector_state.py` vs the SCAFFOLD-reserved `gui/state.py`;
   whether knob-settle and band-drag interactions get ARCHITECTURE.md
-  budget rows (recommended: yes, here).
+  budget rows (recommended: yes, here). *Settled at item time: the model
+  lives in `chain_model.py`, and both budget rows exist —
+  `band_drag_repaint` (50 ms) and `knob_to_graphs` (3 s), published by
+  `gui/filter_tab.py`.*
 - **Item 7:** band memory across the signal quick-switch — the mockups
   keep bands and `mockups/tab --shot lk` shows the consequence (a
   Jtt-tuned threshold silently reinterpreted in LK units); v1 remembered
@@ -610,4 +615,5 @@ detection spans to display.
 - **Item 8:** `lanes` vs `split`; seeker scrub outside the working
   window — clamp (mocked) vs move-the-window.
 - Whether the superseded `mockups/filter_tab.py` (the operations-list
-  concept) is deleted now or when item 6 lands.
+  concept) is deleted now or when item 6 lands. *Moot: it was already gone
+  when item 6 landed.*

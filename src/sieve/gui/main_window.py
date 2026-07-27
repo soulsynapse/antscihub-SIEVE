@@ -1,6 +1,6 @@
 """Top-level window: menus, tabs, the timeline, and the wiring between them.
 
-Tabs follow the workflow order from VISION.md. Only Replicate exists so far;
+Tabs follow the workflow order from VISION.md. Replicate and Filter exist;
 the rest are added as they are built rather than stubbed, so the tab bar is
 never a promise the application cannot keep.
 
@@ -35,10 +35,10 @@ from PySide6.QtWidgets import (
 from yaml import YAMLError
 
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Project, project_path_for
-from sieve.core.replicates import Replicate
 from sieve.core.types import VideoMetadata
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.executor_adapter import ExecutorAdapter
+from sieve.gui.filter_tab import FilterTab
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.preferences_dialog import PreferencesDialog
@@ -97,13 +97,13 @@ class MainWindow(QMainWindow):
         self._replicate_tab = ReplicateTab(self._player, self._document, self)
         self._timeline = TimelineBar(self._player, self._document, self)
 
-        # The graph side of the window. Nothing draws these yet — `graph_hud.py`
-        # is the next item — so what they produce reaches the user as one status
-        # line. That is deliberately thin and deliberately present: it is the
-        # difference between a render path that is exercised every time a
-        # project with a graph is opened and one that only tests run.
+        # The graph side of the window. The filter tab below is now what draws
+        # the runner — it submits its live chain on open, window moves, and
+        # every knob edit — and the whole-render summary still reaches the
+        # user as one status line here.
         self._preview = PreviewRunner(self)
         self._metrics = ExecutorAdapter(parent=self)
+        self._filter_tab = FilterTab(self._player, self._document, self._preview, self)
 
         # The project as last read or written, and where from. `_project`
         # carries the fields the document does not edit, so a save can put them
@@ -120,6 +120,7 @@ class MainWindow(QMainWindow):
 
         tabs = QTabWidget()
         tabs.addTab(self._replicate_tab, "Replicate")
+        tabs.addTab(self._filter_tab, "Filter")
 
         central = QWidget()
         stack = QVBoxLayout(central)
@@ -292,18 +293,14 @@ class MainWindow(QMainWindow):
         self._preferences.changed.connect(self._on_preferences_changed)
         self._document.clip_changed.connect(self._on_clip_changed)
 
-        # Three things make a preview stale and all three arrive as signals:
-        # the reader becoming ready, the graph changing, and the working window
-        # moving. `request_render` supersedes whatever is outstanding, so
-        # dragging the window's spin box submits many and computes the last —
-        # which is why the window may connect all three without a timer of its
-        # own.
-        self._preview.opened.connect(self._refresh_preview)
+        # The filter tab owns render submission — it connects itself to the
+        # runner's `opened` and the document's window — so what remains here
+        # is reporting: the whole-render summary, the two failure lines, and
+        # the tab's own narration.
         self._preview.open_failed.connect(self._on_preview_unavailable)
         self._preview.render_finished.connect(self._on_render_finished)
         self._preview.render_failed.connect(self._on_render_failed)
-        self._document.grouping_changed.connect(self._refresh_preview)
-        self._document.clip_changed.connect(self._refresh_preview)
+        self._filter_tab.status_message.connect(self.statusBar().showMessage)
 
         # The stack is the dirty flag. Every user edit is a command on it by
         # construction (see `document.py`), so there is no second place a change
@@ -624,33 +621,6 @@ class MainWindow(QMainWindow):
         self._warn(message)
 
     # ---- the graph -------------------------------------------------------
-
-    @Slot()
-    def _refresh_preview(self) -> None:
-        """Re-render the working window through whatever graph the document holds.
-
-        Refused by the runner when there is no footage or no node, which is
-        every state the application is in until a project with a graph is
-        opened — so this is a no-op far more often than it is a render, and
-        deliberately not guarded here as well. One place decides what is worth
-        rendering.
-        """
-        window = self._document.window
-        if window is None:
-            return
-        self._preview.request_render(self._document.pipeline, window, self._previewed_replicate())
-
-    def _previewed_replicate(self) -> Replicate | None:
-        """Which arena the preview runs over: the first, or the whole frame.
-
-        The same default `sieve preview` takes, and for the same reason — a
-        preview is one viewport and the fan-out belongs to a run. Following the
-        table's selection is the obvious next move and is not this item's: it
-        needs the arena's identity in the graph HUD's axis label to mean
-        anything, which is the item after this one.
-        """
-        replicates = self._document.all()
-        return replicates[0] if replicates else None
 
     @Slot(object)
     def _on_render_finished(self, render: PreviewRender) -> None:

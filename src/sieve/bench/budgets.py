@@ -102,6 +102,26 @@ BUDGETS: dict[str, Budget] = _table(
         regime=Regime.IN_PIPELINE,
         limit_ms=3000.0,
     ),
+    Budget(
+        key="band_drag_repaint",
+        label="Band drag → graphs repaint",
+        regime=Regime.IN_PIPELINE,
+        # The cheap tier of the two-tier drag discipline: re-derive from the
+        # retained band power, re-count, repaint. Half the 100 ms perceptual
+        # threshold, because a drag emits continuously and two consecutive
+        # ticks must both land inside one perceived beat.
+        limit_ms=50.0,
+    ),
+    Budget(
+        key="knob_to_graphs",
+        label="Knob settle → graphs rebuilt",
+        regime=Regime.IN_PIPELINE,
+        # An upstream parameter edit re-runs extraction over the working
+        # window and re-derives the detector. Bounded by the same ceiling as
+        # the full preview render it contains — the store, not speed, is what
+        # meets it after the first render.
+        limit_ms=3000.0,
+    ),
 )
 
 

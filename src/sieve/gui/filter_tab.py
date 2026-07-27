@@ -1033,8 +1033,13 @@ class FilterTab(QWidget):
         want = min(max(self._playhead, window.start), window.end - 1)
         replicate = self._document.selected_replicate
         expected = self._runner.revision + 1
-        if self._runner.request_frame(self._chain.pipeline(), want, replicate, consumer=grab):
-            self._composite_revisions.add(expected)
+        # Recorded before the submit, not on its return: an idle runner emits
+        # `render_started` synchronously inside `request_frame`, so an entry
+        # added afterwards would miss `_hud_begin`'s check and the refresh
+        # would clear the series it exists to leave alone.
+        self._composite_revisions.add(expected)
+        if not self._runner.request_frame(self._chain.pipeline(), want, replicate, consumer=grab):
+            self._composite_revisions.discard(expected)
 
     def _apply_composite(self, base: np.ndarray | None, over: np.ndarray, is_grid: bool) -> None:
         """Convert the grabbed pair on the GUI thread and hand it to the pane."""

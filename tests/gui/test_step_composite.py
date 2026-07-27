@@ -65,6 +65,10 @@ class _StubRunner(QObject):
     ) -> bool:
         self.revision += 1
         self.frame_renders.append(index)
+        # The real runner's idle path: `_issue` emits `render_started`
+        # synchronously, before `request_frame` returns. The HUD test below
+        # pins a race that only exists on this path, so the stub must keep it.
+        self.render_started.emit(self.revision)
         return True
 
 
@@ -187,6 +191,12 @@ def test_a_composite_refresh_leaves_the_hud_series_alone(
     must not overwrite the render's real cost at that index. A window
     render's start, by contrast, still replaces the series — that contract
     stays the runner's.
+
+    The stub emits `render_started` *inside* `request_frame`, as the idle
+    runner does — which is exactly when the first refresh after a finished
+    render runs. A tab that records the exemption only after the call
+    returns hears that start unexempted and wipes the series it just
+    collected.
     """
     stub.opened.emit()
     stub.render_started.emit(stub.revision)
@@ -196,7 +206,6 @@ def test_a_composite_refresh_leaves_the_hud_series_alone(
 
     player.frame_changed.emit(3, QImage(160, 120, QImage.Format.Format_RGB32))
     assert stub.frame_renders == [3]
-    stub.render_started.emit(stub.revision)  # the composite refresh starting
     stub.frame_cost.emit(3, 0.2)
 
     assert tab.hud.costs() == ((3, 25.0),), "the composite refresh touched the HUD"

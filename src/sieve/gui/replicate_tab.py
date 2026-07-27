@@ -5,10 +5,11 @@ splitter rather than a fixed ratio: the table is where the user works once the
 boxes exist, and the viewport is where they work while drawing them, so which
 half deserves the pixels changes within a single session.
 
-The top half is split again, left and right, and the right half is empty — it
-is where the per-frame tools will go. It holds no placeholder text and no
-frame, because an empty pane the user can drag closed says less than a label
-promising something that does not exist yet.
+The top half is split again, left and right. The right half is
+`gui/crop_tools.py`: the draw/stamp toggle, the magnifier's reset, the selected
+box's dimensions, and what the source video is. That pane is a control surface
+and a provenance claim in one, which is what `REFINED-VISION.md` asks for when
+it says the settings should "point to the parent".
 
 **The left half is the picture and nothing else.** There is no seeker here and
 no clip editor: both are `gui/timeline_bar.py`, one band across the bottom of
@@ -34,13 +35,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.core.types import VideoMetadata
+from sieve.core.types import ROI, VideoMetadata
+from sieve.gui.crop_tools import CropToolsPanel
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.player import VideoPlayer
 from sieve.gui.replicate_table import Column, EditingAwareDelegate, ReplicateTableModel
-from sieve.gui.video_view import NO_SELECTION, VideoView
+from sieve.gui.video_view import NO_SELECTION, CropMode, VideoView
 
-_DRAW_HINT = "Drag on the video to cut a replicate.  Click a box to select it."
+_DRAW_HINT = "Drag to cut a replicate.  Drag the selected box or its handles to adjust it."
 
 
 class ReplicateTab(QWidget):
@@ -82,7 +84,7 @@ class ReplicateTab(QWidget):
         self._table = QTableView()
         self._delegate = EditingAwareDelegate(self._table)
 
-        self._tools_panel = QWidget()
+        self._tools_panel = CropToolsPanel(document)
 
         self._top_splitter = QSplitter(Qt.Orientation.Horizontal)
         self._top_splitter.addWidget(self._build_viewport_panel())
@@ -113,8 +115,8 @@ class ReplicateTab(QWidget):
         return self._top_splitter
 
     @property
-    def tools_panel(self) -> QWidget:
-        """The empty right half. Whatever is built there parents to this."""
+    def tools_panel(self) -> CropToolsPanel:
+        """The crop tools and source information occupying the right half."""
         return self._tools_panel
 
     # ---- construction ----------------------------------------------------
@@ -168,6 +170,14 @@ class ReplicateTab(QWidget):
 
         self._view.roi_drawn.connect(self._document.add_roi)
         self._view.selection_requested.connect(self._on_video_clicked)
+        self._view.roi_adjusted.connect(self._on_roi_adjusted)
+        self._view.stamp_size_changed.connect(self._tools_panel.set_stamp_size)
+        self._view.zoom_changed.connect(self._tools_panel.set_zoom)
+
+        self._tools_panel.mode_changed.connect(self._on_mode_changed)
+        self._tools_panel.stamp_size_changed.connect(self._view.set_stamp_size)
+        self._tools_panel.fit_requested.connect(self._view.reset_zoom)
+        self._tools_panel.editor_open_changed.connect(self.editor_open_changed)
 
         self._document.structure_changed.connect(self._refresh_overlay)
         self._document.replicate_changed.connect(self._refresh_overlay)
@@ -202,6 +212,7 @@ class ReplicateTab(QWidget):
     def video_closed(self) -> None:
         """Return to the empty state after the source is unloaded."""
         self._view.set_source_size(None)
+        self._tools_panel.set_source(None)
         self._hint.setEnabled(False)
 
     # ---- player -----------------------------------------------------------
@@ -210,6 +221,7 @@ class ReplicateTab(QWidget):
     def _on_opened(self, metadata: VideoMetadata) -> None:
         self._view.set_source_size((metadata.width, metadata.height))
         self._view.set_replicates([])
+        self._tools_panel.set_source(metadata)
         self._hint.setEnabled(True)
 
     @Slot(int, QImage)
@@ -252,6 +264,24 @@ class ReplicateTab(QWidget):
             return
         self._document.select(row)
         self.replicate_accepted.emit(row)
+
+    @Slot(int, ROI, int, str)
+    def _on_roi_adjusted(self, row: int, roi: ROI, gesture: int, verb: str) -> None:
+        """One step of a live move or resize on the video.
+
+        The token is passed straight through to the document, which passes it
+        to the command: every step of one drag carries the same one, so sixty
+        emitted geometries collapse to a single undo entry rather than sixty.
+        """
+        if 0 <= row < len(self._document):
+            self._document.set_roi(
+                row, roi, gesture=gesture, text=f"{verb} {self._document.at(row).name}"
+            )
+
+    @Slot(str)
+    def _on_mode_changed(self, mode: str) -> None:
+        """The tools panel's toggle, widened back into the view's enum."""
+        self._view.set_mode(CropMode(mode))
 
     @Slot(QItemSelection, QItemSelection)
     def _on_table_selection_changed(

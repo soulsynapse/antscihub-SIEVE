@@ -76,7 +76,8 @@ src/sieve/gui/wizard.py                 # project creation flow
 src/sieve/gui/wizard_model.py           # its Qt-free half
 src/sieve/gui/replicate_tab.py          # video + tools panel + replicate table
 src/sieve/gui/replicate_table.py        # per-replicate rows, numeric ROI entry
-src/sieve/gui/video_view.py             # box draw/select/paint and the source<->widget mapping
+src/sieve/gui/crop_tools.py             # draw/stamp toggle, stamp size, magnifier reset, parent info
+src/sieve/gui/video_view.py             # the four crop gestures and the source<->widget mapping
 src/sieve/gui/filter_tab.py             # the tuning surface: composite, chain, plots
 src/sieve/gui/chain_stack.py            # the step cards
 src/sieve/gui/chain_model.py            # its Qt-free half

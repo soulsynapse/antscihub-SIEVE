@@ -64,15 +64,25 @@ re-derive it. Full reasoning is in the linked entry, and
 | Block signals | `filters/block_signal.py` | Emits `change_energy`, `flow_speed`, and `coherence`. The solve precedes block reduction; reduce the *tensor*, then eigendecompose. The spec's drafted coherence scalar was wrong — see `findings/2026.07.26-the-specs-coherence-formula-fails-its-own-test.md`. |
 | Threshold units | `filters/temporal_baseline.py` | Median and MAD over a trailing window, because the events are in the sample. The estimate lags a step change by about one window; a centred one needs `Mode.WINDOWED`, which is refused. |
 | The crop | — | It belongs in the graph, and the per-replicate threshold-spread probe that would have measured one rack under one backlight is cancelled, not deferred. `findings/2026.07.25-the-crop-belongs-in-the-graph.md`. |
+| Crop gestures | `gui/video_view.py` | Handles are hit-tested *before* containment, and only on the selected box. Drawing needs travel in both axes; adjusting needs it in either — a horizontal move under the both-axes rule releases as a click and navigates away. `view_rect` is the mapping, `content_rect` is only the floor it is clamped against. |
+| Placement | `gui/video_view.py` `_placed` | A stamp or a move slides against the frame edge and never trims. `ROI.clamped_to` is the *other* rule and belongs to typed numbers, not to placements. |
+| One drag, one undo | `gui/commands.py` | `SetReplicateROI` merges on a per-press token, and `mergeWith` keeps the *first* command's displaced value. A test that drags with a single mouse-move cannot see any of this — the second event is a no-op `set_roi` and the count is 1 either way. |
 
 ---
 
 # Open items
 
-Two, plus two living in the parity plan (below). The temporal chain that
+One, plus two living in the parity plan (below). The temporal chain that
 `docs/REFINED-VISION.md` decomposes into is otherwise complete: coherence,
 multi-upstream kernels, and the per-block baseline have all landed, in that
 order and for the reasons that document's **Build order** section gives.
+
+That document's **Replicates** section is built as far as it can be. The
+selected replicate being the one under tuning landed 2026.07.27 and the crop
+tools the same day; what is left of the section is the table's crop progress
+and output-existence columns, which are readings of a filesystem nothing writes
+to yet and wait in `docs/LATER.md` under **Replicate status** with the trigger
+that would make them real.
 
 ## The motion history filter
 
@@ -120,54 +130,6 @@ Read: `src/sieve/filters/background_ema.py` (the twin),
 `src/sieve/filters/temporal_baseline.py` (the warmup pattern),
 `src/sieve/core/detection.py` (the tail this feeds), `docs/REFINED-VISION.md`
 **C**, `docs/VISION.md` step 3 category C.
-
-## Crop tools: the stamp, the drag, and the magnifier
-
-**Gated on: nothing structurally.** This is `REFINED-VISION.md`'s **Replicates**
-section read as a specification. The other half of that section — the selected
-replicate being the one under tuning — landed 2026.07.27, so this inherits a tab
-whose boxes are finally looked at.
-
-**What exists.** `video_view.py` draws a new box by click-drag, selects the
-topmost box under a click, and paints the set. No zoom, no pan, no handles, no
-move: a drag starting on top of an existing box draws a second box over it. The
-right half of `ReplicateTab` is a deliberately empty `tools_panel` waiting for
-exactly this.
-
-**The four gestures.**
-
-- **Draw versus stamp, as a toggle.** The stamp is the labour saver: a rack is a
-  dozen arenas of identical size, so the size is drawn once — or typed — and
-  then placed. **Placement must preserve width and height exactly.** A stamp
-  that rounds through widget coordinates and back produces twelve arenas that
-  are almost the same, which is worse than one obviously different, because
-  `equivalence_groups` will report them as one group while the pixels disagree.
-- **Move an existing box, with `QUndoCommand.mergeWith`** so one drag collapses
-  to one undo step. `commands.py`'s `SetReplicateROI` is where that goes.
-- **Resize by corner and edge handles**, hit-tested *before* `_replicate_at`'s
-  containment test rather than after — a handle inside another box's bounds must
-  still win, or the top-left corner of a box drawn second is unreachable.
-- **The magnifier, whose floor is the interesting part.** Scrolling magnifies
-  but never zooms out past the natural fit, so the scale floor is `content_rect`'s
-  fit scale — not 1.0, not unbounded. Every coordinate mapping in the file
-  (`to_source`, `to_widget`, the paint path) currently assumes fit-scale; a
-  scale factor and a pan origin have to go through all of them at once, and the
-  round-trip property test in `tests/gui/test_video_view.py` is what says whether
-  they did.
-
-**Numeric entry while unlocked** is half-built: the table's X/Y/W/H columns write
-through `ReplicateDocument.set_roi` and clamp. What the vision adds is the same
-fields *beside the video* while a box is being placed — the same document call,
-not a second edit path.
-
-**Tests worth writing:** the zoom floor is never below fit (a wheel-out storm
-leaves the frame exactly fitted, which is the invariant a naive `scale *= 0.9`
-breaks); source↔widget round-trips hold under a non-fit scale with a pan offset,
-extending the existing test rather than adding a parallel one; and one drag
-pushes one undo command.
-
-Read: `src/sieve/gui/{video_view,replicate_tab,commands,document}.py`,
-`tests/gui/test_video_view.py`, `docs/REFINED-VISION.md` **Replicates**.
 
 ## Open, but living in the parity plan
 

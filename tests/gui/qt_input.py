@@ -9,9 +9,12 @@ exactly as Qt would.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QPointF, Qt
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+from PySide6.QtGui import QMouseEvent, QWheelEvent
 from PySide6.QtWidgets import QWidget
+
+#: One wheel detent, in eighths of a degree — Qt's unit for `angleDelta`.
+DETENT = 120
 
 
 def _event(kind: QEvent.Type, point: QPointF, *, held: bool) -> QMouseEvent:
@@ -50,3 +53,19 @@ def drag(widget: QWidget, start: QPointF, end: QPointF) -> None:
 def click(widget: QWidget, point: QPointF) -> None:
     """Press and release without travelling."""
     drag(widget, point, point)
+
+
+def wheel(widget: QWidget, point: QPointF, detents: int) -> None:
+    """Scroll `detents` notches at `point`; positive is towards the user's screen."""
+    widget.wheelEvent(
+        QWheelEvent(
+            point,
+            point,
+            QPoint(0, 0),
+            QPoint(0, detents * DETENT),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+    )

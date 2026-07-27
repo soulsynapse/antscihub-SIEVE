@@ -1,12 +1,33 @@
-"""Frame display with click-and-drag replicate boxes.
+"""Frame display with the four crop gestures: draw, stamp, move, and resize.
 
 Coordinates convert straight from widget space to *source pixels*, never via
 the proxy image the viewport happens to be showing. The proxy is a display
 detail that can change resolution between frames; the ROI a user draws must
-not. The precision limit is therefore the screen, which is the honest limit.
+not. The precision limit is therefore the screen — which is the honest limit,
+and the one the magnifier below exists to raise.
+
+**Two rectangles, and the difference between them is load-bearing.**
+`content_rect` is where the source lands when it is aspect-fitted into the
+widget: it is a function of the widget size and the source size and nothing
+else. `view_rect` is where the source is actually *painted*, which is
+`content_rect` magnified about a pan centre. Every mapping goes through
+`view_rect`; `content_rect` survives as the thing `view_rect` is clamped
+against, and that clamp is the whole zoom-floor rule. Scrolling out can never
+produce a `view_rect` smaller than the fit, because at zoom 1.0 the two
+expressions are not merely close but the same object — see `view_rect`.
+
+**Adjustment is for the selected replicate only.** A dozen arenas each wearing
+eight handles is an unreadable overlay, and the tab's other rule settles it
+anyway: a click on a box the user is *not* tuning accepts it and moves them to
+the filter tab, so the box under adjustment is by construction the selected
+one. What that costs is that a box is selected in the table before it is
+nudged, which is where the user already is while cutting a rack.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import IntEnum, StrEnum
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
@@ -19,6 +40,7 @@ from PySide6.QtGui import (
     QPainter,
     QPaintEvent,
     QPen,
+    QWheelEvent,
 )
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -30,6 +52,21 @@ from sieve.core.types import ROI
 #: one-pixel replicates every time a user misses a selection.
 MIN_DRAG_PX = 6
 
+#: Half-width of a handle's hit target, in widget pixels. The painted square is
+#: smaller than this: a handle that is hard to grab is worse than one that looks
+#: slightly larger than it is.
+HANDLE_GRAB_PX = 7.0
+HANDLE_PAINT_PX = 4.0
+
+#: Magnification is bounded below by the fit — the vision's rule, and the reason
+#: the floor is 1.0 rather than some pixel scale: 1.0 *is* fit, whatever the
+#: widget size happens to be. The ceiling is where a source pixel is large
+#: enough to place unambiguously and further zoom buys nothing.
+MIN_ZOOM = 1.0
+MAX_ZOOM = 16.0
+#: Multiplier per wheel detent.
+ZOOM_STEP = 1.25
+
 _BACKGROUND = QColor(24, 24, 27)
 _LETTERBOX = QColor(16, 16, 18)
 _HINT_TEXT = QColor(130, 130, 140)
@@ -37,17 +74,98 @@ _BOX = QColor(224, 224, 232)
 _BOX_SELECTED = QColor(90, 170, 255)
 _LABEL_BACKDROP = QColor(0, 0, 0, 170)
 _DRAG = QColor(255, 255, 255)
+_HANDLE_FILL = QColor(18, 18, 22)
 
 NO_SELECTION = -1
 
 
-class VideoView(QWidget):
-    """Letterboxed frame viewport that draws and reports replicate regions."""
+class CropMode(StrEnum):
+    """Whether a click on empty space draws a new box or places a stamp."""
 
-    #: A drag completed, in source-pixel coordinates.
+    DRAW = "draw"
+    STAMP = "stamp"
+
+
+class Handle(IntEnum):
+    """The eight grab points on the selected box."""
+
+    TOP_LEFT = 0
+    TOP = 1
+    TOP_RIGHT = 2
+    LEFT = 3
+    RIGHT = 4
+    BOTTOM_LEFT = 5
+    BOTTOM = 6
+    BOTTOM_RIGHT = 7
+
+
+#: Which edges each handle moves, as (horizontal, vertical) in {-1, 0, +1}.
+#: -1 is the leading edge, +1 the trailing one, 0 means that axis is untouched.
+_HANDLE_EDGES: dict[Handle, tuple[int, int]] = {
+    Handle.TOP_LEFT: (-1, -1),
+    Handle.TOP: (0, -1),
+    Handle.TOP_RIGHT: (+1, -1),
+    Handle.LEFT: (-1, 0),
+    Handle.RIGHT: (+1, 0),
+    Handle.BOTTOM_LEFT: (-1, +1),
+    Handle.BOTTOM: (0, +1),
+    Handle.BOTTOM_RIGHT: (+1, +1),
+}
+
+_HANDLE_CURSORS: dict[Handle, Qt.CursorShape] = {
+    Handle.TOP_LEFT: Qt.CursorShape.SizeFDiagCursor,
+    Handle.TOP: Qt.CursorShape.SizeVerCursor,
+    Handle.TOP_RIGHT: Qt.CursorShape.SizeBDiagCursor,
+    Handle.LEFT: Qt.CursorShape.SizeHorCursor,
+    Handle.RIGHT: Qt.CursorShape.SizeHorCursor,
+    Handle.BOTTOM_LEFT: Qt.CursorShape.SizeBDiagCursor,
+    Handle.BOTTOM: Qt.CursorShape.SizeVerCursor,
+    Handle.BOTTOM_RIGHT: Qt.CursorShape.SizeFDiagCursor,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _Adjustment:
+    """A live move or resize of one existing box.
+
+    `roi` is the geometry at the moment of the press, and every step of the
+    gesture is computed from *it* rather than from the document's current
+    value. Accumulating deltas instead would let rounding compound across a
+    long drag, and a box that ends a few pixels from where the cursor says is
+    exactly the failure a rack of identical arenas cannot absorb.
+    """
+
+    row: int
+    #: None for a move; a handle for a resize.
+    handle: Handle | None
+    roi: ROI
+    origin: QPointF
+    token: int
+
+    @property
+    def verb(self) -> str:
+        """What the Edit menu should call this gesture."""
+        return "Resize" if self.handle is not None else "Move"
+
+
+class VideoView(QWidget):
+    """Letterboxed frame viewport that draws, places, and adjusts regions."""
+
+    #: A drag completed, or a stamp was placed: a new region in source pixels.
     roi_drawn = Signal(ROI)
     #: A click selected a replicate row, or `NO_SELECTION` for empty space.
     selection_requested = Signal(int)
+    #: A live move or resize: row, geometry, the token identifying which
+    #: gesture it belongs to, and the verb for the Edit menu. Every step of one
+    #: drag carries the same token so the undo stack can collapse them — see
+    #: `commands.SetReplicateROI`. The verb rides along because only the view
+    #: knows whether a handle or the box body was grabbed, and "Undo Resize" on
+    #: a drag that moved a box is a small lie the menu does not have to tell.
+    roi_adjusted = Signal(int, ROI, int, str)
+    #: A drag defined a new region, so the stamp now has that size.
+    stamp_size_changed = Signal(int, int)
+    #: The magnification changed, as a multiple of the fit scale.
+    zoom_changed = Signal(float)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -55,6 +173,7 @@ class VideoView(QWidget):
         self.setMinimumHeight(200)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAutoFillBackground(False)
+        self.setMouseTracking(True)
 
         self._image: QImage | None = None
         self._source_size: tuple[int, int] | None = None
@@ -62,6 +181,14 @@ class VideoView(QWidget):
         self._selected = NO_SELECTION
         self._drag_origin: QPoint | None = None
         self._drag_current: QPoint | None = None
+        self._adjustment: _Adjustment | None = None
+        self._gesture_serial = 0
+        self._mode = CropMode.DRAW
+        self._stamp_size: tuple[int, int] | None = None
+        self._zoom = MIN_ZOOM
+        #: Pan centre, in normalized source coordinates. Meaningless at zoom
+        #: 1.0, where the clamp in `view_rect` overrides it entirely.
+        self._centre = QPointF(0.5, 0.5)
         self._hint = "File ▸ Open Video…   (Ctrl+O)"
 
     # ---- content ---------------------------------------------------------
@@ -73,6 +200,8 @@ class VideoView(QWidget):
             self._image = None
             self._replicates = []
             self._selected = NO_SELECTION
+        self._cancel_gesture()
+        self.reset_zoom()
         self.setCursor(
             Qt.CursorShape.CrossCursor if size is not None else Qt.CursorShape.ArrowCursor
         )
@@ -100,10 +229,54 @@ class VideoView(QWidget):
         self._hint = text
         self.update()
 
+    # ---- tools -----------------------------------------------------------
+
+    @property
+    def mode(self) -> CropMode:
+        """Whether a click on empty space draws or stamps."""
+        return self._mode
+
+    def set_mode(self, mode: CropMode) -> None:
+        """Choose between drawing a box and stamping the remembered size."""
+        self._mode = mode
+
+    @property
+    def stamp_size(self) -> tuple[int, int] | None:
+        """Size a stamp will place, or None until one has been established."""
+        return self._stamp_size
+
+    def set_stamp_size(self, width: int, height: int) -> None:
+        """Set the size a stamp places, in source pixels.
+
+        Does not echo `stamp_size_changed`: this is the setter the tools panel
+        calls when its own fields are typed into, and a signal back would race
+        the widget that sent it. Only a *drawn* region announces a new size.
+        """
+        if width <= 0 or height <= 0:
+            return
+        self._stamp_size = (width, height)
+
+    @property
+    def zoom(self) -> float:
+        """Magnification as a multiple of the fit scale. 1.0 is fitted."""
+        return self._zoom
+
+    def reset_zoom(self) -> None:
+        """Return to the fitted view."""
+        self._centre = QPointF(0.5, 0.5)
+        if self._zoom != MIN_ZOOM:
+            self._zoom = MIN_ZOOM
+            self.zoom_changed.emit(self._zoom)
+        self.update()
+
     # ---- geometry --------------------------------------------------------
 
     def content_rect(self) -> QRectF:
-        """Aspect-fit rectangle the source occupies inside this widget."""
+        """Aspect-fit rectangle the source occupies inside this widget.
+
+        The magnifier's floor, and the letterbox the magnified image is clipped
+        to. Not the mapping — that is `view_rect`.
+        """
         if self._source_size is None:
             return QRectF(self.rect())
         source_width, source_height = self._source_size
@@ -121,19 +294,62 @@ class VideoView(QWidget):
             height,
         )
 
+    def view_rect(self) -> QRectF:
+        """Where the source is painted: `content_rect` magnified and panned.
+
+        Two properties this has to hold, and both come out of the clamp rather
+        than out of a guard the caller has to remember:
+
+        At zoom 1.0 it returns `content_rect` itself, so a wheel-out storm
+        leaves the frame *exactly* fitted rather than fitted to within a float
+        epsilon. That exactness is what the round-trip mapping tests stand on.
+
+        Above 1.0 the rect is clamped to cover `content_rect`, so the magnified
+        source always fills the letterbox and there is no pan that reveals a
+        gap. The clamp is what enforces it: the pan centre is a request, and
+        this is the only place that decides what the request resolves to, which
+        is why nothing else clamps `_centre`.
+        """
+        fit = self.content_rect()
+        if self._source_size is None or self._zoom <= MIN_ZOOM:
+            return fit
+
+        width = fit.width() * self._zoom
+        height = fit.height() * self._zoom
+        x = min(max(fit.center().x() - self._centre.x() * width, fit.right() - width), fit.left())
+        y = min(max(fit.center().y() - self._centre.y() * height, fit.bottom() - height), fit.top())
+        return QRectF(x, y, width, height)
+
+    def source_at(self, point: QPointF) -> QPointF:
+        """Widget point as a source coordinate, unrounded and unclamped.
+
+        The mapping the zoom anchor needs: rounding here would make a wheel
+        under a stationary cursor creep, because each step would re-anchor to a
+        slightly different source point than the last one landed on.
+        """
+        if self._source_size is None:
+            return QPointF()
+        source_width, source_height = self._source_size
+        view = self.view_rect()
+        if view.width() <= 0 or view.height() <= 0:
+            return QPointF()
+        return QPointF(
+            (point.x() - view.x()) / view.width() * source_width,
+            (point.y() - view.y()) / view.height() * source_height,
+        )
+
     def to_source(self, point: QPointF) -> tuple[int, int]:
         """Widget point to source pixel, clamped inside the frame."""
         if self._source_size is None:
             return (0, 0)
         source_width, source_height = self._source_size
-        content = self.content_rect()
-        if content.width() <= 0 or content.height() <= 0:
+        view = self.view_rect()
+        if view.width() <= 0 or view.height() <= 0:
             return (0, 0)
-        x = (point.x() - content.x()) / content.width() * source_width
-        y = (point.y() - content.y()) / content.height() * source_height
+        source = self.source_at(point)
         return (
-            int(min(max(round(x), 0), source_width)),
-            int(min(max(round(y), 0), source_height)),
+            int(min(max(round(source.x()), 0), source_width)),
+            int(min(max(round(source.y()), 0), source_height)),
         )
 
     def to_widget(self, roi: ROI) -> QRectF:
@@ -141,14 +357,44 @@ class VideoView(QWidget):
         if self._source_size is None:
             return QRectF()
         source_width, source_height = self._source_size
-        content = self.content_rect()
-        scale_x = content.width() / source_width
-        scale_y = content.height() / source_height
+        view = self.view_rect()
+        scale_x = view.width() / source_width
+        scale_y = view.height() / source_height
         return QRectF(
-            content.x() + roi.x * scale_x,
-            content.y() + roi.y * scale_y,
+            view.x() + roi.x * scale_x,
+            view.y() + roi.y * scale_y,
             roi.width * scale_x,
             roi.height * scale_y,
+        )
+
+    def _placed(self, x: int, y: int, width: int, height: int) -> ROI:
+        """A region of exactly `width` x `height` slid to lie inside the source.
+
+        The counterpart to `ROI.clamped_to`, and the difference is the point.
+        `clamped_to` *trims*: a region hanging off the right edge comes back
+        narrower, which is right for a typed width the frame cannot hold.
+
+        It is wrong for a placement. A stamp dropped near an edge, or a box
+        dragged into one, must keep the extent it already had — a rack is a
+        dozen arenas of identical size, and one that silently lost four pixels
+        against the frame edge would fall into a different equivalence group
+        while looking identical on screen. So this slides, and shrinks only
+        when the region is larger than the frame and there is nowhere to slide.
+
+        It takes loose integers rather than an `ROI` because the callers do not
+        have one yet: a stamp centred near the origin computes a negative `x`,
+        which `ROI.__post_init__` rejects before any clamping could run.
+        """
+        if self._source_size is None:
+            return ROI(x=max(x, 0), y=max(y, 0), width=max(width, 1), height=max(height, 1))
+        source_width, source_height = self._source_size
+        fitted_width = min(max(width, 1), max(source_width, 1))
+        fitted_height = min(max(height, 1), max(source_height, 1))
+        return ROI(
+            x=min(max(x, 0), max(source_width - fitted_width, 0)),
+            y=min(max(y, 0), max(source_height - fitted_height, 0)),
+            width=fitted_width,
+            height=fitted_height,
         )
 
     def _replicate_at(self, point: QPointF) -> int:
@@ -158,56 +404,276 @@ class VideoView(QWidget):
                 return index
         return NO_SELECTION
 
+    def _handle_rects(self) -> dict[Handle, QRectF]:
+        """Grab targets on the selected box, empty when nothing is selected."""
+        if not 0 <= self._selected < len(self._replicates):
+            return {}
+        rect = self.to_widget(self._replicates[self._selected].roi)
+        xs = (rect.left(), rect.center().x(), rect.right())
+        ys = (rect.top(), rect.center().y(), rect.bottom())
+        return {
+            handle: QRectF(
+                xs[horizontal + 1] - HANDLE_GRAB_PX,
+                ys[vertical + 1] - HANDLE_GRAB_PX,
+                HANDLE_GRAB_PX * 2.0,
+                HANDLE_GRAB_PX * 2.0,
+            )
+            for handle, (horizontal, vertical) in _HANDLE_EDGES.items()
+        }
+
+    def _handle_at(self, point: QPointF) -> Handle | None:
+        """Handle under `point`, or None.
+
+        Corners are tested before edges — their targets overlap at a small box,
+        and a corner is the more specific request.
+        """
+        rects = self._handle_rects()
+        corners = (Handle.TOP_LEFT, Handle.TOP_RIGHT, Handle.BOTTOM_LEFT, Handle.BOTTOM_RIGHT)
+        for handle in (*corners, *(h for h in Handle if h not in corners)):
+            if handle in rects and rects[handle].contains(point):
+                return handle
+        return None
+
     # ---- input -----------------------------------------------------------
 
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        """Magnify about the cursor, never below the fit.
+
+        Anchoring on the cursor rather than the centre is what makes the
+        magnifier usable for placement: the arena the user is looking at stays
+        under the pointer while it grows, so they do not have to chase it with
+        a pan after every detent.
+        """
+        if self._source_size is None:
+            super().wheelEvent(event)
+            return
+        detents = event.angleDelta().y() / 120.0
+        if detents == 0.0:
+            super().wheelEvent(event)
+            return
+
+        anchor = event.position()
+        source = self.source_at(anchor)
+        zoom = min(max(self._zoom * (ZOOM_STEP**detents), MIN_ZOOM), MAX_ZOOM)
+        if zoom != self._zoom:
+            self._zoom = zoom
+            self._recentre_on(source, anchor)
+            self.zoom_changed.emit(zoom)
+            self.update()
+        event.accept()
+
+    def _recentre_on(self, source: QPointF, anchor: QPointF) -> None:
+        """Pan so that source point `source` lands at widget point `anchor`.
+
+        Inverts `view_rect`'s placement for `_centre`. The result is a request,
+        not a resolved value — `view_rect` clamps it, and near an edge the
+        anchor consequently does not hold, which is correct: there is nothing
+        beyond the frame edge to slide into view.
+        """
+        source_width, source_height = self._source_size or (0, 0)
+        fit = self.content_rect()
+        width = fit.width() * self._zoom
+        height = fit.height() * self._zoom
+        if width <= 0 or height <= 0 or source_width <= 0 or source_height <= 0:
+            return
+        self._centre = QPointF(
+            (fit.center().x() - anchor.x()) / width + source.x() / source_width,
+            (fit.center().y() - anchor.y()) / height + source.y() / source_height,
+        )
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """Begin a box drag."""
+        """Begin a gesture: resize a handle, move the selected box, or draw.
+
+        The handle test runs *before* the containment test, and that order is
+        the bug it exists to prevent. A handle straddles its corner, so half of
+        it lies outside the box it belongs to — and if that half lies inside a
+        larger box behind, a containment-first test hands the press to the box
+        behind and the corner is unreachable. Overlapping arenas are not exotic;
+        one drawn slightly over its neighbour is a Tuesday.
+        """
         if event.button() != Qt.MouseButton.LeftButton or self._source_size is None:
             super().mousePressEvent(event)
             return
-        self._drag_origin = event.position().toPoint()
+
+        point = event.position()
+        self._drag_origin = point.toPoint()
         self._drag_current = self._drag_origin
+        self._adjustment = None
+
+        handle = self._handle_at(point)
+        if handle is not None:
+            self._begin_adjustment(handle, point)
+        elif 0 <= self._selected < len(self._replicates) and self.to_widget(
+            self._replicates[self._selected].roi
+        ).contains(point):
+            self._begin_adjustment(None, point)
         self.update()
+
+    def _begin_adjustment(self, handle: Handle | None, origin: QPointF) -> None:
+        self._gesture_serial += 1
+        self._adjustment = _Adjustment(
+            row=self._selected,
+            handle=handle,
+            roi=self._replicates[self._selected].roi,
+            origin=origin,
+            token=self._gesture_serial,
+        )
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        """Extend the in-progress box."""
+        """Extend the in-progress gesture, or track the cursor over handles."""
         if self._drag_origin is None:
+            self._update_cursor(event.position())
             super().mouseMoveEvent(event)
             return
-        self._drag_current = event.position().toPoint()
+        point = event.position()
+        self._drag_current = point.toPoint()
+        if self._adjustment is not None and self._is_adjustment(QPointF(self._drag_origin), point):
+            self._emit_adjustment(self._adjustment, point)
         self.update()
 
+    @staticmethod
+    def _is_adjustment(origin: QPointF, end: QPointF) -> bool:
+        """Whether a press that began on the selected box has become a drag.
+
+        Travel in *either* axis, which is the difference from the rule that
+        governs drawing. A new region needs extent in both — a one-pixel-tall
+        replicate is never what a user meant — but a box slid horizontally
+        along a rack has travelled exactly as far as the user intended in the
+        only axis they touched, and demanding a stray vertical pixel too would
+        read that drag as a click and accept the replicate instead of moving
+        it.
+        """
+        return abs(end.x() - origin.x()) >= MIN_DRAG_PX or abs(end.y() - origin.y()) >= MIN_DRAG_PX
+
+    def _update_cursor(self, point: QPointF) -> None:
+        """Show what a press here would do, before it is pressed."""
+        if self._source_size is None:
+            return
+        handle = self._handle_at(point)
+        if handle is not None:
+            self.setCursor(_HANDLE_CURSORS[handle])
+        elif 0 <= self._selected < len(self._replicates) and self.to_widget(
+            self._replicates[self._selected].roi
+        ).contains(point):
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
+        else:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+
+    def _emit_adjustment(self, adjustment: _Adjustment, point: QPointF) -> None:
+        handle = adjustment.handle
+        roi = (
+            self._moved(adjustment, point)
+            if handle is None
+            else self._resized(adjustment, handle, point)
+        )
+        self.roi_adjusted.emit(adjustment.row, roi, adjustment.token, adjustment.verb)
+
+    def _moved(self, adjustment: _Adjustment, point: QPointF) -> ROI:
+        """The dragged box translated by the cursor's travel, size preserved."""
+        start = self.source_at(adjustment.origin)
+        now = self.source_at(point)
+        roi = adjustment.roi
+        return self._placed(
+            round(roi.x + now.x() - start.x()),
+            round(roi.y + now.y() - start.y()),
+            roi.width,
+            roi.height,
+        )
+
+    def _resized(self, adjustment: _Adjustment, handle: Handle, point: QPointF) -> ROI:
+        """The dragged box with the handle's edges moved to the cursor.
+
+        `ROI.from_corners` normalizes, so dragging an edge past its opposite
+        flips the box rather than refusing — the standard behaviour of every
+        drawing tool, and cheaper to live with than a gesture that sticks.
+        """
+        horizontal, vertical = _HANDLE_EDGES[handle]
+        roi = adjustment.roi
+        x, y = self.to_source(point)
+        left = x if horizontal < 0 else roi.x
+        right = x if horizontal > 0 else roi.right
+        top = y if vertical < 0 else roi.y
+        bottom = y if vertical > 0 else roi.bottom
+        if left == right:
+            right = left + 1
+        if top == bottom:
+            bottom = top + 1
+        return ROI.from_corners(left, top, right, bottom).clamped_to(*self._source_size or (1, 1))
+
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        """Finish a drag as a new ROI, or a click as a selection."""
+        """Finish a drag as a region, or a click as a selection or a stamp."""
         if event.button() != Qt.MouseButton.LeftButton or self._drag_origin is None:
             super().mouseReleaseEvent(event)
             return
 
         origin, self._drag_origin = self._drag_origin, None
-        end = event.position().toPoint()
+        adjustment, self._adjustment = self._adjustment, None
+        end = event.position()
         self._drag_current = None
         self.update()
 
-        travelled_x = abs(end.x() - origin.x())
-        travelled_y = abs(end.y() - origin.y())
-        if travelled_x < MIN_DRAG_PX or travelled_y < MIN_DRAG_PX:
-            self.selection_requested.emit(self._replicate_at(QPointF(end)))
+        start = QPointF(origin)
+        if adjustment is not None:
+            # A press on the selected box that never travelled is a click on a
+            # replicate, which the tab reads as accepting it. Adjustment and
+            # acceptance therefore share a press and are told apart only here,
+            # by whether the cursor went anywhere.
+            if self._is_adjustment(start, end):
+                self._emit_adjustment(adjustment, end)
+            else:
+                self.selection_requested.emit(adjustment.row)
+            return
+
+        if abs(end.x() - start.x()) < MIN_DRAG_PX or abs(end.y() - start.y()) < MIN_DRAG_PX:
+            self._release_click(end)
             return
 
         x0, y0 = self.to_source(QPointF(origin))
-        x1, y1 = self.to_source(QPointF(end))
+        x1, y1 = self.to_source(end)
         roi = ROI.from_corners(x0, y0, x1, y1)
         if roi.width > 0 and roi.height > 0:
+            # Every drawn region sets the stamp, in both modes. Drawing is how
+            # the vision says a stamp size is established ("the stamp needs to
+            # be drawn first"), and making that a mode-specific side effect
+            # would mean switching to stamp mode *before* the draw that defines
+            # it — an ordering nobody would guess.
+            self._stamp_size = (roi.width, roi.height)
+            self.stamp_size_changed.emit(roi.width, roi.height)
             self.roi_drawn.emit(roi)
 
+    def _release_click(self, point: QPointF) -> None:
+        """A click that travelled nowhere: stamp on empty space, else select."""
+        row = self._replicate_at(point)
+        if row != NO_SELECTION or self._mode is not CropMode.STAMP or self._stamp_size is None:
+            self.selection_requested.emit(row)
+            return
+        width, height = self._stamp_size
+        x, y = self.to_source(point)
+        self.roi_drawn.emit(self._placed(x - width // 2, y - height // 2, width, height))
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        """Escape abandons an in-progress drag."""
+        """Escape abandons an in-progress gesture."""
         if event.key() == Qt.Key.Key_Escape and self._drag_origin is not None:
-            self._drag_origin = None
-            self._drag_current = None
-            self.update()
+            self._cancel_gesture()
             return
         super().keyPressEvent(event)
+
+    def _cancel_gesture(self) -> None:
+        """Drop any live gesture, putting an adjusted box back where it was.
+
+        The restore goes out under the gesture's own token, so it merges into
+        the same undo entry the drag has been building and the whole abandoned
+        gesture collapses to nothing rather than to a no-op step the user has
+        to press Ctrl+Z through.
+        """
+        adjustment, self._adjustment = self._adjustment, None
+        self._drag_origin = None
+        self._drag_current = None
+        if adjustment is not None:
+            self.roi_adjusted.emit(
+                adjustment.row, adjustment.roi, adjustment.token, adjustment.verb
+            )
+        self.update()
 
     # ---- painting --------------------------------------------------------
 
@@ -224,10 +690,14 @@ class VideoView(QWidget):
 
         content = self.content_rect()
         painter.fillRect(content, _BACKGROUND)
+        # Everything after this is clipped to the fitted box, so a magnified
+        # source spills into the letterbox no more than a fitted one does.
+        painter.setClipRect(content)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        painter.drawImage(content, self._image)
+        painter.drawImage(self.view_rect(), self._image)
 
         self._paint_replicates(painter)
+        self._paint_handles(painter)
         self._paint_drag(painter)
         painter.end()
 
@@ -269,8 +739,15 @@ class VideoView(QWidget):
                 label,
             )
 
+    def _paint_handles(self, painter: QPainter) -> None:
+        painter.setPen(QPen(_BOX_SELECTED, 1.0))
+        painter.setBrush(QBrush(_HANDLE_FILL))
+        for rect in self._handle_rects().values():
+            inset = HANDLE_GRAB_PX - HANDLE_PAINT_PX
+            painter.drawRect(rect.adjusted(inset, inset, -inset, -inset))
+
     def _paint_drag(self, painter: QPainter) -> None:
-        if self._drag_origin is None or self._drag_current is None:
+        if self._drag_origin is None or self._drag_current is None or self._adjustment is not None:
             return
         pen = QPen(_DRAG, 1.0)
         pen.setStyle(Qt.PenStyle.DashLine)

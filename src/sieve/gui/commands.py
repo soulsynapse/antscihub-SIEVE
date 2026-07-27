@@ -82,15 +82,67 @@ class RenameReplicate(QUndoCommand):
             self._document.apply_replace(self._index, self._previous)
 
 
-class SetReplicateROI(QUndoCommand):
-    """Change a replicate's geometry."""
+#: Merge identity for geometry commands. Any non-negative constant works; what
+#: matters is that it is *not* -1, which is Qt's "never merge".
+ROI_MERGE_ID = 1
 
-    def __init__(self, document: ReplicateDocument, index: int, roi: ROI) -> None:
-        super().__init__(f"Resize {document.at(index).name}")
+
+class SetReplicateROI(QUndoCommand):
+    """Change a replicate's geometry, optionally as one step of a live drag.
+
+    A drag across the video emits geometry continuously — that is what makes
+    the box follow the cursor and the table's numbers count up under it — and
+    without merging, a two-second drag would leave sixty entries on the undo
+    stack and Ctrl+Z would crawl the box backwards a pixel at a time. So a
+    command that carries a `gesture` token merges with the command below it
+    when that command carries the *same* token: the surviving command keeps the
+    geometry from before the drag began and takes on the geometry the drag has
+    reached.
+
+    The token is per press, not per drag *kind*, which is what stops two
+    successive drags of the same box from collapsing into one. And it defaults
+    to `None`, so a numeric edit in the table or the tools panel reports `id()`
+    of -1 and never merges with anything — one typed number is one undo step,
+    which is what a user typing numbers expects.
+    """
+
+    def __init__(
+        self,
+        document: ReplicateDocument,
+        index: int,
+        roi: ROI,
+        *,
+        gesture: int | None = None,
+        text: str | None = None,
+    ) -> None:
+        super().__init__(text or f"Resize {document.at(index).name}")
         self._document = document
         self._index = index
         self._roi = roi
+        self._gesture = gesture
         self._previous: Replicate | None = None
+
+    def id(self) -> int:
+        """Merge identity: shared while a gesture is live, never otherwise."""
+        return ROI_MERGE_ID if self._gesture is not None else -1
+
+    def mergeWith(self, other: QUndoCommand) -> bool:
+        """Absorb a later step of the same gesture on the same replicate.
+
+        `other` has already had its `redo` run by `QUndoStack.push` — Qt
+        redoes first and merges second — so the document is current either
+        way. All that is taken from it is the geometry to replay, while
+        `_previous` stays what it was at the start of the gesture, which is
+        what makes one Ctrl+Z return the box to where the drag began.
+        """
+        if not isinstance(other, SetReplicateROI):
+            return False
+        if self._gesture is None or other._gesture != self._gesture:
+            return False
+        if other._index != self._index:
+            return False
+        self._roi = other._roi
+        return True
 
     def redo(self) -> None:
         """Apply the new geometry."""

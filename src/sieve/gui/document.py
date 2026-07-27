@@ -367,12 +367,30 @@ class ReplicateDocument(QObject):
         self.undo_stack.push(RenameReplicate(self, index, name))
         return True
 
-    def set_roi(self, index: int, roi: ROI) -> None:
-        """Give the replicate at `index` new geometry."""
+    def set_roi(
+        self,
+        index: int,
+        roi: ROI,
+        *,
+        gesture: int | None = None,
+        text: str | None = None,
+    ) -> None:
+        """Give the replicate at `index` new geometry.
+
+        `gesture` is a token identifying one continuous drag, and passing the
+        same token on every step of that drag is what collapses it to a single
+        undo entry — see `SetReplicateROI`. A caller with a discrete edit (a
+        typed number) passes nothing and gets its own step.
+
+        The ROI still goes through `_fit` even when the caller has already
+        clamped it against the frame, which for a placement it has: `_fit`
+        leaves a region that is already inside untouched, so the safety net
+        costs a stamp none of its exact extent.
+        """
         fitted = self._fit(roi)
         if fitted == self._replicates[index].roi:
             return
-        self.undo_stack.push(SetReplicateROI(self, index, fitted))
+        self.undo_stack.push(SetReplicateROI(self, index, fitted, gesture=gesture, text=text))
 
     def move_window_to(self, frame: int) -> None:
         """Move the working window so it starts at `frame`, holding its length.

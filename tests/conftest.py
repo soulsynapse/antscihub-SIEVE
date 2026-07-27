@@ -7,12 +7,23 @@ indistinguishable from one that passes.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
+
+# Qt tests call `show()` because focus, window state, and painting are what
+# several of them are about — so on a desktop the suite flashes a few hundred
+# windows across the screen. CI has always run offscreen (`.github/workflows/
+# ci.yml` sets it); this makes a local run the same run rather than a second,
+# noisier one. Set here rather than in a nox session so it holds however
+# pytest is invoked, and only when nothing has chosen a platform already:
+# `QT_QPA_PLATFORM=windows uv run pytest tests/gui` still shows the windows,
+# which is how you watch a gesture test do what it says.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 FIXTURE_FPS = 20.0
 FIXTURE_FRAMES = 40

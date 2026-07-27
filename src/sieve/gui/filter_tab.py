@@ -88,6 +88,7 @@ from sieve.gui.chain_model import (
 )
 from sieve.gui.chain_stack import ChainStackView
 from sieve.gui.composite_view import StepCompositeView, grid_to_qimage
+from sieve.gui.concurrency import DETECTOR_WORKERS
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.density_plot import DensityPlot
 from sieve.gui.detector_worker import (
@@ -684,12 +685,20 @@ class FilterTab(QWidget):
         band_power = (
             self._update.band_power if reuse_band_power and self._update is not None else None
         )
+        # `DETECTOR_WORKERS`, not every core: this runs on the GUI thread beside
+        # the player's decode thread and the preview's pool, so inheriting the
+        # whole machine here is the fourth consumer `gui/concurrency.py` forbids.
+        # The cheap tier reuses `band_power` and runs no transform at all, so
+        # this only bites on a frequency commit — which is also the one that used
+        # to take every core. Capping it lengthens the stall rather than removing
+        # it; routing this through `detector_worker.py` is the real fix.
         update = recompute(
             self._series2d,
             self._fps(),
             self._chain.detector,
             start_index=self._series_start,
             band_power=band_power,
+            workers=DETECTOR_WORKERS,
         )
         # The frontier is recomputed, not remembered: a D drag over a partial
         # series moves it. Widening a centered window pulls it back, and a tab

@@ -385,14 +385,21 @@ that tracked coverage would reopen the question.
 Read: `src/sieve/pipeline/cache.py`, `docs/SCAFFOLD.md` `pipeline/`,
 `storage/`.
 
-## Materialization, and what non-negotiable #1 currently asserts
+## Materialization, and the rule that is waiting on it
 
-**Why not now.** "Filesystem is truth *at rest*" is the first non-negotiable and
+**Why not now.** "Filesystem is truth *at rest*" was the first non-negotiable and
 nothing in this repo has ever been at rest: `MemoryFrameStore` is a dict, no
-sink writes, and `sieve run` refuses a project that declares one. So the rule is
-presently a statement about a state the system cannot enter, which is not a
-violation — during interactive tuning truth is *supposed* to live in memory —
-but it does mean the rule has never been tested by anything.
+sink writes, and `sieve run` refuses a project that declares one. So the rule was
+a statement about a state the system cannot enter, which is not a violation —
+during interactive tuning truth is *supposed* to live in memory — but it did mean
+the rule had never been tested by anything.
+
+**As of 2026.07.27 it is no longer stated as an invariant.** A rule that cannot
+be violated cannot be relied on, and stating one in the same voice as the
+enforced rules is how unbuilt guarantees read as done. It now sits in
+`ARCHITECTURE.md` under *Commitments not yet in force*, and this entry is its
+trigger: it returns to the rules table in the commit that lands the first writer.
+Rule 1 is now "one execution path", which is enforced and was previously unnamed.
 
 VISION step 1 describes the dumbest version of the product as a folder per
 transformation, and step 4's economy argument turns on "save the representative

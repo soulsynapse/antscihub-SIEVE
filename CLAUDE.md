@@ -32,18 +32,28 @@ and the entry, not a separate spec file.
 
 ---
 
-## The five non-negotiables
+## The six rules
 
 Full text in `docs/ARCHITECTURE.md`. A violation is a defect, not a tradeoff.
+Older docstrings call these "non-negotiable #N"; the numbers still hold.
 
-1. **Filesystem is truth at rest.** Materialized artifacts read without SIEVE
-   running. During tuning, truth is in memory.
-2. **Pipeline is a data structure.** Serializable DAG, no GUI-only state in it.
-3. **Filter = one class + one markdown.** Discovery is automatic; nothing
+1. **One execution path.** `pipeline/executor.execute` is the only thing that
+   computes a frame. The GUI is a view over it, never a second implementation.
+2. **Pipeline is a data structure.** Serializable DAG, no GUI-only state in it —
+   and the complete input to rule 1's one path.
+3. **Filter = one module + one markdown.** Discovery is automatic; nothing
    enumerates filters. Adding one must require no edit to a registry.
-4. **No latency budget misses.** `src/sieve/bench/budgets.py` is the table.
-5. **No regime tradeoffs.** Never improve pre-pipeline speed at in-pipeline's
-   expense, or vice versa.
+4. **Every budget has a producer, and a miss is visible.**
+   `src/sieve/bench/budgets.py` is the table; `WITHOUT_PRODUCER` is the honest
+   gap in it. A ceiling nothing publishes is a number, not a budget.
+5. **No consumer starves another.** Every path that can take more than one core
+   declares its share in `gui/concurrency.py`.
+6. **A result must never look better-founded than it is.** Refuse rather than
+   approximate. Absent must not render as zero; unexamined must not render as
+   quiet.
+
+*"Filesystem is truth at rest" was rule 1 and is now a commitment not yet in
+force — nothing in the repo has ever been at rest. See `docs/ARCHITECTURE.md`.*
 
 ---
 

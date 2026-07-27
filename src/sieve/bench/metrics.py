@@ -1,11 +1,16 @@
 """The metric collection bus: where a timed interval goes and who hears it.
 
-`budgets.py` declares eight latency ceilings. Until this module, four of them
-could not be checked by anything, because nothing in the repo emitted a timing —
-and non-negotiable #4 says a budget miss is a defect, which a budget nothing can
-miss is not. This is the one place a duration is published and the one place a
-consumer subscribes, so that adding a check means adding a subscriber rather
-than threading a callback through the executor.
+`budgets.py` declares eleven latency ceilings. Until this module, none of them
+could be checked by anything, because nothing in the repo emitted a timing — and
+rule 4 says a budget miss is a defect, which a budget nothing can miss is not.
+This is the one place a duration is published and the one place a consumer
+subscribes, so that adding a check means adding a subscriber rather than
+threading a callback through the executor.
+
+Four of the eleven still have no publisher anywhere in `src/`. That gap is
+declared in `budgets.WITHOUT_PRODUCER` and held to a list that only shrinks by
+`tests/bench/test_budget_producers.py`, because a ceiling nothing measures reads
+as a ceiling being met.
 
 Qt-free, and the `headless` contract in `.importlinter` enforces it. The QObject
 that re-emits these as signals is `gui/executor_adapter.py`, one layer up, and

@@ -52,7 +52,7 @@ from sieve.core.detection import (
     windowed_mean,
 )
 from sieve.core.pipeline_model import Edge, Node, Pipeline
-from sieve.core.wavelet import ALL_CORES, band_indices, default_freqs, morlet_band_power
+from sieve.core.wavelet import band_indices, default_freqs, morlet_band_power
 from sieve.filters.block_signal import resolve_block
 
 FloatArray = NDArray[np.floating[Any]]
@@ -236,7 +236,7 @@ def recompute(
     *,
     start_index: int = 0,
     band_power: NDArray[np.float32] | None = None,
-    workers: int = ALL_CORES,
+    workers: int,
 ) -> DetectorUpdate:
     """Item 1's functions glued into the one derivation the tab repeats.
 
@@ -248,9 +248,17 @@ def recompute(
     `start_index` is the series' first source frame, so intervals come back
     in absolute frames (what the seeker's ticks jump to).
 
-    `workers` caps the transform's threads. The default is every core, which
-    is what the cheap tier and a headless caller want; the partial-pass path
-    running beside two decode pools passes `concurrency.DETECTOR_WORKERS`.
+    `workers` caps the transform's threads and is **required, with no default**.
+    It had one — `ALL_CORES` — and `gui/filter_tab.py` inherited it by omission,
+    running a full Morlet transform over every core on the GUI thread beside two
+    decode pools. That is the fourth consumer `gui/concurrency.py` exists to
+    forbid, and `tests/unit/test_concurrency.py` could not see it: a test that
+    sums declared constants checks the declaration, not the calls. Deleting the
+    default moves enforcement to pyright, which checks every call site.
+
+    A headless caller wanting the whole machine passes `ALL_CORES` and says so.
+    Anything running beside the interactive pools passes
+    `concurrency.DETECTOR_WORKERS`.
     """
     freqs = default_freqs(fps)
     i, j = band_indices(freqs, state.freq_band[0], state.freq_band[1])

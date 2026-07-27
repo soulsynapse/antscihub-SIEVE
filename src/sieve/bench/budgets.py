@@ -1,10 +1,14 @@
 """The latency budget table. Source of truth in code for both speed regimes.
 
-A budget miss is a defect, not a tradeoff (ARCHITECTURE.md non-negotiable #4).
-The labels below are copied verbatim from the budget block in
-`docs/ARCHITECTURE.md`, and `tests/bench/test_budget_table.py` parses that
-document and fails if the two ever disagree — so the prose cannot drift away
-from what the code enforces, in either direction.
+A budget miss is a defect, not a tradeoff (ARCHITECTURE.md rule 4). The labels
+below are copied verbatim from the budget block in `docs/ARCHITECTURE.md`, and
+`tests/bench/test_budget_table.py` parses that document and fails if the two
+ever disagree — so the prose cannot drift away from what the code enforces, in
+either direction.
+
+**A ceiling nothing publishes is a number, not a budget**, which is the other
+half of rule 4 and the one this table cannot state by itself. It is stated by
+`WITHOUT_PRODUCER` below and checked by `tests/bench/test_budget_producers.py`.
 """
 
 from __future__ import annotations
@@ -142,6 +146,29 @@ BUDGETS: dict[str, Budget] = _table(
         # is happening" latency, not a per-gesture one.
         limit_ms=500.0,
     ),
+)
+
+
+#: Budgets that no module under `src/` names, and so that nothing can ever be
+#: measured against at run time. Rule 4 says a miss must be *visible*; a ceiling
+#: with no publisher cannot be missed, which looks like compliance and is its
+#: absence. Writing the gap down as a set makes it a list that only shrinks —
+#: `tests/bench/test_budget_producers.py` fails both on a budget missing from
+#: here that has no producer *and* on one listed here that has since grown one.
+#:
+#: Two of the four are covered a different way and are not equally dark:
+#: `open_to_first_frame` and `scrub_settle` are timed in CI by
+#: `tests/bench/test_perf_regression.py`, so they have a benchmark but no
+#: runtime publisher — a regression is caught on the bench, never in a session.
+#: `cut_to_ready` and `slider_to_graph` have neither, and `slider_to_graph` is
+#: waiting on there being a slider at all (`docs/LATER.md`).
+WITHOUT_PRODUCER: frozenset[str] = frozenset(
+    {
+        "open_to_first_frame",
+        "scrub_settle",
+        "cut_to_ready",
+        "slider_to_graph",
+    }
 )
 
 

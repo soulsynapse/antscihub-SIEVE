@@ -13,6 +13,7 @@ from dataclasses import replace
 
 import numpy as np
 
+from sieve.core.wavelet import ALL_CORES
 from sieve.gui.chain_model import (
     ChainKind,
     DetectorState,
@@ -66,12 +67,14 @@ def test_disarmed_detector_produces_no_gate_and_armed_detects() -> None:
     series[40:80] += 10.0  # a sustained loud stretch
 
     disarmed = DetectorState.default(FPS)
-    update = recompute(series, FPS, disarmed, start_index=200)
+    update = recompute(series, FPS, disarmed, start_index=200, workers=ALL_CORES)
     assert update.gate is None and update.intervals is None
     assert update.count.shape == (120,)  # the signal still derives
 
     armed = replace(disarmed, count_frac=(0.5, math.inf), value_band=(5.0, math.inf))
-    hot = recompute(series, FPS, armed, start_index=200, band_power=update.band_power)
+    hot = recompute(
+        series, FPS, armed, start_index=200, band_power=update.band_power, workers=ALL_CORES
+    )
     assert hot.intervals is not None and len(hot.intervals) == 1
     start, end = hot.intervals[0]
     assert start >= 200  # absolute frames, not series offsets

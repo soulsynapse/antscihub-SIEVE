@@ -8,13 +8,15 @@ Pre-pipeline speed — from opening a video to having replicates cut and a clip 
 
 In-pipeline speed — from dragging a slider to seeing the graph update. The intended feel is direct manipulation rather than job submission.
 
+Its output is a scientific claim, which is the constraint that separates SIEVE from a fast video toy: a number it renders will be read as a measurement, so a wrong answer that looks like a right one is the most expensive thing this system can produce. Rule 6 is that constraint written down.
+
 ## Layer Diagram
 
 ```
 ┌───────────────────────────────────────┐
 │  gui/          cli/                   │  UI (Qt / terminal)
 ├───────────────────────────────────────┤
-│  bench/                               │  Observation (latency checks)
+│  bench/                               │  Budgets and the metric bus
 ├───────────────────────────────────────┤
 │  pipeline/    (workers/)              │  Orchestration (DAG, executor, cache)
 ├───────────────────────────────────────┤
@@ -39,6 +41,20 @@ over the metric bus lives in `gui/`. This is the mechanism that makes CLI and
 HPC parity real rather than aspirational; a violation is a product regression
 rather than a style problem.
 
+**`bench/` is drawn above `pipeline/` but does not depend on it, and the tier is
+a prohibition rather than a dependency.** `sieve.bench` imports nothing from this
+tree — only stdlib and its own two modules — so nothing observes from up there;
+things below push into it. What the placement actually forbids is
+`pipeline → bench`, which is why `pipeline/preview.py` receives an injected
+`Measure` callable instead of importing the bus, and names its two budget keys as
+string constants (`FIRST_FRAME_BUDGET`, `WHOLE_WINDOW_BUDGET`) rather than
+referencing `BUDGETS`. That is the price of the tier, and it is a real one: it
+reintroduces one layer down exactly the unchecked-key typo that `metrics.py`'s key
+registry exists to prevent. It is paid rather than removed because instrumentation
+that the instrumented layer must import is instrumentation that cannot be absent,
+and `tests/bench/test_budget_producers.py` closes the hole from the other end by
+failing on a budget with no producer *and* on a published key that is not a budget.
+
 One thing this diagram implies that the linter does *not* yet check: that `gui/`
 reaches `workers/` only through `pipeline/`. Because `pipeline/` and `(workers/)`
 are siblings on one tier, the layers contract makes them mutually independent —
@@ -56,22 +72,190 @@ are code, one per backend, and live with the filter in `filters/`, free to
 import `cv2` or `cupy`. `backend/` therefore holds device policy and
 array-namespace helpers, never a filter's implementation: a new filter is one
 module plus one markdown file, and if adding one required editing a shared
-`cpu.py`, non-negotiable #3 would already be broken.
+`cpu.py`, rule 3 would already be broken.
 
 The rule is encoded as a machine-checked contract rather than
 enforced by review.
 
 ---
 
-## Non-Negotiables
+## The Rules
+
+Module docstrings and completed entries cite these as **"non-negotiable #N"**,
+which is what they were called, and the numbers still point where they did — so
+a grep for `non-negotiable #3` lands on rule 3 below. Only rule 1 changed
+meaning, and rule 6 is new.
+
+These were written as five non-negotiables before the rewrite had run into
+what it was describing. Revised 2026.07.27 against the code that exists. Two
+things changed and the reasoning is worth keeping, because it is the test any
+future rule has to pass:
+
+- **A rule that governs no code path is not a rule.** The old #1, "filesystem is
+  truth at rest", has never been true or false of anything: no sink writes, no
+  materializer exists, `MemoryFrameStore` is a dict. It was stated as an enforced
+  invariant and read as one. It is still a commitment, and it has moved to
+  *Commitments not yet in force* below, where its trigger lives.
+- **A rule with a standing documented exception is not a rule either.** The old
+  #4, "no latency budget misses", is contradicted two sections down by the scrub
+  budget, which is met *by degrading* and stands unmet whenever a user turns
+  coarse mode off. The invariant that actually holds — and the one worth
+  defending — is that a miss is always visible.
+
+The slot numbers of 2, 3, and 5 are unchanged in meaning, because roughly
+twenty-five module docstrings and completed entries cite them by number and
+renumbering would silently repoint every one of those. Rule 1 is repurposed; it
+had one dependent. Rule 6 is new.
 
 |#|Rule|Meaning|
 |---|---|---|
-|1|Filesystem is truth _at rest_|Materialized artifacts are readable without SIEVE running. During interactive tuning, truth lives in memory.|
-|2|Pipeline is a data structure|Serializable DAG. No GUI-only state in the pipeline artifact.|
-|3|Filter = one class + one markdown|Discovery is automatic. No registration elsewhere.|
-|4|No latency budget misses|A miss is a defect, not a tradeoff.|
-|5|No regime tradeoffs|No consumer improves its latency at another's expense — across the two regimes or within one. See *Dividing the machine*.|
+|1|One execution path|`pipeline/executor.execute` is the only thing that computes a frame. The GUI is a view over it, never a second implementation.|
+|2|Pipeline is a data structure|Serializable DAG. No GUI-only state in the pipeline artifact. It is the *complete* input to rule 1's one path.|
+|3|Filter = one module + one markdown|Discovery is automatic. No registration elsewhere.|
+|4|Every budget has a producer, and a miss is visible|A budget nothing publishes is a number, not a ceiling. A miss is a defect unless the degradation that causes it is a user's explicit choice.|
+|5|No consumer starves another|No consumer improves its latency at another's expense. Every path that can take more than one core declares its share. See *Dividing the machine*.|
+|6|A result must never look better-founded than it is|Refuse rather than approximate. Absent must not render as zero, and an unexamined stretch must not render as a quiet one.|
+
+### 1. One execution path
+
+`pipeline/executor.execute` is the single loop. `cli/run_cmd.py`,
+`cli/preview_cmd.py`, and the GUI's `PreviewRunner` all call it, the last through
+`pipeline/preview.py`, which is a caching front end over the same function rather
+than a second one. This is what makes HPC parity a property of the design instead
+of a thing somebody has to keep re-establishing: there is no cluster executor to
+diverge, because a cluster run is this function under a different front end.
+
+**Enforced by:** partially. The layer contract keeps `gui/` above `pipeline/` and
+`decode/` the only route to a frame, so a second execution path cannot be
+assembled quietly out of the parts. What is *not* checked is output equality — no
+test runs one project through the CLI and through the GUI and diffs the result.
+That is `docs/AUTO-GUARDRAILS.md` §2's open half and the most valuable unwritten
+check in this repo.
+
+### 2. Pipeline is a data structure
+
+Schema v2, `core/pipeline_model.py`. Serializable, no GUI-only state, and the
+complete input to rule 1 — which is the sense in which rules 1 and 2 are one idea
+seen from two ends. Preferences are the counter-example that defines the boundary:
+`proxy_width` is an assertion about *this machine's* decode budget and lives in
+`QSettings`, because a project carrying it would be carrying a claim about
+hardware it has never seen.
+
+**Enforced by:** `tests/unit/test_pipeline_model.py`, for purity. See rule 1 for
+the parity half.
+
+### 3. Filter = one module + one markdown
+
+`src/sieve/filters/<name>.py` plus `<name>.md`. Nothing enumerates filters;
+`filters/__init__.py` is a `pkgutil` scan and a test AST-parses it to fail if it
+ever names a filter module. Inside the module, `@register_filter` decorates the
+params class — the one class a spec cannot be written without — and
+`@kernel` / `@stateful_kernel` / `@merging_kernel` decorate the kernel functions.
+The `FilterSpec` itself is constructed in `core/filter_registry.py`, never in
+`filters/`.
+
+**Enforced by:** `tests/unit/test_filter_discovery.py`. The strongest guardrail
+here, and the only one that cannot be defeated by adding an import.
+
+**The seam worth knowing:** `register_filter`'s signature is a hand-maintained
+second copy of `FilterSpec`'s field list. It is correct today and one field
+addition away from drifting silently.
+
+### 4. Every budget has a producer, and a miss is visible
+
+The table below is the ceilings. `bench/metrics.py` is where a span is published
+and `Sample.over_ms` is computed against `BUDGETS[key]` on the way past, so a miss
+is detectable by the bus rather than by a call site remembering to ask.
+
+The rule is *not* "no misses", because the architecture already documents a
+standing exception: the scrub budget is met by degrading to a coarse frame grid,
+and a user may turn that off in Preferences, at which point the budget stands
+unmet on that machine by explicit choice. That is a preference, not a silent
+tradeoff, and a rule phrased to forbid it would be a rule everybody learns to
+ignore. What must never happen is a ceiling nothing measures.
+
+**Enforced by:** `tests/bench/test_budget_table.py` pins the table below against
+`bench/budgets.py` bidirectionally and character-exact.
+`tests/bench/test_budget_producers.py` fails on a budget with no publisher unless
+it is named in `budgets.py`'s `WITHOUT_PRODUCER`, which is the honest form of the
+gap and is a list that only shrinks. Four of eleven are in it today. Only two
+budgets are additionally *timed* in CI, by `tests/bench/test_perf_regression.py`.
+
+### 5. No consumer starves another
+
+See *Dividing the machine*, which is the whole of it.
+
+**Enforced by:** `gui/concurrency.py` declares the split and
+`tests/unit/test_concurrency.py` asserts the sum leaves a core for the GUI thread.
+`chain_model.recompute` takes `workers` as a required argument so that a caller
+cannot silently inherit every core — pyright is what checks that, which makes it
+the one part of this rule enforced at the point a violation would be written
+rather than by a test somebody has to think to run.
+
+### 6. A result must never look better-founded than it is
+
+This is the newest rule and the one with the least machinery, but it is not
+aspirational: it names a discipline the code already keeps, which is why it is
+worth stating rather than inventing. In every case so far the system has chosen to
+refuse rather than to produce a plausible number.
+
+- `pipeline/executor.py` raises `UnrunnableNodeError` on a node shape it cannot
+  run — `Mode.WINDOWED`, `rate_changing`, more than one emitted stream — before
+  any frame decodes, rather than running something adjacent.
+- `cli/run_cmd.py` refuses a project that declares a `Sink` rather than running it
+  and writing nothing.
+- `cache_key.py` refuses to key a node it cannot key, and the whole subtree below
+  drops out of the map rather than being served optimistically. "Slow and correct
+  beats fast and occasionally wrong" is that module's asymmetry rule.
+- `filters/temporal_baseline.py` exists so a threshold is denominated in a block's
+  own null distribution rather than in the illumination of one lighting rig.
+- `filters/downsample.py` offers no un-anti-aliased mode.
+
+And the standing obligations it creates, each recorded where the work is:
+
+- A temporal decimator must carry its own anti-alias lowpass, because decimating
+  without one folds high-frequency behaviour into the measured band and it arrives
+  disguised as something slower. `docs/LATER.md`, kernel-protocol entry.
+- Unexamined and examined-and-quiet must never render alike. That collapse — a
+  false negative wearing the costume of a result — is named in `docs/LATER.md` as
+  V1's standing failure, and it is inherited by three separate widgets that do not
+  exist yet.
+- A detection count that grows with clip length for no biological reason is a
+  reproducibility bug that looks like a finding. `docs/LATER.md`, surrogate
+  calibration.
+
+**Enforced by:** nothing mechanical, and it probably cannot be. It is a rule for
+review and for design, and its value is that it gives the recurring objection one
+name instead of being re-derived per widget.
+
+---
+
+## Commitments not yet in force
+
+Real intentions that govern no code path today. They are here rather than in the
+table above because a rule that cannot currently be violated cannot be relied on,
+and stating one as an invariant is how three unbuilt checks read as done for two
+weeks. Each has its trigger and reasoning in `docs/LATER.md`.
+
+- **Filesystem is truth at rest.** Materialized artifacts should read without
+  SIEVE running — VISION step 1's folder per transformation. Nothing in this repo
+  has ever been at rest: no sink writes, `pipeline/materialize.py` and
+  `storage/zarr_store.py` do not exist, `zarr` is a declared dependency imported
+  nowhere, and `MemoryFrameStore` is an unbounded dict. During interactive tuning
+  truth is *supposed* to live in memory, so this is not a violation — it is a rule
+  with no instances. It returns to the table above when the first writer lands.
+- **GPU execution.** `backend/dispatch.py` carries a complete `Backend` type
+  system, per-node backend selection, and `DEFAULT_PREFERENCE = (GPU, CPU)`. There
+  are zero GPU kernels; every filter registers CPU. `runtime_available` is a
+  `find_spec("cupy")` module-presence check, not a device probe. The machinery has
+  a real cost today — `backend_identity` enters the cache key of every filter,
+  since none claims `backend_agnostic` — for no current benefit.
+- **Process isolation and HPC handoff.** Neither exists. There is no
+  `multiprocessing`, no `subprocess`, no `workers/`, no `hpc/`; the whole HPC story
+  today is a `--workers` flag. The architectural claim that survives is narrower
+  than it sounds and is genuinely load-bearing: HPC is not a special path, because
+  rules 1 and 2 mean a cluster run is the same executor over the same artifact.
+  `hpc/handoff.py` is job-script generation, not a second engine.
 
 ---
 
@@ -94,8 +278,8 @@ IN-PIPELINE (feels like direct manipulation)
   Knob settle → graphs start filling: < 500 ms
 ```
 
-The two scrub budgets are a pair, and they are what makes non-negotiable #4
-hold rather than being quietly excepted. A random seek into 5.3K H.264 costs
+The two scrub budgets are a pair, and they are what makes rule 4's exception
+principled rather than convenient. A random seek into 5.3K H.264 costs
 ~68 ms of which ~47 ms is the container seek itself — irreducible through
 OpenCV, and slower still on a slower machine. So *during* a drag the player is
 held to 100 ms by degrading rather than by decoding faster: when sustained
@@ -110,7 +294,7 @@ which is a preference, not a silent tradeoff.
 
 ## Dividing the machine
 
-Non-negotiable #5 was written as a two-body rule — pre-pipeline against
+Rule 5 was written as a two-body rule — pre-pipeline against
 in-pipeline — and stayed self-enforcing only while there were two things
 competing for cores. There are three. The player decodes on a thread, the
 preview decodes on a pool, and `gui/detector_worker.py` runs the Morlet
@@ -122,7 +306,7 @@ The old phrasing also could not catch the specific way it would have been
 broken here. `scipy.fft` defaults to every core, so a derivation thread added
 without thought takes the whole machine, and the symptom is not a failure but a
 scrub that stutters — a pre-pipeline budget quietly bought with an in-pipeline
-nicety, which is the exact trade #5 exists to forbid.
+nicety, which is the exact trade rule 5 exists to forbid.
 
 So the rule reads over consumers rather than over regimes, and the arithmetic
 is declared in one place instead of argued in three comments.
@@ -130,6 +314,21 @@ is declared in one place instead of argued in three comments.
 asserts the sum leaves the machine a core for the GUI thread. A fourth
 consumer, or a raised constant, fails a test rather than degrading a budget
 somebody measures three commits later.
+
+**And a fourth consumer is exactly what the sum test could not see.** Until
+2026.07.27, `gui/filter_tab.py` re-derived the detector *synchronously on the GUI
+thread* on a frequency-band commit, calling `chain_model.recompute` without a
+`workers` argument and so inheriting its `ALL_CORES` default — a full Morlet
+transform over every core, beside the two decode pools, doing precisely what
+`detector_worker.py` was built to prevent. The arithmetic in `concurrency.py` was
+correct and described three consumers while four were running. The lesson is about
+the shape of the guardrail rather than about the bug: a test that sums declared
+constants can only ever check the declaration, so the fix was to delete the
+default and make `workers` a required argument, moving enforcement from a test
+that checks the sum to a type checker that checks each call. What remains open is
+that this derivation still runs on the GUI thread at all; capping it at
+`DETECTOR_WORKERS` restores the split but lengthens the stall it causes, and
+routing it through `detector_worker.py` is the real fix.
 
 `core/` deliberately holds none of this and defaults to every core.
 A CLI run, a whole-clip pass, and a headless parity check on a cluster node
@@ -141,16 +340,16 @@ belongs to the process that is sharing one.
 
 ## Import Boundaries
 
-- `core/` — no Qt, no Zarr, no subprocess, no imports from upper layers. Holds
+- `core/` — no Qt, no Zarr, no subprocess, no imports from upper layers. Holds
   the filter *contract*, never a filter implementation, so it stays free of
   `cv2` and `cupy` without constraining what a kernel may call
-- `pipeline/`, `bench/`, `cli/`, `decode/`, `filters/`, `backend/` — no Qt. CLI
+- `pipeline/`, `bench/`, `cli/`, `decode/`, `filters/`, `backend/` — no Qt. CLI
   and HPC must run headless, and `cli/` needs saying separately because it sits
   on `gui/`'s tier, where the layers contract cannot reach it
-- `core/`, `bench/`, `gui/`, `cli/` — no `cv2`
-- `filters/` — one module per filter: spec plus its kernels, colocated. May
+- `core/`, `bench/`, `gui/`, `cli/` — no `cv2`
+- `filters/` — one module per filter: spec plus its kernels, colocated. May
   import `cv2` and `cupy`; may not import `pipeline/` or anything above it
-- `decode/` — the only package that may reach a *frame*. That is a narrower
+- `decode/` — the only package that may reach a *frame*. That is a narrower
   claim than "the only package that imports `cv2`", and the narrower one is the
   load-bearing one: a kernel calling `cv2.GaussianBlur` touches no container, no
   seek, and no decoder identity, whereas a second path to a frame is how decoder
@@ -167,8 +366,78 @@ and it is the authority wherever the two disagree.
 
 - DAG (directed acyclic graph), not a linear list
 - A linear chain is valid — it's just a degenerate DAG
-- Cache keys include upstream content hashes
+- Schema v2. `Edge.port` names the input it feeds; one producer per port; a v1
+  document still loads
+- `Dag.order` is one topological order per document, not per traversal
 - Materialization is user-initiated or pressure-triggered, not automatic per step
+  — and does not exist yet, per *Commitments not yet in force*
+
+### What a cache key is made of
+
+Two digests, both BLAKE2b-256 and both seeded with `HASH_VERSION`.
+
+`source_key` — the ancestor of every root — folds a source identity, the decoder
+identity, and the replicate's ROI. `node_key` folds its upstream keys *bound to
+their port names*, the node's `filter_id` and semver, its resolved params as
+canonical JSON, and the backend identity unless the filter claims
+`backend_agnostic`.
+
+Two things about this are easy to get wrong from the outside:
+
+**Upstream content is not hashed, and neither is the video.** A previous version
+of this document claimed "cache keys include upstream content hashes". They do
+not. Source identity is `path | st_size | st_mtime_ns`, because hashing the file
+costs a full read of a multi-gigabyte video every time a project opens. Upstream
+*keys* are folded in, so ancestry is covered transitively — but it bottoms out in
+those three cheap facts, and the one way to be served stale is a file edited in
+place preserving both size and mtime. `pipeline/cache_key.py` weighs both failure
+directions in its docstring; that is the authority.
+
+**Ports are in the digest, bound to their keys.** `a - b` and `b - a` are fed by
+the same two upstream keys and are not the same computation. They are hashed as
+sorted pairs, so edge declaration order still cannot move a key.
+
+**Cacheable is narrower than deterministic.** `spec.cacheable` is
+`deterministic and not stateful`. A stateful node's output depends on every frame
+that preceded it, which a key over params and ancestry does not describe, so it is
+not keyed at all — and its whole downstream subtree drops out of the key map with
+it. All three stateful filters shipped today are therefore uncached. See
+`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md` before
+assuming a key could carry it.
+
+### What the executor refuses
+
+`_bind` walks the whole graph before any frame decodes and raises
+`UnrunnableNodeError` for a node whose `mode` is not `Mode.STREAMING`, or that is
+`rate_changing`, or that emits more than one stream. Multi-upstream is *not*
+refused — it landed with `Edge.port` and `MergingKernel`, though no shipped filter
+is one yet. The refusals are rule 6 in its cheapest form: the shapes are valid
+graphs, and running them approximately would be worse than not running them.
+
+### Warmup accumulates along the path, and does not sum
+
+`warmup_frames` is denominated in a filter's own *input* frames, so a rate-changing
+node between two others leaves them speaking different index spaces: five frames of
+warmup behind a 10:1 decimator is fifty source frames, not five. The conversion at
+one node is `core.input_warmup_frames`: `ceil(need / output_rate)` plus the node's
+own warmup. There is exactly one implementation of it and two walks over it, which
+is deliberate:
+
+- `core.source_warmup_frames` folds it sink to root over a **single path**. This is
+  the definition, and `tests/property/test_warmup.py` checks the other walk against
+  it. Nothing in `src/` calls it at run time.
+- `pipeline/plan.py`'s `_lead_in` is what actually runs: one backward pass over
+  `Dag.order`, where a node's output requirement is the **maximum over its
+  downstreams**. A DAG has more than one root-to-node path, and a diamond has
+  exponentially many, so the path walk is the definition and the max walk is the
+  implementation. They agree because `input_warmup_frames` is monotone
+  non-decreasing in its argument — `ceil` and `+` both are — which is what makes
+  the maximum over paths equal the maximum taken node by node.
+
+The executor then requests `plan.decode_range` and discards everything before
+`plan.span.start`. A plain sum compiles, runs, and under-warms every temporal
+filter behind a decimator by the decimation factor, rendering a plausible frame
+while doing it — which is rule 6's failure mode arriving through arithmetic.
 
 ---
 
@@ -176,7 +445,7 @@ and it is the authority wherever the two disagree.
 
 ```
 src/sieve/filters/
-  my_filter.py      ← FilterSpec (data) + one @kernel per backend (code)
+  my_filter.py      ← params class + @register_filter, one @kernel per backend
   my_filter.md      ← guidance doc (discovered automatically)
 ```
 
@@ -186,24 +455,15 @@ the filter branching.
 
 Two declarations on the spec are easy to get wrong and expensive to fix later:
 
-- **`deterministic`** means *same backend, same input, same output*. It governs
-  whether the node may be cached at all.
+- **`deterministic`** means *same backend, same input, same output*. With
+  `stateful` it governs whether the node may be cached at all — see *Cacheable is
+  narrower than deterministic* above.
 - **`backend_agnostic`** means the CPU and GPU kernels agree bit for bit. It
   governs whether backend identity leaves the cache key. It is false for
   essentially every float kernel — cuFFT and NumPy's FFT do not agree, and
   neither do two OpenCV SIMD paths — so it defaults to false, and claiming it
-  requires an equivalence test.
-
-**Warmup accumulates along the path, not per node**, and it does not simply
-sum. `warmup_frames` is denominated in a filter's own *input* frames, so a
-rate-changing node between two others leaves them speaking different index
-spaces: five frames of warmup behind a 10:1 decimator is fifty source frames,
-not five. `core.source_warmup_frames` walks the path sink to root, converting
-`need` to `ceil(need / output_rate)` at each node, and is the only thing that
-should — the executor requests `[clip_start − total, clip_end]` from it and
-discards the lead-in. A plain sum compiles, runs, and under-warms every
-temporal filter behind a decimator by the decimation factor, rendering a
-plausible frame while doing it.
+  requires an equivalence test. No filter claims it, and no such test or harness
+  exists to support one.
 
 An IIR filter's warmup is nominally infinite, so the number a filter declares
 is a settled-to-within-epsilon choice, and its docstring says which epsilon.

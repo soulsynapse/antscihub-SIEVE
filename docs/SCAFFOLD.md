@@ -111,6 +111,7 @@ tests/property/conftest.py              # the hypothesis "property" profile, dea
 tests/docs/test_doc_index.py            # index staleness is a test failure
 tests/docs/test_scaffold.py             # this file's two halves are a test failure
 tests/bench/test_budget_table.py        # ARCHITECTURE.md <-> budgets.py, bidirectional
+tests/bench/test_budget_producers.py    # a budget nothing publishes is a number, not a ceiling
 tests/unit/test_filter_discovery.py     # non-negotiable #3, AST-checked
 tests/unit/test_cache_key.py            # cache isolation between sibling branches
 ```

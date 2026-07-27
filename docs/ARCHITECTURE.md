@@ -15,6 +15,40 @@ In-pipeline speed — from dragging a slider to seeing the graph update. The int
 
 Its output is a scientific claim, which is the constraint that separates SIEVE from a fast video toy: a number it renders will be read as a measurement, so a wrong answer that looks like a right one is the most expensive thing this system can produce. Rule 6 is that constraint written down.
 
+## The objectives, and how a rule relates to them
+
+Every binding rule below is a *proxy* — a crisp, checkable stand-in for one of
+four objectives. Proxies are what make enforcement possible, and Goodhart's law
+is what makes them eventually wrong: a proxy will someday fire in a case where
+the objective it serves is not actually threatened. So each rule carries three
+parts: the **directive** (checkable, enforced), the **objective** it was
+derived from, and its **falsifier** — the pre-stated condition under which the
+directive stops serving the objective and the correct response is to *revise
+the rule, not obey it*. Revision through the falsifier is the legitimate,
+pre-authorized path; obeying a rule into absurdity is a defect, and so is
+violating one without touching its falsifier.
+
+- **O1 — The loop feels direct.** Tuning is the product; a slider drag answers
+  like direct manipulation, not job submission. The budgets are this
+  objective's proxies, anchored to the perceptual response bands (~0.1 s reads
+  as instantaneous, ~1 s holds the flow of thought, ~10 s holds attention;
+  Card, Moran & Newell) and *scoped to the reference workload* — see the
+  budget table's scope note.
+- **O2 — The output is a scientific claim.** A wrong answer that looks right
+  is the most expensive thing the system can produce. **O2 outranks O1
+  unconditionally: speed is never bought with a lie.** Under overload, O1's
+  demand becomes honesty about slowness, not speed.
+- **O3 — One artifact, every front end.** A saved project runs identically
+  under GUI, CLI, and HPC because there is nothing else it could do.
+- **O4 — The repo stays drivable.** Small binding surface, docs as evidence
+  rather than law, completion as a move. The doc rules in `CLAUDE.md` serve
+  this one.
+
+O1 is the objective being *optimized*; O2 through O4 are satisficing
+constraints — met, not maximized (this is the standard resolution for multiple
+objectives: constrain all but one). When two rules collide, the objectives
+adjudicate, and the ranking above is the whole precedence order.
+
 ## Layer Diagram
 
 ```
@@ -143,6 +177,14 @@ test runs one project through the CLI and through the GUI and diffs the result.
 That is `docs/AUTO-GUARDRAILS.md` §2's open half and the most valuable unwritten
 check in this repo.
 
+**Serves:** O3, and O2 through it — one implementation cannot disagree with
+itself. **Wrong when:** keeping every front end on the one path forces the
+executor to grow front-end concepts — a Qt type, a widget's notion of
+progress — in its signature. That is the letter satisfied and the spirit
+inverted: the fix is a front-end adapter over the unchanged loop, and if no
+adapter can express the need, this rule is what gets redesigned, not quietly
+bypassed.
+
 ### 2. Pipeline is a data structure
 
 Schema v2, `core/pipeline_model.py`. Serializable, no GUI-only state, and the
@@ -154,6 +196,12 @@ hardware it has never seen.
 
 **Enforced by:** `tests/unit/test_pipeline_model.py`, for purity. See rule 1 for
 the parity half.
+
+**Serves:** O3. **Wrong when:** the same field keeps being proposed for the
+artifact and rejected as GUI-only. Recurrence is the signal: either the field
+is actually identity in disguise (rule 7 decides), or the artifact's boundary
+is drawn through the middle of a real user concept and needs redrawing once,
+deliberately — not widening one exception at a time.
 
 ### 3. Filter = one module + one markdown
 
@@ -172,6 +220,13 @@ here, and the only one that cannot be defeated by adding an import.
 second copy of `FilterSpec`'s field list. It is correct today and one field
 addition away from drifting silently.
 
+**Serves:** O4 — adding capability must not require touching shared surface.
+**Wrong when:** one-module-per-filter starts forcing copy-paste: a family of
+filters sharing real logic that the module boundary makes them duplicate. The
+fix is a shared helper *below* the filters (in `backend/` or `core/`) or a
+package-per-filter form of the same discovery contract — the discovery stays,
+the granularity moves.
+
 ### 4. Every budget has a producer, and a miss is visible
 
 The table below is the ceilings. `bench/metrics.py` is where a span is published
@@ -185,12 +240,31 @@ unmet on that machine by explicit choice. That is a preference, not a silent
 tradeoff, and a rule phrased to forbid it would be a rule everybody learns to
 ignore. What must never happen is a ceiling nothing measures.
 
+A miss can also be **in declared debt**: currently over budget, with the
+`docs/todo/` item that repays it named in `budgets.py`'s `IN_DEBT`. The
+benchmark gate then reports the miss (xfail, visibly) instead of failing on
+it, which is what makes "temporarily slower while building toward faster"
+expressible without teaching anyone to ignore the gate. A debt whose item file
+no longer exists fails the suite — debt is borrowed against a repayment plan,
+not against goodwill — and the runtime HUD never honors debt at all: a slow
+session looks slow regardless of what the gate has agreed to tolerate.
+
 **Enforced by:** `tests/bench/test_budget_table.py` pins the table below against
 `bench/budgets.py` bidirectionally and character-exact.
 `tests/bench/test_budget_producers.py` fails on a budget with no publisher unless
 it is named in `budgets.py`'s `WITHOUT_PRODUCER`, which is the honest form of the
 gap and is a list that only shrinks. Four of eleven are in it today. Only two
 budgets are additionally *timed* in CI, by `tests/bench/test_perf_regression.py`.
+`tests/bench/test_budget_debt.py` holds every debt to a real budget and a live
+item.
+
+**Serves:** O1 — the budgets are its proxies, and the anchor comments in
+`budgets.py` record which perceptual band each number came from so the number
+outlives the hardware that first met it. **Wrong when:** a miss arrives from
+outside the promised scope (the reference workload — see the note under the
+table), or from work already declared in debt. Both are the proxy diverging
+from the objective, and the response is scoping or debt, never a silent
+higher limit — and never a silent miss.
 
 ### 5. No consumer starves another
 
@@ -202,6 +276,12 @@ See *Dividing the machine*, which is the whole of it.
 cannot silently inherit every core — pyright is what checks that, which makes it
 the one part of this rule enforced at the point a violation would be written
 rather than by a test somebody has to think to run.
+
+**Serves:** O1, in both regimes at once — the rule exists so neither speed is
+bought with the other. **Wrong when:** the declared split leaves cores idle
+while a user waits: a session with one consumer active still capped at its
+share is the split failing the objective it serves. The revision is a split
+that adapts to which consumers are live, not a consumer quietly taking more.
 
 ### 6. A result must never look better-founded than it is
 
@@ -251,6 +331,13 @@ And the standing obligations it creates, each recorded where the work is:
 review and for design, and its value is that it gives the recurring objection one
 name instead of being re-derived per widget.
 
+**Serves:** O2, directly — this rule *is* O2 at the widget scale. **Wrong
+when:** refusal makes the honest path so unusable that users route around
+SIEVE to a tool with no honesty at all — rigor that drives the analysis to a
+spreadsheet serves nothing. The revision is never silent approximation; it is
+the approximate mode built openly, labeled as what it is, with the label
+load-bearing (this rule's own mirror direction applied to the escape hatch).
+
 ### 7. Everything sits on one side of the identity line
 
 `core/pipeline_model.py` states it: materializing an intermediate changes where
@@ -279,6 +366,13 @@ require moving a field across the schema, not forgetting a clause. What is *not*
 checked: no test toggles a checkpoint and asserts every key survives. That test
 is one function, and it would pin this rule the way `test_budget_table.py` pins
 rule 4.
+
+**Serves:** O2 and O3 — the cache can only be trusted, and the wizard can only
+strip placement for a cluster, because the line is absolute. **Wrong when:** a
+field appears that genuinely straddles — changes results *and* placement. None
+is known, and the recorded near-misses (`checkpoints`, `backend_identity`)
+both resolved by splitting. If a true straddler ever arrives, the field gets
+split into its two halves; the line itself does not move.
 
 ---
 
@@ -337,6 +431,18 @@ IN-PIPELINE (feels like direct manipulation)
   Knob settle → graphs rebuilt:    < 3 s
   Knob settle → graphs start filling: < 500 ms
 ```
+
+**Scope: these ceilings are promised for the reference workload** — the
+representative clip through a representative chain, which today means the
+filter stack the wizard builds, not any graph a user can construct. This is
+how service-level objectives are stated everywhere they work: a promise
+conditioned on a workload, not a wish about all workloads. Outside the scope —
+five stacked filters, a pathological source — the promise that survives is
+O2's, not O1's: input never blocks, progress is visible, and a stale frame is
+labeled stale. A miss *inside* the scope is a defect or a declared debt
+(rule 4); a miss outside it is the scope clause doing its job, and widening
+the scope is a decision about the product, made in this document, not
+conceded one alarm at a time.
 
 The two scrub budgets are a pair, and they are what makes rule 4's exception
 principled rather than convenient. A random seek into 5.3K H.264 costs

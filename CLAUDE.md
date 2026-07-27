@@ -37,6 +37,12 @@ and the entry, not a separate spec file.
 
 Full text in `docs/ARCHITECTURE.md`. A violation is a defect, not a tradeoff.
 Older docstrings call these "non-negotiable #N"; the numbers still hold.
+Each rule there now states the **objective** it serves (O1–O4, defined at the
+top of that document) and its **falsifier** — the pre-stated condition under
+which revising the rule, not obeying it, is correct. Revision through the
+falsifier is the legitimate path; obeying a rule into absurdity is a defect
+too. Budgets are scoped to the reference workload and can carry declared
+debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 
 1. **One execution path.** `pipeline/executor.execute` is the only thing that
    computes a frame. The GUI is a view over it, never a second implementation.

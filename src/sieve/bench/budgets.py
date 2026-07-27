@@ -9,6 +9,22 @@ either direction.
 **A ceiling nothing publishes is a number, not a budget**, which is the other
 half of rule 4 and the one this table cannot state by itself. It is stated by
 `WITHOUT_PRODUCER` below and checked by `tests/bench/test_budget_producers.py`.
+
+Every limit carries an **anchor** comment saying which perceptual band the
+number came from (~100 ms reads as instantaneous, ~1 s holds the flow of
+thought, ~10 s holds attention; Card, Moran & Newell — Nielsen's response-time
+bands are the same numbers). A budget anchored to perception outlives the
+hardware that first met it; one anchored to "what we achieved once" is history
+wearing a rule's costume. The ceilings are promised for the *reference
+workload* — the scope note under the table in ARCHITECTURE.md is the
+authority on what that means and what is owed outside it.
+
+A budget currently missed on purpose — temporary slowness bought for eventual
+speed — is declared in `IN_DEBT` with the `docs/todo/` item that repays it.
+The benchmark gate xfails (visibly) instead of failing for a key in debt;
+`tests/bench/test_budget_debt.py` fails the suite if the item file is gone,
+so debt cannot outlive its repayment plan. The runtime HUD never honors debt:
+a slow session looks slow regardless.
 """
 
 from __future__ import annotations
@@ -53,6 +69,9 @@ BUDGETS: dict[str, Budget] = _table(
         key="open_to_first_frame",
         label="Open file → first frame",
         regime=Regime.PRE_PIPELINE,
+        # A "something is happening" latency: half the ~1 s flow-of-thought
+        # band, because opening is a gesture with a visible consequence, not a
+        # submitted job.
         limit_ms=500.0,
     ),
     Budget(
@@ -80,30 +99,42 @@ BUDGETS: dict[str, Budget] = _table(
         key="cut_to_ready",
         label="Cut confirmed → ready",
         regime=Regime.PRE_PIPELINE,
+        # Confirming a cut is a click with a state change, not a render: two
+        # perceptual beats, same band as slider_to_graph.
         limit_ms=200.0,
     ),
     Budget(
         key="filter_to_first_tick",
         label="First filter → first graph tick",
         regime=Regime.IN_PIPELINE,
+        # First-run cost is real work (decode + warmup + one transform), so
+        # this sits in the flow-of-thought band rather than the instantaneous
+        # one — doubled, because the first tick follows a *decision* (adding a
+        # filter), not a drag, and a decision tolerates a beat of setup.
         limit_ms=2000.0,
     ),
     Budget(
         key="slider_to_preview",
         label="Slider drag → preview repaint",
         regime=Regime.IN_PIPELINE,
+        # The 100 ms instantaneous band: a drag is direct manipulation and the
+        # preview is its hand.
         limit_ms=100.0,
     ),
     Budget(
         key="slider_to_graph",
         label="Slider drag → graph update",
         regime=Regime.IN_PIPELINE,
+        # Two perceptual beats: the graph may trail the preview by one tick
+        # without the pair reading as disconnected.
         limit_ms=200.0,
     ),
     Budget(
         key="full_preview_render",
         label="Full preview render (5–10s clip)",
         regime=Regime.IN_PIPELINE,
+        # Attention-band latency, met by the store rather than by speed after
+        # the first render (pipeline/preview.py). Not a per-gesture ceiling.
         limit_ms=3000.0,
     ),
     Budget(
@@ -172,17 +203,47 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
 )
 
 
-def check(key: str, elapsed_ms: float) -> None:
+@dataclass(frozen=True, slots=True)
+class Debt:
+    """A budget miss that is declared, scheduled for repayment, and tolerated
+    by the gate — never by the runtime display."""
+
+    key: str
+    #: The `docs/todo/` item that repays it, as a repo-relative path. A debt
+    #: whose item file no longer exists fails `tests/bench/test_budget_debt.py`
+    #: — completing the item without restoring the budget invalidates the debt
+    #: rather than laundering it.
+    item: str
+    #: One line: what is temporarily slower and what it is buying.
+    why: str
+
+
+#: Budgets currently missed on purpose. Empty is the normal state; an entry is
+#: a loan against a named `docs/todo/` item, and the honest response to a gate
+#: xfail here is to go read that item, not to relax anything.
+IN_DEBT: dict[str, Debt] = {}
+
+
+def check(key: str, elapsed_ms: float, *, honor_debt: bool = False) -> Debt | None:
     """Assert a measured interval is within its budget.
+
+    With `honor_debt`, a miss on a key declared in `IN_DEBT` returns the debt
+    instead of raising — the caller (the benchmark gate) is expected to xfail
+    with the debt's item, which keeps the miss visible in the report. Runtime
+    callers must not pass it: a session's slowness is never excused on screen.
 
     Raises:
         KeyError: if `key` is not a known budget.
-        BudgetMiss: if the interval exceeds the budget.
+        BudgetMissError: if the interval exceeds the budget and no debt applies.
     """
     budget = BUDGETS[key]
     over = budget.exceeded_by(elapsed_ms)
-    if over > 0.0:
-        raise BudgetMissError(
-            f"{budget.label}: {elapsed_ms:.1f} ms exceeds the "
-            f"{budget.limit_ms:.0f} ms {budget.regime} budget by {over:.1f} ms"
-        )
+    if over <= 0.0:
+        return None
+    debt = IN_DEBT.get(key)
+    if honor_debt and debt is not None:
+        return debt
+    raise BudgetMissError(
+        f"{budget.label}: {elapsed_ms:.1f} ms exceeds the "
+        f"{budget.limit_ms:.0f} ms {budget.regime} budget by {over:.1f} ms"
+    )

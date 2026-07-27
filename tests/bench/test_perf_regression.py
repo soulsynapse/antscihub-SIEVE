@@ -44,6 +44,18 @@ from sieve.gui.player import VideoPlayer
 pytestmark = [pytest.mark.gui, pytest.mark.benchmark]
 
 
+def assert_budget(key: str, elapsed_ms: float) -> None:
+    """`check` with the gate's debt policy: a declared debt xfails, visibly.
+
+    xfail rather than skip so the miss stays in the report as an expected
+    failure with the repaying item's path attached — rule 4's "a miss is
+    visible" applied to the gate's own output.
+    """
+    debt = check(key, elapsed_ms, honor_debt=True)
+    if debt is not None:
+        pytest.xfail(f"{key} in declared debt ({debt.why}) — repaid by {debt.item}")
+
+
 class Benchmark(Protocol):
     """The slice of pytest-benchmark's fixture this file uses.
 
@@ -128,7 +140,7 @@ def test_open_to_first_frame_is_within_budget(
         player.shutdown()
 
     benchmark.pedantic(once, rounds=ROUNDS)
-    check("open_to_first_frame", median(samples))
+    assert_budget("open_to_first_frame", median(samples))
 
 
 def test_scrub_release_settles_within_budget(
@@ -144,4 +156,4 @@ def test_scrub_release_settles_within_budget(
             player.shutdown()
 
     benchmark.pedantic(once, rounds=ROUNDS)
-    check("scrub_settle", median(samples))
+    assert_budget("scrub_settle", median(samples))

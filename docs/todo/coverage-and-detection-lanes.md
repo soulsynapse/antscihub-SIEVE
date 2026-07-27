@@ -5,8 +5,8 @@ gated_on: >
   the executor recording, per replicate and per frame, that it ran and under
   which resolved params
 reads:
-  - V1 gui/explorers/detection_timeline.py
-  - V1 gui/track_store.py
+  - ../antscihub-optical-flow-detector/gui/explorers/detection_timeline.py
+  - ../antscihub-optical-flow-detector/gui/track_store.py
 ---
 
 # Coverage and detection lanes on the timeline

@@ -5,8 +5,9 @@ gated_on: >
   the deferred **Sink writers** item (docs/todo/sink-writers.md) landing, or
   materialization — the same trigger, from either end
 reads:
-  - src/sieve/gui/replicate_table.py
   - src/sieve/pipeline/executor.py
+  - src/sieve/cli/run_cmd.py
+  - docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md
   - docs/REFINED-VISION.md
 ---
 

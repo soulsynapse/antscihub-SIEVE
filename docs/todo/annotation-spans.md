@@ -5,7 +5,7 @@ gated_on: >
   a detector whose output is worth correcting by hand, or a labelling task that
   needs ground truth before one exists
 reads:
-  - V1 gui/marks_store.py
+  - ../antscihub-optical-flow-detector/gui/marks_store.py
 ---
 
 # Annotation spans on the timeline

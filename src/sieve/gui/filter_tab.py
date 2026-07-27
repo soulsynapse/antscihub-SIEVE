@@ -1,10 +1,19 @@
 """The filter tab: the live chain on the right, where the signal is on the left.
 
-Item 6's assembly (parity plan § 2). The left column is the block-heat panel,
-the green windowed-count graph, and the detection window D row; the right
-column is `ChainStackView` over one `LiveChain` value; the graphs live in the
-card of the step that produces them. The cross-tab seeker stays outside every
-tab (`main_window.py`), exactly as it does for the replicate tab.
+Item 6's assembly (parity plan § 2). The left column is the step composite,
+the block-heat panel, the green windowed-count graph, and the detection
+window D row; the right column is `ChainStackView` over one `LiveChain`
+value; the graphs live in the card of the step that produces them. The
+cross-tab seeker stays outside every tab (`main_window.py`), exactly as it
+does for the replicate tab.
+
+**The composite follows the stack's selection.** Clicking a card selects the
+step, and the composite pane shows that step's output over its input at one
+opacity — the deepest node-backed ok step at or before the selection, since a
+tab-side step has no rendered frame of its own. Its pair rides window renders
+for free and is otherwise refreshed by a single-frame request at the
+playhead, suppressed while a window render the graphs need is outstanding so
+the refresh stream can never displace it from the runner's pending slot.
 
 **One value, replaced on every edit.** The tab holds the current `LiveChain`
 and replaces it — knob edits rewrite node params, removals go through
@@ -43,7 +52,7 @@ from math import isfinite
 from time import perf_counter
 
 import numpy as np
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import QRect, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -65,6 +74,8 @@ from sieve.gui.band_plot import DIM
 from sieve.gui.block_heat import BlockHeatPanel
 from sieve.gui.chain_model import (
     SIGNAL_LABELS,
+    ChainKind,
+    ChainStep,
     DetectorState,
     DetectorUpdate,
     LiveChain,
@@ -76,6 +87,7 @@ from sieve.gui.chain_model import (
     snapped_band_label,
 )
 from sieve.gui.chain_stack import ChainStackView
+from sieve.gui.composite_view import StepCompositeView, grid_to_qimage
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.density_plot import DensityPlot
 from sieve.gui.document import ReplicateDocument
@@ -138,6 +150,28 @@ class FilterTab(QWidget):
         #: first-tick arm.
         self._knob_armed_at: float | None = None
 
+        # The step composite's state. The selection is sticky by id and falls
+        # back to the tail — "a chain stack that always has a selected step"
+        # is what lets full-current-state be a selection rather than a mode.
+        self._selected_step: str | None = None
+        #: The player's raw frame at the playhead — the first step's input.
+        self._frame_image: QImage | None = None
+        #: One-slot mailbox for the composite pair, the wizard grab's twin:
+        #: the render thread drops `(input array | None, output array,
+        #: is block grid)` in, `_on_render_finished` converts on the GUI
+        #: thread.
+        self._composite_grab: list[tuple[np.ndarray | None, np.ndarray, bool]] = []
+        #: Revisions submitted purely to refresh the composite. The HUD keeps
+        #: its window series through these — one frame at the playhead is an
+        #: update to one index, not a new render worth clearing for.
+        self._composite_revisions: set[int] = set()
+        #: A window render the graphs are waiting on has been submitted and
+        #: has not reported back. While true, playhead-driven composite
+        #: refreshes are suppressed — a stream of single-frame requests would
+        #: displace the window render from the runner's pending slot and the
+        #: series would never arrive.
+        self._series_pending = False
+
         # The wizard (plan item 7). One at a time; the snapshot is what
         # Cancel restores, and the provisional id is what the stack dashes.
         self._wizard: StepWizard | None = None
@@ -166,6 +200,7 @@ class FilterTab(QWidget):
     # ---- construction ----------------------------------------------------
 
     def _build_widgets(self) -> None:
+        self._composite = StepCompositeView()
         self._heat = BlockHeatPanel()
         self._count = CountPlot()
         self._scalogram = ScalogramPlot()
@@ -216,6 +251,7 @@ class FilterTab(QWidget):
 
         left = QVBoxLayout()
         left.setSpacing(4)
+        left.addWidget(self._composite, 3)
         left.addWidget(self._heat, 3)
         left.addWidget(self._count, 2)
         left.addLayout(d_row)
@@ -234,10 +270,12 @@ class FilterTab(QWidget):
         self._runner.opened.connect(self.resubmit)
         self._runner.render_started.connect(self._collector_start)
         self._runner.render_started.connect(self._hud_begin)
-        self._runner.frame_cost.connect(self._hud.add_cost)
+        self._runner.frame_cost.connect(self._on_frame_cost)
         self._runner.render_finished.connect(self._on_render_finished)
+        self._runner.render_failed.connect(self._on_render_failed)
 
         self._stack.reset_clicked.connect(self._on_reset)
+        self._stack.select_requested.connect(self._on_step_selected)
         self._stack.remove_requested.connect(self._on_remove)
         self._stack.swap_requested.connect(self._on_swap_requested)
         self._stack.insert_requested.connect(self._on_insert_requested)
@@ -306,6 +344,16 @@ class FilterTab(QWidget):
         """The per-frame cost plot. The window connects the bus's samples to it."""
         return self._hud
 
+    @property
+    def composite(self) -> StepCompositeView:
+        """The step composite pane, for the window and for tests."""
+        return self._composite
+
+    @property
+    def selected_step(self) -> str | None:
+        """The selected step's id — what the composite is showing."""
+        return self._selected_step
+
     # ---- the chain value -------------------------------------------------
 
     def _fps(self) -> float:
@@ -368,13 +416,17 @@ class FilterTab(QWidget):
         # the closure dead.
         expected = self._runner.revision + 1
         grabber = self._grabber(self._chain) if self._wizard is not None else None
+        composite = self._composite_grabber()
 
         def feed(result: object) -> None:
             collector.add(expected, result)  # type: ignore[arg-type]
             if grabber is not None:
                 grabber(result)
+            if composite is not None:
+                composite(result)
 
-        self._runner.request_render(self._chain.pipeline(), window, replicate, consumer=feed)
+        if self._runner.request_render(self._chain.pipeline(), window, replicate, consumer=feed):
+            self._series_pending = True
 
     def _grabber(self, chain: LiveChain):
         """A consumer that catches the wizard's video frame as it flies past.
@@ -409,18 +461,41 @@ class FilterTab(QWidget):
         the HUD's x axis is the working window, and a single-frame render (a
         wizard hover) is one dot at its place in that window, not a window of
         its own.
+
+        A composite refresh does not clear at all: playback issues one frame
+        request per playhead move, and a HUD that emptied on each would never
+        show the window series again. `add_cost` updates that one index in
+        place instead. Revisions below the one starting can never start —
+        latest-wins displaced them — so they are dropped here.
         """
-        del revision
+        self._composite_revisions = {r for r in self._composite_revisions if r >= revision}
+        if revision in self._composite_revisions:
+            return
         window = self._document.window
         if window is not None:
             self._hud.set_span(window.start, window.frame_count)
         self._hud.begin()
 
+    @Slot(int, float)
+    def _on_frame_cost(self, index: int, elapsed_ms: float) -> None:
+        """Forward a frame's cost to the HUD, unless it is a composite refresh.
+
+        A composite frame is served almost entirely from the store, and its
+        near-zero cost overwriting the render's real cost at that index would
+        turn playback into an eraser for the HUD's series.
+        """
+        if self._runner.revision in self._composite_revisions:
+            return
+        self._hud.add_cost(index, elapsed_ms)
+
     @Slot(object)
     def _on_render_finished(self, render: object) -> None:
         del render
+        self._series_pending = False
         if self._wizard is not None and self._grab:
             self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
+        if self._composite_grab:
+            self._apply_composite(*self._composite_grab.pop())
         series = self._collector.take(self._runner.revision)
         if series is None:
             # A render whose prefix stopped above the extraction step — the
@@ -437,6 +512,17 @@ class FilterTab(QWidget):
             self._metrics.publish(KNOB_BUDGET, (perf_counter() - self._knob_armed_at) * 1000.0)
             self._knob_armed_at = None
         self.graphs_updated.emit()
+
+    @Slot(str)
+    def _on_render_failed(self, message: str) -> None:
+        """A refused render is not one the graphs are still waiting on.
+
+        Without this, the first failed window render would leave
+        `_series_pending` true forever and the composite would never refresh
+        again for the whole source.
+        """
+        del message
+        self._series_pending = False
 
     # ---- derivation ------------------------------------------------------
 
@@ -613,6 +699,8 @@ class FilterTab(QWidget):
         }
 
     def _rebuild_stack(self) -> None:
+        self._ensure_selection()
+        self._update_composite_caption()
         captions = self._captions()
         bodies: dict[str, tuple[QWidget, ...]] = {
             "rescale": (self._rescale_row,),
@@ -628,6 +716,7 @@ class FilterTab(QWidget):
             [captions[step.step_id] for step in self._chain.steps],
             bodies,
             provisional=self._provisional_id,
+            selected=self._selected_step,
         )
 
     def _sync_widgets_from_chain(self) -> None:
@@ -656,6 +745,175 @@ class FilterTab(QWidget):
         finally:
             for widget in knobs:
                 widget.blockSignals(False)
+
+    # ---- the step composite ----------------------------------------------
+
+    @Slot(str)
+    def _on_step_selected(self, step_id: str) -> None:
+        """A card was clicked: the composite retargets to that step."""
+        if step_id == self._selected_step:
+            return
+        self._selected_step = step_id
+        self._stack.set_selected(step_id)
+        self._update_composite_caption()
+        self._refresh_composite()
+
+    def _ensure_selection(self) -> None:
+        """Keep the selection pointing at a step that still exists.
+
+        Sticky by id across rebuilds; when the selected step is gone — or
+        nothing was ever selected — it falls to the tail, the last ok step,
+        which is what makes the default view the full current state.
+        """
+        ids = {step.step_id for step in self._chain.steps}
+        if self._selected_step in ids:
+            return
+        last_ok = None
+        for step, step_grade in zip(self._chain.steps, self._chain.grades(), strict=True):
+            if step_grade.status is Status.OK:
+                last_ok = step.step_id
+        self._selected_step = last_ok
+
+    def _composite_target(self) -> tuple[str | None, ChainStep] | None:
+        """`(input node id, target step)` the composite composes, or None.
+
+        The target is the deepest node-backed ok step at or before the
+        selection: a tab-side step (morlet, windowed count) has no rendered
+        output to show, so selecting one shows the deepest frame the render
+        actually produced. The input id is the node before the target, or
+        None when the target is first and its input is the source itself.
+        """
+        steps = self._chain.steps
+        ids = [step.step_id for step in steps]
+        limit = ids.index(self._selected_step) if self._selected_step in ids else len(steps) - 1
+        target: ChainStep | None = None
+        upstream: str | None = None
+        for index, (step, step_grade) in enumerate(zip(steps, self._chain.grades(), strict=True)):
+            if step_grade.status is not Status.OK or step.node is None or index > limit:
+                break
+            if target is not None and target.node is not None:
+                upstream = target.node.node_id
+            target = step
+        return None if target is None else (upstream, target)
+
+    def _update_composite_caption(self) -> None:
+        target = self._composite_target()
+        if target is None:
+            self._composite.set_caption("")
+            self._composite.set_notice("no runnable step to compose")
+            return
+        _, step = target
+        caption = step.title
+        if step.step_id != self._selected_step:
+            caption = f"{step.title} (deepest rendered)"
+        self._composite.set_caption(caption)
+
+    def _composite_grabber(self):
+        """A consumer that catches the composite pair as frames fly past.
+
+        The wizard grabber's twin: it runs on the render thread inside a
+        render that was happening anyway, indexes the `FrameResult` for two
+        nodes, and never feeds anything back into the graph
+        (`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`).
+        """
+        window = self._document.window
+        target = self._composite_target()
+        if window is None or target is None:
+            return None
+        upstream, step = target
+        if step.node is None:
+            return None
+        node_id = step.node.node_id
+        is_grid = step.kind_out is ChainKind.BLOCK_SERIES
+        want = min(max(self._playhead, window.start), window.end - 1)
+        slot = self._composite_grab
+
+        def grab(result: object) -> None:
+            if getattr(result, "index", None) != want:
+                return
+            outputs = getattr(result, "outputs", {})
+            over = outputs.get(node_id)
+            if over is None:
+                return
+            base = outputs.get(upstream) if upstream is not None else None
+            slot[:] = [
+                (
+                    None if base is None else np.asarray(base.data),
+                    np.asarray(over.data),
+                    is_grid,
+                )
+            ]
+
+        return grab
+
+    def _refresh_composite(self) -> None:
+        """One frame at the playhead for the composite, when nothing bigger is due.
+
+        Suppressed while a window render the graphs need is outstanding: the
+        runner holds one pending request, and a stream of playhead frames
+        would displace the window render from it — the graphs would then show
+        a stale series until the next edit. Nothing is lost by waiting: the
+        outstanding render's consumer grabs the same pair on its way past.
+        """
+        if self._series_pending:
+            return
+        window = self._document.window
+        grab = self._composite_grabber()
+        if window is None or grab is None:
+            return
+        want = min(max(self._playhead, window.start), window.end - 1)
+        replicates = self._document.all()
+        replicate = replicates[0] if replicates else None
+        expected = self._runner.revision + 1
+        if self._runner.request_frame(self._chain.pipeline(), want, replicate, consumer=grab):
+            self._composite_revisions.add(expected)
+
+    def _apply_composite(self, base: np.ndarray | None, over: np.ndarray, is_grid: bool) -> None:
+        """Convert the grabbed pair on the GUI thread and hand it to the pane."""
+        base_image = self._cropped_player_frame() if base is None else frame_to_qimage(base)
+        if is_grid:
+            over_image: QImage | None = grid_to_qimage(over, self._grid_scale(over))
+        else:
+            over_image = frame_to_qimage(over)
+        self._composite.set_frames(base_image, over_image)
+
+    def _grid_scale(self, over: np.ndarray) -> float:
+        """The value that reads as full heat in a block-grid overlay.
+
+        The window's series percentile when one has been collected — the heat
+        panel's fixed-scale discipline, in the raw signal's units — and the
+        frame's own max before the first series lands.
+        """
+        if self._series is not None:
+            return float(np.percentile(self._series.data, _HEAT_PERCENTILE))
+        return float(np.max(over)) if over.size else 1.0
+
+    def _cropped_player_frame(self) -> QImage | None:
+        """The player's frame as the first step's input: replicate-cropped.
+
+        The graph runs over the first replicate's crop when one exists, so the
+        source the composite shows under the first step's output must be the
+        same region — otherwise the overlay would sit on footage the graph
+        never saw. The ROI is in source pixels and the player's image may be a
+        proxy, so the rectangle scales by the image's actual size.
+        """
+        image = self._frame_image
+        if image is None:
+            return None
+        replicates = self._document.all()
+        source = self._document.source_size
+        if not replicates or source is None:
+            return image
+        roi = replicates[0].roi
+        scale_x = image.width() / source[0]
+        scale_y = image.height() / source[1]
+        rect = QRect(
+            round(roi.x * scale_x),
+            round(roi.y * scale_y),
+            round(roi.width * scale_x),
+            round(roi.height * scale_y),
+        ).intersected(image.rect())
+        return image.copy(rect) if not rect.isEmpty() else image
 
     # ---- knob edits (upstream: re-run extraction) ------------------------
 
@@ -973,6 +1231,13 @@ class FilterTab(QWidget):
         self._pooled_power = None
         self._playhead = 0
         self._knob_armed_at = None
+        self._selected_step = None
+        self._frame_image = None
+        self._composite_grab.clear()
+        self._composite_revisions.clear()
+        self._series_pending = False
+        self._composite.set_frames(None, None)
+        self._composite.set_notice("")
         self._heat.set_frame(None)
         self._hud.set_span(0, 0)
         self._hud.begin()
@@ -984,10 +1249,12 @@ class FilterTab(QWidget):
     @Slot(int, QImage)
     def _on_frame_changed(self, index: int, image: QImage) -> None:
         self._playhead = index
+        self._frame_image = image
         self._heat.set_frame(image)
         for plot in (self._scalogram, self._density, self._count, self._hud):
             plot.set_playhead(index)
         self._apply_heat_state()
+        self._refresh_composite()
 
 
 def _row(label: str, *widgets: QWidget) -> QWidget:

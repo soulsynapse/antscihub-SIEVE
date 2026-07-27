@@ -182,56 +182,17 @@ bus's whole-render verdicts, red on a miss. It is `BandPlot` with the handle
 machinery suppressed, so a drag on a cost spike scrubs to it. See
 `docs/completed-todo/2026.07.26-the-graph-hud.md`.
 
-The item below is what is left of the tuning loop VISION step 4 describes. It
-was gated on the preview and no longer is. It was the three-way overlay until
-2026.07.26, when REFINED-VISION was checked against it and the three modes
-collapsed to one view — the reasoning is in the item, because the collapse *is*
-the design.
-
-## The step composite
-
-**Gated on: nothing.** It is a view over previewed frames, and
-`PreviewSession.render_window` delivers them one at a time to a consumer the
-caller passes in — which is the shape a viewport wants. The demand this item
-makes that nothing else does is two frames from *different nodes* at the same
-source index: `FrameResult` already carries every node's output for one frame
-(`gui/filter_tab.py` already indexes it that way for the wizard's grab), so the
-demand is satisfied by indexing it rather than by a second render.
-
-**The view:** the selected step's output, alpha-composited over that step's
-input, with one opacity control. This is VISION step 4's three-way switch after
-REFINED-VISION restructured it:
-
-- *Raw video* is no longer a mode. REFINED-VISION's level-opacity rule — SIEVE
-  inside an output folder does not know what is above it — means "raw" can only
-  mean the current level's source, and cross-level comparison already belongs
-  to the breadcrumb navigation. Within a level, the source is what the first
-  step's composite shows at full opacity anyway.
-- *Full current state* is not a mode either, twice over. The refined chain's
-  tail is thresholded, windowed detection, so the full state is typically a
-  binary mask — uninformative *instead of* the video, only legible *over* it,
-  which is why this is a composite and not a switch. And with a chain stack
-  that always has a selected step, full-state is just the composite with the
-  tail selected.
-- *The contribution of the current operation* is therefore the whole item, and
-  it is the one REFINED-VISION leans on hardest: the grooming walkthrough's
-  claim — decay-plus-touch removes walking and keeps grooming — is spatial, and
-  the band plots and HUD are per-frame scalars that cannot show *which pixels*
-  a step removed. Its closing "much testing would be needed" is this view.
-
-**The napari question under Deferred decisions is answered here: dropped.**
-After the collapse the requirement is two layers and one opacity slider —
-alpha-blended QPainter of the kind `video_view.py` already does for the ROI.
-napari earned re-adoption only if a vision demanded N simultaneous independent
-layers; neither does.
-
-One standing constraint: the composite path displays `FrameResult` entries the
-render already produced and never feeds the graph — the graphs keep reading
-node outputs directly
-(`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`).
-
-Read: `src/sieve/gui/video_view.py`, `docs/REFINED-VISION.md` (filter tab),
-`docs/VISION.md` step 4.
+The step composite — what was left of the tuning loop VISION step 4 describes —
+is drawn. Clicking a card in the chain stack selects that step, and the pane at
+the top of the filter tab's left column draws the step's output over its input
+at one opacity: the tail selected *is* the full current state, the first step at
+full opacity *is* the source, so the three-way overlay stayed collapsed to one
+view. The pair is grabbed out of `FrameResult`s the render already produced —
+never a second render, never fed back into the graph — and playhead refreshes
+are suppressed while a window render is outstanding so they can never displace
+the graphs' render from the runner's one pending slot. The napari question
+closed with it: two layers and one slider is QPainter. See
+`docs/completed-todo/2026.07.26-the-step-composite.md`.
 
 ---
 

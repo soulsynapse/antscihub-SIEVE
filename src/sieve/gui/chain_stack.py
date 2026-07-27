@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui.band_plot import DIM, LINE, PANEL, TEXT, plot_font
+from sieve.gui.band_plot import ACCENT, DIM, LINE, PANEL, TEXT, plot_font
 from sieve.gui.chain_model import STAGE_CHIPS, ChainStep, Stage, Status, StepGrade
 
 #: Conflict red — the card edge, the message, and the repair buttons.
@@ -137,6 +137,7 @@ class StepCard(QWidget):
 
     swap_clicked = Signal(str)
     remove_clicked = Signal(str)
+    select_clicked = Signal(str)
 
     def __init__(
         self,
@@ -146,12 +147,14 @@ class StepCard(QWidget):
         parent: QWidget | None = None,
         *,
         provisional: bool = False,
+        selected: bool = False,
     ) -> None:
         super().__init__(parent)
         self.step = step
         self.grade = grade
         self.caption = caption
         self.provisional = provisional
+        self.selected = selected
         self._hot = False
 
         conflicted = grade.status is Status.CONFLICT
@@ -215,6 +218,17 @@ class StepCard(QWidget):
         self._remove_hover.setVisible(False)
         self.update()
 
+    def mousePressEvent(self, event: object) -> None:
+        """A click anywhere a child did not take selects this step.
+
+        Emits and never applies, like every other card gesture: the tab sets
+        the selection on the model and the next `set_selected` (or `rebuild`)
+        is what moves the marker — a card that painted its own click would
+        disagree with the composite for a frame every time.
+        """
+        del event
+        self.select_clicked.emit(self.step.step_id)
+
     def paintEvent(self, event: QPaintEvent) -> None:
         del event
         painter = QPainter(self)
@@ -231,6 +245,13 @@ class StepCard(QWidget):
             edge = QPen(DIM, 1.0, Qt.PenStyle.DashLine)
         painter.setPen(edge)
         painter.drawRoundedRect(rect, 6, 6)
+        if self.selected and not conflicted:
+            # The selection marker: the composite is showing this step. The
+            # conflict bar wins the same spot — a broken step's problem
+            # outranks its being watched.
+            painter.setBrush(ACCENT)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2)
         if conflicted:
             painter.setBrush(CONFLICT)
             painter.setPen(Qt.PenStyle.NoPen)
@@ -270,6 +291,7 @@ class ChainStackView(QWidget):
     remove_requested = Signal(str)
     swap_requested = Signal(str)
     insert_requested = Signal(int)
+    select_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -317,6 +339,7 @@ class ChainStackView(QWidget):
         captions: Sequence[str],
         bodies: Mapping[str, Sequence[QWidget]],
         provisional: str | None = None,
+        selected: str | None = None,
     ) -> None:
         """Reconstruct the column for `steps`, borrowing `bodies` into cards.
 
@@ -324,6 +347,9 @@ class ChainStackView(QWidget):
         card draws dashed and says so. Everything else about it is ordinary —
         it grades, it renders, its body embeds — because the provisional step
         being *really in the chain* is what makes the preview honest.
+
+        `selected` names the step whose composite the video pane is showing;
+        its card carries the accent marker.
 
         `bodies` maps step ids to the tab's persistent widgets, embedded in
         chain order into each card's body. Widgets borrowed by the previous
@@ -353,9 +379,16 @@ class ChainStackView(QWidget):
             if step.stage not in seen_stages:
                 seen_stages.add(step.stage)
                 self._column.addWidget(StageHeader(step.stage))
-            card = StepCard(step, grade, caption, provisional=step.step_id == provisional)
+            card = StepCard(
+                step,
+                grade,
+                caption,
+                provisional=step.step_id == provisional,
+                selected=step.step_id == selected,
+            )
             card.swap_clicked.connect(self.swap_requested)
             card.remove_clicked.connect(self.remove_requested)
+            card.select_clicked.connect(self.select_requested)
             if grade.status is Status.OK:
                 for widget in bodies.get(step.step_id, ()):
                     card.body.addWidget(widget)
@@ -367,6 +400,14 @@ class ChainStackView(QWidget):
         tail.clicked.connect(self.insert_requested)
         self._column.addWidget(tail)
         self._column.addStretch(1)
+
+    def set_selected(self, step_id: str | None) -> None:
+        """Move the selection marker in place — a click is not a rebuild."""
+        for card in self._cards:
+            wanted = card.step.step_id == step_id
+            if card.selected != wanted:
+                card.selected = wanted
+                card.update()
 
     def update_captions(self, captions: Mapping[str, str]) -> None:
         """Refresh caption text in place — a knob wiggle is not a rebuild."""

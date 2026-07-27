@@ -34,8 +34,10 @@ from sieve.gui.band_plot import ACCENT, DIM, PANEL, TEXT, plot_font
 FloatArray = NDArray[np.floating[Any]]
 
 #: The fill color at full heat — the warm ramp's bright stop, so cell heat and
-#: the scalogram's surface read as the same quantity.
-_HEAT = QColor(226, 130, 56)
+#: the scalogram's surface read as the same quantity. Public because the step
+#: composite colours block grids with it for the same read-as-one-quantity
+#: reason.
+HEAT = QColor(226, 130, 56)
 
 #: Opacity the context frame draws at. Low: it locates, it does not compete.
 _FRAME_OPACITY = 0.42
@@ -176,7 +178,7 @@ class BlockHeatPanel(QWidget):
             row, col = divmod(b, nx)
             cell = QRectF(g.left() + col * cell_w, g.top() + row * cell_h, cell_w, cell_h)
             heat = min(float(self._values[b]) / self._scale_max, 1.0)
-            fill = QColor(_HEAT)
+            fill = QColor(HEAT)
             fill.setAlpha(int(150 * heat))
             painter.fillRect(cell.adjusted(1.0, 1.0, -1.0, -1.0), fill)
             if bool(self._in_band[b]):

@@ -95,23 +95,39 @@ Read: `docs/SCAFFOLD.md` `backend/`, `src/sieve/backend/dispatch.py`,
 
 ## A kernel protocol that is not one frame in, one frame out
 
-**Why not now.** Three node shapes are valid graphs that the executor refuses
-at run time, and all three refuse for one reason: `Kernel` takes a frame and
-returns a frame. `dispatch.py` declines to invent the second signature before a
-filter needs one, and that reasoning has not changed — a signature designed
-against zero instances is a signature every kernel written afterwards is stuck
-with.
+**Why not now.** Two node shapes are valid graphs that the executor refuses at
+run time, and both refuse for one reason: `Kernel` takes a frame and returns a
+frame. `dispatch.py` declines to invent the second signature before a filter
+needs one, and that reasoning has not changed — a signature designed against zero
+instances is a signature every kernel written afterwards is stuck with.
 
-**What would make it the right time.** A filter that actually needs one. Each
-shape has a different trigger and they are unlikely to arrive together:
+**The third shape's trigger has fired and it has been moved.** Multi-upstream
+nodes were the third entry in this list until 2026.07.26, when REFINED-VISION's
+temporal section was read as a specification: every kind-amplifier it describes
+is a *combination* of channels, which is what makes it a discriminant rather than
+a filter, so the trigger this entry asked for — "a filter that actually needs
+one" — is satisfied several times over. See `TODO.md` **Multi-upstream kernels**,
+and `docs/REFINED-VISION.md` **G** for why it gates the rest of that section.
+Per rule 5, it is gone from here rather than duplicated.
+
+**What would make it the right time** for the two that remain. A filter that
+actually needs one. Each has a different trigger and they are unlikely to arrive
+together:
 
 - `Mode.WINDOWED` — a filter needing a span before it can emit, e.g. a temporal
   median for background subtraction. This is the likeliest to arrive first.
 - `rate_changing` — a decimator. The warmup arithmetic already handles rate
-  exactly and is property-tested, so only the *call* is missing.
-- Multi-upstream nodes — a filter merging two streams, which needs named ports
-  on `Edge` first. That is a change to the saved artifact and to every edge ever
-  written, which `filter_base.py`'s `StreamSpec` docstring already prices.
+  exactly and is property-tested, so only the *call* is missing. **One thing to
+  record before it lands**, because discovering it afterwards means invalidating
+  results rather than a design: a decimator must carry its own temporal
+  anti-alias lowpass, or high-frequency behaviour folds into the measured band
+  and arrives disguised as something slower — grooming at 8 Hz sampled at 12 fps
+  reads as 4 Hz. `wavelet.default_freqs`' 0.45·fps cap does not cover this; it
+  stops the *analysis* asking for a frequency that is not there, not the
+  *decimation* from manufacturing one. The anti-alias belongs inside the filter
+  rather than as a separate node a user can forget to place, by the same
+  reasoning that `downsample` offers no un-anti-aliased mode. See
+  `docs/REFINED-VISION.md` **E**.
 
 **A fourth shape was never deferred and is now built.** A *stateful streaming*
 filter — one frame in, one frame out, carrying what it learned from the last
@@ -222,6 +238,89 @@ one behaviour label should be one colour across every replicate in a source,
 which is a display contract about the clip and not about the region.
 
 Read: V1 `gui/marks_store.py`.
+
+## Surrogate calibration for the detection threshold
+
+**Why not now.** It calibrates a chain whose final shape is still being decided —
+`TODO.md`'s temporal section has four items that each change what is being
+thresholded, and a null distribution computed for a chain that then grows a node
+is a number that quietly stops meaning anything. It is also genuinely useless
+before the accuracy question below has *any* answer: a calibrated threshold that
+nobody can check against a labelled event is rigour pointed at an unknown.
+
+**What would make it the right time.** The temporal chain settling — concretely,
+the first parameter set somebody wants to run over a whole video and report.
+That is the moment the threshold stops being a slider position and becomes a
+claim.
+
+**The problem it solves**, which is easy to not notice because it looks like a
+result. Thresholding a few hundred blocks across a few thousand frames is on the
+order of a million tests, so the expected false-positive count is proportional to
+blocks × frames: **the same settings on a longer clip, or on a finer grid,
+produce more detections for no biological reason.** A user comparing a 10-minute
+recording against a 30-minute one under identical settings sees more behaviour in
+the longer one and has no way to tell how much of that is arithmetic. This is the
+same class of failure the coverage lanes entry above exists to prevent, arriving
+through the threshold instead of through the palette.
+
+**The remedy is already half-built.** The size-and-duration filter REFINED-VISION
+describes is cluster-extent inference — the instrument fMRI settled on (Worsley
+and Friston's random field theory; Benjamini–Hochberg FDR is the other branch).
+What is missing is its null distribution, without which "size threshold 12" is
+tuned until the output looks right, which is exactly the circularity the method
+exists to avoid.
+
+**Why it is cheap here, which is the argument for eventually doing it.**
+Circularly shift each block's time series by an independent random offset (or
+phase-randomize it): real spatiotemporal events are destroyed while each block's
+marginal distribution and the spatial correlation structure survive. Run the
+*existing* gate and attribute filter on the surrogate, take the largest cluster,
+repeat a few hundred times, read the threshold off the 95th percentile. The
+surrogate is just a different input array, so this reuses the entire detection
+chain — the implementation is a loop and a percentile, not new mathematics.
+
+This is the single item in the doc tree most likely to make SIEVE's output
+defensible in review, which is why it is written down now rather than when
+somebody asks for it.
+
+Read: `src/sieve/core/detection.py`, `docs/REFINED-VISION.md` **D**.
+
+## Accuracy feedback in the tuning loop
+
+**Why not now.** It needs labelled spans and there is no marks model — this is
+strictly downstream of **Annotation spans on the timeline** above, and shares its
+trigger.
+
+**Why it is worth an entry anyway**, rather than being a line in that one: it is
+the deepest gap between VISION as written and a tool that produces defensible
+results, and naming it separately is what stops it being read as a rendering
+detail of the annotation layer. VISION steps 4 and 5 build an elaborate feedback
+loop about **cost** — the benchmark summary, the graph HUD, the per-operation
+expense, the compaction prompt when memory climbs. There is nothing anywhere
+about whether a parameter change made detection *better*. A user drags a
+threshold and learns exactly what it cost and nothing about what it caught.
+
+**What would make it the right time.** A marks model plus one hand-labelled
+window. Not a corpus — one window is enough to make the curve below draw, and the
+gap between "no accuracy signal" and "a noisy accuracy signal" is far larger than
+the one between noisy and good.
+
+**The shape of the answer, which is cheaper than it sounds.** The detection
+threshold is a *slider* and the score series behind it is already cached, so
+sweeping the threshold across a labelled window and drawing the resulting
+precision/recall or detection-error tradeoff curve is one pass over an array the
+system already holds — `gui/band_plot.py`'s family draws it. The user then tunes
+against a curve instead of an impression, and the parameter that maximizes F1 or
+minimizes total error is *read off* rather than hunted for.
+
+**Two constraints inherited from entries above, both of which V1 got wrong.**
+Labels belong to a **replicate**, not to the video. And a curve computed over
+labelled spans must never be drawn as though it covered unlabelled ones — that is
+the unexamined-versus-quiet collapse the coverage lanes entry names as V1's
+standing failure, arriving through a different widget.
+
+Read: the **Annotation spans on the timeline** entry above,
+`src/sieve/core/detection.py`, `docs/REFINED-VISION.md` **F**.
 
 ## Cache eviction, and spilling to disk
 

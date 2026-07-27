@@ -235,6 +235,165 @@ Read: `src/sieve/gui/video_view.py`, `docs/REFINED-VISION.md` (filter tab),
 
 ---
 
+# The temporal chain
+
+The four items below are what REFINED-VISION's closing section — "Temporal
+signal-amplification-of-kind" — decomposes into once it is read as a specification
+rather than as a sketch. That reading is written up beneath the vision itself, in
+`docs/REFINED-VISION.md` under **What "signal amplification of kind" is, and what
+has to be built for it**; each item below points at its lettered section there
+rather than restating the argument.
+
+They are ordered, and the order is not the order of appeal. Reasoning is in that
+document's closing **Build order** section, but the short form is: the stateless
+discriminant comes first because it may make the stateful one unnecessary for the
+flagship example, the artifact-touching change comes early because migrations get
+worse with age, and the units come before the filter whose thresholds are
+denominated in them.
+
+## Coherence as a third block signal
+
+**Gated on: nothing.** `filters/block_signal.py` already forms five of the six
+unique components of the 3D spatiotemporal structure tensor on the `flow_speed`
+path (`xx, yy, xy, xt, yt`) and the sixth on the `change_energy` path — its
+docstring says so explicitly. This item forms all six together and reads the
+eigenstructure.
+
+**What it is for.** Grooming and walking both produce high `change_energy`; what
+separates them is whether the change *advects*. One dominant eigenvalue means an
+oriented structure in (x, y, t), i.e. coherent translation — walking. Two
+comparable eigenvalues mean change in place — grooming. Emit
+`c = ((λ₁-λ₂)/(λ₁+λ₂))²` in [0, 1] as a third `Signal` member, and grooming
+becomes "high energy, low coherence" with no state and no time constants.
+
+**The one thing to not get backwards:** block-reduce the *tensor* — six numbers
+per block — and eigendecompose after. Averaging eigenvalues across a block
+destroys the anisotropy being measured. This is the same class of constraint the
+module already documents for the LK solve ("the solve precedes reduction so the
+aperture problem is not coupled to the user's block size"), arriving from the
+other direction, and it is what a test should pin: a synthetic translating
+texture must score near 1 and a synthetic in-place flicker near 0, and the test
+fails if the reduction and the decomposition are swapped.
+
+Cost declaration goes up to the `flow_speed` tier (six blurs) since a static
+number cannot branch on the parameter; the eigensolves are a few hundred 3×3
+symmetric matrices and are not the cost.
+
+Read: `src/sieve/filters/block_signal.py`, `docs/REFINED-VISION.md` **B**.
+
+## Multi-upstream kernels
+
+**Gated on: nothing, and it gates everything else in this section.** Promoted
+from `LATER.md`'s "A kernel protocol that is not one frame in, one frame out" on
+2026.07.26 — that entry asked for "a filter that actually needs one" as the
+trigger, and REFINED-VISION's temporal section is nothing but combinations. The
+other two shapes in that entry, `Mode.WINDOWED` and `rate_changing`, stay
+deferred: they have separate triggers and no reason to arrive together.
+
+**Why it is unavoidable rather than convenient.** Every kind-amplifier worth
+building is a combination of channels — that is what makes it a discriminant
+rather than a filter. "High energy AND low coherence", "accumulated signal gated
+against its own baseline", "score compared against its null" are all two-input
+nodes. `pipeline/executor.py` raises `UnrunnableNodeError` on any node with more
+than one upstream, so the whole section is currently unbuildable.
+
+**What it involves.** `core/filter_base.py`'s `StreamSpec` docstring already
+prices the central change: **named ports on `Edge`**, which touches the saved
+artifact and every edge ever written, so it wants a migration path decided rather
+than discovered. Then a second `Kernel` signature taking a mapping of port name
+to `Frame`; `dag.py`'s edge type-check running per port rather than per node;
+`plan.py`'s lead-in becoming a backward max over *all* upstreams of a node rather
+than the one; and `executor.py` holding a frame from each upstream until every
+port for an index has arrived — which is the first place in the executor where
+two streams have to be *aligned by index* rather than consumed in order, and is
+the part most likely to be got subtly wrong when the two upstreams have different
+`warmup_frames`.
+
+The precedent `background_ema` set applies and is worth stating up front:
+whatever a merging kernel needs to be handed, it is handed by
+`KernelBinding.start` and not by a registry entry.
+
+Read: `src/sieve/core/filter_base.py` `StreamSpec`,
+`src/sieve/backend/dispatch.py` `Kernel`/`StatefulKernel`,
+`src/sieve/pipeline/executor.py` `UnrunnableNodeError`,
+`src/sieve/pipeline/{dag,plan}.py`, `docs/REFINED-VISION.md` **G**.
+
+## Per-block temporal baseline
+
+**Gated on: nothing to build it, but it is worth more after multi-upstream
+lands**, because the natural consumer is a node that takes the signal and its
+baseline as two ports rather than one that recomputes the baseline internally.
+
+**The problem.** `change_energy` is in (intensity)²/frame, so its magnitude
+depends on illumination, gain, exposure, and animal-substrate contrast. A
+threshold tuned on one replicate under one backlight is a number about that
+lighting rig — which collides directly with the two things SIEVE promises
+hardest: replicates sharing a pipeline, and an artifact that reproduces.
+`normalize` does not solve this and is not meant to: it removes the *global*
+per-frame illumination component and gives no per-block baseline over time.
+
+**The fix.** Estimate each block's own null over a trailing or centered window
+and emit the signal in units of deviation from it. **Robust statistics —
+median and MAD, not mean and standard deviation** — because the events are in the
+sample and would inflate the spread they are being measured against. This is the
+standard procedure in spike sorting (thresholding at k·MAD of the filtered trace)
+and the same instinct behind fMRI reporting percent signal change rather than
+scanner units. A threshold of "4 MADs above this block's baseline" transfers
+across replicates and lighting; "0.03 energy units" never will.
+
+**The parameter that has no correct value, and is therefore primary:** the
+baseline window. Too short and a sustained behaviour becomes its own baseline and
+vanishes; too long and it stops tracking drift. Same shape of argument as
+`background_ema`'s `alpha`, and the same conclusion.
+
+Read: `src/sieve/filters/normalize.md` (what it does *not* do),
+`src/sieve/filters/background_ema.py` (the warmup argument this will reuse),
+`docs/REFINED-VISION.md` **A**.
+
+## The motion history filter
+
+**Gated on: nothing structurally** — it is single-upstream, streaming,
+rate-preserving and stateful, which is the shape `background_ema` already
+established, down to the buffer discipline and the worst-case `warmup_frames`
+argument. It is ordered last because its thresholds want the units from
+**Per-block temporal baseline** and its output wants somewhere to be combined,
+and building it first means tuning it twice.
+
+**What it is.** The vision's "exponential decay function and a blooming touch
+function", which is `a[t] = λ·(K ⊛ a[t−1]) + (1−λ)·s[t]` — the semi-implicit
+Euler step of `∂a/∂t = −a/τ + D∇²a + s`. VISION step 3 category C already names
+MEI and MHI, and this is them: Bobick & Davis's Motion History Image is the same
+operator with a linear decay law. Name it for them so a user can find the
+literature.
+
+**Four decisions the item has to make, all argued in REFINED-VISION C:**
+
+- **Decay and coupling are one node, two parameters.** Blurring the output of a
+  leaky integrator is a different operator — in the recursion the coupling
+  compounds through the feedback path.
+- **Parameters in physical units.** `tau_seconds`, not λ; `reach_blocks`, not κ.
+  `fps` plumbs in exactly as `block_signal`'s does and for the same reason.
+- **Two coupling modes.** `diffuse` (linear, conservative, spreads the peak
+  *down* and fights the threshold) and `dilate` (grayscale morphological,
+  sustains support without lowering peaks). Expect `dilate` to win; ship both,
+  because this is one of the things "much testing" is about.
+- **Group delay is declared or removed.** A causal integrator lags its event by
+  order τ, and mixing it with `windowed_mean`'s `centered` mode biases reported
+  onsets late by an amount nothing writes down. Either run forward-and-backward
+  for zero phase (legitimate offline) or declare the delay. Not neither.
+
+**The stability bound is the test worth writing.** With `reach` unbounded the
+dilation form propagates one detection outward at one block per frame until it
+fills the arena. A test that runs a single-block impulse through a long run and
+asserts the support stops growing is the one that would catch a beautiful demo
+that is wrong.
+
+Read: `src/sieve/filters/background_ema.py` (the twin), `src/sieve/core/detection.py`
+(the tail this feeds), `docs/REFINED-VISION.md` **C**, `docs/VISION.md` step 3
+category C.
+
+---
+
 # Independent of the stack
 
 These gate nothing below them and can be taken at any point. The three small

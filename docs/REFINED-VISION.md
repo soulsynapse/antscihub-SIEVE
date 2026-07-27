@@ -1,5 +1,10 @@
 # REFINED VISION
 
+> **Dated record of intent (2026.07.26).** Not maintained; its build order is
+> nearly fully landed, which is a plan that worked, not staleness. Reality is
+> recorded in `completed-todo/` and `findings/` — supersede this with a new
+> dated document rather than editing it.
+
 This is the vision after the wizard/setting workflow was decided on. 2026.07.26
 
 The purpose of this is to put down in words what the workflow should be like, and what the lead-ins and lead-outs to the filter tab are.

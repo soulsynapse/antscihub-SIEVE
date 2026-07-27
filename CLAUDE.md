@@ -18,8 +18,8 @@ Read the file that answers your question, not all of them.
 | What am I building, and what is the workflow supposed to feel like? | `docs/VISION.md`, then `docs/REFINED-VISION.md` |
 | What are the invariants, layers, and latency budgets? | `docs/ARCHITECTURE.md` |
 | Where does this module go? | `docs/SCAFFOLD.md` (machine-checked; see below) |
-| What should I work on? | `docs/TODO.md` — open items only |
-| Why isn't X being done yet? | `docs/LATER.md` — deferred, each with its trigger |
+| What should I work on? | `docs/todo/` — one file per item, `status: open` |
+| Why isn't X being done yet? | `docs/todo/` — `status: deferred`, trigger in `gated_on` |
 | Was this already built, and how? | `docs/completed-todo/.index.md` |
 | What is measurably true about the system? | `docs/findings/.index.md` |
 | Which guardrails actually run in CI? | `docs/AUTO-GUARDRAILS.md` |
@@ -65,8 +65,9 @@ force — nothing in the repo has ever been at rest. See `docs/ARCHITECTURE.md`.
 
 ## The work loop
 
-1. **Take one item from `docs/TODO.md`.** Items are scoped to fit one context
-   window and are written so you can start without reading the whole tree.
+1. **Take one `status: open` item from `docs/todo/`** (`docs/.state.md` lists
+   them). Items are scoped to fit one context window and are written so you
+   can start without reading the whole tree.
 2. **Build the checklist first**, one entry per file or gate, before the first
    edit. An item whose steps cannot be listed up front has not been read yet.
 3. **Build it.** Prefer taking what exists over reinventing it — `TODO.md`'s
@@ -75,19 +76,20 @@ force — nothing in the repo has ever been at rest. See `docs/ARCHITECTURE.md`.
    would each fail for a distinct real reason. A property or benchmark earns
    its place only when it pins something an example cannot state.
 5. **Run the gate**: `uv run nox -s checks`. It must pass.
-6. **Complete atomically.** Delete the item's section from `TODO.md` and write
-   `docs/completed-todo/YYYY.MM.DD-name.md` from that folder's `_TEMPLATE.md` —
-   `uv run python tools/complete_item.py <slug>` scaffolds it with the
-   frontmatter and git-derived file lists filled in. Never mark an item done in
-   place — a finished item is *moved*.
+6. **Complete atomically.** `uv run python tools/complete_item.py <slug>`
+   *moves* the item file to `docs/completed-todo/YYYY.MM.DD-<slug>.md` with
+   the completion frontmatter and git-derived file lists scaffolded and the
+   item body preserved for trimming. Never mark an item done in place — a
+   finished item is *moved*.
 7. **Measurements go to `docs/findings/`**, never into the completed entry. A
    completed entry says what was built; a finding says what is true about the
    system and outlives the code that prompted it.
 8. **Rebuild the indexes**: `uv run nox -s docs`. Staleness is a test failure.
 9. **Commit, then push.** Commits do not count until pushed.
 
-Work that is real but not yet timely goes to `docs/LATER.md` with the trigger
-that would make it takeable — not into `TODO.md` to grow stale.
+Work that is real but not yet timely is a `docs/todo/` file with
+`status: deferred` and its trigger in `gated_on` — promotion is a one-line
+`status:` flip when the trigger fires, not a rewrite.
 
 ---
 
@@ -160,9 +162,18 @@ the way it is, and they record the decision that was rejected alongside the one
 that was taken. Two rules keep that from turning into accretion:
 
 - **One home per fact.** History belongs in `docs/completed-todo/`, measurements
-  in `docs/findings/`, deferrals in `docs/LATER.md`, open work in `docs/TODO.md`.
-  If you are about to restate in one what another already holds, link instead.
+  in `docs/findings/`, open and deferred work in `docs/todo/`. If you are about
+  to restate in one what another already holds, link instead.
 - **A doc that asserts a fact about the code should be checkable.** Prefer a
   table a test can parse over a paragraph a reader must trust. The budget table,
   the doc indexes, and the scaffold tree are all machine-checked for this reason;
   that is the mechanism that kept them true while the prose around them drifted.
+- **Only two things bind: the seven rules and what CI checks.** Everything else
+  is evidence — findings can be superseded, records age without being wrong,
+  and a doc you disagree with is an argument to answer, not a law to obey. The
+  v1 doc tree died of the opposite: nineteen ADRs prescribing an architecture
+  before the code existed, each one a standing constraint. Prose that claims
+  current truth carries a `reviewed:`/`subjects:` stamp and `tools/doc_drift.py`
+  *reports* (never gates) when its subjects moved; VISION, REFINED-VISION,
+  SIEVE-HANDOFF, and the parity plan are dated records — superseded, never
+  edited.

@@ -1,9 +1,11 @@
 # Filter tab: v1-parity plan
 
-> **Status — items 1–7 landed, items 8 and 9 open.** Each landed item links its
-> `docs/completed-todo/` entry in §6. The two open ones are pointed at from
-> `docs/TODO.md` under *Open, but living in the parity plan*, and are described
-> in §6 here rather than restated there. Item 9 is the only work anywhere that
+> **Dated plan (2026.07.26); items 1–7 landed, items 8 and 9 open.** Each
+> landed item links its `docs/completed-todo/` entry in §6. The two open ones
+> are `docs/todo/seeker-upgrades.md` and
+> `docs/todo/parity-comparison-finding.md`, which point into §6 here rather
+> than restating it. Beyond those pointers this document is a record and is
+> not otherwise maintained. Item 9 is the only work anywhere that
 > produces evidence the rewrite did not lose signal against v1.
 >
 > Everything above §6 is design rationale for work that is now done. It is kept

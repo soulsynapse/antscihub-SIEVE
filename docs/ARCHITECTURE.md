@@ -1,3 +1,8 @@
+---
+reviewed: 4a4f3d6
+subjects: [src/sieve/, .importlinter, noxfile.py]
+---
+
 # SIEVE — Minimal Architecture Reference
 
 SIEVE is a video signal-processing tool built around one question: how much economy can the user buy back without losing signal? The architecture serves the ability to answer that question interactively for a representative clip, then execute the answer over the full dataset locally or on HPC.

@@ -1,11 +1,13 @@
 # To Do
 
-Open work, scoped and startable. Nothing here is done — a finished item is
-*moved*, never marked.
+**Items live in `docs/todo/`, one file each** — open and deferred alike, with
+the trigger in frontmatter; `docs/.state.md` is the generated summary. This
+file holds what is *not* an item: the bug list below, and the settled table
+open work must not re-decide.
 
-The loop that governs this file — checklist before the first edit, gate, atomic
-completion, findings kept separate, commit and push — is in `CLAUDE.md`. This
-file holds only what an item is and which items are open.
+The loop that governs the work — checklist before the first edit, gate,
+completion by move, findings kept separate, commit and push — is in
+`CLAUDE.md`; what an item looks like is in `docs/todo/_TEMPLATE.md`.
 
 ## Bugs and tweaks
 Bundle these together to not have to do the full test/gate suites for minor things. Tag them when you notice the diff with the date and time so you know when they popped up and you can track them — the format is `(noticed YYYY.MM.DD)`, and `tests/docs/test_todo_hygiene.py` fails on an untagged entry. `<=` marks the ones that predate the rule.
@@ -26,33 +28,19 @@ If any of these are a compounding bug - something that will cause something else
 - The zoom function should work on the replicate tab too. (noticed <=2026.07.27)
 - We had a beautiful bottom bar previously but it's now gone (noticed <=2026.07.27)
 
-## What an item here looks like
-
-1. A short name, under five words.
-2. Written so the work can start **without loading the whole doc tree**. If an
-   item needs three documents read before the first edit, it is not scoped yet.
-3. Scoped to fit one context window.
-4. **Gating stated explicitly**, in a `Gated on:` line — including
-   `Gated on: nothing structurally`, which is information.
-5. Ending with a `Read:` line naming the files, so the first act is opening
-   them rather than searching for them.
-
-Work that is real but not yet timely goes to `docs/LATER.md` with the trigger
-that would make it takeable. An item that fails rules 2 and 3 would sit here
-growing stale, so it belongs there instead and is *moved* here when the trigger
-fires.
-
 ## Keeping this file small
 
 This file's job is to be cheap to read. It stopped being that once: a *Build
 order* section grew to 190 lines of prose narrating everything already finished,
 so finding the two open items meant reading 25 KB of history that
-`docs/completed-todo/` already held one entry at a time.
+`docs/completed-todo/` already held one entry at a time. The open items
+themselves moved out for the same reason — one file per item in `docs/todo/`,
+where finishing one is a move instead of an edit here.
 
-So: **history goes to `docs/completed-todo/`, and the only thing that stays here
-is what a future item must not re-decide.** That is the table below, and it is a
-table because a table cannot grow a paragraph. When you complete an item, you
-may add a row; you may not add a section.
+So: **history goes to `docs/completed-todo/`, items go to `docs/todo/`, and the
+only thing that stays here is what a future item must not re-decide.** That is
+the table below, and it is a table because a table cannot grow a paragraph.
+When you complete an item, you may add a row; you may not add a section.
 
 ---
 
@@ -90,89 +78,6 @@ re-derive it. Full reasoning is in the linked entry, and
 | Slide versus trim | `core/types.py` `ROI.placed_in` | The rule that a region keeps its exact extent and moves, used by both the stamp and "Set all". `clamped_to` is the other rule and trims. Reaching for the wrong one at the frame edge silently makes a rack non-uniform while every number on screen says it worked. |
 | Settings memory | `core/pipeline_model.py` `edited_params` / `edited_detector` | The two-write edit: pin the diff on the replicate being looked at, move the baseline for everyone following. Submit only the fields touched — a whole resolved view drags a deviated arena's pins into the baseline. The GUI routes through `ReplicateDocument.edit_params`/`edit_detector`; the tab's `LiveChain` is the resolved *view*, never a second store. |
 | Detector in the artifact | `core/pipeline_model.py` `DetectorSettings` | Schema v3. Bands, count threshold, and D live on `Project.detector` with field-level pins in `Replicate.detector_overrides`; `solo_block` is looking, not tuning, and stays out. `None` means never tuned — do not resolve the fps-derived default into the field. |
-
----
-
-# Open items
-
-One, plus two living in the parity plan (below). The temporal chain that
-`docs/REFINED-VISION.md` decomposes into is otherwise complete: coherence,
-multi-upstream kernels, and the per-block baseline have all landed, in that
-order and for the reasons that document's **Build order** section gives.
-
-That document's **Replicates** section is built as far as it can be. The
-selected replicate being the one under tuning landed 2026.07.27, the crop tools
-the same day, and "set all" the same day after an audit found it was the one
-sentence of that section nothing had implemented and no file had deferred. What
-is left is the table's crop progress and output-existence columns and the
-filter tab's click-through navigation, all three of which are readings of, or
-movements between, a filesystem nothing writes to yet; they wait in
-`docs/LATER.md` under **Replicate status** and **Click-through navigation on
-the filter tab**, which share one trigger.
-
-## The motion history filter
-
-**Gated on: nothing structurally** — single-upstream, streaming,
-rate-preserving and stateful, which is the shape `background_ema` already
-established, down to the buffer discipline. It was ordered last because its
-thresholds wanted the units `temporal_baseline` now provides and its output
-wants somewhere to be combined; the first is settled, the second is still true —
-nothing yet evaluates a two-signal rule.
-
-**What is already paid for.** `tau_seconds` has exactly `temporal_baseline`'s
-shape — a warmup that is a parameter in physical units, needing `fps` to
-convert — so the contract half is done and the pattern to copy is
-`TemporalBaselineParams.warmup_frames`: declare the worst case over the legal
-range on the spec, override the method with the configured need.
-
-**What it is.** The vision's "exponential decay function and a blooming touch
-function", which is `a[t] = λ·(K ⊛ a[t−1]) + (1−λ)·s[t]` — the semi-implicit
-Euler step of `∂a/∂t = −a/τ + D∇²a + s`. `VISION.md` step 3 category C already
-names MEI and MHI, and this is them: Bobick & Davis's Motion History Image is
-the same operator with a linear decay law. Name it for them so a user can find
-the literature.
-
-**Four decisions, all argued in `REFINED-VISION.md` C:**
-
-- **Decay and coupling are one node, two parameters.** Blurring the output of a
-  leaky integrator is a different operator — in the recursion the coupling
-  compounds through the feedback path.
-- **Physical units.** `tau_seconds`, not λ; `reach_blocks`, not κ. `fps` plumbs
-  in exactly as `block_signal`'s does.
-- **Two coupling modes.** `diffuse` (linear, conservative, spreads the peak
-  *down* and fights the threshold) and `dilate` (grayscale morphological,
-  sustains support without lowering peaks). Expect `dilate` to win; ship both.
-- **Group delay is declared or removed.** A causal integrator lags its event by
-  order τ, and mixing it with `windowed_mean`'s `centered` mode biases reported
-  onsets late by an amount nothing writes down. Either run forward-and-backward
-  for zero phase (legitimate offline) or declare the delay. Not neither.
-
-**The stability bound is the test worth writing.** With `reach` unbounded the
-dilation form propagates one detection outward at one block per frame until it
-fills the arena. Run a single-block impulse through a long run and assert the
-support stops growing — that is what catches a beautiful demo that is wrong.
-
-Read: `src/sieve/filters/background_ema.py` (the twin),
-`src/sieve/filters/temporal_baseline.py` (the warmup pattern),
-`src/sieve/core/detection.py` (the tail this feeds), `docs/REFINED-VISION.md`
-**C**, `docs/VISION.md` step 3 category C.
-
-## Open, but living in the parity plan
-
-`docs/filter-tab-parity-plan.md` has seven of its nine items landed. The two
-that have not are real open work and are described there rather than restated
-here:
-
-- **Item 8 — Seeker upgrades.** Coverage as a render-event log keyed by settings
-  identity, detection ticks and jumps, window bracket and Length in lockstep.
-  Overlaps `docs/LATER.md` **Coverage and detection lanes on the timeline**,
-  which holds the deferral reasoning; take them together.
-- **Item 9 — Parity comparison finding.** Run v1 and v2 on
-  `videos-testing/stab_GX010050c2_02_18_26.MP4` with matched settings and write
-  the numeric agreement, the interaction latencies against the budget table, and
-  a gained/lost list to `docs/findings/`. **This is the only item anywhere that
-  produces evidence the rewrite did not lose signal**, which is worth weighing
-  against its position in an ordering.
 
 ---
 

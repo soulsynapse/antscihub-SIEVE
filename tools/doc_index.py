@@ -105,6 +105,22 @@ SPECS: tuple[IndexSpec, ...] = (
         ),
         required=("title", "date", "status", "verdict"),
     ),
+    IndexSpec(
+        directory="todo",
+        heading="Open and deferred work",
+        blurb=(
+            "One file per item. `status: open` is takeable now; `status: deferred` "
+            "waits on the trigger in `gated_on`. Completion is a move to "
+            "`completed-todo/` via `tools/complete_item.py`; promotion is a "
+            "one-line `status:` edit."
+        ),
+        columns=(
+            ColumnSpec("Status", "status"),
+            ColumnSpec("Item", "title", link=True),
+            ColumnSpec("Gated on", "gated_on"),
+        ),
+        required=("title", "status", "gated_on"),
+    ),
 )
 
 
@@ -236,30 +252,15 @@ def bug_bullets(todo_lines: Sequence[str]) -> list[str]:
     return bullets
 
 
-def _open_item_headings(todo_lines: Sequence[str]) -> list[str]:
-    """`##` headings under TODO.md's `# Open items`, stopping at the first
-    horizontal rule — what follows it (deferred decisions) is not open work."""
-    headings: list[str] = []
-    inside = False
-    for line in todo_lines:
-        if line.strip() == "# Open items":
-            inside = True
-        elif inside and (line.strip() == "---" or (line.startswith("# ") and headings)):
-            break
-        elif inside and line.startswith("## "):
-            headings.append(line.removeprefix("## ").strip())
-    return headings
-
-
 def render_state(root: Path = DOCS_ROOT) -> str:
-    """Build `docs/.state.md` from TODO.md, LATER.md, and the two indexes."""
-    todo = (root / "TODO.md").read_text(encoding="utf-8").splitlines()
-    later = (root / "LATER.md").read_text(encoding="utf-8").splitlines()
-    bugs = bug_bullets(todo)
-    items = _open_item_headings(todo)
-    deferred = [line.removeprefix("## ").strip() for line in later if line.startswith("## ")]
+    """Build `docs/.state.md` from the item folder, TODO.md, and the indexes."""
+    todo_md = (root / "TODO.md").read_text(encoding="utf-8").splitlines()
+    bugs = bug_bullets(todo_md)
 
     by_dir = {spec.directory: spec for spec in SPECS}
+    items = collect(root / "todo", by_dir["todo"].required)
+    open_items = [e for e in items if e.fields.get("status") == "open"]
+    deferred = [e for e in items if e.fields.get("status") == "deferred"]
     completed = collect(root / "completed-todo", by_dir["completed-todo"].required)
     findings = collect(root / "findings", by_dir["findings"].required)
 
@@ -271,12 +272,30 @@ def render_state(root: Path = DOCS_ROOT) -> str:
         "Every line here is derived; nothing is unique to this file. It exists",
         "so a session orients in one read instead of four.",
         "",
-        f"**Open items ({len(items)})** — bodies in `TODO.md`:",
+        f"**Open items ({len(open_items)})** — one file each in `todo/`:",
         "",
-        *[f"- {item}" for item in items],
-        "",
-        f"**Bugs and tweaks queued:** {len(bugs)} "
-        f"&nbsp;&nbsp;**Deferred in `LATER.md`:** {len(deferred)}",
+    ]
+    for entry in open_items:
+        gate = _cell(entry.fields.get("gated_on"))
+        lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name}) — {gate}")
+    lines += ["", f"**Deferred ({len(deferred)})** — the trigger is the whole line:", ""]
+    for entry in deferred:
+        gate = _cell(entry.fields.get("gated_on"))
+        lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name}) — {gate}")
+
+    lines += ["", f"**Bugs and tweaks queued in `TODO.md`:** {len(bugs)}"]
+    later = root / "LATER.md"
+    if later.exists():
+        remaining = sum(
+            1 for line in later.read_text(encoding="utf-8").splitlines() if line.startswith("## ")
+        )
+        lines += [
+            "",
+            f"**`LATER.md` still holds {remaining} sections not yet migrated to "
+            "`todo/` — see `todo/migrate-later-into-item-files.md`.**",
+        ]
+
+    lines += [
         "",
         "**Last completed** (full list in `completed-todo/.index.md`):",
         "",

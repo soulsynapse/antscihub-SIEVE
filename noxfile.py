@@ -32,8 +32,13 @@ def imports(session: nox.Session) -> None:
 
 @nox.session
 def docs(session: nox.Session) -> None:
-    """Regenerate `.index.md` for the atomized doc folders."""
+    """Regenerate the doc indexes and `.state.md`, then report drift.
+
+    The drift report never fails the session — staleness announces itself
+    here so revisits are targeted, and gating on it would make every code
+    change a doc chore."""
     session.run("python", "tools/doc_index.py", *session.posargs)
+    session.run("python", "tools/doc_drift.py")
 
 
 @nox.session

@@ -30,6 +30,7 @@ CLAUDE.md                               # agent routing doc — the only doc loa
 tools/doc_index.py                      # generates docs/*/.index.md and docs/.state.md from frontmatter
 tools/complete_item.py                  # scaffolds a completed-todo entry; git-derived file lists
 tools/transcript_stats.py               # mines session transcripts: where agent wall-clock went
+tools/doc_drift.py                      # reports stamped prose docs whose subject paths moved
 
 src/sieve/core/types.py                 # Frame, ROI, value objects everything pattern-matches on
 src/sieve/core/filter_base.py           # THE FILTER CONTRACT: FilterSpec, ParamsBase, Mode, warmup arithmetic

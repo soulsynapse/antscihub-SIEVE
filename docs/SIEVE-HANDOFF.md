@@ -1,5 +1,9 @@
 # SIEVE rewrite — why v2 exists
 
+> **Dated record of intent.** Not maintained — it explains why v2's
+> constraints took their shape, and that explanation does not age. Supersede
+> rather than edit.
+
 This is the framing document. `CLAUDE.md` at the repo root is the operational
 one: where things live, what the gates are, how the work loop runs. Read that
 first; read this when you want to know why the constraints are shaped the way

@@ -1,5 +1,10 @@
 # SIEVE vision
 
+> **Dated record of intent.** Written before the build; not maintained. What
+> was actually built is in `completed-todo/`, what is measurably true is in
+> `findings/`. Divergence from this document is expected and is not an error —
+> supersede it with a new dated document rather than editing it.
+
 ## Overview
 
 At it's core, SIEVE is about applying filters. The absolute bare-bones, pre-optimization version is like this:

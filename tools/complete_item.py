@@ -1,12 +1,17 @@
-"""Scaffold a `docs/completed-todo/` entry for the item being finished.
+"""Complete an item: move its `docs/todo/` file into `docs/completed-todo/`.
 
-The completion ceremony has a mechanical half (frontmatter skeleton, today's
-date, the file lists the working tree already knows) and a thinking half
-(summary, decisions, rejected alternatives). Transcript mining showed the
-ceremony is paid for in generated tokens, not tool time — so this script emits
-the mechanical half and prints the checklist for the rest, and deliberately
-does *not* rebuild the doc index: an entry whose summary still says TODO must
-not be rendered into `.index.md` as if it were finished.
+Completion is a *move*, never a mark — this script is that rule as a
+mechanism. Given a slug with a file in `docs/todo/`, it moves the file to
+`docs/completed-todo/YYYY.MM.DD-<slug>.md`, swaps the item frontmatter for the
+completion skeleton (title kept, file lists derived from the working tree),
+and preserves the item body under its own heading for the entry to trim.
+Given a slug with no item file (a bug bundle, unplanned work), it scaffolds a
+fresh entry instead.
+
+The ceremony's thinking half stays yours: summary, decisions, rejected. The
+script deliberately does *not* rebuild the doc index — an entry whose summary
+still says TODO must not render into `.index.md` as if it were finished, and
+`tests/docs/test_todo_hygiene.py` fails the gate until the markers are gone.
 
     uv run python tools/complete_item.py the-motion-history-filter
     uv run python tools/complete_item.py fix-scroll --title "Scroll fix"
@@ -23,18 +28,39 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 COMPLETED = REPO_ROOT / "docs" / "completed-todo"
+TODO_DIR = REPO_ROOT / "docs" / "todo"
 
 CHECKLIST = """\
 complete_item: wrote {path}
 
 Still yours to do, in order:
   1. Fill `summary`, `decisions`, `rejected` — the TODO markers fail the gate.
-  2. Delete the item's section from docs/TODO.md (moved, never marked done).
+  2. Trim the preserved item body: keep what a future reader cannot get from
+     the diff, drop what the work itself now records.
   3. If anything was *measured*, it goes to docs/findings/, not this entry.
   4. uv run nox -s checks
   5. uv run nox -s docs
   6. Commit, then `git rev-parse --short HEAD` into `commit:`, then push.
 """
+
+
+def _split_item(text: str) -> tuple[str, str]:
+    """Return `(title, body)` from an item file's text.
+
+    The frontmatter is dropped — the completion skeleton replaces it — and the
+    body is everything after the closing `---`.
+    """
+    lines = text.splitlines()
+    title = ""
+    body_start = 0
+    if lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], start=1):
+            if line.strip() == "---":
+                body_start = i + 1
+                break
+            if line.startswith("title:"):
+                title = line.removeprefix("title:").strip()
+    return title, "\n".join(lines[body_start:]).strip()
 
 
 def _git(*args: str) -> list[str]:
@@ -75,8 +101,15 @@ def _yaml_list(items: list[str], indent: str = "    ") -> str:
     return "\n" + "\n".join(f"{indent}- {item}" for item in items)
 
 
-def render(title: str, added: list[str], changed: list[str], removed: list[str]) -> str:
+def render(
+    title: str,
+    added: list[str],
+    changed: list[str],
+    removed: list[str],
+    item_body: str = "",
+) -> str:
     today = date.today()
+    preserved = f"\n\n## The item as written\n\n{item_body}\n" if item_body else ""
     return f"""\
 ---
 title: {title}
@@ -104,8 +137,7 @@ decisions:
 # {title}
 
 TODO — what was checked by mutation, and what changed outside the item's
-scope. Delete the body if neither applies.
-"""
+scope. Delete the body if neither applies.{preserved}"""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -124,9 +156,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"complete_item: {path} already exists — not overwriting", file=sys.stderr)
         return 1
 
-    title = str(args.title) if args.title else slug.replace("-", " ").capitalize()
+    item_path = TODO_DIR / f"{slug}.md"
+    item_title, item_body = "", ""
+    if item_path.exists():
+        item_title, item_body = _split_item(item_path.read_text(encoding="utf-8"))
+
+    title = str(args.title) if args.title else item_title or slug.replace("-", " ").capitalize()
     added, changed, removed = changed_files(exclude=path)
-    path.write_text(render(title, added, changed, removed), encoding="utf-8", newline="\n")
+    path.write_text(
+        render(title, added, changed, removed, item_body), encoding="utf-8", newline="\n"
+    )
+    if item_path.exists():
+        item_path.unlink()
+        print(f"complete_item: moved docs/todo/{slug}.md")
     print(CHECKLIST.format(path=path.relative_to(REPO_ROOT)))
     return 0
 

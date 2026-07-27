@@ -1,3 +1,8 @@
+---
+reviewed: 75ee2a6
+subjects: [noxfile.py, .github/workflows/, pyproject.toml, tests/docs/, .importlinter]
+---
+
 # AUTO-GUARDRAILS
 
 Guardrails exist so the constraints do not have to be held in your head. Build

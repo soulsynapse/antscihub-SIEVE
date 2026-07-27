@@ -84,7 +84,7 @@ enforced by review.
 Module docstrings and completed entries cite these as **"non-negotiable #N"**,
 which is what they were called, and the numbers still point where they did — so
 a grep for `non-negotiable #3` lands on rule 3 below. Only rule 1 changed
-meaning, and rule 6 is new.
+meaning; rules 6 and 7 are new, and rule 6 has since widened — see its section.
 
 These were written as five non-negotiables before the rewrite had run into
 what it was describing. Revised 2026.07.27 against the code that exists. Two
@@ -105,7 +105,12 @@ future rule has to pass:
 The slot numbers of 2, 3, and 5 are unchanged in meaning, because roughly
 twenty-five module docstrings and completed entries cite them by number and
 renumbering would silently repoint every one of those. Rule 1 is repurposed; it
-had one dependent. Rule 6 is new.
+had one dependent. Rule 6 is new. Rule 7 (added 2026.07.27, later the same day)
+is the opposite motion from rule 1's demotion: rule 1's old meaning was stated
+before anything enforced it, while rule 7 was enforced before anything named it —
+the identity line was already load-bearing prose in `core/pipeline_model.py` and
+already what `pipeline/cache_key.py` implements. Naming it is what lets future
+work cite it instead of re-deriving it per feature.
 
 |#|Rule|Meaning|
 |---|---|---|
@@ -114,7 +119,8 @@ had one dependent. Rule 6 is new.
 |3|Filter = one module + one markdown|Discovery is automatic. No registration elsewhere.|
 |4|Every budget has a producer, and a miss is visible|A budget nothing publishes is a number, not a ceiling. A miss is a defect unless the degradation that causes it is a user's explicit choice.|
 |5|No consumer starves another|No consumer improves its latency at another's expense. Every path that can take more than one core declares its share. See *Dividing the machine*.|
-|6|A result must never look better-founded than it is|Refuse rather than approximate. Absent must not render as zero, and an unexamined stretch must not render as a quiet one.|
+|6|A result must never look better-founded than it is|Refuse rather than approximate. Absent must not render as zero, and an unexamined stretch must not render as a quiet one. The mirror direction: a control must never look more live than it is — an edit the system would discard or silently invalidate must be visibly inert.|
+|7|Everything sits on one side of the identity line|A field either changes *what a result is* — then it is hashed — or only *where it lives and how fast it arrives* — then it is never hashed. Nothing straddles. `checkpoints` and `outputs` live on `Project`, off `Node`, for this reason.|
 
 ### 1. One execution path
 
@@ -211,6 +217,15 @@ refuse rather than to produce a plausible number.
   own null distribution rather than in the illumination of one lighting rig.
 - `filters/downsample.py` offers no un-anti-aliased mode.
 
+The rule reads in both directions (widened 2026.07.27). A *result* must not
+claim more foundation than it has; a *control* must not claim more consequence
+than it will be given. An editable parameter on a stage upstream of a
+materialized artifact claims a tunability the system does not intend to honor —
+the edit either silently invalidates the child or is silently ignored, and both
+are this rule's failure arriving through an input instead of an output. So a
+frozen stage must render frozen, and the rendering must bind behaviour: faded
+means read-only, and unlocking is an explicit discard of what lies below.
+
 And the standing obligations it creates, each recorded where the work is:
 
 - A temporal decimator must carry its own anti-alias lowpass, because decimating
@@ -223,10 +238,42 @@ And the standing obligations it creates, each recorded where the work is:
 - A detection count that grows with clip length for no biological reason is a
   reproducibility bug that looks like a finding. `docs/LATER.md`, surrogate
   calibration.
+- Faded must mean frozen. A dimmed stage whose parameters still accept edits is
+  decoration wearing the costume of a state. `docs/LATER.md`, click-through
+  navigation entry.
 
 **Enforced by:** nothing mechanical, and it probably cannot be. It is a rule for
 review and for design, and its value is that it gives the recurring objection one
 name instead of being re-derived per widget.
+
+### 7. Everything sits on one side of the identity line
+
+`core/pipeline_model.py` states it: materializing an intermediate changes where
+a result lives, never what it is. As a rule: every field in the artifact either
+participates in what a result *is*, in which case it is hashed, or in where it
+lives and how fast it arrives, in which case it must never be. `checkpoints` and
+`outputs` live on `Project` keyed by node id rather than as flags on `Node`
+precisely so a materialize bit never sits one refactor away from being hashed
+with `params`. The HPC handoff depends on this — the wizard empties
+`checkpoints` for a cluster and must not move a single cache key — and so does
+the crop: "a materialized crop is a faster source for the same pixels" is
+checkable rather than hopeful only because of this rule
+(`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`).
+
+The consequence it will be cited for: anything the system *proposes* divides
+along the same line. A suggestion to checkpoint a stage is result-preserving and
+can be accepted casually mid-tuning — nothing invalidates. A suggestion to
+insert a `rescale` changes what every downstream result is, partially discards
+tuning already done, and is a decision about the analysis. A UI that presents
+the two classes in one visual register violates rule 6 through rule 7.
+
+**Enforced by:** structure more than test. The cache key derives from `Node`
+plus the source and root replicate geometry (`pipeline/cache_key.py`);
+`Project.checkpoints` is not an input to it, so hashing a checkpoint would
+require moving a field across the schema, not forgetting a clause. What is *not*
+checked: no test toggles a checkpoint and asserts every key survives. That test
+is one function, and it would pin this rule the way `test_budget_table.py` pins
+rule 4.
 
 ---
 
@@ -243,7 +290,15 @@ weeks. Each has its trigger and reasoning in `docs/LATER.md`.
   `storage/zarr_store.py` do not exist, `zarr` is a declared dependency imported
   nowhere, and `MemoryFrameStore` is an unbounded dict. During interactive tuning
   truth is *supposed* to live in memory, so this is not a violation — it is a rule
-  with no instances. It returns to the table above when the first writer lands.
+  with no instances. What has sharpened since it was demoted (2026.07.27):
+  materialization is user-initiated, never automatic, and the initiating gesture
+  is *descent* — crossing an output boundary is what creates the artifact the
+  descent lands on. So the first writer and the click-through navigation are the
+  front and back of one item, not two entries waiting on each other, and the
+  ancestry above a crossed boundary is frozen (rule 6's mirror direction) because
+  editing it would be editing the identity of something now at rest. It returns
+  to the table above when that item lands. Reasoning and trigger:
+  `docs/LATER.md`, the materialization and click-through entries.
 - **GPU execution.** `backend/dispatch.py` carries a complete `Backend` type
   system, per-node backend selection, and `DEFAULT_PREFERENCE = (GPU, CPU)`. There
   are zero GPU kernels; every filter registers CPU. `runtime_available` is a

@@ -32,7 +32,7 @@ and the entry, not a separate spec file.
 
 ---
 
-## The six rules
+## The seven rules
 
 Full text in `docs/ARCHITECTURE.md`. A violation is a defect, not a tradeoff.
 Older docstrings call these "non-negotiable #N"; the numbers still hold.
@@ -50,7 +50,12 @@ Older docstrings call these "non-negotiable #N"; the numbers still hold.
    declares its share in `gui/concurrency.py`.
 6. **A result must never look better-founded than it is.** Refuse rather than
    approximate. Absent must not render as zero; unexamined must not render as
-   quiet.
+   quiet. Mirror direction: a control must never look more live than it is —
+   faded must mean frozen.
+7. **Everything sits on one side of the identity line.** A field changes *what
+   a result is* (hashed) or only *where it lives and how fast it arrives*
+   (never hashed). Nothing straddles; `checkpoints` and `outputs` live on
+   `Project`, off `Node`, for this reason.
 
 *"Filesystem is truth at rest" was rule 1 and is now a commitment not yet in
 force — nothing in the repo has ever been at rest. See `docs/ARCHITECTURE.md`.*

@@ -46,5 +46,28 @@ Back on the replicate tab, the full width replicate table is the replicate statu
 
 ## Filter tab
 
-At the top of the window, there is a breadcrumbs trail for how deep onto outputs the user is. Outputs are when the user has decided they want some kind of output, and it materializes in that replicates folder as a new folder. Going into that folder, SIEVE only works with what is in that folder and doesn't know what is above it. If there is a video of a binary mask from a detection filter, then that is all that it has to work with. Any prior resource can be passed down with symbolic links. What is past forward is defined by what the user configures as the outputs, which is always the last item of the DAG in the filter view.
+At the top of the window, there is a breadcrumbs trail for how deep onto outputs the user is. Outputs are when the user has decided they want some kind of output, and it materializes in that replicates folder as a new folder. Going into that folder, SIEVE only works with what is in that folder and doesn't know what is above it. If there is a video of a binary mask from a detection filter, then that is all that it has to work with. Any prior resource can be passed down with symbolic links. What is passed forward is defined by what the user configures as the outputs, which is always the last item of the DAG in the filter view.
 
+The output list is defined by what the different steps of the dag announce they can produce.
+
+The step that is always just before the output list is the thresholded and windowed detection. inf to inf threshold always lets everything through.
+
+Now, reasoning through temporal filters:
+
+Temporal channel filters have at least a few kinds, traditionally: temporal filters that remove information (noise reduction techniques, frame decimation), additive (MIE and such), or both/neither (transformative, or thresholded frequencies, that kind of thing). Thinking about it this way isn't very helpful, so here is the universal case:
+
+Seemingly all of the concrete use cases for this are either *signal-amplification-of-kind* or *economic*. Economic means that you decimate frames or do some other compute or storage saving measure because of constraints.
+
+Temporal signal-amplification-of-kind is a different beast. What this asks is: is there a pattern in time, across any channels, that creates at least part of a composite that isolates the behavior?
+
+This is the true power of SIEVE. Some examples:
+
+An ant is grooming itself. It raises its leg up to put it's antennae through the cleaning groove.
+
+We first crop to the replicate. Then we set a low grade blur to remove the general noise. Then we set energy Jtt - where change is happening has hotspots. We threshold to known points where they groom, and create a continuous mask output to isolate all of the candidate points.
+
+We then apply temporal signal amplification of kind: Using something like temporal summing across same pixels, by a specific block size, we apply an exponential decay function and a blooming "touch" function of some kind: the active detections touch the ones around them to keep them from the exponential decay. This filters out the walking behavior, leaving only the behaviors where they are sitting in one spot but still moving.
+
+Then, by filtering out events that do not meet a specific size threshold or duration threshold, we are left with mostly grooming behaviors.
+
+This is at least how I envision it working. But much testing would be needed to nail down what actually works.

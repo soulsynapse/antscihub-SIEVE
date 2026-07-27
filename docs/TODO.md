@@ -336,21 +336,144 @@ category C.
 
 ---
 
+# The replicate tab
+
+The two items below are REFINED-VISION's **Replicates** section read as a
+specification rather than as a description. That section was written after the
+wizard workflow was decided, and it asks the tab to do two things it does not
+do: to be where a crop is *shaped* — a stamp, a drag, a magnifier, numbers —
+and to be where a replicate is *chosen*, which is the act that sends the user
+to the filter tab with that arena under them.
+
+They are ordered, and for once the cheap one is first because it is also the
+one that makes the tab mean anything. The executor has cropped per replicate
+since it was written — `executor.py` takes `plan.replicate.roi`, crops each
+decoded frame before any root node sees it, and `cache_key.py` folds that ROI
+into the source key — and the GUI has never chosen which one. `filter_tab.py`
+reads `replicates[0]` in three places. Every tool in the second item shapes a
+box that, until the first item lands, nothing downstream will ever look at.
+
+Two things that section describes are deliberately not here. The replicate
+table's "progress bar for the crop, and the list of outputs defined by the DAG,
+and whether they exist" is a claim about files nothing writes, and it went to
+`LATER.md` under **Replicate status: crop progress and output existence** with
+the trigger that would make it takeable. And the **project interface** section
+above it — a folder of videos, one video per folder, symlinks rather than moves
+— is a tab that does not exist yet rather than a change to this one.
+
+## The selected replicate is the one being tuned
+
+**Gated on: nothing, and everything about this tab is worth less until it
+lands.** The vision's sentence is "Left click on a replicate is the same as
+accepting it, and begins the crop, and moves the user over to the filters tab."
+
+**What "begins the crop" turns out to mean, which is the first thing to get
+straight.** Not a background job with a progress bar. The crop is applied per
+frame at the graph's root, in memory, by the executor — that is settled and
+argued in `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`, and a
+*materialized* crop is a `Project.checkpoints` entry that is contractually
+never hashed and that nothing currently writes. So accepting a replicate is a
+submit, not a job: it sets the replicate on the preview path and re-renders.
+Anyone who builds a progress bar here first has built a bar for a job that does
+not exist.
+
+**What it involves.** `ReplicateTab` already knows its selected row and already
+emits nothing about it. The three `replicates[0] if replicates else None` sites
+in `filter_tab.py` become one selection the document or the window owns —
+whichever, it is *one*, because two answers to "which arena am I looking at"
+is the same failure the transport had before the timeline replaced it. The
+render goes through `PreviewRunner.request_render` unchanged; the coalescing
+and abandon rules are already written against a caller that submits faster than
+renders finish, and a replicate change invalidates exactly as a window move
+does.
+
+**The tab switch needs plumbing that does not exist.** `main_window.py` builds
+its `QTabWidget` as a *local variable* and keeps no reference, and nothing in
+`src/` calls `setCurrentIndex` or `setCurrentWidget`. That is a two-line fix and
+it is worth naming because it is the kind of thing that reads as already-there.
+
+**The one judgement call.** A left click that both selects and navigates leaves
+no way to select a replicate while staying on this tab — which is what the user
+wants when they are drawing the next twelve. The vision says left click accepts;
+the workable reading is that clicking a *row in the table* selects, and it is
+the click on the **video** that accepts and navigates, which also mirrors the
+filter tab's click-to-navigate gesture from the same document.
+
+**Tests worth writing:** selecting row N renders N's pixels rather than row 0's
+(the current bug, and it would pass today by accident on any single-replicate
+project — so the test needs two replicates with different ROIs); and a
+replicate change submits through the runner's one pending slot rather than
+racing a window render, which is the discipline the step composite item
+established.
+
+Read: `src/sieve/gui/{replicate_tab,filter_tab,main_window,preview_runner}.py`,
+`src/sieve/pipeline/{executor,preview}.py`,
+`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`,
+`docs/REFINED-VISION.md` **Replicates**.
+
+## Crop tools: the stamp, the drag, and the magnifier
+
+**Gated on: nothing structurally.** This absorbs the "Drag existing boxes" item
+that sat under *Independent of the stack* until 2026.07.26 — it was the same
+work described one gesture at a time, and the vision names the rest of the
+gestures it belongs with.
+
+**What exists.** `video_view.py` draws a new box by click-drag, selects the
+topmost box under a click, and paints the set. It has no zoom, no pan, no
+handles, and no move: a drag that starts on top of an existing box draws a
+second box over it. The right half of `ReplicateTab` is a deliberately empty
+`tools_panel` waiting for exactly this.
+
+**The four gestures the vision asks for.**
+
+- **Draw versus stamp, as a toggle.** The stamp is the labour saver and the
+  reason this is not just "drag boxes": a rack is a dozen arenas of identical
+  size, so the size is drawn *once* — or typed — and then placed. Stamp
+  placement must preserve width and height exactly; a stamp that rounds through
+  widget coordinates and back produces twelve arenas that are almost the same,
+  which is worse than one that is obviously different because
+  `equivalence_groups` will happily report them as one group while the pixels
+  disagree.
+- **Move an existing box, with `QUndoCommand.mergeWith`** so one drag collapses
+  to one undo step rather than one per mouse-move. `commands.py`'s
+  `SetReplicateROI` is where that goes.
+- **Resize by corner and edge handles**, which is hit-testing before
+  `_replicate_at`'s containment test rather than after it — a handle inside
+  another box's bounds must still win, or the top-left corner of a box drawn
+  second is unreachable.
+- **The magnifier, whose floor is the interesting part.** "Scrolling in or out
+  magnifies the video so they can position it carefully, but doesn't zoom out
+  more than the natural resizing to fit the box" — so the scale floor is
+  `content_rect`'s fit scale, not 1.0 and not unbounded. Every coordinate
+  mapping in the file (`to_source`, `to_widget`, the paint path) currently
+  assumes fit-scale; a scale factor and a pan origin have to go through all of
+  them at once, and the round-trip property test in
+  `tests/gui/test_video_view.py` is the thing that says whether they did.
+
+**Numeric entry while unlocked** is already half-built: the table's X/Y/W/H
+columns write through `ReplicateDocument.set_roi` and clamp. What the vision
+adds is the same fields *beside the video* while a box is being placed, which
+should be the same document call and not a second edit path.
+
+**Tests worth writing:** the zoom floor is never below fit (a wheel-out storm
+leaves the frame exactly fitted, which is the invariant a naive
+`scale *= 0.9` breaks); source↔widget round-trips hold under a non-fit scale
+with a pan offset, extending the existing round-trip test rather than adding a
+parallel one; and one drag pushes one undo command.
+
+Read: `src/sieve/gui/{video_view,replicate_tab,commands,document}.py`,
+`tests/gui/test_video_view.py`, `docs/REFINED-VISION.md` **Replicates**.
+
+---
+
 # Independent of the stack
 
 These gate nothing below them and can be taken at any point. The three small
 GUI fixes that sat here are done — see
 `docs/completed-todo/2026.07.26-three-small-gui-fixes.md`, which also records
-why the preferences one could not be tested the obvious way.
-
-## Drag existing boxes
-
-Boxes can be drawn, renamed, numerically edited, and deleted, but not moved or
-resized on the video. Needs corner/edge handles, hit-testing, and
-`QUndoCommand.mergeWith` so one drag collapses to one undo step rather than
-one per mouse-move.
-
-Read: `src/sieve/gui/{video_view,commands}.py`.
+why the preferences one could not be tested the obvious way. "Drag existing
+boxes" was moved rather than finished: it is one gesture of the crop-tools item
+above, and describing it separately was describing the same work twice.
 
 ---
 

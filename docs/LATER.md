@@ -217,6 +217,47 @@ without one.
 
 Read: V1 `gui/explorers/detection_timeline.py`, `gui/track_store.py`.
 
+## Replicate status: crop progress and output existence
+
+**Why not now.** REFINED-VISION's replicate section asks the full-width table to
+be "the replicate status ... the progress bar for the crop, at the very least,
+and the list of outputs defined by the DAG, and whether they exist". Both halves
+are readings of a filesystem nothing writes to. There is no
+`pipeline/materialize.py`, `Sink` is a declaration with no writer, and
+`cli/run_cmd.py` *refuses* a project that declares outputs rather than running
+it — so an existence column would report "missing" for every row forever, which
+is a widget that can only ever be wrong in one direction.
+
+The crop half is not merely unwritten, it is a bar for a job that does not
+exist. The crop is applied per frame at the graph's root in memory
+(`pipeline/executor.py`), and a materialized crop is a `Project.checkpoints`
+entry — contractually never hashed, deliberately optional, and absent. A
+progress bar implies a background task with a duration; what actually happens
+when a user accepts a replicate is a render submission. See
+`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
+
+**What would make it the right time.** The **Sink writers** entry above landing,
+or materialization — the same trigger, from either end. At that point outputs
+have a path, a write has a duration, and both columns become readings rather
+than guesses.
+
+**The half that is derivable today, and is deliberately not being built alone.**
+"The output list is defined by what the different steps of the dag announce they
+can produce" is `FilterSpec` declarations over `Dag.order`, and needs nothing new.
+A column listing what *could* be produced, beside no statement of what *has*
+been, is the weaker of the two claims and the one users will read as the
+stronger — so it waits and arrives with its other half.
+
+**The constraint to not get wrong when it lands**, inherited whole from the
+coverage-lanes entry above: *absent* and *not yet computed* must not look alike.
+An output that does not exist because nobody ran the graph and an output that
+does not exist because the graph produced nothing are different claims, and a
+table that paints both as an empty cell is the unexamined-versus-quiet collapse
+arriving through a third widget.
+
+Read: `docs/REFINED-VISION.md` **Replicates**, `TODO.md` **The replicate tab**,
+the **Sink writers** entry above, `src/sieve/gui/replicate_table.py`.
+
 ## Annotation spans on the timeline
 
 **Why not now.** There is no marks model, no labelled-span sidecar, and no UI

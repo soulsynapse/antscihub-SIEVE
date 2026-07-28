@@ -208,7 +208,7 @@ def process_memory_bytes() -> int:
 
     SIEVE spawns no child processes today, so the child walk is usually a
     walk over nothing — but it is taken every time rather than assumed away,
-    because worker processes will one day make it real and a sampler
+    because the process-isolation item will one day make it real and a sampler
     that quietly reported the parent alone from that day on is rule 6's
     failure with no symptom.
 

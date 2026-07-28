@@ -167,12 +167,12 @@ the matching `docs/todo/` item and is named in the annotation — this file only
 says where the file would go.
 
 ```tree
-src/sieve/core/config.py                # pydantic-settings app config, CLI > env > file
+src/sieve/core/config.py                # pydantic-settings app config — todo/application-config.md
 src/sieve/core/constants.py             # hash seeds, cache format version (currently inline)
 src/sieve/backend/namespace.py          # array-API namespace resolution — todo/gpu-execution.md
 src/sieve/storage/zarr_store.py         # Zarr v3 arrays, the general store — todo/materialization.md
 src/sieve/storage/sharding.py           # workload-specific sharding
-src/sieve/workers/manager.py            # crash isolation; arrives with a kernel that can segfault
+src/sieve/workers/manager.py            # crash isolation — todo/process-isolation.md
 src/sieve/workers/protocol.py           # versioned IPC
 src/sieve/workers/shm_transport.py      # shared-memory frame transport
 src/sieve/workers/process.py            # worker lifecycle, cooperative cancellation
@@ -180,9 +180,9 @@ src/sieve/observe/logging.py            # structlog JSON Lines
 src/sieve/observe/log_aggregator.py     # per-worker stream merge
 src/sieve/observe/results.py            # Parquet results dataset
 src/sieve/bench/profiling.py            # VizTracer + py-spy, both already in the dev group
-src/sieve/hpc/handoff.py                # DAG -> job script; no --memory flag, SIEVE reads the cgroup
+src/sieve/hpc/handoff.py                # DAG -> job script — todo/hpc-handoff-and-review-mode.md
 src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
-src/sieve/review/output.py              # VISION step 7 review contract
+src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see docs/SETTLED.md
 ```

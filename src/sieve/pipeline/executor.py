@@ -62,9 +62,20 @@ from typing import Any, Protocol, cast
 from sieve.backend.dispatch import KERNELS, Kernel, KernelRegistry, MergingKernel
 from sieve.core.filter_base import Mode
 from sieve.core.pipeline_model import Node
-from sieve.core.types import ROI, Frame
+from sieve.core.types import ROI, ChannelSpec, Frame
 from sieve.pipeline.cache import FrameStore, NullFrameStore
 from sieve.pipeline.plan import ExecutionPlan
+
+
+class FormatMismatchError(RuntimeError):
+    """The reader's decode format is not the one this run's keys were derived
+    under.
+
+    A defect rather than a user error, which is why it is a `RuntimeError` and
+    not something a command catches to print nicely: nothing a user types
+    chooses the format, so reaching this means two call sites derived it from
+    different graphs. See `_check_format`.
+    """
 
 
 class UnrunnableNodeError(RuntimeError):
@@ -228,6 +239,7 @@ def execute(
                     # seeking twice. `decoded` outlives the crop so the
                     # result below can carry the whole frame.
                     decoded = reader.read(index)
+                    _check_format(decoded, plan)
                     source = decoded if roi is None else _crop(decoded, roi)
                 incoming = source
             produced = _run_node(node, incoming, index, plan, bindings)
@@ -242,6 +254,32 @@ def execute(
                 source=decoded,
                 source_cropped=plan.pre_cropped,
             )
+
+
+def _check_format(decoded: Frame, plan: ExecutionPlan) -> None:
+    """Refuse a reader whose format is not the one the keys were derived under.
+
+    The failure this catches is the one that leaves no trace. `source_key`
+    hashes `plan.luma`, so a reader opened in the other format produces
+    correctly-shaped frames computed from the wrong pixels, stored under keys
+    that say otherwise — and the symptom is a preview that looks plausible and
+    a cache that stays poisoned for the rest of the session. Six sites derived
+    this format independently (docs/todo/the-decode-format-has-six-derivations.md)
+    and each was correct in isolation; this is the check that makes a
+    disagreement between any two of them loud.
+
+    Costs one enum comparison per decoded frame, which is nothing beside the
+    decode that produced it, so it is not hoisted to the first frame only: a
+    reader that changed format mid-run is exactly as wrong as one that started
+    wrong, and a first-frame check would miss it.
+    """
+    if (decoded.channels is ChannelSpec.GRAY) == plan.luma:
+        return
+    wanted = "luma" if plan.luma else "colour"
+    raise FormatMismatchError(
+        f"this run is keyed for {wanted} but the reader handed {decoded.channels}. Every frame "
+        "it computes would be stored under a key that names the other format."
+    )
 
 
 def _bind(

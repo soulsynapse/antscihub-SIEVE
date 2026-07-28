@@ -148,6 +148,20 @@ class RenderRequest:
     pipeline: Pipeline
     window: ClipRange
     replicate: Replicate | None
+    #: Which format the reader for this render must be opened in —
+    #: `not graph_needs_chroma(pipeline)`, and never a choice: `source_key`
+    #: hashes it, so a reader disagreeing with it fills the store with frames
+    #: computed from the wrong pixels under labels that say otherwise.
+    #:
+    #: A field rather than something the worker derives, and the invariant that
+    #: it must not drift from `pipeline` is held by `PreviewRunner._request`
+    #: being the only constructor — the render thread used to derive this twice
+    #: per render, two methods apart, because there was nowhere to put the
+    #: answer between them. The `Dag` build moves off the render thread and out
+    #: of the `full_preview_render` span as a side effect, which is worth
+    #: 18 microseconds and was never the reason
+    #: (`docs/findings/2026.07.28-the-decode-format-is-free-to-derive.md`).
+    luma: bool
     #: Called with every `FrameResult` **on the render thread**, inside the
     #: timed spans and after the staleness check — so a superseded render's
     #: frames never reach it. This is how a series consumer (the detector's
@@ -390,7 +404,7 @@ class _RenderWorker(QObject):
             project_dir=self._path.parent if crops is None else crops.project_dir,
             parent=self._path,
             parent_identity=self._source,
-            luma=not graph_needs_chroma(request.pipeline, self._registry),
+            luma=request.luma,
             want=request.window,
         )
 
@@ -400,11 +414,12 @@ class _RenderWorker(QObject):
         """The reader over the resolved file in the format this graph wants.
 
         The decode format is a property of the graph (`Dag.needs_chroma`), so it
-        is not knowable at `open` and this is the first place it is. Built here
-        on the first render, and rebuilt if a later graph disagrees — which must
-        not be left to drift, because `source_key` hashes the format and a reader
-        handing BGR to a graph keyed for luma would fill the store with entries
-        labelled as something they are not.
+        is not knowable at `open`, and the request carries the answer rather
+        than this method deriving one: a reader handing BGR to a graph keyed for
+        luma would fill the store with entries labelled as something they are
+        not, and two derivations two methods apart are two chances of being
+        handed a different graph. Built here on the first render, and rebuilt if
+        a later request disagrees.
 
         The *file* can change too, and for one reason: the selected arena moved
         to one that a crop artifact backs, or away from one. That is a rebuild
@@ -424,7 +439,7 @@ class _RenderWorker(QObject):
         every key is rooted in, and a reader outliving it would serve the new
         file's pixels under the old file's keys.
         """
-        luma = not graph_needs_chroma(request.pipeline, self._registry)
+        luma = request.luma
         if (
             self._reader is not None
             and self._reader.luma == luma
@@ -573,6 +588,10 @@ class PreviewRunner(QObject):
         discover()
 
         self._metrics = METRICS if metrics is None else metrics
+        # Kept on this side as well as handed to the worker, because the decode
+        # format is derived at submission now and a shelf the two threads
+        # disagreed about would be exactly the drift `_request` exists to stop.
+        self._registry: FilterRegistry | None = registry
         self._opened = False
         self._paused = False
         self._revision = 0
@@ -813,7 +832,7 @@ class PreviewRunner(QObject):
             self._armed_at = perf_counter()
 
         self._submit(
-            RenderRequest(
+            self._request(
                 revision=self._next_revision(),
                 pipeline=pipeline,
                 window=window,
@@ -841,7 +860,7 @@ class PreviewRunner(QObject):
         if not self._opened or self._paused or not pipeline.nodes:
             return False
         self._submit(
-            RenderRequest(
+            self._request(
                 revision=self._next_revision(),
                 pipeline=pipeline,
                 window=ClipRange(start=index, end=index + 1),
@@ -851,6 +870,35 @@ class PreviewRunner(QObject):
             )
         )
         return True
+
+    def _request(
+        self,
+        *,
+        revision: int,
+        pipeline: Pipeline,
+        window: ClipRange,
+        replicate: Replicate | None,
+        consumer: Consumer | None,
+        frame_index: int | None = None,
+    ) -> RenderRequest:
+        """The only place a `RenderRequest` is built, which is the whole point.
+
+        `luma` is derived here and nowhere else. It is an input to every cache
+        key rooted in this source, and a `bool` is the one type that cannot
+        carry its own provenance — so what keeps it honest is that there is one
+        expression producing it, on the thread that already holds the graph,
+        rather than a second one on the render thread reading a `pipeline` that
+        arrived by a different route.
+        """
+        return RenderRequest(
+            revision=revision,
+            pipeline=pipeline,
+            window=window,
+            replicate=replicate,
+            luma=not graph_needs_chroma(pipeline, self._registry),
+            consumer=consumer,
+            frame_index=frame_index,
+        )
 
     def _next_revision(self) -> int:
         """Bump and declare the newest revision.

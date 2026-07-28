@@ -9,12 +9,18 @@ still passed.
 
 from __future__ import annotations
 
+import numpy as np
+import pytest
+
+from sieve.backend.dispatch import Backend, KernelRegistry, kernel
 from sieve.core.filter_base import ArraySpec, CostEstimate, ParamsBase, TableSpec
 from sieve.core.filter_registry import FilterRegistry, register_filter
-from sieve.core.pipeline_model import Edge, Node, Pipeline
-from sieve.core.types import ChannelSpec
+from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
+from sieve.core.types import ChannelSpec, Frame
 from sieve.pipeline.cache_key import source_key
 from sieve.pipeline.dag import Dag, graph_needs_chroma
+from sieve.pipeline.executor import FormatMismatchError, execute
+from sieve.pipeline.plan import ExecutionPlan
 
 COST = CostEstimate(seconds_per_megapixel=0.001, peak_bytes_per_input_byte=2.0)
 
@@ -158,3 +164,68 @@ class TestSourceKey:
         A caller not yet taught to derive the format is slow, never wrong.
         """
         assert source_key("footage") == source_key("footage", luma=False)
+
+
+#: Kernels for the two filters the mismatch tests run. Identity, because the
+#: check under test fires before any kernel is reached and a kernel that did
+#: anything would be asserting about something else.
+SHELF_KERNELS = KernelRegistry()
+
+
+@kernel(GrayOnlyParams, Backend.CPU, registry=SHELF_KERNELS)
+def gray_only_cpu(frame: Frame, params: GrayOnlyParams) -> Frame:
+    return frame
+
+
+@kernel(HueParams, Backend.CPU, registry=SHELF_KERNELS)
+def hue_cpu(frame: Frame, params: HueParams) -> Frame:
+    return frame
+
+
+class TestTheExecutorRefusesADisagreement:
+    """The one place the six derivations can be caught disagreeing at run time.
+
+    `TestSourceKey` above pins that the format changes the key. What it cannot
+    say is what happens when a reader and a plan hold different answers, which
+    is the whole failure mode: the run completes, the frames are the right
+    shape, and the store fills with entries labelled as something they are not.
+    These fail if `executor._check_format` is removed.
+    """
+
+    def _plan(self, *, luma: bool) -> ExecutionPlan:
+        """A plan keyed for `luma`, built from a graph that demands it."""
+        return ExecutionPlan.build(
+            Dag.build(graph("gray_only" if luma else "hue"), SHELF),
+            source="footage",
+            span=ClipRange(start=0, end=1),
+            backend=Backend.CPU,
+        )
+
+    def test_a_colour_reader_under_a_luma_plan_is_refused(self) -> None:
+        plan = self._plan(luma=True)
+        assert plan.luma is True
+        with pytest.raises(FormatMismatchError, match="keyed for luma"):
+            list(execute(plan, _OneFrame(ChannelSpec.BGR), kernels=SHELF_KERNELS))
+
+    def test_a_luma_reader_under_a_colour_plan_is_refused(self) -> None:
+        """The mirror, which is the case a `luma` flag defaulting wrong produces.
+
+        Asserted separately rather than parametrized: the two are caught by one
+        comparison today, and a future implementation that only checked the
+        expensive direction would leave this one silent.
+        """
+        plan = self._plan(luma=False)
+        assert plan.luma is False
+        with pytest.raises(FormatMismatchError, match="keyed for colour"):
+            list(execute(plan, _OneFrame(ChannelSpec.GRAY), kernels=SHELF_KERNELS))
+
+
+class _OneFrame:
+    """A `FrameSource` handing back one frame in a declared format."""
+
+    def __init__(self, channels: ChannelSpec) -> None:
+        self._channels = channels
+
+    def read(self, index: int) -> Frame:
+        shape = (4, 4) if self._channels is ChannelSpec.GRAY else (4, 4, 3)
+        return Frame(data=np.zeros(shape, dtype=np.uint8), index=index, channels=self._channels)

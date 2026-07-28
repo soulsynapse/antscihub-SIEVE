@@ -142,8 +142,11 @@ class ListSource:
         self.reads.append(index)
         # Frame `n` is a field of intensity `n`, so a later assertion can say
         # which frame an output came from rather than that one arrived.
-        data = np.full((HEIGHT, WIDTH, 3), index % 200, dtype=np.uint8)
-        return Frame(data=data, index=index, channels=ChannelSpec.BGR)
+        # Gray, because these plans are keyed for luma: every graph here is
+        # built from filters that accept a single channel, so `plan.luma` is
+        # True and `executor._check_format` refuses a colour reader against it.
+        data = np.full((HEIGHT, WIDTH), index % 200, dtype=np.uint8)
+        return Frame(data=data, index=index, channels=ChannelSpec.GRAY)
 
 
 class RefusingSource:
@@ -277,7 +280,7 @@ def test_every_root_sees_the_replicates_crop_on_every_frame() -> None:
     results = run(plan, source)
 
     assert all(
-        result[node_id].data.shape == (ARENA.height, ARENA.width, 3)
+        result[node_id].data.shape == (ARENA.height, ARENA.width)
         for result in results
         for node_id in ("a", "b")
     )
@@ -301,7 +304,7 @@ def test_the_decoded_frame_escapes_uncropped_and_only_when_a_decode_happened() -
     for result in first:
         assert result.source is not None
         assert result.source.index == result.index
-        assert result.source.data.shape == (HEIGHT, WIDTH, 3), "the crop reached the source"
+        assert result.source.data.shape == (HEIGHT, WIDTH), "the crop reached the source"
 
     second = run(plan, RefusingSource(), store=store)
     assert all(result.source is None for result in second)

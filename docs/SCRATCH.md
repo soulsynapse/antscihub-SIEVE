@@ -70,3 +70,48 @@ frontier arithmetic runs — `settled_for(..., final=True)` is the whole record.
 falsified — "HPC consumes the same serialized DAG the CLI does", true of the
 executor and false of detection. That is now true of detection too, and that
 item does not know it yet.
+
+## the-decode-format-has-six-derivations — done, plus a loud break
+
+**Measured first, as the item asked.** `graph_needs_chroma` over a three-node
+chain: median 8.9 us, p95 13.2 us, max 77.5 us, no caching anywhere on the path
+(checked — a memoized `Dag.build` would have made the number meaningless). The
+render thread paid ~18 us per render inside a 3000 ms span. The cost half is
+nothing; the correctness argument carries the whole change. Written up as
+`docs/findings/2026.07.28-the-decode-format-is-free-to-derive.md`.
+
+**What changed:**
+
+- `RenderRequest.luma` — a field, derived in `PreviewRunner._request`, which is
+  now the only constructor. The two render-thread derivations two methods apart
+  are gone, and the `Dag` build leaves the render thread as a side effect.
+- `ExecutionPlan.luma` — `not dag.needs_chroma`, for anything holding a plan.
+- `executor._check_format` + `FormatMismatchError` — **the addition the item did
+  not ask for and the one that matters.** The item's own "what breaks if this is
+  wrong" was *nothing loudly, which is the danger*. Now a reader whose format
+  disagrees with the plan's keys raises on the first decoded frame, per frame
+  (one enum comparison; a first-frame check would miss a reader that changed
+  format mid-run).
+
+**It caught things immediately**, which is the argument for it: ten tests were
+handing BGR frames to plans keyed for luma. `tests/unit/test_executor.py`'s
+`ListSource` and `tests/integration/test_executor_run.py`'s `VideoReader` were
+both opening colour under luma plans — harmless in a test, exactly the poisoned
+cache in a session.
+
+**Fixture limitation found on the way, and left.** `conftest`'s synthetic video
+marks frame *n* by the blue channel at `n * 5`. BT.601 weights blue at 0.114, so
+one frame of separation is ~0.6 luma levels — inside `mp4v`'s own error. Under
+the luma decode, adjacent frames are indistinguishable: `test_executor_run`'s
+"these are not four copies of one frame" went from 4 distinct to 3. Weakened to
+`>= 3` with the reason stated in the test. **CLAUDE.md advertises the opposite**
+("a test can assert *which* frame a seek landed on"), and that is now true only
+on the colour path, which most graphs no longer take. A fixture whose marker
+survives both formats is its own item and probably a real one — every test that
+asserts `blue == n * 5` would move with it.
+
+**Two of the six sites remain, correctly.** `cli/preview_cmd.py` and
+`cli/materialize_cmd.py` must choose a format *before* they have a plan, so they
+call `graph_needs_chroma` once each — one derivation per command, not a second
+answer. `cli/run_cmd.py` and `cli/detect_cmd.py` read it off their own `dag`,
+which is the same object the plan's keys come from.

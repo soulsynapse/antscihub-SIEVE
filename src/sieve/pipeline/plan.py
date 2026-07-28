@@ -243,6 +243,27 @@ class ExecutionPlan:
         """Whether every node's lead-in is fully available in the source."""
         return self.lead_in_shortfall == 0
 
+    @property
+    def luma(self) -> bool:
+        """Which format the reader for this run must be opened in.
+
+        `not dag.needs_chroma`, which is what `cache_key.source_key` hashes —
+        so this is not a preference and a caller must not choose it. The
+        failure it exists to prevent leaves no trace: a reader handing BGR to a
+        graph keyed for luma fills the store with correctly-shaped frames
+        computed from the wrong pixels, and the symptom is a preview that looks
+        plausible.
+
+        Here rather than at each call site because a plan is "everything about
+        a run that is knowable before a frame is decoded", and this is exactly
+        that — the `Dag` it derives from is already built and already the one
+        the keys came from. A caller that must decide *before* it plans (the
+        render worker, `sieve preview`) has no plan to ask and calls
+        `dag.graph_needs_chroma` instead; what those two must not do is decide
+        it a second time once a plan exists.
+        """
+        return not self.dag.needs_chroma
+
     # ---- queries ---------------------------------------------------------
 
     def backend_for(self, node_id: str) -> Backend:

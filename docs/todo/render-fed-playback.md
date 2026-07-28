@@ -155,12 +155,16 @@ stops being the main path. The main path is: keep what the render produced, and
 play it.
 
 **Which makes retention the real question, and it is a planning job rather than
-a coding one.** A window of 1280-wide gray proxies is 0.9 MB a frame — 3.8 GB
-for 70 s at 59.94 fps — so "keep everything" is not available and the design is
-entirely about what to keep and what to drop. That is
-docs/todo/proxy-retention-policy.md, deliberately deferred to a planning pass
-rather than decided inline here, because a retention rule chosen to make one
-demo smooth is how a cache becomes something nobody can reason about.
+a coding one.** A window of 1280-wide gray proxies is 0.9 MB a frame — 3.8 GB for
+70 s at 59.94 fps. Whether that is affordable is a fact about the machine, not
+about this repo: comfortable on the reference workstation, reckless on a laptop,
+trivial on an HPC node. So the policy has to read its budget rather than carry
+one, which is docs/todo/proxy-retention-policy.md — deferred to a planning pass
+rather than decided inline, because a retention rule chosen to make one demo
+smooth is how a cache becomes something nobody can reason about.
+
+This item does not wait on it. A plain bounded ring is enough for the first
+version, and the ring's size is exactly the knob that item exists to replace.
 
 ## What to not get wrong
 

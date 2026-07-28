@@ -175,7 +175,7 @@ src/sieve/hpc/handoff.py                # DAG -> job script — todo/hpc-handoff
 src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
 src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
-src/sieve/gui/state.py                  # only when UI state has no natural owner; see TODO.md deferred decisions
+src/sieve/gui/state.py                  # only when UI state has no natural owner; see docs/SETTLED.md
 ```
 
 `.importlinter` declares `(sieve.workers)` in parentheses, so the layer contract
@@ -195,8 +195,8 @@ would have written code that three separate decisions had already refused.
   editor)**. The plot layer settled as QPainter widgets over `band_plot.py`, and
   the one item that still owned a napari question — the three-way overlay —
   answered it by collapsing to two layers and one opacity slider. Re-adding
-  either needs a new demand, not a revisit. See `docs/TODO.md` *Deferred
-  decisions* and `docs/todo/pipeline-editor-list-or-graph.md`.
+  either needs a new demand, not a revisit. See `docs/SETTLED.md` and
+  `docs/todo/pipeline-editor-list-or-graph.md`.
 - **`docs/ARCHITECTURE-TREE.md`**. `docs/findings/` holds measurement-driven
   decisions one file at a time and `docs/completed-todo/` holds what was built;
   nothing was left for a third log to carry.

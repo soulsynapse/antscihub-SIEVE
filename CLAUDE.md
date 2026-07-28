@@ -14,7 +14,7 @@ Read the file that answers your question, not all of them.
 
 | Question | File |
 |---|---|
-| What is the state of play right now, in one read? | `docs/.state.md` — generated; read it before TODO.md |
+| What is the state of play right now, in one read? | `docs/.state.md` — generated; read it first |
 | What am I building, and what is the workflow supposed to feel like? | `docs/VISION.md`, then `docs/REFINED-VISION.md` |
 | What is this ultimately for, and is my item walking toward it? | `docs/ASPIRATIONS.md` — A1–A3 and the invariants; derivation in `docs/WORKING-BACKWARDS.md` |
 | What are the invariants, layers, and latency budgets? | `docs/ARCHITECTURE.md` |
@@ -22,6 +22,7 @@ Read the file that answers your question, not all of them.
 | What should I work on? | `docs/todo/` — one file per item, `status: open` |
 | Why isn't X being done yet? | `docs/todo/` — `status: deferred`, trigger in `gated_on` |
 | Was this already built, and how? | `docs/completed-todo/.index.md` |
+| What must my item not re-decide? | `docs/SETTLED.md` — generated from `settled:` on completed entries |
 | What is measurably true about the system? | `docs/findings/.index.md` |
 | Which guardrails actually run in CI? | `docs/AUTO-GUARDRAILS.md` |
 | Why does v2 exist at all? | `docs/SIEVE-HANDOFF.md` |
@@ -80,8 +81,9 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
    can start without reading the whole tree.
 2. **Build the checklist first**, one entry per file or gate, before the first
    edit. An item whose steps cannot be listed up front has not been read yet.
-3. **Build it.** Prefer taking what exists over reinventing it — `TODO.md`'s
-   *What already exists* table says what is already solved and by which module.
+3. **Build it.** Prefer taking what exists over reinventing it —
+   `docs/SETTLED.md` says what is already solved, by which module, and what
+   about it must not be re-decided.
 4. **Test the load-bearing claim, not the surface.** Two or three tests that
    would each fail for a distinct real reason. A property or benchmark earns
    its place only when it pins something an example cannot state.
@@ -89,11 +91,14 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 6. **Complete atomically.** `uv run python tools/complete_item.py <slug>`
    *moves* the item file to `docs/completed-todo/YYYY.MM.DD-<slug>.md` with the
    completion frontmatter and git-derived file lists scaffolded. Never mark an
-   item done in place — a finished item is *moved*. **Fill `summary` and stop
-   there.** The frontmatter is the entry; the index is built from it alone, and
-   a body is the exception, written only when a rejected alternative would
-   otherwise be re-proposed. The item's own text is not copied across — it is in
-   git (`git log --diff-filter=D -- docs/todo/<slug>.md`).
+   item done in place — a finished item is *moved*. **Fill `summary`, answer
+   `settled`, and stop there.** The frontmatter is the entry; the index is
+   built from it alone, and a body is the exception, written only when a
+   rejected alternative would otherwise be re-proposed. `settled` is the only
+   thing that writes `docs/SETTLED.md`, and `none` is a real answer — a
+   scaffolded marker left in place fails the gate. The item's own text is not
+   copied across — it is in git
+   (`git log --diff-filter=D -- docs/todo/<slug>.md`).
 7. **Measurements go to `docs/findings/`**, never into the completed entry. A
    completed entry says what was built; a finding says what is true about the
    system and outlives the code that prompted it.

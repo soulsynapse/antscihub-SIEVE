@@ -93,7 +93,7 @@ class TestAttribution:
             _event(
                 "assistant",
                 "2026-07-27T11:01:11.000Z",
-                [_use("b", "Edit", {"file_path": "docs/TODO.md"})],
+                [_use("b", "Edit", {"file_path": "docs/SETTLED.md"})],
             ),
             _event("user", "2026-07-27T11:01:12.000Z", [_result("b")]),
         ]
@@ -119,7 +119,7 @@ class TestClassification:
             "edit:src",
             "build",
         )
-        assert classify("Edit", {"file_path": r"C:\repo\docs\TODO.md"})[0:2] == (
+        assert classify("Edit", {"file_path": r"C:\repo\docs\SETTLED.md"})[0:2] == (
             "edit:docs",
             "docs",
         )

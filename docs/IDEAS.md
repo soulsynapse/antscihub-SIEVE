@@ -107,15 +107,6 @@ Is there any part of the general workflow that would greatly benefit from doing 
 >
 > Bottom line: Mockups for representation, never for interaction. And the operational rule the seeker taught: a mockup carries a date and is deleted when its item resolves, because the phantom regression came from a mockup outliving its question.
 
-Given the codebase, you make comments on functions a lot. Is there a way we could categorize the comments?
-
-> Grumpy Sr. Engineer Opinion: A category tag is one more thing to get wrong, and greppability is not a problem you have. CLAUDE.md already names four kinds — the reason, the rejected alternative, the non-obvious consequence, the pointer to a finding — and gives one test to apply. Prefixing them `# WHY:` buys grep and costs a convention nobody follows past the third file.
->
-> Mentor Sr. Engineer Opinion: One of those four differs from the other three, and it is the one worth marking mechanically: the pointer to a finding is the only category with an *external referent*, which makes it the only one that can rot while the surrounding code is untouched.
->
-> Assessment: A finding gets superseded, or a file is renamed, and a comment pointing at it silently becomes a dead link inside a decision record — the exact failure already caught twice in prose. A test asserting every `findings/...` and `docs/...` path named in a source comment resolves is idea 5(a) extended from `docs/**` to `src/**`: one test, both problems. The other three categories are prose about reasoning, and reasoning has no schema.
->
-> Bottom line: Do not tag categories. Enforce the one category that has a referent, in the same test that checks doc paths.
 
 We should probably make more scripts to update state.md. Which are the most valuable?
 

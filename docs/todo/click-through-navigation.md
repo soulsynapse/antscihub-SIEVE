@@ -10,7 +10,7 @@ gated_on: >
   the general store exists
 reads:
   - docs/REFINED-VISION.md
-  - docs/TODO.md
+  - docs/SETTLED.md
   - docs/todo/sink-writers.md
   - docs/todo/materialization.md
   - src/sieve/gui/replicate_table.py
@@ -139,7 +139,8 @@ an output that does not exist because the graph produced nothing are different
 claims, and a table that paints both as an empty cell is the
 unexamined-versus-quiet collapse arriving through a third widget.
 
-Read: `docs/REFINED-VISION.md` **Replicates**, `TODO.md` **The replicate tab**,
+Read: `docs/REFINED-VISION.md` **Replicates**,
+`docs/completed-todo/2026.07.25-replicate-tab.md`,
 the deferred **Sink writers** item, docs/todo/sink-writers.md, the
 **Materialization** item, docs/todo/materialization.md,
 `src/sieve/gui/replicate_table.py`, `docs/ARCHITECTURE.md` rules 6 and 7.

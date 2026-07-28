@@ -1,5 +1,5 @@
 """Generate `.index.md` for the atomized documentation folders, plus
-`docs/.state.md`, the one-read session primer.
+`docs/SETTLED.md` and `docs/.state.md`, the one-read session primer.
 
 `docs/completed-todo/` and `docs/findings/` hold one file per item, each with
 YAML frontmatter. A folder of thirty such files is unnavigable without a
@@ -9,10 +9,14 @@ it has drifted from the files it describes.
 
 The primer exists because transcript mining put ~11% of active session time
 into re-orientation (see `findings/2026.07.27-session-time-is-generation-not-
-tools.md`): it condenses what TODO.md, `todo/`, and the two indexes would
-each be opened for at session start into one generated read. It deliberately
-holds nothing unique — every line is derived, so it can never be the home of
-a fact.
+tools.md`): it condenses what `todo/` and the indexes would each be opened for
+at session start into one generated read. It deliberately holds nothing unique
+— every line is derived, so it can never be the home of a fact.
+
+`SETTLED.md` is the same discipline applied to the anti-rediscovery table that
+used to live in a hand-written `TODO.md`. Its rows are `settled:` blocks on
+completed entries, so a row is written in the same file, at the same moment,
+by the same tool as the entry that decided it.
 
 That is the same discipline `tests/bench/test_budget_table.py` applies to
 `ARCHITECTURE.md`: prose that restates data is checked against the data.
@@ -90,7 +94,14 @@ SPECS: tuple[IndexSpec, ...] = (
             ColumnSpec("Commit", "commit"),
             ColumnSpec("Summary", "summary"),
         ),
-        required=("title", "date", "commit", "summary"),
+        # `settled` is required rather than optional, and `none` is a legal
+        # value, because optional is how the hand-written table it replaces
+        # died: it grew 20 -> 26 rows in one afternoon and then took twelve
+        # commits of real building without gaining one. Adding a row was a
+        # separate step in a separate file that nothing asked for. Requiring
+        # the key makes *deciding* the step, and `complete_item.py` scaffolds
+        # it with a marker the hygiene test fails on.
+        required=("title", "date", "commit", "summary", "settled"),
     ),
     IndexSpec(
         directory="findings",
@@ -479,25 +490,84 @@ def aspiration_lines(items: Sequence[Entry]) -> list[str]:
     return lines
 
 
-def bug_bullets(todo_lines: Sequence[str]) -> list[str]:
-    """Bullet lines of TODO.md's `## Bugs and tweaks` section."""
-    bullets: list[str] = []
-    inside = False
-    for line in todo_lines:
-        if line.startswith("## Bugs and tweaks"):
-            inside = True
-        elif inside and line.startswith("#"):
-            break
-        elif inside and line.startswith("- "):
-            bullets.append(line)
-    return bullets
+SETTLED_NAME = "SETTLED.md"
+
+#: Keys every `settled:` row carries. `do_not_redecide` is the load-bearing
+#: one — the other two only say where to look.
+SETTLED_KEYS = ("what", "where", "do_not_redecide")
+
+#: The spelling for "this item settled nothing a later item must not
+#: re-decide". Written out rather than allowed to be absent, so the answer is
+#: a decision somebody made and not a field somebody skipped.
+SETTLED_NONE = "none"
+
+
+def settled_rows(entry: Entry) -> list[dict[str, str]]:
+    """The `settled:` rows of one completed entry, `[]` for `none`.
+
+    Raises:
+        FrontmatterError: on a shape that would render as a blank cell — the
+            same reason `required` exists. A row missing `do_not_redecide` is
+            the failure mode worth catching: it looks settled and says nothing.
+    """
+    raw: object = entry.fields.get("settled")
+    if raw is None or (isinstance(raw, str) and raw.strip().lower() in {SETTLED_NONE, ""}):
+        return []
+    if not isinstance(raw, list):
+        raise FrontmatterError(f"{entry.path}: `settled` must be a list of rows, or `none`")
+
+    rows: list[dict[str, str]] = []
+    for index, item in enumerate(cast(Sequence[Any], raw)):
+        if not isinstance(item, dict):
+            raise FrontmatterError(f"{entry.path}: `settled` row {index} is not a mapping")
+        fields = {str(key): value for key, value in cast(dict[Any, Any], item).items()}
+        missing = [key for key in SETTLED_KEYS if not str(fields.get(key, "")).strip()]
+        if missing:
+            raise FrontmatterError(
+                f"{entry.path}: `settled` row {index} is missing {', '.join(missing)}"
+            )
+        rows.append({key: _cell(fields[key]) for key in SETTLED_KEYS})
+    return rows
+
+
+def render_settled(completed: Sequence[Entry]) -> str:
+    """Build `docs/SETTLED.md` — what a new item must not re-decide.
+
+    Ordered by `where`, which sorts the layers into the order they stack
+    (`bench`, `core`, `decode`, `filters`, `gui`, `pipeline`) for free. Date
+    order was the alternative and is wrong here: a reader arrives with a
+    module in hand, not a date.
+    """
+    rows = [(row, entry) for entry in completed for row in settled_rows(entry)]
+    rows.sort(key=lambda pair: (pair[0]["where"].strip("`"), pair[0]["what"]))
+
+    lines = [
+        GENERATED_NOTICE,
+        "",
+        "# What already exists — take it, do not rebuild it",
+        "",
+        "Every row is a `settled:` block in the `docs/completed-todo/` entry that",
+        "decided it; that entry is the home and this table is derived. The third",
+        "column is the part that costs a day if you re-derive it.",
+        "",
+        "| What | Where | What you must not re-decide | Settled by |",
+        "|---|---|---|---|",
+    ]
+    for row, entry in rows:
+        link = f"[{entry.fields.get('date')}](completed-todo/{entry.path.name})"
+        lines.append(f"| {row['what']} | {row['where']} | {row['do_not_redecide']} | {link} |")
+
+    silent = sum(1 for entry in completed if not settled_rows(entry))
+    lines += [
+        "",
+        f"*{len(rows)} rows from {len(completed) - silent} entries; "
+        f"{silent} entries settled nothing.*",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def render_state(root: Path = DOCS_ROOT) -> str:
-    """Build `docs/.state.md` from the item folder, TODO.md, and the indexes."""
-    todo_md = (root / "TODO.md").read_text(encoding="utf-8").splitlines()
-    bugs = bug_bullets(todo_md)
-
+    """Build `docs/.state.md` from the item folder and the indexes."""
     by_dir = {spec.directory: spec for spec in SPECS}
     items = collect(root / "todo", by_dir["todo"].required)
     open_items = [e for e in items if e.fields.get("status") == "open"]
@@ -531,7 +601,6 @@ def render_state(root: Path = DOCS_ROOT) -> str:
     if mermaid:
         lines += ["", *mermaid]
 
-    lines += ["", f"**Bugs and tweaks queued in `TODO.md`:** {len(bugs)}"]
     lines += [
         "",
         "**Last completed** (full list in `completed-todo/.index.md`):",
@@ -552,6 +621,9 @@ def build(root: Path = DOCS_ROOT) -> Iterator[tuple[Path, str]]:
         if not directory.is_dir():
             raise FrontmatterError(f"{directory}: indexed folder does not exist")
         yield directory / INDEX_NAME, render(spec, collect(directory, spec.required))
+    completed_spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
+    completed = collect(root / "completed-todo", completed_spec.required)
+    yield root / SETTLED_NAME, render_settled(completed)
     yield root / STATE_NAME, render_state(root)
 
 

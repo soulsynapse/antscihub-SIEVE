@@ -22,7 +22,8 @@ nodes were the third entry in this list until 2026.07.26, when REFINED-VISION's
 temporal section was read as a specification: every kind-amplifier it describes
 is a *combination* of channels, which is what makes it a discriminant rather than
 a filter, so the trigger this entry asked for — "a filter that actually needs
-one" — is satisfied several times over. See `TODO.md` **Multi-upstream kernels**,
+one" — is satisfied several times over. See
+`docs/completed-todo/2026.07.26-multi-upstream-kernels.md`,
 and `docs/REFINED-VISION.md` **G** for why it gates the rest of that section.
 Per rule 5, it is gone from here rather than duplicated.
 

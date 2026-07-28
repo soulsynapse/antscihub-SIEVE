@@ -1,37 +1,54 @@
-"""TODO.md's bug list and the completed-todo folder stay honest.
+"""The item folder and the completed-todo folder stay honest.
 
-Two cheap drifts these pin down. The bug list's own instruction says to tag
-each entry with when it was noticed, and untagged entries accumulated anyway —
-a date is what later distinguishes "regression from last week" from "known
-since the rewrite". And `tools/complete_item.py` scaffolds entries with
-`TODO —` markers; an entry that still carries one was filed, not finished,
-and must not sit in the index looking done (rule 6).
+`tools/complete_item.py` scaffolds entries with `TODO —` markers; an entry
+that still carries one was filed, not finished, and must not sit in an index
+looking done (rule 6). That marker is also the whole enforcement behind
+`settled:` — the key is required, `none` is a legal answer, and the scaffold
+makes answering it the step rather than an optional extra in another file.
+The hand-written table this replaced grew 20 -> 26 rows in one afternoon and
+then took twelve commits of real building without gaining a single row.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from doc_index import (
     DOCS_ROOT,
+    SETTLED_KEYS,
     SKIP_PREFIXES,
     SPECS,
     ItemGraph,
-    bug_bullets,
     build_graph,
     collect,
+    settled_rows,
 )
 
-NOTICED = re.compile(r"\(noticed (<=)?\d{4}\.\d{2}\.\d{2}( [0-9:]+)?\)")
+
+def test_every_completed_entry_answers_what_it_settled() -> None:
+    # `required` already fails a missing key; this fails a *malformed* one,
+    # which is the shape that would render as a blank cell in SETTLED.md and
+    # read as "nothing to know here" (rule 6).
+    spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
+    for entry in collect(DOCS_ROOT / "completed-todo", spec.required):
+        rows = settled_rows(entry)
+        for row in rows:
+            assert set(row) == set(SETTLED_KEYS), f"{entry.path}: {row}"
 
 
-def test_every_bug_bullet_says_when_it_was_noticed() -> None:
-    todo = (DOCS_ROOT / "TODO.md").read_text(encoding="utf-8").splitlines()
-    bullets = bug_bullets(todo)
-    assert bullets, "the bug-section parser found nothing — did the heading move?"
-    untagged = [line for line in bullets if not NOTICED.search(line)]
-    assert not untagged, "bug entries without a '(noticed YYYY.MM.DD)' tag:\n" + "\n".join(untagged)
+def test_a_settled_row_points_at_something_that_exists() -> None:
+    # `where` is the column a reader follows. A row naming a module that moved
+    # is worse than no row: it costs a search and then still has to be
+    # re-derived.
+    spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
+    missing: list[str] = []
+    for entry in collect(DOCS_ROOT / "completed-todo", spec.required):
+        for row in settled_rows(entry):
+            for token in row["where"].split("`"):
+                looks_like_a_path = "/" in token and token.endswith((".py", ".md", ".toml", "/"))
+                if looks_like_a_path and not (DOCS_ROOT.parent / token).exists():
+                    missing.append(f"{entry.path.name}: {token}")
+    assert not missing, "`settled` rows naming paths that do not exist: " + ", ".join(missing)
 
 
 def test_every_item_status_is_in_the_vocabulary() -> None:

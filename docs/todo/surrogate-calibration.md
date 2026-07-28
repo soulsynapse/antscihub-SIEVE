@@ -13,7 +13,8 @@ reads:
 # Surrogate calibration for the detection threshold
 
 **Why not now.** It calibrates a chain whose final shape is still being decided —
-`TODO.md`'s temporal section has four items that each change what is being
+`docs/REFINED-VISION.md`'s temporal section produced four items that each
+change what is being
 thresholded, and a null distribution computed for a chain that then grows a node
 is a number that quietly stops meaning anything. It is also genuinely useless
 before the accuracy question — the deferred **Accuracy feedback in the tuning

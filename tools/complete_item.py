@@ -49,13 +49,16 @@ complete_item: wrote {path}
 Still yours to do, in order:
   1. Fill `summary` — one sentence. It is the whole entry and the TODO marker
      fails the gate until it is gone.
-  2. Leave the file at that unless a rejected alternative would otherwise be
+  2. Answer `settled` — either the rows a later item must not re-decide, or
+     the word `none`. This is the only entry point to docs/SETTLED.md, so a
+     decision left out here is one somebody re-derives.
+  3. Leave the file at that unless a rejected alternative would otherwise be
      re-proposed; then uncomment `decisions:`/`rejected:` and say which.
      A body under the frontmatter is the exception, not the shape.
-  3. If anything was *measured*, it goes to docs/findings/, not this entry.
-  4. uv run nox -s checks
-  5. uv run nox -s docs
-  6. Commit, then `git rev-parse --short HEAD` into `commit:`, then push.
+  4. If anything was *measured*, it goes to docs/findings/, not this entry.
+  5. uv run nox -s checks
+  6. uv run nox -s docs
+  7. Commit, then `git rev-parse --short HEAD` into `commit:`, then push.
 """
 
 
@@ -127,6 +130,11 @@ def render(
     markers. Neither is required by `doc_index.SPECS`, and a filled-in TODO
     marker is a stronger prompt than an empty section — the previous skeleton
     asked for a decision on every item, so every item grew one.
+
+    `settled` goes the other way and *is* scaffolded with markers, because it
+    is required and because the table it feeds died of being optional: rows
+    were added in one burst and then not at all, while the building continued.
+    The cost of the marker is that `none` must be typed; that is the point.
     """
     today = date.today()
     return f"""\
@@ -138,6 +146,16 @@ tags: []
 
 summary: >
   TODO — one sentence, past tense: what the repo can do now that it could not.
+
+# Rows a later item must not re-decide, or the word `none`. Generated into
+# docs/SETTLED.md; this is the only thing that writes it. Answering `none` is
+# the common case and is a real answer — leaving the marker is not.
+settled:
+  - what: TODO — the capability, in a few words
+    where: TODO — `src/sieve/...`, backticked
+    do_not_redecide: >
+      TODO — the part that costs a day if it is re-derived, or delete these
+      three lines and write `settled: none`.
 
 files:
   added:{_yaml_list(added)}

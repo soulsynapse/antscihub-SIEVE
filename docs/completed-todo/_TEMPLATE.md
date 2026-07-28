@@ -9,6 +9,15 @@ summary: >
   One sentence, past tense, saying what the repo can do now that it could not
   before. Not a list of files — that is `files`.
 
+# Required. `none` when this item settled nothing a later item must not
+# re-decide, which is the common answer. Generated into docs/SETTLED.md.
+settled:
+  - what: The scrub budget
+    where: "`src/sieve/bench/budgets.py`"
+    do_not_redecide: >
+      46.7 ms of the 67.8 ms round trip is the container seek and it has no
+      knob, so a tighter ceiling is a ceiling nothing can meet.
+
 # ---- what moved -----------------------------------------------------------
 files:
   added:
@@ -77,16 +86,23 @@ reader finds in the diff and cannot explain from the title.
 
 ## How to use this file
 
-Copy it to `docs/completed-todo/YYYY.MM.DD-short-name.md`, delete this section
-and the example values, fill it in, and delete the corresponding section from
-`docs/TODO.md`. One file per completed item, always — a file covering two items
+`tools/complete_item.py` writes this file; copy it by hand only when that
+script cannot. One file per completed item, always — a file covering two items
 cannot be superseded, cross-referenced, or deleted independently, which is the
 whole reason these are atomic.
 
-Every field is optional except `title`, `date`, `commit`, `summary`, and
-`files`. Omit a key rather than writing `none` — an absent `rejected:` reads as
-"nothing was seriously considered and dropped", which is usually true and
-should not cost a line.
+Every field is optional except `title`, `date`, `commit`, `summary`, `files`,
+and `settled`. Omit a key rather than writing `none` — an absent `rejected:`
+reads as "nothing was seriously considered and dropped", which is usually true
+and should not cost a line.
+
+**`settled` is the one exception to that rule**, and deliberately: it is
+required, and `none` is its normal answer. It feeds `docs/SETTLED.md`, the
+table a later item consults before rebuilding something. Optional is exactly
+how the hand-written version of that table died — it gained six rows in one
+afternoon and none across the twelve commits that followed, because adding one
+was a separate step in a separate file that nothing asked for. Answering the
+key is now the step.
 
 ### Filling in `commit`
 

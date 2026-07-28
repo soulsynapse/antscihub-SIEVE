@@ -2,9 +2,11 @@
 title: "Click-through navigation: the output boundary lives in the chain-stack"
 status: deferred
 gated_on: >
-  the same trigger as the deferred **Replicate status** item
-  (docs/todo/replicate-status-columns.md), now sharpened: this item and
-  docs/todo/materialization.md land as one item, gesture-first
+  general materialization promoting (docs/todo/materialization.md) — the
+  source-boundary half left this item 2026-07-28 into
+  docs/todo/crop-boundary-gesture.md, and what remains here is descent
+  through *node* output boundaries, which has no writer until the general
+  store exists
 reads:
   - docs/REFINED-VISION.md
   - docs/TODO.md
@@ -15,6 +17,16 @@ reads:
 ---
 
 # Click-through navigation: the output boundary lives in the chain-stack
+
+**Split 2026-07-28.** The *source* boundary — the replicate crop, whose
+writer now exists — moved to docs/todo/crop-boundary-gesture.md with the
+freeze semantics it needs. This item keeps everything below that: descent
+through node output boundaries, the fading ancestry, the suggestion
+machinery, and the sibling question. One premise shifted with the crop's
+identity model (child source, not byte-exact stand-in — recorded in
+docs/todo/crop-artifact-writer.md): a materialize offer is result-*changing*
+now, so the suggestion division below keeps its two registers but
+"checkpoint this stage" no longer sits in the casual one.
 
 REFINED-VISION's replicates section ends with two sentences about a different
 tab: "Right click on the video in the filters tab goes back up to the source.

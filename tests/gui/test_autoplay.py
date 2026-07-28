@@ -4,23 +4,24 @@ There was never an autoplay path to break — nothing called `VideoPlayer.play`
 except the toolbar toggle — so the only thing worth pinning is *where* the call
 sits. Both remaining constraints are ordering ones, and both fail silently:
 a `play()` above `bind_source` runs the transport over a document that has no
-source yet, and a `play()` above `_offer_neighbour_project` leaves frames
-advancing behind a modal the user has not answered. Neither shows up in a test
-that only asks whether the player is playing at the end.
+source yet, and a `play()` above `_open_neighbour_project` runs it over
+replicates the restore is about to replace. Neither shows up in a test that
+only asks whether the player is playing at the end.
 """
 
 from __future__ import annotations
 
 import shutil
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
 from sieve.core.pipeline_model import Project, project_path_for
+from sieve.core.replicates import Replicate
+from sieve.core.types import ROI
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.main_window import MainWindow
 from sieve.gui.player import VideoPlayer
@@ -92,22 +93,31 @@ def test_playback_starts_after_the_document_is_bound(
     assert bound_when_started[0] is not None
 
 
-def test_playback_waits_for_the_neighbour_offer(
-    qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
+def test_playback_waits_for_the_neighbour_project(
+    qtbot: QtBot, window: MainWindow, video: Path
 ) -> None:
-    """A modal is blocking, so a player started above it advances behind it."""
-    Project.for_video(video, video.parent).save(project_path_for(video))
+    """The neighbour restore replaces the document, so it has to land first.
+
+    It used to be a modal that a playing video would sit behind; now it is a
+    document swap, and a transport started above it runs through replicates
+    that are about to be thrown away. Asserted at the instant playback starts,
+    because afterwards it passes either way.
+    """
+    neighbour = Project.for_video(video, video.parent).with_replicates(
+        (Replicate(roi=ROI(x=0, y=0, width=40, height=30), name="Left", replicate_id="r1"),)
+    )
+    neighbour.save(project_path_for(video))
     player = _player(window)
-    playing_while_asked: list[bool] = []
+    document = _document(window)
+    restored_when_started: list[int] = []
 
-    def asked(*_args: object, **_kwargs: object) -> QMessageBox.StandardButton:
-        playing_while_asked.append(player.is_playing)
-        return QMessageBox.StandardButton.No
+    def record(playing: bool) -> None:
+        if playing:
+            restored_when_started.append(len(document))
 
-    patched: Callable[..., QMessageBox.StandardButton] = asked
-    monkeypatch.setattr(QMessageBox, "question", patched)
+    player.playing_changed.connect(record)
 
     window.open_video(video)
-    qtbot.waitUntil(lambda: player.is_playing, timeout=OPEN_TIMEOUT_MS)
+    qtbot.waitUntil(lambda: bool(restored_when_started), timeout=OPEN_TIMEOUT_MS)
 
-    assert playing_while_asked == [False]
+    assert restored_when_started[0] == 1

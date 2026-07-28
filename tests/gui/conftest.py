@@ -42,9 +42,10 @@ def no_modal_dialogs(monkeypatch: pytest.MonkeyPatch) -> None:
 
     A modal in a headless suite is not a failure — it is a test that never
     returns, and the report names nothing. The answers are the ones that let
-    teardown finish: discard unsaved work, decline the offer to open a
-    neighbouring project. A test about either prompt overrides this with its own
-    patch and asserts on the arguments.
+    teardown finish, chiefly discarding unsaved work. `question` is patched to
+    "No" for anything that grows one later; nothing in the window asks a
+    question today. A test about a prompt overrides this with its own patch and
+    asserts on the arguments.
     """
     monkeypatch.setattr(QMessageBox, "warning", answering(QMessageBox.StandardButton.Discard))
     monkeypatch.setattr(QMessageBox, "question", answering(QMessageBox.StandardButton.No))

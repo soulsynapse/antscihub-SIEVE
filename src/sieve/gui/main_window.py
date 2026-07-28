@@ -521,27 +521,26 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Saved {path.name}")
         return True
 
-    def _offer_neighbour_project(self, video: Path) -> None:
-        """Offer the project filed beside a video the user opened directly.
+    def _open_neighbour_project(self, video: Path) -> None:
+        """Open the project filed beside a video the user opened directly.
 
         VISION step 1 puts the project at the root of the source's own folder,
         so this file existing is the normal case for footage that has been
-        worked on before. Offered rather than opened: the user asked for a
-        video, and silently restoring twelve replicates they cannot see the
-        provenance of is a worse surprise than one question.
+        worked on before. This used to ask, on the argument that silently
+        restoring twelve replicates the user cannot see the provenance of is a
+        worse surprise than one question. The argument survives in the
+        announcement rather than in the question: the status bar says which
+        project was restored and from where, so the provenance is still there
+        without a modal in front of a video the user already asked for.
         """
         path = project_path_for(video)
         if not path.is_file():
             return
-        answer = QMessageBox.question(
-            self,
-            "SIEVE",
-            f"{path.name} sits beside this video.\nOpen it?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer == QMessageBox.StandardButton.Yes:
-            self.open_project(path)
+        self.open_project(path)
+        # `open_project` reports its own failures and leaves the path unadopted;
+        # announcing unconditionally would claim a restore that did not happen.
+        if self._project_path == path:
+            self.statusBar().showMessage(f"Restored {path.name}  ·  {path.parent}")
 
     def _update_title(self) -> None:
         """Restate what is open and whether it is saved.
@@ -621,8 +620,8 @@ class MainWindow(QMainWindow):
             f"{metadata.fps:.2f} fps  ·  {metadata.frame_count:,} frames"
         )
 
-        # Read and cleared before either branch runs: the neighbour offer can
-        # open a project of its own, and a pending entry still sitting here
+        # Read and cleared before either branch runs: the neighbour open can
+        # load a project of its own, and a pending entry still sitting here
         # would be applied to the wrong video by the next open.
         pending = self._pending_project
         self._pending_project = None
@@ -632,12 +631,13 @@ class MainWindow(QMainWindow):
             self._project = None
             self._project_path = None
             self._update_title()
-            self._offer_neighbour_project(metadata.path)
+            self._open_neighbour_project(metadata.path)
 
-        # Last, and on both branches, because both constraints on autoplay are
-        # ordering ones: the document has to be bound before the transport
-        # starts moving through it, and `_offer_neighbour_project` can still
-        # raise a modal that a playing video would sit behind. Gated on the
+        # Last, and on both branches, because the document has to be bound
+        # before the transport starts moving through it. The neighbour path no
+        # longer raises a modal, but it can still adopt a project, and playing
+        # under a document that is about to be replaced advances the transport
+        # through a state the user never sees. Gated on the
         # action rather than on a fresh `metadata is not None`, because the
         # action already carries that condition *and* the editing one — if
         # play is not being offered, it should not happen by itself either.

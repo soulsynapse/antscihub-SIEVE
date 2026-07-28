@@ -321,41 +321,50 @@ class TestUnsavedChanges:
         assert window.isWindowModified() is True
 
 
-class TestNeighbourOffer:
-    def test_opening_a_video_offers_the_project_filed_beside_it(
+class TestNeighbourOpen:
+    def test_opening_a_video_opens_the_project_filed_beside_it_without_asking(
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The offer, and that accepting it does not re-decode the open video."""
+        """It restores, and it does so with no question in front of the video."""
         _project_file(project_path_for(video), video)
-        asked: list[str] = []
+        asked: list[object] = []
 
         def answer(*args: object, **_kwargs: object) -> QMessageBox.StandardButton:
-            asked.append(str(args[2]))
+            asked.append(args)
             return QMessageBox.StandardButton.Yes
 
         monkeypatch.setattr(QMessageBox, "question", answer)
 
         _open(qtbot, window, video)
 
-        assert len(asked) == 1
-        assert "arena.sieve.yaml" in asked[0]
+        assert asked == []
         assert len(_document(window)) == 2
 
-    def test_a_video_with_no_project_beside_it_asks_nothing(
-        self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
+    def test_the_restore_says_which_project_and_from_where(
+        self, qtbot: QtBot, window: MainWindow, video: Path
     ) -> None:
-        asked: list[object] = []
+        """The provenance the question used to carry has to survive somewhere.
 
-        def answer(*args: object, **_kwargs: object) -> QMessageBox.StandardButton:
-            asked.append(args)
-            return QMessageBox.StandardButton.No
-
-        monkeypatch.setattr(QMessageBox, "question", answer)
+        Restoring two replicates the user cannot account for is the surprise the
+        modal existed to prevent; the status bar is where that argument now
+        lands, so a silent restore is a regression even though the state is
+        right.
+        """
+        _project_file(project_path_for(video), video)
 
         _open(qtbot, window, video)
 
-        assert asked == []
+        message = window.statusBar().currentMessage()
+        assert "arena.sieve.yaml" in message
+        assert str(video.parent) in message
+
+    def test_a_video_with_no_project_beside_it_restores_nothing(
+        self, qtbot: QtBot, window: MainWindow, video: Path
+    ) -> None:
+        _open(qtbot, window, video)
+
         assert len(_document(window)) == 0
+        assert "Restored" not in window.statusBar().currentMessage()
 
 
 class TestSourceMismatch:

@@ -24,9 +24,13 @@ every playhead position — at one slider-set layer alpha. On top, cells
 inside the value band right now get an interior fill at one alpha and a
 1 px border ring at a second, independent alpha, both in `ACCENT`, the
 palette's one in-band colour. The ring belongs to *detected* cells only; an
-out-of-band cell is bare heat. Ring and interior are disjoint pixel regions,
-so border alpha 0 reads as separated blocks and equal alphas read as one
-mass; that separation is the control surface, not a rendering accident. All
+out-of-band cell is bare heat. One pixel is the width of every wall, the
+shared ones included: two adjacent detected cells split a single line rather
+than laying a ring each, so the interior of a detected region — the least
+informative part of the picture — does not get the heaviest ink. Ring and
+interior are disjoint pixel regions, so border alpha 0 reads as separated
+blocks and equal alphas read as one mass; that separation is the control
+surface, not a rendering accident. All
 three grid sliders quantize to 0.2 steps so the two alphas can be matched by
 feel. Holding Shift peeks: every overlay drops and the frame underneath is
 all there is.
@@ -68,6 +72,7 @@ on the next crossing rather than deduplicated into silence.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from typing import Any
 
 import numpy as np
@@ -224,6 +229,28 @@ class _CompositePane(QWidget):
         """Where the grid paints: the same rectangle the images fill."""
         return self.view_rect()
 
+    def grid_edges(self) -> tuple[list[int], list[int]]:
+        """The integer pixel columns and rows the grid lines fall on.
+
+        `(xs, ys)`, each `n + 1` long: cell `(row, col)` owns the pixels
+        `xs[col] .. xs[col + 1] - 1` across and `ys[row] .. ys[row + 1] - 1`
+        down. Rounding the *line* rather than each cell's own origin and
+        extent is what closes the seam: neighbouring cells cannot round apart
+        when they read the same number, whereas `left + i*w` and
+        `left + (i-1)*w + w` are the same real and need not be the same float,
+        and one ULP either side of a half-pixel is a row of unblended footage
+        across the heatmap.
+
+        Both the paint and `block_at` read this, so the cell under the pointer
+        is the cell the pointer is over — registration between the two is not
+        maintained so much as unable to come apart.
+        """
+        g = self.grid_rect()
+        ny, nx = self.grid
+        xs = [round(g.left() + i * g.width() / nx) for i in range(nx + 1)]
+        ys = [round(g.top() + j * g.height() / ny) for j in range(ny + 1)]
+        return xs, ys
+
     def block_at(self, pos: QPointF) -> int | None:
         """The block under `pos`, or None outside the grid (or with none on).
 
@@ -239,8 +266,9 @@ class _CompositePane(QWidget):
         if not g.contains(pos) or g.isEmpty() or not self._content_rect().contains(pos):
             return None
         ny, nx = self.grid
-        col = min(int((pos.x() - g.left()) / g.width() * nx), nx - 1)
-        row = min(int((pos.y() - g.top()) / g.height() * ny), ny - 1)
+        xs, ys = self.grid_edges()
+        col = min(max(bisect_right(xs, int(pos.x())) - 1, 0), nx - 1)
+        row = min(max(bisect_right(ys, int(pos.y())) - 1, 0), ny - 1)
         return row * nx + col
 
     # ---- input -----------------------------------------------------------
@@ -371,31 +399,50 @@ class _CompositePane(QWidget):
             painter.drawImage(view, self.over)
             painter.setOpacity(1.0)
         if self.grid_on and not self.peek:
-            self._paint_grid(painter, view)
+            self._paint_grid(painter)
         painter.end()
 
-    def _paint_grid(self, painter: QPainter, g: QRectF) -> None:
+    def _paint_grid(self, painter: QPainter) -> None:
         """Heatmap under, detected squares over — three independent alphas.
 
         The heatmap tiles every cell edge to edge, coloured cold-to-hot by
         value, at the layer's own alpha: a contiguous surface, the way v1
-        blended its colormap over the footage. The detected overlay sits on
-        top, and only on in-band cells: ring and interior are disjoint pixel
-        regions — the ring is the cell's outer pixel, the fill starts one
-        pixel in — so those two alphas never composite over each other:
-        border alpha 0 leaves the seam between neighbouring fills bare
-        (separated blocks), equal alphas tile the in-band region seamlessly
-        (a mass). Antialiasing stays off so a ring is a square ring, not a
-        rounded smear.
+        blended its colormap over the footage. Edge to edge means
+        `grid_edges`' integer lines — cells that share a number cannot leave a
+        gap between them, which is the seam this used to draw.
+
+        The detected overlay sits on top, and only on in-band cells. A wall is
+        one pixel wide *everywhere*, whether it separates a detected cell from
+        bare heat or from another detected cell — so the interior lines of a
+        detected region, which carry the least information, no longer get the
+        heaviest ink. That costs an asymmetry: every cell owns its top and
+        left pixel lines and gives up its bottom and right ones to the
+        neighbour below and to the right, unless there is no detected
+        neighbour there to give them to. The reward is that every wall pixel
+        is painted exactly once, by exactly one cell, so the ring alpha means
+        one thing on screen rather than two.
+
+        Ring and interior stay disjoint pixel regions, and the fill takes
+        whatever the walls leave: border alpha 0 bares the seam between
+        neighbouring fills (separated blocks), equal alphas tile the in-band
+        region seamlessly (a mass). Antialiasing stays off so a ring is a
+        square ring, not a rounded smear.
         """
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         ny, nx = self.grid
-        cell_w, cell_h = g.width() / nx, g.height() / ny
+        xs, ys = self.grid_edges()
         blocks = min(ny * nx, len(self.values), len(self.in_band))
 
-        def cell_rect(b: int) -> QRectF:
+        def cell_rect(b: int) -> QRect:
             row, col = divmod(b, nx)
-            return QRectF(g.left() + col * cell_w, g.top() + row * cell_h, cell_w, cell_h)
+            return QRect(xs[col], ys[row], xs[col + 1] - xs[col], ys[row + 1] - ys[row])
+
+        def detected(row: int, col: int) -> bool:
+            """Whether the cell at `(row, col)` is in band — False off the grid."""
+            if not (0 <= row < ny and 0 <= col < nx):
+                return False
+            b = row * nx + col
+            return b < blocks and bool(self.in_band[b])
 
         if self.heat_alpha > 0.0:
             for b in range(blocks):
@@ -403,26 +450,47 @@ class _CompositePane(QWidget):
                 heat.setAlphaF(self.heat_alpha)
                 painter.fillRect(cell_rect(b), heat)
 
-        if self.fill_alpha > 0.0:
+        if self.fill_alpha > 0.0 or self.line_alpha > 0.0:
             fill = QColor(ACCENT)
             fill.setAlphaF(self.fill_alpha)
-            for b in range(blocks):
-                if bool(self.in_band[b]):
-                    painter.fillRect(cell_rect(b).adjusted(1.0, 1.0, -1.0, -1.0), fill)
-
-        if self.line_alpha > 0.0:
             line = QColor(ACCENT)
             line.setAlphaF(self.line_alpha)
-            painter.setPen(QPen(line, 1.0))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
             for b in range(blocks):
-                if bool(self.in_band[b]):
-                    painter.drawRect(cell_rect(b).adjusted(0.5, 0.5, -0.5, -0.5))
+                if not bool(self.in_band[b]):
+                    continue
+                row, col = divmod(b, nx)
+                # The cell's first and last pixel, in each axis.
+                x0, x1 = xs[col], xs[col + 1] - 1
+                y0, y1 = ys[row], ys[row + 1] - 1
+                if x1 < x0 or y1 < y0:  # a cell too small to hold a pixel
+                    continue
+                # Which of the four walls this cell owns. Top and left always;
+                # bottom and right only where there is no detected neighbour to
+                # own them instead.
+                right_wall = x1 > x0 and not detected(row, col + 1)
+                bottom_wall = y1 > y0 and not detected(row + 1, col)
+                if self.line_alpha > 0.0:
+                    painter.fillRect(QRect(x0, y0, x1 - x0 + 1, 1), line)
+                    if y1 > y0:
+                        painter.fillRect(QRect(x0, y0 + 1, 1, y1 - y0), line)
+                    if right_wall:
+                        painter.fillRect(QRect(x1, y0 + 1, 1, y1 - y0), line)
+                    if bottom_wall:
+                        # The left wall already holds this row's first pixel,
+                        # and the right wall its last one if it was drawn.
+                        bx1 = x1 - 1 if right_wall else x1
+                        if bx1 >= x0 + 1:
+                            painter.fillRect(QRect(x0 + 1, y1, bx1 - x0, 1), line)
+                if self.fill_alpha > 0.0:
+                    right = x1 - 1 if right_wall else x1
+                    bottom = y1 - 1 if bottom_wall else y1
+                    if right >= x0 + 1 and bottom >= y0 + 1:
+                        painter.fillRect(QRect(x0 + 1, y0 + 1, right - x0, bottom - y0), fill)
 
         if self.solo is not None and self.solo < ny * nx:
             painter.setPen(QPen(TEXT, 1.8))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRect(cell_rect(self.solo).adjusted(1.0, 1.0, -1.0, -1.0))
+            painter.drawRect(cell_rect(self.solo).adjusted(1, 1, -1, -1))
 
 
 class StepCompositeView(QWidget):

@@ -492,6 +492,95 @@ def _grid_view(qtbot: QtBot, ny: int, nx: int, size: tuple[int, int]) -> StepCom
     return view
 
 
+def test_two_adjacent_detected_cells_share_one_one_pixel_wall(qtbot: QtBot) -> None:
+    """The wall between two detected cells is 1 px, not 2.
+
+    Each cell used to stroke its own ring, so neighbouring detected cells laid
+    their rings side by side: 2 px inside a detected region and 1 px on its
+    outer boundary, which is backwards — the interior lines carry the least
+    information and got the heaviest ink. Measured with the border at zero and
+    the fill opaque, so the wall reads as bare panel and its width is a count
+    of background pixels: exactly one, where it used to be two.
+    """
+    view = _grid_view(qtbot, 1, 2, (400, 240))
+    view.set_block_state(np.zeros(2, np.float32), np.ones(2, bool), None)
+    view.fill_slider.setValue(GRID_STEPS)
+    view.line_slider.setValue(0)
+    view.heat_slider.setValue(0)
+
+    pane = view.pane
+    xs, ys = pane.grid_edges()
+    row_y = (ys[0] + ys[1]) // 2
+    image = pane.grab().toImage()
+
+    bare = [x for x in range(xs[1] - 5, xs[1] + 6) if image.pixelColor(x, row_y) == PANEL]
+    assert bare == [xs[1]], f"the shared wall is {len(bare)} px wide, not 1"
+
+
+def test_a_lone_detected_cell_still_shows_a_closed_ring(qtbot: QtBot) -> None:
+    """The other side of the shared-wall rule.
+
+    Giving the bottom and right pixel lines to a detected neighbour is only
+    sound if a cell with no detected neighbour keeps them: a lone in-band cell
+    must be ringed on all four sides, one pixel thick, with bare heat inside
+    it at fill 0 and bare panel outside.
+    """
+    view = _grid_view(qtbot, 3, 3, (400, 400))
+    in_band = np.zeros(9, bool)
+    in_band[4] = True
+    view.set_block_state(np.zeros(9, np.float32), in_band, None)
+    view.line_slider.setValue(GRID_STEPS)
+    view.fill_slider.setValue(0)
+    view.heat_slider.setValue(0)
+
+    pane = view.pane
+    xs, ys = pane.grid_edges()
+    x0, x1, y0, y1 = xs[1], xs[2] - 1, ys[1], ys[2] - 1
+    image = pane.grab().toImage()
+
+    for y in range(y0, y1 + 1):
+        assert image.pixelColor(x0, y) != PANEL, f"the left wall breaks at y={y}"
+        assert image.pixelColor(x1, y) != PANEL, f"the right wall breaks at y={y}"
+    for x in range(x0, x1 + 1):
+        assert image.pixelColor(x, y0) != PANEL, f"the top wall breaks at x={x}"
+        assert image.pixelColor(x, y1) != PANEL, f"the bottom wall breaks at x={x}"
+    mid_y = (y0 + y1) // 2
+    assert image.pixelColor(x0 - 1, mid_y) == PANEL, "the ring bled outside the cell"
+    assert image.pixelColor(x0 + 1, mid_y) == PANEL, "the ring is more than 1 px thick"
+    assert image.pixelColor(x1 + 1, mid_y) == PANEL, "the ring bled into the next cell"
+
+
+def test_the_heatmap_tiles_with_no_uncovered_row_at_any_pane_height(qtbot: QtBot) -> None:
+    """The seam: a 1 px line of unblended footage across the heatmap.
+
+    Each cell used to derive its own origin and extent from a float cell size,
+    so `left + i*w` and `left + (i-1)*w + w` — the same real number — could
+    land either side of a half pixel and the fills rounded apart. It showed up
+    at *particular* pane heights only, which is why the height is swept rather
+    than sampled: one geometry proves nothing about the arithmetic.
+    """
+    view = _grid_view(qtbot, 12, 3, (300, 200))
+    view.set_block_state(np.full(36, 5.0, np.float32), np.zeros(36, bool), None)
+    view.set_scale_max(10.0)
+    view.heat_slider.setValue(GRID_STEPS)
+    view.fill_slider.setValue(0)
+    view.line_slider.setValue(0)
+
+    pane = view.pane
+    for height in range(200, 260):
+        view.resize(300, height)
+        QApplication.processEvents()
+        rect = pane.grid_rect()
+        column = int(rect.center().x())
+        image = pane.grab().toImage()
+        gaps = [
+            y
+            for y in range(int(rect.top()) + 1, int(rect.bottom()) - 1)
+            if image.pixelColor(column, y) == PANEL
+        ]
+        assert not gaps, f"unblended row(s) {gaps} through the heatmap at height {height}"
+
+
 class TestMagnifier:
     """The wheel over the pane, and the mapping it moves under.
 

@@ -35,8 +35,8 @@ geometry), then stamp, then the rest.
 - If the user draws boxes and undoes it, then clicks into a replicate, the ratio is wrong (noticed <=2026.07.27) → `todo/ratio-wrong-after-undo.md`
 - It shouldn't ask to save the project or load the project. But it should automatically keep project history so if the user messes stuff up it can roll back. (noticed <=2026.07.27) → `todo/no-save-prompts-keep-history.md`
 - The zoom function should work on the replicate tab too. (noticed <=2026.07.27) → `todo/zoom-on-the-composite-view.md`
-- With heat on there is a gap in the footage making a yellow line — probably cropping, pixel numbers, or block size vs resolution (noticed 2026.07.27) → `todo/grid-overlay-seam-and-border-width.md`
-- Detection borders are 2 px when detected blocks sit next to each other; they should be 1 px (noticed 2026.07.27) → `todo/grid-overlay-seam-and-border-width.md`
+- With heat on there is a gap in the footage making a yellow line — probably cropping, pixel numbers, or block size vs resolution (noticed 2026.07.27) → `completed-todo/2026.07.28-grid-overlay-seam-and-border-width.md`. Fixed 2026.07.28: neither cropping nor block size — float associativity between adjacent cell rectangles. The partial-edge-block registration question is diagnosed there and deliberately left, since the pane is never told the block size.
+- Detection borders are 2 px when detected blocks sit next to each other; they should be 1 px (noticed 2026.07.27) → `completed-todo/2026.07.28-grid-overlay-seam-and-border-width.md`. Fixed 2026.07.28: adjacent detected cells share one wall instead of stroking a ring each.
 - We had a beautiful bottom bar previously but it's now gone (noticed <=2026.07.27) → `todo/seeker-upgrades.md`. Not a regression: `gui/timeline_bar.py` is the v2 base (its `STRIP_HEIGHT` comment reserves room for the lanes) and the loaded seeker in `mockups/seeker/` was never built. Resolved 2026.07.27; the item it duplicated is deleted. Built 2026.07.27 as far as it has producers — bracket drag and hover bubble; the mockup is deleted, ticks and coverage are `todo/coverage-and-detection-lanes.md`.
 
 ## Keeping this file small

@@ -22,6 +22,7 @@ default resting state.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from itertools import pairwise
 from typing import Any
 
@@ -124,6 +125,65 @@ def bin_counts(band_power: FloatArray, value_max: float, bins: int = _BINS) -> N
     return counts
 
 
+@dataclass(frozen=True, slots=True)
+class DensitySurface:
+    """The picture and the axis it implies, without a widget or a `QImage`.
+
+    Everything expensive about `DensityPlot.set_series` and nothing that needs
+    the GUI thread, so it can be computed wherever the band power was — see
+    `density_surface`.
+    """
+
+    #: The array's own maximum, which the value axis and the band handles are
+    #: denominated in. Carried even when `argb` is None, so a refused surface
+    #: still leaves the handles meaning this array's units.
+    value_max: float
+    #: `(bins, T)` ARGB rows, already flipped so row 0 is the top of the plot.
+    #: None when nothing was binned, and `notice` then says why.
+    argb: NDArray[np.uint32] | None
+    #: Why there is no surface, or empty.
+    notice: str
+
+
+def density_surface(band_power: FloatArray) -> DensitySurface:
+    """Bin `(T, B)` band power into the picture, off any particular thread.
+
+    Split out of `DensityPlot.set_series` so the work can happen on the thread
+    that already holds this array — `gui/detector_worker.py` computed it — and
+    the GUI thread is left with a `QImage` wrap and a repaint. The split is
+    what `docs/todo/budgets-attribute-cost-they-do-not-cap-it.md` needs first:
+    a rebuild the user waits for on the GUI thread is why `MAX_BLOCKS` exists,
+    and a rebuild that is not on the GUI thread does not need a refusal.
+
+    Nothing here touches Qt. `ramp_lut` is a numpy lookup table that happens to
+    live beside Qt code; the `QImage` is deliberately *not* built here, because
+    the widget is the thing that owns it and one wrap is not what costs.
+    """
+    m = np.asarray(band_power, np.float32)
+    blocks = m.shape[1]
+    # One pass over the array, before any bound: the value axis and the band
+    # handles keep meaning this array's units even when the surface is refused.
+    value_max = float(m.max()) or 1.0
+    if blocks > MAX_BLOCKS:
+        # Refused, not computed slowly, and not left as the previous grid's
+        # picture either — that image is a histogram of a different population
+        # and would read as this one's.
+        #
+        # This branch is on its way out with `MAX_BLOCKS` itself; what replaces
+        # it is the HUD naming the cost, not the graph declining to draw.
+        return DensitySurface(
+            value_max=value_max,
+            argb=None,
+            notice=f"{blocks:,} blocks — above the {MAX_BLOCKS:,} this graph bins",
+        )
+    counts = bin_counts(m, value_max)
+    norm = np.log1p(counts) / math.log1p(max(blocks, 2))
+    lut = ramp_lut(DENSITY_STOPS)
+    return DensitySurface(
+        value_max=value_max, argb=lut[(norm * 255).astype(np.uint8)][::-1], notice=""
+    )
+
+
 class DensityPlot(BandPlot):
     """Per-frame value histogram over all blocks, with the value band on top."""
 
@@ -146,8 +206,18 @@ class DensityPlot(BandPlot):
 
     # ---- data ---------------------------------------------------------------
 
-    def set_series(self, band_power: FloatArray, solo: FloatArray | None = None) -> None:
+    def set_series(
+        self,
+        band_power: FloatArray,
+        solo: FloatArray | None = None,
+        *,
+        surface: DensitySurface | None = None,
+    ) -> None:
         """The `(T, B)` band power to bin, and one block's `(T,)` trace or None.
+
+        `surface` is `density_surface(band_power)` when a caller already ran it
+        off the GUI thread. Optional rather than required because the cheap
+        tier hands the same array back and never reaches the binning at all.
 
         **The surface is rebuilt only when the array behind it moves.**
         `filter_tab`'s cheap tier — value band, count threshold, D, centered,
@@ -175,29 +245,24 @@ class DensityPlot(BandPlot):
         m = np.asarray(band_power, np.float32)
         if m is not self._source:
             self._source = m
-            blocks = m.shape[1]
-            # Before the bound, so the value axis and the band handles keep
-            # meaning this array's units even when the surface is refused.
-            # One pass over the array; the histogram is the expensive part.
-            self._max = float(m.max()) or 1.0
-            if blocks > MAX_BLOCKS:
-                # Refused, not computed slowly, and not left as the previous
-                # grid's picture either — that image is a histogram of a
-                # different population and would read as this one's. The Block
-                # spin box refuses these sizes at entry; this is the same bound
-                # held at the surface, for the values entry cannot reach: a
-                # project saved before the bound, or a crop grown under a fixed
-                # block size.
-                self._image = None
+            # `surface` when the caller already paid for it off the GUI thread,
+            # and only then: a caller handing a surface for a *different* array
+            # would put one population's picture under another's axis, so the
+            # identity check above is what makes accepting one safe.
+            built = density_surface(m) if surface is None else surface
+            self._max = built.value_max
+            self._notice = built.notice
+            self._image = None if built.argb is None else argb_to_qimage(built.argb)
+            if built.argb is None:
+                # The refusal drops the trace too — an overlaid block against no
+                # surface reads as a population of one. The Block spin box
+                # refuses these sizes at entry; this is the same bound held at
+                # the surface, for the values entry cannot reach: a project
+                # saved before the bound, or a crop grown under a fixed block
+                # size.
                 self._solo = None
-                self._notice = f"{blocks:,} blocks — above the {MAX_BLOCKS:,} this graph bins"
                 self.update()
                 return
-            self._notice = ""
-            counts = bin_counts(m, self._max)
-            norm = np.log1p(counts) / math.log1p(max(blocks, 2))
-            lut = ramp_lut(DENSITY_STOPS)
-            self._image = argb_to_qimage(lut[(norm * 255).astype(np.uint8)][::-1])
         self._solo = None if solo is None else np.asarray(solo, np.float32)
         self.update()
 

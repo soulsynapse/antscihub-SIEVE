@@ -171,3 +171,30 @@ order fixed (off-thread rebuild first, then the cap comes off, then the HUD
 attributes), `density_rebuild` declared in `IN_DEBT` against it, and the
 `MAX_BLOCKS` docstring corrected in place so nobody derives anything new from
 it or tunes it to a better wrong value.
+
+## budgets-attribute-cost — step 1 started, half done
+
+`density_surface(band_power) -> DensitySurface` extracted from
+`DensityPlot.set_series`: the max, the bincount histogram, the log1p norm and
+the ramp lookup, producing an ARGB array and nothing Qt. `set_series` gains an
+optional `surface=` for a caller that already paid for it, guarded by the same
+identity check that makes the cheap tier free — a surface handed for a
+*different* array would put one population's picture under another's axis, and
+the identity check is what makes accepting one safe. Pure refactor, no
+behaviour change, suite green and the `density_rebuild` debt xfails visibly in
+`nox -s benchmark`.
+
+**What is left of step 1, and it is the load-bearing half:** nobody passes
+`surface=` yet, so the binning is still on the GUI thread. The wiring is
+
+- `gui/detector_worker.derive` calls `density_surface(update.band_power)`
+  beside its `morlet_power` — it already holds that array on its own thread —
+  and carries the result on `DetectorResult`.
+- `gui/filter_tab.py:1244` and `gui/wizard.py:519` pass `surface=result.density`
+  instead of letting the widget bin.
+- The cheap tier is untouched by construction: it hands the same array back and
+  never reaches the binning.
+
+Then step 2 (the cap comes off) and step 3 (the HUD attributes) as the item
+sets out. `MAX_BLOCKS`'s refusal branch now lives in `density_surface` and is
+one `return` to delete when the responsiveness work lands.

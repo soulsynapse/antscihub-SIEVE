@@ -78,13 +78,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.pool_meter import PoolMeter
 from sieve.core.wavelet import default_freqs
 from sieve.detect import gate_to
-from sieve.filters.block_signal import min_block_for, resolve_block
+from sieve.filters.block_signal import resolve_block
 from sieve.gui.band_plot import DIM
 from sieve.gui.block_spin import BlockSpinBox
 from sieve.gui.chain_model import (
@@ -107,7 +106,7 @@ from sieve.gui.composite_view import StepCompositeView
 from sieve.gui.concurrency import resolve_worker_split
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.crop_binding import CropBacking, CropState
-from sieve.gui.density_plot import MAX_BLOCKS, DensityPlot
+from sieve.gui.density_plot import DensityPlot, DensitySurface
 from sieve.gui.detector_worker import (
     DetectorFailure,
     DetectorRequest,
@@ -194,6 +193,10 @@ class FilterTab(QWidget):
         self._grid: tuple[int, int] = (1, 1)
         self._update: DetectorUpdate | None = None
         self._pooled_power: np.ndarray | None = None
+        #: The density picture the worker binned for `_update.band_power`, held
+        #: so every repaint hands the plot the same one. None only before the
+        #: first derivation — never as a way of asking the widget to bin.
+        self._density_surface: DensitySurface | None = None
         #: Why the newest derivation did not land, or None. Held in state
         #: rather than written straight to the plot because `_apply` rebuilds
         #: every notice from the chain on each repaint: a notice set from the
@@ -353,7 +356,6 @@ class FilterTab(QWidget):
         self._normalize.addItems(["off", "zscore"])
         self._block = BlockSpinBox()
         self._block.setRange(0, 256)
-        self._refresh_block_floor()
         self._signal_buttons: dict[str, QPushButton] = {}
         for signal_id, label in SIGNAL_LABELS.items():
             button = QPushButton(label)
@@ -1058,6 +1060,14 @@ class FilterTab(QWidget):
         self._grid = result.grid
         self._update = result.update
         self._pooled_power = result.pooled_power
+        self._density_surface = result.density
+        # Measured on the detector thread, published here: the budget is the
+        # binning, and moving it off the GUI thread changed where it runs, not
+        # what it costs. Publishing the GUI-side wrap instead would report a
+        # number nothing waits on and show a met budget for work nobody timed.
+        self._metrics.publish(
+            DENSITY_BUDGET, result.density_ms, detail=f"B = {result.density.blocks:,}"
+        )
         self._filled = result.frames
         self._settled = result.settled
         self._series_final = result.final
@@ -1235,14 +1245,11 @@ class FilterTab(QWidget):
 
         solo = detector.solo_block
         solo_trace = update.band_power[:, solo] if solo is not None and solo < blocks else None
-        # The one graph cost on the GUI thread that scales with the block
-        # count, and so the one the Block spin box's floor is derived from.
-        # Timed here rather than inside the widget: the identity cache means a
-        # repeat call does no work, and a producer that only published on the
-        # rebuild path would report a budget nothing ever missed.
-        started = perf_counter()
-        self._density.set_series(update.band_power, solo_trace)
-        self._metrics.publish(DENSITY_BUDGET, (perf_counter() - started) * 1000.0)
+        # The surface came from the detector thread with this update, so what
+        # is left here is a `QImage` wrap on the first call and nothing at all
+        # on a cheap-tier repaint, where the identity check hits. The producer
+        # for `density_rebuild` moved with the work, to `_on_detector_ready`.
+        self._density.set_series(update.band_power, solo_trace, surface=self._density_surface)
         self._density.set_span(start, span)
         self._density.set_filled(frames, self._settled)
         self._density.set_playhead(self._playhead)
@@ -1306,8 +1313,12 @@ class FilterTab(QWidget):
         """
         if self._wizard is None:
             return
+        # The wizard's density plot is a second view of the same array, so it
+        # gets the same surface rather than binning its own — otherwise opening
+        # the wizard doubles the one cost this item exists to move.
         self._wizard.apply_state(
             update=update,
+            surface=self._density_surface,
             start=start,
             frames=frames,
             detector=self._chain.detector,
@@ -1328,51 +1339,6 @@ class FilterTab(QWidget):
         lo, hi = self._chain.detector.value_band
         in_band = (values >= lo) & (values <= hi)
         self._composite.set_block_state(values, in_band, self._chain.detector.solo_block)
-
-    def _working_extent(self) -> tuple[int, int] | None:
-        """`(height, width)` in working pixels the block grid is formed over.
-
-        The selected replicate's ROI at the current rescale — the same two
-        numbers the kernel sees, and `rescale`'s own rounding
-        (`max(1, round(src x scale))`) rather than a second approximation of
-        it. None before a source is open, when there is no extent to speak of.
-        """
-        replicate = self._document.selected_replicate
-        source = self._document.source_size
-        if replicate is not None:
-            width, height = replicate.roi.width, replicate.roi.height
-        elif source is not None:
-            width, height = source
-        else:
-            return None
-        scale = 1.0
-        for step in self._chain.steps:
-            if step.node is not None and step.node.filter_id == "rescale":
-                scale = float(step.node.params["scale"])
-                break
-        return max(1, round(height * scale)), max(1, round(width * scale))
-
-    def _refresh_block_floor(self) -> None:
-        """Re-derive the smallest block size the Block spin box will accept.
-
-        Called wherever the extent or the rescale can have moved — a replicate
-        selection, a downsample edit, any chain sync. The floor is a function
-        of both, so the same block size is legal over a small crop and refused
-        over a large one, and a control carrying a constant here would be
-        wrong on one of the two.
-        """
-        extent = self._working_extent()
-        if extent is None:
-            return
-        height, width = extent
-        self._block.set_floor(
-            min_block_for(height, width, MAX_BLOCKS),
-            reason=(
-                f"a {width}x{height} working frame below it is more than "
-                f"{MAX_BLOCKS:,} blocks, and the density graph is held to "
-                f"{BUDGETS[DENSITY_BUDGET].limit_ms:.0f} ms at that count"
-            ),
-        )
 
     def _signal_label(self) -> str:
         step = self._block_step()
@@ -1438,7 +1404,6 @@ class FilterTab(QWidget):
                 widget.blockSignals(False)
         # After the echo, not inside it: the floor depends on the rescale this
         # loop just wrote, and it changes no value — only what may be entered.
-        self._refresh_block_floor()
 
     # ---- the step composite ----------------------------------------------
 
@@ -1651,7 +1616,6 @@ class FilterTab(QWidget):
         # After the submit, which is what moves the chain the floor reads. A
         # smaller working frame is fewer blocks at the same block size, so this
         # direction *lowers* the floor as often as it raises it.
-        self._refresh_block_floor()
 
     @Slot(str)
     def _on_normalize(self, mode: str) -> None:
@@ -2355,6 +2319,7 @@ class FilterTab(QWidget):
         self._series2d = None
         self._update = None
         self._pooled_power = None
+        self._density_surface = None
         # Dropped with the rest, so a new source cannot be scaled against the
         # old one's ceiling and the previous band power is not held alive by a
         # cache key nothing will ever match again.

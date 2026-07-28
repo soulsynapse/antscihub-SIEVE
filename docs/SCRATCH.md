@@ -198,3 +198,59 @@ behaviour change, suite green and the `density_rebuild` debt xfails visibly in
 Then step 2 (the cap comes off) and step 3 (the HUD attributes) as the item
 sets out. `MAX_BLOCKS`'s refusal branch now lives in `density_surface` and is
 one `return` to delete when the responsiveness work lands.
+
+## budgets-attribute-cost — all three steps, done
+
+**Step 1's load-bearing half (the wiring).** `derive` now binds the surface
+beside `morlet_power` on the detector thread and carries it back:
+`DetectorResult.density` (a `DensitySurface`) and `density_ms`. `filter_tab`
+holds the surface with the update and hands it to both plots — its own and the
+wizard's, which is a second view of the same array and would otherwise have
+doubled the cost the item exists to remove.
+
+**The producer moved with the work, and that was the real decision.** Keeping
+the `perf_counter` around `set_series` would have published the `QImage` wrap —
+a number nothing waits on — and shown a met budget for work nobody timed, which
+is rule 6 with the sign flipped. `density_ms` is measured on the thread that
+does the binning and published by the GUI thread on arrival.
+
+**Step 2, the cap.** `MAX_BLOCKS` deleted; the refusal branch in
+`density_surface` deleted, so `DensitySurface.argb` is never None and `notice`
+is gone with it (the density plot's centered-notice paint went too — it had no
+other producer). `block_spin.py` rewritten: no floor, no hole, no `set_floor`.
+What survived is the one boundary that was never about performance — `0` is a
+*mode*, so an accelerated wheel run down stops at 1 before reaching auto.
+`filters/block_signal.min_block_for` and `tests/unit/test_min_block_for.py`
+deleted outright: the floor was their only consumer, and the arithmetic is in
+git if a bound ever comes back. `filter_tab._refresh_block_floor` and
+`_working_extent` went with them.
+
+**Step 3, the attribution.** `Sample` gains `detail: str = ""` and
+`MetricBus.publish(..., detail=)`, so a publisher can say what the span was
+*for* — `filter_tab` sends `B = 16,384`. `GraphHud.show_sample` now keeps every
+key, not just `WATCHED`, and `attribution_line()` names the leader **ranked by
+`elapsed / limit`, not by raw milliseconds**. That ratio is the whole design:
+by wall clock the render wins every session (3000 ms ceiling against 100), and
+a field that always says "render" attributes nothing. Drawn bottom-right,
+persistently, in the band color only when the leader is actually over.
+
+**The debt was repaid halfway and repointed.** `IN_DEBT["density_rebuild"]` now
+names `budget-checks-under-ambient-load.md` instead of this item: the *cap*
+half is repaid, and what is left is the timing — `density_surface` at
+B = 16,384 reads 98.3 ms min / 139 ms median on this workstation against the
+100 ms ceiling, so it passes standalone under `BEST` and xfails inside a full
+collection. Both of those are visible in `nox -s benchmark` / `nox -s checks`.
+
+**The question that is now Kendrick's, and it is a small one.** With the
+binning off the GUI thread a miss here means a graph filling late, not a frozen
+window — so 100 ms may simply be the wrong ceiling now. It was set as a
+perceptual bound on a GUI-thread stall that no longer exists. I did not move it;
+moving a budget limit is a decision, not a cleanup.
+
+**Tests:** two on the HUD (ratio beats milliseconds; the field persists when
+nothing is over), one on `derive` (the surface matches its own array's shape and
+maximum — a surface for the *wrong* array is the one wrong answer that still
+renders), and `test_block_spin.py` rewritten to pin the absence of the floor
+rather than its presence. `test_density_rebuild.py` now times `density_surface`
+rather than `set_series`, at `REFERENCE_BLOCKS` — the same 16,384, no longer as
+a bound.

@@ -47,6 +47,20 @@ elapsed against ceiling, in the band color when missed — because a budget miss
 is a defect (ARCHITECTURE.md non-negotiable #4) and a defect reported only to a
 status bar the user has scrolled past is one nobody sees.
 
+**And one span is named as the dominant cost.** `WATCHED` above is a fixed
+three lines for the whole-render intervals; the attribution field is the
+opposite — every key that arrives is ranked, by elapsed against its *own*
+ceiling rather than by raw milliseconds, and the leader is printed with
+whatever `Sample.detail` its publisher attached. Raw milliseconds would name
+the render every time, since a 3000 ms ceiling dwarfs a 100 ms one; the ratio
+is what makes a density rebuild at B = 65,536 outrank a render that is merely
+large. This is what stands in for the block-count cap that was removed
+(`docs/todo/budgets-attribute-cost-they-do-not-cap-it.md`): the user may ask
+for any grain, and the obligation the budget creates is that the application
+*say what is costing the time* rather than refuse. Persistent, not a warning —
+it is drawn whether or not anything is over, because a field that appeared only
+on a miss would be a modal with extra steps.
+
 **And so do the resource readings.** `gui/resource_probe.py` publishes the
 session's RSS against the ledger's ceiling and each pool's utilisation once a
 second, and this plot is where the symptom of both being wrong shows up — a
@@ -97,6 +111,10 @@ class GraphHud(BandPlot):
         self._ceiling = MIN_CEILING_MS
         self._flush_pending = False
         self._watched: dict[str, Sample] = {}
+        #: Newest sample per key, for *every* key — the ranking pool. Separate
+        #: from `_watched` because that one is three named lines in a fixed
+        #: order and this one is a leaderboard nothing enumerates.
+        self._spans: dict[str, Sample] = {}
         self._resources: ResourceSample | None = None
         self.setMinimumHeight(110)
 
@@ -123,10 +141,10 @@ class GraphHud(BandPlot):
 
     @Slot(Sample)
     def show_sample(self, sample: Sample) -> None:
-        """A whole-render interval from the bus, if it is one this plot watches."""
-        if sample.key not in WATCHED:
-            return
-        self._watched[sample.key] = sample
+        """Any interval from the bus: ranked always, given a line if watched."""
+        self._spans[sample.key] = sample
+        if sample.key in WATCHED:
+            self._watched[sample.key] = sample
         self._schedule_repaint()
 
     @Slot(object)
@@ -158,6 +176,24 @@ class GraphHud(BandPlot):
             parts.append(f"{name} {sample.elapsed_ms:.0f}/{sample.budget.limit_ms:.0f} ms")
             missed = missed or not sample.within_budget
         return "  ·  ".join(parts), missed
+
+    def attribution_line(self) -> tuple[str, bool]:
+        """The dominant span, named with what it was for, and whether it is over.
+
+        Ranked by `elapsed / limit`, not by elapsed — see the module docstring.
+        The ceiling is printed alongside so the ratio is checkable rather than
+        asserted, and the flag is a genuine miss on the leader rather than a
+        threshold of its own.
+        """
+        if not self._spans:
+            return "", False
+        top = max(self._spans.values(), key=lambda s: s.elapsed_ms / s.budget.limit_ms)
+        detail = f" {top.detail}" if top.detail else ""
+        line = (
+            f"cost: {top.key}{detail} · {top.elapsed_ms:.0f} ms "
+            f"({top.elapsed_ms / top.budget.limit_ms:.1f}x its {top.budget.limit_ms:.0f})"
+        )
+        return line, not top.within_budget
 
     def resource_line(self) -> tuple[str, bool]:
         """The probe's verdict line and whether it warrants the band color.
@@ -235,6 +271,15 @@ class GraphHud(BandPlot):
                 QRect(r.left() + 4, r.bottom() - 14, r.width() - 8, 12),
                 int(Qt.AlignmentFlag.AlignLeft),
                 resources,
+            )
+
+        attribution, over = self.attribution_line()
+        if attribution:
+            painter.setPen(QColor(BAND) if over else QColor(DIM))
+            painter.drawText(
+                QRect(r.left() + 4, r.bottom() - 14, r.width() - 8, 12),
+                int(Qt.AlignmentFlag.AlignRight),
+                attribution,
             )
 
     # ---- the throttle ----------------------------------------------------------

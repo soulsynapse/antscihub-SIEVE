@@ -1,100 +1,53 @@
-"""The Block spin box, and the sizes it will not accept.
+"""The Block spin box: a size, a mode below it, and no refusal between them.
 
 Block size is entered as a block *edge in working pixels*, so scrolling it
 **down** multiplies the block count: one wheel notch from a comfortable value
 takes B from a few hundred toward the crop's whole pixel count. Everything
-downstream of the count is linear in it, and one thing downstream of it runs on
-the GUI thread — `DensityPlot.set_series` bins the entire `(T, B)` band power
-per rebuild. At B in the hundreds of thousands that was measured in seconds
-(`docs/findings/2026.07.27-the-density-histogram-was-a-scatter.md`), which is a
-frozen window, and a frozen window is a control that looks more live than it is.
+downstream of the count is linear in it.
 
-**So the control refuses rather than the surface computes slowly** (rule 6).
-The refused range is a *hole*, not a floor, because `0 = auto` sits below it and
-must stay reachable: auto is fixed at 64 *source* pixels, so its block count is
-a property of the source rather than of the knob, and it is under the bound for
-any source below roughly 8192x8192. Sizes from 1 up to the derived floor are the
-ones that do not exist; the spin box steps over them in both directions and
-snaps a typed one to the nearest legal value.
+**This control used to refuse the small end.** `density_plot.MAX_BLOCKS` was
+the largest B the density surface would bin and `block_signal.min_block_for`
+turned it into a per-replicate floor, so a range of sizes did not exist and the
+spin box stepped over them. That is gone (2026-07-28,
+`docs/todo/budgets-attribute-cost-they-do-not-cap-it.md`): block count is a
+scientific choice about the grain of the analysis, and the ceiling that
+justified the refusal was one workstation's timing. The stall it was protecting
+against is gone too — the binning left the GUI thread — so what a large B now
+costs is time, which the HUD attributes, rather than a frozen window.
 
-**The floor is derived, not chosen.** `density_plot.MAX_BLOCKS` is the largest B
-`tests/bench/test_density_rebuild.py` pins against the `density_rebuild` budget,
-and `block_signal.min_block_for` reads it back through the same ceiling division
-the kernel's grid uses. The floor therefore moves with the replicate's crop
-extent — the same block size is legal on a small crop and refused on a large one
-— which is why `set_floor` is called from the tab whenever the extent or the
-rescale factor moves, rather than once at construction.
-
-*Rejected:* letting every legal value compute and leaving the benchmark to guard
-the cost. The benchmark runs in CI against the reference count, never against
-the value a wheel notch just set, so it cannot protect the session that matters.
+What remains is one boundary, and it is semantic rather than performance:
+`0 = auto` is a *mode*, not a smaller size. A crank down the range stops at 1
+before it reaches auto, so an accelerated run cannot cross into the mode
+without the user seeing the smallest size on the way.
 """
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import QSpinBox, QWidget
 
-#: `0 = auto`, and it is always legal — see the module docstring.
+#: `0 = auto`: the block edge is fixed at 64 *source* pixels and the count
+#: follows from the source rather than from this knob.
 AUTO = 0
 
 
 class BlockSpinBox(QSpinBox):
-    """A spin box over `{0} | [floor, max]`, with `(0, floor)` refused.
-
-    Wire and read it exactly like a `QSpinBox`; the hole is enforced on the
-    three paths a value can enter through — the wheel and the arrows
-    (`stepBy`), and typing (`valueFromText`, at commit).
-    """
+    """A spin box over `{0} | [1, max]`, where 0 is a mode and 1 is a size."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._floor = 1
-        # Interpret on commit, not per keystroke: with keyboard tracking on,
-        # snapping "1" up to the floor would rewrite the line edit before "15"
-        # could be finished being typed. `crop_tools.py` turns it off for the
-        # neighbouring reason — an edit runs from the first keystroke to a
-        # commit and nothing in between reaches the document.
+        # Interpret on commit, not per keystroke: with keyboard tracking on, a
+        # partially typed "15" would be read as "1" and pushed to the chain.
+        # `crop_tools.py` turns it off for the neighbouring reason — an edit
+        # runs from the first keystroke to a commit and nothing in between
+        # reaches the document.
         self.setKeyboardTracking(False)
-
-    @property
-    def floor(self) -> int:
-        """The smallest legal explicit block size. `AUTO` is legal below it."""
-        return self._floor
-
-    def set_floor(self, floor: int, *, reason: str = "") -> None:
-        """Refuse explicit sizes under `floor`, and say so in the tooltip.
-
-        **A value already below the new floor is left exactly where it is.**
-        The floor governs what may be *entered*; it is not a claim about what
-        the pipeline currently holds. A project saved before this bound
-        existed, or one whose crop grew under a fixed block size, is a real
-        parameter value, and a widget that silently raised it would show a
-        number the chain does not hold — the mirror of rule 6, a control
-        looking more settled than it is. The stall such a value causes is
-        refused at the surface instead (`density_plot.set_series`), which is
-        the one place every path into the value passes through.
-        """
-        self._floor = max(1, floor)
-        self.setToolTip(
-            f"Block edge in working pixels; 0 is auto.\n"
-            f"Sizes below {self._floor} are refused here" + (f" — {reason}." if reason else ".")
-        )
+        self.setToolTip("Block edge in working pixels; 0 is auto (64 source pixels).")
 
     def stepBy(self, steps: int) -> None:
-        """Step over the hole: up lands on the floor, down stops at it first.
-
-        Downward is deliberately two steps rather than one. Auto is a *mode*
-        and the floor is the smallest *size*, so a crank down the range stops
-        at the size before it reaches the mode — otherwise an accelerated run
-        would cross a semantic boundary without the user seeing the value they
-        were heading for.
-        """
+        """Step down to 1 before stepping to auto — see the module docstring."""
         target = self.value() + steps
-        if AUTO < target < self._floor:
-            target = self._floor if steps > 0 or self.value() > self._floor else AUTO
+        if target <= AUTO and self.value() > 1:
+            # However many notches the acceleration was worth, the run ends at
+            # the smallest size; the next one after that reaches the mode.
+            target = 1
         self.setValue(max(self.minimum(), min(self.maximum(), target)))
-
-    def valueFromText(self, text: str) -> int:
-        """A typed size inside the hole commits as the floor, not as itself."""
-        value = super().valueFromText(text)
-        return self._floor if AUTO < value < self._floor else value

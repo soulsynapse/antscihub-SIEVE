@@ -75,6 +75,13 @@ class Sample:
 
     budget: Budget
     elapsed_ms: float
+    #: What this interval was *for*, in the publisher's own terms — "B = 65,536"
+    #: for a density rebuild, empty for a span whose key already says it. The
+    #: bus does not interpret it; a consumer that ranks spans prints it, so an
+    #: attribution can name the parameter driving the cost rather than only the
+    #: budget it exceeded. Optional because most spans have one shape and only
+    #: the ones a user's parameter scales need it.
+    detail: str = ""
 
     @property
     def key(self) -> str:
@@ -143,17 +150,19 @@ class MetricBus:
 
     # ---- publishers ------------------------------------------------------
 
-    def publish(self, key: str, elapsed_ms: float) -> Sample:
+    def publish(self, key: str, elapsed_ms: float, *, detail: str = "") -> Sample:
         """Announce that `key`'s interval took `elapsed_ms`.
 
         Returns the sample so a caller that wants the verdict — over budget or
         not — has it without subscribing to its own publication.
 
+        `detail` says what this instance of the span was for; see `Sample`.
+
         Raises:
             KeyError: if `key` is not in `BUDGETS`. See the module docstring:
                 an unrecognised key is a metric nothing will ever check.
         """
-        sample = Sample(budget=BUDGETS[key], elapsed_ms=elapsed_ms)
+        sample = Sample(budget=BUDGETS[key], elapsed_ms=elapsed_ms, detail=detail)
         for subscriber in self._subscribers:
             subscriber(sample)
         return sample

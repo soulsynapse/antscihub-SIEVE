@@ -46,6 +46,7 @@ mean what the clip means.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -58,6 +59,7 @@ from sieve.detect import gate_to
 from sieve.detect import settled_for as settled_for_settings
 from sieve.gui.chain_model import DetectorState, DetectorUpdate, recompute
 from sieve.gui.concurrency import resolve_worker_split
+from sieve.gui.density_plot import DensitySurface, density_surface
 
 FloatArray = NDArray[np.floating[Any]]
 
@@ -112,6 +114,15 @@ class DetectorResult:
     settled: int
     #: `(F, T)` pooled scalogram power over the whole bank.
     pooled_power: NDArray[np.float32]
+    #: The density picture for `update.band_power`, binned here rather than by
+    #: the widget. Carried as a value so the GUI thread is left with a `QImage`
+    #: wrap; the plot's identity check is what makes handing it one safe.
+    density: DensitySurface
+    #: Milliseconds the surface above took. The `density_rebuild` producer —
+    #: published by the GUI thread on arrival, measured on this one, because
+    #: the interval is the binning wherever it runs and the thread it ran on is
+    #: the thing that changed.
+    density_ms: float
     final: bool
 
 
@@ -149,6 +160,14 @@ def derive(request: DetectorRequest) -> DetectorResult:
 
     settled = settled_for(frames, fps, request.state, final=request.final)
 
+    # Beside `morlet_power` because this thread already holds the array the
+    # binning reads. `gate_to` below rebuilds the update but passes
+    # `band_power` through untouched, so the surface stays the picture of the
+    # array the tab will hand back to the plot.
+    started = perf_counter()
+    density = density_surface(update.band_power)
+    density_ms = (perf_counter() - started) * 1000.0
+
     return DetectorResult(
         revision=request.revision,
         update=gate_to(update, settled, request.start_index),
@@ -158,6 +177,8 @@ def derive(request: DetectorRequest) -> DetectorResult:
         frames=frames,
         settled=settled,
         pooled_power=pooled,
+        density=density,
+        density_ms=density_ms,
         final=request.final,
     )
 

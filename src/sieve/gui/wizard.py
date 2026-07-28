@@ -63,7 +63,7 @@ from sieve.gui.chain_model import (
     grade,
 )
 from sieve.gui.count_plot import CountPlot
-from sieve.gui.density_plot import DensityPlot
+from sieve.gui.density_plot import DensityPlot, DensitySurface
 from sieve.gui.param_form import param_rows
 from sieve.gui.wizard_model import (
     Candidate,
@@ -480,6 +480,9 @@ class StepWizard(QWidget):
         self,
         *,
         update: DetectorUpdate | None,
+        #: The picture the detector thread already binned for
+        #: `update.band_power`. None only before the first derivation.
+        surface: DensitySurface | None = None,
         start: int,
         frames: int,
         detector: DetectorState,
@@ -516,7 +519,7 @@ class StepWizard(QWidget):
         blocks = update.band_power.shape[1]
         solo = detector.solo_block
         solo_trace = update.band_power[:, solo] if solo is not None and solo < blocks else None
-        self.density.set_series(update.band_power, solo_trace)
+        self.density.set_series(update.band_power, solo_trace, surface=surface)
         self.density.set_span(start, frames)
         self.density.set_playhead(playhead)
         self.density.set_band(*detector.value_band)

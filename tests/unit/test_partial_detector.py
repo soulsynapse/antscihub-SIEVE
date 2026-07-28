@@ -181,3 +181,28 @@ def test_the_start_index_survives_so_intervals_are_absolute() -> None:
     assert result.start_index == 500
     assert result.update.intervals is not None
     assert all(start >= 500 for start, _ in result.update.intervals)
+
+
+def test_the_density_surface_is_binned_here_and_matches_its_own_array() -> None:
+    """The picture crosses back with the pass that produced it.
+
+    The failure this closes is silent: if `derive` stopped carrying a surface
+    the GUI thread would fall back to binning one itself in `set_series`, the
+    graphs would look identical, and the whole cost this arrangement exists to
+    move would be back on the thread it was moved off — visible only as a
+    session that stutters at large B.
+
+    The surface is checked against `band_power`'s own shape and maximum rather
+    than merely being non-None, because a surface for the *wrong* array is the
+    one wrong answer that still renders.
+    """
+    data = _series(120, blocks=12)
+    state = DetectorState(count_frac=(0.05, 1.0), window_frames=20, centered=True)
+    result = derive(
+        DetectorRequest(revision=1, series=data, start_index=0, fps=FPS, state=state, final=True)
+    )
+
+    assert result.density.blocks == result.update.band_power.shape[1]
+    assert result.density.argb.shape[1] == result.update.band_power.shape[0]
+    assert result.density.value_max == float(result.update.band_power.max())
+    assert result.density_ms >= 0.0

@@ -161,19 +161,24 @@ BUDGETS: dict[str, Budget] = _table(
         key="density_rebuild",
         label="Band power arrives → density rebuilt",
         regime=Regime.IN_PIPELINE,
-        # `DensityPlot.set_series` bins the whole `(T, B)` band power on the
-        # GUI thread, so this is the one graph cost that blocks the repaint it
-        # exists to cause. 100 ms is the instantaneous band: a partial pass
-        # lands repeatedly while a window renders, and each rebuild must fit
-        # inside one perceived beat rather than merely inside the 500 ms
-        # `knob_to_first_partial` it sits within.
+        # `density_surface` bins the whole `(T, B)` band power. 100 ms is the
+        # instantaneous band: a partial pass lands repeatedly while a window
+        # renders, and each rebuild must fit inside one perceived beat rather
+        # than merely inside the 500 ms `knob_to_first_partial` it sits within.
         #
-        # It is also the *only* budget in this table that a control is derived
-        # from. `gui/density_plot.MAX_BLOCKS` is the largest B pinned against
-        # this ceiling by `tests/bench/test_density_rebuild.py`, and the Block
-        # spin box refuses any size implying more — rule 4's producer clause
-        # reaching a widget, so the refusal threshold is a measured ceiling
-        # rather than a number somebody liked.
+        # **It no longer blocks the repaint it exists to cause.** The binning
+        # moved to the detector thread beside `morlet_power`, so a miss here is
+        # a graph that lags the render, not a frozen window — the producer went
+        # with the work (`DetectorResult.density_ms`) rather than staying on the
+        # GUI thread to time a `QImage` wrap. What survives the move is the
+        # ceiling's meaning as an attribution.
+        #
+        # It is also the only budget in this table a control was ever derived
+        # from: `gui/density_plot.MAX_BLOCKS` refuses a block count implying
+        # more than this. That derivation is what
+        # `docs/todo/budgets-attribute-cost-they-do-not-cap-it.md` removes, and
+        # the move above is its precondition — a cap justified by "the window
+        # freezes" has no justification once the window does not freeze.
         limit_ms=100.0,
     ),
     Budget(
@@ -246,14 +251,14 @@ class Debt:
 IN_DEBT: dict[str, Debt] = {
     "density_rebuild": Debt(
         key="density_rebuild",
-        item="docs/todo/budgets-attribute-cost-they-do-not-cap-it.md",
+        item="docs/todo/budget-checks-under-ambient-load.md",
         why=(
-            "B = 16,384 measures 89-100 ms against the 100 ms ceiling on the reference "
-            "workstation, where the finding that set the bound measured 84.1 the same day — "
-            "headroom under the machine's own variation. The debt is not the timing: it is "
-            "that this budget is currently a *cap* on a scientific parameter, and the work "
-            "that repays it moves the rebuild off the GUI thread and turns the number into "
-            "an attribution instead of a refusal"
+            "the cap half of this debt is repaid — the binning moved to the detector "
+            "thread and the block-count refusal is gone, so the number attributes rather "
+            "than forbids. What is left is the timing: B = 16,384 reads 98-140 ms against "
+            "a 100 ms ceiling on the reference workstation, headroom under the machine's "
+            "own variation. The open question is whether 100 ms is still the right ceiling "
+            "at all now that a miss means a graph filling late rather than a frozen window"
         ),
     )
 }

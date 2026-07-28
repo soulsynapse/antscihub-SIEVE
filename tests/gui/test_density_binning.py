@@ -20,7 +20,7 @@ from numpy.typing import NDArray
 from pytestqt.qtbot import QtBot
 
 from sieve.gui import density_plot
-from sieve.gui.density_plot import MAX_BLOCKS, DensityPlot, bin_counts
+from sieve.gui.density_plot import DensityPlot, bin_counts
 
 pytestmark = pytest.mark.gui
 
@@ -74,56 +74,6 @@ class TestTheDensityHistogramCountsEveryBlockOnce:
         assert counts.sum() == 2.0
         assert counts[0, 0] == 1.0
         assert counts[-1, 0] == 1.0
-
-
-class TestASurfaceTooLargeToBinIsRefusedAndSaysSo:
-    """The bound the Block spin box is derived from, held at the surface.
-
-    The spin box refuses these block counts at entry; this is the same bound
-    where every *other* path into the value passes — a project saved before
-    the bound existed, a crop grown under a fixed block size. The timing that
-    fixes the number is `tests/bench/test_density_rebuild.py`.
-    """
-
-    def test_one_block_over_the_bound_is_refused(self, qtbot: QtBot) -> None:
-        """`MAX_BLOCKS` is legal and `MAX_BLOCKS + 1` is not.
-
-        Asserted at the boundary rather than at some comfortably large number,
-        because an off-by-one here is the difference between a benchmark that
-        pins the bound and one that pins a value next to it.
-        """
-        plot = DensityPlot()
-        qtbot.addWidget(plot)
-        plot.resize(800, 200)
-
-        plot.set_series(np.ones((2, MAX_BLOCKS), np.float32))
-        assert plot.notice == ""
-
-        plot.set_series(np.ones((2, MAX_BLOCKS + 1), np.float32))
-        assert str(MAX_BLOCKS + 1) in plot.notice.replace(",", "")
-
-    def test_a_refused_surface_drops_the_previous_picture_and_its_solo(self, qtbot: QtBot) -> None:
-        """Refusing must not leave the last legal grid's histogram on screen.
-
-        That image is a population of a different size over a different block
-        grid, and left in place it would read as this one's — a result looking
-        better-founded than it is, which is the failure rule 6 names. The solo
-        trace goes with it for the same reason: it indexes blocks that no
-        longer exist.
-        """
-        plot = DensityPlot()
-        qtbot.addWidget(plot)
-        plot.resize(800, 200)
-        small = np.random.default_rng(11).uniform(0.0, 100.0, (8, BLOCKS)).astype(np.float32)
-
-        plot.set_series(small, solo=small[:, 0])
-        assert plot.notice == ""
-
-        plot.set_series(np.ones((2, MAX_BLOCKS + 1), np.float32))
-        assert plot.notice != ""
-        # Repainting must not raise on the dropped state — the widget is still
-        # on screen with its band handles live over a surface that is gone.
-        plot.repaint()
 
 
 class TestTheDensitySurfaceIsBuiltOnlyWhenItsArrayMoves:

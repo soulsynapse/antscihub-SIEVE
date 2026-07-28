@@ -17,6 +17,19 @@ when solo changes hands.
 The value band handles are the base's: dragging past the top reads as
 unbounded (``inf``), which for a band that *shapes a signal* is the correct
 default resting state.
+
+**There is no `MAX_BLOCKS`, deliberately** (2026-07-28,
+`docs/todo/budgets-attribute-cost-they-do-not-cap-it.md`). It was 16,384 —
+where the 100 ms `density_rebuild` ceiling landed *on one workstation* — and
+`gui/block_spin.py` refused every block size implying more. Block count is a
+scientific choice about the grain of the analysis; the HPC target has neither
+that machine's clock nor that refusal's justification, and a user who wants a
+256x256 grid is not making a mistake to be prevented. What made the refusal
+defensible was that the binning ran on the GUI thread, where slow is frozen and
+frozen is rule 6's mirror clause. It does not any more
+(`gui/detector_worker.derive`), so what is left of the ceiling is an
+attribution: the HUD names this span when it is the dominant cost. Slow is
+acceptable; slow and unexplained is not.
 """
 
 from __future__ import annotations
@@ -28,11 +41,11 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from PySide6.QtCore import QPointF, QRect, QRectF, Qt
+from PySide6.QtCore import QPointF, QRect, QRectF
 from PySide6.QtGui import QColor, QImage, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-from sieve.gui.band_plot import ACCENT, DIM, BandPlot, argb_to_qimage, plot_font, ramp_lut
+from sieve.gui.band_plot import ACCENT, BandPlot, argb_to_qimage, ramp_lut
 
 FloatArray = NDArray[np.floating[Any]]
 
@@ -48,35 +61,6 @@ DENSITY_STOPS: tuple[tuple[int, int, int], ...] = (
 
 #: Vertical resolution of the histogram, in value bins.
 _BINS = 96
-
-#: The largest `B` this surface will bin, and so the largest block count the
-#: Block spin box accepts (`gui/block_spin.py` derives its floor from it).
-#:
-#: A ceiling with a producer, per rule 4: `tests/bench/test_density_rebuild.py`
-#: pins `set_series` at exactly this B over the reference window against the
-#: `density_rebuild` budget, so the number below is the one the benchmark holds
-#: and not a number a widget chose. It is a bound on *B*, not on block size —
-#: block size implies B only together with the crop extent, which is why the
-#: spin box's floor is derived per replicate.
-#:
-#: Refusing rather than computing slowly is rule 6's preference (a control must
-#: never look more live than it is, and a multi-second GUI-thread stall is the
-#: same lie told with a frozen window). 16,384 is a 128x128 grid: an order of
-#: magnitude above any grid anyone tunes with, and an order below the 210,672
-#: that `docs/findings/2026.07.27-the-density-histogram-was-a-scatter.md`
-#: measured at seconds a tick.
-#:
-#: **This constant is known wrong and is on its way out**
-#: (docs/todo/budgets-attribute-cost-they-do-not-cap-it.md, decided
-#: 2026-07-28). Block count is a scientific choice and this number is where a
-#: *dev workstation's* timing landed — the HPC target has neither this
-#: machine's clock nor this refusal's justification. The paragraph above reads
-#: rule 6 as licensing a cap; it does not. The obligation is on the
-#: application: get the rebuild off the GUI thread, then let the user ask for
-#: what they want and have the HUD name what it costs. Do not derive anything
-#: new from this number, and do not tune it — it is scheduled for deletion,
-#: not for a better value. `density_rebuild` is in `IN_DEBT` against that item.
-MAX_BLOCKS = 16_384
 
 
 def bin_counts(band_power: FloatArray, value_max: float, bins: int = _BINS) -> NDArray[np.float32]:
@@ -135,14 +119,15 @@ class DensitySurface:
     """
 
     #: The array's own maximum, which the value axis and the band handles are
-    #: denominated in. Carried even when `argb` is None, so a refused surface
-    #: still leaves the handles meaning this array's units.
+    #: denominated in.
     value_max: float
     #: `(bins, T)` ARGB rows, already flipped so row 0 is the top of the plot.
-    #: None when nothing was binned, and `notice` then says why.
-    argb: NDArray[np.uint32] | None
-    #: Why there is no surface, or empty.
-    notice: str
+    #: Never None: every B is binned now, however long it takes.
+    argb: NDArray[np.uint32]
+    #: Blocks binned, so a consumer that reports the cost can say what the cost
+    #: was *for*. Carried on the surface rather than re-derived at the HUD
+    #: because the array it describes does not travel that far.
+    blocks: int
 
 
 def density_surface(band_power: FloatArray) -> DensitySurface:
@@ -150,10 +135,10 @@ def density_surface(band_power: FloatArray) -> DensitySurface:
 
     Split out of `DensityPlot.set_series` so the work can happen on the thread
     that already holds this array — `gui/detector_worker.py` computed it — and
-    the GUI thread is left with a `QImage` wrap and a repaint. The split is
-    what `docs/todo/budgets-attribute-cost-they-do-not-cap-it.md` needs first:
-    a rebuild the user waits for on the GUI thread is why `MAX_BLOCKS` exists,
-    and a rebuild that is not on the GUI thread does not need a refusal.
+    the GUI thread is left with a `QImage` wrap and a repaint. This is what let
+    the block-count cap go: a rebuild the user waits for on the GUI thread is
+    why `MAX_BLOCKS` existed, and one that is not on the GUI thread does not
+    need a refusal — it needs the HUD to name what it costs.
 
     Nothing here touches Qt. `ramp_lut` is a numpy lookup table that happens to
     live beside Qt code; the `QImage` is deliberately *not* built here, because
@@ -161,26 +146,12 @@ def density_surface(band_power: FloatArray) -> DensitySurface:
     """
     m = np.asarray(band_power, np.float32)
     blocks = m.shape[1]
-    # One pass over the array, before any bound: the value axis and the band
-    # handles keep meaning this array's units even when the surface is refused.
     value_max = float(m.max()) or 1.0
-    if blocks > MAX_BLOCKS:
-        # Refused, not computed slowly, and not left as the previous grid's
-        # picture either — that image is a histogram of a different population
-        # and would read as this one's.
-        #
-        # This branch is on its way out with `MAX_BLOCKS` itself; what replaces
-        # it is the HUD naming the cost, not the graph declining to draw.
-        return DensitySurface(
-            value_max=value_max,
-            argb=None,
-            notice=f"{blocks:,} blocks — above the {MAX_BLOCKS:,} this graph bins",
-        )
     counts = bin_counts(m, value_max)
     norm = np.log1p(counts) / math.log1p(max(blocks, 2))
     lut = ramp_lut(DENSITY_STOPS)
     return DensitySurface(
-        value_max=value_max, argb=lut[(norm * 255).astype(np.uint8)][::-1], notice=""
+        value_max=value_max, argb=lut[(norm * 255).astype(np.uint8)][::-1], blocks=blocks
     )
 
 
@@ -192,17 +163,11 @@ class DensityPlot(BandPlot):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._image: QImage | None = None
-        self._notice = ""
         self._max = 1.0
         self._solo: NDArray[np.float32] | None = None
         #: The exact array `_image` was binned over. Identity, not equality —
         #: see `set_series`.
         self._source: FloatArray | None = None
-
-    @property
-    def notice(self) -> str:
-        """Why there is no surface, or empty. Set only by `set_series`."""
-        return self._notice
 
     # ---- data ---------------------------------------------------------------
 
@@ -251,18 +216,7 @@ class DensityPlot(BandPlot):
             # identity check above is what makes accepting one safe.
             built = density_surface(m) if surface is None else surface
             self._max = built.value_max
-            self._notice = built.notice
-            self._image = None if built.argb is None else argb_to_qimage(built.argb)
-            if built.argb is None:
-                # The refusal drops the trace too — an overlaid block against no
-                # surface reads as a population of one. The Block spin box
-                # refuses these sizes at entry; this is the same bound held at
-                # the surface, for the values entry cannot reach: a project
-                # saved before the bound, or a crop grown under a fixed block
-                # size.
-                self._solo = None
-                self.update()
-                return
+            self._image = argb_to_qimage(built.argb)
         self._solo = None if solo is None else np.asarray(solo, np.float32)
         self.update()
 
@@ -284,13 +238,6 @@ class DensityPlot(BandPlot):
         target = self.content_rect()
         if self._image is not None and target.width() > 0:
             painter.drawImage(QRectF(target), self._image)
-        if self._notice:
-            # A refused surface says why, in the space the surface would have
-            # filled. An empty dark rectangle is a population of zero, which is
-            # the claim rule 6 forbids this widget from making by accident.
-            painter.setPen(DIM)
-            painter.setFont(plot_font(8))
-            painter.drawText(r, int(Qt.AlignmentFlag.AlignCenter), self._notice)
         if self._solo is None or self._count <= 0:
             return
         painter.setPen(QPen(ACCENT, 1.4))

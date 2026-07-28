@@ -101,6 +101,42 @@ def test_the_budget_line_carries_the_watched_verdicts_and_their_misses(qtbot: Qt
     assert hud.budget_line() == (line, False)
 
 
+def test_the_attribution_names_the_span_worst_against_its_own_ceiling(qtbot: QtBot) -> None:
+    """Ranked by ratio, not by milliseconds — the whole point of the field.
+
+    The render below is four times the wall clock of the density rebuild and
+    still is not the dominant cost: it is inside a 3000 ms ceiling while the
+    rebuild is at three times a 100 ms one. Ranking by elapsed would name the
+    render every session and attribute nothing, which is what a user asking
+    for a larger block grid needs the field *not* to do.
+    """
+    hud = _hud(qtbot)
+    assert hud.attribution_line() == ("", False)
+
+    hud.show_sample(Sample(budget=BUDGETS["full_preview_render"], elapsed_ms=1200.0))
+    hud.show_sample(
+        Sample(budget=BUDGETS["density_rebuild"], elapsed_ms=340.0, detail="B = 65,536")
+    )
+    line, over = hud.attribution_line()
+    assert "density_rebuild" in line and "B = 65,536" in line and "340 ms" in line
+    assert "3.4x its 100" in line
+    assert over
+
+
+def test_the_attribution_persists_when_nothing_is_over(qtbot: QtBot) -> None:
+    """Not a warning: a field that appeared only on a miss is a modal.
+
+    The dominant cost is a fact about the session whether or not it breaches
+    anything, and the HUD is where a user looks to find out what the tuning
+    loop is currently spending itself on.
+    """
+    hud = _hud(qtbot)
+    hud.show_sample(Sample(budget=BUDGETS["density_rebuild"], elapsed_ms=12.0, detail="B = 1,024"))
+    line, over = hud.attribution_line()
+    assert "density_rebuild" in line and "B = 1,024" in line
+    assert not over
+
+
 def test_every_drag_scrubs_because_there_is_no_handle_to_grab(qtbot: QtBot) -> None:
     """Where the base class parks a grabbable handle, the HUD scrubs.
 

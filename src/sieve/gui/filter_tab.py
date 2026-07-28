@@ -61,6 +61,7 @@ from math import isfinite
 from time import perf_counter
 
 import numpy as np
+from numpy.typing import NDArray
 from PySide6.QtCore import QRect, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
@@ -195,6 +196,15 @@ class FilterTab(QWidget):
         #: arm: the budget names the *first* readable graph, and republishing
         #: it on every later pass would turn a latency into a throughput.
         self._partial_published = False
+        #: The composite's heat ceiling, and the exact `band_power` it was taken
+        #: over. Cached because it is a percentile across the largest array the
+        #: tab holds — ~29 ms at (600, 8040), against ~0.01 ms for the prefix-sum
+        #: that is all a D step actually changes — and the cheap tier's whole
+        #: premise is that `band_power` is the thing it did *not* recompute.
+        #: Identity, not equality: two arrays that compare equal still cost a
+        #: full pass to find that out, which is the cost being avoided.
+        self._heat_source: NDArray[np.float32] | None = None
+        self._heat_max = 0.0
 
         # The step composite's state. The selection is sticky by id and falls
         # back to the tail — "a chain stack that always has a selected step"
@@ -900,6 +910,22 @@ class FilterTab(QWidget):
         self._update = gate_to(update, self._settled, self._series_start)
         self._apply()
 
+    def _heat_scale(self, band_power: NDArray[np.float32]) -> float:
+        """The composite's heat ceiling over `band_power`, recomputed only when it moves.
+
+        `recompute` hands the previous `band_power` straight back on the cheap
+        tier — that is what "no transform at all" means — so during a D or
+        threshold drag this is the same array object every pass, and the
+        percentile is the same number arrived at the expensive way. The ceiling
+        must still follow a real change: a frequency commit or a new render
+        builds a fresh array and this misses, which is exactly when the scale
+        is owed a recount.
+        """
+        if band_power is not self._heat_source:
+            self._heat_source = band_power
+            self._heat_max = float(np.percentile(band_power, _HEAT_PERCENTILE))
+        return self._heat_max
+
     def _apply(self) -> None:
         """Repaint everything from the chain value and the last update."""
         detector = self._chain.detector
@@ -979,7 +1005,7 @@ class FilterTab(QWidget):
 
         ny, nx = self._grid
         self._composite.set_grid(ny, nx)
-        self._composite.set_scale_max(float(np.percentile(update.band_power, _HEAT_PERCENTILE)))
+        self._composite.set_scale_max(self._heat_scale(update.band_power))
         self._composite.set_grid_caption(f"{signal} · {ny}x{nx} blocks · click to solo")
         self._apply_block_state()
 
@@ -1418,15 +1444,46 @@ class FilterTab(QWidget):
 
     @Slot()
     def _on_d_released(self) -> None:
-        self._d_gesture = None
+        """The commit tier: one entry for the drag, at the value it ended on.
+
+        The value is read back off the chain rather than off a slider, because
+        both the tab's D slider and the wizard's share these three handlers and
+        the drag tier has already written the live value there.
+        """
+        gesture, self._d_gesture = self._d_gesture, None
+        if gesture is None:
+            return
+        self._submit_detector(
+            {"window_frames": self._chain.detector.window_frames},
+            "Set Detection Window",
+            gesture=gesture,
+        )
 
     @Slot(int)
     def _on_window_frames(self, frames: int) -> None:
-        self._submit_detector(
-            {"window_frames": max(frames, 1)},
-            "Set Detection Window",
-            gesture=self._d_gesture,
-        )
+        """Two tiers, the same split every other drag in this tab already has.
+
+        D was the one control that wrote to the document on every step and
+        leaned on `EditDetector.mergeWith` to fold the history back up
+        afterwards. Merging fixes the undo stack; it does not make the work go
+        away. Each step still pushed a command, moved the baseline, re-pinned
+        the diff on the replicate, emitted `detector_changed`, re-resolved the
+        detector through the pin chain, re-synced the knobs, and rebuilt every
+        card caption — all before reaching the derive that is the only part the
+        user is dragging for. That is why D was dead in the tab and merely slow
+        in the wizard, which routes to `_cheap_retune` and skips every line of
+        it: the asymmetry was the document round trip, not the arithmetic.
+
+        So the drag repaints from the local value and the release is what the
+        document records, exactly as `_on_value_drag` / `_on_value_band` do.
+        A step arriving outside a gesture — keyboard, wheel, `setValue` — still
+        commits immediately, because there is no release coming to commit it.
+        """
+        frames = max(frames, 1)
+        if self._d_gesture is not None:
+            self._cheap_retune(replace(self._chain.detector, window_frames=frames))
+            return
+        self._submit_detector({"window_frames": frames}, "Set Detection Window")
 
     @Slot(bool)
     def _on_centered(self, centered: bool) -> None:
@@ -1684,6 +1741,11 @@ class FilterTab(QWidget):
         self._series2d = None
         self._update = None
         self._pooled_power = None
+        # Dropped with the rest, so a new source cannot be scaled against the
+        # old one's ceiling and the previous band power is not held alive by a
+        # cache key nothing will ever match again.
+        self._heat_source = None
+        self._heat_max = 0.0
         self._playhead = 0
         self._knob_armed_at = None
         self._selected_step = None

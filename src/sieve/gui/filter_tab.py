@@ -232,6 +232,8 @@ class FilterTab(QWidget):
         # Cancel restores, and the provisional id is what the stack dashes.
         self._wizard: StepWizard | None = None
         self._wizard_snapshot: LiveChain | None = None
+        #: The undo stack's index when the wizard opened — Cancel's other half.
+        self._wizard_undo_index: int | None = None
         self._provisional_id: str | None = None
         #: One-slot mailbox for the wizard's video frame: the render thread
         #: drops the grabbed array in, `_on_render_finished` converts it on
@@ -523,12 +525,14 @@ class FilterTab(QWidget):
     ) -> None:
         """Route a committed detector edit through the document, or keep it local.
 
-        Local while a wizard is open: its detector edits are provisional
-        exactly as its step is, and Cancel restores them from the snapshot —
-        the net change reaches the document once, on Add
-        (`_on_wizard_accepted`).
+        The wizard's edits take this same path — tuning is tuning wherever
+        the slider lives, and a wizard that kept its own provisional copy left
+        the tab's widgets displaying stale values after Add. Cancel's restore
+        is `_on_wizard_cancelled` rolling the session's entries back off the
+        undo stack. Local only while there is no pipeline in the document,
+        where there is no baseline for an edit to move.
         """
-        if self._wizard is not None or not len(self._document.pipeline.nodes):
+        if not len(self._document.pipeline.nodes):
             detector = self._chain.detector
             updated = replace(detector, **changes)
             if updated.freq_band == detector.freq_band:
@@ -571,6 +575,14 @@ class FilterTab(QWidget):
             solo_block=previous.solo_block,
         )
         if resolved == previous:
+            # Equal chain does not mean synced knobs. The wizard's sliders are
+            # separate widget instances sharing this tab's handlers, and its
+            # edits write the chain live — so by the time Add lands the edit in
+            # the document, this echo compares equal and used to return before
+            # the sync below. The document then held the tuned value, the
+            # captions showed it, and the tab's own slider displayed the
+            # pre-wizard number indefinitely.
+            self._sync_widgets_from_chain()
             return
         self._set_detector(resolved)
         self._sync_widgets_from_chain()
@@ -1544,6 +1556,11 @@ class FilterTab(QWidget):
         if self._wizard is not None:
             return
         self._wizard_snapshot = self._chain
+        # Detector edits write through the document live, so Cancel's restore
+        # is this index: everything the session pushed is rolled back off the
+        # undo stack, and the snapshot covers only what never reached it —
+        # the provisional step and its params.
+        self._wizard_undo_index = self._document.undo_stack.index()
         wizard = StepWizard(self._chain, target, parent=self)
         self._wizard = wizard
 
@@ -1616,12 +1633,14 @@ class FilterTab(QWidget):
     def _on_wizard_accepted(self) -> None:
         """Add: the provisional step solidifies; the chain is already rendered.
 
-        This is also where the wizard's provisional tuning reaches the
-        document, in one place and only on Add: the new structure through
-        `sync_structure` (the minted node's parameters become its baseline),
-        and the *net* detector change against the snapshot as one edit —
-        pinned and defaulted exactly as if it had been made on the tab, which
-        it semantically was.
+        Only the structure lands here in the ordinary case. The session's
+        tuning went through the document live, edit by edit, exactly as the
+        tab's own — the one thing the document has not seen is the
+        provisional step, whose minted parameters become its baseline through
+        `sync_structure`. The net-diff write below is for the one session the
+        live path cannot serve: a wizard opened before any pipeline reached
+        the document, whose detector edits stayed local; when the edits went
+        through live it compares equal and writes nothing.
         """
         step_id = self._provisional_id
         snapshot = self._wizard_snapshot
@@ -1636,12 +1655,27 @@ class FilterTab(QWidget):
             changes = {name: value for name, value in after.items() if before[name] != value}
             if changes:
                 self._document.edit_detector(changes, "Tune Detection")
+        # The chain must end this handler as the resolved view of what the
+        # document now holds — `sync_structure` kept the document's own
+        # baselines for every pre-existing node, and a chain still carrying
+        # the wizard's copies would show values a save does not.
+        self._refresh_from_document()
         self._rebuild_stack()
 
     def _on_wizard_cancelled(self) -> None:
-        """Cancel/Esc: everything exactly as it was, from the snapshot value."""
+        """Cancel/Esc: everything exactly as it was — stack rollback plus snapshot.
+
+        Two restores because the session writes to two places: detector (and
+        any committed-step param) edits went through the document as ordinary
+        undoable commands and are rolled back off the stack; the provisional
+        step and its params never reached the document and come back with the
+        chain snapshot.
+        """
         snapshot = self._wizard_snapshot
+        undo_index = self._wizard_undo_index
         self._close_wizard()
+        if undo_index is not None:
+            self._document.undo_stack.setIndex(undo_index)
         if snapshot is not None and snapshot is not self._chain:
             self._chain = snapshot
             self._sync_widgets_from_chain()
@@ -1654,6 +1688,7 @@ class FilterTab(QWidget):
         wizard = self._wizard
         self._wizard = None
         self._wizard_snapshot = None
+        self._wizard_undo_index = None
         self._provisional_id = None
         self._grab.clear()
         if wizard is not None:

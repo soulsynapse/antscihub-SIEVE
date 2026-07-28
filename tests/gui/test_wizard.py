@@ -101,6 +101,30 @@ def test_cancel_restores_the_exact_prior_state(qtbot: QtBot, tab: FilterTab) -> 
     assert all(not c.provisional for c in tab.stack.cards())
 
 
+def test_add_displays_the_wizard_tuning_on_the_tabs_own_widgets(tab: FilterTab) -> None:
+    """Pass-back must reach the knobs, not only the document and the captions.
+
+    The wizard's D slider is a separate widget instance sharing the tab's
+    handlers, and its edits write the chain live — so when Add lands the net
+    change in the document, the echo compares equal against the chain and
+    must still sync the tab's widgets. Before it did, the document held the
+    tuned value, the label said so, and the tab's slider displayed the
+    pre-wizard number until something unrelated happened to re-sync it.
+    """
+    tab.stack.insert_requested.emit(SEAM_ABOVE_EXTRACTION)
+    wizard = tab.wizard
+    assert wizard is not None
+    before = tab.chain.detector.window_frames
+    wizard.d_slider.setValue(before + 60)
+
+    wizard.accepted.emit()
+
+    assert tab.wizard is None
+    assert tab.chain.detector.window_frames == before + 60
+    # The tab's own slider, not the wizard's (which is destroyed by now).
+    assert tab._d_slider.value() == before + 60  # pyright: ignore[reportPrivateUsage]
+
+
 def test_a_disabled_candidate_cannot_be_committed_by_any_input_path(tab: FilterTab) -> None:
     """The model's judgment holds at the last gate every input path crosses.
 

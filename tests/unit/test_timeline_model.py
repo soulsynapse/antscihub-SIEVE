@@ -24,6 +24,7 @@ from sieve.gui.timeline_model import (
     effective_window,
     ended_at,
     ended_at_handle,
+    feed_bounds,
     fitted,
     moved_to,
     playback_step,
@@ -237,3 +238,33 @@ class TestGeometry:
         assert empty.is_empty
         assert empty.frame_at(250.0) == 0
         assert empty.x_of_frame(10) == 0.0
+
+
+class TestTheFrontierFold:
+    """Render-fed playback's bound: play only what the render has produced."""
+
+    def test_playback_is_confined_to_the_rendered_prefix(self) -> None:
+        window = ClipRange(start=100, end=400)
+        bounds = feed_bounds(window, 249)
+        assert bounds == ClipRange(start=100, end=250)
+        # And `playback_step` folds a clock past the frontier back to the
+        # window's start — the loop over what exists, not a stall at its edge.
+        assert playback_step(300, 249, bounds).index == window.start
+
+    def test_a_frontier_past_the_window_end_changes_nothing(self) -> None:
+        """The render's last frame is the window's; an overshoot must not widen it."""
+        window = ClipRange(start=100, end=400)
+        assert feed_bounds(window, 399) == window
+        assert feed_bounds(window, 5000) == window
+
+    def test_no_frontier_and_a_stale_frontier_both_yield_the_window(self) -> None:
+        """Folding to nothing, or to a foreign span, would freeze the pane
+        in the name of keeping it moving."""
+        window = ClipRange(start=100, end=400)
+        assert feed_bounds(window, None) == window
+        assert feed_bounds(window, 99) == window
+
+    def test_a_frontier_at_the_window_start_is_a_one_frame_loop(self) -> None:
+        """The very start of a render: one frame exists and it is shown."""
+        window = ClipRange(start=100, end=400)
+        assert feed_bounds(window, 100) == ClipRange(start=100, end=101)

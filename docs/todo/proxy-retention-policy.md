@@ -1,12 +1,12 @@
 ---
 title: What the viewport keeps of a render, and what it drops
-status: deferred
+status: open
 opened: 2026-07-27
 gated_on: >
-  the planning pass ran 2026-07-27 (decisions below); what remains is gated on
-  docs/todo/resource-ledger.md landing (the byte budget) and
-  docs/todo/render-fed-playback.md's v1 ring existing (the thing this policy
-  replaces the bound of)
+  nothing any more — both triggers fired 2026-07-27: the resource ledger landed
+  (gui/concurrency.py's byte column) and render-fed-playback's v1 ring exists
+  (gui/render_ring.py, bound by RENDER_RING_SHARE — the bound this policy
+  replaces)
 reads:
   - src/sieve/gui/proxy_cache.py
   - src/sieve/pipeline/cache.py

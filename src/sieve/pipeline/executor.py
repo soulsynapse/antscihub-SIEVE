@@ -114,6 +114,14 @@ class FrameResult:
     #: Which nodes were served from the store rather than computed. What a HUD
     #: reports and what a test asserts caching actually happened on.
     from_cache: frozenset[str]
+    #: The frame as decoded, *before* the replicate crop — the crop is what
+    #: the graph consumes, but the consumer this field exists for is a
+    #: viewport that shows the whole frame (render-fed playback), and a crop
+    #: cannot be undone. `None` when every root was served from the store and
+    #: no decode happened, which is exactly the warm re-render where there is
+    #: nothing to share. Carrying it costs one frame's reference for as long
+    #: as the caller holds this, the same argument as `outputs` above.
+    source: Frame | None = None
 
     def __getitem__(self, node_id: str) -> Frame:
         """That node's output.
@@ -167,6 +175,7 @@ def execute(
     roi = None if plan.replicate is None else plan.replicate.roi
 
     for index in plan.decode_range:
+        decoded: Frame | None = None
         source: Frame | None = None
         outputs: dict[str, Frame] = {}
         hits: set[str] = set()
@@ -191,9 +200,10 @@ def execute(
             else:
                 if source is None:
                     # The one place the reader is touched, and only once per
-                    # frame however many roots there are: a graph with two roots
-                    # crops the same decoded frame twice rather than seeking
-                    # twice.
+                    # frame however many roots there are: a graph with two
+                    # roots crops the same decoded frame once rather than
+                    # seeking twice. `decoded` outlives the crop so the
+                    # result below can carry the whole frame.
                     decoded = reader.read(index)
                     source = decoded if roi is None else _crop(decoded, roi)
                 incoming = source
@@ -202,7 +212,9 @@ def execute(
             if key is not None:
                 keep.put(key, index, produced)
         if index >= plan.span.start:
-            yield FrameResult(index=index, outputs=outputs, from_cache=frozenset(hits))
+            yield FrameResult(
+                index=index, outputs=outputs, from_cache=frozenset(hits), source=decoded
+            )
 
 
 def _bind(

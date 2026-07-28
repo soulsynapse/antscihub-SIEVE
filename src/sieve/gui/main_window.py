@@ -102,6 +102,11 @@ class MainWindow(QMainWindow):
         # every knob edit — and the whole-render summary still reaches the
         # user as one status line here.
         self._preview = PreviewRunner(self)
+        # Render-fed playback: the player takes frames the render already
+        # decoded instead of decoding them again. Wired here because this is
+        # the one object that owns both ends; `apply_preferences` below is
+        # what sizes the ring's proxies, so the feed must exist first.
+        self._player.set_render_feed(self._preview.ring)
         self._metrics = ExecutorAdapter(parent=self)
         self._filter_tab = FilterTab(
             self._player, self._document, self._preview, self, preferences=self._preferences
@@ -306,6 +311,9 @@ class MainWindow(QMainWindow):
         self._preview.open_failed.connect(self._on_preview_unavailable)
         self._preview.render_finished.connect(self._on_render_finished)
         self._preview.render_failed.connect(self._on_render_failed)
+        # The fold-at-frontier half of render-fed playback: while a window
+        # render fills, playback loops over the prefix that exists.
+        self._preview.window_render_changed.connect(self._player.set_render_filling)
         self._filter_tab.status_message.connect(self.statusBar().showMessage)
 
         # The bus's whole-render verdicts reach the HUD here rather than in

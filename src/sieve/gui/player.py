@@ -57,8 +57,9 @@ from sieve.gui.concurrency import PROXY_CACHE_SHARE, resolved_bytes
 from sieve.gui.decode_worker import DecodeWorker
 from sieve.gui.preferences import Preferences
 from sieve.gui.proxy_cache import ProxyFrameCache
+from sieve.gui.render_ring import RenderFrameRing
 from sieve.gui.scrub_policy import ScrubPolicy
-from sieve.gui.timeline_model import playback_step
+from sieve.gui.timeline_model import feed_bounds, playback_step
 
 #: How often playback re-evaluates which frame the clock is on. Finer than any
 #: source frame rate we expect, so the limit on smoothness is decode, not this.
@@ -131,6 +132,14 @@ class VideoPlayer(QObject):
 
         self._viewport_luma = False
 
+        # Render-fed playback: a ring of frames the render already decoded,
+        # consulted before every decode of our own. The ring's frames are
+        # luma, so `_viewport_luma` is part of the gate — the gray viewport
+        # is what makes the render's format and ours the same format.
+        self._render_ring: RenderFrameRing | None = None
+        self._render_fed = True
+        self._render_filling = False
+
         self._open_requested.connect(self._worker.open)
         self._frame_requested.connect(self._worker.request_frame)
         self._proxy_width_changed.connect(self._worker.set_proxy_width)
@@ -182,10 +191,36 @@ class VideoPlayer(QObject):
         """Adopt the user's settings. Safe to call at any time."""
         self._policy.set_allow_degrade(preferences.adaptive_scrub)
         self._policy.set_coarse_interval_seconds(preferences.coarse_interval_seconds)
+        self._render_fed = preferences.render_fed_playback
         # Cached frames are proxies at the old width, so they are the wrong
-        # size the moment the width changes and must not be served again.
+        # size the moment the width changes and must not be served again. The
+        # ring applies the same discipline internally on a width change.
         self._cache.clear()
+        if self._render_ring is not None:
+            self._render_ring.set_proxy_width(preferences.proxy_width)
         self._proxy_width_changed.emit(preferences.proxy_width)
+
+    def set_render_feed(self, ring: RenderFrameRing | None) -> None:
+        """Adopt `ring` as a source of frames that is not the decode thread.
+
+        Called once at wiring time by whoever owns both the player and the
+        render (`main_window.py`). The ring keeps its own lock; this object
+        never mutates it beyond the width above.
+        """
+        self._render_ring = ring
+
+    @Slot(bool)
+    def set_render_filling(self, active: bool) -> None:
+        """A window render started filling the ring, or stopped.
+
+        While true and the feed is live, playback folds at the render's
+        frontier rather than at the window's end — there is always something
+        moving to watch, and it never runs ahead into frames whose only
+        source would be the second decode this mode removes. When false the
+        fold lifts; the ring is still consulted, because the frames it kept
+        are still the frames.
+        """
+        self._render_filling = active
 
     @property
     def viewport_luma(self) -> bool:
@@ -346,7 +381,11 @@ class VideoPlayer(QObject):
 
         elapsed = perf_counter() - self._play_anchor_time
         target = self._play_anchor_index + int(elapsed * self.fps * self._playback_rate)
-        step = playback_step(target, self._current_index, self._bounds())
+        bounds = self._bounds()
+        ring = self._feed_ring()
+        if ring is not None and self._render_filling:
+            bounds = feed_bounds(bounds, ring.frontier)
+        step = playback_step(target, self._current_index, bounds)
 
         if step.rewound:
             self._anchor_playback(step.index)
@@ -407,8 +446,42 @@ class VideoPlayer(QObject):
         self._cache.clear()
         self._policy.reset()
 
+    def _feed_ring(self) -> RenderFrameRing | None:
+        """The ring, when playback may take frames from it, else None.
+
+        Three gates in one place: a ring must be wired, the preference must
+        allow it, and the viewport must be gray — the ring's frames are luma,
+        and serving one into a colour pane would be the format lie the
+        gray-toggle item exists to prevent. The last gate is also what scopes
+        the feed to the filter tab, since that tab is the only place the
+        pane goes gray.
+        """
+        if self._render_fed and self._viewport_luma:
+            return self._render_ring
+        return None
+
+    def _display_from_ring(self, index: int, kind: RequestKind) -> bool:
+        """Show the render's frame if it kept one. The no-second-decode path.
+
+        Deliberately not copied into `_cache`: the ring is its own retention,
+        and playback frames are exactly what `gui/proxy_cache.py` says must
+        not evict a scrub's warmed grid.
+        """
+        ring = self._feed_ring()
+        if ring is None:
+            return False
+        image = ring.get(index)
+        if image is None:
+            return False
+        self._coalescer.served_without_decode(kind)
+        self._current_index = index
+        self.frame_changed.emit(index, image)
+        return True
+
     def _request(self, index: int, kind: RequestKind) -> None:
-        """Ask the decode thread for a frame, coalescing against any in flight."""
+        """Ask the decode thread for a frame — unless the render already has it."""
+        if self._display_from_ring(index, kind):
+            return
         self._issue(self._coalescer.request(index, kind))
 
     def _issue(self, request: Request | None) -> None:

@@ -86,6 +86,7 @@ from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.filters import discover
 from sieve.gui.concurrency import resolve_worker_split
+from sieve.gui.render_ring import RenderFrameRing
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
@@ -177,6 +178,7 @@ class _RenderWorker(QObject):
     def __init__(
         self,
         wanted: _Wanted,
+        ring: RenderFrameRing,
         bus: MetricBus,
         backend: Backend,
         registry: FilterRegistry | None,
@@ -184,6 +186,7 @@ class _RenderWorker(QObject):
     ) -> None:
         super().__init__()
         self._wanted = wanted
+        self._ring = ring
         self._bus = bus
         self._backend = backend
         self._registry = registry
@@ -237,6 +240,12 @@ class _RenderWorker(QObject):
         if session is None:
             return
 
+        # A window render's frontier starts from nothing; a single-frame
+        # refresh is not a render filling and must not move it.
+        window_render = request.frame_index is None
+        if window_render:
+            self._ring.begin()
+
         started = perf_counter()
         previous = started
 
@@ -247,6 +256,13 @@ class _RenderWorker(QObject):
             # truncated series.
             if not self._wanted.is_current(request.revision):
                 raise _AbandonedError
+            # The proxy is made here, on the render thread, where the pixels
+            # already are — a resize in front of every repaint would put the
+            # cost on the GUI thread instead. `source` is None exactly when
+            # the store served every root, which is the warm re-render where
+            # there was no decode to share.
+            if window_render and result.source is not None:
+                self._ring.put(result.source)
             if request.consumer is not None:
                 request.consumer(result)
             now = perf_counter()
@@ -273,7 +289,14 @@ class _RenderWorker(QObject):
 
     @Slot()
     def close(self) -> None:
-        """Drop the session and stop the decode threads. Idempotent."""
+        """Drop the session and stop the decode threads. Idempotent.
+
+        The ring again, though the runner already cleared it on its thread:
+        this queued slot runs after any in-flight render has aborted, so it
+        sweeps up a frame that slipped past the revision check in the same
+        instant the GUI thread was clearing.
+        """
+        self._ring.clear()
         self._session = None
         self._path = None
         if self._reader is not None:
@@ -430,6 +453,11 @@ class PreviewRunner(QObject):
         # The one thing both threads touch. Written here on every submission
         # and on every close, read by the worker once per frame.
         self._wanted = _Wanted()
+        # The other thing both threads touch, and it carries its own lock:
+        # the worker writes a proxy of every source frame a window render
+        # decodes, and the player reads them back instead of decoding the
+        # same file again (`gui/render_ring.py`).
+        self._ring = RenderFrameRing()
 
         # When a non-empty graph was first submitted for this source, and
         # whether anything has ticked since. `None` means nothing is being
@@ -440,7 +468,9 @@ class PreviewRunner(QObject):
 
         self._thread = QThread()
         self._thread.setObjectName("sieve-preview")
-        self._worker = _RenderWorker(self._wanted, self._metrics, backend, registry, kernels)
+        self._worker = _RenderWorker(
+            self._wanted, self._ring, self._metrics, backend, registry, kernels
+        )
         self._worker.moveToThread(self._thread)
 
         self._open_requested.connect(self._worker.open)
@@ -461,6 +491,11 @@ class PreviewRunner(QObject):
     def is_open(self) -> bool:
         """Whether footage is loaded and a render can be asked for."""
         return self._opened
+
+    @property
+    def ring(self) -> RenderFrameRing:
+        """The render's recent source frames, for the player to play from."""
+        return self._ring
 
     @property
     def revision(self) -> int:
@@ -516,6 +551,11 @@ class PreviewRunner(QObject):
         # its last.
         self._revision += 1
         self._wanted.set(self._revision)
+        # After the bump, so the abandoned render cannot refill what is being
+        # emptied: its next `on_frame` raises before it reaches the ring. The
+        # ring is index-keyed with no source identity, so frames of the video
+        # being closed must not survive into the next one's playback.
+        self._ring.clear()
         self._note_slots_changed()
         self._close_requested.emit()
 

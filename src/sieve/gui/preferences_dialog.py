@@ -46,6 +46,15 @@ _ADAPTIVE_HELP = (
     "accurate while dragging, but it will lag on slower machines."
 )
 _INTERVAL_HELP = "How far apart the coarse grid's frames are while you drag."
+_RENDER_FED_LABEL = "Show the graph render's frames during playback"
+_RENDER_FED_HELP = (
+    "While the graphs are computing, SIEVE has already decoded every frame it "
+    "needs — playback reuses them instead of decoding the file a second time, "
+    "which is what makes the picture keep moving during a render. Playback "
+    "loops over the part of the window that has been rendered so far. Turn "
+    "this off to always decode independently: full wall-clock coverage of the "
+    "window, at the cost of stuttering while renders fill."
+)
 _PROXY_HELP = (
     "Frames are decoded down to this width for display only. Lower is faster "
     "to scrub; higher shows more detail. Never affects analysis output."
@@ -63,6 +72,7 @@ class PreferencesDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_scrubbing_group())
+        layout.addWidget(self._build_playback_group())
         layout.addWidget(self._build_display_group())
         layout.addStretch(1)
 
@@ -103,6 +113,19 @@ class PreferencesDialog(QDialog):
 
         return group
 
+    def _build_playback_group(self) -> QGroupBox:
+        group = QGroupBox("Playback")
+        form = QFormLayout(group)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+
+        self._render_fed_check = QCheckBox(_RENDER_FED_LABEL)
+        self._render_fed_check.setToolTip(_RENDER_FED_HELP)
+        self._render_fed_check.toggled.connect(self._on_render_fed_toggled)
+        form.addRow(self._render_fed_check)
+        form.addRow(_help_label(_RENDER_FED_HELP))
+
+        return group
+
     def _build_display_group(self) -> QGroupBox:
         group = QGroupBox("Display")
         form = QFormLayout(group)
@@ -124,10 +147,16 @@ class PreferencesDialog(QDialog):
     @Slot()
     def _load(self) -> None:
         """Pull every value from the store without re-emitting changes."""
-        widgets = (self._adaptive_check, self._interval_spin, self._proxy_spin)
+        widgets = (
+            self._adaptive_check,
+            self._interval_spin,
+            self._render_fed_check,
+            self._proxy_spin,
+        )
         blockers = [QSignalBlocker(widget) for widget in widgets]
         self._adaptive_check.setChecked(self._preferences.adaptive_scrub)
         self._interval_spin.setValue(self._preferences.coarse_interval_seconds)
+        self._render_fed_check.setChecked(self._preferences.render_fed_playback)
         self._proxy_spin.setValue(self._preferences.proxy_width)
         del blockers
         self._interval_spin.setEnabled(self._adaptive_check.isChecked())
@@ -137,6 +166,10 @@ class PreferencesDialog(QDialog):
         self._preferences.adaptive_scrub = enabled
         # The grid spacing only means anything when the grid can be used.
         self._interval_spin.setEnabled(enabled)
+
+    @Slot(bool)
+    def _on_render_fed_toggled(self, enabled: bool) -> None:
+        self._preferences.render_fed_playback = enabled
 
     @Slot(float)
     def _on_interval_changed(self, seconds: float) -> None:

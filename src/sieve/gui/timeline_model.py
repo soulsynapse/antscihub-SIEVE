@@ -172,6 +172,26 @@ def fitted(window: ClipRange | None, frame_count: int) -> ClipRange | None:
     return ClipRange(start=window.start, end=min(window.end, frame_count))
 
 
+def feed_bounds(window: ClipRange, frontier: int | None) -> ClipRange:
+    """What playback may cover while a render is filling: up to its frontier.
+
+    Render-fed playback's fold. The player takes frames from the render's ring
+    rather than decoding, so while the render is still producing, the last
+    frame worth targeting is the last one that exists — playback loops over
+    the rendered prefix while the window fills behind it, instead of running
+    ahead into frames whose only source would be the second decode this mode
+    exists to remove.
+
+    `None` (nothing produced yet) and a frontier before the window (a stale
+    claim from a window that has since moved) both yield the window unchanged:
+    a fold that pinned playback to a single frame, or to a foreign span, would
+    freeze the pane in the name of keeping it moving.
+    """
+    if frontier is None or frontier < window.start:
+        return window
+    return ClipRange(start=window.start, end=min(window.end, frontier + 1))
+
+
 @dataclass(frozen=True, slots=True)
 class PlaybackStep:
     """Where playback goes next, and whether the clock has to be re-anchored.

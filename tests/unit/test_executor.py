@@ -284,6 +284,29 @@ def test_every_root_sees_the_replicates_crop_on_every_frame() -> None:
     assert source.reads == list(plan.decode_range)
 
 
+def test_the_decoded_frame_escapes_uncropped_and_only_when_a_decode_happened() -> None:
+    """`source` is the whole frame, and a warm replay carries none.
+
+    Three distinct failures. A *cropped* source could not feed the full-frame
+    viewport render-fed playback shares it with — the crop is the graph's
+    input, not the frame. A source on the fully-cached replay would claim a
+    decode that never ran, and the sharer would treat store-served results as
+    fresh pixels. And no source at all is the second decode coming back.
+    """
+    replicate = Replicate(name="arena 2", roi=ARENA)
+    plan = plan_for(Pipeline(nodes=(node("t"),)), replicate=replicate)
+    store = MemoryFrameStore()
+
+    first = run(plan, ListSource(), store=store)
+    for result in first:
+        assert result.source is not None
+        assert result.source.index == result.index
+        assert result.source.data.shape == (HEIGHT, WIDTH, 3), "the crop reached the source"
+
+    second = run(plan, RefusingSource(), store=store)
+    assert all(result.source is None for result in second)
+
+
 def test_a_windowed_node_is_refused_before_anything_is_read() -> None:
     """The message is available statically, so it is given statically.
 

@@ -47,6 +47,15 @@ MAX_PROXY_WIDTH: Final = 3840
 VIEWPORT_LUMA: Final = "decode/viewport_luma"
 DEFAULT_VIEWPORT_LUMA: Final = False
 
+#: Serve playback from the render's own frames when it has them, instead of
+#: decoding the same file a second time. Beside `ADAPTIVE_SCRUB` in spirit and
+#: in the pane: an automatic behaviour the user may not want. Off means the
+#: player decodes independently and stutters during renders — the right choice
+#: for someone who needs true wall-clock coverage of the whole window more
+#: than smooth motion.
+RENDER_FED_PLAYBACK: Final = "playback/render_fed"
+DEFAULT_RENDER_FED_PLAYBACK: Final = True
+
 #: The last video successfully opened, reoffered at the next launch. Session
 #: state rather than a tunable: it has no entry in the preferences pane and is
 #: written by the window, not by the user.
@@ -126,6 +135,15 @@ class Preferences(QObject):
         self._store(VIEWPORT_LUMA, bool(enabled), current=self.viewport_luma)
 
     @property
+    def render_fed_playback(self) -> bool:
+        """Whether the player may take frames from the render instead of decoding."""
+        return _as_bool(self._settings.value(RENDER_FED_PLAYBACK), DEFAULT_RENDER_FED_PLAYBACK)
+
+    @render_fed_playback.setter
+    def render_fed_playback(self, enabled: bool) -> None:
+        self._store(RENDER_FED_PLAYBACK, bool(enabled), current=self.render_fed_playback)
+
+    @property
     def last_video(self) -> Path | None:
         """The video to reoffer at launch, or `None` if there is nothing to offer.
 
@@ -160,7 +178,13 @@ class Preferences(QObject):
         statement about how the application should behave, and forgetting which
         file the user was working on is not one of the things they asked for.
         """
-        for key in (ADAPTIVE_SCRUB, COARSE_INTERVAL_SECONDS, PROXY_WIDTH, VIEWPORT_LUMA):
+        for key in (
+            ADAPTIVE_SCRUB,
+            COARSE_INTERVAL_SECONDS,
+            PROXY_WIDTH,
+            VIEWPORT_LUMA,
+            RENDER_FED_PLAYBACK,
+        ):
             self._settings.remove(key)
         self._settings.sync()
         self.changed.emit()

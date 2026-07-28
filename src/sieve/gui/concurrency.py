@@ -172,6 +172,16 @@ PREVIEW_INFLIGHT_SHARE = MemoryShare(
 #: Declared for completeness, so the table is the whole session.
 PLAYER_INFLIGHT_SHARE = MemoryShare("player in-flight decode", floor_bytes=REFERENCE_FRAME_BYTES)
 
+#: The render-fed playback ring (`gui/render_ring.py`): the render's recent
+#: source frames as display proxies, so the player can show them instead of
+#: decoding the same file a second time. The floor is the bound the item
+#: fixed up front — ~280 gray 1280-wide proxies, ~4.7 s at 59.94 fps, enough
+#: that a playhead a few seconds behind the frontier never misses. Fraction
+#: zero on purpose: how much of a *bigger* machine this deserves is the
+#: retention policy's question (`docs/todo/proxy-retention-policy.md`), and
+#: growing it here would decide that policy by side effect.
+RENDER_RING_SHARE = MemoryShare("render-fed playback ring", floor_bytes=256 * 1024 * 1024)
+
 #: Every bounded slab the interactive session holds. A new consumer adds a row
 #: here in the commit that creates it, or it is the undeclared tenant H4's
 #: instrumentation exists to catch.
@@ -179,6 +189,7 @@ MEMORY_SHARES: tuple[MemoryShare, ...] = (
     PROXY_CACHE_SHARE,
     PREVIEW_INFLIGHT_SHARE,
     PLAYER_INFLIGHT_SHARE,
+    RENDER_RING_SHARE,
 )
 
 #: Consumers that hold real memory and no row above — the ledger's honest gap,

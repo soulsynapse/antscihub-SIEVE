@@ -98,6 +98,7 @@ src/sieve/gui/executor_adapter.py       # the ONLY place that knows both bench/m
 src/sieve/gui/player.py                 # playback, scrub, frame requests
 src/sieve/gui/decode_worker.py          # decode off the GUI thread
 src/sieve/gui/proxy_cache.py            # coarse-grid frame cache serving the scrub budget
+src/sieve/gui/render_ring.py            # the render's recent frames as proxies, played instead of re-decoded
 src/sieve/gui/scrub_policy.py           # when to degrade to the coarse grid; Qt-free
 src/sieve/gui/coalescer.py              # two slots, rank rule, source stamp; Qt-free
 src/sieve/gui/timeline_bar.py           # the full-width band: working window and playhead

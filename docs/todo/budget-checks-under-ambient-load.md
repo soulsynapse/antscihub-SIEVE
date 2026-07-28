@@ -1,6 +1,7 @@
 ---
 title: A one-shot wall clock in the correctness gate
 status: open
+serves: [A2]
 opened: 2026-07-28
 gated_on: >
   nothing structurally — but the fix is a decision about how a budget is
@@ -82,8 +83,52 @@ the one that generalises — any other budget check running single-shot under
 `--benchmark-disable` has the same exposure, and the sweep for those is part
 of this item.
 
+## The diagnosis above is wrong, and the recommendation follows it (2026-07-28)
+
+Reproduced during the aspirations work, again with a docs-only tree, and it is
+not ambient load. It is a function of **how much of the suite pytest has
+collected**, and it is deterministic:
+
+| Invocation | Collected | Result |
+|---|---|---|
+| `pytest tests/bench` | 21 | passes |
+| `pytest tests/gui tests/unit <file> -k density_rebuild` | 855 | passes |
+| `pytest -k density_rebuild` (full collection, one test runs) | 962 | **fails, 3/3** |
+| `nox -s checks` | 962 | **fails, 2/2** |
+
+The third row is the load-bearing one: everything else is *deselected*, so only
+this test executes. Nothing is running concurrently and nothing else has run
+first. The slowdown is caused by what was **imported at collection**, not by
+contention with other tests and not by the machine being busy. Overages across
+the five failing runs: 7.1, 23.5, 39.9, 43.3, 44.0 ms — a 1.1x to 1.4x
+systematic penalty with high variance on top, not a jitter around the limit.
+
+Two consequences:
+
+- **Best-of-N does not fix this.** The minimum is the right statistic for a
+  disturbance that only ever adds time *sometimes*; here every reading in a
+  full run is inflated, so the minimum of N is inflated too. Option (1) would
+  have made the test pass on some machines and left it failing on others, which
+  is worse than the current honest failure because it would look fixed.
+- The original 1.7 ms observation was probably the same effect near its floor,
+  not a busy machine — which means "passed three times in isolation
+  immediately afterwards" was never evidence of a flake. It was the partial-
+  collection case, and it was reproducing the *passing* condition.
+
+The open question is now mechanistic and worth a finding rather than a guess:
+what does importing the remaining ~100 test modules change for a NumPy
+`bincount`-per-frame loop? The candidates worth checking first are thread-pool
+or BLAS/OpenMP configuration set as an import side effect (`cv2` and `scipy`
+both do this, and `scipy.fft's workers argument does nothing in this build`
+is a finding that already shows this repo's threading assumptions failing
+silently), and working-set growth from the imported modules degrading cache
+locality. Measure before choosing an option; the three above were all written
+against a cause that is not the cause.
+
 ## Scope
 
 Audit every budget assertion that runs under `--benchmark-disable`, not just
 this one. `test_density_rebuild.py` is the instance that fired; it is
-unlikely to be the only single-shot wall clock in the gate.
+unlikely to be the only single-shot wall clock in the gate. The collection-size
+result above widens this: the audit should also ask whether any *passing*
+budget check is passing only because it runs in a small collection.

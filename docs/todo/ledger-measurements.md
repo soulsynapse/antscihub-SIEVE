@@ -1,6 +1,7 @@
 ---
 title: The ledger's two unmeasured numbers
 status: deferred
+serves: [A2]
 opened: 2026-07-27
 gated_on: >
   a floor reading on a *small* machine. The instrumented session ran 2026-07-28

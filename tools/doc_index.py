@@ -237,6 +237,65 @@ def render(spec: IndexSpec, entries: Sequence[Entry]) -> str:
 
 STATE_NAME = ".state.md"
 
+#: The long-view capabilities in `docs/ASPIRATIONS.md`, by id and title. An item
+#: may name one or more in its optional `serves:` frontmatter key.
+#:
+#: The primer renders every aspiration, **including the ones nothing is
+#: serving** — that visibility is the entire mechanism. Prior attempts to keep
+#: the long view in front of a session put it in a document a session had to
+#: choose to open, and inference chose not to. This routes it through the one
+#: file the work loop already forces every session through.
+#:
+#: Deliberately not a gate: a test that failed when an aspiration had no open
+#: item would manufacture busywork and teach people to tag falsely. The
+#: reasoning is recorded in `ASPIRATIONS.md` under *How this stays in front of
+#: a session*, which is the place to argue with it.
+ASPIRATIONS: tuple[tuple[str, str], ...] = (
+    ("A1", "A laggy session decomposes from its log"),
+    ("A2", "SIEVE divides an unknown machine, and can say why"),
+    ("A3", "SIEVE navigates the parameter space itself"),
+)
+
+
+def served_ids(entry: Entry) -> set[str]:
+    """Aspiration ids an item declares in `serves:`.
+
+    Accepts a bare string as well as a list, because `serves: A1` is what a
+    hand-written frontmatter block tends to contain and rejecting it would be
+    pedantry over a key that is optional in the first place.
+    """
+    raw: object = entry.fields.get("serves")
+    if raw is None:
+        return set()
+    if isinstance(raw, str):
+        return {raw.strip()}
+    if isinstance(raw, list | tuple):
+        return {str(item).strip() for item in cast(Sequence[Any], raw)}
+    return {str(raw).strip()}
+
+
+def aspiration_lines(items: Sequence[Entry]) -> list[str]:
+    """The primer's aspiration block: each capability and what serves it."""
+    lines = [
+        "**Aspirations** — the long view (`ASPIRATIONS.md`), and what is walking",
+        "toward it. An aspiration with nothing under it is the point of this block:",
+        "",
+    ]
+    for key, title in ASPIRATIONS:
+        serving = [entry for entry in items if key in served_ids(entry)]
+        # Open items first: a session picking work should see takeable items
+        # before it sees the deferred ones it cannot act on.
+        serving.sort(key=lambda entry: (entry.fields.get("status") != "open", entry.path.name))
+        lines.append(f"- **{key} — {title}**")
+        if not serving:
+            lines.append("  - *nothing is serving this*")
+            continue
+        for entry in serving:
+            status = _cell(entry.fields.get("status"))
+            name = _cell(entry.fields.get("title"))
+            lines.append(f"  - [{name}](todo/{entry.path.name}) — {status}")
+    return lines
+
 
 def bug_bullets(todo_lines: Sequence[str]) -> list[str]:
     """Bullet lines of TODO.md's `## Bugs and tweaks` section."""
@@ -282,6 +341,8 @@ def render_state(root: Path = DOCS_ROOT) -> str:
     for entry in deferred:
         gate = _cell(entry.fields.get("gated_on"))
         lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name}) — {gate}")
+
+    lines += ["", *aspiration_lines(items)]
 
     lines += ["", f"**Bugs and tweaks queued in `TODO.md`:** {len(bugs)}"]
     lines += [

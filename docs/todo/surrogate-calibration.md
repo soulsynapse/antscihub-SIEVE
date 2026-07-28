@@ -1,6 +1,7 @@
 ---
 title: Surrogate calibration for the detection threshold
 status: deferred
+serves: [A3]
 gated_on: >
   the temporal chain settling — concretely, the first parameter set somebody
   wants to run over a whole video and report

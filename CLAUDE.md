@@ -16,6 +16,7 @@ Read the file that answers your question, not all of them.
 |---|---|
 | What is the state of play right now, in one read? | `docs/.state.md` — generated; read it before TODO.md |
 | What am I building, and what is the workflow supposed to feel like? | `docs/VISION.md`, then `docs/REFINED-VISION.md` |
+| What is this ultimately for, and is my item walking toward it? | `docs/ASPIRATIONS.md` — A1–A3 and the invariants; derivation in `docs/WORKING-BACKWARDS.md` |
 | What are the invariants, layers, and latency budgets? | `docs/ARCHITECTURE.md` |
 | Where does this module go? | `docs/SCAFFOLD.md` (machine-checked; see below) |
 | What should I work on? | `docs/todo/` — one file per item, `status: open` |

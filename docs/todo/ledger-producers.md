@@ -1,6 +1,7 @@
 ---
 title: The memory ledger has no producer, and the worker split has no sensor
 status: open
+serves: [A1, A2]
 opened: 2026-07-28
 gated_on: >
   nothing structurally — the metrics bus and the HUD it already feeds are the

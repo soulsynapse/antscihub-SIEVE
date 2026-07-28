@@ -1,6 +1,7 @@
 ---
 title: Profiling as a module
 status: deferred
+serves: [A1]
 gated_on: >
   a budget miss whose cause is not obvious from the span that reported it —
   concretely, a `full_preview_render` miss over a multi-node graph

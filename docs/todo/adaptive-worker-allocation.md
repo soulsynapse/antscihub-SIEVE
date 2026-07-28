@@ -1,6 +1,7 @@
 ---
 title: Whether the worker split should be a controller rather than a constant
 status: deferred
+serves: [A2]
 opened: 2026-07-28
 gated_on: >
   evidence from docs/todo/ledger-producers.md that the fixed constants are

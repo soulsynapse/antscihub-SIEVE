@@ -93,6 +93,7 @@ src/sieve/gui/filter_tab.py             # the tuning surface: composite, chain, 
 src/sieve/gui/chain_stack.py            # the step cards
 src/sieve/gui/chain_model.py            # its Qt-free half
 src/sieve/gui/param_form.py             # widgets generated from a filter's params model
+src/sieve/gui/commit_combo.py           # a drop menu that commits on selection, never on highlight
 src/sieve/gui/composite_view.py         # the step composite: output over input, plus the block grid overlay
 src/sieve/gui/preview_runner.py         # holds a PreviewSession on its own thread; emits per-frame cost
 src/sieve/gui/detector_worker.py        # derives the detector off the GUI thread so graphs fill as frames land

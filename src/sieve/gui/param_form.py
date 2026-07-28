@@ -21,7 +21,6 @@ from typing import Any
 import annotated_types
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
@@ -32,6 +31,7 @@ from PySide6.QtWidgets import (
 from sieve.core.filter_registry import REGISTRY
 from sieve.core.pipeline_model import Node
 from sieve.gui.band_plot import DIM
+from sieve.gui.commit_combo import CommitCombo
 
 #: What a numeric field spans when it declares no bounds of its own.
 _UNBOUNDED = 1_000_000
@@ -68,14 +68,18 @@ def _widget_for(
     on_edit: Callable[[str, object], None],
 ) -> QWidget | None:
     if isinstance(annotation, type) and issubclass(annotation, StrEnum):
-        combo = QComboBox()
+        combo = CommitCombo()
         combo.addItems([member.value for member in annotation])
         combo.setCurrentText(str(current))
 
         def text_edited(text: str) -> None:
             on_edit(name, text)
 
-        combo.currentTextChanged.connect(text_edited)
+        # `textActivated`, not `currentTextChanged`: this is a filter parameter,
+        # so every value the user merely passes through would be a re-plan, a
+        # new cache key, and a render. `CommitCombo` is what makes the signal a
+        # complete statement of intent — see its module docstring.
+        combo.textActivated.connect(text_edited)
         return combo
     if annotation is bool:
         box = QCheckBox()

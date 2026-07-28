@@ -66,7 +66,6 @@ from PySide6.QtCore import QRect, Qt, Signal, Slot
 from PySide6.QtGui import QHideEvent, QImage, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
@@ -97,6 +96,7 @@ from sieve.gui.chain_model import (
     snapped_band_label,
 )
 from sieve.gui.chain_stack import ChainStackView
+from sieve.gui.commit_combo import CommitCombo
 from sieve.gui.composite_view import StepCompositeView
 from sieve.gui.concurrency import resolve_worker_split
 from sieve.gui.count_plot import CountPlot
@@ -320,7 +320,7 @@ class FilterTab(QWidget):
         self._downsample.setRange(0.05, 1.0)
         self._downsample.setSingleStep(0.05)
         self._downsample.setDecimals(2)
-        self._normalize = QComboBox()
+        self._normalize = CommitCombo()
         self._normalize.addItems(["off", "zscore"])
         self._block = QSpinBox()
         self._block.setRange(0, 256)
@@ -414,7 +414,10 @@ class FilterTab(QWidget):
         # Knobs: every edit rewrites the chain value and rides the runner's
         # latest-wins submission. No timers here — see the module docstring.
         self._downsample.valueChanged.connect(self._on_downsample)
-        self._normalize.currentTextChanged.connect(self._on_normalize)
+        # The mode combo commits on selection only (`gui/commit_combo.py`), so
+        # arrowing or scrolling past `zscore` is not a normalisation the
+        # document records and re-renders.
+        self._normalize.textActivated.connect(self._on_normalize)
         self._block.valueChanged.connect(self._on_block)
 
         # The gesture contract: handle drags in two tiers, everything else a

@@ -47,6 +47,13 @@ from sieve.gui.preferences import Preferences
 from sieve.gui.preferences_dialog import PreferencesDialog
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.replicate_tab import ReplicateTab
+from sieve.gui.resource_probe import (
+    MODE_IDLE,
+    MODE_PLAYBACK,
+    MODE_RENDER,
+    MODE_RENDER_FED_PLAYBACK,
+    ResourceProbe,
+)
 from sieve.gui.timeline_bar import TimelineBar
 from sieve.gui.toast import Toast
 from sieve.pipeline.cache_key import source_identity
@@ -356,6 +363,21 @@ class MainWindow(QMainWindow):
         # the tab, because the adapter is the window's — the tab keeps not
         # knowing that the bus has a Qt side at all.
         self._metrics.sample.connect(self._filter_tab.hud.show_sample)
+
+        # The resource side of the same wiring: session RSS against the
+        # ledger's ceiling, pool utilisation against the declared split, once
+        # a second, mode-tagged. Built here because this is the one object
+        # that owns all three meters' owners.
+        self._probe = ResourceProbe(
+            meters={
+                "player": self._player.decode_meter,
+                "preview": self._preview.prefetch_meter,
+                "detector": self._filter_tab.detector_meter,
+            },
+            mode=self._session_mode,
+            parent=self,
+        )
+        self._probe.sample.connect(self._filter_tab.hud.show_resources)
 
         # The stack is the dirty flag. Every user edit is a command on it by
         # construction (see `document.py`), so there is no second place a change
@@ -942,6 +964,23 @@ class MainWindow(QMainWindow):
         ):
             action.setEnabled(enabled)
 
+    def _session_mode(self) -> str:
+        """What the session is doing, for the probe to stamp on its samples.
+
+        Ordered by how strongly the mode shapes the numbers: render-fed
+        playback is the one regime where the ring is in play, plain playback
+        exercises the player pool alone, a render with the transport stopped
+        is the preview pool's regime, and idle is the floor everything else is
+        read against. Called once a second on the GUI thread.
+        """
+        if self._player.is_playing:
+            if self._player.render_fed and self._preview.window_render_active:
+                return MODE_RENDER_FED_PLAYBACK
+            return MODE_PLAYBACK
+        if self._preview.window_render_active:
+            return MODE_RENDER
+        return MODE_IDLE
+
     def closeEvent(self, event: QCloseEvent) -> None:
         """Flush the history, then stop the decode thread before the window goes away.
 
@@ -954,6 +993,10 @@ class MainWindow(QMainWindow):
         if self._history_timer.isActive():
             self._history_timer.stop()
             self._write_snapshot()
+        # The probe first: its tick reads the player's and the tab's meters,
+        # and its mode callable reads the player, so it must stop looking
+        # before what it looks at goes away.
+        self._probe.shutdown()
         self._player.shutdown()
         # The adapter before the runner: the runner's last act is to abandon a
         # render, and a subscription still live on a QObject Qt is about to

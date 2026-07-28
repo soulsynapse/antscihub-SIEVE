@@ -102,6 +102,7 @@ from typing import Self
 # module is still a sensible place to ask how many decode threads a machine
 # supports.
 from sieve.core.machine import available_cpus as available_cpus
+from sieve.core.pool_meter import PoolMeter
 from sieve.core.types import Frame, VideoMetadata
 from sieve.decode.reader import VideoDecodeError, VideoReader
 
@@ -188,6 +189,7 @@ class PrefetchFrameSource:
         workers: int | None = None,
         lookahead: int | None = None,
         luma: bool = False,
+        meter: PoolMeter | None = None,
     ) -> None:
         """Open `path` `workers` times and start reading ahead of the caller.
 
@@ -210,6 +212,14 @@ class PrefetchFrameSource:
             luma: Open every reader on the luma path — see `VideoReader`. The
                 per-frame buffer drops from 47.6 MB to 15.9, which is the
                 quantity `lookahead`'s memory arithmetic above is denominated in.
+            meter: Where the workers account their busy time and the ready
+                queue its depth. Owned by the caller rather than created here,
+                because this source is rebuilt per footage while utilisation
+                is a question about the *session* — an external meter stays
+                monotonic across rebuilds (`gui/preview_runner.py` owns one).
+                One is created when none is given, so the counters always
+                exist; depth is the count of decoded frames waiting for the
+                consumer, which is zero exactly when the consumer is starving.
 
         Raises:
             VideoDecodeError: if the file cannot be opened or reports no frames.
@@ -218,6 +228,7 @@ class PrefetchFrameSource:
         """
         self._path = Path(path)
         self._luma = luma
+        self._meter = PoolMeter() if meter is None else meter
         self._worker_count = resolve_workers(workers, luma=luma)
         self._lookahead = self._worker_count * 2 if lookahead is None else max(lookahead, 1)
 
@@ -281,6 +292,11 @@ class PrefetchFrameSource:
         """Ceiling on frames claimed but not yet consumed."""
         return self._lookahead
 
+    @property
+    def meter(self) -> PoolMeter:
+        """The pool's busy-time and depth counters, for a sampler to read."""
+        return self._meter
+
     # ---- reading ---------------------------------------------------------
 
     def read(self, index: int) -> Frame:
@@ -311,6 +327,7 @@ class PrefetchFrameSource:
                 frame = self._done.pop(index, None)
                 if frame is not None:
                     self._want = index + 1
+                    self._meter.set_depth(len(self._done))
                     self._state.notify_all()
                     return frame
                 failure = self._failed.pop(index, None)
@@ -339,6 +356,7 @@ class PrefetchFrameSource:
         self._claim = index
         self._done.clear()
         self._failed.clear()
+        self._meter.set_depth(0)
         self._state.notify_all()
 
     def _serve(self, reader: VideoReader) -> None:
@@ -359,7 +377,8 @@ class PrefetchFrameSource:
                 self._claim += 1
 
             try:
-                frame = reader.read(index)
+                with self._meter.working():
+                    frame = reader.read(index)
             except VideoDecodeError as error:
                 self._publish(epoch, index, error=error)
                 continue
@@ -391,6 +410,7 @@ class PrefetchFrameSource:
             if epoch == self._epoch:
                 if frame is not None:
                     self._done[index] = frame
+                    self._meter.set_depth(len(self._done))
                 if error is not None:
                     self._failed[index] = error
             self._state.notify_all()
@@ -416,6 +436,7 @@ class PrefetchFrameSource:
         with self._state:
             self._done.clear()
             self._failed.clear()
+            self._meter.set_depth(0)
 
     def __enter__(self) -> Self:
         return self

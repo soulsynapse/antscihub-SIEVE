@@ -81,6 +81,7 @@ from sieve.backend.dispatch import Backend, KernelRegistry, NoKernelError
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, CropArtifact, Pipeline
+from sieve.core.pool_meter import PoolMeter
 from sieve.core.replicates import Replicate
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
@@ -200,11 +201,13 @@ class _RenderWorker(QObject):
         backend: Backend,
         registry: FilterRegistry | None,
         kernels: KernelRegistry | None,
+        meter: PoolMeter,
     ) -> None:
         super().__init__()
         self._wanted = wanted
         self._ring = ring
         self._bus = bus
+        self._meter = meter
         self._backend = backend
         self._registry = registry
         self._kernels = kernels
@@ -417,7 +420,13 @@ class _RenderWorker(QObject):
             # smaller than the reference class the preview's pool degrades
             # before the player's does (`concurrency.resolve_worker_split`).
             reader = PrefetchFrameSource(
-                resolved.path, workers=resolve_worker_split().preview, luma=luma
+                resolved.path,
+                workers=resolve_worker_split().preview,
+                luma=luma,
+                # The runner's meter, not a fresh one: readers are rebuilt per
+                # footage and per format, and utilisation is a question about
+                # the session's pool, so the busy total must survive the churn.
+                meter=self._meter,
             )
         except VideoDecodeError as error:
             self.render_failed.emit(request.revision, str(error))
@@ -563,10 +572,21 @@ class PreviewRunner(QObject):
         self._armed_at: float | None = None
         self._ticked = False
 
+        # The preview pool's counters. Owned here, above the reader churn, so
+        # the sampler differencing busy time never sees a rebuilt source reset
+        # the total.
+        self._prefetch_meter = PoolMeter()
+
         self._thread = QThread()
         self._thread.setObjectName("sieve-preview")
         self._worker = _RenderWorker(
-            self._wanted, self._ring, self._metrics, backend, registry, kernels
+            self._wanted,
+            self._ring,
+            self._metrics,
+            backend,
+            registry,
+            kernels,
+            self._prefetch_meter,
         )
         self._worker.moveToThread(self._thread)
 
@@ -627,6 +647,11 @@ class PreviewRunner(QObject):
     def ring(self) -> RenderFrameRing:
         """The render's recent source frames, for the player to play from."""
         return self._ring
+
+    @property
+    def prefetch_meter(self) -> PoolMeter:
+        """The preview pool's counters, for `gui/resource_probe.py` to read."""
+        return self._prefetch_meter
 
     @property
     def revision(self) -> int:

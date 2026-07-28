@@ -46,6 +46,14 @@ the bus's samples to the GUI thread and until now nothing drew them.
 elapsed against ceiling, in the band color when missed — because a budget miss
 is a defect (ARCHITECTURE.md non-negotiable #4) and a defect reported only to a
 status bar the user has scrolled past is one nobody sees.
+
+**And so do the resource readings.** `gui/resource_probe.py` publishes the
+session's RSS against the ledger's ceiling and each pool's utilisation once a
+second, and this plot is where the symptom of both being wrong shows up — a
+slow fill is either the machine being divided badly or the budget being
+missed, and the two lines belong on the same surface. The memory half renders
+its refusal: an unreadable session prints as `unreadable` in the band color,
+never as a quiet zero (rule 6, both directions).
 """
 
 from __future__ import annotations
@@ -56,6 +64,7 @@ from PySide6.QtWidgets import QWidget
 
 from sieve.bench.metrics import Sample
 from sieve.gui.band_plot import ACCENT, BAND, DIM, BandPlot, plot_font
+from sieve.gui.resource_probe import ResourceSample
 
 #: The trailing-flush interval. One repaint at most this often while points are
 #: arriving, and always one after the last of them — a 30 Hz HUD over a render
@@ -88,6 +97,7 @@ class GraphHud(BandPlot):
         self._ceiling = MIN_CEILING_MS
         self._flush_pending = False
         self._watched: dict[str, Sample] = {}
+        self._resources: ResourceSample | None = None
         self.setMinimumHeight(110)
 
     # ---- what it is told ---------------------------------------------------
@@ -119,6 +129,13 @@ class GraphHud(BandPlot):
         self._watched[sample.key] = sample
         self._schedule_repaint()
 
+    @Slot(object)
+    def show_resources(self, sample: object) -> None:
+        """The probe's once-a-second reading. Newest wins; repaint is deferred."""
+        if isinstance(sample, ResourceSample):
+            self._resources = sample
+            self._schedule_repaint()
+
     # ---- the series (exposed because these are the claims worth testing) ----
 
     def costs(self) -> tuple[tuple[int, float], ...]:
@@ -141,6 +158,29 @@ class GraphHud(BandPlot):
             parts.append(f"{name} {sample.elapsed_ms:.0f}/{sample.budget.limit_ms:.0f} ms")
             missed = missed or not sample.within_budget
         return "  ·  ".join(parts), missed
+
+    def resource_line(self) -> tuple[str, bool]:
+        """The probe's verdict line and whether it warrants the band color.
+
+        Flagged both when the session is over its ledger and when the reading
+        was refused: an unreadable session must not look calmer than a full
+        one. Depth is only printed when nonzero — a quiet queue is the normal
+        state, and six `q0`s would bury the one that matters.
+        """
+        sample = self._resources
+        if sample is None:
+            return "", False
+        gib = 1024**3
+        if sample.rss_bytes is None:
+            memory = f"mem unreadable/{sample.ledger_bytes / gib:.1f} GB"
+        else:
+            memory = f"mem {sample.rss_bytes / gib:.1f}/{sample.ledger_bytes / gib:.1f} GB"
+        pools = [
+            f"{pool.name} {pool.utilisation:.0%}" + (f" q{pool.depth}" if pool.depth else "")
+            for pool in sample.pools
+        ]
+        line = "  ·  ".join([memory, *pools, sample.mode])
+        return line, sample.over_ledger is not False
 
     # ---- the value axis ------------------------------------------------------
 
@@ -186,6 +226,15 @@ class GraphHud(BandPlot):
                 QRect(r.left() + 4, r.top() + 2, r.width() - 8, 12),
                 int(Qt.AlignmentFlag.AlignRight),
                 line,
+            )
+
+        resources, flagged = self.resource_line()
+        if resources:
+            painter.setPen(QColor(BAND) if flagged else QColor(DIM))
+            painter.drawText(
+                QRect(r.left() + 4, r.bottom() - 14, r.width() - 8, 12),
+                int(Qt.AlignmentFlag.AlignLeft),
+                resources,
             )
 
     # ---- the throttle ----------------------------------------------------------

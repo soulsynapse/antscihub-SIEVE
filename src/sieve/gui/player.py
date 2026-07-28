@@ -66,6 +66,7 @@ from sieve.bench.retention_trace import (
     TraceRecorder,
 )
 from sieve.core.pipeline_model import ClipRange
+from sieve.core.pool_meter import PoolMeter
 from sieve.core.types import VideoMetadata
 from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
 from sieve.gui.concurrency import PROXY_CACHE_SHARE, resolved_bytes
@@ -147,7 +148,9 @@ class VideoPlayer(QObject):
 
         self._thread = QThread()
         self._thread.setObjectName("sieve-decode")
-        self._worker = DecodeWorker()
+        # The player pool's counters, owned here for the sampler's sake.
+        self._decode_meter = PoolMeter()
+        self._worker = DecodeWorker(self._decode_meter)
         self._worker.moveToThread(self._thread)
 
         self._viewport_luma = False
@@ -182,6 +185,22 @@ class VideoPlayer(QObject):
     def current_index(self) -> int:
         """Index of the most recently displayed frame."""
         return self._current_index
+
+    @property
+    def decode_meter(self) -> PoolMeter:
+        """The player pool's counters, for `gui/resource_probe.py` to read."""
+        return self._decode_meter
+
+    @property
+    def render_fed(self) -> bool:
+        """Whether playback may currently take frames from the render ring.
+
+        `_feed_ring`'s three gates, exposed so the resource probe can tag its
+        samples with the mode that produced them — the ledger item's confound:
+        a render-fed playback sample and a plain playback sample must never be
+        summed, because the ring is only in play in one of them.
+        """
+        return self._feed_ring() is not None
 
     @property
     def is_playing(self) -> bool:

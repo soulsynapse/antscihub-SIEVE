@@ -21,7 +21,13 @@ absolute numbers — that is what makes this file right on a 16 GB laptop and a
 at on the reference class of machine; the fractions are how a share grows
 when the allocation does. A consumer whose floor cannot be met is *reported*
 (`fits_memory`), exactly as `fits_machine` reports a one-core allocation: the
-ledger is a sum a test checks, never a runtime governor.
+ledger is never a runtime governor — but it is no longer only a sum a test
+checks. `gui/resource_probe.py` samples the session against `ledger_ceiling`
+and the pools against their meters every second, so a machine where these
+declarations are wrong now produces evidence instead of a feeling. What has a
+producer and what still does not is stated by `SENSED` / `WITHOUT_SENSOR`
+below, `bench/budgets.py`'s `WITHOUT_PRODUCER` construction applied to this
+file's own tables.
 
 **The honest gap:** `pipeline/cache.py`'s `MemoryFrameStore` is unbounded and
 holds no row here — see `UNBOUNDED`. It gets its bound when
@@ -206,6 +212,31 @@ MEMORY_SHARES: tuple[MemoryShare, ...] = (
 UNBOUNDED: tuple[str, ...] = ("pipeline/cache.py MemoryFrameStore",)
 
 
+#: Rows of the two tables above whose declared numbers something at run time
+#: now produces evidence about: the three pools publish busy time and queue
+#: depth through their `PoolMeter`s, read by `gui/resource_probe.py`. Names are
+#: `WorkerSplit`'s fields for pools and `MemoryShare.name` for shares;
+#: `tests/unit/test_ledger_sensors.py` holds the two sets to exactly the rows
+#: that exist, so a new pool or share lands in one list or the other in the
+#: commit that creates it — never silently in neither.
+SENSED: frozenset[str] = frozenset({"player", "preview", "detector"})
+
+#: Rows with no producer of their own — the honest gap, `WITHOUT_PRODUCER`'s
+#: construction. The memory shares are here as a body: the probe samples the
+#: session's RSS against `ledger_ceiling`, which bounds their *sum*, but no
+#: share reports its own occupancy, so a tenant over its row while the total
+#: still fits is invisible. This list only shrinks; moving a name to `SENSED`
+#: is the deliberate edit the reconciliation test forces.
+WITHOUT_SENSOR: frozenset[str] = frozenset(
+    {
+        "scrub proxy cache",
+        "preview in-flight decodes",
+        "player in-flight decode",
+        "render-fed playback ring",
+    }
+)
+
+
 def memory_reserve(total_bytes: int) -> int:
     """Bytes the ledger refuses to allocate: Python, Qt, the decoder's own
     buffers — everything the table above cannot see.
@@ -239,6 +270,27 @@ def resolved_bytes(share: MemoryShare, total_bytes: int | None = None) -> int:
     the thread column's `fits_machine`.
     """
     return max(share.floor_bytes, int(share.fraction * memory_budget(total_bytes)))
+
+
+def ledger_ceiling(total_bytes: int | None = None) -> int:
+    """What a session's measured RSS is judged against: every declared share
+    as resolved for this machine, plus the reserve.
+
+    The standing comparison `docs/todo/ledger-measurements.md` wanted run once
+    on the reference workstation, computed instead on whatever machine the
+    session is on — which is the point: the reserve's formula models total RAM
+    while the session-floor finding showed memory tracks the working window,
+    and per-machine readings against this ceiling are how that mismatch stops
+    being one finding and starts being every session's evidence.
+
+    A reading *over* this ceiling means an undeclared tenant, an
+    under-declared share, or the reserve's formula being wrong on this class
+    of machine — the three things `UNBOUNDED` and the reserve's own docstring
+    can only warn about.
+    """
+    total = available_memory() if total_bytes is None else total_bytes
+    shares = sum(resolved_bytes(share, total) for share in MEMORY_SHARES)
+    return shares + memory_reserve(total)
 
 
 def fits_memory(total_bytes: int | None = None) -> bool:

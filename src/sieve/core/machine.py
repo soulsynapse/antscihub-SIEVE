@@ -36,6 +36,8 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
+import psutil
+
 #: cgroup v1 reports "no limit" as a huge page-rounded sentinel near 2**63
 #: rather than by omitting the file; anything this large is the sentinel, not
 #: an allocation.
@@ -173,6 +175,53 @@ def _parse_slurm_megabytes(raw: str | None) -> int | None:
     if not text.isdigit():
         return None
     return int(text) * scale
+
+
+class MemoryUnreadableError(OSError):
+    """A session memory reading that could not be taken honestly.
+
+    Raised instead of returning a partial sum, because an undercounting
+    memory readout is precisely the "looks better-founded than it is" failure
+    ARCHITECTURE.md rule 6 names — it would be believed, and a reading that
+    silently omitted a worker's memory would clear the ledger's ceiling while
+    the machine swaps.
+    """
+
+
+def process_memory_bytes() -> int:
+    """Resident bytes of this process and every live child, summed.
+
+    The standing version of the ledger item's H3/H4 instrumentation: what a
+    session actually holds, to be judged against what `gui/concurrency.py`
+    declares. RSS rather than private bytes because RSS is the quantity the
+    OOM killer and the pager act on, and it is what the instrumented-session
+    finding measured, so readings stay comparable with it.
+
+    SIEVE spawns no child processes today, so the child walk is usually a
+    walk over nothing — but it is taken every time rather than assumed away,
+    because the process-isolation item will one day make it real and a sampler
+    that quietly reported the parent alone from that day on is rule 6's
+    failure with no symptom.
+
+    Not cheap on Windows: enumerating children snapshots the process table.
+    Callers sample from a worker thread (`gui/resource_probe.py` does), never
+    from a thread with a latency budget.
+
+    Raises:
+        MemoryUnreadableError: if the process or any child cannot be read —
+            permissions, or a worker exiting mid-sample. A child that exited
+            probably holds nothing, but "probably nothing" summed into a
+            total makes the total a guess, and the refusal is the honest
+            report.
+    """
+    try:
+        own = psutil.Process()
+        total = own.memory_info().rss
+        for child in own.children(recursive=True):
+            total += child.memory_info().rss
+    except psutil.Error as error:
+        raise MemoryUnreadableError(f"session memory could not be read: {error}") from error
+    return total
 
 
 def physical_memory() -> int:

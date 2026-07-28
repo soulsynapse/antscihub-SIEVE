@@ -1,12 +1,12 @@
 ---
 title: Sessions log how the app was used, and changes are scored against a moving baseline
-status: deferred
+status: open
 serves: [A1]
 opened: 2026-07-28
 gated_on: >
-  docs/todo/ledger-producers.md landing — there is nothing to aggregate until
-  something publishes. Taking this first would build a reporting path over an
-  empty bus.
+  nothing — the trigger fired 2026-07-28 when ledger-producers landed
+  (docs/completed-todo/2026.07.28-ledger-producers.md): the resource probe and
+  the pool meters now publish, so there is something to aggregate.
 reads:
   - docs/todo/ledger-producers.md
   - src/sieve/bench/budgets.py

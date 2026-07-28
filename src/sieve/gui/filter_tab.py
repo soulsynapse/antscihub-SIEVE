@@ -81,6 +81,7 @@ from PySide6.QtWidgets import (
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.pipeline_model import CropArtifact
+from sieve.core.pool_meter import PoolMeter
 from sieve.core.wavelet import default_freqs
 from sieve.filters.block_signal import min_block_for, resolve_block
 from sieve.gui.band_plot import DIM
@@ -541,6 +542,11 @@ class FilterTab(QWidget):
     def hud(self) -> GraphHud:
         """The per-frame cost plot. The window connects the bus's samples to it."""
         return self._hud
+
+    @property
+    def detector_meter(self) -> PoolMeter:
+        """The detector pool's counters, for `gui/resource_probe.py` to read."""
+        return self._detector.meter
 
     @property
     def composite(self) -> StepCompositeView:

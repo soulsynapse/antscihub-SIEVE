@@ -39,7 +39,8 @@ src/sieve/core/pipeline_model.py        # THE SAVED ARTIFACT: pydantic DAG, sche
 src/sieve/core/replicates.py            # replicate identity, overrides, resolved_params, equivalence groups
 src/sieve/core/detection.py             # windowed_mean + detect_gate, the detection chain tail
 src/sieve/core/wavelet.py               # morlet_band_power, default_freqs (capped at 0.45*fps)
-src/sieve/core/machine.py               # the machine read once: available_cpus, available_memory
+src/sieve/core/machine.py               # the machine read once: available_cpus, available_memory, process_memory_bytes
+src/sieve/core/pool_meter.py            # busy-time and depth counters a worker pool exposes to a sampler
 
 src/sieve/decode/reader.py              # the only path to a frame; OpenCV VideoCapture, pinned
 src/sieve/decode/prefetch.py            # threaded span reads, measured 1.61x and no further
@@ -107,6 +108,7 @@ src/sieve/gui/detector_worker.py        # derives the detector off the GUI threa
 src/sieve/gui/materialize_worker.py     # writes a crop artifact off the GUI thread: progress, cancel, one at a time
 src/sieve/gui/concurrency.py            # the one declaration of how the session divides the machine
 src/sieve/gui/executor_adapter.py       # the ONLY place that knows both bench/metrics and Qt
+src/sieve/gui/resource_probe.py         # samples RSS and pool utilisation off the GUI thread, mode-tagged
 src/sieve/gui/player.py                 # playback, scrub, frame requests
 src/sieve/gui/decode_worker.py          # decode off the GUI thread
 src/sieve/gui/proxy_cache.py            # coarse-grid frame cache serving the scrub budget

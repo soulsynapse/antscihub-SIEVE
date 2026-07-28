@@ -54,6 +54,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from sieve.core.detection import gate_intervals
 from sieve.core.detection import settled_frames as settled_after_window
+from sieve.core.pool_meter import PoolMeter
 from sieve.core.wavelet import band_indices, default_freqs, morlet_power
 from sieve.core.wavelet import settled_frames as settled_after_coi
 from sieve.gui.chain_model import DetectorState, DetectorUpdate, recompute
@@ -217,6 +218,10 @@ class _DetectorWorker(QObject):
     computed = Signal(object)
     failed = Signal(object)
 
+    def __init__(self, meter: PoolMeter) -> None:
+        super().__init__()
+        self._meter = meter
+
     @Slot(DetectorRequest)
     def compute(self, request: DetectorRequest) -> None:
         """Derive and report — the result, or the failure. Never neither.
@@ -236,7 +241,8 @@ class _DetectorWorker(QObject):
         was the one escaping to kill the pass some other way.
         """
         try:
-            result = derive(request)
+            with self._meter.working():
+                result = derive(request)
         except (ValueError, FloatingPointError, MemoryError) as error:
             self.failed.emit(
                 DetectorFailure(
@@ -267,15 +273,18 @@ class DetectorRunner(QObject):
 
     _requested = Signal(DetectorRequest)
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None, *, meter: PoolMeter | None = None) -> None:
         super().__init__(parent)
         self._revision = 0
         self._busy = False
         self._pending: DetectorRequest | None = None
+        #: Busy time is accumulated on the detector thread around `derive`;
+        #: depth is the pending slot (0 or 1 — latest wins is the queue).
+        self._meter = PoolMeter() if meter is None else meter
 
         self._thread = QThread()
         self._thread.setObjectName("sieve-detector")
-        self._worker = _DetectorWorker()
+        self._worker = _DetectorWorker(self._meter)
         self._worker.moveToThread(self._thread)
         self._requested.connect(self._worker.compute)
         self._worker.computed.connect(self._on_computed)
@@ -287,6 +296,11 @@ class DetectorRunner(QObject):
         """Whether a pass is in flight. The tab's idle gate reads this."""
         return self._busy
 
+    @property
+    def meter(self) -> PoolMeter:
+        """The pool's busy-time and depth counters, for a sampler to read."""
+        return self._meter
+
     def set_revision(self, revision: int) -> None:
         """Declare `revision` the only one still worth painting.
 
@@ -297,6 +311,7 @@ class DetectorRunner(QObject):
         """
         self._revision = revision
         self._pending = None
+        self._meter.set_depth(0)
 
     def submit(self, request: DetectorRequest) -> bool:
         """Derive `request`, superseding anything waiting. Returns whether it
@@ -312,6 +327,7 @@ class DetectorRunner(QObject):
             return False
         if self._busy:
             self._pending = request
+            self._meter.set_depth(1)
             return True
         self._issue(request)
         return True
@@ -356,5 +372,6 @@ class DetectorRunner(QObject):
 
     def _issue_pending(self) -> None:
         pending, self._pending = self._pending, None
+        self._meter.set_depth(0)
         if pending is not None and pending.revision == self._revision:
             self._issue(pending)

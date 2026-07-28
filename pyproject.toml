@@ -28,6 +28,13 @@ dependencies = [
     "zarr>=3.0",
     "duckdb",
     "pyarrow",
+    # core/machine.py: the session RSS producer (ledger-producers item). A
+    # declared dependency, decided explicitly: it previously resolved in dev
+    # only as a transitive of pytest-benchmark, and a runtime sensor standing
+    # on an accident of the dev environment would vanish in any install that
+    # skipped the dev group. ctypes/GetProcessMemoryInfo was the alternative
+    # and loses the day SIEVE has child processes to account for.
+    "psutil>=5.9",
 ]
 
 [project.scripts]
@@ -59,6 +66,8 @@ dev = [
     "py-spy",
     "jaxtyping",
     "import-linter>=2.13",
+    # psutil ships no py.typed; pyright strict needs the typeshed stubs.
+    "types-psutil",
 ]
 dev-gui = [
     "pytest-qt",

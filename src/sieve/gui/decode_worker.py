@@ -28,6 +28,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QImage
 
+from sieve.core.pool_meter import PoolMeter
 from sieve.core.types import ChannelSpec, VideoMetadata
 from sieve.decode.reader import VideoDecodeError, VideoReader
 
@@ -45,8 +46,12 @@ class DecodeWorker(QObject):
     failed = Signal(str)
     frame_ready = Signal(int, QImage)
 
-    def __init__(self) -> None:
+    def __init__(self, meter: PoolMeter | None = None) -> None:
+        """`meter` is where decode time is accounted — the player pool's row in
+        `gui/concurrency.py` getting the producer it never had. Owned by the
+        caller (`VideoPlayer`), which outlives this worker's reader churn."""
         super().__init__()
+        self._meter = PoolMeter() if meter is None else meter
         self._reader: VideoReader | None = None
         self._proxy_width = PROXY_WIDTH
         self._luma = False
@@ -112,7 +117,8 @@ class DecodeWorker(QObject):
         if reader is None:
             return
         try:
-            frame = reader.read(index, max_width=self._proxy_width)
+            with self._meter.working():
+                frame = reader.read(index, max_width=self._proxy_width)
         except VideoDecodeError as error:
             self.failed.emit(str(error))
             return

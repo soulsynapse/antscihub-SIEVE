@@ -38,7 +38,12 @@ from time import perf_counter, sleep
 import numpy as np
 import pytest
 
-from sieve.decode.prefetch import PrefetchFrameSource
+from sieve.decode.prefetch import (
+    INFERRED_WORKER_CAP,
+    LUMA_WORKER_CAP,
+    PrefetchFrameSource,
+    available_cpus,
+)
 from sieve.decode.reader import VideoDecodeError, VideoReader
 
 #: The fixture is 40 frames; a span in the middle so a positioning error has
@@ -68,6 +73,33 @@ def test_every_frame_is_byte_identical_to_the_sequential_reader(synthetic_video:
     # And they are not 24 copies of one frame, which the comparison above would
     # not notice if both readers had stalled on the same frame.
     assert len({frame.data.tobytes() for frame in got}) == len(list(SPAN))
+
+
+def test_an_inferred_count_follows_the_format_the_source_was_opened_in(
+    synthetic_video: Path,
+) -> None:
+    """The luma cap reaches the pool, not just `resolve_workers`.
+
+    The unit test pins the function; this pins the wiring, and the wiring is
+    where it can actually be lost — `resolve_workers(workers)` without the
+    keyword type-checks, passes every other test here, and silently runs the
+    luma path at four workers, which is 21% slower than two on the reference
+    source. Nothing above would notice: every frame is still correct.
+
+    Skipped rather than asserted-around on an allocation too small to tell the
+    two caps apart, because on one or two cores they resolve to the same number
+    and the test would pass with the keyword deleted.
+    """
+    if available_cpus() < INFERRED_WORKER_CAP:
+        pytest.skip(f"{available_cpus()} cpus cannot distinguish the two caps")
+
+    with PrefetchFrameSource(synthetic_video, luma=True) as source:
+        assert source.luma
+        assert source.workers == LUMA_WORKER_CAP
+
+    with PrefetchFrameSource(synthetic_video) as source:
+        assert not source.luma
+        assert source.workers == INFERRED_WORKER_CAP
 
 
 def test_the_window_never_runs_further_ahead_than_lookahead(synthetic_video: Path) -> None:

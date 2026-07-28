@@ -14,7 +14,12 @@ is the honest outcome: they existed to check rules that existed to be checked.
 
 from __future__ import annotations
 
-from sieve.decode.prefetch import INFERRED_WORKER_CAP, available_cpus, resolve_workers
+from sieve.decode.prefetch import (
+    INFERRED_WORKER_CAP,
+    LUMA_WORKER_CAP,
+    available_cpus,
+    resolve_workers,
+)
 
 
 def test_an_explicit_request_is_never_capped_or_second_guessed() -> None:
@@ -32,6 +37,11 @@ def test_an_explicit_request_is_never_capped_or_second_guessed() -> None:
     # resolve there rather than raising or starting no threads at all.
     assert resolve_workers(0) == 1
     assert resolve_workers(-4) == 1
+    # The luma cap is lower, which makes it the tempting one to apply to a
+    # request. It is still an inference bound: a node that measured its own
+    # curve outranks either constant.
+    assert resolve_workers(32, luma=True) == 32
+    assert resolve_workers(0, luma=True) == 1
 
 
 def test_an_inferred_count_is_this_process_s_allocation_and_is_capped() -> None:
@@ -51,3 +61,23 @@ def test_an_inferred_count_is_this_process_s_allocation_and_is_capped() -> None:
     assert inferred == min(available_cpus(), INFERRED_WORKER_CAP)
     assert 1 <= inferred <= INFERRED_WORKER_CAP
     assert available_cpus() >= 1
+
+
+def test_the_luma_path_infers_its_own_lower_cap() -> None:
+    """Two, not four, and the difference is a measurement rather than caution.
+
+    Declining the colour convert removes most of what threading was overlapping,
+    so the curve peaks at two workers (6.41 ms/frame against a sequential 8.49)
+    and four is 7.88 — a 21% regression, not a wash. Inferring the colour cap
+    here makes every luma run slower with nothing in the output to say so, which
+    is precisely the failure the ledger item called out as invisible.
+
+    Pinned as an inequality plus the identity, so the test says *which way* the
+    two caps must differ rather than merely restating both constants.
+    """
+    assert LUMA_WORKER_CAP < INFERRED_WORKER_CAP
+
+    inferred = resolve_workers(luma=True)
+
+    assert inferred == min(available_cpus(), LUMA_WORKER_CAP)
+    assert inferred <= resolve_workers()

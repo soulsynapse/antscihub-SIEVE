@@ -1,32 +1,34 @@
 ---
-title: The ledger's three unmeasured numbers
-status: open
+title: The ledger's two unmeasured numbers
+status: deferred
 opened: 2026-07-27
 gated_on: >
-  nothing structurally — the ledger landed with its reserve and worker
-  arithmetic marked provisional; each measurement below replaces a stated
-  guess with a finding, and none blocks the items consuming the ledger
+  one instrumented GUI session — the app open on the reference footage with a
+  person tuning in it for a few minutes, which is the only thing that produces
+  an RSS floor and a peak; the same session serves both hypotheses, and the
+  third (the luma worker sweep) was split out 2026-07-28 because it needed
+  neither
 reads:
   - src/sieve/gui/concurrency.py
-  - src/sieve/decode/prefetch.py
-  - docs/findings/2026.07.26-threading-the-reads-buys-1.6x-and-stops.md
+  - docs/todo/cache-eviction.md
+  - docs/todo/proxy-retention-policy.md
 ---
 
-# The ledger's three unmeasured numbers
+# The ledger's two unmeasured numbers
 
 The resource ledger (completed 2026-07-27) landed the resolver, the byte
 column, and the resolved worker split — with three of its hypotheses left as
-stated guesses because each needs the reference footage or a live session,
-not a unit test. This item is those measurements, lifted verbatim from the
-ledger item so they do not dissolve into its completion entry. Each outcome
-is a finding in `docs/findings/`; the ledger's constants then cite it.
+stated guesses because each needs the reference footage or a live session, not
+a unit test. This item is those measurements, lifted verbatim from the ledger
+item so they do not dissolve into its completion entry. Each outcome is a
+finding in `docs/findings/`; the ledger's constants then cite it.
 
-- **H2 — the four-worker prefetch optimum does not survive the luma path.**
-  The wall was the 47.6 MB buffer; luma is 15.9 MB, so the optimum should
-  move. Re-run the worker sweep from the threading finding with `luma=True`.
-  Outcome either way is a finding and sets the preview pool's ceiling
-  (`INFERRED_WORKER_CAP` is flagged "inherited, not established" on this
-  path in `decode/prefetch.py`).
+**H2 is done.** It was the only one of the three that a headless process could
+take, so it was split into `docs/todo/luma-worker-sweep.md` and completed
+2026-07-28 —
+`docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
+What remains is the two that need a person at the keyboard.
+
 - **H3 — the reserve.** Measure the session's RSS floor (app open, video
   loaded, nothing rendered) on the reference workstation and once on a small
   machine. That number replaces `memory_reserve`'s provisional
@@ -41,3 +43,25 @@ is a finding in `docs/findings/`; the ledger's constants then cite it.
 The declared-floor test in `tests/unit/test_concurrency.py` and the honest
 gap (`UNBOUNDED`) already say what the ledger cannot: until H4 runs, the sum
 describes the *declared* session, not necessarily the whole one.
+
+## Why this waits rather than being approximated
+
+An RSS floor taken under `QT_QPA_PLATFORM=offscreen` in a headless process is
+not the number `memory_reserve` is trying to hold back: no swapchain, no
+driver allocation, no font cache the size of a real desktop's, and no decoder
+warmed by an actual scrub. It would be a plausible-looking constant with a
+worse provenance than the formula it replaced, which rule 6 says is the failure
+mode to avoid — the guess is currently *labelled* a guess, and a measured-looking
+wrong number is a downgrade.
+
+H4 is the harder half of the same thing: "peak RSS over a reference tuning
+session" only means something if the session is a real one. A scripted sequence
+of renders would measure the paths the script chose, and the point of H4 is to
+find a consumer nobody declared — which is to say, a path nobody thought to
+script.
+
+**The trigger is the same one `docs/todo/proxy-retention-policy.md` is waiting
+on**: one recorded tuning session on real footage. Whoever produces that trace
+should have `SIEVE_RETENTION_TRACE` set *and* an RSS sampler running, because
+the expensive part is the person's few minutes and both instruments ride along
+for free.

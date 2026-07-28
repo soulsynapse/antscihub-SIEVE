@@ -27,10 +27,15 @@ routes are in
 implemented here.** Each worker's `VideoReader` is opened with the flag and this
 module is unchanged otherwise — same claim protocol, same interleave, same
 window. What it changes is the number the interleave is amortising: the buffer
-is 15.9 MB instead of 47.6, and since the four-worker optimum in that finding is
-a memory-bandwidth property of the 47.6 MB buffer rather than a core count,
-`INFERRED_WORKER_CAP` is not known to be right on this path. It has not been
-re-measured; treat four as inherited, not established.
+is 15.9 MB instead of 47.6, and there is no convert left to overlap.
+
+**So the optimum moves down, not up, and it has now been measured.** Two
+workers, 6.4 ms/frame against a sequential 8.5 — 1.30x where the colour path
+gets 1.44x on the same machine — and four workers is 7.8 ms, 21% *worse* than
+two. `INFERRED_WORKER_CAP` was wrong here in the harmful direction, so
+`LUMA_WORKER_CAP` is a second constant rather than a shared one; the curve and
+what it refutes are in
+`docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
 
 **Every frame is byte-identical to what `VideoReader` returns in the same
 format, and that is the constraint the design is shaped around.**
@@ -112,8 +117,21 @@ from sieve.decode.reader import VideoDecodeError, VideoReader
 #: measuring its own is the caller that should win.
 INFERRED_WORKER_CAP = 4
 
+#: The same ceiling for the luma path, and a different number because the curve
+#: is a different curve: 8.49 ms/frame sequential, 6.41 at two workers, 6.93 at
+#: three, 7.88 at four, and worse than sequential by six. Declining the convert
+#: removes most of what threading was overlapping, so two threads cover what is
+#: left and the fourth is a 21% regression rather than a wash.
+#:
+#: A second constant rather than a scaled one on purpose. The colour cap's
+#: reason is a 47.6 MB buffer and this one's is that there is barely any
+#: parallel work, so a formula relating them would assert a mechanism the
+#: measurement refutes — see
+#: `docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
+LUMA_WORKER_CAP = 2
 
-def resolve_workers(requested: int | None = None) -> int:
+
+def resolve_workers(requested: int | None = None, *, luma: bool = False) -> int:
     """How many decode threads to run: the request, else what the machine allows.
 
     **The one definition, so that a second caller cannot invent a different
@@ -122,9 +140,14 @@ def resolve_workers(requested: int | None = None) -> int:
     and compute processes disagreed about how much of a node they had would
     oversubscribe it, and the symptom is a slow job rather than a failure.
 
-    A request always wins and is never capped: `INFERRED_WORKER_CAP` bounds a
-    guess about a machine this code cannot see, and a cluster node passing 32 can
-    see it.
+    A request always wins and is never capped: the caps bound a guess about a
+    machine this code cannot see, and a cluster node passing 32 can see it.
+
+    `luma` picks which cap, because the two paths have measurably different
+    optima — four and two. It is a keyword rather than a second function so that
+    a caller cannot resolve a count for the wrong format by picking the wrong
+    name, and it defaults to the colour path for the same reason `frame_source`
+    does: a caller that has not been taught to pass it is slow, never wrong.
 
     **Deliberately does not read the environment.** An earlier version consulted
     `SLURM_CPUS_PER_TASK` and a `SIEVE_DECODE_WORKERS` override, and both were
@@ -142,7 +165,7 @@ def resolve_workers(requested: int | None = None) -> int:
     """
     if requested is not None:
         return max(requested, 1)
-    return min(available_cpus(), INFERRED_WORKER_CAP)
+    return min(available_cpus(), LUMA_WORKER_CAP if luma else INFERRED_WORKER_CAP)
 
 
 class PrefetchFrameSource:
@@ -172,7 +195,9 @@ class PrefetchFrameSource:
             path: The video. Opened once per worker, because a `VideoCapture`
                 carries the decoder position and two threads sharing one would
                 interleave their seeks.
-            workers: Decode threads. `None` asks `resolve_workers`.
+            workers: Decode threads. `None` asks `resolve_workers`, which is told
+                `luma` — the two paths peak at different counts, and inferring
+                four on the luma path is 21% slower than inferring two.
             lookahead: How far ahead of the consumer indices may be claimed, and
                 therefore the ceiling on frames held at once. Defaults to twice
                 the worker count — the value every number in the module docstring
@@ -193,7 +218,7 @@ class PrefetchFrameSource:
         """
         self._path = Path(path)
         self._luma = luma
-        self._worker_count = resolve_workers(workers)
+        self._worker_count = resolve_workers(workers, luma=luma)
         self._lookahead = self._worker_count * 2 if lookahead is None else max(lookahead, 1)
 
         self._readers = self._open_readers()

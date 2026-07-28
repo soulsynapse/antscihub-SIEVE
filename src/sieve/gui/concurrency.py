@@ -51,11 +51,18 @@ from sieve.core.machine import available_cpus, available_memory
 #: on more threads, so this is a fact about the design rather than a knob.
 PLAYER_WORKERS = 1
 
-#: Decode threads the preview's reader gets, below `prefetch.py`'s inferred cap
+#: Decode threads the preview's reader gets, below `prefetch.py`'s colour cap
 #: of four on purpose. The player already owns a decode thread on the same
 #: footage and the reads-ahead hold full-resolution frames — 47.6 MB each on
 #: the reference source — so a preview that made scrubbing stutter would be
 #: trading an in-pipeline budget for a pre-pipeline one.
+#:
+#: That was a concession when it was written and is no longer one on the path
+#: the preview actually takes: the preview opens luma whenever no node needs
+#: chroma (`gui/preview_runner.py`), and two is the *measured optimum* there —
+#: `prefetch.py`'s `LUMA_WORKER_CAP`, from
+#: `docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
+#: On a colour graph it remains the concession it always was.
 PREVIEW_WORKERS = 2
 
 #: Threads `scipy.fft` may use for a partial detector pass. The smallest number

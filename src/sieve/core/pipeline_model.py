@@ -1065,6 +1065,36 @@ class Project(_Artifact):
             crops = (*self.crops, artifact)
         return self.model_copy(update={"crops": crops})
 
+    def with_crops(self, crops: Iterable[CropArtifact]) -> Self:
+        """Copy whose crop records are exactly these, in this order.
+
+        `with_crop`'s wholesale twin, for the caller that holds the whole set
+        rather than one new record — the GUI document, which owns crops the way
+        it owns `visited` and writes them back on save. Validated rather than
+        assigned, because "two records for one cut" is refused in the model and
+        a caller assembling a tuple can produce one where `with_crop` cannot.
+        """
+        return self.model_validate(self.model_copy(update={"crops": tuple(crops)}))
+
+    def without_crop(self, artifact: CropArtifact) -> Self:
+        """Copy with any record of `artifact`'s cut dropped.
+
+        Keyed on `CropArtifact.identity` for `with_crop`'s reason: what is being
+        discarded is a *cut*, and the path it happens to be recorded under is
+        convenience. The file itself is not touched here — deleting it is the
+        caller's separate act, and a record dropped while the file survives is
+        exactly the "never registered" state `materialize.py` already treats as
+        safe.
+        """
+        wanted = artifact.identity()
+        return self.model_copy(
+            update={
+                "crops": tuple(
+                    candidate for candidate in self.crops if candidate.identity() != wanted
+                )
+            }
+        )
+
     def with_visited(self, visited: Iterable[str]) -> Self:
         """Copy whose geometry locks are exactly these replicates.
 

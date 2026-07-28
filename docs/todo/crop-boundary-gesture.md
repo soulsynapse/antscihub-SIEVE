@@ -85,8 +85,11 @@ the card returns to *not at rest*.
    runner around it; register the record through the document/commands layer
    (not undoable — the file exists; discard is its inverse gesture).
 3. ROI/clip freeze surfaces in `gui/replicate_tab.py` / timeline handles,
-   driven by the same match rule the serving item uses (one implementation,
-   imported — a second copy is how the card and the freeze disagree).
+   driven by `gui/crop_binding.py` — the reading of the match rule both this
+   card and that freeze import, split out and landed separately
+   (docs/completed-todo/2026.07.28-crop-boundary-match-reading.md). It already
+   answers which of the four states a replicate is in, why a near-miss missed,
+   and what span the clip is held inside; nothing here may restate it.
 4. Tests (`tests/gui/`, `pytestmark = pytest.mark.gui`): state transitions
    per match-clause flip; cancel leaves no record and no part file; frozen
    ROI rejects the edit and discard releases it; the stale and not-at-rest

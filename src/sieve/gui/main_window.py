@@ -628,11 +628,21 @@ class MainWindow(QMainWindow):
         self._pending_project = None
         if pending is not None:
             self._adopt_project(*pending)
-            return
-        self._project = None
-        self._project_path = None
-        self._update_title()
-        self._offer_neighbour_project(metadata.path)
+        else:
+            self._project = None
+            self._project_path = None
+            self._update_title()
+            self._offer_neighbour_project(metadata.path)
+
+        # Last, and on both branches, because both constraints on autoplay are
+        # ordering ones: the document has to be bound before the transport
+        # starts moving through it, and `_offer_neighbour_project` can still
+        # raise a modal that a playing video would sit behind. Gated on the
+        # action rather than on a fresh `metadata is not None`, because the
+        # action already carries that condition *and* the editing one — if
+        # play is not being offered, it should not happen by itself either.
+        if self._play_action.isEnabled():
+            self._player.play()
 
     @Slot(str)
     def _on_failed(self, message: str) -> None:

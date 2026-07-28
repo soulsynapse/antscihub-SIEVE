@@ -1,6 +1,6 @@
 ---
 status: current
-reviewed: 75ee2a6
+reviewed: a1bc99f
 subjects: [noxfile.py, .github/workflows/, pyproject.toml, tests/docs/, .importlinter]
 ---
 
@@ -37,7 +37,9 @@ expressible in the current contract and is not checked. `pipeline/` and
 independent — so the encoded rule forbids `pipeline → workers`, the path the
 intent requires, and permits `gui → workers`, the one it forbids. Harmless while
 `workers/` does not exist. **Settle it in the commit that creates `workers/`**,
-by moving it to its own tier or writing a forbidden contract.
+by moving it to its own tier or writing a forbidden contract. **Trigger: NOT
+FIRED** (re-checked 2026.07.28) — `workers/` is still four lines in
+SCAFFOLD.md's Projected half, and the stated resolution is still the right one.
 
 ## 2. One execution path, and artifact purity — ENFORCED for purity, OPEN for parity
 
@@ -61,9 +63,14 @@ diffs GUI-run against CLI-run output. This is the one that would catch a real
 divergence rather than a schema slip, and it is the most valuable unwritten
 check in this file — it is the only thing that would make rule 1 a guarantee
 rather than a property of how the code currently happens to be arranged.
-**Trigger:** the next item that touches serialization.
+**Trigger: FIRED** (audited 2026.07.28). It read "the next item that touches
+serialization", and schema v3 landed `Edge.port`, `Project.detector`, and the
+pin fields without anyone writing the check. It is now an open item,
+`docs/todo/gui-cli-execution-parity.md` — which is what a fired trigger should
+have become on the day it fired, and the argument for
+`docs/todo/deferral-expires-by-default.md`.
 
-## 3. Filter self-registration — ENFORCED, and the strongest of the five
+## 3. Filter self-registration — ENFORCED, and the strongest of the eight
 
 A filter is one class plus one colocated markdown. Discovery finds it with no
 edit to any registry, manifest, or import list.
@@ -83,7 +90,7 @@ rather than by `--benchmark-only`, so deleting the budget checks yields pytest
 exit code 5 and breaks the gate instead of reporting green on skips.
 
 **Enforced by, as of 2026.07.27:** `tests/bench/test_budget_producers.py`, which
-is rule 4's other half. 7 of the 11 budgets are named by a module under `src/`;
+is rule 4's other half. 8 of the 12 budgets are named by a module under `src/`;
 the other 4 are declared in `budgets.WITHOUT_PRODUCER` and the test fails both on
 an undeclared budget with no producer and on a declared one that has since grown
 a producer, so the gap is a list that only shrinks. It also AST-checks every
@@ -91,14 +98,19 @@ module-level `*_BUDGET` constant against the table — which closes the hole the
 layer diagram opens, since `pipeline/` may not import `bench/` and so spells its
 two keys as string literals.
 
-**PARTIAL:** 2 of the 11 budgets are actually *timed* —
+**PARTIAL:** 3 of the 12 budgets are actually *timed* —
 `tests/bench/test_perf_regression.py` covers `open_to_first_frame` and
-`scrub_settle`, both pre-pipeline. **Every in-pipeline budget is published but
-nothing asserts a limit on it in CI**, which matters because in-pipeline is the
-regime the product is sold on. **Trigger:** each in-pipeline budget gets its
-benchmark when the thing that produces it lands; `filter_to_first_tick`,
-`knob_to_graphs`, and `knob_to_first_partial` all now have producers and so are
-takeable today.
+`scrub_settle`, both pre-pipeline, and `tests/bench/test_density_rebuild.py`
+covers `density_rebuild`, which is the one in-pipeline budget with a clock on
+it and is also the one currently in `IN_DEBT`. **Eight of the nine remaining
+in-pipeline budgets are published and nothing asserts a limit on any of them in
+CI**, which matters because in-pipeline is the regime the product is sold on.
+**Trigger: FIRED** (audited 2026.07.28) for three of them —
+`filter_to_first_tick`, `knob_to_graphs`, and `knob_to_first_partial` have had
+producers since 2026.07.27 and are takeable now. The remaining gap is a count
+this section states, so the counts above are the thing to correct when it
+moves; before this audit they read "7 of the 11" and "2 of the 11", against a
+table of twelve.
 
 ## 5. Cache isolation — ENFORCED
 
@@ -110,14 +122,22 @@ mutation test on an a→{b,c} graph, plus
 
 ## 6. Documentation that asserts facts about the code — ENFORCED
 
-Three docs make checkable claims and each is checked, which is why they stayed
-true while the prose around them drifted:
+Six claims are machine-checked, which is why they stayed true while the prose
+around them drifted:
 
 - `docs/*/.index.md` against their folders — `tests/docs/test_doc_index.py`
 - `docs/SCAFFOLD.md`'s Built and Projected halves against the tree —
   `tests/docs/test_scaffold.py`
 - `ARCHITECTURE.md`'s budget table against `budgets.py` —
   `tests/bench/test_budget_table.py`
+- `docs/SETTLED.md` against the `settled:` blocks it is generated from, and
+  every `where:` in one against the tree — `tests/docs/test_todo_hygiene.py`
+- every `docs/*.md` declaring `status: current | record | working`, so a
+  reader can tell whether a file even claims to be true now —
+  `tests/docs/test_doc_status.py`
+- every link, backticked file path, and item `reads:` entry across the live
+  docs resolving to something that exists — `tests/docs/test_doc_refs.py`,
+  which found twelve dangling pointers the first time it ran
 
 **The rule this generalizes:** when a doc asserts something about the code,
 prefer a form a test can parse. The audit that produced this file found five
@@ -145,8 +165,13 @@ argument before it is a constant with a test.
 **PARTIAL:** the arithmetic still assumes the three declared pools are the only
 consumers. Nothing detects a fourth that arrives by some route other than
 `recompute` — a new `scipy` or `cv2` call with a thread-count default would not
-be seen. **Trigger:** the next module that calls into a library whose default is
-every core.
+be seen. **Trigger: NOT FIRED** (re-checked 2026.07.28 against `e394636`, which
+moved the density surface out of the widget, and against `gui/detector_worker.py`,
+the new consumer it feeds). `detector_worker.derive` takes its share from
+`resolve_worker_split().detector` and passes it explicitly to both `morlet_power`
+calls, so the fourth consumer arrived *through* the declared mechanism rather
+than around it. That is the required-argument half of this section working as
+designed, which is the outcome worth recording — the trigger stays armed.
 
 ## 8. Results that do not overstate themselves — OPEN, and probably not mechanical
 

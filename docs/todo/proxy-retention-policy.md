@@ -3,13 +3,15 @@ title: What the viewport keeps of a render, and what it drops
 status: open
 opened: 2026-07-27
 gated_on: >
-  nothing — the trigger fired 2026-07-28 and the policy question is answered
-  against the proposal on throughput
-  (docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md). What
-  is left is the change that finding points at: give RENDER_RING_SHARE a
-  fraction so the ring grows with the allocation, since capacity was worth ~60x
-  policy at the operating point. The scrub half is untouched and does not block
-  it.
+  a session that scrubs. The capacity half landed 2026-07-28 in 14ce201:
+  RENDER_RING_SHARE took fraction=0.01 against a 4 GB reserve — ~644 MB and so
+  ~700 gray 1280-wide proxies on the finding's 68.4 GB machine, sized to reach
+  a large machine's own knee rather than to hardcode the ~720 where that
+  session saturated — and below ~26 GB total the 256 MB floor resolves instead,
+  so a small machine pays nothing. What is left is the scrub half, and it has
+  no sample: 16 scrub events, 0.00% hit under every policy. Reopening the
+  eviction rule is a stall-length argument, not a throughput one, so it needs a
+  recorded session that actually scrubs.
 reads:
   - src/sieve/gui/render_ring.py
   - src/sieve/gui/concurrency.py

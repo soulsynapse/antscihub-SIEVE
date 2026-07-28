@@ -4,8 +4,16 @@ status: open
 opened: 2026-07-28
 
 gated_on: >
-  nothing structurally — but the first step is a decision, and taking the
-  mechanical half without making it is churn with no payoff
+  nothing — the decision was made 2026-07-28 in 937ac91 and option B is
+  refused. Each apply_* is the per-edit signal contract, not duplication:
+  collapsing every command onto apply_state makes every Ctrl+Z a full broadcast
+  and leaves replicate_changed(index), the only parameterized signal, with no
+  producer. What survives is killing the displacement bookkeeping while each
+  command keeps its own targeted apply_* — the double computation of
+  edited_params goes, the back-reference stays, and the seam test the item
+  quotes still fails. That is option A, which stops being churn now that the
+  command classes are not about to be deleted; the item buys less than it
+  claimed and should be re-scoped to A before it is taken.
 
 reads:
   - src/sieve/gui/document.py

@@ -1183,7 +1183,7 @@ class FilterTab(QWidget):
         ny, nx = self._grid
         self._composite.set_grid(ny, nx)
         self._composite.set_scale_max(self._heat_scale(update.band_power))
-        self._composite.set_grid_caption(f"{signal} · {ny}x{nx} blocks · click to solo")
+        self._composite.set_grid_caption(f"{signal} · {ny}x{nx} blocks · hover solos, click pins")
         self._apply_block_state()
 
         if not temporal_ok or not detection_ok:
@@ -1636,9 +1636,30 @@ class FilterTab(QWidget):
             self._submit_detector({"count_frac": frac}, "Set Count Threshold")
 
     def _on_solo(self, block: object) -> None:
-        # Looking, not tuning: solo never reaches the document or a save.
+        """Solo is a repaint, not a re-derive — which is what makes it hoverable.
+
+        Looking, not tuning: solo never reaches the document or a save. It also
+        never reaches `recompute`, which does not read `solo_block` at all — the
+        soloed block picks which column of the retained `band_power` the density
+        plot overlays, and that choice is made in `_apply`. Routing it through
+        `_cheap_retune` therefore spent a full in-band count and windowed mean
+        over the whole series to arrive at a bit-identical update. That was
+        affordable at one click per block and is not at one crossing per pointer
+        move, which is what the gesture now costs (`composite_view`: hover
+        solos, click pins).
+
+        Published under `band_drag_repaint` all the same: it is the same
+        continuously-emitted gesture the two-tier drag discipline exists for,
+        and rule 4 wants the miss visible on screen if this ever stops being
+        the cheap thing this docstring claims it is.
+        """
         solo = block if isinstance(block, int) else None
-        self._cheap_retune(replace(self._chain.detector, solo_block=solo))
+        if solo == self._chain.detector.solo_block:
+            return
+        started = perf_counter()
+        self._set_detector(replace(self._chain.detector, solo_block=solo))
+        self._apply()
+        self._metrics.publish(BAND_DRAG_BUDGET, (perf_counter() - started) * 1000.0)
 
     @Slot()
     def _on_d_pressed(self) -> None:

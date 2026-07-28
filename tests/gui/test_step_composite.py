@@ -25,14 +25,14 @@ from PySide6.QtGui import QColor, QImage, QKeyEvent
 from PySide6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
-from sieve.bench.metrics import MetricBus
+from sieve.bench.metrics import MetricBus, Recorder
 from sieve.core.types import ROI
 from sieve.gui.band_plot import PANEL
 from sieve.gui.composite_view import GRID_STEPS, StepCompositeView
 from sieve.gui.document import ReplicateDocument
-from sieve.gui.filter_tab import FilterTab
+from sieve.gui.filter_tab import BAND_DRAG_BUDGET, FilterTab
 from sieve.gui.player import VideoPlayer
-from tests.gui.qt_input import wheel
+from tests.gui.qt_input import click, leave, move, wheel
 
 pytestmark = pytest.mark.gui
 
@@ -96,10 +96,20 @@ def stub() -> _StubRunner:
 
 
 @pytest.fixture
+def metrics() -> MetricBus:
+    """The tab's bus, held by the test so a publication can be heard."""
+    return MetricBus()
+
+
+@pytest.fixture
 def tab(
-    qtbot: QtBot, player: VideoPlayer, document: ReplicateDocument, stub: _StubRunner
+    qtbot: QtBot,
+    player: VideoPlayer,
+    document: ReplicateDocument,
+    stub: _StubRunner,
+    metrics: MetricBus,
 ) -> Iterator[FilterTab]:
-    instance = FilterTab(player, document, stub, metrics=MetricBus())  # type: ignore[arg-type]
+    instance = FilterTab(player, document, stub, metrics=metrics)  # type: ignore[arg-type]
     qtbot.addWidget(instance)
     yield instance
     # The tab owns the detector thread, so it carries the same
@@ -471,6 +481,17 @@ def test_the_heatmap_runs_cold_to_hot_and_borders_mark_only_detected_cells(
     )
 
 
+def _grid_view(qtbot: QtBot, ny: int, nx: int, size: tuple[int, int]) -> StepCompositeView:
+    view = StepCompositeView()
+    qtbot.addWidget(view)
+    view.resize(*size)
+    view.set_grid_visible(True)
+    view.set_grid(ny, nx)
+    view.set_block_state(np.zeros(ny * nx, np.float32), np.zeros(ny * nx, bool), None)
+    view.show()
+    return view
+
+
 class TestMagnifier:
     """The wheel over the pane, and the mapping it moves under.
 
@@ -479,17 +500,6 @@ class TestMagnifier:
     view that zooms while the overlay or the hit test stays behind is worse
     than no zoom at all.
     """
-
-    @staticmethod
-    def _grid_view(qtbot: QtBot, ny: int, nx: int, size: tuple[int, int]) -> StepCompositeView:
-        view = StepCompositeView()
-        qtbot.addWidget(view)
-        view.resize(*size)
-        view.set_grid_visible(True)
-        view.set_grid(ny, nx)
-        view.set_block_state(np.zeros(ny * nx, np.float32), np.zeros(ny * nx, bool), None)
-        view.show()
-        return view
 
     def test_the_block_under_the_cursor_stays_under_the_cursor(self, qtbot: QtBot) -> None:
         """The item's first claim, and the reason the geometry lands first.
@@ -508,7 +518,7 @@ class TestMagnifier:
         # The view is held, not just its pane: dropping the last Python
         # reference to the parent lets Qt delete the child out from under the
         # test, which shows up only under the full suite's collection timing.
-        view = self._grid_view(qtbot, 4, 4, (400, 400))
+        view = _grid_view(qtbot, 4, 4, (400, 400))
         pane = view.pane
         fit = pane.grid_rect()
         anchor = QPointF(fit.left() + fit.width() * 0.24, fit.top() + fit.height() * 0.24)
@@ -537,7 +547,7 @@ class TestMagnifier:
         where a pan that pulls content off the edge shows up as bare panel
         inside the picture.
         """
-        view = self._grid_view(qtbot, 3, 4, (400, 300))
+        view = _grid_view(qtbot, 3, 4, (400, 300))
         pane = view.pane
         fit = pane.grid_rect()
         corner = QPointF(fit.left() + fit.width() * 0.15, fit.top() + fit.height() * 0.85)
@@ -573,7 +583,7 @@ class TestMagnifier:
         rect share a centre when the pan is centred, so a centred zoom would
         leave a drifting grid's seam sitting exactly on the image's.
         """
-        view = self._grid_view(qtbot, 1, 2, (400, 240))
+        view = _grid_view(qtbot, 1, 2, (400, 240))
         view.set_block_state(np.zeros(2, np.float32), np.array([False, True]), None)
         view.fill_slider.setValue(GRID_STEPS)  # opaque, so the fill hides the image
         view.line_slider.setValue(0)
@@ -625,7 +635,7 @@ class TestMagnifier:
         solo a cell from a strip of bare panel — rule 6's mirror direction, a
         control answering where nothing is drawn.
         """
-        view = self._grid_view(qtbot, 1, 2, (400, 400))
+        view = _grid_view(qtbot, 1, 2, (400, 400))
         pane = view.pane
         fit = pane.grid_rect()
         letterbox = QPointF(fit.center().x(), fit.top() - 20.0)
@@ -635,6 +645,152 @@ class TestMagnifier:
 
         assert pane.grid_rect().contains(letterbox), "the fixture no longer covers the letterbox"
         assert pane.block_at(letterbox) is None
+
+
+def test_soloing_repaints_and_never_re_derives(
+    tab: FilterTab, metrics: MetricBus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What makes the gesture affordable at pointer speed.
+
+    `recompute` does not read `solo_block` (pinned in
+    `tests/unit/test_chain_model.py`), so a solo that went through the cheap
+    *derive* tier paid an in-band count and a windowed mean over the whole
+    series to produce a bit-identical update. One click per block could
+    afford that; one crossing per pointer move cannot. Counted rather than
+    timed — the claim is that the work does not happen, not that it is fast.
+
+    The band drag is asserted alongside because it is the regression this
+    could cause: a solo skipping the derivation must not take the drag with it.
+    """
+    recorder = Recorder()
+    metrics.subscribe(recorder.record)
+    derives: list[bool] = []
+
+    def counting(*, reuse_band_power: bool) -> None:
+        derives.append(reuse_band_power)
+
+    monkeypatch.setattr(tab, "_derive", counting)
+
+    tab._on_solo(2)  # pyright: ignore[reportPrivateUsage]
+    assert tab.chain.detector.solo_block == 2
+    assert derives == []
+    assert len(recorder.samples(BAND_DRAG_BUDGET)) == 1, "the gesture publishes nothing to miss"
+
+    tab._on_solo(2)  # pyright: ignore[reportPrivateUsage]
+    assert len(recorder.samples(BAND_DRAG_BUDGET)) == 1, "an unchanged solo repainted anyway"
+
+    tab._on_value_drag(0.1, 0.9)  # pyright: ignore[reportPrivateUsage]
+    assert derives == [True]
+
+
+class _SoloModel:
+    """The state model the pane is talking to, small enough to read.
+
+    The pane emits and never applies, so a test that only listened would drive
+    a pane whose own `solo` never moved — and the pane compares against exactly
+    that value to decide whether a crossing is worth asking about. Applying
+    what is asked for is therefore not decoration: it is the half of the loop
+    the deduplication reads.
+    """
+
+    def __init__(self, view: StepCompositeView, blocks: int) -> None:
+        self._view = view
+        self._blocks = blocks
+        self.asked: list[object] = []
+        view.solo_toggled.connect(self.apply)
+
+    def apply(self, block: object) -> None:
+        self.asked.append(block)
+        solo = block if isinstance(block, int) else None
+        self._view.set_block_state(
+            np.zeros(self._blocks, np.float32), np.zeros(self._blocks, bool), solo
+        )
+
+
+def _cell(view: StepCompositeView, block: int) -> QPointF:
+    """The centre of a block, in the pane's coordinates."""
+    pane = view.pane
+    rect = pane.grid_rect()
+    ny, nx = pane.grid
+    row, col = divmod(block, nx)
+    return QPointF(
+        rect.left() + rect.width() * (col + 0.5) / nx,
+        rect.top() + rect.height() * (row + 0.5) / ny,
+    )
+
+
+class TestHoverSolosAndClickPins:
+    """The two tiers of the solo gesture.
+
+    Soloing exists to put one block's trace on the density plot, which is not
+    the grid — so a rule where solo is strictly the block under the pointer
+    clears at the instant the user looks at what they asked for. Hence: hover
+    previews, a click pins, and leaving the grid reverts to the pin.
+    """
+
+    def test_hovering_across_blocks_solos_each_in_turn_without_a_click(self, qtbot: QtBot) -> None:
+        view = _grid_view(qtbot, 4, 4, (400, 400))
+        model = _SoloModel(view, 16)
+        hovered: list[object] = []
+        view.pane.hover_changed.connect(hovered.append)
+
+        for block in (0, 5, 10):
+            move(view.pane, _cell(view, block))
+
+        assert model.asked == [0, 5, 10]
+        assert view.pane.solo == 10
+        # The footer readout is driven by the same crossing and is unchanged
+        # by solo having joined it — one signal, two consumers, still.
+        assert hovered == [0, 5, 10]
+
+    def test_a_pin_survives_leaving_and_hover_still_previews_over_it(self, qtbot: QtBot) -> None:
+        view = _grid_view(qtbot, 4, 4, (400, 400))
+        model = _SoloModel(view, 16)
+
+        move(view.pane, _cell(view, 5))
+        click(view.pane, _cell(view, 5))  # pinned; hover already solos it, so nothing is asked
+        move(view.pane, _cell(view, 9))  # a pin does not stop the preview
+        leave(view.pane)
+
+        assert model.asked == [5, 9, 5]
+        assert view.pane.solo == 5
+
+    def test_leaving_with_nothing_pinned_clears_the_solo(self, qtbot: QtBot) -> None:
+        view = _grid_view(qtbot, 4, 4, (400, 400))
+        model = _SoloModel(view, 16)
+
+        move(view.pane, _cell(view, 3))
+        leave(view.pane)
+
+        assert model.asked == [3, None]
+        assert view.pane.solo is None
+
+    def test_a_second_click_unpins_so_leaving_clears_again(self, qtbot: QtBot) -> None:
+        view = _grid_view(qtbot, 4, 4, (400, 400))
+        model = _SoloModel(view, 16)
+
+        move(view.pane, _cell(view, 2))
+        click(view.pane, _cell(view, 2))
+        click(view.pane, _cell(view, 2))
+        leave(view.pane)
+
+        # Neither click asks for anything: hover is soloing the block either
+        # way, and what the click changed is what leaving reverts to.
+        assert model.asked == [2, None]
+        assert view.pane.latched is None
+
+    def test_the_grid_going_away_drops_the_pin(self, qtbot: QtBot) -> None:
+        """Rule 6's mirror direction: a pin outliving the grid keeps a block
+        soloed in the density plot with nothing on screen saying which."""
+        view = _grid_view(qtbot, 4, 4, (400, 400))
+        model = _SoloModel(view, 16)
+
+        move(view.pane, _cell(view, 7))
+        click(view.pane, _cell(view, 7))
+        view.set_grid_visible(False)
+
+        assert model.asked == [7, None]
+        assert view.pane.latched is None
 
 
 def test_holding_shift_peeks_under_every_overlay(qtbot: QtBot) -> None:

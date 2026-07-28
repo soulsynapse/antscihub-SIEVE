@@ -45,12 +45,25 @@ outside the fit: a magnified grid extends under the letterbox, where nothing
 is painted, and a click on bare panel must not solo the cell that would have
 been there.
 
-**A grid click emits; it never applies.** `solo_toggled` carries the block
+**Hover solos, click pins.** The block under the pointer is soloed as the
+pointer moves, and a click *latches* one so it survives the pointer leaving
+the grid — `leaveEvent` reverts to the latched block, or to none. The reason
+hover is enough is that the point of soloing is to look at the *trace*, which
+is drawn in the density plot rather than here: a rule where solo is strictly
+the block under the pointer would destroy the thing it was asked for at the
+instant the user looked at it, and a rule that needed a click per block makes
+comparing two of them two gestures.
+
+**A grid gesture emits; it never applies.** `solo_toggled` carries the block
 index (or None for un-solo) and the drawn solo marker moves only when
 `set_block_state` says so — solo lives in the state model, and a widget that
-painted its own click before the model confirmed it would disagree with the
+painted its own gesture before the model confirmed it would disagree with the
 density plot for a frame every time. That ordering is a tested claim,
-inherited from the block-heat panel this view absorbed.
+inherited from the block-heat panel this view absorbed. The latch is the one
+piece of gesture state that does live here, and it is not the solo: it says
+what the pointer leaving reverts *to*, and it is compared against `self.solo`
+— what the model last applied — so a request the model dropped is asked again
+on the next crossing rather than deduplicated into silence.
 """
 
 from __future__ import annotations
@@ -160,6 +173,10 @@ class _CompositePane(QWidget):
         self.in_band: NDArray[np.bool_] = np.zeros(1, bool)
         self.solo: int | None = None
         self.hover: int | None = None
+        #: The block a click pinned. Gesture state, not the solo: it decides
+        #: what the pointer leaving the grid reverts to, and what is *drawn*
+        #: still moves only when `set_block_state` says so.
+        self.latched: int | None = None
         self.fill_alpha = DEFAULT_FILL_STEP / GRID_STEPS
         self.line_alpha = DEFAULT_LINE_STEP / GRID_STEPS
         self.heat_alpha = DEFAULT_HEAT_STEP / GRID_STEPS
@@ -252,35 +269,77 @@ class _CompositePane(QWidget):
             self.zoom_changed.emit(self.magnifier.zoom)
             self.update()
 
-    def _refresh_hover(self, pos: QPointF) -> None:
-        """Re-read the block under a stationary cursor after the map moved."""
-        hover = self.block_at(pos)
-        if hover != self.hover:
-            self.hover = hover
-            self.hover_changed.emit(hover)
+    def _solo_now(self) -> int | None:
+        """What the gesture currently means: the hovered block, else the pinned one."""
+        return self.hover if self.hover is not None else self.latched
 
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        hover = self.block_at(event.position())
-        if hover != self.hover:
-            self.hover = hover
-            self.hover_changed.emit(hover)
-            self.update()
+    def _emit_solo(self) -> None:
+        """Ask for the gesture's solo, unless the model already holds it.
 
-    def leaveEvent(self, event: object) -> None:
-        del event
+        Compared against `self.solo` rather than against a private record of
+        what was last emitted: the model's value is the one that is drawn, so
+        a request it dropped is worth asking again, and a request it already
+        satisfied is worth not asking twice — a redundant one costs a repaint
+        of every graph at pointer speed.
+        """
+        solo = self._solo_now()
+        if solo != self.solo:
+            self.solo_toggled.emit(solo)
+
+    def _set_hover(self, hover: int | None) -> None:
+        """One funnel for every change of the block under the pointer.
+
+        Hover moves the solo as well as the footer readout — the pane asks,
+        the model decides — and it fires per *block crossing* rather than per
+        mouse sample, which is what makes driving something as involuntary as
+        pointer position affordable at all.
+        """
+        if hover == self.hover:
+            return
+        self.hover = hover
+        self.hover_changed.emit(hover)
+        self._emit_solo()
+        self.update()
+
+    def clear_solo_gesture(self) -> None:
+        """Forget hover and pin — what a grid going away means for the gesture.
+
+        Emitted, not silent: a pin left standing over a grid that is no longer
+        drawn would keep a block soloed in the density plot with nothing on
+        screen saying which, which is rule 6's mirror direction.
+        """
+        self.latched = None
         if self.hover is not None:
             self.hover = None
             self.hover_changed.emit(None)
-            self.update()
+        self._emit_solo()
+        self.update()
+
+    def _refresh_hover(self, pos: QPointF) -> None:
+        """Re-read the block under a stationary cursor after the map moved."""
+        self._set_hover(self.block_at(pos))
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        self._set_hover(self.block_at(event.position()))
+
+    def leaveEvent(self, event: object) -> None:
+        del event
+        self._set_hover(None)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """Emit the toggle; the state model decides, `set_block_state` applies."""
+        """Pin the block under the cursor, or unpin it; the model still decides.
+
+        Unpinning while the pointer is still on the block asks for nothing new
+        — hover is soloing it either way — and that is the whole difference the
+        click makes: what leaving the grid reverts to.
+        """
         if event.button() is not Qt.MouseButton.LeftButton:
             return
         block = self.block_at(event.position())
         if block is None:
             return
-        self.solo_toggled.emit(None if block == self.solo else block)
+        self.latched = None if block == self.latched else block
+        self._emit_solo()
 
     # ---- painting --------------------------------------------------------
 
@@ -472,6 +531,8 @@ class StepCompositeView(QWidget):
         if on == self._pane.grid_on:
             return
         self._pane.grid_on = on
+        if not on:
+            self._pane.clear_solo_gesture()
         self._show_grid_controls(on)
         self._update_tag()
         self._pane.update()
@@ -636,7 +697,7 @@ class StepCompositeView(QWidget):
         if self._caption:
             title = f"{title} — {self._caption.upper()}"
         if self._pane.grid_on:
-            title = f"{title} — CLICK TO SOLO · SHIFT PEEKS"
+            title = f"{title} — HOVER SOLOS · CLICK PINS · SHIFT PEEKS"
         # Magnified is a state a user can forget they are in, and at 8x a grid
         # shows a handful of cells that look like the whole thing. The header
         # says so; scrolling out returns exactly to the fit.

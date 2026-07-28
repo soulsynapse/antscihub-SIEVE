@@ -112,6 +112,35 @@ def test_reset_restores_knobs_and_disarms_but_keeps_structure() -> None:
     assert fresh.detector.window_frames == round(FPS)
 
 
+def test_the_soloed_block_changes_nothing_the_derivation_produces() -> None:
+    """Why soloing is a repaint and never a re-derive.
+
+    `solo_block` picks which column of the retained band power the density
+    plot overlays, and that choice belongs to the view. If `recompute` ever
+    started reading it, `FilterTab._on_solo` — which skips the derivation
+    entirely so the gesture can follow the pointer — would paint a stale
+    update, and nothing else in the suite would notice.
+    """
+    rng = np.random.default_rng(11)
+    series = rng.random((60, 6)).astype(np.float32)
+    armed = replace(
+        DetectorState.default(FPS),
+        count_frac=(0.4, math.inf),
+        value_band=(0.2, math.inf),
+    )
+
+    plain = recompute(series, FPS, armed, workers=ALL_CORES)
+    soloed = recompute(
+        series, FPS, replace(armed, solo_block=3), band_power=plain.band_power, workers=ALL_CORES
+    )
+
+    assert np.array_equal(soloed.count, plain.count)
+    assert np.array_equal(soloed.windowed, plain.windowed)
+    assert plain.gate is not None and soloed.gate is not None
+    assert np.array_equal(soloed.gate, plain.gate)
+    assert soloed.intervals == plain.intervals
+
+
 def test_captions_restate_the_values_the_chain_actually_holds() -> None:
     # A collapsed reading of the stack must be complete (plan § 2): every
     # caption restates the value its card's widgets hold, from the same

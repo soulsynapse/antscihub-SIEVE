@@ -228,22 +228,32 @@ def _grid_view(qtbot: QtBot) -> StepCompositeView:
 
 
 class TestSoloLivesInTheStateModel:
-    def test_a_click_emits_and_does_not_apply_itself(self, qtbot: QtBot) -> None:
-        """Clicking the same block twice emits the same index twice — the
-        pane's own solo moved nowhere, because only `set_block_state` moves it."""
+    def test_a_gesture_emits_and_does_not_apply_itself(self, qtbot: QtBot) -> None:
+        """The pane asks; only `set_block_state` moves the marker it draws.
+
+        Hover is now the gesture, so this is the same claim the click version
+        made and a livelier way to break it: a pane that painted its own hover
+        would disagree with the density plot for a frame on every crossing
+        rather than once per click.
+        """
         view = _grid_view(qtbot)
         emitted: list[object] = []
         view.solo_toggled.connect(emitted.append)
 
         pane = view.pane
         g = pane.grid_rect()
-        cell = QPointF(g.left() + g.width() * 3.0 / 8.0, g.top() + g.height() * 3.0 / 8.0)
-        block = pane.block_at(cell)
-        qt_input.click(pane, cell)
-        qt_input.click(pane, cell)
-        assert emitted == [block, block]
+        first = QPointF(g.left() + g.width() * 3.0 / 8.0, g.top() + g.height() * 3.0 / 8.0)
+        second = QPointF(g.left() + g.width() * 7.0 / 8.0, g.top() + g.height() * 3.0 / 8.0)
+        qt_input.move(pane, first)
+        qt_input.move(pane, second)
 
-    def test_once_the_state_model_confirms_the_same_click_untoggles(self, qtbot: QtBot) -> None:
+        assert emitted == [pane.block_at(first), pane.block_at(second)]
+        assert pane.solo is None, "the pane applied its own gesture"
+
+    def test_the_model_holding_a_block_is_never_asked_for_it_again(self, qtbot: QtBot) -> None:
+        """The dedupe is against what the model applied, not against a private
+        record of what was emitted — so hovering onto the block already soloed
+        asks for nothing, and every graph is spared a repaint."""
         view = _grid_view(qtbot)
         pane = view.pane
         g = pane.grid_rect()
@@ -254,5 +264,8 @@ class TestSoloLivesInTheStateModel:
         emitted: list[object] = []
         view.solo_toggled.connect(emitted.append)
 
-        qt_input.click(pane, cell)
+        qt_input.move(pane, cell)
+        assert emitted == []
+        # Leaving asks for none: nothing is pinned, so the model's block goes.
+        qt_input.leave(pane)
         assert emitted == [None]

@@ -3,8 +3,8 @@ title: No save prompts, keep history
 status: open
 opened: 2026-07-27
 gated_on: >
-  nothing structurally — but it is a policy decision two other items wait on,
-  so decide it before building either half
+  nothing — the policy is decided (2026-07-27, below); this item is now the
+  autosave half, and the prompts come out only after it lands
 reads:
   - src/sieve/gui/main_window.py
   - src/sieve/gui/document.py
@@ -17,12 +17,37 @@ Noticed `<=2026.07.27`: "it shouldn't ask to save the project or load the
 project. But it should automatically keep project history so if the user messes
 stuff up it can roll back."
 
-**Decide the policy before building either half.** This item gates
-`docs/todo/confirm-before-changing-the-replicate.md`, which asks for a modal in
-front of a geometry edit — the same pattern this one removes. The two cannot
-both be right: if rollback is the safety net, the user is not asked to predict
-mistakes; if confirmation is the safety net, automatic history is redundant for
-the case it covers. Answer it once, here, and record the rejected side.
+## Decided 2026.07.27: rollback is the safety net, and it lands first
+
+**Rollback, not confirmation.** The user is not asked to predict mistakes.
+`docs/todo/confirm-before-changing-the-replicate.md` is closed by this — a
+modal in front of a geometry edit is the pattern being removed one screen over.
+*Rejected side:* confirmation as the net, which would have made automatic
+history redundant for the case it covers and left the user answering a question
+about a mistake they have not made yet.
+
+**Autosave lands before the prompts come out.** The obvious order is the wrong
+one. `confirm_discard` exists because every path it guards silently destroyed a
+session's work; that reason is transferred to autosave, not retired by deleting
+the dialog. Removing the dialog first opens a window in which *neither* net is
+in place. So: this item is the autosave half. The ~70–90 lines of prompt removal
+follow it, as a separate item, and are trivial once history exists.
+*Rejected side:* dialogs-first because it is cheap — cheap and unsafe in that
+order, and the item's own reading of `confirm_discard` says why.
+
+**A snapshot is keyed to an undo-stack entry**, not to wall-clock time. The
+stack already knows what a user-meaningful action is (`SetReplicateROI` merges a
+whole drag into one entry), and time-based snapshots cut across gestures.
+*Rejected side:* interval autosave, which would have needed no new keying and
+would have produced checkpoints in the middle of drags.
+
+**The neighbour-project modal is not a save prompt and is settled separately:**
+`_offer_neighbour_project` (`:524-543`) becomes `_open_neighbour_project` —
+open it, then say so in the status bar. Its argument survives in the announcement
+rather than in the question: the user still learns which project was restored and
+from where, without being asked. That also dissolves the second placement
+constraint in `docs/todo/video-autoplays.md`.
+*Rejected side:* keeping the question, and silent restore with no announcement.
 
 The two halves are wildly different in size.
 
@@ -52,8 +77,8 @@ documents unless someone decides otherwise; at replicate-scale that is fine and
 at output-scale it may not be, which rule 7 already anticipates by keeping
 `checkpoints` and `outputs` on `Project` rather than on `Node`.
 
-This item is scoped to the *decision plus the cheap half*. If rollback is
-chosen, split it out as its own item rather than growing this one — 300–500
-lines with a new store does not fit one context window alongside the removal.
+This item is now scoped to *the autosave half only*. Prompt removal is its own
+item, taken after this one lands; 300–500 lines with a new store does not fit
+one context window alongside the removal, which is why they are two.
 
 The estimates above are readings of the current code, not measurements.

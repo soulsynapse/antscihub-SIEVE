@@ -41,15 +41,46 @@ Two things to fix, and the second is the one that matters:
 1. Make the latch a counter, or better, a set of the currently-editing
    sources, so a stale `False` cannot clear a live `True` and a source that
    disappears can be dropped by identity rather than by decrement.
-2. Decide whether *focus* on a number field should suppress playback at all.
-   A spin box that has focus but is not being typed into is not an editor;
-   suppressing on focus is what makes the failure reachable by clicking around.
+2. Focus alone must not suppress playback — see the decision below.
 
 Recovery matters as much as prevention: whatever the model, there must be a
 point at which it is known-good — the window losing activation, or the tab
 changing — so a stuck state cannot outlive one gesture.
 
-~20–40 lines. Tests: two overlapping editors, the second closing first, leaves
-play enabled only when both are done; a focused field destroyed or hidden
-without `FocusOut` does not leave play disabled; and typing into a table cell
-still does not mark a clip.
+## Decided 2026.07.27: suppression follows the commit, not the focus
+
+**Spacebar plays unless something is actively being edited.** A spin box holding
+focus is not an editor; suppressing on plain focus is what makes the stuck state
+reachable by clicking around, and it is the behaviour to remove, not merely to
+make robust. So `crop_tools.py:220`'s `field.focus_changed` stops being a
+suppression source; the table delegate's `editing_started` / `editing_finished`
+(`replicate_tab.py:191-192`) stays one.
+
+*Rejected side:* keeping focus-based suppression and only fixing the latch —
+smaller, and it preserves a behaviour nobody wants once it is named.
+
+**An edit ends at a commit, and the commit restores playback.** Enter commits,
+Esc cancels, clicking out commits; each of the three returns spacebar. This is
+what makes "actively editing" a state with a defined exit rather than a focus
+flag that can be stranded — the recovery requirement above is then satisfied by
+construction rather than by a rescue hook.
+
+**The field's *value* follows the same boundary, which is the part that reaches
+beyond this item.** A number field applies on commit, not per keystroke: typing
+`15` into a field showing `9` must not apply `1` on the way. And a drop menu
+applies on *selection*, not on highlight — arrowing through a combo box must not
+retune once per row. Both are the same rule (a control's value changes when the
+user says it does), and both are behaviour changes to the crop-tools fields and
+the chain menus rather than to the play latch. If they do not fit alongside the
+latch fix, split them out as one item — they belong together and neither belongs
+with the counter.
+
+~20–40 lines for the latch and the focus-source removal; the commit-boundary
+work is larger and unmeasured.
+
+Tests: two overlapping editors, the second closing first, leaves play enabled
+only when both are done; a focused field destroyed or hidden without `FocusOut`
+does not leave play disabled; clicking a crop-tools number field without typing
+leaves spacebar working; Enter, Esc and click-out each restore it from an active
+edit; typing into a table cell still does not mark a clip; and a partially typed
+number never reaches the document.

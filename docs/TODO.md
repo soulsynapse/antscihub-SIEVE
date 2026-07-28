@@ -28,9 +28,9 @@ geometry), then stamp, then the rest.
 - Band power in block may randomly give out if block signal block number is low enough (noticed <=2026.07.27) → `todo/band-power-at-small-block-size.md`
 - Video should auto play (noticed <=2026.07.27) → `todo/video-autoplays.md`
 - Right click on the video in the filter tab should take it back to the replicate tab full view (noticed <=2026.07.27) → `todo/right-click-back-to-the-replicate-tab.md`
-- Instead of shift to peek, it should just let you hover with mouse to peek (noticed <=2026.07.27) → `todo/hover-to-peek.md`
+- Instead of shift to peek, it should just let you hover with mouse to peek (noticed <=2026.07.27) → `todo/hover-to-solo.md`. Clarified 2026.07.27: the gesture meant is *solo* (click-to-solo follows the pointer), not *peek*; Shift-peek is unchanged.
 - Stamp should be the default once one is drawn. Stamp should be the default if the user clicks, and if the user tries to drag click it should let it draw. It should stamp based on the highlighted replicate. (noticed <=2026.07.27) → `todo/stamp-as-the-default-gesture.md`
-- If the user sets the replicate and tries to change it, it should ask for confirmation as a box. (noticed <=2026.07.27) → `todo/confirm-before-changing-the-replicate.md`
+- If the user sets the replicate and tries to change it, it should ask for confirmation as a box. (noticed <=2026.07.27) → `todo/confirm-before-changing-the-replicate.md`. Closed 2026.07.27 by the save/history decision: rollback is the safety net, so the modal is the pattern being removed.
 - If the user draws boxes and undoes it, then clicks into a replicate, the ratio is wrong (noticed <=2026.07.27) → `todo/ratio-wrong-after-undo.md`
 - It shouldn't ask to save the project or load the project. But it should automatically keep project history so if the user messes stuff up it can roll back. (noticed <=2026.07.27) → `todo/no-save-prompts-keep-history.md`
 - The zoom function should work on the replicate tab too. (noticed <=2026.07.27) → `todo/zoom-on-the-composite-view.md`

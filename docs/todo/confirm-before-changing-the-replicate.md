@@ -3,9 +3,10 @@ title: Confirm before changing the replicate
 status: deferred
 opened: 2026-07-27
 gated_on: >
-  the save/history policy in `docs/todo/no-save-prompts-keep-history.md` being
-  settled — if automatic rollback is the safety net, this modal is the pattern
-  that item rejects
+  the save/history policy going the other way — settled 2026-07-27 in
+  `docs/todo/no-save-prompts-keep-history.md` as rollback-not-confirmation, so
+  building this now knowingly contradicts a decision already taken; the trigger
+  is that decision being revisited, not an event
 reads:
   - docs/todo/no-save-prompts-keep-history.md
   - src/sieve/core/replicates.py
@@ -17,13 +18,15 @@ reads:
 Noticed `<=2026.07.27`: "if the user sets the replicate and tries to change it,
 it should ask for confirmation as a box."
 
-Deferred on a direct tension, not on effort. The **No save prompts, keep
-history** item (`docs/todo/no-save-prompts-keep-history.md`) asks for the
-open/save modals to go away in favour of automatic history with rollback. If
-rollback is the safety net, then a confirmation modal in front of a geometry
-edit is the same pattern being removed one screen over — the user is asked to
-predict a mistake instead of being allowed to undo it. Settle that policy
-first; this item is either built or closed by the answer.
+**Closed by the answer, 2026-07-27.** The tension was never about effort. The
+**No save prompts, keep history** item
+(`docs/todo/no-save-prompts-keep-history.md`) settled the policy as rollback,
+not confirmation: the user is not asked to predict a mistake when they can undo
+it, and a confirmation modal in front of a geometry edit is exactly the pattern
+being removed one screen over. This item is kept rather than deleted because the
+two gaps below are real findings about the model that outlive the dialog, and
+because a future session that wants this modal should meet the decision rather
+than rediscover the request.
 
 **There is a second, prior gap: "the replicate is set" has no representation in
 the model today.** `Replicate` (`src/sieve/core/replicates.py:52-86`) carries

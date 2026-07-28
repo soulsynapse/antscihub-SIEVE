@@ -1,3 +1,7 @@
+---
+status: record
+---
+
 # REFINED VISION
 
 > **Dated record of intent (2026.07.26).** Not maintained; its build order is

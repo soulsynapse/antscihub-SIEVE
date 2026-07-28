@@ -13,12 +13,20 @@ for one targeted revisit, not a broken build; making it a test would turn
 every code change into a doc chore, which is the paralysis this design exists
 to avoid.
 
-Stamped docs carry frontmatter:
+Every top-level doc declares what kind of thing it is, in its own first three
+lines, so a reader can tell whether it is *supposed* to be true now without
+consulting a list held somewhere else:
 
     ---
+    status: current              # current | record | working
     reviewed: 4a4f3d6            # commit the claims were last checked at
     subjects: [src/sieve/, .importlinter]
     ---
+
+Only `current` docs can drift, so only they are reported. `reviewed`/
+`subjects` are what makes the report quantitative; a `current` doc without
+them is listed as unassessable rather than as clean, because an unstamped doc
+is exactly the one nobody has checked.
 
 Findings need no stamp — their existing `commit:` and `files:` fields are the
 same information, so every non-superseded finding is checked for free.
@@ -32,14 +40,47 @@ import subprocess
 import sys
 from typing import Any, cast
 
-from doc_index import DOCS_ROOT, SPECS, collect, parse_frontmatter
+from doc_index import DOCS_ROOT, SPECS, FrontmatterError, collect, parse_frontmatter
 
 REPO_ROOT = DOCS_ROOT.parent
 
-#: Prose docs that claim current truth. Records of intent (VISION,
-#: REFINED-VISION, SIEVE-HANDOFF, the parity plan) are deliberately absent:
-#: they are dated and superseded, never revisited.
-STAMPED = ("ARCHITECTURE.md", "AUTO-GUARDRAILS.md")
+#: The `status:` values a top-level doc may declare, and what each means for
+#: drift. `current` claims truth about the code as it is now and is therefore
+#: the only kind that can go stale. `record` is dated and superseded, never
+#: revisited — VISION, REFINED-VISION, SIEVE-HANDOFF, the parity plan.
+#: `working` is a workbench (IDEAS, SCRATCH): it asserts nothing about the
+#: code, so there is nothing for it to drift from, and it is drained or
+#: deleted rather than maintained.
+#:
+#: This replaces a hardcoded two-name tuple, which was the same failure the
+#: docs it governs are prone to: a list in one file naming files that live
+#: somewhere else, updated by whoever remembers. The doc now says what it is,
+#: in its own first three lines, where a reader sees it.
+DOC_STATUS = ("current", "record", "working")
+
+#: Files in `docs/` that `tools/doc_index.py` writes. They carry a generated
+#: banner instead of frontmatter, and their status is not a question: a
+#: generated file is current by construction or the gate is already red.
+GENERATED = ("SETTLED.md", ".state.md")
+
+
+def status_of(name: str) -> str:
+    """The `status:` a top-level doc declares, or `""` if it has none."""
+    try:
+        fields = parse_frontmatter(DOCS_ROOT / name)
+    except FrontmatterError:
+        return ""
+    return str(fields.get("status", "")).strip()
+
+
+def current_docs() -> list[str]:
+    """Top-level docs that claim truth about the code as it is now."""
+    return sorted(
+        path.name
+        for path in DOCS_ROOT.glob("*.md")
+        if path.name not in GENERATED and status_of(path.name) == "current"
+    )
+
 
 #: More commits than this touching a doc's subjects is worth a line even in
 #: the quiet summary; below it, the doc is listed as current.
@@ -99,8 +140,8 @@ def report_findings() -> list[str]:
 
 
 def main() -> int:
-    print("doc_drift: prose docs, by their stamps")
-    for name in STAMPED:
+    print("doc_drift: prose docs claiming current truth, by their stamps")
+    for name in current_docs():
         for line in report_doc(name):
             print(line)
     print("doc_drift: findings whose measured files moved most")

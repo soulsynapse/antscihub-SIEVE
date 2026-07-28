@@ -1,3 +1,7 @@
+---
+status: working
+---
+
 # Scratch
 
 Running notes from a fast pass, held only until they have a home. **This file

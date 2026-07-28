@@ -1,3 +1,7 @@
+---
+status: record
+---
+
 # SIEVE rewrite — why v2 exists
 
 > **Dated record of intent.** Not maintained — it explains why v2's

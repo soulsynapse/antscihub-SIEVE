@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # Working backwards from the aspirations
 
 > **Dated record of a derivation (2026.07.28).** This is the reasoning that

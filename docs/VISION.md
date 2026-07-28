@@ -1,3 +1,7 @@
+---
+status: record
+---
+
 # SIEVE vision
 
 > **Dated record of intent.** Written before the build; not maintained. What

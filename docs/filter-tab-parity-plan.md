@@ -1,3 +1,7 @@
+---
+status: record
+---
+
 # Filter tab: v1-parity plan
 
 > **Dated plan (2026.07.26); items 1–7 landed, items 8 and 9 open.** Each

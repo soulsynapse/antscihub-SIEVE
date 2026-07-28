@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # SCAFFOLD — where things live
 
 This file answers one question: **where does this module go?**
@@ -35,7 +39,7 @@ tools/doc_drift.py                      # reports stamped prose docs whose subje
 src/sieve/core/types.py                 # Frame, ROI, value objects everything pattern-matches on
 src/sieve/core/filter_base.py           # THE FILTER CONTRACT: FilterSpec, ParamsBase, Mode, warmup arithmetic
 src/sieve/core/filter_registry.py       # the shelf; filters/ puts things on it via decorator
-src/sieve/core/pipeline_model.py        # THE SAVED ARTIFACT: pydantic DAG, schema v2 with Edge.port
+src/sieve/core/pipeline_model.py        # THE SAVED ARTIFACT: pydantic DAG, schema v3 with Edge.port and Project.detector
 src/sieve/core/replicates.py            # replicate identity, overrides, resolved_params, equivalence groups
 src/sieve/core/detection.py             # windowed_mean + detect_gate, the detection chain tail
 src/sieve/core/wavelet.py               # morlet_band_power, default_freqs (capped at 0.45*fps)

@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 SIEVE — uv Requirements
 
 ## Core Dependencies

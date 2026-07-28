@@ -7,10 +7,19 @@ the standard Torrence & Compo (1998) construction with ``w0 = 6``, normalized
 so power is comparable across scales.
 
 FFT-based via `scipy.fft` rather than `numpy.fft`: it keeps float32 inputs in
-single precision (complex64, half the memory traffic), pads to a fast
-composite length (a prime T would otherwise fall back to Bluestein), and
-threads across block columns (``workers=-1``). v1 measured ~10x on the
-per-block ``(T, B)`` workload from exactly these three properties.
+single precision (complex64, half the memory traffic) and pads to a fast
+composite length (a prime T would otherwise fall back to Bluestein).
+
+**The threading is this module's, not `scipy.fft`'s.** `morlet_band_power` used
+to hand ``workers`` straight to `scipy.fft` and assume it split the batch. On
+the build this ships against it does not: 1, 2, 8, 16, and 32 workers time
+identically, on the strided ``axis=0`` call the transform actually makes *and*
+on a fully contiguous batch — so the whole ``(T, B)`` pass ran single-threaded
+while `gui/concurrency.py` carefully budgeted threads for it. The block-chunk
+loop is now run on a `ThreadPoolExecutor` and the inner FFTs are told
+``workers=1``, which measures 4.9x at eight threads on the reference stress
+workload and cannot silently become 1x again — the pool is ours.
+`docs/findings/2026.07.27-scipy-fft-workers-does-nothing-here.md` has the table.
 
 Lives in `core/` because it is numpy/scipy math with no Qt, no cv2, and no
 frame contract — the tab-side detector calls it over series the pipeline
@@ -21,6 +30,7 @@ and the kernel contract is per-frame (see the parity plan, § 2, hybrid chain).
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 import numpy as np
@@ -35,12 +45,26 @@ W0 = 6.0
 FloatArray = NDArray[np.floating[Any]]
 ComplexArray = NDArray[np.complexfloating[Any, Any]]
 
-#: Default thread count handed to `scipy.fft`: every core this process may use.
-#: A whole-clip pass, a CLI run, and a headless parity check all want the whole
-#: machine, and `core/` holds no policy about who else might want it — a caller
-#: that must leave room says so, which is what `gui/concurrency.py` does and
-#: the only place in the tree that needs to.
+#: Default thread count: every core this process may use. A whole-clip pass, a
+#: CLI run, and a headless parity check all want the whole machine, and `core/`
+#: holds no policy about who else might want it — a caller that must leave room
+#: says so, which is what `gui/concurrency.py` does and the only place in the
+#: tree that needs to.
 ALL_CORES = -1
+
+
+def _pool_size(workers: int) -> int | None:
+    """`workers` as a `ThreadPoolExecutor` size; `None` is the stdlib default.
+
+    `ALL_CORES` becomes `None` rather than `os.cpu_count()` on purpose. Core
+    may not import `decode.prefetch.available_cpus` — that is a layer up — and
+    re-deriving "how much of this machine do I have" here is exactly the second
+    answer `resolve_workers` documents at length as the thing to avoid. The
+    stdlib's own default is a third party to the disagreement rather than a
+    party in it, and it is what "every core" already meant when this number
+    went to `scipy.fft`.
+    """
+    return None if workers <= 0 else workers
 
 
 # scipy.fft's stubs return `tuple[Dispatchable]` under strict pyright; these
@@ -265,8 +289,16 @@ def morlet_band_power(
     the band's scales, chunked over block columns so a whole-clip pass stays
     memory-bounded.
 
-    ``workers`` is `morlet_power`'s, for the same reason and with the same
-    default: every core unless the caller has someone to leave room for.
+    ``workers`` is how many block chunks are transformed at once, defaulting to
+    every core unless the caller has someone to leave room for. See the module
+    docstring for why the pool is here rather than `scipy.fft`'s.
+
+    **The pool cannot move a bit.** Chunks write disjoint column slices of one
+    preallocated output and share nothing but read-only inputs, and the summation
+    order *within* a chunk — the only place floats are added — is the serial
+    order untouched. So the thread count is a wall-clock choice and never an
+    answer, which is what `test_the_thread_count_cannot_move_a_bit` pins and what
+    lets an interactive pass and a headless one be compared at all.
     """
     x32 = np.asarray(x, np.float32)
     squeeze = x32.ndim == 1
@@ -286,14 +318,34 @@ def morlet_band_power(
     daughters = [_daughter(float(s), omega, heavi, dt) for s in band]
     out = np.zeros((n_frames, n_blocks), np.float32)
     chunk = max(1, block_chunk)
-    for c0 in range(0, n_blocks, chunk):
+    starts = tuple(range(0, n_blocks, chunk))
+
+    def transform(c0: int) -> None:
+        """One chunk of columns, start to finish. Every buffer is a local, so
+        two chunks running at once cannot meet in a scratch array."""
         c1 = min(n_blocks, c0 + chunk)
-        xf = _fft_time_axis(x32[:, c0:c1], n, workers)
+        xf = _fft_time_axis(x32[:, c0:c1], n, 1)
         acc = np.zeros((n_frames, c1 - c0), np.float32)
         buf = np.empty_like(xf)
         for d in daughters:
             np.multiply(xf, d[:, None], out=buf)
-            w = _ifft_time_axis(buf, workers)[:n_frames]
+            w = _ifft_time_axis(buf, 1)[:n_frames]
             acc += w.real**2 + w.imag**2
         out[:, c0:c1] = acc
+
+    if workers == 1 or len(starts) < 2:
+        # No pool for the cases that cannot use one: a caller that asked for one
+        # thread meant it, and a single chunk has nothing to overlap with. Both
+        # are the ordinary shape in tests and in the 1-D `squeeze` path, where
+        # spinning up an executor would be most of the cost.
+        for c0 in starts:
+            transform(c0)
+    else:
+        with ThreadPoolExecutor(max_workers=_pool_size(workers)) as pool:
+            # Consumed rather than left lazy: `map` defers exceptions to
+            # iteration, and a chunk that raised into an unread iterator would
+            # leave `out` holding zeros for those columns — blocks reading as
+            # silent rather than as failed, which is rule 6 exactly.
+            for _ in pool.map(transform, starts):
+                pass
     return out[:, 0] if squeeze else out

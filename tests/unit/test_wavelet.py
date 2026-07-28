@@ -74,6 +74,32 @@ def test_band_power_matches_cube_slice_exactly() -> None:
     np.testing.assert_array_equal(banded, direct)
 
 
+def test_the_thread_count_cannot_move_a_bit() -> None:
+    """One thread and many produce the same array, exactly.
+
+    `morlet_band_power` runs its block-chunk loop on a thread pool of the
+    caller's size, so a live tab pass (a small share of the machine) and a
+    headless whole-clip pass (all of it) are two different thread counts over
+    the same input. If those disagreed anywhere — a shared scratch buffer, a
+    chunk boundary that moved with the pool, an accumulation order that
+    depended on completion order — the parity check comparing a live tuning to
+    a batch run would be comparing two answers and calling the difference a
+    finding.
+
+    More chunks than threads on purpose: `block_chunk=3` over 11 columns is
+    four chunks, one of them partial, so chunk-boundary arithmetic and the
+    ragged tail are both under the pool rather than beside it.
+    """
+    rng = np.random.default_rng(11)
+    x = rng.standard_normal((256, 11)).astype(np.float32)
+    freqs = default_freqs(FPS)
+    i, j = 6, 13
+    serial = morlet_band_power(x, FPS, freqs, i, j, block_chunk=3, workers=1)
+    for workers in (2, 4, -1):
+        threaded = morlet_band_power(x, FPS, freqs, i, j, block_chunk=3, workers=workers)
+        np.testing.assert_array_equal(threaded, serial)
+
+
 def test_coi_efolding_is_1p369_over_f() -> None:
     """The w0=6 e-folding time is ~1.369/f s — the constant the alpha fade
     and any chunk widening are built on (a 1.46/f figure circulated once and

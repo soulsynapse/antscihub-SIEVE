@@ -49,6 +49,52 @@ DENSITY_STOPS: tuple[tuple[int, int, int], ...] = (
 _BINS = 96
 
 
+def bin_counts(band_power: FloatArray, value_max: float, bins: int = _BINS) -> NDArray[np.float32]:
+    """`(T, B)` band power binned to `(bins, T)` counts on a log1p value axis.
+
+    Module-level and public because it is the only part of `set_series` that can
+    be *wrong* — the rest is a lookup table and a blit — and asserting on a
+    rendered QImage to find out is a test of the ramp pretending to be a test of
+    the histogram.
+
+    **A `bincount` per frame, not one `np.add.at` over everything.** The
+    `add.at` version was the obvious vectorization and the wrong one: it is the
+    unbuffered ufunc path, which is scalar-at-a-time, and it needed a column
+    index *per element* to say which frame each value belonged to. At the
+    reference stress workload (599 frames x 210,672 blocks, block size 1) that
+    index was a 1,010 MB `intp` array built per drag tick beside a 505 MB
+    `int32` of bin numbers, and the scatter alone measured **4,840 ms** against
+    a 50 ms budget. Binning row by row needs no column index at all, because the
+    row *is* the column, and measures **263 ms** for the same histogram. The
+    loop is over frames — a few hundred — not over the hundred million values,
+    so the per-iteration Python cost is noise.
+    `docs/findings/2026.07.27-the-density-histogram-was-a-scatter.md`.
+
+    Indices are clipped at *both* ends, where the `add.at` version clipped only
+    the top. A NaN or a negative reaching `astype` lands somewhere
+    unrepresentable, and the two paths disagree about what happens next:
+    `add.at` wraps a negative index round and silently adds the value to the
+    *brightest* bin, while `bincount` refuses outright. Neither is a histogram,
+    so such a value is pinned to the floor before either can see it. This is a
+    guard on a value the transform should not be able to produce — band power is
+    a sum of squares and `block_signal`'s edge blocks always cover at least one
+    real pixel — which is why flooring is acceptable here and would not be if
+    the case were reachable: rendering undefined as quiet is rule 6's own
+    example of the thing not to do.
+    """
+    m = np.asarray(band_power, np.float32)
+    frames = m.shape[0]
+    top = math.log1p(max(value_max, 0.0)) or 1.0
+    with np.errstate(invalid="ignore"):
+        # The clip below is the handling; the warning would only announce that
+        # a case documented three lines up happened, once per repaint.
+        idx = np.clip((np.log1p(m) / top * (bins - 1)).astype(np.int32), 0, bins - 1)
+    counts = np.zeros((bins, frames), np.float32)
+    for t in range(frames):
+        counts[:, t] = np.bincount(idx[t], minlength=bins)
+    return counts
+
+
 class DensityPlot(BandPlot):
     """Per-frame value histogram over all blocks, with the value band on top."""
 
@@ -59,29 +105,47 @@ class DensityPlot(BandPlot):
         self._image: QImage | None = None
         self._max = 1.0
         self._solo: NDArray[np.float32] | None = None
+        #: The exact array `_image` was binned over. Identity, not equality —
+        #: see `set_series`.
+        self._source: FloatArray | None = None
 
     # ---- data ---------------------------------------------------------------
 
     def set_series(self, band_power: FloatArray, solo: FloatArray | None = None) -> None:
         """The `(T, B)` band power to bin, and one block's `(T,)` trace or None.
 
-        The histogram image is rebuilt here, inside the cheap tier — binning
-        `(T, B)` into `(bins, T)` is one `np.add.at`, which is what makes a
-        frequency-band drag repaint this surface live.
+        **The surface is rebuilt only when the array behind it moves.**
+        `filter_tab`'s cheap tier — value band, count threshold, D, centered,
+        solo — hands the *same* `band_power` object back on every mouse-move by
+        construction: reusing it is what makes that tier cheap, and the band
+        drawn on top of this surface is not part of the surface. So an identity
+        check answers "is this the picture I already have", and a drag repaints
+        the handles over a cached image instead of re-binning a hundred million
+        values per tick. `filter_tab._heat_scale` guards a percentile over the
+        same array the same way and for the same reason.
+
+        Identity rather than equality on purpose. `np.array_equal` over `(T, B)`
+        would cost within a small factor of just re-binning, so an equality
+        check that succeeded would have saved nothing and one that failed would
+        have doubled the work. What makes identity *sufficient* is that
+        `recompute` never writes into a retained `band_power` — it either passes
+        the previous array through untouched or allocates a new one — and
+        `DetectorUpdate` is frozen. A future cheap tier that mutated in place
+        would break this, which is why that array is documented as retained
+        rather than as scratch.
+
+        `solo` is deliberately outside the check: it changes only the overlaid
+        trace, which `paint_content` draws from state on every repaint anyway.
         """
         m = np.asarray(band_power, np.float32)
-        frames, blocks = m.shape
-        self._max = float(m.max()) or 1.0
-        top = math.log1p(self._max)
-        idx: NDArray[np.int32] = np.minimum(
-            (np.log1p(m) / top * (_BINS - 1)).astype(np.int32), np.int32(_BINS - 1)
-        )
-        counts = np.zeros((_BINS, frames), np.float32)
-        cols: NDArray[np.intp] = np.repeat(np.arange(frames, dtype=np.intp), blocks)
-        np.add.at(counts, (idx.ravel(), cols), 1.0)
-        norm = np.log1p(counts) / math.log1p(max(blocks, 2))
-        lut = ramp_lut(DENSITY_STOPS)
-        self._image = argb_to_qimage(lut[(norm * 255).astype(np.uint8)][::-1])
+        if m is not self._source:
+            self._source = m
+            blocks = m.shape[1]
+            self._max = float(m.max()) or 1.0
+            counts = bin_counts(m, self._max)
+            norm = np.log1p(counts) / math.log1p(max(blocks, 2))
+            lut = ramp_lut(DENSITY_STOPS)
+            self._image = argb_to_qimage(lut[(norm * 255).astype(np.uint8)][::-1])
         self._solo = None if solo is None else np.asarray(solo, np.float32)
         self.update()
 

@@ -54,6 +54,7 @@ src/sieve/filters/normalize.py          # per-frame global illumination removal
 src/sieve/filters/background_ema.py     # first stateful filter; the twin to copy for new stateful ones
 src/sieve/filters/block_signal.py       # change_energy, flow_speed, coherence — the 3D structure tensor
 src/sieve/filters/temporal_baseline.py  # per-cell median/MAD null; the units thresholds are denominated in
+src/sieve/filters/motion_history.py     # MHI: leaky accumulator with dilate/diffuse coupling, declared group delay
 
 src/sieve/pipeline/dag.py               # resolve, reject cycles and untypeable edges, one topological order
 src/sieve/pipeline/plan.py              # everything knowable before a frame decodes: params, keys, lead-in

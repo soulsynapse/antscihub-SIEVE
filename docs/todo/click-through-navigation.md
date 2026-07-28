@@ -126,10 +126,10 @@ exists at the same depth, a branch affordance is needed that fading does not
 provide. Undecided, and worth deciding before the stack's linearity becomes
 load-bearing.
 
-**What would make it the right time.** The same trigger as the deferred
-**Replicate status** item, docs/todo/replicate-status-columns.md, now sharpened:
-this item and the materialization item, docs/todo/materialization.md, land as
-one item, gesture-first.
+**What would make it the right time.** The same trigger as the replicate
+status columns, now folded into the deferred **Sink writers** item
+(docs/todo/sink-writers.md), and sharpened: this item and the materialization
+item, docs/todo/materialization.md, land as one item, gesture-first.
 
 **The constraint to not get wrong when it lands**, inherited whole from the
 deferred **Coverage and detection lanes** item,

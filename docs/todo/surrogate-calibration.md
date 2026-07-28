@@ -17,8 +17,8 @@ reads:
 change what is being
 thresholded, and a null distribution computed for a chain that then grows a node
 is a number that quietly stops meaning anything. It is also genuinely useless
-before the accuracy question — the deferred **Accuracy feedback in the tuning
-loop** item, docs/todo/accuracy-feedback.md — has *any* answer: a calibrated
+before the accuracy question — the deferred **Annotation spans** item,
+docs/todo/annotation-spans.md — has *any* answer: a calibrated
 threshold that nobody can check against a labelled event is rigour pointed at an
 unknown.
 

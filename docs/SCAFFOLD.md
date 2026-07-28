@@ -167,22 +167,22 @@ the matching `docs/todo/` item and is named in the annotation — this file only
 says where the file would go.
 
 ```tree
-src/sieve/core/config.py                # pydantic-settings app config — todo/application-config.md
+src/sieve/core/config.py                # pydantic-settings app config, CLI > env > file
 src/sieve/core/constants.py             # hash seeds, cache format version (currently inline)
 src/sieve/backend/namespace.py          # array-API namespace resolution — todo/gpu-execution.md
 src/sieve/storage/zarr_store.py         # Zarr v3 arrays, the general store — todo/materialization.md
 src/sieve/storage/sharding.py           # workload-specific sharding
-src/sieve/workers/manager.py            # crash isolation — todo/process-isolation.md
+src/sieve/workers/manager.py            # crash isolation; arrives with a kernel that can segfault
 src/sieve/workers/protocol.py           # versioned IPC
 src/sieve/workers/shm_transport.py      # shared-memory frame transport
 src/sieve/workers/process.py            # worker lifecycle, cooperative cancellation
 src/sieve/observe/logging.py            # structlog JSON Lines
 src/sieve/observe/log_aggregator.py     # per-worker stream merge
 src/sieve/observe/results.py            # Parquet results dataset
-src/sieve/bench/profiling.py            # VizTracer + py-spy — todo/profiling-as-a-module.md
-src/sieve/hpc/handoff.py                # DAG -> job script — todo/hpc-handoff-and-review-mode.md
+src/sieve/bench/profiling.py            # VizTracer + py-spy, both already in the dev group
+src/sieve/hpc/handoff.py                # DAG -> job script; no --memory flag, SIEVE reads the cgroup
 src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
-src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
+src/sieve/review/output.py              # VISION step 7 review contract
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see docs/SETTLED.md
 ```
@@ -204,8 +204,12 @@ would have written code that three separate decisions had already refused.
   editor)**. The plot layer settled as QPainter widgets over `band_plot.py`, and
   the one item that still owned a napari question — the three-way overlay —
   answered it by collapsing to two layers and one opacity slider. Re-adding
-  either needs a new demand, not a revisit. See `docs/SETTLED.md` and
-  `docs/todo/pipeline-editor-list-or-graph.md`.
+  either needs a new demand, not a revisit. See `docs/SETTLED.md`. The list
+  VISION step 4 actually asks for is an ordinary list widget over `Dag.order`;
+  whether a branching graph later wants one widget that degrades to a list or
+  two views over one model is settled by watching a user, not by argument, and
+  cannot arise before `Edge` grows named ports
+  (`docs/todo/kernel-protocol-beyond-one-frame.md`).
 - **`docs/ARCHITECTURE-TREE.md`**. `docs/findings/` holds measurement-driven
   decisions one file at a time and `docs/completed-todo/` holds what was built;
   nothing was left for a third log to carry.

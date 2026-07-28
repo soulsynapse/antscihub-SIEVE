@@ -58,9 +58,8 @@ in docs/completed-todo/2026.07.28-crop-artifact-writer.md.
 
 **What stays here.** The general store: materializing *node outputs* (the
 folder-per-transformation of VISION step 1), the Zarr layout question,
-spilling from the memory cache (the deferred **Cache eviction** item,
-docs/todo/cache-eviction.md, names `materialize.py` as where spilling
-belongs), and the node-output boundaries in the chain-stack (the deferred
+spilling from the memory cache, and the node-output boundaries in the
+chain-stack (the deferred
 **Click-through navigation** item, docs/todo/click-through-navigation.md,
 keeps the descent-through-node-outputs design). The first measurement to
 take when this promotes is what a session's intermediates actually weigh,
@@ -74,6 +73,28 @@ the child-source model causes: materializing is result-*changing* (it
 re-keys what sits below), so when node-output boundaries offer it, the offer
 belongs in the deliberate class of the rule-7 division, not the
 accept-casually class the 2026-07-27 notes assumed.
+
+## Cache eviction, folded in 2026-07-28
+
+It was a separate entry and had been reduced to one open question by its own
+updates. The *bound* is not its to pick — that is a declared share of the
+resource ledger's byte budget (docs/completed-todo/2026.07.27-resource-ledger.md,
+`core/shares.py`). Spilling is not its to do — an evicted frame is recomputable
+by construction, which is what the cache key means, so eviction *discards*, and
+anything worth keeping instead goes through the user-initiated compaction path
+this item builds. What was left is the policy alone: **which** entry goes when
+the share is full, and an answer written before `materialize.py` would be a
+second answer to where a frame goes when it stops fitting.
+
+`MemoryFrameStore` is a dict with no bound today. The protocol is in place, so
+the executor is already written against the thing that will grow the policy
+rather than against a dict it would have to be rewritten off.
+
+**Also deferred here, for a related reason:** cache-aware lead-in shortening. A
+cached upstream could in principle shorten a decode range, but only if the
+entry covered the lead-in span too, which the store does not record. Slow and
+correct beats fast and occasionally wrong, per `cache_key.py`'s asymmetry rule.
+A store that tracked coverage would reopen the question.
 
 Read: `docs/SCAFFOLD.md` `storage/`, `src/sieve/pipeline/cache.py`,
 `docs/VISION.md` steps 1 and 4, and the three crop items for what already

@@ -148,9 +148,10 @@ Three states, and an observation is in exactly one:
 
 ## What this is not
 
-Not a profiler. `docs/todo/profiling-as-a-module.md` attributes a known miss
-to a cause and stays deferred on its own trigger. This one answers "what
-should somebody look at" and hands off.
+Not a profiler. Attributing a known miss to a cause is what `viztracer` and
+`py-spy` are already in the dev group for, and the first question of the form
+"which node?" is where somebody runs one. This item answers "what should
+somebody look at" and hands off.
 
 Not a governor. `docs/todo/adaptive-worker-allocation.md` is the item for
 acting on this data automatically, and it is deferred behind exactly the

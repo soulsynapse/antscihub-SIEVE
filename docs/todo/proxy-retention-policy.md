@@ -1,9 +1,11 @@
 ---
 title: What the viewport keeps of a render, and what it drops
-status: open
+status: deferred
+after: [slow-path-surfacing]
 opened: 2026-07-27
 gated_on: >
-  a session that scrubs. The capacity half landed 2026-07-28 in 14ce201:
+  a recorded session that scrubs, which is docs/todo/slow-path-surfacing.md's
+  gesture mix to make visible. The capacity half landed 2026-07-28 in 14ce201:
   RENDER_RING_SHARE took fraction=0.01 against a 4 GB reserve — ~644 MB and so
   ~700 gray 1280-wide proxies on the finding's 68.4 GB machine, sized to reach
   a large machine's own knee rather than to hardcode the ~720 where that

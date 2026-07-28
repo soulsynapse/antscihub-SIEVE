@@ -31,7 +31,7 @@ applied to this file's own tables.
 
 **The honest gap:** `pipeline/cache.py`'s `MemoryFrameStore` is unbounded and
 holds no row here — see `UNBOUNDED`. It gets its bound when
-`docs/todo/cache-eviction.md` lands; naming the gap is what keeps the sum
+`docs/todo/materialization.md` lands; naming the gap is what keeps the sum
 below from reading as complete while it is not (rule 6).
 
 **Why this is in `core/` when it declares a GUI session's pools.** It was in
@@ -186,7 +186,7 @@ MEMORY_SHARES: tuple[MemoryShare, ...] = (
 #: Consumers that hold real memory and no row above — the ledger's honest gap,
 #: the same construction as `bench/budgets.py`'s `WITHOUT_PRODUCER`. This list
 #: only shrinks: `MemoryFrameStore` gets its bound when cache eviction lands
-#: (`docs/todo/cache-eviction.md`).
+#: (`docs/todo/materialization.md`).
 UNBOUNDED: tuple[str, ...] = ("pipeline/cache.py MemoryFrameStore",)
 
 

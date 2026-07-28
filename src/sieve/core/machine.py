@@ -27,6 +27,15 @@ consults `SLURM_MEM_PER_NODE` — not as scheduler coverage (PBS, LSF, and SGE
 configurations that neither set a cgroup nor these variables fall through to
 physical, and that is a known gap, not a claim), but because it is the one
 honest reading left where it applies.
+
+**Consequence for the HPC handoff, recorded here because this is where
+somebody about to violate it is reading.** A generated job script declares
+resources to the *scheduler* and nothing to SIEVE, because SIEVE reads what
+the scheduler imposed. There is no `--memory` flag to generate, and adding one
+should be read as a defect in this resolver rather than a feature of the
+handoff. A job step is the friendliest case for this design — the allocation
+is large and explicitly declared — and the least forgiving for any constant
+chosen on a desktop, because exceeding a cgroup is an OOM kill.
 """
 
 from __future__ import annotations
@@ -199,7 +208,7 @@ def process_memory_bytes() -> int:
 
     SIEVE spawns no child processes today, so the child walk is usually a
     walk over nothing — but it is taken every time rather than assumed away,
-    because the process-isolation item will one day make it real and a sampler
+    because worker processes will one day make it real and a sampler
     that quietly reported the parent alone from that day on is rule 6's
     failure with no symptom.
 

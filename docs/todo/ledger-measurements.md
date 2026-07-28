@@ -17,7 +17,7 @@ gated_on: >
   is a session read through them rather than a sensor.
 reads:
   - src/sieve/gui/concurrency.py
-  - docs/todo/cache-eviction.md
+  - docs/todo/materialization.md
   - docs/todo/proxy-retention-policy.md
 ---
 
@@ -50,7 +50,7 @@ What remains is the two that need a person at the keyboard.
   Instrument peak RSS over a reference tuning session and compare to
   declared-sum plus reserve. A large gap means an undeclared consumer
   exists; finding it is the point. This is also the measurement
-  `docs/todo/cache-eviction.md` says nobody has taken — one instrumented
+  `docs/todo/materialization.md`'s eviction half says nobody has taken — one instrumented
   session serves both. **Answered weakly 2026-07-28**: peak 4.72 GB against
   declared 1.15 + reserve 4.29 = 5.44 GB, so no gross overrun. But the peak
   cannot be split into declared-versus-undeclared, because nothing publishes

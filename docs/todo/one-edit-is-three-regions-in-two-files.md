@@ -4,16 +4,7 @@ status: open
 opened: 2026-07-28
 
 gated_on: >
-  nothing — the decision was made 2026-07-28 in 937ac91 and option B is
-  refused. Each apply_* is the per-edit signal contract, not duplication:
-  collapsing every command onto apply_state makes every Ctrl+Z a full broadcast
-  and leaves replicate_changed(index), the only parameterized signal, with no
-  producer. What survives is killing the displacement bookkeeping while each
-  command keeps its own targeted apply_* — the double computation of
-  edited_params goes, the back-reference stays, and the seam test the item
-  quotes still fails. That is option A, which stops being churn now that the
-  command classes are not about to be deleted; the item buys less than it
-  claimed and should be re-scoped to A before it is taken.
+  nothing — scoped to option A on 2026-07-28 after 937ac91 refused option B
 
 reads:
   - src/sieve/gui/document.py
@@ -41,65 +32,39 @@ means touching, in order:
    for step 2 to call, mutating without history.
 
 `edited_params` is called twice per edit, once by `_would_change` to decide and
-once by `redo` to act. `commands.py` imports `document.py` under `TYPE_CHECKING`
-to avoid a cycle, and every command holds `self._document`. That back-reference
-is exactly the test `docs/todo/filter-tab-is-eleven-jobs.md` states for a bad
-seam, applied to a split that already happened: *if the extracted object must
-hold a back-reference to do its job, the seam is wrong.*
+once by `redo` to act.
 
-## The pain is the trio, not the file boundary
+## The snapshot rewrite was considered and refused (937ac91, 2026-07-28)
 
-This matters because the obvious move is the wrong size. Merging `commands.py`
-into `document.py` removes the import cycle, the back-reference becomes `self`,
-and the co-change number goes to zero by construction — and produces a
-1,670-line file in which one edit is still three regions. The file boundary is
-not where the axis of change runs; the *mechanism* is. A merge alone buys
-locality, and locality is the aesthetic payoff this plan is supposed to cut.
+Recorded so it is not re-proposed. `DocumentState` is four immutable fields and
+`RestoreSnapshot` already undoes by value, so collapsing every command onto
+one before/after shape looked like one undo mechanism instead of two. It is
+wrong for a reason the co-change number does not show: **each `apply_*` is the
+per-edit signal contract, not duplication.** Collapsing onto `apply_state`
+makes every Ctrl+Z a full broadcast, and leaves `replicate_changed(index)` —
+the only parameterized signal — with no producer.
 
-So the item's first job is a decision, and the mechanical half is downstream of
-it either way.
+## What is left, and it is worth doing
 
-**Option A — merge, and stop.** `commands.py` moves into `document.py` beside
-the methods each command serves. Cheap, mechanical, pyright-checked, no
-behaviour change. Honest assessment: this is worth doing *only* if B is
-rejected, because if B lands the command classes mostly stop existing and the
-merge was churn against code about to be deleted.
+Kill the displacement bookkeeping while each command keeps its own targeted
+`apply_*`. The double computation of `edited_params` goes; the back-reference
+stays, because with the signal contract intact it is what the command is
+*for* rather than a seam defect. `commands.py` moves into `document.py` beside
+the methods each command serves — cheap, mechanical, pyright-checked, no
+behaviour change, and no longer churn against code that was about to be
+deleted, which is the only thing that made it not worth doing before.
 
-**Option B — one undo mechanism instead of two, and the second one already
-exists.** `DocumentState` is four immutable fields, `capture()` is documented as
-cheap, and `RestoreSnapshot` already undoes by value rather than by displacement.
-That is a working proof that a command need not hold a back-reference or
-remember what it displaced: it can hold a before-state, an after-state, a text,
-and a merge id. `EditTuningParams`, `EditDetector`, `ResetTuning`, `SetClip`,
-`AddReplicate`, `RemoveReplicate`, `RenameReplicate` collapse toward one shape,
-`apply_*` stops being public, and `_would_change` becomes `before != after`,
-which is the same question asked once instead of twice.
-
-**What would make B wrong, and it has to be checked rather than argued.**
-`commands.py`'s docstring gives the reason for displacement-based undo: an
-inverse "is always exact even after other edits have moved rows around". A
-snapshot is immune to moved rows for a different reason — it does not name them
-— so that specific argument survives the change. What does not obviously survive
-is `mergeWith`: `SetReplicateROI` collapses a drag into one entry and
-`ROI_MERGE_ID`/`DETECTOR_MERGE_ID` keep two gestures from merging into each
-other. Snapshot merging is "keep the first before, take the latest after", which
-is correct but is a claim, not a given. Pin it with a test over a simulated drag
-before converting anything, and if it does not hold, B is dead and A is the
-whole item.
-
-**Do not convert the geometry gesture first.** `finish_roi_gesture`, `_Gesture`,
-and the merge ids are the most intricate part of the stack and the part users
-touch most. Convert `SetClip` first — one field, no merge, no index arithmetic —
-and let it be the shape the rest follow or refute.
+Be honest about what this buys: locality and one fewer computation, not a
+smaller mechanism. One edit is still three regions; they are now three regions
+in one file. The 1,670-line result is the cost, and the axis-of-change test in
+`CLAUDE.md` says it is the right trade here specifically because seven of seven
+means nothing declares the coupling today.
 
 ## What breaks if this is wrong
 
 Holes in undo, which `document.py`'s own docstring names as discovered by users
-rather than by tests. That is the cost line for the whole item and it is why the
-sequencing above is worth obeying. The existing coverage is real but partial:
-`tests/gui/test_document.py` and `tests/gui/test_history.py` exercise the stack,
-and neither would fail if a converted command silently restored a field it
-should have left alone — a snapshot restore writes all four fields every time,
-so a bug here looks like an unrelated value quietly reverting. Any conversion
-lands with a test that asserts the *untouched* fields are untouched across an
-undo, which is the assertion the current mechanism gets for free and B does not.
+rather than by tests. `tests/gui/test_document.py` and `tests/gui/test_history.py`
+exercise the stack, and neither would fail if a command silently restored a
+field it should have left alone. Land the merge with a test that asserts the
+*untouched* fields are untouched across an undo — the current mechanism gets
+that assertion for free and nothing states it.

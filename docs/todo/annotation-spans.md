@@ -1,11 +1,14 @@
 ---
-title: Annotation spans on the timeline
+title: Annotation spans, and the accuracy feedback they unlock
 status: deferred
+serves: [A3]
 gated_on: >
   a detector whose output is worth correcting by hand, or a labelling task that
   needs ground truth before one exists
 reads:
   - ../antscihub-optical-flow-detector/gui/marks_store.py
+  - src/sieve/core/detection.py
+  - docs/REFINED-VISION.md
 ---
 
 # Annotation spans on the timeline
@@ -29,4 +32,33 @@ video. A span is one region's answer. V1 wrote every region into one
 one behaviour label should be one colour across every replicate in a source,
 which is a display contract about the clip and not about the region.
 
-Read: V1 `../antscihub-optical-flow-detector/gui/marks_store.py`.
+## Why the labels are worth the trouble: accuracy feedback
+
+Folded in from a separate entry 2026-07-28, because it shared this trigger
+exactly and reading it as a rendering detail of the annotation layer is the
+only way to get it wrong.
+
+VISION steps 4 and 5 build an elaborate feedback loop about **cost** — the
+benchmark summary, the graph HUD, the per-operation expense, the compaction
+prompt. There is nothing anywhere about whether a parameter change made
+detection *better*. A user drags a threshold and learns exactly what it cost
+and nothing about what it caught. That is the deepest gap between VISION as
+written and a tool that produces defensible results.
+
+One hand-labelled window is enough, not a corpus: the gap between no accuracy
+signal and a noisy one is far larger than the gap between noisy and good. And
+the answer is cheaper than it sounds — the detection threshold is a slider and
+the score series behind it is already cached, so sweeping the threshold across
+a labelled window and drawing the precision/recall curve is one pass over an
+array the system already holds, in a widget `gui/band_plot.py`'s family already
+draws. The user reads the optimum off a curve instead of hunting for it.
+
+The replicate-scoped constraint above applies to the curve too, and a second
+one with it: a curve computed over labelled spans must never be drawn as
+though it covered unlabelled ones — the unexamined-versus-quiet collapse the
+deferred **Coverage and detection lanes** item,
+docs/todo/coverage-and-detection-lanes.md, names as V1's standing failure,
+arriving through a different widget.
+
+Read: V1 `../antscihub-optical-flow-detector/gui/marks_store.py`,
+`src/sieve/core/detection.py`, `docs/REFINED-VISION.md` **F**.

@@ -27,7 +27,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from statistics import median
 from time import perf_counter
 from typing import Protocol
 
@@ -38,22 +37,10 @@ pytest.importorskip("PySide6", reason="requires the gui extra")
 from PySide6.QtGui import QImage
 from pytestqt.qtbot import QtBot
 
-from sieve.bench.budgets import check
 from sieve.gui.player import VideoPlayer
+from tests.bench.gate import TYPICAL, within_budget
 
 pytestmark = [pytest.mark.gui, pytest.mark.benchmark]
-
-
-def assert_budget(key: str, elapsed_ms: float) -> None:
-    """`check` with the gate's debt policy: a declared debt xfails, visibly.
-
-    xfail rather than skip so the miss stays in the report as an expected
-    failure with the repaying item's path attached — rule 4's "a miss is
-    visible" applied to the gate's own output.
-    """
-    debt = check(key, elapsed_ms, honor_debt=True)
-    if debt is not None:
-        pytest.xfail(f"{key} in declared debt ({debt.why}) — repaid by {debt.item}")
 
 
 class Benchmark(Protocol):
@@ -70,7 +57,7 @@ class Benchmark(Protocol):
     the plain call decides the count for us.
     """
 
-    def pedantic(self, target: Callable[[], None], *, rounds: int) -> object: ...
+    def pedantic(self, target: Callable[[], object], *, rounds: int) -> object: ...
 
 
 TIMEOUT_MS = 5000
@@ -134,13 +121,17 @@ def test_open_to_first_frame_is_within_budget(
 ) -> None:
     samples: list[float] = []
 
-    def once() -> None:
+    def once() -> float:
         player, elapsed_ms = open_measured(qtbot, synthetic_video)
         samples.append(elapsed_ms)
         player.shutdown()
+        return elapsed_ms
 
     benchmark.pedantic(once, rounds=ROUNDS)
-    assert_budget("open_to_first_frame", median(samples))
+    # `TYPICAL`, because this is a felt-latency budget rather than a capability
+    # bound: a ceiling only the best round meets is one a user misses half the
+    # time. `tests/bench/gate.py` argues the distinction.
+    within_budget("open_to_first_frame", samples, resample=once, statistic=TYPICAL)
 
 
 def test_scrub_release_settles_within_budget(
@@ -148,12 +139,14 @@ def test_scrub_release_settles_within_budget(
 ) -> None:
     samples: list[float] = []
 
-    def once() -> None:
+    def once() -> float:
         player, _ = open_measured(qtbot, synthetic_video)
         try:
-            samples.append(settle_ms(qtbot, player, drag_to=DRAG_TARGET, release_at=RELEASE_TARGET))
+            elapsed = settle_ms(qtbot, player, drag_to=DRAG_TARGET, release_at=RELEASE_TARGET)
         finally:
             player.shutdown()
+        samples.append(elapsed)
+        return elapsed
 
     benchmark.pedantic(once, rounds=ROUNDS)
-    assert_budget("scrub_settle", median(samples))
+    within_budget("scrub_settle", samples, resample=once, statistic=TYPICAL)

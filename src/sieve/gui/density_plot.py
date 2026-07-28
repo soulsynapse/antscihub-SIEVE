@@ -64,6 +64,17 @@ _BINS = 96
 #: magnitude above any grid anyone tunes with, and an order below the 210,672
 #: that `docs/findings/2026.07.27-the-density-histogram-was-a-scatter.md`
 #: measured at seconds a tick.
+#:
+#: **This constant is known wrong and is on its way out**
+#: (docs/todo/budgets-attribute-cost-they-do-not-cap-it.md, decided
+#: 2026-07-28). Block count is a scientific choice and this number is where a
+#: *dev workstation's* timing landed — the HPC target has neither this
+#: machine's clock nor this refusal's justification. The paragraph above reads
+#: rule 6 as licensing a cap; it does not. The obligation is on the
+#: application: get the rebuild off the GUI thread, then let the user ask for
+#: what they want and have the HUD name what it costs. Do not derive anything
+#: new from this number, and do not tune it — it is scheduled for deletion,
+#: not for a better value. `density_rebuild` is in `IN_DEBT` against that item.
 MAX_BLOCKS = 16_384
 
 

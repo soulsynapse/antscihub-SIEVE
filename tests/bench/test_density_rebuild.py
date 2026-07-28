@@ -22,6 +22,7 @@ place a bound needs to be checked least conditionally.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable
 from time import perf_counter
 from typing import Protocol
@@ -33,8 +34,8 @@ pytest.importorskip("PySide6", reason="requires the gui extra")
 
 from pytestqt.qtbot import QtBot
 
-from sieve.bench.budgets import check
 from sieve.gui.density_plot import MAX_BLOCKS, DensityPlot
+from tests.bench.gate import BEST, within_budget
 
 pytestmark = [pytest.mark.gui, pytest.mark.benchmark]
 
@@ -49,16 +50,16 @@ class Benchmark(Protocol):
     `test_perf_regression.py` for why the shape is declared rather than
     inferred."""
 
-    def pedantic(self, target: Callable[[], None], *, rounds: int) -> object: ...
+    def pedantic(self, target: Callable[[], object], *, rounds: int) -> object: ...
 
 
-def _band_power(frames: int, blocks: int) -> np.ndarray:
+def _band_power(frames: int, blocks: int, seed: int = 7) -> np.ndarray:
     """Band power shaped like the real thing: positive, orders of magnitude wide.
 
     The log1p axis is what the binning spends its time in, so a flat array
     would measure a different function than the one the tab calls.
     """
-    rng = np.random.default_rng(7)
+    rng = np.random.default_rng(seed)
     return (10.0 ** rng.uniform(-2.0, 3.0, (frames, blocks))).astype(np.float32)
 
 
@@ -75,16 +76,32 @@ def test_the_largest_admitted_block_count_rebuilds_within_budget(
     qtbot.addWidget(plot)
     plot.resize(900, 200)
     samples: list[float] = []
-    # Built up front, outside every round: generating them is more expensive
-    # than the binning under test, and a round that included it would report a
-    # number the budget was never written about.
-    arrays = [_band_power(REFERENCE_FRAMES, MAX_BLOCKS) for _ in range(ROUNDS)]
+    # `ROUNDS` up front and no more, and the count is load-bearing. One array is
+    # 600 x 16384 float32 = 39 MB, and the binning is memory-bandwidth bound
+    # over it (docs/findings/2026.07.28-the-density-rebuild-is-bandwidth-bound-
+    # on-its-own-input.md), so holding nine of them to pre-build every retry
+    # slows the thing under test by half again. A retry generates its array
+    # instead, before the clock starts, and lets it go afterwards — so the
+    # resident footprint is the same on the tenth reading as on the first.
+    #
+    # Built outside the timed region either way: generating is more expensive
+    # than the binning, and a round that included it would report a number the
+    # budget was never written about.
+    arrays = [_band_power(REFERENCE_FRAMES, MAX_BLOCKS, seed) for seed in range(ROUNDS)]
+    seeds = itertools.count(ROUNDS)
 
-    def once() -> None:
-        m = arrays.pop()
+    def once() -> float:
+        # A fresh array every reading: an array this plot has already binned is
+        # served by the identity cache and would measure a repaint.
+        series = arrays.pop() if arrays else _band_power(REFERENCE_FRAMES, MAX_BLOCKS, next(seeds))
         started = perf_counter()
-        plot.set_series(m)
-        samples.append((perf_counter() - started) * 1000.0)
+        plot.set_series(series)
+        elapsed = (perf_counter() - started) * 1000.0
+        samples.append(elapsed)
+        return elapsed
 
     benchmark.pedantic(once, rounds=ROUNDS)
-    check("density_rebuild", min(samples))
+    # `BEST`, because this is a capability bound: the claim is that the largest
+    # admitted block count *can* be rebuilt inside the budget, and every sample
+    # above the minimum is that one plus whatever else the machine was doing.
+    within_budget("density_rebuild", samples, resample=once, statistic=BEST)

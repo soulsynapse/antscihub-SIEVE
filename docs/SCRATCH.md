@@ -115,3 +115,59 @@ asserts `blue == n * 5` would move with it.
 call `graph_needs_chroma` once each — one derivation per command, not a second
 answer. `cli/run_cmd.py` and `cli/detect_cmd.py` read it off their own `dag`,
 which is the same object the plan's keys come from.
+
+## budget-checks-under-ambient-load — the audit landed, the diagnosis did not
+
+**The item's second diagnosis does not reproduce.** It claimed the slowdown was
+a deterministic function of how much of the suite pytest had collected. Tested
+directly: importing all 97 test modules in a fresh process changes the reading
+by under 1% (81.5/81.8 before, 82.3/82.5 after), and `pytest -k density_rebuild`
+under full collection passed 5/5. So "it is not ambient load, it is collection"
+is wrong, and the original observation was the flaky-looking thing it looked
+like.
+
+**What is actually true is worse.** Fresh processes on the reference
+workstation today: 89.3, 92.8, 93.3, 99.7 ms at B = 16,384 against a 100 ms
+ceiling — where the finding that set the bound measured 84.1 ms the same
+morning. Inside pytest, 100-118 ms. Scaling confirmed linear: 23.6 / 47.0 /
+97.6 ms at B = 4,096 / 8,192 / 16,384. The headroom is smaller than the
+machine's own state-to-state variation, so **no statistic and no retry policy
+can adjudicate it** — which is the one thing the item was sure of and the one
+thing that turned out not to matter.
+
+**The audit's real result, and it stands on its own.** The statistic is the
+kind of claim, not a house style, and the two kinds in this suite were already
+right by accident:
+
+- `density_rebuild` is a *capability* bound — can the machine do it at all —
+  so `min` is correct, and it already used `min`.
+- `open_to_first_frame` / `scrub_settle` are *felt latency* — a ceiling only
+  the best round meets is one a user misses half the time — so `median` is
+  correct, and they already used `median`.
+
+Nothing was written down anywhere, which is how the item came to recommend
+best-of-N globally. Now in `tests/bench/gate.py` as `BEST` / `TYPICAL` with the
+argument, plus `within_budget`, which re-takes a missed batch up to three times
+before believing it. The limit never moves — this is deliberately not the
+item's option (3); what changes is how much evidence a regression claim needs.
+
+**One real bug found while converting.** Pre-building nine 39 MB arrays so
+every retry had one made the thing under test 50% slower (82 -> 150 ms). One
+array is 600 x 16,384 float32; the binning is bandwidth-bound over it. Retries
+now generate lazily, so the resident footprint is the same on the tenth reading
+as on the first. A benchmark whose own fixture setup dominates its subject is a
+shape worth watching for elsewhere.
+
+**Then Kendrick overturned the premise, and it is the important part.** The
+whole question was framed as "what should the cap be", and there should not be
+a cap. `MAX_BLOCKS` is a dev-workstation timing turned into a refusal on a
+*scientific* parameter; the HPC target has neither this machine's clock nor
+this refusal's justification. The user may ask for whatever they want; the
+obligation is on the app to stay responsive and to *say what is costing the
+time* in a persistent field. That is the point of having budgets at all.
+
+Written up as `docs/todo/budgets-attribute-cost-they-do-not-cap-it.md` with the
+order fixed (off-thread rebuild first, then the cap comes off, then the HUD
+attributes), `density_rebuild` declared in `IN_DEBT` against it, and the
+`MAX_BLOCKS` docstring corrected in place so nobody derives anything new from
+it or tunes it to a better wrong value.

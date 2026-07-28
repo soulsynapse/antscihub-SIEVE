@@ -243,7 +243,20 @@ class Debt:
 #: Budgets currently missed on purpose. Empty is the normal state; an entry is
 #: a loan against a named `docs/todo/` item, and the honest response to a gate
 #: xfail here is to go read that item, not to relax anything.
-IN_DEBT: dict[str, Debt] = {}
+IN_DEBT: dict[str, Debt] = {
+    "density_rebuild": Debt(
+        key="density_rebuild",
+        item="docs/todo/budgets-attribute-cost-they-do-not-cap-it.md",
+        why=(
+            "B = 16,384 measures 89-100 ms against the 100 ms ceiling on the reference "
+            "workstation, where the finding that set the bound measured 84.1 the same day — "
+            "headroom under the machine's own variation. The debt is not the timing: it is "
+            "that this budget is currently a *cap* on a scientific parameter, and the work "
+            "that repays it moves the rebuild off the GUI thread and turns the number into "
+            "an attribution instead of a refusal"
+        ),
+    )
+}
 
 
 def check(key: str, elapsed_ms: float, *, honor_debt: bool = False) -> Debt | None:

@@ -83,11 +83,11 @@ from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, Pipeline
 from sieve.core.replicates import Replicate
 from sieve.decode.prefetch import PrefetchFrameSource
-from sieve.decode.reader import VideoDecodeError
+from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.filters import discover
 from sieve.gui.concurrency import PREVIEW_WORKERS as _PREVIEW_WORKERS
 from sieve.pipeline.cache_key import source_identity
-from sieve.pipeline.dag import GraphError
+from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
 from sieve.pipeline.preview import Consumer, PreviewRender, PreviewSession
 
@@ -197,6 +197,7 @@ class _RenderWorker(QObject):
         self._registry = registry
         self._kernels = kernels
         self._source = ""
+        self._path: Path | None = None
         self._reader: PrefetchFrameSource | None = None
         self._session: PreviewSession | None = None
 
@@ -208,13 +209,25 @@ class _RenderWorker(QObject):
         than derived here, because `source_identity` stats the file and a
         `stat` that fails is a message about the project — which the GUI thread
         is where anything can be said about.
+
+        **What this opens is one capture, and it closes it again.** The reader a
+        render uses is `PREVIEW_WORKERS` captures in a format only the graph can
+        decide (`_reader_for`), and no graph exists yet — a project's footage
+        loads before its chain resolves. Building the real reader here would mean
+        building it in whichever format was guessed and then rebuilding it on the
+        first render, which is the N-capture open paid twice on every source.
+
+        So this validates and reports, which is what `opened` promises and all
+        the GUI does with it: a file that cannot be decoded says so now rather
+        than at the first render, when the message would arrive as a failed graph.
         """
         self.close()
         try:
-            self._reader = PrefetchFrameSource(Path(path), workers=PREVIEW_WORKERS)
+            VideoReader(Path(path)).close()
         except VideoDecodeError as error:
             self.open_failed.emit(str(error))
             return
+        self._path = Path(path)
         self._source = source
         self.opened.emit()
 
@@ -270,9 +283,44 @@ class _RenderWorker(QObject):
     def close(self) -> None:
         """Drop the session and stop the decode threads. Idempotent."""
         self._session = None
+        self._path = None
         if self._reader is not None:
             self._reader.close()
             self._reader = None
+
+    def _reader_for(self, request: RenderRequest) -> PrefetchFrameSource | None:
+        """The reader in the format this graph resolves to, built or rebuilt.
+
+        The decode format is a property of the graph (`Dag.needs_chroma`), so it
+        is not knowable at `open` and this is the first place it is. Built here
+        on the first render, and rebuilt if a later graph disagrees — which must
+        not be left to drift, because `source_key` hashes the format and a reader
+        handing BGR to a graph keyed for luma would fill the store with entries
+        labelled as something they are not.
+
+        A rebuild is expensive (`PREVIEW_WORKERS` captures) and unreachable
+        today, since nothing on the shelf declares a chroma-only input. It exists
+        so that the day one does, the wrong thing is slow rather than wrong. The
+        session goes with the reader: its store holds frames decoded in the
+        format being left behind.
+        """
+        if self._path is None:
+            return None
+        luma = not graph_needs_chroma(request.pipeline, self._registry)
+        if self._reader is not None and self._reader.luma == luma:
+            return self._reader
+
+        if self._reader is not None:
+            self._reader.close()
+        self._reader = None
+        self._session = None
+        try:
+            reader = PrefetchFrameSource(self._path, workers=PREVIEW_WORKERS, luma=luma)
+        except VideoDecodeError as error:
+            self.render_failed.emit(request.revision, str(error))
+            return None
+        self._reader = reader
+        return reader
 
     def _session_for(self, request: RenderRequest) -> PreviewSession | None:
         """This source's session, built on first use and re-aimed after that.
@@ -283,12 +331,13 @@ class _RenderWorker(QObject):
         render is cheap. `set_window` and `set_replicate` both keep every
         entry; see `pipeline/preview.py` for why each of them can.
         """
-        if self._reader is None:
+        reader = self._reader_for(request)
+        if reader is None:
             return None
         if self._session is None:
             self._session = PreviewSession(
                 source=self._source,
-                reader=self._reader,
+                reader=reader,
                 window=request.window,
                 measure=self._bus.measure,
                 replicate=request.replicate,

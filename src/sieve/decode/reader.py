@@ -1,8 +1,9 @@
 """OpenCV `VideoCapture` wrapper with a seek strategy tuned by measurement.
 
 DECISION: seek accuracy is chosen over source bit-depth preservation. Frames
-come back as 8-bit BGR because that is what `VideoCapture` gives us and what
-the cache key assumes; a high-bit-depth path would be a separate reader.
+come back 8-bit — BGR, or single-channel luma under `luma=True` (below) —
+because that is what `VideoCapture` gives us and what the cache key assumes; a
+high-bit-depth path would be a separate reader.
 
 The seek strategy exists because of a lopsided cost profile, measured on a
 5312x2988 59.94 fps source (mpeg4 Simple Profile at 183 Mbps — this docstring
@@ -28,6 +29,23 @@ because `retrieve()` does it on the calling thread before handing back an array.
 So the parallelism is one level up — N of these readers, one per thread — and
 every frame stays byte-identical, which is what lets it be turned on without
 touching `decoder_identity()`.
+
+**`luma=True` declines the conversion instead of parallelising it.** With
+`CAP_PROP_CONVERT_RGB=0` the FFmpeg backend hands back the Y plane alone — one
+channel at `(height, width)`, 15.9 MB against BGR's 47.6 — and the per-frame cost
+drops from 19.4 ms to 7.96 ms on the reference source. The saving is the convert
+*and* the allocation that carries it, which is the wall
+`docs/findings/2026.07.26-threading-the-reads-buys-1.6x-and-stops.md` found at
+four workers rather than at any core count.
+
+This is not the same array as `cvtColor(BGR2GRAY)` of the converted frame — the
+luma plane is limited-range and this footage is BT.709 where `cvtColor` applies
+BT.601 weights — so it is a decode *policy*, hashed through
+`DECODE_POLICY_VERSION` and through the format field in
+`cache_key.source_key`, never a transparent optimisation. What it costs the
+answer was measured before it was turned on: 0.004 sd mean on the block series
+the detector reads, r = 0.99999. Who decides it is `pipeline/`, from whether any
+node in the graph accepts chroma; this module only obeys.
 """
 
 from __future__ import annotations
@@ -57,7 +75,16 @@ class VideoReader:
     reader on a dedicated decode thread for exactly this reason.
     """
 
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, luma: bool = False) -> None:
+        """Open `path`.
+
+        Args:
+            path: The video.
+            luma: Decode the luma plane instead of converting to BGR — 2.4x
+                cheaper and one channel. Frames come back `ChannelSpec.GRAY`.
+                Off by default so the colour path stays the one a caller gets
+                without asking, and stays byte-identical to what it always was.
+        """
         self._path = Path(path)
         if not self._path.is_file():
             raise VideoDecodeError(f"No such video file: {self._path}")
@@ -65,6 +92,13 @@ class VideoReader:
         self._capture = cv2.VideoCapture(str(self._path))
         if not self._capture.isOpened():
             raise VideoDecodeError(f"Could not open video: {self._path}")
+
+        self._luma = luma
+        if luma:
+            # Set before the first read and never toggled after: the property
+            # governs what `retrieve()` produces, and a capture that changed
+            # format mid-stream would hand two shapes to one consumer.
+            self._capture.set(cv2.CAP_PROP_CONVERT_RGB, 0)
 
         self._metadata = self._read_metadata()
         if self._metadata.frame_count <= 0:
@@ -93,6 +127,16 @@ class VideoReader:
         """Whether the underlying capture is still usable."""
         return self._capture.isOpened()
 
+    @property
+    def luma(self) -> bool:
+        """Whether this reader decodes the luma plane rather than BGR.
+
+        Exposed because the format is part of what a frame *is*: a caller
+        deriving a cache key, or deciding whether two readers may serve one
+        consumer, is asking this and must not have to remember what it passed.
+        """
+        return self._luma
+
     def read(self, index: int, max_width: int | None = None) -> Frame:
         """Decode the frame at `index`.
 
@@ -103,8 +147,13 @@ class VideoReader:
         economy are pipeline nodes and record themselves in the DAG; this does
         not, and must never feed anything but a viewport.
 
+        Channels follow the reader's format, not the call: `ChannelSpec.GRAY`
+        under `luma=True` and `ChannelSpec.BGR` otherwise. A caller that wants
+        both formats wants two readers.
+
         Raises:
-            VideoDecodeError: if the frame cannot be read.
+            VideoDecodeError: if the frame cannot be read, or if `luma=True` and
+                this build did not hand back a luma plane.
         """
         if not 0 <= index < self._metadata.frame_count:
             raise VideoDecodeError(
@@ -120,11 +169,39 @@ class VideoReader:
             raise VideoDecodeError(f"Failed to decode frame {index} of {self._path}")
         self._cursor = index + 1
 
+        if self._luma:
+            self._check_luma_plane(data, index)
+
         return Frame(
             data=_downscale(data, max_width),
             index=index,
-            channels=ChannelSpec.BGR,
+            channels=ChannelSpec.GRAY if self._luma else ChannelSpec.BGR,
         )
+
+    def _check_luma_plane(self, data: NDArray[Any], index: int) -> None:
+        """Refuse anything that is not the plane `luma=True` asked for.
+
+        `CAP_PROP_CONVERT_RGB = 0` is a request, not a contract: the FFmpeg
+        backend hands back the Y plane for planar 8-bit YUV and something else
+        for anything it handles differently — a packed layout, a 10-bit source,
+        a build with a different fallback. It says so only in a log line, and one
+        emitted once per frame, which `decode/quiet.py` drops.
+
+        So the check moves here, where it can do more than print. A packed
+        4:2:2 buffer arriving with these dimensions and being *treated* as a
+        luma plane is a wrong answer that renders — plausible pixels, wrong
+        pixels, and a block series nothing downstream can tell is wrong. The
+        two dimensions are the whole test: the plane is exactly one channel at
+        the container's frame size, and every fallback layout differs in at
+        least one of those.
+        """
+        expected = (self._metadata.height, self._metadata.width)
+        if data.ndim != 2 or data.shape != expected:
+            raise VideoDecodeError(
+                f"Frame {index} of {self._path}: asked for the luma plane and got an array "
+                f"of shape {data.shape}, not {expected}. This build's decoder does not hand "
+                f"back planar luma for this source; open the reader without luma=True."
+            )
 
     def _position_at(self, index: int) -> None:
         """Make the capture's next read return frame `index`."""

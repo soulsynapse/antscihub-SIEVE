@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from sieve.core.types import ChannelSpec
 from sieve.decode.identity import decoder_identity
 from sieve.decode.reader import GRAB_FORWARD_LIMIT, VideoDecodeError, VideoReader
 from tests.conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
@@ -108,3 +110,71 @@ class TestIdentity:
         assert decoder_identity() == decoder_identity()
         assert decoder_identity().startswith("opencv-")
         assert "policy-" in decoder_identity()
+
+
+class TestLumaPath:
+    """`luma=True` declines the colour convert. What must survive is *which* frame.
+
+    The fixture's ramp lives in the blue channel, which luma weights at 0.114 —
+    so a luma read of frame `n` is a dim but strictly increasing function of `n`.
+    That is enough to catch the failure that matters here: a format change that
+    also moved the seek, which would decode fine and land somewhere else.
+    """
+
+    def test_luma_frames_are_single_channel_at_source_size(self, synthetic_video: Path) -> None:
+        with VideoReader(synthetic_video, luma=True) as reader:
+            frame = reader.read(3)
+            assert frame.channels is ChannelSpec.GRAY
+            assert frame.data.ndim == 2
+            assert frame.data.shape == (FIXTURE_HEIGHT, FIXTURE_WIDTH)
+
+    def test_the_colour_path_is_untouched_by_default(self, synthetic_video: Path) -> None:
+        """The fallback stays byte-identical: no caller gets luma without asking."""
+        with VideoReader(synthetic_video) as reader:
+            assert reader.luma is False
+            assert reader.read(3).channels is ChannelSpec.BGR
+
+    def test_luma_still_lands_on_the_frame_that_was_asked_for(self, synthetic_video: Path) -> None:
+        """Seek accuracy is the property `reader.py` is shaped around; it holds here.
+
+        Both seek paths, because `_position_at` chooses between grabbing forward
+        and `set(POS_FRAMES)` and only one of them retrieves through the changed
+        format.
+        """
+        with VideoReader(synthetic_video, luma=True) as reader:
+            forward = [float(reader.read(index).data.mean()) for index in range(0, 12, 3)]
+            assert forward == sorted(forward)
+            assert forward[0] < forward[-1]
+
+            far = float(reader.read(30).data.mean())
+            back = float(reader.read(2).data.mean())
+            assert back < far
+
+    def test_a_plane_that_is_not_the_plane_asked_for_raises(
+        self, synthetic_video: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The guard that replaces the per-frame warning `sieve/__init__.py` silences.
+
+        `CAP_PROP_CONVERT_RGB = 0` is a request, and a build that answers it with
+        a packed layout would hand back an array this reader must not interpret
+        as luma — plausible pixels, wrong pixels, and nothing downstream able to
+        tell. Simulated by returning a three-channel frame, which is exactly what
+        a build ignoring the property would produce.
+        """
+        reader = VideoReader(synthetic_video, luma=True)
+        packed = np.zeros((FIXTURE_HEIGHT, FIXTURE_WIDTH, 3), np.uint8)
+
+        class PackedCapture:
+            """Stands in for a build that ignores `CAP_PROP_CONVERT_RGB`.
+
+            The capture itself cannot be patched — `cv2.VideoCapture.read` is
+            read-only — so the whole object is replaced. Only `read` is reached:
+            the reader is freshly opened, so `_position_at(0)` is a no-op.
+            """
+
+            def read(self) -> tuple[bool, object]:
+                return True, packed
+
+        monkeypatch.setattr(reader, "_capture", PackedCapture())
+        with pytest.raises(VideoDecodeError, match="asked for the luma plane"):
+            reader.read(0)

@@ -1,9 +1,10 @@
 ---
 title: Materialization, and the rule that is waiting on it
-status: deferred
+status: open
 gated_on: >
-  a tuning session slow enough that the user wants a compaction checkpoint —
-  downstream of the preview loop in `TODO.md`; lands as one item with
+  nothing — the trigger fired 2026-07-27 (a session where the render's decode
+  was the whole wall clock, measured); the takeable scope is the replicate crop,
+  not the general Zarr layout, and it lands with
   docs/todo/click-through-navigation.md
 reads:
   - docs/SCAFFOLD.md
@@ -52,6 +53,29 @@ format is a cropped video, its access pattern is the preview loop's own
 (sequential playback plus scrubbing), and the decode-budget finding argues its
 trigger is already met — none of the chunk-layout unknowns that make general
 materialization premature apply to it.
+
+**Promoted 2026.07.27 — the trigger fired, and here is the measurement.** The
+condition this entry set was "a tuning session slow enough that the user wants a
+compaction checkpoint." That session happened. On the reference footage the
+preview decodes at 22.4 ms/frame and the player's own decode of the *same* frames
+costs 22.7 ms alone and 41.9 ms while the render runs — so a 70 s window renders
+in ~94 s and playback drops to 0.40x real time for the duration, with the ratio
+invariant in the window length because both sides are linear in the frame count.
+
+That is the trigger, and it also says which half to take. Every millisecond above
+is decode of full-resolution frames from the source; none of it is filters, and
+none of it is touched by the chunk-layout questions that make general
+materialization premature. The takeable item is the **replicate crop** — a
+cropped video, written once, whose access pattern is the preview loop's own —
+which the sharpening below had already split out on exactly these grounds. The
+general Zarr store stays where it was: still waiting on a workload that can say
+what the chunking is for.
+
+Two items filed the same day take pressure off this one without replacing it:
+docs/todo/grayscale-and-the-luma-decode.md removes the colour convert (19.4 →
+8.0 ms/frame of decode) and docs/todo/render-fed-playback.md stops the window
+being decoded twice. Both make the decode cheaper. Only this one makes it stop
+happening.
 
 **Related and settled enough to record:** compaction is user-initiated, never
 automatic per step. ARCHITECTURE says so and VISION's "you can save that

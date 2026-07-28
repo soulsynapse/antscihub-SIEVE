@@ -61,7 +61,12 @@ from sieve.decode.identity import decoder_identity
 #: 2: the upstream fold gained port names (2026-07-26, multi-upstream kernels).
 #: A sorted list of upstream keys could not tell `a - b` from `b - a`; the fold
 #: is now `[port, key]` pairs, which changes every node key's derivation.
-HASH_VERSION = 2
+#: 3: `source_key` gained the decode format (2026-07-27, the luma path). This is
+#: the case the paragraph above names — a field added to a key — and the bump is
+#: belt and braces: appending the field already changes every root digest, and
+#: `DECODE_POLICY_VERSION` moved in the same commit for a different reason. All
+#: three invalidate the same entries once, and each records a distinct fact.
+HASH_VERSION = 3
 
 #: 32 bytes of BLAKE2b. Not a security boundary — nothing here defends against a
 #: crafted collision — so the size is chosen against accidental collision, where
@@ -120,7 +125,7 @@ def source_identity(video: Path) -> str:
     return f"{PurePosixPath(video.resolve()).as_posix()}|{stat.st_size}|{stat.st_mtime_ns}"
 
 
-def source_key(source: str, roi: ROI | None = None) -> str:
+def source_key(source: str, roi: ROI | None = None, *, luma: bool = False) -> str:
     """The key for frames as one replicate sees them: the ancestor of every root.
 
     `roi` is the replicate's crop, and it is here rather than on the first node
@@ -129,17 +134,36 @@ def source_key(source: str, roi: ROI | None = None) -> str:
     source this replicate was handed. `None` is a project with no replicates,
     which is the whole frame and a different key from any crop of it.
 
+    `luma` is the decode format, and it belongs here for the same reason
+    `decoder_identity()` does: it changes the pixel values every root is handed.
+    A graph that reads no chroma is decoded from the luma plane rather than from
+    a BGR conversion of it (`decode/reader.py`), and the two are not the same
+    array — so a colour graph and a luma graph over one file must not collide.
+    `Dag.needs_chroma` derives it; nothing chooses it by hand, which is what
+    stops the key and the reader disagreeing.
+
+    Note what this is *not*: it is not the fact that this package's decode policy
+    changed when the luma path landed. That is every entry ever computed, it is
+    not per-run, and it is `DECODE_POLICY_VERSION` inside `decoder_identity()`.
+    This field distinguishes two runs on one build; that constant distinguishes
+    two builds.
+
     A materialized crop on disk does not appear and must not: it is a faster
     route to the same pixels, and letting its presence move a key would make a
     storage decision into a semantic one. See
-    `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
+    `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`. The contrast
+    with `luma` is the whole distinction rule 7 draws: a crop on disk is where
+    the pixels live, the luma plane is which pixels they are.
 
     Args:
         source: What identifies the footage — `source_identity` builds one.
         roi: The replicate's region, in source pixels.
+        luma: Whether the source is decoded as single-channel luma. Defaults to
+            colour, so a caller that has not thought about it gets the format
+            that has always been the default rather than a silently cheaper one.
     """
     region = None if roi is None else [roi.x, roi.y, roi.width, roi.height]
-    return _digest("source", source, decoder_identity(), region)
+    return _digest("source", source, decoder_identity(), region, "luma" if luma else "bgr")
 
 
 def node_key(

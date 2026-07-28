@@ -42,7 +42,7 @@ WORKERS_OPTION = typer.Option(
 )
 
 
-def frame_source(video: Path, workers: int | None) -> PrefetchFrameSource:
+def frame_source(video: Path, workers: int | None, *, luma: bool = False) -> PrefetchFrameSource:
     """The reader a span is decoded through, however many threads it gets.
 
     Always a `PrefetchFrameSource`, including at one worker, so that `--workers 1`
@@ -50,8 +50,14 @@ def frame_source(video: Path, workers: int | None) -> PrefetchFrameSource:
     the option switches between. `VideoReader` is what it is built out of, so the
     frames are byte-identical at any count — which is why this can be the default
     without a cache generation.
+
+    `luma` is not an option and must never become one: it is
+    `not Dag.needs_chroma` for the graph about to run, and a `--luma` flag would
+    let a user pick a format the cache key says was not used. Callers derive it
+    from the plan and pass it; the default is colour so that a caller which has
+    not been taught to derive it is slow rather than wrong.
     """
-    return PrefetchFrameSource(video, workers=workers)
+    return PrefetchFrameSource(video, workers=workers, luma=luma)
 
 
 def refuse(message: str) -> typer.Exit:

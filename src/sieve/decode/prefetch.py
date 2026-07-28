@@ -23,15 +23,24 @@ luma plane alone — and none of that is reachable from here. Numbers and the fo
 routes are in
 `docs/findings/2026.07.26-threading-the-reads-buys-1.6x-and-stops.md`.
 
-**Every frame is byte-identical to what `VideoReader` returns, and that is the
-constraint the design is shaped around.** `cache_key.source_key` folds
-`decoder_identity()` into the ancestor of every node, so a reader that changed a
-pixel would silently invalidate — or worse, silently *not* invalidate — every
-entry in every store. There is no new decode path here: each worker owns an
-ordinary `VideoReader` and calls `read(index)` on it. Nothing crops, nothing
-converts, nothing resamples. That is why this needs no decoder identity of its
-own and why it can be turned on without a cache generation, which the three
-faster routes in that finding cannot.
+**`luma=True` takes one of those routes, and it is passed through rather than
+implemented here.** Each worker's `VideoReader` is opened with the flag and this
+module is unchanged otherwise — same claim protocol, same interleave, same
+window. What it changes is the number the interleave is amortising: the buffer
+is 15.9 MB instead of 47.6, and since the four-worker optimum in that finding is
+a memory-bandwidth property of the 47.6 MB buffer rather than a core count,
+`INFERRED_WORKER_CAP` is not known to be right on this path. It has not been
+re-measured; treat four as inherited, not established.
+
+**Every frame is byte-identical to what `VideoReader` returns in the same
+format, and that is the constraint the design is shaped around.**
+`cache_key.source_key` folds `decoder_identity()` into the ancestor of every
+node, so a reader that changed a pixel would silently invalidate — or worse,
+silently *not* invalidate — every entry in every store. There is no new decode
+path here: each worker owns an ordinary `VideoReader` and calls `read(index)` on
+it. Nothing crops, nothing converts, nothing resamples. Choosing the format is
+the caller's, and `source_key` hashes it; what this module guarantees is only
+that N threads produce what one thread would have.
 
 **Interleaved, not chunked, because the consumer wants frames in order.**
 Splitting a span into N contiguous blocks is the obvious decomposition and it is
@@ -166,6 +175,7 @@ class PrefetchFrameSource:
         *,
         workers: int | None = None,
         lookahead: int | None = None,
+        luma: bool = False,
     ) -> None:
         """Open `path` `workers` times and start reading ahead of the caller.
 
@@ -183,6 +193,9 @@ class PrefetchFrameSource:
                 full-resolution frames — 47.6 MB each on the reference source —
                 and that arithmetic, not the core count, is what bounds a
                 sensible worker count on a laptop.
+            luma: Open every reader on the luma path — see `VideoReader`. The
+                per-frame buffer drops from 47.6 MB to 15.9, which is the
+                quantity `lookahead`'s memory arithmetic above is denominated in.
 
         Raises:
             VideoDecodeError: if the file cannot be opened or reports no frames.
@@ -190,6 +203,7 @@ class PrefetchFrameSource:
                 path fails the same way it does for `VideoReader`.
         """
         self._path = Path(path)
+        self._luma = luma
         self._worker_count = resolve_workers(workers)
         self._lookahead = self._worker_count * 2 if lookahead is None else max(lookahead, 1)
 
@@ -224,7 +238,7 @@ class PrefetchFrameSource:
         readers: list[VideoReader] = []
         try:
             for _ in range(self._worker_count):
-                readers.append(VideoReader(self._path))
+                readers.append(VideoReader(self._path, luma=self._luma))
         except VideoDecodeError:
             for reader in readers:
                 reader.close()
@@ -232,6 +246,11 @@ class PrefetchFrameSource:
         return readers
 
     # ---- state -----------------------------------------------------------
+
+    @property
+    def luma(self) -> bool:
+        """Whether these readers decode the luma plane. `VideoReader.luma`'s reason."""
+        return self._luma
 
     @property
     def metadata(self) -> VideoMetadata:

@@ -115,7 +115,10 @@ def run_project(
         return
 
     store: FrameStore = NullFrameStore() if no_cache else MemoryFrameStore()
-    with frame_source(video, workers) as reader:
+    # The format the keys in `plans` were derived under — `dag.needs_chroma` is
+    # what `Dag.node_keys` asked, so asking it again here is one derivation read
+    # twice rather than two decisions that could differ.
+    with frame_source(video, workers, luma=not dag.needs_chroma) as reader:
         for plan in plans:
             _execute_one(plan, reader, store)
 

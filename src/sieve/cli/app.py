@@ -22,6 +22,7 @@ from sieve import __version__
 from sieve.cli.inspect_cmd import inspect_filters
 from sieve.cli.preview_cmd import preview_project
 from sieve.cli.run_cmd import run_project
+from sieve.decode.quiet import silence_raw_format_warning
 
 app = typer.Typer(
     name="sieve",
@@ -46,7 +47,7 @@ def _print_version(value: bool) -> None:
 
 
 @app.callback()
-def main(
+def root_options(
     version: Annotated[
         bool,
         typer.Option(
@@ -54,8 +55,31 @@ def main(
         ),
     ] = False,
 ) -> None:
-    """Root callback. Exists to carry `--version`; the commands do the work."""
+    """Root callback. Exists to carry `--version`; the commands do the work.
+
+    Named for what it carries rather than `main`, which is the console script
+    below: Typer takes the options from the signature and the help text from
+    `Typer(help=...)`, so the name is free, and leaving it as `main` would have
+    put the entry point and the option carrier under one name that only one of
+    them can have. Public because a leading underscore makes it look unused to
+    a type checker that cannot see the decorator registering it.
+    """
+
+
+def main() -> None:
+    """The `sieve` console script: install the stderr filter, then run.
+
+    Deliberately not the Typer callback, and the distinction is the whole reason
+    this function exists. The callback runs inside `CliRunner` too, which drives
+    the app in-process with `sys.stderr` replaced by its own capture — and
+    `decode/quiet.py` takes file descriptor 2, so installing from there displaces
+    the fixture a test is about to read from. This runs only when a real process
+    was started by a real invocation, which is the only time taking fd 2 is
+    anyone's business.
+    """
+    silence_raw_format_warning()
+    app()
 
 
 if __name__ == "__main__":
-    app()
+    main()

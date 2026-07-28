@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from sieve import __version__
+from sieve.decode.quiet import silence_raw_format_warning
 from sieve.gui.main_window import MainWindow
 from sieve.gui.wheel_steps import WheelSteps
 
@@ -21,6 +22,11 @@ def main(argv: list[str] | None = None) -> int:
     still where it was.
     """
     argv = list(sys.argv if argv is None else argv)
+
+    # Before any decoding, and here rather than in the reader: taking fd 2 is a
+    # process-wide act and this is what owns the process. See `decode/quiet.py`
+    # for why the log level and the environment variable are not options.
+    silence_raw_format_warning()
 
     app = QApplication(argv)
     app.setApplicationName("SIEVE")

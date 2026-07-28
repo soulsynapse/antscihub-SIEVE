@@ -50,7 +50,7 @@ from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
-from sieve.pipeline.dag import GraphError
+from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import UnrunnableNodeError
 from sieve.pipeline.preview import PreviewRender, PreviewSession
 
@@ -127,7 +127,9 @@ def preview_project(
     recorder = Recorder()
     bus.subscribe(recorder.record)
 
-    with frame_source(video, workers) as reader:
+    # `--edit` rewrites parameters, never the shelf a node names, so no edit can
+    # move the answer: the format is the project's and holds for every repeat.
+    with frame_source(video, workers, luma=not graph_needs_chroma(project.pipeline)) as reader:
         session = PreviewSession(
             source=source,
             reader=reader,

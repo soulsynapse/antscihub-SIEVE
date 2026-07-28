@@ -261,7 +261,12 @@ class TestKeyWalk:
                 replicate=arena,
             )
 
-        expected = {"a": by_hand("a", {"in": source_key(SOURCE, ARENA)})}
+        # The root key carries the decode format, and the hand walk has to say
+        # which — `needs_chroma` rather than a literal, because hard-coding
+        # `luma=True` here would pass for this shelf of wildcard filters and
+        # stop testing the thing that matters: that the walk asks the graph.
+        root = source_key(SOURCE, ARENA, luma=not dag.needs_chroma)
+        expected = {"a": by_hand("a", {"in": root})}
         expected["b"] = by_hand("b", {"in": expected["a"]})
         expected["c"] = by_hand("c", {"in": expected["a"]})
         expected["d"] = by_hand("d", {"left": expected["b"], "right": expected["c"]})

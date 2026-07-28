@@ -44,10 +44,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import FilterSpec, StreamSpec
+from sieve.core.filter_base import ArraySpec, FilterSpec, StreamSpec
 from sieve.core.filter_registry import REGISTRY, FilterRegistry, UnknownFilterError
 from sieve.core.pipeline_model import Node, Pipeline
 from sieve.core.replicates import Replicate
+from sieve.core.types import ChannelSpec
 from sieve.pipeline.cache_key import NotCacheableError, node_key, source_key
 
 
@@ -386,6 +387,31 @@ class Dag:
         """
         return self.specs[node_id]
 
+    @property
+    def needs_chroma(self) -> bool:
+        """Whether this graph must be fed colour frames rather than luma.
+
+        The decode format is a property of the graph, not a setting: a chain
+        that nowhere reads colour is decoded from the luma plane, which is 2.4x
+        cheaper and drops the per-frame buffer from 47.6 MB to 15.9
+        (`decode/reader.py`). Today no filter on the shelf declares a chroma-only
+        input, so this is false for every real graph — and the point of deriving
+        it rather than hard-coding it is that the first filter which *does* read
+        hue flips it back without anyone having to remember that it must.
+
+        **Over-inclusive on purpose, and it is the whole graph rather than the
+        roots.** Only roots touch the source frame, so a strict reading would
+        ask about them alone; but channel layout propagates — most filters emit
+        what they were handed — and a downstream node demanding colour is
+        evidence the chain was meant to carry it. `cache_key.py`'s rule applies
+        unchanged: an input wrongly included is a slower correct answer, an
+        input wrongly omitted is a wrong one served from cache and never noticed.
+
+        A filter that leaves `accepts.channels` empty means "any", which
+        includes GRAY, so silence is never read as a demand for colour.
+        """
+        return any(_requires_chroma(spec) for spec in self.specs.values())
+
     def node_keys(
         self,
         *,
@@ -437,7 +463,14 @@ class Dag:
                 done here because this is where they would enter a hash.
             KeyError: if `backend` is a mapping missing a node in `order`.
         """
-        root_key = source_key(source, None if replicate is None else replicate.roi)
+        # The format is derived here rather than passed in, so the key and the
+        # reader cannot disagree about what was decoded: whoever opens the
+        # reader asks this same graph the same question.
+        root_key = source_key(
+            source,
+            None if replicate is None else replicate.roi,
+            luma=not self.needs_chroma,
+        )
         keys: dict[str, str] = {}
         for node in self.order:
             fed = self.ports[node.node_id]
@@ -463,3 +496,45 @@ class Dag:
             except NotCacheableError:
                 continue
         return keys
+
+
+def graph_needs_chroma(pipeline: Pipeline, registry: FilterRegistry | None = None) -> bool:
+    """`Dag.needs_chroma` for a graph nobody has built a `Dag` from yet.
+
+    For the caller that must choose a decode format *before* it plans — the GUI's
+    render worker owns its reader and has to know which format to open it in, and
+    a reader is not something a `PreviewSession` can reopen on its behalf.
+
+    A graph that does not resolve needs colour, because "this filter is missing"
+    is not a question about chroma and the caller is about to fail on it properly
+    a moment later; answering `True` keeps the fallback the format that has
+    always been the default.
+
+    This does build a second `Dag` for a render that will build one again when it
+    plans. That is a resolve and a topological sort over a handful of nodes
+    against a render measured in seconds, and it is not a second *answer*: both
+    derive from this function on the same input, which is the property that
+    matters.
+    """
+    try:
+        return Dag.build(pipeline, registry).needs_chroma
+    except GraphError:
+        return True
+
+
+def _requires_chroma(spec: FilterSpec) -> bool:
+    """Whether `spec` refuses a single-channel frame.
+
+    A demand, not a preference: the question is whether GRAY is *excluded* from
+    what this filter accepts, so an empty `channels` tuple — the "any" wildcard
+    `ArraySpec` documents — answers no, and so does any set that lists GRAY
+    alongside colour layouts. Only a filter that names colour layouts and omits
+    GRAY is asking for chroma it would not otherwise get.
+
+    A non-array input (a `TableSpec`) never reads pixels and so never demands
+    them, which is why the isinstance is a `False` rather than an error.
+    """
+    accepts = spec.accepts
+    if not isinstance(accepts, ArraySpec) or not accepts.channels:
+        return False
+    return ChannelSpec.GRAY not in accepts.channels

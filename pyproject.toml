@@ -28,7 +28,7 @@ dependencies = [
 # `sieve` is the headless path and needs nothing beyond the base dependencies;
 # `sieve-gui` needs the `gui` extra. Two scripts rather than one with a
 # subcommand, so that installing without Qt still installs a working command.
-sieve = "sieve.cli.app:app"
+sieve = "sieve.cli.app:main"
 sieve-gui = "sieve.gui.app:main"
 
 [project.optional-dependencies]

@@ -7,6 +7,12 @@ signal and a frequency band the transform would silently correct; the 1 px
 gate floor is what keeps a single-frame detection visible at any zoom; and
 solo living in the state model is what keeps the composite's grid overlay and
 the density plot from ever disagreeing about which block is soloed.
+
+The count axis's three claims are here for the same reason: an axis that ran
+to the region's block count left the only tunable graph unreadable at a
+realistic block count, and the two rules that make autoscaling safe — the band
+is unioned in, a drag freezes the frame — are each a way the naive version
+loses the handle.
 """
 
 from __future__ import annotations
@@ -124,6 +130,73 @@ class TestTheGestureBoundary:
         qt_input.release(plot, QPointF(x, start.y() + 20.0))
 
         assert bands and not presses
+
+
+#: A peak nowhere near the region's block count — the realistic case, and the
+#: one a 0..B axis drew on the bottom pixel row.
+PEAK = 4.0
+
+
+def _count(qtbot: QtBot, peak: float = PEAK) -> CountPlot:
+    plot = CountPlot()
+    qtbot.addWidget(plot)
+    plot.resize(800, 200)
+    plot.set_span(0, FRAMES)
+    series = np.zeros(FRAMES, np.float32)
+    series[FRAMES // 2] = peak
+    plot.set_series(series, region_blocks=BLOCKS, armed=True)
+    return plot
+
+
+class TestTheCountAxis:
+    def test_the_peak_reaches_the_top_of_the_plot_not_the_floor(self, qtbot: QtBot) -> None:
+        """4 blocks of 64 fills the plot, because the axis is the data.
+
+        On the old 0..B axis this sat 6% up from the bottom, which at a
+        realistic block count is the bottom pixel row.
+        """
+        plot = _count(qtbot)
+        r = plot.plot_rect()
+
+        height_used = (r.bottom() - plot.y_of(PEAK)) / r.height()
+
+        assert height_used > 0.9
+
+    def test_a_threshold_above_the_data_keeps_its_value_reachable(self, qtbot: QtBot) -> None:
+        """The band is unioned into the range, so the handle is at 40, not clamped.
+
+        This is the scrub case: a threshold placed against a loud stretch, then
+        the window moves somewhere quiet. Without the union the handle pins to
+        the frame and reads as the axis top — a value the user never set, and
+        one they could only correct by scrubbing back.
+        """
+        plot = _count(qtbot)
+        plot.set_band(0.0, 40.0)
+
+        assert plot.value_of(plot.handle_y("hi")) == pytest.approx(40.0, rel=1e-3)
+
+    def test_a_held_handle_does_not_chase_its_own_rescale(self, qtbot: QtBot) -> None:
+        """Two moves to the same y emit the same count: the axis froze at press.
+
+        Unfrozen, the range widens to hold the handle and the handle is placed
+        through the range — so a stationary mouse walks the value down a
+        geometric series, one step per mouse-move event.
+        """
+        plot = _count(qtbot)
+        plot.set_band(0.0, 40.0)
+        emitted: list[tuple[float, float]] = []
+        plot.band_changed.connect(_capture(emitted))
+
+        r = plot.plot_rect()
+        x = float(r.center().x())
+        target = QPointF(x, r.top() + r.height() * 0.25)
+        qt_input.press(plot, QPointF(x, plot.handle_y("hi")))
+        qt_input.move(plot, target)
+        qt_input.move(plot, target)
+        qt_input.release(plot, target)
+
+        assert len(emitted) == 2
+        assert emitted[0][1] == pytest.approx(emitted[1][1])
 
 
 class TestTheGateFloor:

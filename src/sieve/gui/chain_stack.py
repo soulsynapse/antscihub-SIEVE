@@ -24,6 +24,13 @@ a hairline and a plus, and clicking one emits `insert_requested` — which the
 tab answers with a status line until item 7 builds the wizard that opens
 here. The affordance ships first so the gesture is discoverable the day the
 wizard lands.
+
+**The source card stands above the stack and does not scroll with it.** It is
+not a step: it is what the chain *consumes* — this replicate's crop of the
+source — and it is where that boundary's state at rest lives. It sits outside
+the scrolling column because a `rebuild` tears that column down on every
+structural edit, and the one thing on this tab that can be mid-write must not
+be rebuilt underneath a running write pass.
 """
 
 from __future__ import annotations
@@ -35,6 +42,7 @@ from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -43,6 +51,7 @@ from PySide6.QtWidgets import (
 
 from sieve.gui.band_plot import ACCENT, DIM, LINE, PANEL, TEXT, plot_font
 from sieve.gui.chain_model import STAGE_CHIPS, ChainStep, Stage, Status, StepGrade
+from sieve.gui.crop_binding import CropState
 
 #: Conflict red — the card edge, the message, and the repair buttons.
 CONFLICT = QColor(235, 110, 100)
@@ -284,6 +293,164 @@ class StepCard(QWidget):
         painter.end()
 
 
+#: What the offer costs, stated on the affordance itself rather than in a
+#: tooltip or a preferences page. The numbers are the reference clip's
+#: (`docs/findings/2026.07.28-the-crop-artifact-is-ffv1.md`): 46 s of luma
+#: decode to write 77 seconds, and 0.09 ms/frame to read it back against the
+#: parent's 9.93. A control whose price is a surprise is a control the user
+#: presses once.
+MATERIALIZE_PRICE = "about one render to write · roughly 100x cheaper to decode after"
+
+_OFFER_CSS = (
+    "QPushButton {background: #2f3a33; color: #cfe6d6; border: 1px solid #4d6a57;"
+    " border-radius: 4px; padding: 3px 12px; font-size: 8pt;}"
+    "QPushButton:hover {background: #3a4a40;}"
+)
+_QUIET_CSS = (
+    "QPushButton {background: transparent; color: #8b8e98; border: 1px solid #40434b;"
+    " border-radius: 4px; padding: 2px 10px; font-size: 8pt;}"
+    "QPushButton:hover {color: #e6e7eb; border-color: #6a6e78;}"
+)
+
+
+class SourceCard(QWidget):
+    """What the chain consumes, and whether it is at rest.
+
+    Four states, one input: `set_state` takes the `CropState` and the sentences
+    that go with it, and the widget decides nothing. That is deliberate — the
+    reading of which state a replicate is in is `gui/crop_binding.py`'s and the
+    document's, and a card that re-derived any clause of it would be the second
+    answer rule 6's absent-versus-unexamined distinction exists to prevent.
+
+    **At rest is quieter than an offer, and stale is not absent.** The goal
+    state paints flat with a dim stamp and one recessive discard; the offer
+    carries the accent and the price; staleness names the clause that missed and
+    offers both ways out. An artifact that was cut and then orphaned is a
+    different claim from one that was never cut, and the two must not render
+    alike — the user who cannot tell them apart re-cuts a file they already have.
+    """
+
+    materialize_requested = Signal()
+    cancel_requested = Signal()
+    discard_requested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._state = CropState.ABSENT
+
+        self._title = QLabel("SOURCE")
+        self._title.setFont(plot_font(8, bold=True, spaced=True))
+        self._title.setStyleSheet(f"color: {DIM.name()};")
+        self._subject = QLabel()
+        self._subject.setFont(plot_font(9))
+        self._subject.setStyleSheet(f"color: {TEXT.name()};")
+        self._detail = QLabel()
+        self._detail.setFont(plot_font(8))
+        self._detail.setWordWrap(True)
+        self._detail.setStyleSheet(f"color: {DIM.name()};")
+
+        self._progress = QProgressBar()
+        self._progress.setTextVisible(True)
+        self._progress.setFixedHeight(14)
+
+        self._materialize = QPushButton("Materialize…")
+        self._materialize.setStyleSheet(_OFFER_CSS)
+        self._materialize.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._materialize.clicked.connect(lambda _=False: self.materialize_requested.emit())
+        self._cancel = QPushButton("Cancel")
+        self._cancel.setStyleSheet(_QUIET_CSS)
+        self._cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cancel.clicked.connect(lambda _=False: self.cancel_requested.emit())
+        self._discard = QPushButton("Discard")
+        self._discard.setStyleSheet(_QUIET_CSS)
+        self._discard.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._discard.clicked.connect(lambda _=False: self.discard_requested.emit())
+
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.addWidget(self._title)
+        head.addStretch(1)
+        head.addWidget(self._subject)
+
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addWidget(self._progress, 1)
+        buttons.addStretch(1)
+        buttons.addWidget(self._discard)
+        buttons.addWidget(self._cancel)
+        buttons.addWidget(self._materialize)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 8, 14, 8)
+        layout.setSpacing(4)
+        layout.addLayout(head)
+        layout.addWidget(self._detail)
+        layout.addLayout(buttons)
+
+        self.set_state(CropState.ABSENT, subject="", detail="")
+
+    @property
+    def state(self) -> CropState:
+        """Which of the four states is on screen. A test's observable."""
+        return self._state
+
+    def buttons(self) -> tuple[QPushButton, QPushButton, QPushButton]:
+        """Materialize, Cancel, Discard — for the tests that drive the gestures."""
+        return (self._materialize, self._cancel, self._discard)
+
+    @property
+    def detail(self) -> str:
+        """The sentence under the title, verbatim. What a stale card must not hide."""
+        return self._detail.text()
+
+    def set_state(self, state: CropState, *, subject: str, detail: str) -> None:
+        """Render `state` for `subject`, with `detail` as its one sentence.
+
+        `detail` is passed through unaltered — for `STALE` it is the clause that
+        missed, which `crop_binding` phrased and which nothing here may
+        summarise away.
+        """
+        self._state = state
+        self._subject.setText(subject)
+        self._detail.setText(detail)
+        self._materialize.setVisible(state in (CropState.ABSENT, CropState.STALE))
+        self._materialize.setText("Re-materialize…" if state is CropState.STALE else "Materialize…")
+        self._cancel.setVisible(state is CropState.WRITING)
+        self._discard.setVisible(state in (CropState.AT_REST, CropState.STALE))
+        self._progress.setVisible(state is CropState.WRITING)
+        if state is not CropState.WRITING:
+            self._progress.reset()
+        self.update()
+
+    def set_progress(self, written: int, total: int) -> None:
+        """Advance the write. Ignored unless a write is what is on screen."""
+        if self._state is not CropState.WRITING:
+            return
+        self._progress.setMaximum(max(total, 1))
+        self._progress.setValue(written)
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        """The card's edge, which is the whole of its loudness.
+
+        Accent while there is a decision to take, flat while there is not. The
+        at-rest card is the only one that draws no coloured edge at all: it is
+        the goal state, and a goal state that keeps announcing itself is an
+        alert.
+        """
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.setBrush(PANEL)
+        painter.setPen(QPen(CONFLICT if self._state is CropState.STALE else LINE, 1.0))
+        painter.drawRoundedRect(rect, 6, 6)
+        if self._state in (CropState.ABSENT, CropState.WRITING):
+            painter.setBrush(ACCENT if self._state is CropState.WRITING else DIM)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2)
+        painter.end()
+
+
 class ChainStackView(QWidget):
     """The right column: Reset above the scrolling column of seams and cards."""
 
@@ -310,6 +477,8 @@ class ChainStackView(QWidget):
         self._reset.clicked.connect(self.reset_clicked)
         head.addWidget(self._reset)
 
+        self._source = SourceCard()
+
         self._host = QWidget()
         self._column = QVBoxLayout(self._host)
         self._column.setContentsMargins(0, 0, 6, 0)
@@ -322,7 +491,13 @@ class ChainStackView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(head)
+        layout.addWidget(self._source)
         layout.addWidget(scroll, 1)
+
+    @property
+    def source_card(self) -> SourceCard:
+        """The boundary card above the stages. The tab drives it and it alone."""
+        return self._source
 
     def cards(self) -> list[StepCard]:
         """The current cards, in chain order."""

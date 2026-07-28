@@ -198,6 +198,11 @@ class ReplicateTab(QWidget):
 
         self._document.structure_changed.connect(self._refresh_overlay)
         self._document.replicate_changed.connect(self._refresh_overlay)
+        # A record written or discarded is a freeze arriving or lifting, and
+        # nothing about the replicates themselves moved — so the overlay has to
+        # be told, or the box the user just materialized stays draggable-looking
+        # until something unrelated redraws it.
+        self._document.crops_changed.connect(self._refresh_overlay)
         self._document.selection_changed.connect(self._sync_selection)
 
         # `setModel` above guarantees a selection model exists from here on.
@@ -273,6 +278,11 @@ class ReplicateTab(QWidget):
     @Slot()
     def _refresh_overlay(self) -> None:
         self._view.set_replicates(self._document.all())
+        # Which boxes a crop at rest is holding still. Pushed on the same beat
+        # as the boxes themselves so the fade can never lag the geometry it is
+        # describing — a box that moved out from under its artifact stops being
+        # frozen in the same repaint that shows it moved.
+        self._view.set_frozen_rows(self._document.frozen_rows())
         # The model reset that redrew the table also cleared its selection;
         # the document's answer survived, so put it back on screen.
         self._sync_selection()

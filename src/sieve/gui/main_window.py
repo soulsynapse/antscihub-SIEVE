@@ -37,7 +37,7 @@ from yaml import YAMLError
 
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Project, project_path_for
 from sieve.core.types import VideoMetadata
-from sieve.gui.document import ReplicateDocument
+from sieve.gui.document import ReplicateDocument, SourceHome
 from sieve.gui.executor_adapter import ExecutorAdapter
 from sieve.gui.filter_tab import FilterTab
 from sieve.gui.history import SnapshotStore, history_directory
@@ -49,6 +49,7 @@ from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.replicate_tab import ReplicateTab
 from sieve.gui.timeline_bar import TimelineBar
 from sieve.gui.toast import Toast
+from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.preview import PreviewRender
 
 VIDEO_FILTER = (
@@ -332,6 +333,12 @@ class MainWindow(QMainWindow):
         self._replicate_tab.replicate_accepted.connect(self._on_replicate_accepted)
         self._preferences.changed.connect(self._on_preferences_changed)
         self._document.clip_changed.connect(self._on_clip_changed)
+        self._document.crops_changed.connect(self._on_crops_changed)
+        # A refused edit is the freeze speaking, and it says so where every
+        # other refusal in this application says so. A toast rather than the
+        # status bar: the gesture that provoked it was a drag or a button, and
+        # the user's eyes are on the thing that did not move.
+        self._document.edit_refused.connect(self._toast.show_message)
 
         # The filter tab owns render submission — it connects itself to the
         # runner's `opened` and the document's window — so what remains here
@@ -506,6 +513,10 @@ class MainWindow(QMainWindow):
         self._document.load_project(project)
         self._project = project
         self._project_path = path
+        # Where the loaded records point, declared before anything reads them:
+        # `load_project` deliberately emits nothing for the crops precisely so
+        # that the home and the set arrive together.
+        self._declare_source_home()
         # The one thing the render worker needs from the document that the
         # document does not hand it: which replicates have a crop on disk it
         # can read instead of the parent. Told at adoption and at save, the
@@ -522,17 +533,22 @@ class MainWindow(QMainWindow):
             return False
 
         base = self._project
+        home = self._document.source_home
         if base is None:
-            base = Project.for_video(metadata.path, path.parent)
-        elif self._project_path is not None:
-            # Unconditionally, without comparing the directories: rebasing onto
-            # the directory a project is already anchored to is a no-op, and the
-            # comparison that would skip it is a path-equality test — the kind
-            # that is wrong across a symlink and right in every test.
-            base = base.relocated(self._project_path.parent, path.parent)
+            base = Project.for_video(metadata.path, home.project_dir if home else path.parent)
 
         try:
+            # Assemble first, rebase second — the reverse of the order this used
+            # to run in, and the crops are why. The document is the live set now
+            # (`apply_to` writes it wholesale), and its records are relative to
+            # `source_home.project_dir`; relocating the base before the document
+            # overwrote it left a Save As rebasing records that were then thrown
+            # away and storing ones that were not. One relocation over the
+            # assembled project rebases source, sinks, and crops together, from
+            # the one directory they are all actually relative to.
             project = self._document.apply_to(base)
+            if home is not None and home.project_dir != path.parent:
+                project = project.relocated(home.project_dir, path.parent)
             project.save(path)
         except (OSError, ValidationError) as error:
             self._warn(f"Cannot save {path.name}:\n{error}")
@@ -541,8 +557,12 @@ class MainWindow(QMainWindow):
         self._project = project
         self._project_path = path
         # A Save As rebases every relative path in the document, `CropArtifact`
-        # included, so the worker's copy is re-declared against the new home
-        # rather than left pointing through the old one.
+        # included, so the document's records and the worker's copy are both
+        # re-declared against the new home rather than left pointing through the
+        # old one. The document first: the home has to be true before anything
+        # resolves a record against it.
+        self._declare_source_home()
+        self._document.set_crops(project.crops)
         self._preview.set_crops(project.crops, path.parent)
         self._document.undo_stack.setClean()
         self._update_title()
@@ -553,6 +573,50 @@ class MainWindow(QMainWindow):
         self._retarget_history()
         self.statusBar().showMessage(f"Saved {path.name}")
         return True
+
+    def _declare_source_home(self) -> None:
+        """Tell the document where its footage is and what its crops sit beside.
+
+        The anchor is `_retarget_history`'s, and deliberately the same one: the
+        project's home once there is one, and the conventional path beside the
+        video until then. A session that has never chosen a file is exactly the
+        session that may still write an artifact, and a record it could not
+        resolve afterwards would be a verified file the next open cannot find.
+
+        The identity is taken here rather than derived on demand because it is a
+        stat of the parent, and every consumer of it — the card, the freeze, the
+        four-state reading — asks on every repaint.
+        """
+        metadata = self._player.metadata
+        if metadata is None:
+            self._document.set_source_home(None)
+            return
+        anchor = self._project_path or project_path_for(metadata.path)
+        try:
+            identity = source_identity(metadata.path)
+        except OSError:
+            # Footage that has gone since it was opened. No identity means no
+            # record can match, which is the same fallback every clause of the
+            # matching rule takes — never a claim that a crop is at rest.
+            self._document.set_source_home(None)
+            return
+        self._document.set_source_home(
+            SourceHome(video=metadata.path, project_dir=anchor.parent, identity=identity)
+        )
+
+    @Slot()
+    def _on_crops_changed(self) -> None:
+        """A record was written or discarded: the worker is told, the title dirties.
+
+        The runner is *told* rather than asked, exactly as at adoption and at
+        save — it holds no reference to the document — and the third moment
+        `Project.crops` changes is this one.
+        """
+        home = self._document.source_home
+        if home is None:
+            return
+        self._preview.set_crops(self._document.crops, home.project_dir)
+        self._update_title()
 
     def _open_neighbour_project(self, video: Path) -> None:
         """Open the project filed beside a video the user opened directly.
@@ -719,6 +783,7 @@ class MainWindow(QMainWindow):
         self._player.close()
         self._preview.close()
         self._document.unbind_source()
+        self._document.set_source_home(None)
         self._replicate_tab.video_closed()
         self._timeline.video_closed()
         self._set_video_actions_enabled(False)
@@ -746,6 +811,10 @@ class MainWindow(QMainWindow):
         self._document.bind_source(
             metadata.width, metadata.height, metadata.frame_count, metadata.fps
         )
+        # Immediately after the bind and before any project is applied: the
+        # document has a source and no records, which is the state a video
+        # opened on its own stays in — and it can still be materialized from.
+        self._declare_source_home()
         self._set_video_actions_enabled(True)
         self.statusBar().showMessage(
             f"{metadata.path.name}  ·  {metadata.width}x{metadata.height}  ·  "

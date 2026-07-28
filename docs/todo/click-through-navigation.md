@@ -18,14 +18,19 @@ reads:
 
 # Click-through navigation: the output boundary lives in the chain-stack
 
-**Split 2026-07-28.** The *source* boundary — the replicate crop, whose
-writer now exists — moved to docs/todo/crop-boundary-gesture.md with the
-freeze semantics it needs. This item keeps everything below that: descent
-through node output boundaries, the fading ancestry, the suggestion
+**Split 2026-07-28, and the source half has since landed.** The *source*
+boundary — the replicate crop — moved to docs/todo/crop-boundary-gesture.md and
+was built the same day
+(docs/completed-todo/2026.07.28-crop-boundary-gesture.md): the
+card, the four states, the write pass, and the freeze it puts on a backed
+replicate's box and on the clip. Everything the two boundaries share is
+therefore no longer a design question here but a shipped mechanism to match —
+faded-means-frozen, discard-as-the-only-unfreeze, and the deliberate register a
+materialize offer sits in. This item keeps only what remains: descent through
+*node* output boundaries, the fading ancestry above one, the suggestion
 machinery, and the sibling question. One premise shifted with the crop's
-identity model (child source, not byte-exact stand-in — recorded in
-docs/todo/crop-artifact-writer.md): a materialize offer is result-*changing*
-now, so the suggestion division below keeps its two registers but
+identity model (child source, not byte-exact stand-in): a materialize offer is
+result-*changing*, so the suggestion division below keeps its two registers but
 "checkpoint this stage" no longer sits in the casual one.
 
 REFINED-VISION's replicates section ends with two sentences about a different
@@ -65,8 +70,10 @@ item, docs/todo/materialization.md), and this gesture is the initiation:
 clicking through an unmaterialized output boundary is the offer to materialize
 it, and the descent lands when the writer finishes. Before the writer exists the
 descent must refuse rather than fake — a faded "at rest" ancestry that is
-actually recomputed per frame is rule 6's failure verbatim. So the navigation is
-the front half of `pipeline/materialize.py`, not a widget waiting on it.
+actually recomputed per frame is rule 6's failure verbatim. The source boundary
+has already been through this cycle and is what the node boundary should copy:
+offer, write with progress and cancel, register, freeze — `gui/chain_stack.py`'s
+`SourceCard` and `gui/materialize_worker.py`.
 
 **Suggestions ride the boundary, divided by rule 7.** The boundary element is
 where the system may propose insertions — and every proposal sits on one side

@@ -209,6 +209,11 @@ class VideoView(QWidget):
         self._source_size: tuple[int, int] | None = None
         self._replicates: list[Replicate] = []
         self._selected = NO_SELECTION
+        #: Rows a materialized crop is holding still. They paint faded, grow no
+        #: handles, and cannot be grabbed — rule 6's mirror direction, where
+        #: faded has to *mean* frozen rather than decorate it. The set is pushed
+        #: in; this widget derives nothing about artifacts.
+        self._frozen: frozenset[int] = frozenset()
         self._drag_origin: QPoint | None = None
         self._drag_current: QPoint | None = None
         self._adjustment: _Adjustment | None = None
@@ -251,6 +256,22 @@ class VideoView(QWidget):
             return
         self._selected = index
         self._take_stamp_from_selection()
+        self.update()
+
+    def set_frozen_rows(self, rows: frozenset[int]) -> None:
+        """Declare which rows are held still by a crop at rest.
+
+        A live gesture on a row that has just frozen is cancelled rather than
+        left running: the freeze can arrive mid-drag (a write finishing while
+        the pointer is down is rare, but the release would then push a geometry
+        the document is about to refuse), and a cancelled gesture puts the box
+        back where it was.
+        """
+        if rows == self._frozen:
+            return
+        self._frozen = rows
+        if self._adjustment is not None and self._adjustment.row in rows:
+            self._cancel_gesture()
         self.update()
 
     def set_hint(self, text: str) -> None:
@@ -428,8 +449,14 @@ class VideoView(QWidget):
         return NO_SELECTION
 
     def _handle_rects(self) -> dict[Handle, QRectF]:
-        """Grab targets on the selected box, empty when nothing is selected."""
-        if not 0 <= self._selected < len(self._replicates):
+        """Grab targets on the selected box, empty when nothing is selected.
+
+        Empty also when the selected box is frozen, which is the whole of the
+        "faded means frozen" binding on this widget: no rects means no handles
+        painted and none grabbable, from one condition rather than two that
+        could disagree.
+        """
+        if not 0 <= self._selected < len(self._replicates) or self._selected in self._frozen:
             return {}
         rect = self.to_widget(self._replicates[self._selected].roi)
         xs = (rect.left(), rect.center().x(), rect.right())
@@ -496,11 +523,23 @@ class VideoView(QWidget):
         handle = self._handle_at(point)
         if handle is not None:
             self._begin_adjustment(handle, point)
-        elif 0 <= self._selected < len(self._replicates) and self.to_widget(
-            self._replicates[self._selected].roi
-        ).contains(point):
+        elif self._over_movable_selection(point):
             self._begin_adjustment(None, point)
         self.update()
+
+    def _over_movable_selection(self, point: QPointF) -> bool:
+        """Whether a press here would move the selected box.
+
+        False over a frozen one, which is what makes the fade honest: the
+        cursor does not offer the move and the press does not begin it, so the
+        document's refusal is a backstop rather than the first the user hears
+        of it.
+        """
+        return (
+            0 <= self._selected < len(self._replicates)
+            and self._selected not in self._frozen
+            and self.to_widget(self._replicates[self._selected].roi).contains(point)
+        )
 
     def _begin_adjustment(self, handle: Handle | None, origin: QPointF) -> None:
         self._gesture_serial += 1
@@ -545,9 +584,7 @@ class VideoView(QWidget):
         handle = self._handle_at(point)
         if handle is not None:
             self.setCursor(_HANDLE_CURSORS[handle])
-        elif 0 <= self._selected < len(self._replicates) and self.to_widget(
-            self._replicates[self._selected].roi
-        ).contains(point):
+        elif self._over_movable_selection(point):
             self.setCursor(Qt.CursorShape.SizeAllCursor)
         else:
             self.setCursor(Qt.CursorShape.CrossCursor)
@@ -718,14 +755,23 @@ class VideoView(QWidget):
 
         for index, replicate in enumerate(self._replicates):
             selected = index == self._selected
-            colour = _BOX_SELECTED if selected else _BOX
+            frozen = index in self._frozen
+            colour = QColor(_BOX_SELECTED if selected else _BOX)
             rect = self.to_widget(replicate.roi)
 
-            painter.setPen(QPen(colour, 2.0 if selected else 1.0))
+            pen = QPen(colour, 2.0 if selected else 1.0)
+            if frozen:
+                # Faded *and* dashed. Alpha alone reads as "further away" on a
+                # busy frame; the dash is what says the outline is a record of
+                # where the crop was cut rather than a box under the pointer.
+                colour.setAlpha(120)
+                pen = QPen(colour, 1.0)
+                pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(rect)
 
-            label = replicate.name
+            label = f"{replicate.name}  (crop at rest)" if frozen else replicate.name
             text_width = metrics.horizontalAdvance(label)
             backdrop = QRectF(
                 rect.x(),

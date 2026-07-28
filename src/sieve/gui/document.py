@@ -17,8 +17,9 @@ whole window rather than one table in it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
@@ -26,6 +27,7 @@ from PySide6.QtGui import QUndoStack
 
 from sieve.core.pipeline_model import (
     ClipRange,
+    CropArtifact,
     DetectorSettings,
     Node,
     Pipeline,
@@ -50,7 +52,9 @@ from sieve.gui.commands import (
     SetReplicateROI,
     SetReplicateROIs,
 )
+from sieve.gui.crop_binding import CropBacking, CropState, backing_for, frozen_span
 from sieve.gui.timeline_model import containing, effective_window, ended_at, fitted, moved_to
+from sieve.pipeline.dag import graph_needs_chroma
 
 
 @dataclass(frozen=True)
@@ -77,6 +81,28 @@ class DocumentState:
     pipeline: Pipeline
     detector: DetectorSettings | None
     clip: ClipRange | None
+
+
+@dataclass(frozen=True)
+class SourceHome:
+    """Where the bound footage is, what it is, and what its crops sit beside.
+
+    The three facts a crop record cannot be read without, carried as one value
+    for `ResolvedSource`'s reason: a caller holding `project_dir` without
+    `identity` would resolve a path and then match it against nothing, and one
+    holding `identity` without `video` would know a record is stale and have
+    nothing to re-cut from.
+
+    `project_dir` is the directory `CropArtifact.path` is relative to — the
+    project file's home once there is one, and the conventional home beside the
+    video until then, exactly as `MainWindow._retarget_history` anchors history.
+    An artifact written before the first save must not become unfindable by the
+    save.
+    """
+
+    video: Path
+    project_dir: Path
+    identity: str
 
 
 @dataclass(frozen=True)
@@ -123,6 +149,17 @@ class ReplicateDocument(QObject):
     #: swapped, or removed. Views rebuild from the pipeline rather than
     #: re-resolving values into an existing shape.
     pipeline_changed = Signal()
+    #: The set of crop records changed — one was written, or one discarded.
+    #: Separate from every signal above because nothing about the *document*
+    #: moved: what changed is which replicates are read from a file at rest,
+    #: which is a storage fact the render worker and the source card follow and
+    #: no undo entry covers.
+    crops_changed = Signal()
+    #: An edit was refused because a materialized crop depends on it standing
+    #: still, with the reason as the user can read it. Rule 6's mirror: a freeze
+    #: that silently swallowed the gesture would look like a control that does
+    #: nothing rather than one that is frozen.
+    edit_refused = Signal(str)
     #: A different replicate is the one being tuned — or none is. Not emitted
     #: when a removal above the selection merely shifts its row number: the
     #: arena on screen is the same arena, and a re-render of it would say
@@ -143,6 +180,15 @@ class ReplicateDocument(QObject):
         #: state, saved with the project and *not* on the undo stack. See
         #: `mark_visited`.
         self._visited: set[str] = set()
+        #: Materialized crops of the bound source, in document order — owned
+        #: the way `_visited` is: edited by the GUI, saved with the project,
+        #: and off the undo stack, because what a record describes is a file
+        #: that exists and Ctrl+Z does not un-write a file.
+        self._crops: tuple[CropArtifact, ...] = ()
+        #: Where those records are relative to, and what they were cut from.
+        #: None until a source is bound; set by the window, which is the one
+        #: object that knows both the video and the project's home.
+        self._home: SourceHome | None = None
         #: The live geometry gesture: its token, the row, and where the box was
         #: before the first step of it. Held so a refused move can be put back
         #: exactly, which the command cannot do for itself — its `_previous` is
@@ -301,6 +347,130 @@ class ReplicateDocument(QObject):
         """
         return equivalence_groups(self._pipeline, self._replicates.as_list(), self._detector)
 
+    # ---- the source boundary ---------------------------------------------
+    # Crops are read here and nowhere else in the GUI. `gui/crop_binding.py`
+    # holds the rule; this section is the one place that has all four of its
+    # inputs at once — the records, the replicates, the parent's identity, and
+    # the format the graph decodes — so the card, the box, and the timeline
+    # handles cannot end up asking three slightly different questions.
+
+    @property
+    def crops(self) -> tuple[CropArtifact, ...]:
+        """The crop records for the bound source, in document order."""
+        return self._crops
+
+    @property
+    def source_home(self) -> SourceHome | None:
+        """Where the footage and its crops live, or None while nothing is bound."""
+        return self._home
+
+    def set_source_home(self, home: SourceHome | None) -> None:
+        """Declare where the bound footage is and what its records sit beside.
+
+        Called on open and after every save: a Save As moves the project's home
+        and the records must be re-expressed against it *before* they are stored
+        here, which is the window's job (`Project.relocated` is the one rebasing
+        rule) — this setter only records where they now point.
+        """
+        self._home = home
+
+    def set_crops(self, crops: Iterable[CropArtifact]) -> None:
+        """Replace the record set wholesale — a load, or a save that rebased them."""
+        records = tuple(crops)
+        if records == self._crops:
+            return
+        self._crops = records
+        self.crops_changed.emit()
+
+    def register_crop(self, artifact: CropArtifact) -> None:
+        """Record a crop that has just been written and verified.
+
+        Not a command, for `mark_visited`'s reason turned up one notch: the
+        file is on disk, and an undo that dropped its record would leave a
+        verified artifact the session can no longer find while the folder still
+        holds it. Discarding is the inverse gesture, and it is explicit.
+
+        Replacement rather than append, keyed on `CropArtifact.identity` — the
+        same rule `Project.with_crop` states, reached by handing it the set
+        rather than restated here, so a re-cut after a deleted file replaces its
+        record in place instead of producing the pair the artifact refuses.
+        """
+        self.set_crops(self._as_project().with_crop(artifact).crops)
+
+    def discard_crop(self, artifact: CropArtifact) -> None:
+        """Drop the record of `artifact`'s cut, unfreezing what it held still.
+
+        The file is not touched here — deleting it is the caller's separate act
+        (`Project.without_crop` states the same split), because a record dropped
+        while the file survives is exactly the never-registered state the writer
+        already treats as safe.
+        """
+        self.set_crops(self._as_project().without_crop(artifact).crops)
+
+    def _as_project(self) -> Project:
+        """The record set as the model holds it, for one of its own operations.
+
+        A scratch `Project` carrying nothing but the crops: `with_crop` and
+        `without_crop` are the one home for what makes two records the same
+        record, and a document that reimplemented the identity comparison would
+        be a second answer to it. The video it names is never read — the paths
+        on the records are already relative to the real home.
+        """
+        return Project.for_video(Path("scratch.mp4"), Path()).with_crops(self._crops)
+
+    def crop_backing(self, index: int) -> CropBacking:
+        """Which of the four states the replicate at `index` is in.
+
+        `ABSENT` whenever nothing is bound: with no home there is no directory
+        to resolve a record against, so "no artifact backs this" is the only
+        answer that is true rather than merely unavailable.
+        """
+        home = self._home
+        if home is None or not 0 <= index < len(self._replicates):
+            return CropBacking(CropState.ABSENT)
+        return backing_for(
+            self._crops,
+            index,
+            self._replicates.as_list(),
+            source=home.identity,
+            luma=self.decodes_luma(),
+            project_dir=home.project_dir,
+            window=self.window,
+        )
+
+    def is_crop_frozen(self, index: int) -> bool:
+        """Whether an artifact is depending on this replicate's box standing still."""
+        return self.crop_backing(index).frozen
+
+    def frozen_rows(self) -> frozenset[int]:
+        """Every row whose geometry a live artifact holds still."""
+        return frozenset(
+            index for index in range(len(self._replicates)) if self.is_crop_frozen(index)
+        )
+
+    def frozen_clip_span(self) -> ClipRange | None:
+        """The span the clip may not leave, or None when nothing is backed."""
+        home = self._home
+        if home is None:
+            return None
+        return frozen_span(
+            self._crops,
+            self._replicates.as_list(),
+            source=home.identity,
+            luma=self.decodes_luma(),
+            project_dir=home.project_dir,
+        )
+
+    def decodes_luma(self) -> bool:
+        """Whether the current graph decodes the luma plane. Never a choice.
+
+        A consequence of the chain (`Dag.needs_chroma`), and public because the
+        write pass has to be handed the same answer the matching rule will use:
+        an artifact written in the other format is one the next render declines,
+        which is a minute of encoding spent on a file nothing will read.
+        """
+        return not graph_needs_chroma(self._pipeline)
+
     # ---- lifecycle -------------------------------------------------------
 
     def set_pipeline(self, pipeline: Pipeline) -> None:
@@ -401,6 +571,11 @@ class ReplicateDocument(QObject):
         self._clip = None
         self._selected = None
         self._visited.clear()
+        # The records go with the source, not with the home: they are cuts of
+        # *this* footage, and the next video's boundary starts empty. The home
+        # itself is the window's to reassign, and it does so as the new source
+        # binds.
+        self._crops = ()
         self._gesture = None
         self.undo_stack.clear()
 
@@ -439,6 +614,15 @@ class ReplicateDocument(QObject):
         # costs a user a week of tuning is the one they make on Monday over
         # footage they tuned on Friday.
         self._visited = set(project.visited)
+        # And so do the crops, unrefitted: a record is a claim about a file on
+        # disk, and `backs` re-checks every clause of it against the source
+        # actually bound. Trimming them here would be guessing at a question
+        # `crop_backing` answers exactly, one replicate at a time.
+        self._crops = project.crops
+        # No `crops_changed` for them: the window is mid-adoption and has not
+        # yet said where this project's home is, so a listener that re-read the
+        # records now would resolve them against the *previous* project's
+        # directory. Adoption declares the home and the records together.
         # The first row, not none: a loaded project must open looking at *an*
         # arena, and with nothing remembered in the file the first is the only
         # unarbitrary one.
@@ -488,6 +672,17 @@ class ReplicateDocument(QObject):
             .with_clip(self._clip)
             .with_detector(self._detector)
             .with_pipeline(self._pipeline)
+            # Last, and after the graph, because `with_crops` validates the
+            # whole project: run before `with_pipeline` it would judge the
+            # intermediate state, where the replicates already carry pins
+            # naming nodes the old graph does not have. Wholesale, because the
+            # document is the live set — an artifact written this session is on
+            # disk whether or not the `Project` this copies from predates it,
+            # and a save that kept the base's crops would drop the record and
+            # leave the file orphaned. The paths are relative to
+            # `source_home.project_dir`, which is what makes the window's
+            # relocate-after-assemble ordering load-bearing.
+            .with_crops(self._crops)
         )
 
     def capture(self) -> DocumentState:
@@ -686,7 +881,20 @@ class ReplicateDocument(QObject):
         clamped it against the frame, which for a placement it has: `_fit`
         leaves a region that is already inside untouched, so the safety net
         costs a stamp none of its exact extent.
+
+        A box a materialized crop is cut at is *refused* here, not offered.
+        That is the difference between this and the geometry lock one method
+        down: the lock protects tuning, which the user may reasonably decide to
+        throw away in place, while a moved box orphans a file — so the way out
+        is discarding the artifact, deliberately, and this is the last gate
+        every edit path passes through (a drag, a typed number, set-all).
         """
+        if self.is_crop_frozen(index):
+            self.edit_refused.emit(
+                f"{self._replicates[index].name} is cut to a materialized crop. "
+                "Discard the crop to move its box."
+            )
+            return
         # Before the no-op check below, not after: a gesture whose first step
         # lands the box exactly where it already was is still that gesture, and
         # recording its origin one step later would record a box that has
@@ -792,13 +1000,24 @@ class ReplicateDocument(QObject):
         when the rack is already uniform at this size — a button that stacks a
         no-op onto the history every time it is pressed teaches users not to
         press it.
+
+        A frozen row is left out and said so, rather than taking the whole
+        gesture down with it: a rack of twelve with one materialized arena
+        should still square up the other eleven, and refusing all of them would
+        make one artifact a reason to unfreeze it.
         """
+        frozen = self.frozen_rows()
         changed = {
             index: resized
             for index, replicate in enumerate(self._replicates.as_list())
-            if (resized := replicate.roi.resized_in(width, height, self._source_size))
+            if index not in frozen
+            and (resized := replicate.roi.resized_in(width, height, self._source_size))
             != replicate.roi
         }
+        if frozen:
+            self.edit_refused.emit(
+                f"{len(frozen)} arena(s) cut to a materialized crop were left as they are."
+            )
         if not changed:
             return
         self.undo_stack.push(SetReplicateROIs(self, changed, f"Set All to {width}x{height}"))
@@ -887,8 +1106,32 @@ class ReplicateDocument(QObject):
         self._push_clip(None, "Clear Clip")
 
     def _push_clip(self, clip: ClipRange | None, text: str) -> None:
+        """Record a clip edit, unless a materialized crop is holding the span.
+
+        The clip's freeze is the same rule as the box's, one axis over: a crop
+        was cut over exactly the span it was asked for, and a window reaching
+        past either end of it un-backs the replicate entirely
+        (`pipeline/resolve_source.py` declines whole rather than half-serving).
+        So the frozen span is the intersection of every backing cut, and a clip
+        that would leave it is refused with the span named.
+
+        Clearing the clip is refused for the same reason and not a special case:
+        `window` falls back to the default ten seconds, which is a different span
+        from the one that was cut in all but a coincidence.
+        """
         if clip == self._clip:
             return
+        held = self.frozen_clip_span()
+        if held is not None:
+            wanted = fitted(clip, self._source_frames) or effective_window(
+                None, self._source_frames, self._source_fps
+            )
+            if wanted is None or wanted.start < held.start or wanted.end > held.end:
+                self.edit_refused.emit(
+                    f"a materialized crop holds frames [{held.start}:{held.end}). "
+                    "Discard it to move the clip outside them."
+                )
+                return
         self.undo_stack.push(SetClip(self, clip, text))
 
     # ---- command-facing primitives ---------------------------------------

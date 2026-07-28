@@ -541,6 +541,7 @@ class PreviewRunner(QObject):
 
         self._metrics = METRICS if metrics is None else metrics
         self._opened = False
+        self._paused = False
         self._revision = 0
         self._in_flight: RenderRequest | None = None
         self._pending: RenderRequest | None = None
@@ -588,6 +589,39 @@ class PreviewRunner(QObject):
     def is_open(self) -> bool:
         """Whether footage is loaded and a render can be asked for."""
         return self._opened
+
+    @property
+    def paused(self) -> bool:
+        """Whether renders are being refused while something else reads the disk."""
+        return self._paused
+
+    def set_paused(self, paused: bool) -> None:
+        """Stop or resume accepting renders, abandoning anything in flight.
+
+        The materialization pass is a strictly sequential decode of the same
+        footage the preview is decoding, and running both recreates the
+        bandwidth wall the artifact exists to remove. Rule 5 is why this is a
+        *pause* and not a fourth declared consumer: the writer borrows the
+        preview's share for the length of the write rather than claiming one of
+        its own, so `gui/concurrency.py` gains no row and the declared sum does
+        not move.
+
+        Pausing bumps the revision with nothing issued at it — `close`'s
+        mechanism, for `close`'s reason: the in-flight render is inside
+        `render_window` and cannot be recalled, so what stops it competing is
+        that its next frame boundary is its last. Resuming submits nothing; the
+        caller resubmits, because only it knows what the chain now is.
+        """
+        if paused == self._paused:
+            return
+        self._paused = paused
+        if not paused:
+            return
+        self._in_flight = None
+        self._pending = None
+        self._revision += 1
+        self._wanted.set(self._revision)
+        self._note_slots_changed()
 
     @property
     def ring(self) -> RenderFrameRing:
@@ -699,7 +733,7 @@ class PreviewRunner(QObject):
         `RenderRequest.consumer` for the contract. Pair it with a
         `SeriesCollector` started from `render_started` to assemble a series.
         """
-        if not self._opened or not pipeline.nodes:
+        if not self._opened or self._paused or not pipeline.nodes:
             return False
 
         if not self._ticked and self._armed_at is None:
@@ -731,7 +765,7 @@ class PreviewRunner(QObject):
         the tab's first graph tick, and arming here would publish a number
         about the wrong interval.
         """
-        if not self._opened or not pipeline.nodes:
+        if not self._opened or self._paused or not pipeline.nodes:
             return False
         self._submit(
             RenderRequest(

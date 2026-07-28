@@ -95,7 +95,7 @@ src/sieve/gui/video_view.py             # the four crop gestures and the source<
 src/sieve/gui/gray_toggle.py            # the viewport's decode-format control: manual, auto while rendering, pin
 src/sieve/gui/zoom.py                   # the magnifier: zoom, pan centre, and the fit it is clamped against
 src/sieve/gui/filter_tab.py             # the tuning surface: composite, chain, plots
-src/sieve/gui/chain_stack.py            # the step cards
+src/sieve/gui/chain_stack.py            # the step cards, and the source card above them
 src/sieve/gui/chain_model.py            # its Qt-free half
 src/sieve/gui/crop_binding.py           # which record backs a replicate, and what that freezes; Qt-free
 src/sieve/gui/param_form.py             # widgets generated from a filter's params model
@@ -103,6 +103,7 @@ src/sieve/gui/commit_combo.py           # a drop menu that commits on selection,
 src/sieve/gui/composite_view.py         # the step composite: output over input, plus the block grid overlay
 src/sieve/gui/preview_runner.py         # holds a PreviewSession on its own thread; emits per-frame cost
 src/sieve/gui/detector_worker.py        # derives the detector off the GUI thread so graphs fill as frames land
+src/sieve/gui/materialize_worker.py     # writes a crop artifact off the GUI thread: progress, cancel, one at a time
 src/sieve/gui/concurrency.py            # the one declaration of how the session divides the machine
 src/sieve/gui/executor_adapter.py       # the ONLY place that knows both bench/metrics and Qt
 src/sieve/gui/player.py                 # playback, scrub, frame requests

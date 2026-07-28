@@ -4,7 +4,7 @@
 screen since the bus met the HUD; what never existed was anything publishing on
 the resource side of it. This is that publisher. Once a second it reads the
 three pool meters, asks the sampler thread for the session's RSS, judges the
-reading against `concurrency.ledger_ceiling`, and emits one `ResourceSample`
+reading against `shares.ledger_ceiling`, and emits one `ResourceSample`
 on the GUI thread — the standing version of the measurement that was, twice,
 a scratch script attached by PID.
 
@@ -47,7 +47,8 @@ from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
 
 from sieve.core.machine import MemoryUnreadableError, process_memory_bytes
 from sieve.core.pool_meter import PoolMeter
-from sieve.gui.concurrency import WorkerSplit, ledger_ceiling, resolve_worker_split
+from sieve.core.shares import WorkerSplit, ledger_ceiling
+from sieve.gui.concurrency import resolve_worker_split
 
 #: One reading per second. Fast enough that the ledger item's "30-second
 #: reading on small hardware" is thirty samples, slow enough that the GUI-side
@@ -67,7 +68,7 @@ MODE_IDLE = "idle"
 class PoolReading:
     """One pool's interval, as resolved for this machine."""
 
-    #: The row in `concurrency.SENSED` this reading is evidence about.
+    #: The row in `shares.SENSED` this reading is evidence about.
     name: str
     #: The resolved pool width the utilisation is denominated in.
     workers: int
@@ -87,7 +88,7 @@ class ResourceSample:
     #: Session RSS including children, or None when the reading was refused.
     #: None is a published refusal, not an absence of data (rule 6).
     rss_bytes: int | None
-    #: `concurrency.ledger_ceiling()` for this machine at this tick.
+    #: `shares.ledger_ceiling()` for this machine at this tick.
     ledger_bytes: int
     pools: tuple[PoolReading, ...]
 
@@ -152,7 +153,7 @@ class ResourceProbe(QObject):
 
         Args:
             meters: One `PoolMeter` per pool row, keyed by the names in
-                `concurrency.SENSED`. A mapping rather than three parameters
+                `shares.SENSED`. A mapping rather than three parameters
                 so the reconciliation test and this signature cannot disagree
                 about what the rows are.
             mode: What the session is doing right now. Called on the GUI

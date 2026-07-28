@@ -1153,7 +1153,7 @@ class FilterTab(QWidget):
         # The detector's resolved share, not every core: this runs on the GUI
         # thread beside the player's decode thread and the preview's pool, so
         # inheriting the whole machine here is the fourth consumer
-        # `gui/concurrency.py` forbids. The cheap tier reuses `band_power` and
+        # `core/shares.py` forbids. The cheap tier reuses `band_power` and
         # runs no transform at all, so this only bites on a frequency commit —
         # which is also the one that used to take every core. Capping it
         # lengthens the stall rather than removing it; routing this through

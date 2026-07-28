@@ -1,6 +1,7 @@
 ---
 title: HPC handoff, and review mode
 status: deferred
+after: [headless-detection]
 gated_on: >
   for HPC, a dataset that does not fit in a local session plus at least one
   sink — a real user with a real cluster, not a milestone; for review mode, the

@@ -1,6 +1,6 @@
 """The counters a worker pool exposes so its utilisation stops being a guess.
 
-`gui/concurrency.py` declares three worker pools, and until this module not one
+`core/shares.py` declares three worker pools, and until this module not one
 of them could report whether its declared share fits the machine it is running
 on — `DETECTOR_WORKERS`' own docstring calls itself "a judgement, not a
 measurement", and the day someone profiles the pools competing is the day it

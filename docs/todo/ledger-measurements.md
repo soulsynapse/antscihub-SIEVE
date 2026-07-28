@@ -1,6 +1,7 @@
 ---
 title: The ledger's two unmeasured numbers
 status: deferred
+after: [ledger-producers]
 serves: [A2]
 opened: 2026-07-27
 gated_on: >

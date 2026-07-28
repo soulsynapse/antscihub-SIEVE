@@ -13,7 +13,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from doc_index import DOCS_ROOT, SKIP_PREFIXES, SPECS, bug_bullets, collect
+from doc_index import (
+    DOCS_ROOT,
+    SKIP_PREFIXES,
+    SPECS,
+    ItemGraph,
+    bug_bullets,
+    build_graph,
+    collect,
+)
 
 NOTICED = re.compile(r"\(noticed (<=)?\d{4}\.\d{2}\.\d{2}( [0-9:]+)?\)")
 
@@ -36,6 +44,32 @@ def test_every_item_status_is_in_the_vocabulary() -> None:
         if entry.fields.get("status") not in ("open", "deferred")
     ]
     assert not bad, f"item status must be open or deferred: {bad}"
+
+
+def _graph() -> ItemGraph:
+    by_dir = {spec.directory: spec for spec in SPECS}
+    return build_graph(
+        collect(DOCS_ROOT / "todo", by_dir["todo"].required),
+        collect(DOCS_ROOT / "completed-todo", by_dir["completed-todo"].required),
+    )
+
+
+def test_every_after_slug_resolves_to_an_item() -> None:
+    # The failure this replaces: an edge written as a sentence points only the
+    # way the sentence runs, and a rename breaks it with no trace. A slug
+    # survives completion (`completed-todo/YYYY.MM.DD-<slug>.md`), so an edge
+    # into finished work resolves rather than dangling.
+    unresolved = _graph().unresolved()
+    assert not unresolved, "`after:` slugs naming no item file: " + ", ".join(
+        f"{item} -> {target}" for item, target in unresolved
+    )
+
+
+def test_the_item_graph_has_no_cycle() -> None:
+    # Two items each claiming to come first. Nothing else in the tree would
+    # notice; it would read as an ordering.
+    cycles = _graph().cycles()
+    assert not cycles, "cyclic `after:` edges: " + "; ".join(" -> ".join(c) for c in cycles)
 
 
 def test_no_completed_entry_still_carries_a_scaffold_marker() -> None:

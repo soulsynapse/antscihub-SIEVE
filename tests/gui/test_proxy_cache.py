@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from PySide6.QtGui import QImage
 
-from sieve.gui.concurrency import PROXY_CACHE_SHARE
+from sieve.core.shares import PROXY_CACHE_SHARE
 from sieve.gui.proxy_cache import DEFAULT_CAPACITY_BYTES, ProxyFrameCache
 
 pytestmark = pytest.mark.gui

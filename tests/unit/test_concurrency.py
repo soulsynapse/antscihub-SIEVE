@@ -10,20 +10,18 @@ else's budget.
 
 from __future__ import annotations
 
-from sieve.gui.concurrency import (
+from sieve.core.shares import (
     DETECTOR_WORKERS,
     MEMORY_SHARES,
     PLAYER_WORKERS,
     PREVIEW_WORKERS,
     PROXY_CACHE_SHARE,
     REFERENCE_FRAME_BYTES,
-    fits_machine,
     fits_memory,
     memory_reserve,
-    resolve_worker_split,
     resolved_bytes,
-    total_workers,
 )
+from sieve.gui.concurrency import fits_machine, resolve_worker_split, total_workers
 
 GIB = 1024**3
 

@@ -1,7 +1,7 @@
 """The machine is read once. Both resources, one home, importable headless.
 
 Every consumer that declares a share of the machine declares it against a
-reading from this module — `gui/concurrency.py` for the interactive session,
+reading from this module — `core/shares.py` for the interactive session,
 `decode/prefetch.py` for decode pools, and the CLI and HPC paths that have no
 GUI at all. Two callers re-deriving "how much of this machine do I have" and
 disagreeing is a slow job nobody can explain when the resource is cores, and
@@ -192,7 +192,7 @@ def process_memory_bytes() -> int:
     """Resident bytes of this process and every live child, summed.
 
     The standing version of the ledger item's H3/H4 instrumentation: what a
-    session actually holds, to be judged against what `gui/concurrency.py`
+    session actually holds, to be judged against what `core/shares.py`
     declares. RSS rather than private bytes because RSS is the quantity the
     OOM killer and the pager act on, and it is what the instrumented-session
     finding measured, so readings stay comparable with it.

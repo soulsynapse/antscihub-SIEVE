@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-from sieve.gui.concurrency import MEMORY_SHARES, SENSED, WITHOUT_SENSOR, WorkerSplit
+from sieve.core.shares import MEMORY_SHARES, SENSED, WITHOUT_SENSOR, WorkerSplit
 
 
 def _every_row() -> set[str]:

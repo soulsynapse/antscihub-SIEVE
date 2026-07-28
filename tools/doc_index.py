@@ -24,6 +24,7 @@ That is the same discipline `tests/bench/test_budget_table.py` applies to
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -275,6 +276,186 @@ def served_ids(entry: Entry) -> set[str]:
     return {str(raw).strip()}
 
 
+#: `tools/complete_item.py` writes `completed-todo/YYYY.MM.DD-<slug>.md`, so a
+#: slug survives completion and an edge pointing at an item never has to be
+#: rewritten when that item finishes. That is the property the whole graph rests
+#: on — it is what lets an edge show a *frontier* rather than a backlog.
+DATE_PREFIX = re.compile(r"^\d{4}\.\d{2}\.\d{2}-")
+
+
+def item_slug(entry: Entry) -> str:
+    """The stable name of an item, in `todo/` or after the move to completed."""
+    return DATE_PREFIX.sub("", entry.path.stem)
+
+
+def after_slugs(entry: Entry) -> list[str]:
+    """Slugs an item declares in `after:` — hard prerequisites that are items.
+
+    Distinct from `gated_on`, which is a trigger and usually not an item at all
+    (a measurement nobody has taken, a machine nobody owns). An `after:` list
+    that has drained does not make an item takeable, it makes it *unblocked*;
+    the trigger is still the gate. Bare strings are accepted for the same reason
+    `serves:` accepts them.
+    """
+    raw: object = entry.fields.get("after")
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        return [raw.strip()] if raw.strip() else []
+    if isinstance(raw, list | tuple):
+        return [str(item).strip() for item in cast(Sequence[Any], raw) if str(item).strip()]
+    return [str(raw).strip()]
+
+
+@dataclass(frozen=True, slots=True)
+class ItemGraph:
+    """Every item in both directories, keyed by slug, with its `after:` edges."""
+
+    #: slug -> entry, over `todo/` and `completed-todo/` together.
+    nodes: dict[str, Entry]
+    #: slug -> the slugs it declares in `after:`, verbatim and unresolved.
+    edges: dict[str, list[str]]
+    #: slugs that are complete, so an edge into one is satisfied.
+    done: frozenset[str]
+
+    def unresolved(self) -> list[tuple[str, str]]:
+        """`(item, slug)` pairs where the slug names no file in either folder.
+
+        An unresolved slug is a renamed item nobody updated — the failure this
+        graph exists to make loud, since prose edges fail this way silently.
+        """
+        return [
+            (slug, target)
+            for slug, targets in sorted(self.edges.items())
+            for target in targets
+            if target not in self.nodes
+        ]
+
+    def cycles(self) -> list[list[str]]:
+        """Every cycle reachable in the edge graph, as slug paths.
+
+        A cycle is two items each claiming to come first. Today that would
+        simply sit there looking like an ordering.
+        """
+        found: list[list[str]] = []
+        seen: set[str] = set()
+
+        def walk(slug: str, stack: list[str]) -> None:
+            if slug in stack:
+                found.append([*stack[stack.index(slug) :], slug])
+                return
+            if slug in seen or slug not in self.nodes:
+                return
+            seen.add(slug)
+            for target in self.edges.get(slug, []):
+                walk(target, [*stack, slug])
+
+        for slug in sorted(self.nodes):
+            walk(slug, [])
+        return found
+
+    def blockers(self, slug: str) -> list[str]:
+        """Prerequisites of `slug` that are not complete."""
+        return [t for t in self.edges.get(slug, []) if t not in self.done]
+
+
+def build_graph(items: Sequence[Entry], completed: Sequence[Entry]) -> ItemGraph:
+    """Index both folders by slug and read every `after:` edge."""
+    nodes = {item_slug(entry): entry for entry in [*completed, *items]}
+    edges = {item_slug(entry): after_slugs(entry) for entry in [*completed, *items]}
+    return ItemGraph(
+        nodes=nodes,
+        edges={slug: targets for slug, targets in edges.items() if targets},
+        done=frozenset(item_slug(entry) for entry in completed),
+    )
+
+
+def frontier_lines(open_items: Sequence[Entry], graph: ItemGraph) -> list[str]:
+    """The primer's frontier: open items with no incomplete prerequisite.
+
+    This is the one derived answer to *what can I take right now*, and it is
+    what the file-ordered list above cannot say. Blocked items are shown with
+    what blocks them rather than hidden, so the frontier is readable as a
+    partition of the open list and not as a second, shorter list.
+    """
+    ranked = [(entry, graph.blockers(item_slug(entry))) for entry in open_items]
+    ready = [entry for entry, blocked in ranked if not blocked]
+    blocked = [(entry, blockers) for entry, blockers in ranked if blockers]
+
+    lines = [
+        f"**Frontier ({len(ready)} of {len(open_items)})** — open items whose `after:`",
+        "prerequisites are all complete. `gated_on` is still the gate; this only says",
+        "no *other item* has to come first:",
+        "",
+    ]
+    for entry in ready:
+        lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name})")
+    if blocked:
+        lines += ["", "Blocked on another item, with what blocks them:", ""]
+        for entry, blockers in blocked:
+            names = ", ".join(f"`{slug}`" for slug in blockers)
+            title = _cell(entry.fields.get("title"))
+            lines.append(f"- [{title}](todo/{entry.path.name}) — {names}")
+    return lines
+
+
+def mermaid_lines(graph: ItemGraph) -> list[str]:
+    """The item DAG, grouped into subgraphs by `serves:`.
+
+    Only items carrying an edge are drawn. Thirty-four nodes render as a
+    hairball and the unconnected ones carry no graph information — they are
+    already listed above, in full. Cutting them is the item's own instruction
+    for when the picture does not fit, applied to the axis that costs nothing.
+    """
+    drawn: set[str] = set()
+    for slug, targets in graph.edges.items():
+        drawn.add(slug)
+        drawn.update(targets)
+    drawn &= set(graph.nodes)
+    if not drawn:
+        return []
+
+    def node_line(slug: str) -> str:
+        entry = graph.nodes[slug]
+        title = _cell(entry.fields.get("title")).replace('"', "'")
+        mark = "✓ " if slug in graph.done else ""
+        return f'    {slug.replace("-", "_")}["{mark}{title}"]'
+
+    lines = [
+        "**The item DAG** — `after:` edges only; an arrow points from a",
+        "prerequisite to the item that waits on it. `✓` is complete. Items with no",
+        "edge are omitted, not missing — they are the lists above.",
+        "",
+        "```mermaid",
+        "graph LR",
+    ]
+
+    grouped: dict[str, list[str]] = {key: [] for key, _ in ASPIRATIONS}
+    ungrouped: list[str] = []
+    for slug in sorted(drawn):
+        served = served_ids(graph.nodes[slug]) & set(grouped)
+        if served:
+            grouped[sorted(served)[0]].append(slug)
+        else:
+            ungrouped.append(slug)
+
+    for key, title in ASPIRATIONS:
+        if not grouped[key]:
+            continue
+        lines.append(f'  subgraph {key}["{key} — {title}"]')
+        lines += [f"  {node_line(slug)}" for slug in grouped[key]]
+        lines.append("  end")
+    lines += [node_line(slug) for slug in ungrouped]
+
+    for slug, targets in sorted(graph.edges.items()):
+        for target in targets:
+            if target in drawn:
+                lines.append(f"    {target.replace('-', '_')} --> {slug.replace('-', '_')}")
+
+    lines.append("```")
+    return lines
+
+
 def aspiration_lines(items: Sequence[Entry]) -> list[str]:
     """The primer's aspiration block: each capability and what serves it."""
     lines = [
@@ -343,7 +524,12 @@ def render_state(root: Path = DOCS_ROOT) -> str:
         gate = _cell(entry.fields.get("gated_on"))
         lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name}) — {gate}")
 
+    graph = build_graph(items, completed)
+    lines += ["", *frontier_lines(open_items, graph)]
     lines += ["", *aspiration_lines(items)]
+    mermaid = mermaid_lines(graph)
+    if mermaid:
+        lines += ["", *mermaid]
 
     lines += ["", f"**Bugs and tweaks queued in `TODO.md`:** {len(bugs)}"]
     lines += [

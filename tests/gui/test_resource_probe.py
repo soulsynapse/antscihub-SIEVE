@@ -17,7 +17,7 @@ from pytestqt.qtbot import QtBot
 
 from sieve.core.machine import MemoryUnreadableError
 from sieve.core.pool_meter import PoolMeter
-from sieve.gui.concurrency import SENSED, WorkerSplit, ledger_ceiling
+from sieve.core.shares import SENSED, WorkerSplit, ledger_ceiling
 from sieve.gui.graph_hud import GraphHud
 from sieve.gui.resource_probe import MODE_PLAYBACK, ResourceProbe, ResourceSample
 

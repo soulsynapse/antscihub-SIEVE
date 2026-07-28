@@ -672,7 +672,7 @@ class PreviewRunner(QObject):
         bandwidth wall the artifact exists to remove. Rule 5 is why this is a
         *pause* and not a fourth declared consumer: the writer borrows the
         preview's share for the length of the write rather than claiming one of
-        its own, so `gui/concurrency.py` gains no row and the declared sum does
+        its own, so `core/shares.py` gains no row and the declared sum does
         not move.
 
         Pausing bumps the revision with nothing issued at it — `close`'s

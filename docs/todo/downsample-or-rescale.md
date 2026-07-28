@@ -1,6 +1,7 @@
 ---
 title: Downsample or rescale
 status: deferred
+after: [parity-comparison-finding]
 opened: 2026-07-27
 gated_on: >
   the parity-comparison finding landing — rescale is v1's semantic and must

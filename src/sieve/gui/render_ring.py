@@ -27,7 +27,7 @@ render's format and the player's the same format. A chroma frame offered to
 honest behaviour is the old one (the player decodes for itself), not a
 conversion pass nobody measured.
 
-The bound is `RENDER_RING_SHARE` in `gui/concurrency.py` — declared there so
+The bound is `RENDER_RING_SHARE` in `core/shares.py` — declared there so
 the ledger's sum stays the whole session. It is a 256 MB floor with a 1%
 fraction: capacity, not eviction order, is what its hit rate turned out to be
 made of (`docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md`),
@@ -59,8 +59,8 @@ from sieve.bench.retention_trace import (
     AccessEvent,
     TraceRecorder,
 )
+from sieve.core.shares import RENDER_RING_SHARE, resolved_bytes
 from sieve.core.types import ChannelSpec, Frame
-from sieve.gui.concurrency import RENDER_RING_SHARE, resolved_bytes
 from sieve.gui.decode_worker import PROXY_WIDTH
 from sieve.gui.proxy_cache import ProxyFrameCache
 

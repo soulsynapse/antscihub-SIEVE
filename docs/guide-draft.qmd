@@ -2,7 +2,7 @@
 
 Agents can ignore this file. This is a guide I'm writing on how to do agentic programming efficiently, it's essentially my write up on what I learned. It's going to be going through iterations between commits.
 
----
+------------------------------------------------------------------------
 
 ## Agent's workflow
 
@@ -30,4 +30,4 @@ Agents can ignore this file. This is a guide I'm writing on how to do agentic pr
 
 ## Highest value TOOLS
 
-- **Build a bot**: Have it build a bot for moving things around and compiling things.
+- **Have it build hooks as enforcement.**

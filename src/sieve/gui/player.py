@@ -67,9 +67,9 @@ from sieve.bench.retention_trace import (
 )
 from sieve.core.pipeline_model import ClipRange
 from sieve.core.pool_meter import PoolMeter
+from sieve.core.shares import PROXY_CACHE_SHARE, resolved_bytes
 from sieve.core.types import VideoMetadata
 from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
-from sieve.gui.concurrency import PROXY_CACHE_SHARE, resolved_bytes
 from sieve.gui.decode_worker import DecodeWorker
 from sieve.gui.preferences import Preferences
 from sieve.gui.proxy_cache import ProxyFrameCache

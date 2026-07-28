@@ -277,7 +277,7 @@ higher limit — and never a silent miss.
 
 See *Dividing the machine*, which is the whole of it.
 
-**Enforced by:** `gui/concurrency.py` declares the split — threads and bytes
+**Enforced by:** `core/shares.py` declares the split — threads and bytes
 both, since 2026.07.27 — and `tests/unit/test_concurrency.py` asserts the
 thread sum leaves a core for the GUI thread and the byte floors plus the
 reserve fit a 16 GB machine.
@@ -526,8 +526,9 @@ nicety, which is the exact trade rule 5 exists to forbid.
 
 So the rule reads over consumers rather than over regimes, and the arithmetic
 is declared in one place instead of argued in three comments.
-`gui/concurrency.py` holds the split and `tests/unit/test_concurrency.py`
-asserts the sum leaves the machine a core for the GUI thread. A fourth
+`core/shares.py` holds the split, `gui/concurrency.py` the interactive
+session's slice of it, and `tests/unit/test_concurrency.py` asserts the sum
+leaves the machine a core for the GUI thread. A fourth
 consumer, or a raised constant, fails a test rather than degrading a budget
 somebody measures three commits later.
 
@@ -536,7 +537,7 @@ somebody measures three commits later.
 thread* on a frequency-band commit, calling `chain_model.recompute` without a
 `workers` argument and so inheriting its `ALL_CORES` default — a full Morlet
 transform over every core, beside the two decode pools, doing precisely what
-`detector_worker.py` was built to prevent. The arithmetic in `concurrency.py` was
+`detector_worker.py` was built to prevent. The arithmetic in the ledger was
 correct and described three consumers while four were running. The lesson is about
 the shape of the guardrail rather than about the bug: a test that sums declared
 constants can only ever check the declaration, so the fix was to delete the
@@ -555,7 +556,7 @@ at its word — a bounded slab of memory declares its share exactly as a pool
 of cores does. `core/machine.py` reads the machine once (`available_memory`
 reports the *allocation*: cgroup limit, then scheduler declaration, then
 physical RAM — because exceeding a cgroup is an OOM kill, not a slowdown),
-`gui/concurrency.py` holds the shares as fractions of the post-reserve budget
+`core/shares.py` holds the shares as fractions of the post-reserve budget
 with declared floors, and the test asserts the floors fit a 16 GB machine.
 The reserve is provisional until measured (`docs/todo/ledger-measurements.md`),
 `MemoryFrameStore` is the named unbounded gap (`UNBOUNDED`, the same honest

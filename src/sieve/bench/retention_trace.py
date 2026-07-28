@@ -417,6 +417,6 @@ def compare(events: Sequence[AccessEvent], capacity_frames: int) -> tuple[Replay
     Capacity is in frames rather than bytes because the experiment sweeps it:
     the interesting output is the curve — where, if anywhere, the proposal's
     advantage over the plain ring survives — and a single byte figure from
-    `gui/concurrency.py` would report one point on it.
+    `core/shares.py` would report one point on it.
     """
     return tuple(replay(events, policy(capacity_frames)) for policy in POLICIES)

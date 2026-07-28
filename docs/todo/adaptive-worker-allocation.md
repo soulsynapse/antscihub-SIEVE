@@ -1,6 +1,7 @@
 ---
 title: Whether the worker split should be a controller rather than a constant
 status: deferred
+after: [ledger-producers]
 serves: [A2]
 opened: 2026-07-28
 gated_on: >

@@ -1,6 +1,7 @@
 ---
 title: Sink writers
 status: deferred
+after: [materialization]
 opened: 2026-07-25
 gated_on: >
   the first filter that emits a TableSpec (a detector producing coordinates),

@@ -1,6 +1,7 @@
 ---
 title: "Replicate status: crop progress and output existence"
 status: deferred
+after: [sink-writers, materialization]
 gated_on: >
   the deferred **Sink writers** item (docs/todo/sink-writers.md) landing, or
   materialization — the same trigger, from either end

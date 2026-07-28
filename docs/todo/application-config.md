@@ -1,6 +1,7 @@
 ---
 title: Application config, and where the boundary with Preferences falls
 status: deferred
+after: [gpu-execution]
 gated_on: >
   the first setting the CLI and the GUI both need to read — cache bounds and
   backend selection policy are the two candidates

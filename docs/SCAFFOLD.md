@@ -41,6 +41,7 @@ src/sieve/core/detection.py             # windowed_mean + detect_gate, the detec
 src/sieve/core/wavelet.py               # morlet_band_power, default_freqs (capped at 0.45*fps)
 src/sieve/core/machine.py               # the machine read once: available_cpus, available_memory, process_memory_bytes
 src/sieve/core/pool_meter.py            # busy-time and depth counters a worker pool exposes to a sampler
+src/sieve/core/shares.py                # rule 5's ledger: worker constants, memory shares, sensor lists
 
 src/sieve/decode/reader.py              # the only path to a frame; OpenCV VideoCapture, pinned
 src/sieve/decode/prefetch.py            # threaded span reads, measured 1.61x and no further

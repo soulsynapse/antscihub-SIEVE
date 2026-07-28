@@ -1,6 +1,7 @@
 ---
 title: "Click-through navigation: the output boundary lives in the chain-stack"
 status: deferred
+after: [materialization]
 gated_on: >
   general materialization promoting (docs/todo/materialization.md) — the
   source-boundary half left this item 2026-07-28 and shipped

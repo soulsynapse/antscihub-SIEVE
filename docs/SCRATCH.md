@@ -254,3 +254,90 @@ renders), and `test_block_spin.py` rewritten to pin the absence of the floor
 rather than its presence. `test_density_rebuild.py` now times `density_surface`
 rather than `set_series`, at `REFERENCE_BLOCKS` — the same 16,384, no longer as
 a bound.
+
+## the-todo-dag-is-prose — done
+
+**Checked the load-bearing property first, as the item asked.** A slug does
+survive completion: `completed-todo/2026.07.25-executor.md` yields `executor`
+under a `^\d{4}\.\d{2}\.\d{2}-` strip, so an edge pointing at an item never has
+to be rewritten when that item finishes. Everything else rests on that.
+
+- `tools/doc_index.py` — `after_slugs`, `item_slug`, `build_graph`, and an
+  `ItemGraph` with `unresolved()` / `cycles()` / `blockers()`. `after:` is a new
+  optional key; `gated_on` untouched and unchanged in meaning.
+- `tests/docs/test_todo_hygiene.py` — the two assertions the item specified.
+- Twelve `after:` edges backfilled from the item's own table.
+
+**Two renders, and the frontier is the one that pays.** "Open items whose
+`after:` have all completed" reads 11 of 12 — only `qt-free-logic-under-gui` is
+blocked, on `headless-detection`. Blocked items are *shown with their blocker*
+rather than omitted, so the frontier partitions the open list instead of being a
+second shorter list a reader has to diff against the first.
+
+**The mermaid block draws 17 nodes, not 34**, because only items carrying an
+edge are drawn. That is the item's own "cut the graph rather than tune the
+layout" instruction applied to the axis that costs nothing: an item with no edge
+contributes nothing to a picture *of edges* and is already listed above in full.
+
+**`serves:` backfill deliberately not done.** The item predicted the honest
+outcome is that most items serve nothing in ASPIRATIONS.md and should say so by
+staying blank — and with only edge-carrying nodes drawn, the ungrouped block is
+already small and readable. Inventing edges to avoid showing a large body of
+work under no aspiration is the one failure mode the item named. Left blank.
+
+**Not done:** `conflicts_with:`, correctly — the item says not to design a
+second edge kind before `after:` has been used and shown what it costs.
+
+## machine-share-policy-is-above-its-consumers — done, and one of its symptoms was wrong
+
+**The file argued against the item, and the argument had a hole.**
+`gui/concurrency.py`'s docstring said outright "**`core/` holds none of this** —
+policy about sharing a machine belongs to the process that is sharing one",
+with `core.wavelet` defaulting to every core as the supporting case. That is a
+real invariant and it is about **defaults**, but it had been applied to
+**location**, and the two come apart: a declaration being *reachable* from
+below does not make anything below *apply* it. Unreachability was enforcing the
+right rule by accident. The move keeps the invariant and states it at both ends
+— `core/shares.py` declares, the caller applies, and a required `workers`
+argument with no default is what makes the caller say which it is.
+
+**One of the item's three symptoms does not survive inspection.** It claimed
+`decode/quiet.py` and `bench/retention_trace.py` "refer to it in prose *because
+they cannot import it*". Neither wants to import it. `quiet.py` cites
+concurrency's **argument** as an analogy for why fd-2 redirection belongs to the
+process owner; `retention_trace.compare` explains that a single byte figure
+would report one point on a curve it is sweeping. Both are rhetorical
+citations, and neither becomes an import. The item's *check afterwards* step
+("become imports if the move makes them possible") therefore has no work in it.
+
+**What carried the change was symptom 2, and it is enough on its own.**
+`detect/detector.py` documents that a caller running beside the interactive
+pools passes `DETECTOR_WORKERS`, and could only name it in prose — `sieve.detect`
+is below `sieve.gui` in the layer contract. A constant named in a docstring is
+one nobody's type checker follows. That docstring now names an import.
+
+**The design question the item flagged: `SENSED`/`WITHOUT_SENSOR` follow the
+table**, into `core/shares.py`. They are statements *about the rows*, so they
+have to sit with the rows or rule 4's honest gap is a gap declared in neither
+file — the sum would read as complete in one place while the missing sensor is
+recorded in another. That the *producers* (`PoolMeter`, `gui/resource_probe.py`)
+stay up in `gui/` is not a split of the table: it is the arrangement
+`bench/budgets.py` already has, where a declaration names its own gap and
+something above it closes one.
+
+**Split as built.** `core/shares.py` — the three worker constants, `WorkerSplit`,
+`MemoryShare`, `REFERENCE_FRAME_BYTES`, the four shares, `MEMORY_SHARES`,
+`UNBOUNDED`, `SENSED`, `WITHOUT_SENSOR`, and every function over the byte column.
+`gui/concurrency.py` — `total_workers`, `fits_machine`, `resolve_worker_split`:
+which pools an interactive session runs and how they degrade. No re-exports, so
+each name keeps one home; six import sites and four test modules updated.
+
+**Stale pointers retargeted**, which was most of the work by volume: eleven
+modules and three ARCHITECTURE.md passages named `gui/concurrency.py` as the
+home of the table. `decode/quiet.py` was rewritten rather than sed'd, because
+the argument it cites is the one this item inverted.
+
+**Not done:** `chain_model.recompute` still takes `workers` required with no
+default, and should — that is the enforcement the ARCHITECTURE.md passage calls
+"the one part of this rule enforced at the point a violation would be written".
+The item lists it as a symptom; it is the fix, not the disease.

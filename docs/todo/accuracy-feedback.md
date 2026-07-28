@@ -1,6 +1,7 @@
 ---
 title: Accuracy feedback in the tuning loop
 status: deferred
+after: [annotation-spans]
 serves: [A3]
 gated_on: >
   a marks model plus one hand-labelled window — the same trigger as the

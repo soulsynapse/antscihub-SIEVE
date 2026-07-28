@@ -1,6 +1,7 @@
 ---
 title: Cache eviction, and spilling to disk
 status: deferred
+after: [materialization]
 gated_on: >
   a tuning session that exhausts memory, or `materialize.py` landing —
   compaction to Zarr is where spilling belongs

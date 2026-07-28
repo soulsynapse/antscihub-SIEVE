@@ -18,7 +18,7 @@ frontier arithmetic applies — `settled_for(..., final=True)` is the whole
 record, and the intervals printed here are the ones that will not move. That
 is the difference between this and the tab, where the record is still filling.
 
-**Workers is `ALL_CORES` and says so.** `gui/concurrency.py` is explicit that
+**Workers is `ALL_CORES` and says so.** `core/shares.py` is explicit that
 policy about sharing a machine belongs to the process sharing one; a whole-clip
 pass on a node is not that process, and `--workers` here caps decode, which is
 the pool a job step actually contends on.

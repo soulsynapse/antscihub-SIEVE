@@ -48,7 +48,7 @@ class DecodeWorker(QObject):
 
     def __init__(self, meter: PoolMeter | None = None) -> None:
         """`meter` is where decode time is accounted — the player pool's row in
-        `gui/concurrency.py` getting the producer it never had. Owned by the
+        `core/shares.py` getting the producer it never had. Owned by the
         caller (`VideoPlayer`), which outlives this worker's reader churn."""
         super().__init__()
         self._meter = PoolMeter() if meter is None else meter

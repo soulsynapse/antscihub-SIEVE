@@ -1,6 +1,7 @@
 ---
 title: A pipeline editor, and whether it is a list or a graph
 status: deferred
+after: [kernel-protocol-beyond-one-frame]
 gated_on: >
   a graph that is not a chain — which means a multi-upstream filter, which
   means the named-port change to `Edge` in

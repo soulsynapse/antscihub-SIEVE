@@ -31,11 +31,13 @@ visible.
 
 **Why the application calls this and the reader does not.** Redirecting file
 descriptor 2 is process-global and irreversible in practice, which makes it a
-decision belonging to whatever owns the process — the same argument
-`gui/concurrency.py` makes for keeping machine-sharing policy out of `core/`. A
-reader that installed it on construction would also do it inside pytest, where
-fd 2 belongs to the capture fixture and taking it is how a test suite starts
-losing output it was asserting on.
+decision belonging to whatever owns the process — the same division
+`core/shares.py` draws between declaring a share of the machine and applying
+one. The declaration can live anywhere a consumer can reach; the act belongs to
+whoever owns the process, and here the act is the whole of it. A reader that
+installed this on construction would also do it inside pytest, where fd 2
+belongs to the capture fixture and taking it is how a test suite starts losing
+output it was asserting on.
 """
 
 from __future__ import annotations

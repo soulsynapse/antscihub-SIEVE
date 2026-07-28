@@ -157,6 +157,43 @@ def test_a_playhead_refresh_never_displaces_a_pending_window_render(
     assert stub.frame_renders == [7]
 
 
+def test_playhead_refreshes_never_displace_each_other(
+    tab: FilterTab, stub: _StubRunner, player: VideoPlayer
+) -> None:
+    """The same guard against itself, and the reason the pane ever went blank.
+
+    A refresh is a single-frame render, and a single-frame render's only frame
+    boundary is *before* its one delivery — so superseding one does not make it
+    late, it makes it never arrive. Playback submits a refresh per playhead
+    move, and on a chain whose frame costs more than a playback tick every
+    render started was abandoned by the next move: the pane froze for the whole
+    of playback while the graphs the last window render filled kept updating,
+    and pausing (or smashing space) let one land.
+
+    So a refresh may not be issued while one is outstanding, and the move that
+    was suppressed is not lost — it is re-issued at the newest playhead when
+    the outstanding one reports, which is what leaves the pane on the frame the
+    user paused at.
+    """
+    stub.opened.emit()
+    stub.render_finished.emit(object())  # the graphs' render is out of the way
+
+    frame = QImage(160, 120, QImage.Format.Format_RGB32)
+    player.frame_changed.emit(5, frame)
+    assert stub.frame_renders == [5]
+
+    player.frame_changed.emit(6, frame)
+    player.frame_changed.emit(7, frame)
+    assert stub.frame_renders == [5], "a refresh displaced the refresh still rendering"
+
+    stub.render_finished.emit(object())
+    assert stub.frame_renders == [5, 7], "the suppressed playhead was dropped rather than deferred"
+
+    # And nothing is left armed: a report with no move behind it submits nothing.
+    stub.render_finished.emit(object())
+    assert stub.frame_renders == [5, 7]
+
+
 def test_a_playhead_refresh_never_erases_the_series_or_the_final_derivation(
     qtbot: QtBot,
     tab: FilterTab,

@@ -227,6 +227,19 @@ class FilterTab(QWidget):
         #: displace the window render from the runner's pending slot and the
         #: series would never arrive.
         self._series_pending = False
+        #: The single-frame render the composite is waiting on, or None. One at
+        #: a time, because a second submission declares a newer revision and the
+        #: runner abandons the first at its next frame boundary — and a
+        #: single-frame render's only frame boundary is *before* its one
+        #: delivery. Playback submits one refresh per playhead move, so without
+        #: this slot a chain whose frame costs more than a playback tick abandons
+        #: every render it starts: the pane never repaints at all, while the
+        #: graphs the last window render filled keep looking healthy.
+        self._composite_outstanding: int | None = None
+        #: A playhead moved while that render was outstanding. The refresh is
+        #: re-issued when it reports, so pausing lands the pane on the frame the
+        #: user stopped at rather than on the one before it.
+        self._composite_deferred = False
 
         # The wizard (plan item 7). One at a time; the snapshot is what
         # Cancel restores, and the provisional id is what the stack dashes.
@@ -691,6 +704,12 @@ class FilterTab(QWidget):
 
         if self._runner.request_render(self._chain.pipeline(), window, replicate, consumer=feed):
             self._series_pending = True
+            # This render displaces any outstanding refresh, which is abandoned
+            # without reporting: holding the slot for it would suppress every
+            # later refresh for the rest of the session. Nothing is deferred —
+            # this render's consumer grabs the playhead pair on its way past.
+            self._composite_outstanding = None
+            self._composite_deferred = False
             # The axis is the window, from now until the render is replaced.
             # Set here rather than on the first partial so that an empty plot
             # already has the right x extent and the first curve to arrive
@@ -816,6 +835,20 @@ class FilterTab(QWidget):
             )
         )
 
+    def _release_composite_slot(self) -> None:
+        """A render reported back, so the composite may ask for another.
+
+        Any report frees the slot, not only a composite refresh's: the runner
+        reports for the current revision only, so a report at all means nothing
+        older is still running — including the refresh a window render or a
+        hover displaced, which is abandoned silently and would otherwise hold
+        the slot for the rest of the session.
+        """
+        self._composite_outstanding = None
+        if self._composite_deferred:
+            self._composite_deferred = False
+            self._refresh_composite()
+
     @Slot(object)
     def _on_render_finished(self, render: object) -> None:
         del render
@@ -824,16 +857,17 @@ class FilterTab(QWidget):
             self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
         if self._composite_grab:
             self._apply_composite(*self._composite_grab.pop())
-        if self._collector.snapshot_rows(self._runner.revision) is None:
-            # A render whose prefix stopped above the extraction step — the
-            # graphs have nothing new; `_apply` already says why.
-            return
-        # The final derivation goes through the same worker as every partial
-        # one rather than being computed here. Two paths producing the graphs
-        # would be two places for the frontier arithmetic to disagree, and the
-        # last pass is exactly a partial pass that is allowed to claim the
-        # whole record — which is what `final` says.
-        self._kick_partial(final=True)
+        if self._collector.snapshot_rows(self._runner.revision) is not None:
+            # The final derivation goes through the same worker as every partial
+            # one rather than being computed here. Two paths producing the graphs
+            # would be two places for the frontier arithmetic to disagree, and the
+            # last pass is exactly a partial pass that is allowed to claim the
+            # whole record — which is what `final` says. A prefix that stopped
+            # above the extraction step has nothing new; `_apply` already says why.
+            self._kick_partial(final=True)
+        # Last, because the deferred refresh submits and so moves the runner's
+        # revision — the number `_kick_partial` above stamps its series with.
+        self._release_composite_slot()
 
     @Slot(object)
     def _on_detector_ready(self, result: DetectorResult) -> None:
@@ -887,6 +921,7 @@ class FilterTab(QWidget):
         """
         del message
         self._series_pending = False
+        self._release_composite_slot()
 
     # ---- derivation ------------------------------------------------------
 
@@ -1277,8 +1312,18 @@ class FilterTab(QWidget):
         would displace the window render from it — the graphs would then show
         a stale series until the next edit. Nothing is lost by waiting: the
         outstanding render's consumer grabs the same pair on its way past.
+
+        Suppressed the same way while a refresh of its own is outstanding, and
+        for a sharper reason: superseding a *single-frame* render kills it
+        before its only delivery, so a refresh per playhead move at a rate the
+        chain cannot render at delivers nothing at all rather than delivering
+        late. One at a time makes the pane follow playback at whatever rate the
+        chain can actually render, which is the honest ceiling.
         """
         if self._series_pending:
+            return
+        if self._composite_outstanding is not None:
+            self._composite_deferred = True
             return
         window = self._document.window
         grab = self._composite_grabber()
@@ -1292,7 +1337,10 @@ class FilterTab(QWidget):
         # added afterwards would miss `_hud_begin`'s check and the refresh
         # would clear the series it exists to leave alone.
         self._composite_revisions.add(expected)
-        if not self._runner.request_frame(self._chain.pipeline(), want, replicate, consumer=grab):
+        if self._runner.request_frame(self._chain.pipeline(), want, replicate, consumer=grab):
+            self._composite_outstanding = expected
+            self._composite_deferred = False
+        else:
             self._composite_revisions.discard(expected)
 
     def _apply_composite(self, base: np.ndarray | None, over: np.ndarray, is_grid: bool) -> None:
@@ -1621,7 +1669,14 @@ class FilterTab(QWidget):
         # `_hud_begin` leave the window series and the HUD alone.
         expected = self._runner.revision + 1
         self._composite_revisions.add(expected)
-        if not self._runner.request_frame(chain.pipeline(), want, replicate, consumer=grab):
+        # A hover takes the composite's slot rather than queueing behind it: it
+        # is a gesture the pointer is still making, and the refresh it displaces
+        # is a playhead the user is not looking at. Taking the slot is also what
+        # keeps it accounted for — the displaced refresh never reports back.
+        if self._runner.request_frame(chain.pipeline(), want, replicate, consumer=grab):
+            self._composite_outstanding = expected
+            self._composite_deferred = False
+        else:
             self._composite_revisions.discard(expected)
 
     def _on_hover_ended(self) -> None:
@@ -1822,6 +1877,8 @@ class FilterTab(QWidget):
         self._composite_grab.clear()
         self._composite_revisions.clear()
         self._series_pending = False
+        self._composite_outstanding = None
+        self._composite_deferred = False
         self._composite.set_frames(None, None)
         self._composite.set_notice("")
         self._composite.set_block_state(np.zeros(1, np.float32), np.zeros(1, bool), None)

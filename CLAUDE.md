@@ -87,10 +87,13 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
    its place only when it pins something an example cannot state.
 5. **Run the gate**: `uv run nox -s checks`. It must pass.
 6. **Complete atomically.** `uv run python tools/complete_item.py <slug>`
-   *moves* the item file to `docs/completed-todo/YYYY.MM.DD-<slug>.md` with
-   the completion frontmatter and git-derived file lists scaffolded and the
-   item body preserved for trimming. Never mark an item done in place — a
-   finished item is *moved*.
+   *moves* the item file to `docs/completed-todo/YYYY.MM.DD-<slug>.md` with the
+   completion frontmatter and git-derived file lists scaffolded. Never mark an
+   item done in place — a finished item is *moved*. **Fill `summary` and stop
+   there.** The frontmatter is the entry; the index is built from it alone, and
+   a body is the exception, written only when a rejected alternative would
+   otherwise be re-proposed. The item's own text is not copied across — it is in
+   git (`git log --diff-filter=D -- docs/todo/<slug>.md`).
 7. **Measurements go to `docs/findings/`**, never into the completed entry. A
    completed entry says what was built; a finding says what is true about the
    system and outlives the code that prompted it.
@@ -164,6 +167,47 @@ frame a seek landed on, not merely that something decoded.
   also available. Paths in docs use whichever the surrounding file uses.
 
 ---
+
+## Comments, and when a file should be split
+
+**Fix what you find, in the file you are already editing.** Both rules below
+are opportunistic — a sweep for their own sake is churn, and churn is what
+these rules exist to prevent.
+
+**A comment earns its place by recording a decision.** Keep the reason, the
+rejected alternative, the non-obvious consequence, and the pointer to a
+finding. Cut anything a reader gets from the signature, the step-by-step
+narration of what the function does, and the second-person aside. One test:
+*could a competent reader derive this sentence from the code?* If yes, delete
+it; if no, it is the whole value of the comment and shortening it is the wrong
+cut. `pipeline/executor.py` on why the backend is the plan's is the shape to
+keep — it names a failure mode that leaves no trace. Do not touch dated
+records (VISION, REFINED-VISION, SIEVE-HANDOFF, the parity plan, entries in
+`completed-todo/`); they are superseded, never edited.
+
+**Split by axis of change, not by size.** The goal is a file that never has to
+be opened again, which is Parnas' information hiding stated as an outcome. It
+has two halves and the second is the one that gets forgotten:
+
+- Things that change for different reasons belong apart.
+- **Things that change together belong together.** A split that leaves the new
+  file being edited in every commit that touches the old one bought nothing and
+  cost a jump. Twelve stable files that must be edited in lockstep are worse
+  than one file, because nothing declares the coupling.
+
+Git answers this where reading cannot. Before proposing a split, check whether
+the seam already exists elsewhere and held:
+
+```
+git log --format=%H --no-merges | while read c; do
+  git diff-tree --no-commit-id --name-only -r $c | grep '^src/sieve/.*\.py$'; echo "--"
+done
+```
+
+Count how often each pair appears together versus alone. As of 2026-07-28
+`gui/document.py` + `gui/replicate_tab.py` was a working seam (8 together, 9
+and 10 alone) and `gui/composite_view.py` + `gui/filter_tab.py` was not (5
+together, 1 alone) — the same extraction, one that took and one that did not.
 
 ## Style of the docs themselves
 

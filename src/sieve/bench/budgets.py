@@ -210,8 +210,11 @@ BUDGETS: dict[str, Budget] = _table(
 #: `open_to_first_frame` and `scrub_settle` are timed in CI by
 #: `tests/bench/test_perf_regression.py`, so they have a benchmark but no
 #: runtime publisher — a regression is caught on the bench, never in a session.
-#: `cut_to_ready` and `slider_to_graph` have neither, and `slider_to_graph` is
-#: waiting on there being a slider at all (`docs/todo/slider-to-graph.md`).
+#: `cut_to_ready` and `slider_to_graph` have neither. `slider_to_graph` was
+#: waiting on there being a slider at all; there is one, and the gesture is now
+#: timed twice over by `knob_to_first_partial` and `knob_to_graphs` — so the
+#: open question is whether this row still names anything they do not, which is
+#: `docs/todo/slider-to-graph.md`.
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
     {
         "open_to_first_frame",

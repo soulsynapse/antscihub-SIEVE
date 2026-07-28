@@ -44,8 +44,9 @@ run `uv run nox -s docs`. One file per item.
   trigger fires — plus rescoping the body if it has aged.
 - **Completion is a move, never a mark**:
   `uv run python tools/complete_item.py <slug>` moves the file to
-  `docs/completed-todo/YYYY.MM.DD-<slug>.md`, swaps in the completion
-  frontmatter, and preserves the item body for the entry to trim.
+  `docs/completed-todo/YYYY.MM.DD-<slug>.md` and swaps in the completion
+  frontmatter. The body written here is *not* carried across — fill the entry's
+  `summary` and stop. This body stays in git.
 - **This folder is not a second `SCAFFOLD.md`.** A module that merely does
   not exist yet is SCAFFOLD's line, not an item. An entry here is work with
   reasoning — open work, or a deferred decision with a trigger.

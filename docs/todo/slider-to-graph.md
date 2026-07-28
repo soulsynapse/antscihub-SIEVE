@@ -1,47 +1,67 @@
 ---
-title: "`slider_to_graph`, which is gated on there being a slider"
-status: deferred
+title: "`slider_to_graph` names a gesture two other budgets now time"
+status: open
+opened: 2026-07-25
 gated_on: >
-  a parameter control bound to a node — VISION step 4's "information on the
-  specific filter applied", the panel beside the operations list
+  nothing — the trigger this item was written against ("a parameter control
+  bound to a node") fired, and what is left is a decision about the budget
+  table rather than a panel to build
 reads:
-  - src/sieve/gui/preview_runner.py
-  - src/sieve/core/filter_base.py
   - src/sieve/bench/budgets.py
-  - docs/VISION.md
+  - src/sieve/gui/param_form.py
+  - src/sieve/gui/filter_tab.py
 ---
 
-# `slider_to_graph`, which is gated on there being a slider
+# `slider_to_graph` names a gesture two other budgets now time
 
-**Why not now.** The budget is "Slider drag → graph update" (200 ms), and
-nothing in the GUI edits a parameter. `ReplicateDocument` holds the graph and
-`set_pipeline` is the one write, but every caller of it is a project load —
-there is no widget anywhere that changes a node's params, so there is no drag
-for the ceiling to describe. `gui/preview_runner.py` would publish it in one
-line and the line would never run.
+**The premise this item was deferred on is false.** It said "there is no widget
+anywhere that changes a node's params, so there is no drag for the ceiling to
+describe". `gui/param_form.py` now builds a settings surface from any filter's
+registered params model and routes edits through `document.edit_params`
+(`filter_tab.py:2063`), and the downsample spin box has been writing
+`rescale.scale` and `block_signal.scale` on `valueChanged` since the parity
+work. The panel exists; `slider_to_graph` is still in `WITHOUT_PRODUCER`, and
+the comment beside it still says it is "waiting on there being a slider at
+all".
 
-This is deliberately *not* faked by publishing the key from something adjacent.
-A graph re-render triggered by the working window moving is a real interval and
-is not this one: the window change decodes frames the store does not have, and
-the drag this budget names is supposed to decode nothing at all
-(`pipeline/preview.py`). Putting window moves into the series would make a
-200 ms ceiling look generous by measuring the wrong gesture.
+**Two rows already time that gesture end to end.** An upstream knob edit arms
+`_knob_armed_at` and publishes `knob_to_first_partial` (500 ms, "when could I
+start reading it") and `knob_to_graphs` (3000 ms, "when is it complete"). A
+third row, `band_drag_repaint` (50 ms), covers the continuous cheap tier. So
+the interval `slider_to_graph` describes is not unmeasured — it is measured
+twice, against different ceilings.
 
-**What would make it the right time.** A parameter control bound to a node —
-VISION step 4's "information on the specific filter applied", which is the panel
-beside the operations list. `core/filter_base.py` already declares
-`primary_params`, which is what such a panel would build itself from, so the
-gating is the widget and not the contract. `filter_to_first_tick` has a producer
-as of `gui/preview_runner.py` and this is the last in-pipeline budget without
-one.
+## The decision
 
-**What it involves.** The panel reads `FilterSpec.primary_params` and the params
-model's fields, writes through `Project.with_param_edit` so the edit lands as
-the two writes that method already performs, and pushes a `QUndoCommand` like
-every other document mutation. The render it triggers is
-`PreviewRunner.request_render`, unchanged — the coalescing and the abandon rule
-are already written against a caller that submits faster than renders finish.
+`slider_to_graph`'s 200 ms was anchored to a gesture that **decodes nothing**:
+the item's own words were that the drag "is supposed to decode nothing at all",
+every frame already in the store, two perceptual beats from knob to redrawn
+graph. `knob_to_graphs` folds that case in and prices it at 3000 ms, because
+its comment says the store rather than speed is what meets the ceiling after
+the first render — which means the all-cached edit, the one case where 200 ms
+is the honest bar, is currently adjudicated against a ceiling fifteen times
+looser and can regress without anything firing.
 
-Read: `src/sieve/gui/preview_runner.py`, `src/sieve/core/filter_base.py`
-`primary_params`, `src/sieve/bench/budgets.py` `slider_to_graph`,
-`docs/VISION.md` step 4.
+Three ways out, and the item exists to pick one rather than let the row sit in
+`WITHOUT_PRODUCER` describing work that has been done:
+
+1. **Publish it, conditioned on a store hit.** The arm already exists; the
+   render knows whether it decoded. A row that only fires when nothing was
+   decoded is the 200 ms claim stated honestly, and it is the only option that
+   keeps the tight ceiling on the case that deserves it.
+2. **Retire the row.** `knob_to_first_partial` and `knob_to_graphs` are the
+   intervals a user actually waits through, and a third row over the same
+   gesture is a ceiling nobody reads. Cheapest, and it gives up the cached-edit
+   guarantee.
+3. **Redefine it in place.** Rejected before it is proposed, for the reason
+   `knob_to_first_partial`'s own comment gives about why *it* was added as a
+   second row: redefining a key silently rewrites what the findings already
+   written against it measured.
+
+**Recommendation: (1), and measure before setting the condition.** Whether a
+knob edit over a warm store lands near 200 ms is not recorded anywhere, and if
+it does not, (1) is a budget that fires constantly and (2) becomes right. Take
+the number first; it belongs in `docs/findings/` either way.
+
+Whichever lands, `WITHOUT_PRODUCER`'s comment loses its "waiting on there being
+a slider" clause and the pointer to this file, because both are now false.

@@ -30,8 +30,8 @@ assertion about hardware it has never seen.
 
 **What would make it the right time.** The first setting the CLI and the GUI
 both need to read. **One of the two candidates withdrew 2026-07-27:** cache
-bounds became *derived* rather than configured — docs/todo/resource-ledger.md
-reads the machine's allocation and consumers declare shares of it, so there is
+bounds became *derived* rather than configured — the resource ledger
+(docs/completed-todo/2026.07.27-resource-ledger.md) reads the machine's allocation and consumers declare shares of it, so there is
 no cache-size number for a config file to carry, and carrying one would
 reintroduce exactly the travelling-hardware-assertion failure this file warns
 about. Backend selection policy remains the live candidate, downstream of the

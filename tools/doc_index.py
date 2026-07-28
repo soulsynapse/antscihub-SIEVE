@@ -79,8 +79,9 @@ SPECS: tuple[IndexSpec, ...] = (
         directory="completed-todo",
         heading="Completed",
         blurb=(
-            "One file per finished TODO item, newest first. Each records what moved, "
-            "what was decided, and what was rejected along the way."
+            "One file per finished TODO item, newest first. The summary is the entry — "
+            "a body is written only when a rejected alternative would otherwise be "
+            "re-proposed."
         ),
         columns=(
             ColumnSpec("Date", "date"),

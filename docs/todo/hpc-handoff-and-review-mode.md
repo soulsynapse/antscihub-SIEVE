@@ -37,8 +37,8 @@ docs/todo/coverage-and-detection-lanes.md, has.
 
 **Also worth recording (2026-07-27): the resource posture on a cluster is the
 same code path, not an HPC feature.** `available_cpus()` already reads the
-job step's affinity/cgroup rather than the node, and docs/todo/resource-ledger.md
-gives memory the same treatment (`memory.max`, then the scheduler's declared
+job step's affinity/cgroup rather than the node, and the resource ledger
+(docs/completed-todo/2026.07.27-resource-ledger.md) gives memory the same treatment (`memory.max`, then the scheduler's declared
 `--mem`, then physical). A job step is the *friendliest* case for that design —
 the allocation is large and explicitly declared — and the least forgiving for
 any constant chosen on a desktop, because exceeding a cgroup is an OOM kill.

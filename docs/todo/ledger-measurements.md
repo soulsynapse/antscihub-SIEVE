@@ -10,8 +10,10 @@ gated_on: >
   working window, and memory_reserve's fraction term therefore models the wrong
   variable — least wrongly on the largest machine and worst on the smallest.
   The load-bearing measurement is now one 30-second reading on ~8 GB hardware,
-  which nobody has. H4 is answered only in the weak sense and is blocked on
-  docs/todo/ledger-producers.md rather than on a session.
+  which nobody has. H4 is answered only in the weak sense; the producers it
+  was blocked on landed 2026-07-28
+  (docs/completed-todo/2026.07.28-ledger-producers.md), so what H4 now needs
+  is a session read through them rather than a sensor.
 reads:
   - src/sieve/gui/concurrency.py
   - docs/todo/cache-eviction.md
@@ -28,8 +30,8 @@ item so they do not dissolve into its completion entry. Each outcome is a
 finding in `docs/findings/`; the ledger's constants then cite it.
 
 **H2 is done.** It was the only one of the three that a headless process could
-take, so it was split into `docs/todo/luma-worker-sweep.md` and completed
-2026-07-28 —
+take, so it was split out and completed 2026-07-28
+(docs/completed-todo/2026.07.28-luma-worker-sweep.md) —
 `docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
 What remains is the two that need a person at the keyboard.
 
@@ -52,8 +54,10 @@ What remains is the two that need a person at the keyboard.
   declared 1.15 + reserve 4.29 = 5.44 GB, so no gross overrun. But the peak
   cannot be split into declared-versus-undeclared, because nothing publishes
   what the four consumers actually held — so the question H4 was written for
-  is unanswerable from outside the process. It is now blocked on
-  `docs/todo/ledger-producers.md`, not on another session.
+  is unanswerable from outside the process. The producers that make it
+  answerable landed 2026-07-28
+  (`docs/completed-todo/2026.07.28-ledger-producers.md`), so H4 is back to
+  needing a session — one taken while they are publishing.
 
 The declared-floor test in `tests/unit/test_concurrency.py` and the honest
 gap (`UNBOUNDED`) already say what the ledger cannot: until H4 runs, the sum

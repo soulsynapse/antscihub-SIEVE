@@ -11,205 +11,86 @@ gated_on: >
   policy at the operating point. The scrub half is untouched and does not block
   it.
 reads:
-  - src/sieve/gui/proxy_cache.py
-  - src/sieve/pipeline/cache.py
-  - src/sieve/gui/player.py
+  - src/sieve/gui/render_ring.py
+  - src/sieve/gui/concurrency.py
   - src/sieve/bench/retention_trace.py
   - docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md
-  - docs/todo/render-fed-playback.md
 ---
-
-> **Answered 2026-07-28, in part.** The recorded session this item was waiting
-> on exists, and
-> `docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md` scores
-> it. Distance-from-playhead buys 0.69 pp of hit rate over the plain ring at
-> the operating capacity of ~280 proxies; raising capacity from 280 to 720 buys
-> 42 pp on the plain ring alone. LRU and the ring are indistinguishable
-> everywhere. **Do not build the second eviction rule.** Give the ring a
-> fraction instead — the portable result is that the ring deserves to grow with
-> the allocation, not that 720 is a number to hardcode, and what a machine too
-> small to reach its own saturation point should do is not settled.
->
-> Two things the finding does not close: the scrub half (16 scrub events in the
-> session, 0.00% hit under every policy, and the item's own framing puts felt
-> latency first), and stall *length*, which is the one metric the proposal
-> genuinely improves — worst miss run falls 14% at the operating capacity and
-> 23% at 1080. If the rule is ever reopened it should be reopened on stall, not
-> on throughput.
 
 # What the viewport keeps of a render, and what it drops
 
-**Why not now.** Not because it is unimportant — it is the difference between a
-viewport that follows a render and one that can *replay* it — but because it is
-a policy question wearing a data-structure costume, and the wrong shape of answer
-is one that makes a particular session feel smooth and cannot be reasoned about
-afterwards.
-
-The observation that opened it (2026-07-27): the pane is frozen because frames
-are **discarded, not unavailable**. `execute` decodes into a local and releases
-it; the render's consumer sees every frame once and keeps none. And since the
-luma decode, the render produces ~88 fps against playback's 59.94 — so the
+The observation that opened this item (2026-07-27): the pane is frozen because
+frames are **discarded, not unavailable**. `execute` decodes into a local and
+releases it; the render's consumer sees every frame once and keeps none. Since
+the luma decode the render produces ~88 fps against playback's 59.94, so the
 producer is ahead, and everything it has produced and dropped is exactly what a
 user scrubbing backwards would want.
 
-## The arithmetic, and the machine it depends on
+`gui/render_ring.py` answered the retention half. What is left is the *size* of
+what it retains, and one question the trace could not answer.
 
-A 1280-wide gray proxy is 0.9 MB. A 70 s window at 59.94 fps is 4196 frames:
+## The change that is left
 
-```
-whole window, 1280 gray proxies      3.8 GB
-whole window, 640 gray proxies       0.9 GB
-ProxyFrameCache's current bound       96 MB    ~106 proxies    ~1.8 s
-```
+`RENDER_RING_SHARE` is `floor_bytes=256 MB` with **fraction zero**, and the
+comment in `gui/concurrency.py` says why: how much of a bigger machine the ring
+deserves was this item's question, and growing it there would have decided the
+policy by side effect. The measurement is now in, so the fraction is this
+item's to set.
 
-**3.8 GB is not obviously too much, and an earlier draft of this file said it
-was — wrongly.** On the reference workstation it is comfortable; on a laptop
-with 16 GB shared with a browser it is not; on an HPC node it is nothing. The
-number that decides is not in this file, because it is a fact about the machine.
+Give it one. At the operating capacity of ~280 proxies, distance-from-playhead
+buys 0.69 pp of hit rate over the plain ring; raising capacity from 280 to 720
+buys 42 pp on the plain ring alone — capacity is worth ~60x policy, and the
+portable result is that the ring deserves to grow with the allocation, not that
+720 is a number to hardcode.
 
-That makes the policy **resource-derived, not constant**, and there is already a
-model for exactly this in the repo: `decode/prefetch.py`'s `available_cpus()`
-deliberately reports the process's affinity or cgroup allocation rather than the
-machine's core count, because inside a container or a job step those differ and
-the allocation is the honest answer. Retention wants the memory equivalent —
-cgroup limit, `--mem` from the scheduler, or the physical figure when neither
-applies — and it does not exist yet. Writing it is probably the first step of
-this item rather than part of the policy.
+**What the finding does not settle, and the fraction must not pretend to:**
+what a machine too small to reach its own saturation point should do. A
+fraction tuned so the reference workstation lands past the knee leaves a small
+machine below it, and a floor raised to compensate is the reserve competing
+with the consumers it is reserved against.
 
-A smaller proxy is not the escape it looks like: INTER_AREA gets *more* expensive
-as the ratio grows (measured — 2.03 ms to 1280, 6.09 ms to 640), so shrinking to
-fit spends render-thread CPU to save memory. Dropping the width is a real knob
-and it is not a free one.
+Two levers, and the second is not free: the fraction, and the proxy width.
+INTER_AREA gets *more* expensive as the ratio grows — measured, 2.03 ms to
+1280 against 6.09 ms to 640 — so shrinking proxies to fit more of them spends
+render-thread CPU to save memory.
 
-## Why this reaches further than the viewport
+## Do not rebuild the eviction rule
 
-Two consequences worth stating before the plan starts, because they change who
-the item is for:
+Settled by measurement, not by argument, so the rejected sides are recorded
+here rather than re-derived:
 
-**It is a per-user decision, not a per-application one.** The same policy that
-is reckless on a laptop is timid on a workstation, and the difference between
-them is a factor of thirty in what can be held. A retention rule that is one
-number in the source will be wrong for most people running it; one that reads
-the allocation is right for all of them and needs no setting. This is the same
-argument `gui/concurrency.py` makes about cores, and it lands on the same
-conclusion for a different resource.
+- **Distance-from-playhead with the frontier pinned** — this item's own
+  proposal, and the reasoning for it still reads well: eviction drops the
+  retained frame farthest from the playhead, scrubbing *moves* the playhead so
+  a scrubbed-to region is preferred by construction, no pin list and no decay
+  constant. It buys 0.69 pp. It also costs a second eviction rule to explain
+  and a playhead crossing a thread boundary to feed it.
+- **LRU by access, and the plain ring** — indistinguishable from each other and
+  from the proposal everywhere in the sweep.
 
-**It bears directly on HPC** (docs/todo/hpc-handoff-and-review-mode.md). A
-cluster node's memory allocation is both large and *declared* — a job step says
-`--mem` and gets exactly that — which is the friendliest possible case for a
-policy that reads its budget rather than guessing it, and the least forgiving for
-one that does not, because exceeding a cgroup limit is an OOM kill rather than a
-slow session. If retention is written against a constant now, the HPC path
-inherits a number chosen for somebody's desktop.
+## The scrub half, which is still open
 
-There is also a third axis hiding here. Non-negotiable #5 says no consumer
-starves another, and `gui/concurrency.py` enforces it by counting threads; the
-bandwidth finding already showed that arithmetic misses the resource that
-actually binds. Memory is a further one. Whatever this item concludes should
-probably land *in* that module rather than beside it, so the session's claim on
-the machine adds up in one place instead of three.
+16 scrub events in the recorded session, 0.00% hit under every policy, and this
+item's own framing puts felt latency first. The trace cannot say whether that
+is the policy's fault or the session's — 16 events against 12671 playback gets
+is not a sample.
 
-## What has to be reconciled, which is why it wants planning
+Stall *length* is the one metric the rejected proposal genuinely improves:
+worst miss run falls 14% at the operating capacity and 23% at 1080. **If the
+eviction rule is ever reopened it is reopened on stall, not on throughput**,
+and the reopening needs a session that scrubs — which is a gesture-mix
+question, and therefore
+docs/todo/slow-path-surfacing.md's to make visible while it is still running.
 
-Three caches already exist and none of them is the right home as written:
+## The constraint that outlives both halves
 
-* `gui/proxy_cache.py` — display proxies by frame index, 96 MB, LRU. Its
-  docstring explicitly refuses playback frames, on the grounds that walking the
-  timeline evicts everything a scrub warmed. A render walks the timeline too,
-  and harder.
-* `pipeline/cache.py` — computed frames by cache key. Keyed by *what computed
-  them*, which is the right question for a node output and the wrong one for
-  "the source frame at index N as the viewport would draw it".
-* the player's own in-flight coalescing — one frame, not a store.
-
-The open questions a plan had to answer, none of which a bounded ring answers
-by itself — **answered 2026-07-27, the planning pass this item was gated on:**
-
-- **The budget comes from the resource ledger, never from this file.** The
-  memory resolver this item said was probably step one is now its own item,
-  docs/todo/resource-ledger.md, landing in `gui/concurrency.py` exactly as the
-  section above argued — the session's claim on the machine in one place. This
-  item consumes a declared byte share; it never reads the machine itself.
-- **Keyed on the playhead, with the frontier pinned.** Eviction drops the
-  retained frame farthest from the playhead, which keeps one contiguous
-  interval around where the user is looking, growing toward the frontier. This
-  answers the scrubbed-vs-recently-rendered question without a second rule:
-  scrubbing *moves the playhead*, so a scrubbed-to region is preferred by
-  construction, and it ages out naturally as the user moves on — no pin list,
-  no decay constant to tune. The frontier's latest frame is always retained
-  regardless of distance, because follow-the-render mode displays it.
-  *Rejected sides:* frontier-keyed (a pure ring) — evicts exactly the frames a
-  backward scrub wants, which is the observation that opened this item; LRU by
-  access — a render *touches* every frame once, so filling the window evicts
-  the scrub-warmed region, the same defect `gui/proxy_cache.py`'s docstring
-  already refuses playback for.
-- **One policy, filling or not.** The only render-state dependence is the
-  frontier pin, which is vacuous once the render completes. Two policies with
-  a handover was considered and dropped: the handover moment is exactly when a
-  user is watching, and a retention set that reshuffles at that boundary is
-  the unreasonable-afterwards behaviour this item exists to prevent.
-- **Nothing survives a re-render; durable replay is materialization's.**
-  Retention is session-transient display state, dropped with the render it
-  followed (as the format-flip in the grayscale item already drops warmed
-  proxies). The moment "keep it for next time" is worth paying for, the answer
-  is the replicate crop — docs/todo/materialization.md — which is truth-grade
-  and on disk; a long-lived proxy hoard would be a second, worse materializer
-  on the wrong side of the max_width line the constraint below draws.
-
-**The hypothesis test, before the policy is trusted:** the distance-from-
-playhead rule is a reasoned guess, and the honest check is cheap — instrument
-the player to log (playhead, request, hit/miss) events during a real tuning
-session, then replay the trace through candidate policies (plain ring, LRU,
-distance-from-playhead) in a unit-level harness scoring hit rate and worst
-scrub stall. Adopt the policy only if it beats the plain ring by a margin
-worth its complexity; if it does not, the ring stays and this item closes as
-a finding rather than code. Trace and comparison both belong in
-`docs/findings/`.
-
-## Deferred 2026-07-28: what is left, and how to settle it in one sitting
-
-The instrument the hypothesis test asked for is built —
-`src/sieve/bench/retention_trace.py`, split out as
-`docs/todo/retention-trace.md` and landed the same day. What remains is a
-measurement nobody at a terminal can fake and the one decision that follows
-from it.
-
-**To produce the trace.** Start the GUI with `SIEVE_RETENTION_TRACE` pointing
-at a path, tune something real — a chain edit, a window render, and the
-scrubbing back and forth that a render invites — for a few minutes, and quit.
-Then `compare(load_trace(path), capacity_frames=n)` for a sweep of `n` around
-the ring's current bound (256 MB / 0.9 MB is ~284 frames), and put the curve in
-`docs/findings/`.
-
-**The decision the curve settles.** Whether `RenderFrameRing` keeps its LRU or
-adopts distance-from-playhead with the frontier pinned. Three outcomes, and
-each has a different right answer:
-
-* *The proposal wins by a wide margin at the capacity the ledger actually
-  grants.* Adopt it. The change is contained — an eviction rule inside
-  `RenderFrameRing`, plus a playhead the player pushes into the ring, since the
-  render thread does not know where the user is looking.
-* *The two are within a few percent.* Keep the ring. A second eviction rule
-  that has to be explained, and a playhead crossing a thread boundary to feed
-  it, are real costs against a difference nobody can feel; this item then
-  closes as a finding rather than as code, which it explicitly allows.
-* *The proposal wins only at small capacities.* Keep the ring and raise
-  `RENDER_RING_SHARE`'s fraction off zero instead — the cheaper lever, and the
-  ledger is where a share is supposed to grow.
-
-**Recommendation: expect the second outcome and be pleased to be wrong.** The
-frames a backward scrub wants are the ones the render produced most recently
-*in the direction the user came from*, and at ~284 retained frames the ring
-already holds ~4.7 s behind the frontier — which covers the reflexive scrub
-back that this item was opened on. The proposal's advantage should appear only
-once the playhead parks further behind the frontier than the ring is deep, and
-whether a real session does that is exactly what nobody knows. That is why the
-trace is worth taking before either answer is written into the ring.
-
-**Constraint worth recording before anyone starts:** whatever is kept must not be
-mistakable for truth. These are display proxies — downscaled, single-channel, and
-under `max_width` semantics that `decode/reader.py` says must never feed anything
-but a viewport. A retention layer that made them addressable by anything other
-than the viewport would be handing the pipeline a cheaper route to different
-pixels, which is the failure `2026.07.25-the-crop-belongs-in-the-graph.md` argues
-against in the other direction.
+Whatever is kept must not be mistakable for truth. These are display proxies —
+downscaled, single-channel, and under `max_width` semantics that
+`decode/reader.py` says must never feed anything but a viewport. A retention
+layer addressable by anything other than the viewport would be handing the
+pipeline a cheaper route to different pixels, which is the failure
+`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` argues against in
+the other direction. Nothing survives a re-render either: retention is
+session-transient display state, and the moment "keep it for next time" is
+worth paying for, the answer is materialization, which is truth-grade and on
+disk.

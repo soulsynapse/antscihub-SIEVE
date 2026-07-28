@@ -71,10 +71,10 @@ than open ends** (each with the condition that would revise it):
   says VRAM residency pays; device-side caching is the revision, not the
   default, because VRAM exhaustion over a tuning session is the OOM-kill class
   of failure and nobody has measured a session's device footprint.
-- **VRAM joins the resource ledger** (docs/todo/resource-ledger.md) as a third
-  column the day the first kernel lands: resolved device allocation, declared
-  consumers, a reserve. The ledger item holds the shape; this one brings the
-  tenant.
+- **VRAM joins the resource ledger**
+  (docs/completed-todo/2026.07.27-resource-ledger.md) as a third column the day
+  the first kernel lands: resolved device allocation, declared consumers, a
+  reserve. The ledger holds the shape; this one brings the tenant.
 
 **The arithmetic that says this is not free — not a measurement.** On the
 reference source (5312x2988 BGR, ~47 MB a frame), a PCIe round trip is order

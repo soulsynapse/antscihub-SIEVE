@@ -3,10 +3,10 @@ title: "Click-through navigation: the output boundary lives in the chain-stack"
 status: deferred
 gated_on: >
   general materialization promoting (docs/todo/materialization.md) — the
-  source-boundary half left this item 2026-07-28 into
-  docs/todo/crop-boundary-gesture.md, and what remains here is descent
-  through *node* output boundaries, which has no writer until the general
-  store exists
+  source-boundary half left this item 2026-07-28 and shipped
+  (docs/completed-todo/2026.07.28-crop-boundary-gesture.md), and what remains
+  here is descent through *node* output boundaries, which has no writer until
+  the general store exists
 reads:
   - docs/REFINED-VISION.md
   - docs/TODO.md
@@ -19,8 +19,7 @@ reads:
 # Click-through navigation: the output boundary lives in the chain-stack
 
 **Split 2026-07-28, and the source half has since landed.** The *source*
-boundary — the replicate crop — moved to docs/todo/crop-boundary-gesture.md and
-was built the same day
+boundary — the replicate crop — moved out and was built the same day
 (docs/completed-todo/2026.07.28-crop-boundary-gesture.md): the
 card, the four states, and the write pass. Everything the two boundaries share
 is therefore no longer a design question here but a shipped mechanism to match —
@@ -91,6 +90,24 @@ actually recomputed per frame is rule 6's failure verbatim. The source boundary
 has already been through this cycle and is what the node boundary should copy:
 offer, write with progress and cancel, register — `gui/chain_stack.py`'s
 `SourceCard` and `gui/materialize_worker.py`.
+
+**The standing request this rejection is answering** (noticed `<=2026.07.27`,
+folded in here 2026-07-28 from its own item, which was one file holding one
+rejection): "right click on the video in the filter tab should take it back to
+the replicate tab full view." Mechanically it is small —
+`_CompositePane.mousePressEvent` already handles presses and the tab switch is
+a signal out of `StepCompositeView` — which is exactly why it needs an argument
+against it rather than a backlog position. Building it puts a second,
+undocumented navigation affordance on the same surface, and the two would have
+to be reconciled the first time either moved. Either this item revisits the
+rejection (a right-click *plus* the boundary is defensible if they mean the
+same thing), or the boundary lands and closes the request rather than building
+it. If it is built anyway as a knowingly provisional stopgap — a legitimate
+call — the completed entry has to say so, because an unlabelled provisional
+binding is what makes the reconciliation expensive. And "back to the full view"
+must define what happens to the current selection and window: returning without
+carrying the selected replicate is a different gesture from the one being
+asked for, and the difference is invisible until someone has two replicates.
 
 **Suggestions ride the boundary, divided by rule 7.** The boundary element is
 where the system may propose insertions — and every proposal sits on one side

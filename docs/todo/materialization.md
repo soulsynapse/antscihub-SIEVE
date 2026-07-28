@@ -4,11 +4,11 @@ status: deferred
 gated_on: >
   a workload that can say what the general store's chunking is for — the
   replicate-crop half was split out 2026-07-28 (crop-artifact-writer /
-  -serving / crop-boundary-gesture, takeable in order) and no longer waits
-  here; "filesystem is truth at rest" returns to the rules table with the
-  writer item, not with this one
+  -serving / crop-boundary-gesture) and built the same day, so it no longer
+  waits here; "filesystem is truth at rest" returned to the rules table with
+  the writer, not with this one
 reads:
-  - docs/todo/crop-artifact-writer.md
+  - docs/completed-todo/2026.07.28-crop-artifact-writer.md
   - docs/findings/2026.07.28-the-crop-artifact-is-ffv1.md
   - docs/SCAFFOLD.md
   - docs/VISION.md
@@ -54,7 +54,7 @@ did not survive contact: "lossless is not a preference, it is the identity
 line" was revised 2026-07-28 to the child-source model — the artifact is a
 source with its own identity rather than a byte-exact stand-in for the
 parent's key — and the reversal is recorded where the decision now lives,
-in docs/todo/crop-artifact-writer.md.
+in docs/completed-todo/2026.07.28-crop-artifact-writer.md.
 
 **What stays here.** The general store: materializing *node outputs* (the
 folder-per-transformation of VISION step 1), the Zarr layout question,

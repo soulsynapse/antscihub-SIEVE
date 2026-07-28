@@ -60,7 +60,8 @@ Read: V1 `gui/explorers/detection_timeline.py`, `gui/track_store.py`.
 ## Detection ticks came here on 2026.07.27, and why
 
 Item 8 of `docs/filter-tab-parity-plan.md` was split that day: the bracket and
-the hover bubble stayed open in `docs/todo/seeker-upgrades.md`, and **detection
+the hover bubble stayed in the seeker item
+(`docs/completed-todo/2026.07.27-seeker-upgrades.md`), and **detection
 ticks and the `|<` / `>|` jumps moved here**, because they share this item's
 trigger rather than the seeker's absence of one.
 

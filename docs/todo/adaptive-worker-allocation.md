@@ -4,21 +4,24 @@ status: deferred
 serves: [A2]
 opened: 2026-07-28
 gated_on: >
-  evidence from docs/todo/ledger-producers.md that the fixed constants are
-  wrong on machines that are not the reference — concretely, pool-utilisation
-  samples from more than one class of machine showing the declared split
-  leaving a pool starved or idle. Until a sensor exists there is nothing to
-  close a loop around, and a governor tuned on argument would oscillate where
-  a fixed constant merely sits at the wrong value.
+  evidence that the fixed constants are wrong on machines that are not the
+  reference — concretely, pool-utilisation samples from more than one class of
+  machine showing the declared split leaving a pool starved or idle. The
+  sensor landed 2026-07-28
+  (docs/completed-todo/2026.07.28-ledger-producers.md), so what is missing is
+  no longer instrumentation but a second machine to point it at. A governor
+  tuned on argument would oscillate where a fixed constant merely sits at the
+  wrong value.
 reads:
   - src/sieve/gui/concurrency.py
-  - docs/todo/ledger-producers.md
+  - docs/completed-todo/2026.07.28-ledger-producers.md
   - docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md
 ---
 
 # Constant, or controller
 
-Raised 2026-07-28 alongside `docs/todo/ledger-producers.md`: "the load
+Raised 2026-07-28 alongside the ledger-producers item
+(docs/completed-todo/2026.07.28-ledger-producers.md): "the load
 balancing should be automatic, I'm not certain if it is tuned to my machine
 it's actually useful." The observability half became that item. This is the
 half it deliberately does not do.
@@ -41,9 +44,12 @@ different memory bandwidth has a different optimum, and nothing measures it.
 
 Three reasons, in descending order of how much they should matter.
 
-1. **No sensor.** Until `ledger-producers.md` lands there is no per-machine
-   evidence at all, so any controller would be tuned on argument. That is the
-   blocking one.
+1. **One machine's worth of evidence.** The sensor landed 2026-07-28, so the
+   original blocker — no per-machine evidence at all — is gone, and what
+   replaced it is narrower and just as blocking: every sample so far comes
+   from the reference class of machine, which is the class the constants were
+   already tuned on. A controller fitted to it would be the constant with more
+   moving parts.
 2. **A confounded objective.** "Is the split working" is not directly
    observable; what is observable is throughput, and throughput depends on
    what the user is doing. The 2026-07-28 session is the cautionary case: it

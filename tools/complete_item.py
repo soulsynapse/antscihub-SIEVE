@@ -2,16 +2,29 @@
 
 Completion is a *move*, never a mark — this script is that rule as a
 mechanism. Given a slug with a file in `docs/todo/`, it moves the file to
-`docs/completed-todo/YYYY.MM.DD-<slug>.md`, swaps the item frontmatter for the
-completion skeleton (title kept, file lists derived from the working tree),
-and preserves the item body under its own heading for the entry to trim.
+`docs/completed-todo/YYYY.MM.DD-<slug>.md` and swaps the item frontmatter for
+the completion skeleton: title kept, file lists derived from the working tree.
 Given a slug with no item file (a bug bundle, unplanned work), it scaffolds a
 fresh entry instead.
 
-The ceremony's thinking half stays yours: summary, decisions, rejected. The
-script deliberately does *not* rebuild the doc index — an entry whose summary
-still says TODO must not render into `.index.md` as if it were finished, and
-`tests/docs/test_todo_hygiene.py` fails the gate until the markers are gone.
+**The frontmatter is the entry; a body is the exception.** Measured 2026-07-28
+over the 80 entries then on disk: 9,305 lines of bodies, referenced from source
+twice, against 34 references to `docs/findings/`. The index is built from
+`title`/`date`/`commit`/`summary` alone, so everything under the closing `---`
+was serving an audience of two.
+
+Write a body only when a rejected alternative would otherwise be re-proposed.
+A measurement goes to `docs/findings/`; why a module is shaped as it is goes in
+that module's docstring.
+
+The item text is not copied across and is not lost:
+`git log --diff-filter=D -- docs/todo/<slug>.md` finds the deleting commit,
+`git show <commit>^:docs/todo/<slug>.md` prints it.
+
+The script deliberately does *not* rebuild the doc index — an entry whose
+summary still says TODO must not render into `.index.md` as if it were
+finished, and `tests/docs/test_todo_hygiene.py` fails the gate until the
+markers are gone.
 
     uv run python tools/complete_item.py the-motion-history-filter
     uv run python tools/complete_item.py fix-scroll --title "Scroll fix"
@@ -34,9 +47,11 @@ CHECKLIST = """\
 complete_item: wrote {path}
 
 Still yours to do, in order:
-  1. Fill `summary`, `decisions`, `rejected` — the TODO markers fail the gate.
-  2. Trim the preserved item body: keep what a future reader cannot get from
-     the diff, drop what the work itself now records.
+  1. Fill `summary` — one sentence. It is the whole entry and the TODO marker
+     fails the gate until it is gone.
+  2. Leave the file at that unless a rejected alternative would otherwise be
+     re-proposed; then uncomment `decisions:`/`rejected:` and say which.
+     A body under the frontmatter is the exception, not the shape.
   3. If anything was *measured*, it goes to docs/findings/, not this entry.
   4. uv run nox -s checks
   5. uv run nox -s docs
@@ -44,23 +59,22 @@ Still yours to do, in order:
 """
 
 
-def _split_item(text: str) -> tuple[str, str]:
-    """Return `(title, body)` from an item file's text.
+def _item_title(text: str) -> str:
+    """Return the `title:` from an item file's frontmatter, or `""`.
 
-    The frontmatter is dropped — the completion skeleton replaces it — and the
-    body is everything after the closing `---`.
+    The title is the only thing carried across. The body is not read: it stays
+    in git (see the module docstring), and copying it here is what made every
+    entry start at the item's length.
     """
     lines = text.splitlines()
-    title = ""
-    body_start = 0
-    if lines and lines[0].strip() == "---":
-        for i, line in enumerate(lines[1:], start=1):
-            if line.strip() == "---":
-                body_start = i + 1
-                break
-            if line.startswith("title:"):
-                title = line.removeprefix("title:").strip()
-    return title, "\n".join(lines[body_start:]).strip()
+    if not lines or lines[0].strip() != "---":
+        return ""
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if line.startswith("title:"):
+            return line.removeprefix("title:").strip()
+    return ""
 
 
 def _git(*args: str) -> list[str]:
@@ -106,10 +120,15 @@ def render(
     added: list[str],
     changed: list[str],
     removed: list[str],
-    item_body: str = "",
 ) -> str:
+    """The whole entry: frontmatter, and nothing under it.
+
+    `decisions` and `rejected` are commented out rather than scaffolded with
+    markers. Neither is required by `doc_index.SPECS`, and a filled-in TODO
+    marker is a stronger prompt than an empty section — the previous skeleton
+    asked for a decision on every item, so every item grew one.
+    """
     today = date.today()
-    preserved = f"\n\n## The item as written\n\n{item_body}\n" if item_body else ""
     return f"""\
 ---
 title: {title}
@@ -125,19 +144,15 @@ files:
   changed:{_yaml_list(changed)}
   removed:{_yaml_list(removed)}
 
-decisions:
-  - what: TODO — the choice
-    why: TODO — the reason it stops being re-argued
-
+# Uncomment only for a choice that would otherwise be re-argued.
+# decisions:
+#   - what:
+#     why:
 # rejected:
 #   - what:
 #     why:
 ---
-
-# {title}
-
-TODO — what was checked by mutation, and what changed outside the item's
-scope. Delete the body if neither applies.{preserved}"""
+"""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -157,15 +172,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     item_path = TODO_DIR / f"{slug}.md"
-    item_title, item_body = "", ""
+    item_title = ""
     if item_path.exists():
-        item_title, item_body = _split_item(item_path.read_text(encoding="utf-8"))
+        item_title = _item_title(item_path.read_text(encoding="utf-8"))
 
     title = str(args.title) if args.title else item_title or slug.replace("-", " ").capitalize()
     added, changed, removed = changed_files(exclude=path)
-    path.write_text(
-        render(title, added, changed, removed, item_body), encoding="utf-8", newline="\n"
-    )
+    path.write_text(render(title, added, changed, removed), encoding="utf-8", newline="\n")
     if item_path.exists():
         item_path.unlink()
         print(f"complete_item: moved docs/todo/{slug}.md")

@@ -3,11 +3,14 @@ title: The ledger's two unmeasured numbers
 status: deferred
 opened: 2026-07-27
 gated_on: >
-  one instrumented GUI session — the app open on the reference footage with a
-  person tuning in it for a few minutes, which is the only thing that produces
-  an RSS floor and a peak; the same session serves both hypotheses, and the
-  third (the luma worker sweep) was split out 2026-07-28 because it needed
-  neither
+  a floor reading on a *small* machine. The instrumented session ran 2026-07-28
+  (docs/findings/2026.07.28-the-session-floor-is-the-window.md) and changed the
+  question: there is no machine-independent floor, session memory tracks the
+  working window, and memory_reserve's fraction term therefore models the wrong
+  variable — least wrongly on the largest machine and worst on the smallest.
+  The load-bearing measurement is now one 30-second reading on ~8 GB hardware,
+  which nobody has. H4 is answered only in the weak sense and is blocked on
+  docs/todo/ledger-producers.md rather than on a session.
 reads:
   - src/sieve/gui/concurrency.py
   - docs/todo/cache-eviction.md
@@ -29,16 +32,27 @@ take, so it was split into `docs/todo/luma-worker-sweep.md` and completed
 `docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
 What remains is the two that need a person at the keyboard.
 
-- **H3 — the reserve.** Measure the session's RSS floor (app open, video
+- **H3 — the reserve.** ~~Measure the session's RSS floor (app open, video
   loaded, nothing rendered) on the reference workstation and once on a small
-  machine. That number replaces `memory_reserve`'s provisional
-  `min(4 GB, max(2 GB, 25%))`.
+  machine.~~ **Run 2026-07-28 on the large machine, and the premise did not
+  survive.** There is no floor: idle with a large working window the session
+  climbed 3.39 → 4.72 GB over 95 s and released; idle with a shrunk window it
+  sat flat at 1.61–1.71 GB for 330 s. Session memory tracks *window extent*,
+  which the user sets, while `memory_reserve` scales with *total RAM*. The
+  formula is least wrong on the biggest machine and worst on the smallest —
+  which is the half nobody has measured, and is now the only reading that
+  matters. See `docs/findings/2026.07.28-the-session-floor-is-the-window.md`.
 - **H4 — the ledger accounts for what the process actually holds.**
   Instrument peak RSS over a reference tuning session and compare to
   declared-sum plus reserve. A large gap means an undeclared consumer
   exists; finding it is the point. This is also the measurement
   `docs/todo/cache-eviction.md` says nobody has taken — one instrumented
-  session serves both.
+  session serves both. **Answered weakly 2026-07-28**: peak 4.72 GB against
+  declared 1.15 + reserve 4.29 = 5.44 GB, so no gross overrun. But the peak
+  cannot be split into declared-versus-undeclared, because nothing publishes
+  what the four consumers actually held — so the question H4 was written for
+  is unanswerable from outside the process. It is now blocked on
+  `docs/todo/ledger-producers.md`, not on another session.
 
 The declared-floor test in `tests/unit/test_concurrency.py` and the honest
 gap (`UNBOUNDED`) already say what the ledger cannot: until H4 runs, the sum

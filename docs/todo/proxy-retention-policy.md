@@ -1,21 +1,41 @@
 ---
 title: What the viewport keeps of a render, and what it drops
-status: deferred
+status: open
 opened: 2026-07-27
 gated_on: >
-  one recorded tuning session — run the GUI with SIEVE_RETENTION_TRACE set,
-  tune something real for a few minutes, then `compare` the trace at a sweep of
-  capacities (docs/todo/retention-trace.md landed the instrument 2026-07-28).
-  The pending decision is whether distance-from-playhead beats the plain ring
-  by enough to be worth being a second eviction rule; nobody but the person at
-  the keyboard can produce the trace that settles it.
+  nothing — the trigger fired 2026-07-28 and the policy question is answered
+  against the proposal on throughput
+  (docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md). What
+  is left is the change that finding points at: give RENDER_RING_SHARE a
+  fraction so the ring grows with the allocation, since capacity was worth ~60x
+  policy at the operating point. The scrub half is untouched and does not block
+  it.
 reads:
   - src/sieve/gui/proxy_cache.py
   - src/sieve/pipeline/cache.py
   - src/sieve/gui/player.py
   - src/sieve/bench/retention_trace.py
+  - docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md
   - docs/todo/render-fed-playback.md
 ---
+
+> **Answered 2026-07-28, in part.** The recorded session this item was waiting
+> on exists, and
+> `docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md` scores
+> it. Distance-from-playhead buys 0.69 pp of hit rate over the plain ring at
+> the operating capacity of ~280 proxies; raising capacity from 280 to 720 buys
+> 42 pp on the plain ring alone. LRU and the ring are indistinguishable
+> everywhere. **Do not build the second eviction rule.** Give the ring a
+> fraction instead — the portable result is that the ring deserves to grow with
+> the allocation, not that 720 is a number to hardcode, and what a machine too
+> small to reach its own saturation point should do is not settled.
+>
+> Two things the finding does not close: the scrub half (16 scrub events in the
+> session, 0.00% hit under every policy, and the item's own framing puts felt
+> latency first), and stall *length*, which is the one metric the proposal
+> genuinely improves — worst miss run falls 14% at the operating capacity and
+> 23% at 1080. If the rule is ever reopened it should be reopened on stall, not
+> on throughput.
 
 # What the viewport keeps of a render, and what it drops
 

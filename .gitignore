@@ -12,3 +12,5 @@ tests/results/
 tests/fixtures/decoder-corpus/mockups/renders/
 retention-session.jsonl
 rss-session.csv
+retention-tuning.jsonl
+rss-tuning.csv

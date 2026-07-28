@@ -44,15 +44,13 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from sieve.core.detection import (
-    count_band_to_counts,
-    detect_gate,
-    gate_intervals,
-    inband_count,
-    windowed_mean,
-)
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
-from sieve.core.wavelet import band_indices, default_freqs, morlet_band_power
+from sieve.core.wavelet import band_indices, default_freqs
+
+#: `DetectorUpdate` is re-exported rather than redefined: the type belongs to
+#: `sieve.detect` now, and the tab importing it from here keeps one import line
+#: for a family it uses together.
+from sieve.detect import DetectorUpdate, detect
 from sieve.filters.block_signal import resolve_block
 
 FloatArray = NDArray[np.floating[Any]]
@@ -225,6 +223,18 @@ class DetectorState:
             "centered": self.centered,
         }
 
+    def to_settings(self) -> DetectorSettings:
+        """This state as the artifact value, for anything below the GUI.
+
+        The inverse of `from_settings`, and the boundary `sieve.detect` is
+        reached across: everything past it takes a resolved `DetectorSettings`
+        and never learns this type. Distinct from `as_settings_changes` on
+        purpose — that returns a dict because a document edit submits a
+        *subset*, and this returns the whole value because a derivation needs
+        all of it.
+        """
+        return DetectorSettings(**self.as_settings_changes())
+
     @classmethod
     def from_settings(cls, settings: DetectorSettings, *, solo_block: int | None) -> DetectorState:
         """The live state a resolved artifact value renders as.
@@ -243,26 +253,6 @@ class DetectorState:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class DetectorUpdate:
-    """One pure recompute over one collected series.
-
-    `band_power` is retained so value-band / threshold / D re-tunes are the
-    cheap tier (no transform); a frequency-band or upstream change discards
-    it and recomputes. `gate` and `intervals` are None when disarmed — not
-    empty, which would be "armed and found nothing".
-    """
-
-    band_power: NDArray[np.float32]  # (T, B)
-    count: NDArray[np.float32]  # (T,)
-    windowed: NDArray[np.float32]  # (T,)
-    gate: NDArray[np.bool_] | None
-    intervals: tuple[tuple[int, int], ...] | None
-    #: The snapped bank rows the transform actually used — what the
-    #: scalogram title renders (the title tells the truth the transform uses).
-    band_rows: tuple[int, int]
-
-
 def recompute(
     series: FloatArray,
     fps: float,
@@ -272,48 +262,21 @@ def recompute(
     band_power: NDArray[np.float32] | None = None,
     workers: int,
 ) -> DetectorUpdate:
-    """Item 1's functions glued into the one derivation the tab repeats.
+    """`sieve.detect.detect` with the live state converted at the boundary.
 
-    `series` is the collected `(T, B)` block-signal columns. Pass the
-    previous update's `band_power` when only the value band, threshold, D,
-    or centered changed — the cheap tier — and leave it None when the
-    frequency band or anything upstream moved.
-
-    `start_index` is the series' first source frame, so intervals come back
-    in absolute frames (what the seeker's ticks jump to).
-
-    `workers` caps the transform's threads and is **required, with no default**.
-    It had one — `ALL_CORES` — and `gui/filter_tab.py` inherited it by omission,
-    running a full Morlet transform over every core on the GUI thread beside two
-    decode pools. That is the fourth consumer `gui/concurrency.py` exists to
-    forbid, and `tests/unit/test_concurrency.py` could not see it: a test that
-    sums declared constants checks the declaration, not the calls. Deleting the
-    default moves enforcement to pyright, which checks every call site.
-
-    A headless caller wanting the whole machine passes `ALL_CORES` and says so.
-    Anything running beside the interactive pools passes
-    `concurrency.DETECTOR_WORKERS`.
+    The derivation itself is not here and must not come back: it is what a
+    saved `DetectorSettings` names, and a document that declares a value only
+    the GUI can compute is `docs/todo/headless-detection.md`'s defect. This is
+    the two-line adapter that keeps `DetectorState` — mutable, carrying a
+    soloed block nothing downstream reads — on this side of the line.
     """
-    freqs = default_freqs(fps)
-    i, j = band_indices(freqs, state.freq_band[0], state.freq_band[1])
-    if band_power is None:
-        band_power = morlet_band_power(series, fps, freqs, i, j, workers=workers)
-    count = inband_count(band_power, state.value_band[0], state.value_band[1])
-    windowed = windowed_mean(count, state.window_frames, state.centered)
-    if state.count_frac is None:
-        gate = None
-        intervals = None
-    else:
-        lo, hi = count_band_to_counts(state.count_frac[0], state.count_frac[1], band_power.shape[1])
-        gate = detect_gate(windowed, lo, hi)
-        intervals = tuple(gate_intervals(gate, start=start_index))
-    return DetectorUpdate(
+    return detect(
+        series,
+        fps,
+        state.to_settings(),
+        start_index=start_index,
         band_power=band_power,
-        count=count,
-        windowed=windowed,
-        gate=gate,
-        intervals=intervals,
-        band_rows=(i, j),
+        workers=workers,
     )
 
 

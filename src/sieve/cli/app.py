@@ -19,6 +19,7 @@ from typing import Annotated
 import typer
 
 from sieve import __version__
+from sieve.cli.detect_cmd import detect_project
 from sieve.cli.inspect_cmd import inspect_filters
 from sieve.cli.materialize_cmd import materialize_replicate
 from sieve.cli.preview_cmd import preview_project
@@ -39,6 +40,7 @@ app.command("inspect")(inspect_filters)
 app.command("run")(run_project)
 app.command("preview")(preview_project)
 app.command("materialize")(materialize_replicate)
+app.command("detect")(detect_project)
 
 
 def _print_version(value: bool) -> None:

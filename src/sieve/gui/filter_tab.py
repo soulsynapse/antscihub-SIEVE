@@ -83,6 +83,7 @@ from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.pool_meter import PoolMeter
 from sieve.core.wavelet import default_freqs
+from sieve.detect import gate_to
 from sieve.filters.block_signal import min_block_for, resolve_block
 from sieve.gui.band_plot import DIM
 from sieve.gui.block_spin import BlockSpinBox
@@ -112,7 +113,6 @@ from sieve.gui.detector_worker import (
     DetectorRequest,
     DetectorResult,
     DetectorRunner,
-    gate_to,
     settled_for,
 )
 from sieve.gui.document import ReplicateDocument

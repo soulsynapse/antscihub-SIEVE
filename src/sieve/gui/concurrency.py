@@ -189,11 +189,20 @@ PLAYER_INFLIGHT_SHARE = MemoryShare("player in-flight decode", floor_bytes=REFER
 #: source frames as display proxies, so the player can show them instead of
 #: decoding the same file a second time. The floor is the bound the item
 #: fixed up front — ~280 gray 1280-wide proxies, ~4.7 s at 59.94 fps, enough
-#: that a playhead a few seconds behind the frontier never misses. Fraction
-#: zero on purpose: how much of a *bigger* machine this deserves is the
-#: retention policy's question (`docs/todo/proxy-retention-policy.md`), and
-#: growing it here would decide that policy by side effect.
-RENDER_RING_SHARE = MemoryShare("render-fed playback ring", floor_bytes=256 * 1024 * 1024)
+#: that a playhead a few seconds behind the frontier never misses.
+#:
+#: The fraction is the retention finding's one portable consequence
+#: (`docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md`):
+#: capacity beat eviction policy 60:1 at the operating point, so the ring
+#: deserves to grow with the allocation. One percent lands the 68 GB machine
+#: measured there on ~700 proxies, which is the ~720 its working set saturated
+#: at — sized to reach a large machine's own knee, not to hardcode 720. The
+#: floor is unchanged so a small machine pays nothing for that: below ~26 GB
+#: the fraction is under the floor and the floor is what resolves, which is
+#: also the case the finding explicitly could not settle.
+RENDER_RING_SHARE = MemoryShare(
+    "render-fed playback ring", floor_bytes=256 * 1024 * 1024, fraction=0.01
+)
 
 #: Every bounded slab the interactive session holds. A new consumer adds a row
 #: here in the commit that creates it, or it is the undeclared tenant H4's

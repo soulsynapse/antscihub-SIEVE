@@ -52,11 +52,10 @@ import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
-from sieve.core.detection import gate_intervals
-from sieve.core.detection import settled_frames as settled_after_window
 from sieve.core.pool_meter import PoolMeter
-from sieve.core.wavelet import band_indices, default_freqs, morlet_power
-from sieve.core.wavelet import settled_frames as settled_after_coi
+from sieve.core.wavelet import default_freqs, morlet_power
+from sieve.detect import gate_to
+from sieve.detect import settled_for as settled_for_settings
 from sieve.gui.chain_model import DetectorState, DetectorUpdate, recompute
 from sieve.gui.concurrency import resolve_worker_split
 
@@ -117,27 +116,14 @@ class DetectorResult:
 
 
 def settled_for(frames: int, fps: float, state: DetectorState, *, final: bool) -> int:
-    """Where a record of `frames` stops being provisional, under `state`.
+    """`sieve.detect.settled_for` with the live state converted at the boundary.
 
-    Two frontiers and the smaller wins: the transform's cone of influence at
-    the cut, and a centered detection window reaching past it. A final pass
-    claims the whole record — a render that is over has no moving frontier, and
-    its edges mean what the clip's edges mean.
-
-    Shared with `FilterTab`'s cheap tier rather than living only in `derive`,
-    because a D drag over a partial series *moves* this frontier: widening a
-    centered window pulls it back, and a tab that kept the frontier the worker
-    last reported would go on painting a gate over frames the wider window no
-    longer settles.
+    Kept as a name here because `FilterTab`'s cheap tier calls it with the
+    state it is dragging: a D drag over a partial series *moves* this frontier,
+    and a tab that kept the frontier the worker last reported would go on
+    painting a gate over frames the wider window no longer settles.
     """
-    if final:
-        return frames
-    freqs = default_freqs(fps)
-    i, j = band_indices(freqs, state.freq_band[0], state.freq_band[1])
-    return min(
-        settled_after_coi(frames, fps, freqs[i:j]),
-        settled_after_window(frames, state.window_frames, state.centered),
-    )
+    return settled_for_settings(frames, fps, state.to_settings(), final=final)
 
 
 def derive(request: DetectorRequest) -> DetectorResult:
@@ -173,30 +159,6 @@ def derive(request: DetectorRequest) -> DetectorResult:
         settled=settled,
         pooled_power=pooled,
         final=request.final,
-    )
-
-
-def gate_to(update: DetectorUpdate, settled: int, start_index: int) -> DetectorUpdate:
-    """Truncate the gate and its intervals to the settled frontier.
-
-    The curves are published in full and drawn faded past the frontier, because
-    a provisional *value* reads as one. A provisional *detection* does not: the
-    seeker's ticks and the prev/next jumps are navigation, and an interval that
-    appears and then vanishes as the record grows is a worse lie than a graph
-    that has not got there yet. So the gate stops where the arithmetic stops
-    being final, and the summary's count only ever grows.
-    """
-    gate = update.gate
-    if gate is None or settled >= gate.shape[0]:
-        return update
-    clipped = gate[:settled]
-    return DetectorUpdate(
-        band_power=update.band_power,
-        count=update.count,
-        windowed=update.windowed,
-        gate=clipped,
-        intervals=tuple(gate_intervals(clipped, start=start_index)),
-        band_rows=update.band_rows,
     )
 
 

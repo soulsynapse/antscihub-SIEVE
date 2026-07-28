@@ -28,8 +28,10 @@ honest behaviour is the old one (the player decodes for itself), not a
 conversion pass nobody measured.
 
 The bound is `RENDER_RING_SHARE` in `gui/concurrency.py` — declared there so
-the ledger's sum stays the whole session, and fixed at the item's 256 MB
-until `docs/todo/proxy-retention-policy.md` replaces the number with policy.
+the ledger's sum stays the whole session. It is a 256 MB floor with a 1%
+fraction: capacity, not eviction order, is what its hit rate turned out to be
+made of (`docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md`),
+so a bigger machine gets a bigger ring rather than a cleverer one.
 
 Every accepted `put` is offered to `bench/retention_trace.py`, which is off
 unless a session declares a path — the render's production sequence is half of

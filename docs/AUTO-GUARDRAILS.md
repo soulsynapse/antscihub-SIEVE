@@ -67,8 +67,7 @@ rather than a property of how the code currently happens to be arranged.
 serialization", and schema v3 landed `Edge.port`, `Project.detector`, and the
 pin fields without anyone writing the check. It is now an open item,
 `docs/todo/gui-cli-execution-parity.md` — which is what a fired trigger should
-have become on the day it fired, and the argument for
-`docs/todo/deferral-expires-by-default.md`.
+have become on the day it fired.
 
 ## 3. Filter self-registration — ENFORCED, and the strongest of the eight
 

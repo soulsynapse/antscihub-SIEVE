@@ -567,29 +567,22 @@ def render_settled(completed: Sequence[Entry]) -> str:
 
 
 def budget_health() -> str:
-    """One line: how much of rule 4's table is actually holding anything up.
+    """One line: the load-bearing gap in rule 4's table.
 
-    Rule 4 has the largest declared gap of any rule and reading it currently
-    costs three files — the table, `WITHOUT_PRODUCER`, and the benchmark
-    modules. All three counts are derived from `bench/budgets.py`, which is
-    itself machine-checked against `ARCHITECTURE.md` and against the call
-    sites, so this line cannot say something the gate would not already have
-    caught. That is also why it is safe in a file `--check` compares: nothing
-    here varies with the working tree or the clock.
-
-    One line, and it displaces nothing — `.state.md`'s budget is lines, not
-    scripts. The two other candidates for this block are deliberately absent:
-    tree state and `doc_drift`'s worst line both move with `HEAD`, which would
-    make the primer stale on every commit and turn a real staleness failure
-    into noise. Tree state went to the session Stop hook instead.
+    In-pipeline is the regime the product is sold on, and untimed is the
+    widest of the three gaps — published and in-debt are both visible from
+    `budgets.py` itself and did not earn a line here. Derived, so it is safe
+    in a file `--check` compares byte-for-byte; tree state and `doc_drift`'s
+    worst line move with `HEAD` and went to the Stop hook and the `docs`
+    report instead.
     """
-    from sieve.bench.budgets import BUDGETS, IN_DEBT, TIMED, WITHOUT_PRODUCER
+    from sieve.bench.budgets import BUDGETS, TIMED
 
-    total = len(BUDGETS)
+    pre_pipeline = {"open_to_first_frame", "scrub_settle"}
+    in_pipeline = set(BUDGETS) - pre_pipeline
     return (
-        f"**Budgets ({total}):** {total - len(WITHOUT_PRODUCER)} published, "
-        f"{len(TIMED)} timed in CI, {len(IN_DEBT)} in declared debt "
-        f"({', '.join(sorted(IN_DEBT)) or 'none'})."
+        f"**Budgets:** {len(in_pipeline - TIMED)} of {len(in_pipeline)} in-pipeline "
+        f"budgets have no CI benchmark asserting a limit."
     )
 
 

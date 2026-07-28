@@ -120,6 +120,16 @@ Until one of those, the enum is the cheaper thing to be wrong about: adding
 an entry forecloses nothing, and if multi-channel ever lands, every existing
 signal is one more plane in it.
 
+**Start decision 1 by drawing it, not by arguing about it.** A value band and
+a heat ramp over an angle are wrap-around objects the GUI has no shape for,
+and that is a *representation* question — the one kind a mockup answers
+cheaply. The seeker taught the limit: `mockups/seeker/` was about gesture
+semantics, which no static picture settles, and it outlived its question and
+produced a phantom regression that cost a session to disprove
+(`docs/completed-todo/2026.07.27-seeker-upgrades.md`). So if a mockup is
+checked in for this, it carries the date and the item it belongs to, and it
+is deleted when this item resolves.
+
 ## Still unbuilt, and unaffected by either decision
 
 Two candidates were named but never screened, because both cost a new blur or

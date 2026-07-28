@@ -1,4 +1,4 @@
-"""Every path and symbol a live doc names must still exist.
+"""Every path a live doc names must still exist.
 
 The audit that produced AUTO-GUARDRAILS §6 found five false claims in the doc
 tree and every one of them was in prose, while every machine-checked claim was
@@ -18,10 +18,11 @@ flagging it would make the report unreadable. A `working` doc is a workbench.
 frontmatter `files:` lists name deleted paths on purpose, and `doc_drift.py`
 already watches them from the other end.
 
-Symbols are reported, not gated. A backticked `Dag.order` is checked by
-substring against the source tree, which cannot distinguish a renamed method
-from one this repo never defined (a Qt method, a numpy call), so it advises
-rather than fails.
+Paths only. A backticked `Dag.order` is a claim too, but the only cheap way
+to check one is a substring search over `src/`, which cannot tell a renamed
+method from one this repo never defined — a Qt override, a numpy call. That
+version was written, reported nothing on its first and only run, and was cut:
+a check that cannot fail is not a check.
 
     uv run python tools/doc_refs.py            # report
     uv run python tools/doc_refs.py --check    # exit 1 on a dangling path
@@ -35,7 +36,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any, cast
 
-from doc_drift import GENERATED, status_of
+from doc_drift import UNSTAMPED, status_of
 from doc_index import DOCS_ROOT, parse_frontmatter
 
 REPO_ROOT = DOCS_ROOT.parent
@@ -52,12 +53,6 @@ LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 
 #: Text between single backticks, no newline inside.
 BACKTICKED = re.compile(r"`([^`\n]+)`")
-
-#: `Thing.method` or `module.function` — a claim that a name exists.
-DOTTED = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$")
-
-#: Names that are dotted but are not this repo's to define.
-FOREIGN = ("np.", "cv2.", "Qt.", "QtCore.", "yaml.", "pytest.", "self.")
 
 
 def body_of(path: Path) -> str:
@@ -83,7 +78,7 @@ def live_docs() -> list[Path]:
     docs += [
         path
         for path in sorted(DOCS_ROOT.glob("*.md"))
-        if path.name not in GENERATED and status_of(path.name) == "current"
+        if path.name not in UNSTAMPED and status_of(path.name) == "current"
     ]
     docs += [p for p in sorted((DOCS_ROOT / "todo").glob("*.md")) if not p.name.startswith("_")]
     return docs
@@ -197,36 +192,6 @@ def dangling(docs: Iterable[Path]) -> list[tuple[str, str]]:
     return missing
 
 
-def _source_text() -> str:
-    return "\n".join(
-        p.read_text(encoding="utf-8", errors="ignore") for p in (REPO_ROOT / "src").rglob("*.py")
-    )
-
-
-def unknown_symbols(docs: Iterable[Path]) -> list[tuple[str, str]]:
-    """`(doc, symbol)` for dotted names whose last segment is not in `src/`.
-
-    Only the last segment is searched. `Dag.order` is a claim about `order`
-    existing on `Dag`, but a doc may legitimately write `SomeProtocol.method`
-    where the method is only ever implemented, never declared under that name.
-    Matching the leaf is the version with a tolerable false-positive rate,
-    which is also why this reports rather than gates.
-    """
-    source = _source_text()
-    found: list[tuple[str, str]] = []
-    for doc in docs:
-        for token in BACKTICKED.findall(body_of(doc)):
-            token = str(token).strip().rstrip("().,;:")
-            if not DOTTED.match(token) or token.startswith(FOREIGN):
-                continue
-            if token.endswith(PATH_SUFFIXES) or token in ROOT_FILES:
-                continue  # `pyproject.toml` is dotted and is not a symbol
-            leaf = token.rsplit(".", 1)[1]
-            if leaf not in source:
-                found.append((doc.relative_to(REPO_ROOT).as_posix(), token))
-    return found
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="exit 1 on a dangling path")
@@ -239,13 +204,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"  DANGLING {doc} -> {claim}")
     if not missing:
         print("  every path resolves")
-
-    print("doc_refs: symbols not found anywhere under src/ (advisory)")
-    unknown = unknown_symbols(docs)
-    for doc, token in unknown:
-        print(f"  {doc}: {token}")
-    if not unknown:
-        print("  (none)")
 
     return 1 if (args.check and missing) else 0
 

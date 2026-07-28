@@ -30,8 +30,7 @@ is a property of the current arrangement rather than a guarantee.
 The trigger fired and nobody noticed, which is the other half of why this is
 takeable now. Schema v3 landed `Edge.port`, `Project.detector`, and the pin
 fields, all serialization, and §2's **Trigger:** line said "the next item that
-touches serialization". A trigger nobody polls makes an item a lottery ticket
-(see `docs/todo/deferral-expires-by-default.md`).
+touches serialization". A trigger nobody polls makes an item a lottery ticket.
 
 ## What the check is, and what it is not
 

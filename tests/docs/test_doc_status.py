@@ -9,18 +9,18 @@ was superseded.
 
 So the answer moves into the file's own first three lines. `current` is the
 only kind that can go stale and the only kind `tools/doc_drift.py` reports;
-`record` is dated and never revisited; `working` is a workbench that asserts
-nothing and is drained rather than maintained.
+`record` is dated and never revisited. Files with no claim to make at all —
+the generated pair, and the two workbenches — are named in `UNSTAMPED`.
 """
 
 from __future__ import annotations
 
-from doc_drift import DOC_STATUS, GENERATED, current_docs, status_of
+from doc_drift import DOC_STATUS, UNSTAMPED, current_docs, status_of
 from doc_index import DOCS_ROOT
 
 
 def _top_level() -> list[str]:
-    return sorted(p.name for p in DOCS_ROOT.glob("*.md") if p.name not in GENERATED)
+    return sorted(p.name for p in DOCS_ROOT.glob("*.md") if p.name not in UNSTAMPED)
 
 
 def test_every_top_level_doc_declares_a_status() -> None:

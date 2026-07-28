@@ -40,11 +40,7 @@ REPO_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path(__file__).resolve(
 
 STATE = Path("docs/.state.md")
 
-PRIMER_HEADER = (
-    "Repo state primer, injected from `docs/.state.md`. It is generated — every line "
-    "is derived from `docs/todo/`, the indexes, and `bench/budgets.py`, so it is "
-    "current as of the last `uv run nox -s docs`. Read it before choosing work.\n\n"
-)
+PRIMER_HEADER = "Repo state, generated into `docs/.state.md` by `uv run nox -s docs`:\n\n"
 
 
 def _git(*args: str) -> str:

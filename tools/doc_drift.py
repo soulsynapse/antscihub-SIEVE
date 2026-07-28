@@ -18,7 +18,7 @@ lines, so a reader can tell whether it is *supposed* to be true now without
 consulting a list held somewhere else:
 
     ---
-    status: current              # current | record | working
+    status: current              # current | record
     reviewed: 4a4f3d6            # commit the claims were last checked at
     subjects: [src/sieve/, .importlinter]
     ---
@@ -26,7 +26,8 @@ consulting a list held somewhere else:
 Only `current` docs can drift, so only they are reported. `reviewed`/
 `subjects` are what makes the report quantitative; a `current` doc without
 them is listed as unassessable rather than as clean, because an unstamped doc
-is exactly the one nobody has checked.
+is exactly the one nobody has checked. `UNSTAMPED` names the files that
+declare nothing and are not asked to.
 
 Findings need no stamp — their existing `commit:` and `files:` fields are the
 same information, so every non-superseded finding is checked for free.
@@ -44,24 +45,27 @@ from doc_index import DOCS_ROOT, SPECS, FrontmatterError, collect, parse_frontma
 
 REPO_ROOT = DOCS_ROOT.parent
 
-#: The `status:` values a top-level doc may declare, and what each means for
-#: drift. `current` claims truth about the code as it is now and is therefore
-#: the only kind that can go stale. `record` is dated and superseded, never
-#: revisited — VISION, REFINED-VISION, SIEVE-HANDOFF, the parity plan.
-#: `working` is a workbench (IDEAS, SCRATCH): it asserts nothing about the
-#: code, so there is nothing for it to drift from, and it is drained or
-#: deleted rather than maintained.
+#: The `status:` values a top-level doc may declare. `current` claims truth
+#: about the code as it is now and is therefore the only kind that can go
+#: stale. `record` is dated and superseded, never revisited — VISION,
+#: REFINED-VISION, SIEVE-HANDOFF, the parity plan.
 #:
-#: This replaces a hardcoded two-name tuple, which was the same failure the
-#: docs it governs are prone to: a list in one file naming files that live
-#: somewhere else, updated by whoever remembers. The doc now says what it is,
-#: in its own first three lines, where a reader sees it.
-DOC_STATUS = ("current", "record", "working")
+#: This replaces a hardcoded two-name tuple of stamped docs, which was the
+#: same failure the docs it governs are prone to: a list in one file naming
+#: files that live somewhere else, updated by whoever remembers. The doc now
+#: says what it is, in its own first three lines, where a reader sees it.
+DOC_STATUS = ("current", "record")
 
-#: Files in `docs/` that `tools/doc_index.py` writes. They carry a generated
-#: banner instead of frontmatter, and their status is not a question: a
-#: generated file is current by construction or the gate is already red.
-GENERATED = ("SETTLED.md", ".state.md")
+#: Files in `docs/` that declare no status and are not asked to. Two reasons,
+#: and both are "there is no claim here to go stale": `doc_index.py` writes
+#: SETTLED.md and .state.md, which are current by construction or the gate is
+#: already red; IDEAS.md and SCRATCH.md are workbenches that are drained
+#: rather than maintained.
+#:
+#: A third `status: working` was tried for the second pair and cut — it was an
+#: enum member, a branch, a paragraph and a test to say "not in the report",
+#: which is what this tuple already said.
+UNSTAMPED = ("SETTLED.md", ".state.md", "IDEAS.md", "SCRATCH.md")
 
 
 def status_of(name: str) -> str:
@@ -78,7 +82,7 @@ def current_docs() -> list[str]:
     return sorted(
         path.name
         for path in DOCS_ROOT.glob("*.md")
-        if path.name not in GENERATED and status_of(path.name) == "current"
+        if path.name not in UNSTAMPED and status_of(path.name) == "current"
     )
 
 

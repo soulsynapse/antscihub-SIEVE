@@ -233,12 +233,12 @@ that was taken. Two rules keep that from turning into accretion:
   v1 doc tree died of the opposite: nineteen ADRs prescribing an architecture
   before the code existed, each one a standing constraint.
 - **Every `docs/*.md` says what kind of thing it is in its own first three
-  lines** — `status: current | record | working`. Only `current` claims truth
-  about the code as it is now; only `current` is drift-reported. A `current`
-  doc also carries a `reviewed:`/`subjects:` stamp, and `tools/doc_drift.py`
-  *reports* (never gates) when its subjects moved — an unstamped one is listed
-  as unassessable, which is what it is. `record` is dated and superseded,
-  never edited (VISION, REFINED-VISION, SIEVE-HANDOFF, the parity plan);
-  `working` is a workbench that asserts nothing and is drained, not
-  maintained (IDEAS, SCRATCH). The list used to live here, in prose, where the
+  lines** — `status: current | record`. Only `current` claims truth about the
+  code as it is now, and only `current` is drift-reported; `record` is dated
+  and never edited (VISION, REFINED-VISION, SIEVE-HANDOFF, the parity plan).
+  A `current` doc also carries a `reviewed:`/`subjects:` stamp, and
+  `tools/doc_drift.py` *reports* (never gates) when its subjects moved — an
+  unstamped one is listed as unassessable, which is what it is. The generated
+  files and the two workbenches declare nothing and are named in
+  `doc_drift.UNSTAMPED`. This list used to live here, in prose, where the
   reader of a stale file could not see it.

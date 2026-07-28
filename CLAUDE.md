@@ -33,7 +33,7 @@ and the entry, not a separate spec file.
 
 ---
 
-## The seven rules
+## The eight rules
 
 Full text in `docs/ARCHITECTURE.md`. A violation is a defect, not a tradeoff.
 Older docstrings call these "non-negotiable #N"; the numbers still hold.
@@ -63,9 +63,12 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
    a result is* (hashed) or only *where it lives and how fast it arrives*
    (never hashed). Nothing straddles; `checkpoints` and `outputs` live on
    `Project`, off `Node`, for this reason.
-
-*"Filesystem is truth at rest" was rule 1 and is now a commitment not yet in
-force — nothing in the repo has ever been at rest. See `docs/ARCHITECTURE.md`.*
+8. **Filesystem is truth at rest.** What SIEVE writes reads back without SIEVE
+   running, and a writer proves it by reading its own output back before
+   registering it. An artifact that fails verification is deleted, never
+   recorded. This was rule 1, was demoted to a commitment because nothing had
+   ever been at rest, and returned to the table 2026-07-28 with the replicate
+   crop writer (`pipeline/materialize.py`).
 
 ---
 

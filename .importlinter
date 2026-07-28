@@ -18,7 +18,7 @@ layers =
     sieve.bench
     sieve.pipeline | (sieve.workers)
     sieve.filters
-    sieve.decode | (sieve.storage) | sieve.backend
+    sieve.decode | sieve.storage | sieve.backend
     sieve.core
 
 [importlinter:contract:core-purity]
@@ -44,6 +44,7 @@ source_modules =
     sieve.pipeline
     sieve.bench
     sieve.decode
+    sieve.storage
     sieve.filters
     sieve.backend
 forbidden_modules =

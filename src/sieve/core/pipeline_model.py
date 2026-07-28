@@ -78,7 +78,7 @@ import math
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
-from typing import Any, Self
+from typing import Any, Literal, Self
 from uuid import uuid4
 
 import yaml
@@ -98,6 +98,7 @@ from sieve.core.filter_base import (
     SEMVER_PATTERN,
 )
 from sieve.core.replicates import Replicate
+from sieve.core.types import ROI
 
 #: Bumped when a saved document stops being readable by this code unchanged. A
 #: reader refuses a document from the future rather than guessing at it: the
@@ -122,7 +123,12 @@ from sieve.core.replicates import Replicate
 #: that a project written before this build comes back with every replicate
 #: unlocked until it is looked at again. Every save now writes the field, and a
 #: version-3 build would report it as stray for the same reason as above.
-SCHEMA_VERSION = 4
+#:
+#: 5: `Project` gained `crops` (2026-07-28, the replicate crop artifact). A
+#: version-4 document loads unchanged — nothing had ever been written at rest,
+#: which is what the empty default says — but every save now writes the field,
+#: and a version-4 build would report it as stray for the same reason as above.
+SCHEMA_VERSION = 5
 
 #: Project files are named `<video stem>.sieve.yaml` and live *beside* the
 #: video they describe. VISION step 1 fixes the layout — a source in a folder,
@@ -537,6 +543,116 @@ class Sink(_Artifact):
         return _resolved(Path(project_dir, self.path))
 
 
+#: Which decode format an artifact holds, spelt as `source_key` spells it. Not a
+#: `bool`, because the two names appear in file names and in a cache key's
+#: payload, and `luma=False` is not a thing anyone can read off a directory
+#: listing. Two artifacts, never one that serves both: a luma read of a
+#: colour-coded file is the wrong-pixels trap the codec finding measured.
+CropFormat = Literal["luma", "bgr"]
+
+
+class CropArtifact(_Artifact):
+    """One replicate's crop, written to a file that is then a source in itself.
+
+    **The artifact is a child source with its own identity, not the parent's.**
+    A run against it roots off `source_identity(<the artifact file>)` with
+    `roi=None`, exactly as it would for any video a user opened — so `plan`,
+    `executor`, and `cache_key` need no notion that this file was cut from
+    anything, and no decoder upgrade can orphan a file at rest by breaking a
+    byte-parity claim nobody depends on. What it costs is that descending onto
+    the artifact re-keys: downstream entries from source-side tuning are
+    recomputed once, and two replicates with identical ROIs stop sharing
+    entries once each is backed by its own file. Both were accepted knowingly
+    (2026-07-28); `docs/todo/crop-artifact-writer.md` holds the reversal this
+    revised, and `docs/findings/2026.07.28-the-crop-artifact-is-ffv1.md` the
+    measurements.
+
+    Rule 7 therefore stays clean, and it is worth being precise about which
+    side each field falls on: every field here is *location* — where an
+    artifact lives and what it was cut from. The identity that enters a key is
+    computed from the file itself at run time. A record cannot make a stale
+    file look fresh, because nothing here is trusted for identity: a replaced
+    or truncated file changes what `source_identity` returns by construction.
+
+    `cut_from` and `decoder` are provenance, and they differ in what they are
+    used for. `cut_from` is *matched* (see `backs`) — a re-exported source must
+    not silently keep serving crops of the old one. `decoder` is deliberately
+    **not** matched: the artifact is expected to outlive decoder upgrades, and
+    refusing it after one would throw away a file whose pixels are on disk and
+    correct in favour of a 46-second re-cut.
+    """
+
+    #: POSIX, relative to the project file's directory — `Sink.path`'s rule,
+    #: for `Sink.path`'s reason: an absolute path makes the project unopenable
+    #: the moment the folder moves, and the folder moving is how footage
+    #: reaches a cluster.
+    path: str
+    #: The geometry it was cut at, in source pixels. The *replicate's* ROI as
+    #: recorded, not the frame-clamped one the writer applied: clamping is a
+    #: function of the decoded frame and the executor applies the identical
+    #: `ROI.clamped_to(...).crop(...)`, so storing the clamped result would
+    #: make a replicate whose box overhangs the frame edge never match its own
+    #: artifact.
+    roi: ROI
+    format: CropFormat
+    #: Source frames `[start, end)` covered. Artifact frame 0 is source frame
+    #: `span.start`; nothing else translates between the two index spaces.
+    span: ClipRange
+    #: The parent's `source_identity` at write time.
+    cut_from: str
+    #: `decoder_identity()` at write time. Provenance only — see the docstring.
+    decoder: str
+
+    @field_validator("path", "cut_from", "decoder")
+    @classmethod
+    def _non_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("crop artifact fields must not be empty")
+        return value
+
+    @property
+    def luma(self) -> bool:
+        """Whether this artifact holds the luma plane rather than colour."""
+        return self.format == "luma"
+
+    def resolve(self, project_dir: Path) -> Path:
+        """The artifact file, given where the project file was read from."""
+        return _resolved(Path(project_dir, self.path))
+
+    def identity(self) -> tuple[str, ROI, CropFormat, ClipRange]:
+        """What makes two records the same record.
+
+        Not the path: writing the same cut twice to two names is one artifact
+        recorded twice, and the second write is the one that should replace the
+        first rather than accumulate beside it.
+        """
+        return (self.cut_from, self.roi, self.format, self.span)
+
+    def backs(self, replicate: Replicate, *, source: str, luma: bool, project_dir: Path) -> bool:
+        """Whether this record can serve `replicate` right now.
+
+        **The matching rule, stated once here and read by whatever serves it.**
+        Three conditions, and each fails in the direction that recomputes
+        rather than the direction that serves the wrong pixels: the parent must
+        still be the footage this was cut from (`cut_from`), the box must still
+        be where it was when the cut was made (`roi`), the session must want
+        the format that was written (`format`), and the file must be there. A
+        moved ROI or a re-exported source misses by construction.
+
+        The span is deliberately absent from the test. A record whose span no
+        longer covers what is being asked for is a record that serves part of
+        the request, and deciding what to do about a partial cover belongs to
+        the caller that knows which frames it wants — not to a predicate that
+        can only answer yes or no.
+        """
+        return (
+            self.cut_from == source
+            and self.roi == replicate.roi
+            and self.luma == luma
+            and self.resolve(project_dir).is_file()
+        )
+
+
 class Pipeline(_Artifact):
     """The graph itself: no source video, no replicates, no output locations.
 
@@ -713,6 +829,15 @@ class Project(_Artifact):
     #: change a single cache key.
     checkpoints: tuple[str, ...] = ()
     outputs: tuple[Sink, ...] = ()
+    #: Crops written to disk, each a source in its own right. Here rather than
+    #: on `Replicate` for `checkpoints`' reason two fields up, and it is the
+    #: same test: an artifact is a faster route to pixels the graph would have
+    #: computed anyway, so it changes where a result lives and never what it
+    #: is. Rule 7 admits no third place. A record naming a replicate is
+    #: deliberately *not* how they are associated either — `CropArtifact.backs`
+    #: matches on geometry and parentage, so a record survives a rename and
+    #: correctly stops matching a box that moved.
+    crops: tuple[CropArtifact, ...] = ()
     #: Replicates that have been opened in the filter tab, by `replicate_id`.
     #: The geometry lock's whole state: a replicate named here has been tuned
     #: *against*, so moving its box is refused until the user accepts what the
@@ -804,6 +929,15 @@ class Project(_Artifact):
         for sink in self.outputs:
             if sink.node_id not in self.pipeline:
                 raise ValueError(f"sink names no such node: {sink.node_id!r}")
+        # Two records for one cut are two files claiming to be the same thing,
+        # and nothing downstream could choose between them — `backs` would
+        # answer yes for both. Refused here rather than deduplicated silently,
+        # because the way to get one is to hand-edit the document and the
+        # honest response to that is to say so. `with_crop` is the path that
+        # cannot produce one.
+        cuts = [artifact.identity() for artifact in self.crops]
+        if len(set(cuts)) != len(cuts):
+            raise ValueError("two crop artifacts record the same cut")
         known = set(ids)
         for replicate_id in self.visited:
             # A checkpoint's staleness rule applied to the lock: an id naming
@@ -880,10 +1014,16 @@ class Project(_Artifact):
         def rebase(sink: Sink) -> Sink:
             return sink.model_copy(update={"path": _posix_relative(sink.resolve(from_dir), to_dir)})
 
+        def rebase_crop(artifact: CropArtifact) -> CropArtifact:
+            return artifact.model_copy(
+                update={"path": _posix_relative(artifact.resolve(from_dir), to_dir)}
+            )
+
         return self.model_copy(
             update={
                 "source": SourceRef.relative_to(self.source.resolve(from_dir), to_dir),
                 "outputs": tuple(rebase(sink) for sink in self.outputs),
+                "crops": tuple(rebase_crop(artifact) for artifact in self.crops),
             }
         )
 
@@ -906,6 +1046,24 @@ class Project(_Artifact):
     def with_clip(self, clip: ClipRange | None) -> Self:
         """Copy carrying a different representative clip."""
         return self.model_copy(update={"clip": clip})
+
+    def with_crop(self, artifact: CropArtifact) -> Self:
+        """Copy that records `artifact`, replacing any earlier record of that cut.
+
+        Replacement rather than append, keyed on `CropArtifact.identity`: a
+        second write of the same cut is the same artifact written again — after
+        a deleted file, or a part file left by a crash — and appending would
+        produce the pair the document validator refuses. The replacement holds
+        the original's position, so re-cutting one arena does not reorder the
+        list.
+        """
+        existing = [candidate.identity() for candidate in self.crops]
+        if artifact.identity() in existing:
+            index = existing.index(artifact.identity())
+            crops = (*self.crops[:index], artifact, *self.crops[index + 1 :])
+        else:
+            crops = (*self.crops, artifact)
+        return self.model_copy(update={"crops": crops})
 
     def with_visited(self, visited: Iterable[str]) -> Self:
         """Copy whose geometry locks are exactly these replicates.

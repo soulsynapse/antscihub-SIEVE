@@ -123,7 +123,9 @@ enforced by review.
 Module docstrings and completed entries cite these as **"non-negotiable #N"**,
 which is what they were called, and the numbers still point where they did — so
 a grep for `non-negotiable #3` lands on rule 3 below. Only rule 1 changed
-meaning; rules 6 and 7 are new, and rule 6 has since widened — see its section.
+meaning; rules 6, 7, and 8 are new, and rule 6 has since widened — see its
+section. Rule 8 is the old #1 returned to the table on 2026.07.28 under its own
+number, with the writer that finally gives it instances.
 
 These were written as five non-negotiables before the rewrite had run into
 what it was describing. Revised 2026.07.27 against the code that exists. Two
@@ -133,8 +135,12 @@ future rule has to pass:
 - **A rule that governs no code path is not a rule.** The old #1, "filesystem is
   truth at rest", has never been true or false of anything: no sink writes, no
   materializer exists, `MemoryFrameStore` is a dict. It was stated as an enforced
-  invariant and read as one. It is still a commitment, and it has moved to
-  *Commitments not yet in force* below, where its trigger lives.
+  invariant and read as one. It is still a commitment, and it moved to
+  *Commitments not yet in force* below, where its trigger lived — and the
+  trigger fired on 2026.07.28, so it is back in the table as rule 8. The episode
+  is kept because the demotion is what made the return meaningful: what came
+  back is a rule with a code path and a test, not the sentence that sat here
+  governing nothing for two weeks.
 - **A rule with a standing documented exception is not a rule either.** The old
   #4, "no latency budget misses", is contradicted two sections down by the scrub
   budget, which is met *by degrading* and stands unmet whenever a user turns
@@ -160,6 +166,7 @@ work cite it instead of re-deriving it per feature.
 |5|No consumer starves another|No consumer improves its latency at another's expense. Every path that can take more than one core, or a bounded slab of memory, declares its share. See *Dividing the machine*.|
 |6|A result must never look better-founded than it is|Refuse rather than approximate. Absent must not render as zero, and an unexamined stretch must not render as a quiet one. The mirror direction: a control must never look more live than it is — an edit the system would discard or silently invalidate must be visibly inert.|
 |7|Everything sits on one side of the identity line|A field either changes *what a result is* — then it is hashed — or only *where it lives and how fast it arrives* — then it is never hashed. Nothing straddles. `checkpoints` and `outputs` live on `Project`, off `Node`, for this reason.|
+|8|Filesystem is truth at rest|What SIEVE writes reads back without SIEVE running, and a writer proves that by reading its own output back before it registers it. An artifact that cannot be verified is deleted, never recorded.|
 
 ### 1. One execution path
 
@@ -376,6 +383,49 @@ is known, and the recorded near-misses (`checkpoints`, `backend_identity`)
 both resolved by splitting. If a true straddler ever arrives, the field gets
 split into its two halves; the line itself does not move.
 
+### 8. Filesystem is truth at rest
+
+Restored to the table 2026.07.28, by the commit that landed
+`pipeline/materialize.py` and `storage/crop_writer.py` — the first writer this
+repo has ever had. Until then this was a commitment with no instances, and it is
+in the table now for exactly the reason it left: there is finally a code path it
+governs, and one that can be violated.
+
+What it means concretely, in the form the first writer establishes:
+
+- **A written artifact is a source in its own right.** The replicate crop is
+  FFV1 in Matroska, playable in anything, and SIEVE reopens it through the
+  unchanged `VideoReader` with an identity derived from the file itself
+  (`CropArtifact`). It is not a private cache format and it is not keyed under
+  the thing it was cut from.
+- **A writer verifies before it registers.** The read-back pass is not belt and
+  braces: `docs/findings/2026.07.28-the-crop-artifact-is-ffv1.md` measured a
+  *lossless* encoding whose pixels came back wrong on every frame through the
+  reader that reads everything else, with the right shape and the right count.
+  Nothing in a decode path catches that. So the writer holds a digest per fed
+  frame, reads its own file, compares, and on a mismatch deletes the file and
+  raises — which is rule 6 applied to the filesystem: a plausible artifact that
+  lies is worse than no artifact.
+- **What is at rest is location, never identity.** The record says where a file
+  lives and what it was cut from; the identity that enters a key is computed
+  from the file when it is opened. That keeps rule 7 clean and makes a replaced
+  or truncated file change its own identity by construction.
+
+**Enforced by:** `tests/integration/test_materialize.py`, which is the
+verification pass turned against itself — it encodes deliberately wrong pixels
+through the same path and asserts nothing is registered and nothing survives on
+disk. What is *not* enforced is generality: one writer exists, and the rule will
+be tested again by the general store, where "reads without SIEVE running" is a
+harder claim for a chunked array than for a video file.
+
+**Serves:** O3 and O1 — a cluster run and a next session both start from files
+rather than from a live process, and the crop is what makes the second render of
+a tuned arena cost 0.09 ms/frame instead of 9.93. **Wrong when:** the verify
+pass becomes the dominant cost of writing, or a format arrives whose correct
+read-back cannot be checked without a second full decode. The revision then is a
+sampled verification declared as sampled, never a silent drop — this rule's own
+second clause applied to itself.
+
 ---
 
 ## Commitments not yet in force
@@ -385,21 +435,18 @@ table above because a rule that cannot currently be violated cannot be relied on
 and stating one as an invariant is how three unbuilt checks read as done for two
 weeks. Each has its trigger and reasoning in a `docs/todo/` item.
 
-- **Filesystem is truth at rest.** Materialized artifacts should read without
-  SIEVE running — VISION step 1's folder per transformation. Nothing in this repo
-  has ever been at rest: no sink writes, `pipeline/materialize.py` and
-  `storage/zarr_store.py` do not exist, `zarr` is a declared dependency imported
-  nowhere, and `MemoryFrameStore` is an unbounded dict. During interactive tuning
-  truth is *supposed* to live in memory, so this is not a violation — it is a rule
-  with no instances. What has sharpened since it was demoted (2026.07.27):
-  materialization is user-initiated, never automatic, and the initiating gesture
-  is *descent* — crossing an output boundary is what creates the artifact the
-  descent lands on. So the first writer and the click-through navigation are the
-  front and back of one item, not two entries waiting on each other, and the
-  ancestry above a crossed boundary is frozen (rule 6's mirror direction) because
-  editing it would be editing the identity of something now at rest. It returns
-  to the table above when that item lands. Reasoning and trigger:
-  `docs/todo/materialization.md` and `docs/todo/click-through-navigation.md`.
+- **The general result store.** *Filesystem is truth at rest* left this list on
+  2026.07.28 and is rule 8 above; what stayed behind is the half the first
+  writer does not cover. No sink writes, `storage/zarr_store.py` does not exist,
+  `zarr` is a declared dependency imported nowhere, and `MemoryFrameStore` is
+  still an unbounded dict — so a *node's* output has no home on disk, only a
+  replicate's crop does. During interactive tuning truth is supposed to live in
+  memory, so this is not a violation; it is the second instance the rule is
+  waiting for, and the thing it will be tested by is chunking, which needs a
+  workload that can say what it is for. Reasoning and trigger:
+  `docs/todo/materialization.md` and `docs/todo/click-through-navigation.md` —
+  the latter holds the descent gesture through a *node's* output boundary, which
+  has no writer until this exists.
 - **GPU execution.** `backend/dispatch.py` carries a complete `Backend` type
   system, per-node backend selection, and `DEFAULT_PREFERENCE = (GPU, CPU)`. There
   are zero GPU kernels; every filter registers CPU. `runtime_available` is a
@@ -555,11 +602,12 @@ and it is the authority wherever the two disagree.
 
 - DAG (directed acyclic graph), not a linear list
 - A linear chain is valid — it's just a degenerate DAG
-- Schema v2. `Edge.port` names the input it feeds; one producer per port; a v1
+- Schema v5. `Edge.port` names the input it feeds; one producer per port; a v1
   document still loads
 - `Dag.order` is one topological order per document, not per traversal
-- Materialization is user-initiated or pressure-triggered, not automatic per step
-  — and does not exist yet, per *Commitments not yet in force*
+- Materialization is user-initiated, never automatic per step. One kind exists:
+  the replicate crop (`Project.crops`, rule 8). A *node's* output still has no
+  home on disk — see *Commitments not yet in force*
 
 ### What a cache key is made of
 

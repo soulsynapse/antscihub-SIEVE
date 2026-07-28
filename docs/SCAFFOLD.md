@@ -63,6 +63,9 @@ src/sieve/pipeline/cache_key.py         # key derivation; ports bind upstream ke
 src/sieve/pipeline/cache.py             # store protocol
 src/sieve/pipeline/executor.py          # THE ONE EXECUTION PATH. CLI, GUI, and HPC all call this
 src/sieve/pipeline/preview.py           # PreviewSession: re-render the working window, pay only below the edit
+src/sieve/pipeline/materialize.py       # the replicate crop artifact: cut it, verify the read-back, record it
+
+src/sieve/storage/crop_writer.py        # FFV1/Matroska encode from arrays; knows no identity
 
 src/sieve/bench/budgets.py              # the budget table; character-exact against ARCHITECTURE.md
 src/sieve/bench/metrics.py              # Qt-free metric bus; judges samples against BUDGETS on the way past
@@ -73,6 +76,7 @@ src/sieve/cli/common.py                 # shared option plumbing
 src/sieve/cli/inspect_cmd.py            # `sieve inspect` — a filter's declaration and its guidance
 src/sieve/cli/run_cmd.py                # `sieve run` — execute a YAML project
 src/sieve/cli/preview_cmd.py            # `sieve preview` — headless window render, --check is an exit code
+src/sieve/cli/materialize_cmd.py        # `sieve materialize` — one replicate's crop, written and registered
 
 src/sieve/gui/app.py                    # QApplication bootstrap
 src/sieve/gui/main_window.py            # tabs, the cross-tab timeline, panel orchestration
@@ -147,8 +151,7 @@ says where the file would go.
 src/sieve/core/config.py                # pydantic-settings app config — todo/application-config.md
 src/sieve/core/constants.py             # hash seeds, cache format version (currently inline)
 src/sieve/backend/namespace.py          # array-API namespace resolution — todo/gpu-execution.md
-src/sieve/pipeline/materialize.py       # memory cache -> Zarr compaction — todo/materialization.md
-src/sieve/storage/zarr_store.py         # Zarr v3 arrays, filesystem-is-truth — todo/materialization.md
+src/sieve/storage/zarr_store.py         # Zarr v3 arrays, the general store — todo/materialization.md
 src/sieve/storage/sharding.py           # workload-specific sharding
 src/sieve/workers/manager.py            # crash isolation — todo/process-isolation.md
 src/sieve/workers/protocol.py           # versioned IPC
@@ -161,15 +164,15 @@ src/sieve/bench/profiling.py            # VizTracer + py-spy — todo/profiling-
 src/sieve/hpc/handoff.py                # DAG -> job script — todo/hpc-handoff-and-review-mode.md
 src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
 src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
-src/sieve/cli/materialize_cmd.py        # arrives with pipeline/materialize.py
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see TODO.md deferred decisions
 ```
 
-`.importlinter` already declares `(sieve.workers)` and `(sieve.storage)` in
-parentheses, so the layer contract governs them from their first commit rather
-than being widened afterwards to accommodate them. When one is built, drop the
-parentheses in the same commit that moves its line up.
+`.importlinter` declares `(sieve.workers)` in parentheses, so the layer contract
+governs it from its first commit rather than being widened afterwards to
+accommodate it. When it is built, drop the parentheses in the same commit that
+moves its line up — which is what `sieve.storage` did on 2026-07-28, when
+`crop_writer.py` became the first module in it.
 
 ---
 

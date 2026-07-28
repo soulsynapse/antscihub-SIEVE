@@ -19,6 +19,12 @@ dependencies = [
     # Pinned below 5.x: the decoder identity feeds cache-key derivation, and a
     # major OpenCV bump changes seek/decode behaviour. Revisit deliberately.
     "opencv-python-headless>=4.10,<5",
+    # storage/crop_writer.py: the FFV1 encoder for the replicate crop artifact.
+    # A base dependency, not an extra, because O3 requires the artifact to be
+    # creatable headless — `sieve materialize` is a CLI command. Encode only;
+    # every read of an artifact goes back through OpenCV's `VideoReader`, so
+    # this does not become a second decoder identity.
+    "av>=13",
     "zarr>=3.0",
     "duckdb",
     "pyarrow",

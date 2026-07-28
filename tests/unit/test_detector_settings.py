@@ -15,6 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from sieve.core.pipeline_model import (
+    SCHEMA_VERSION,
     DetectorSettings,
     Node,
     Pipeline,
@@ -80,6 +81,61 @@ def test_project_round_trips_detector_and_pins_including_infinite_edges() -> Non
     # "never tuned" rather than as any particular choice.
     untuned = Project.model_validate({"schema_version": 2, "source": {"path": "video.mp4"}})
     assert untuned.detector is None
+
+
+def test_an_infinite_edge_survives_in_a_pin_and_not_only_in_the_baseline() -> None:
+    """The open edge of a *pinned* band is a number on the way back in.
+
+    The seam the test above is named for and does not reach: its infinity is
+    on `DetectorSettings.value_band`, a typed field pydantic leaves alone,
+    while its only pin is an `int`. A pin lives in `Any`-typed storage, where
+    the default serializer wrote `null` — one arena of a real project came
+    back with `value_band: [51206.8, null]` and every tuning path over it
+    raised from then on.
+    """
+    baseline = DetectorSettings(value_band=(51206.8, math.inf))
+    pinned = _replicate("open top").with_detector_pins({"value_band": (1043.6, math.inf)})
+    project = Project(source=SourceRef(path="video.mp4"), replicates=(pinned,), detector=baseline)
+
+    restored = Project.from_yaml(project.to_yaml())
+
+    assert restored.detector is not None
+    assert restored.replicates[0].detector_overrides["value_band"] == [1043.6, math.inf]
+    assert resolved_detector(restored.detector, restored.replicates[0]).value_band == (
+        1043.6,
+        math.inf,
+    )
+
+
+def test_a_pin_that_cannot_resolve_is_refused_by_the_reader() -> None:
+    """A document that cannot say what an arena runs with is not a document.
+
+    The half of the same failure that let it go unnoticed: the reader checked
+    the spelling of a pin and not its value, so a project written with `null`
+    where a band edge belonged loaded clean and raised later, inside a GUI
+    slot, over a table that went on selecting rows.
+    """
+    poisoned = Project(source=SourceRef(path="video.mp4"), replicates=(_replicate("r"),)).to_yaml()
+    poisoned = poisoned.replace(
+        "detector_overrides: {}", "detector_overrides:\n    value_band: [1043.6, null]"
+    )
+
+    with pytest.raises(ValidationError, match="does not fit its field"):
+        Project.from_yaml(poisoned)
+
+
+def test_a_readable_document_is_restamped_with_this_builds_schema() -> None:
+    """The stamp says what wrote the file, not what wrote its oldest ancestor.
+
+    The GUI saves by copying the `Project` it opened, so a stamp carried
+    through `model_copy` is carried forever: the reported file claimed v2
+    while holding v3's `detector`, which sends a v2 build into `extra=forbid`
+    instead of into the message the version check exists to give.
+    """
+    older = Project.model_validate({"schema_version": 2, "source": {"path": "video.mp4"}})
+
+    assert older.schema_version == SCHEMA_VERSION
+    assert f"schema_version: {SCHEMA_VERSION}" in older.to_yaml()
 
 
 def test_grouping_and_validation_see_detector_pins() -> None:

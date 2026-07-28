@@ -82,7 +82,14 @@ from typing import Any, Self
 from uuid import uuid4
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from sieve.core.filter_base import (
     DEFAULT_PORT,
@@ -168,9 +175,20 @@ class _Artifact(BaseModel):
     Frozen because a document that has been written to disk, hashed, or handed
     to an executor must not then change underneath it. Extra fields forbidden
     for the reason in the module docstring.
+
+    `ser_json_inf_nan="constants"` is not a formatting preference. Pydantic
+    leaves a non-finite float alone in a *typed* field under
+    `model_dump(mode="json")` but nulls it in an `Any`-typed one, and the
+    per-replicate pins (`Replicate.overrides`, `Replicate.detector_overrides`)
+    are `Any` by necessity — a filter owns its parameter model, and the
+    detector's fields are validated one layer up. Under the default the two
+    halves of one band disagreed: `value_band: [51206.8, .inf]` on the
+    baseline, `[51206.8, null]` on the arena that pinned it, and `null` is not
+    a float on the way back in. YAML can write an infinity; this makes the
+    serializer hand it one to write.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", ser_json_inf_nan="constants")
 
 
 class SourceRef(_Artifact):
@@ -692,11 +710,23 @@ class Project(_Artifact):
     @field_validator("schema_version")
     @classmethod
     def _readable(cls, value: int) -> int:
+        """Refuse a document from the future; restamp everything else as ours.
+
+        The check is the field's whole reason to exist. The restamp is what
+        keeps it honest over a project's life: the GUI saves by copying the
+        `Project` it opened, so without this the stamp of the oldest file in
+        the history is carried forever, and a document carrying v3's
+        `detector` while claiming v2 sends a v2 build into `extra="forbid"`
+        instead of into the message this constant exists to give. A document
+        this build accepted *is* a document in this build's schema: every field it
+        did not carry took the default that field was given precisely so the
+        older document would mean the same thing.
+        """
         if value > SCHEMA_VERSION:
             raise ValueError(
                 f"project uses schema version {value}; this build reads up to {SCHEMA_VERSION}"
             )
-        return value
+        return SCHEMA_VERSION
 
     @model_validator(mode="after")
     def _references_resolve(self) -> Self:
@@ -715,14 +745,31 @@ class Project(_Artifact):
                     )
             for field_name in replicate.detector_overrides:
                 # The detector twin of the check above: a pin on a field that
-                # does not exist is a value nothing will ever read. Value
-                # validity is `resolved_detector`'s job; spelling is structure
-                # and belongs here.
+                # does not exist is a value nothing will ever read.
                 if field_name not in DetectorSettings.model_fields:
                     raise ValueError(
                         f"replicate {replicate.replicate_id!r} pins no such detector "
                         f"field: {field_name!r}"
                     )
+            # And that the pinned *values* resolve, not only that they are
+            # spelt right. This used to be left to `resolved_detector` on the
+            # argument that spelling is structure and values are not, and that
+            # split cost a session: a pin serialized as `null` by the bug this
+            # model_config now fixes loaded clean here and raised later, inside
+            # whichever Qt slot first asked what the selected arena runs with.
+            # A raise there aborts one slot — the table went on selecting rows
+            # over a document whose every tuning path was dead, which is rule 6
+            # in its mirror direction. A document that cannot answer "what does
+            # this arena run with" is not a document, so it is refused at the
+            # one place every reader passes through, where the caller still has
+            # a file name to put in the message.
+            try:
+                resolved_detector(self.detector or DetectorSettings(), replicate)
+            except ValidationError as error:
+                raise ValueError(
+                    f"replicate {replicate.replicate_id!r} pins a detector value that "
+                    f"does not fit its field: {error}"
+                ) from error
         for node_id in self.checkpoints:
             if node_id not in self.pipeline:
                 raise ValueError(f"checkpoint names no such node: {node_id!r}")

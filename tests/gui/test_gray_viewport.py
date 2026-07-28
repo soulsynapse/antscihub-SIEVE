@@ -27,7 +27,7 @@ from PySide6.QtGui import QImage
 from pytestqt.qtbot import QtBot
 
 from sieve.core.types import VideoMetadata
-from sieve.gui.gray_toggle import GrayToggle
+from sieve.gui.gray_toggle import LABEL_AUTO, LABEL_COLOR, LABEL_GRAY, GrayToggle
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 
@@ -175,6 +175,29 @@ class TestTogglePolicy:
 
         toggle.click()
         assert not preferences.viewport_luma
+
+    def test_the_label_names_the_format_and_the_multiplier_in_every_state(
+        self, qtbot: QtBot, preferences: Preferences
+    ) -> None:
+        """Both directions of rule 6: the state and its cost are on the button.
+
+        Colour states its own multiplier too — a button that only spoke when
+        gray would make colour read as the absence of a decision rather than
+        the 1x it is.
+        """
+        toggle = GrayToggle(preferences)
+        qtbot.addWidget(toggle)
+        assert toggle.text() == LABEL_COLOR
+
+        toggle.click()
+        assert toggle.text() == LABEL_GRAY
+
+        toggle.click()
+        toggle.set_rendering(True)
+        assert toggle.text() == LABEL_AUTO, "auto-gray must announce its reason"
+
+        toggle.set_rendering(False)
+        assert toggle.text() == LABEL_COLOR
 
     def test_unchecking_during_a_render_means_colour_not_a_fallback_to_auto(
         self, qtbot: QtBot, preferences: Preferences

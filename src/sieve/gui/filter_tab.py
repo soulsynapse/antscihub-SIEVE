@@ -73,6 +73,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSlider,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -109,8 +110,10 @@ from sieve.gui.detector_worker import (
 )
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.graph_hud import GraphHud
+from sieve.gui.gray_toggle import GrayToggle
 from sieve.gui.param_form import param_rows
 from sieve.gui.player import VideoPlayer
+from sieve.gui.preferences import Preferences
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.scalogram_plot import ScalogramPlot
 from sieve.gui.series_collector import SeriesCollector
@@ -133,6 +136,11 @@ _HEAT_PERCENTILE = 99.5
 _CHAIN_INCOMPLETE = "chain incomplete — see the stack"
 _DISARMED = "disarmed — place the count threshold"
 
+#: The playback-speed cycle, in click order. Wall-clock playback throughout —
+#: a higher rate scales the clock and drops more frames, it does not decode
+#: faster — so 5x is a skim of the window, not a demand the decoder can miss.
+PLAYBACK_RATES = (1.0, 2.0, 5.0)
+
 
 class FilterTab(QWidget):
     """The live preprocessing chain and its detector, for one source video."""
@@ -151,12 +159,17 @@ class FilterTab(QWidget):
         parent: QWidget | None = None,
         *,
         metrics: MetricBus | None = None,
+        preferences: Preferences | None = None,
     ) -> None:
         super().__init__(parent)
         self._player = player
         self._document = document
         self._runner = runner
         self._metrics = METRICS if metrics is None else metrics
+        # The gray toggle persists its manual half here. The window passes its
+        # store; a tab built bare (tests, mostly) gets a default one, exactly
+        # as `MainWindow` itself does when none is injected.
+        self._preferences = preferences if preferences is not None else Preferences(parent=self)
 
         self._chain = parity_chain(30.0)
         self._defaults = parity_chain(30.0)
@@ -276,6 +289,15 @@ class FilterTab(QWidget):
     # ---- construction ----------------------------------------------------
 
     def _build_widgets(self) -> None:
+        # The tab's top-right corner: how fast the transport runs, and what
+        # format the pane decodes — the two controls over how the picture
+        # arrives, next to each other because they trade against the same
+        # scarce decode bandwidth.
+        self._speed = QToolButton()
+        self._speed.setToolTip("Playback speed — click to cycle 1x, 2x, 5x")
+        self._speed.setText(f"{self._player.playback_rate:g}x")
+        self._gray_toggle = GrayToggle(self._preferences)
+
         self._composite = StepCompositeView()
         self._count = CountPlot()
         self._scalogram = ScalogramPlot()
@@ -331,13 +353,33 @@ class FilterTab(QWidget):
         left.addLayout(d_row)
         left.addWidget(self._hud, 1)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 4)
-        layout.setSpacing(10)
-        layout.addLayout(left, 5)
-        layout.addWidget(self._stack, 6)
+        controls = QHBoxLayout()
+        controls.setSpacing(6)
+        controls.addStretch(1)
+        controls.addWidget(self._speed)
+        controls.addWidget(self._gray_toggle)
+
+        columns = QHBoxLayout()
+        columns.setSpacing(10)
+        columns.addLayout(left, 5)
+        columns.addWidget(self._stack, 6)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(4)
+        layout.addLayout(controls)
+        layout.addLayout(columns, 1)
 
     def _connect(self) -> None:
+        self._speed.clicked.connect(self._on_speed_clicked)
+        # The toggle decides the format, the player obeys it, and the runner
+        # feeds the automatic half. Pushed once at construction too: a
+        # persisted gray preference must reach the decode thread before the
+        # first video opens, not on the first click.
+        self._gray_toggle.luma_changed.connect(self._player.set_viewport_luma)
+        self._runner.window_render_changed.connect(self._gray_toggle.set_rendering)
+        self._player.set_viewport_luma(self._gray_toggle.effective_luma)
+
         self._player.frame_changed.connect(self._on_frame_changed)
         self._document.source_changed.connect(self._on_source_changed)
         self._document.clip_changed.connect(self.resubmit)
@@ -453,6 +495,32 @@ class FilterTab(QWidget):
     def selected_step(self) -> str | None:
         """The selected step's id — what the composite is showing."""
         return self._selected_step
+
+    @property
+    def gray_toggle(self) -> GrayToggle:
+        """The decode-format control in the tab's top-right corner."""
+        return self._gray_toggle
+
+    @property
+    def speed_button(self) -> QToolButton:
+        """The playback-rate cycler beside it."""
+        return self._speed
+
+    # ---- the corner controls ---------------------------------------------
+
+    @Slot()
+    def _on_speed_clicked(self) -> None:
+        """Rotate the transport through the named rates, and say which holds.
+
+        The label is written from the rate actually adopted, not from the
+        click count, so the button can never claim a speed the player is not
+        running at.
+        """
+        current = self._player.playback_rate
+        index = PLAYBACK_RATES.index(current) if current in PLAYBACK_RATES else 0
+        rate = PLAYBACK_RATES[(index + 1) % len(PLAYBACK_RATES)]
+        self._player.set_playback_rate(rate)
+        self._speed.setText(f"{self._player.playback_rate:g}x")
 
     # ---- the chain value -------------------------------------------------
 

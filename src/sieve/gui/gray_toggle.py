@@ -3,10 +3,11 @@
 A preferences checkbox is where a setting goes to be found by someone who
 already knows it exists. The person who needs this is watching a stuttering
 pane *right now* and does not know that colour is what they are paying for —
-so the control sits on the viewport and its label says what it buys. The
-label never says just "grayscale": nobody wants gray, they want the frame
-rate, and a bare "grayscale" would read as a viewing preference, which is the
-one thing this is not.
+so the control sits in the filter tab's top-right corner, over the tuning
+surface where the stutter is felt, beside the playback-speed cycler. Both
+its states name the format and the multiplier ("Color · 1x", "Gray · ~2.5x"):
+a label that said just "grayscale" would read as a viewing preference, which
+is the one thing this is not — nobody wants gray, they want the frame rate.
 
 Two behaviours share the one button, and the button is the announcement for
 both (rule 6's mirror clause — the state is shown by the same affordance that
@@ -41,12 +42,14 @@ from PySide6.QtWidgets import QToolButton, QWidget
 
 from sieve.gui.preferences import Preferences
 
-#: What a manual click buys, stated on the button. "2.5x" is the measured
-#: ratio on the reference workload during a render (52.3 fps against 19.6);
-#: alone it is when nothing else runs (100.8 against 43.1).
-LABEL_MANUAL = "Gray · ~2.5x playback"
+#: Both states name the format and its playback multiplier, so the button
+#: reads as the tradeoff it is rather than a viewing preference. "~2.5x" is
+#: the measured ratio on the reference workload during a render (52.3 fps
+#: against 19.6); alone it is closer to 2.3x (100.8 against 43.1).
+LABEL_COLOR = "Color · 1x"
+LABEL_GRAY = "Gray · ~2.5x"
 #: Why the pane went gray by itself, stated by the same control that undoes it.
-LABEL_AUTO = "Gray while rendering — click for colour"
+LABEL_AUTO = "Gray · ~2.5x · rendering"
 
 _TOOLTIP = (
     "Decode the viewport in grayscale: colour off, playback roughly 2.5x.\n"
@@ -126,7 +129,10 @@ class GrayToggle(QToolButton):
         effective = self._manual or (self._rendering and not self._pinned)
         auto = effective and not self._manual
         self.setChecked(effective)
-        self.setText(LABEL_AUTO if auto else LABEL_MANUAL)
+        if not effective:
+            self.setText(LABEL_COLOR)
+        else:
+            self.setText(LABEL_AUTO if auto else LABEL_GRAY)
         if effective != self._effective:
             self._effective = effective
             self.luma_changed.emit(effective)

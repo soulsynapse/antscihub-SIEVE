@@ -78,6 +78,31 @@ def test_removing_the_temporal_step_hides_its_graphs_and_says_why(tab: FilterTab
     assert tab.summary_text == "chain incomplete — see the stack"
 
 
+def test_the_speed_button_cycles_the_named_rates_and_reports_the_active_one(
+    tab: FilterTab, player: VideoPlayer
+) -> None:
+    """1x → 2x → 5x → 1x, with the label written from the adopted rate.
+
+    The transport stays wall-clock at every step — the rate scales the clock
+    — so the assertion that matters is that button text and player rate can
+    never disagree: the label is read back from the player after each click.
+    """
+    assert tab.speed_button.text() == "1x"
+    assert player.playback_rate == 1.0
+
+    tab.speed_button.click()
+    assert player.playback_rate == 2.0
+    assert tab.speed_button.text() == "2x"
+
+    tab.speed_button.click()
+    assert player.playback_rate == 5.0
+    assert tab.speed_button.text() == "5x"
+
+    tab.speed_button.click()
+    assert player.playback_rate == 1.0
+    assert tab.speed_button.text() == "1x"
+
+
 def test_a_knob_burst_mid_render_yields_one_final_recompute_with_the_last_value(
     qtbot: QtBot,
     tab: FilterTab,

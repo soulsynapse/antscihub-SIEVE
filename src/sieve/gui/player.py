@@ -121,6 +121,7 @@ class VideoPlayer(QObject):
         self._playing = False
         self._play_anchor_time = 0.0
         self._play_anchor_index = 0
+        self._playback_rate = 1.0
         self._tick_timer_id = 0
 
         self._thread = QThread()
@@ -190,6 +191,27 @@ class VideoPlayer(QObject):
     def viewport_luma(self) -> bool:
         """Whether the viewport is currently being decoded grayscale."""
         return self._viewport_luma
+
+    @property
+    def playback_rate(self) -> float:
+        """The transport's speed as a multiple of source time. 1.0 is real time."""
+        return self._playback_rate
+
+    def set_playback_rate(self, rate: float) -> None:
+        """Play at `rate` times source speed.
+
+        Still wall-clock playback — the module docstring's argument is
+        unchanged, the clock is simply scaled — so frames the decoder cannot
+        keep up with are dropped, not queued. Re-anchoring at the current
+        frame is what makes the change take effect *from here*: the target
+        arithmetic multiplies the whole elapsed span, and without a new
+        anchor a rate change mid-play would teleport the playhead to where
+        the new rate says it should have been all along.
+        """
+        if rate <= 0.0 or rate == self._playback_rate:
+            return
+        self._playback_rate = rate
+        self._anchor_playback(self._current_index)
 
     def set_viewport_luma(self, enabled: bool) -> None:
         """Switch the viewport's decode format between colour and luma.
@@ -323,7 +345,7 @@ class VideoPlayer(QObject):
             return
 
         elapsed = perf_counter() - self._play_anchor_time
-        target = self._play_anchor_index + int(elapsed * self.fps)
+        target = self._play_anchor_index + int(elapsed * self.fps * self._playback_rate)
         step = playback_step(target, self._current_index, self._bounds())
 
         if step.rewound:

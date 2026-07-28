@@ -62,6 +62,7 @@ class _StubRunner(QObject):
     render_failed = Signal(str)
     opened = Signal()
     open_failed = Signal(str)
+    window_render_changed = Signal(bool)
 
     def __init__(self) -> None:
         super().__init__()

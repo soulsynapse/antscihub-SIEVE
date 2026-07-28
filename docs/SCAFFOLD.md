@@ -66,6 +66,7 @@ src/sieve/pipeline/preview.py           # PreviewSession: re-render the working 
 
 src/sieve/bench/budgets.py              # the budget table; character-exact against ARCHITECTURE.md
 src/sieve/bench/metrics.py              # Qt-free metric bus; judges samples against BUDGETS on the way past
+src/sieve/bench/retention_trace.py      # session recorder + the retention policies a trace is replayed through
 
 src/sieve/cli/app.py                    # Typer entry point
 src/sieve/cli/common.py                 # shared option plumbing

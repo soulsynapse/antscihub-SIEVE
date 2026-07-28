@@ -39,6 +39,12 @@ frames it could not decode. Playback runs at correct *speed* with a lower
 frame rate, which is what a video editor does and what a user judging
 behaviour timing actually needs. Playing every frame at the wrong speed would
 be the wrong tradeoff.
+
+One instrument hangs off all of this and is off unless a session asks for it:
+`bench/retention_trace.py` records which frame was requested, from where the
+playhead was, and which of the three layers served it. That is the query half
+of the retention experiment `docs/todo/proxy-retention-policy.md` is waiting
+on; the render ring writes the production half to the same file.
 """
 
 from __future__ import annotations
@@ -50,6 +56,15 @@ from PySide6.QtGui import QImage
 
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import METRICS, MetricBus
+from sieve.bench.retention_trace import (
+    FROM_CACHE,
+    FROM_DECODE,
+    FROM_RING,
+    GET,
+    TRACE,
+    AccessEvent,
+    TraceRecorder,
+)
 from sieve.core.pipeline_model import ClipRange
 from sieve.core.types import VideoMetadata
 from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
@@ -97,6 +112,7 @@ class VideoPlayer(QObject):
         *,
         policy: ScrubPolicy | None = None,
         metrics: MetricBus | None = None,
+        trace: TraceRecorder | None = None,
     ) -> None:
         super().__init__(parent)
 
@@ -118,6 +134,10 @@ class VideoPlayer(QObject):
         # on what was published must not hear another test's player, and the
         # process-wide bus is shared by construction.
         self._metrics = METRICS if metrics is None else metrics
+        # Off unless a session declares a path. Injectable for the same reason
+        # the bus above is, and shared with the render ring: one file, both
+        # threads, in the order the two actually interleaved.
+        self._trace = TRACE if trace is None else trace
 
         self._playing = False
         self._play_anchor_time = 0.0
@@ -409,6 +429,7 @@ class VideoPlayer(QObject):
         if image is None:
             return False
 
+        self._record(index, kind, FROM_CACHE)
         self._coalescer.served_without_decode(kind)
         self._current_index = index
         self.frame_changed.emit(index, image)
@@ -473,6 +494,7 @@ class VideoPlayer(QObject):
         image = ring.get(index)
         if image is None:
             return False
+        self._record(index, kind, FROM_RING)
         self._coalescer.served_without_decode(kind)
         self._current_index = index
         self.frame_changed.emit(index, image)
@@ -482,7 +504,34 @@ class VideoPlayer(QObject):
         """Ask the decode thread for a frame — unless the render already has it."""
         if self._display_from_ring(index, kind):
             return
+        self._record(index, kind, FROM_DECODE)
         self._issue(self._coalescer.request(index, kind))
+
+    def _record(self, index: int, kind: RequestKind, source: str) -> None:
+        """Note one request and what served it, for the retention experiment.
+
+        Exactly one event per request, at the point the source is known — so
+        the trace says what the ring *would have been asked for*, which is what
+        a replay of a different policy needs, and never counts a request twice
+        because it fell through a layer.
+
+        The playhead recorded is where the user was *before* this request, so
+        the event carries the move rather than its destination twice; every
+        call site is therefore ahead of the `_current_index` assignment.
+        """
+        if not self._trace.enabled:
+            return
+        ring = self._render_ring
+        self._trace.record(
+            AccessEvent(
+                op=GET,
+                index=index,
+                playhead=self._current_index,
+                kind=kind.value,
+                source=source,
+                frontier=None if ring is None else ring.frontier,
+            )
+        )
 
     def _issue(self, request: Request | None) -> None:
         """Send to the decode thread whatever the coalescer decided to issue."""

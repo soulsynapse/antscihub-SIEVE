@@ -1,16 +1,19 @@
 ---
 title: What the viewport keeps of a render, and what it drops
-status: open
+status: deferred
 opened: 2026-07-27
 gated_on: >
-  nothing any more — both triggers fired 2026-07-27: the resource ledger landed
-  (gui/concurrency.py's byte column) and render-fed-playback's v1 ring exists
-  (gui/render_ring.py, bound by RENDER_RING_SHARE — the bound this policy
-  replaces)
+  one recorded tuning session — run the GUI with SIEVE_RETENTION_TRACE set,
+  tune something real for a few minutes, then `compare` the trace at a sweep of
+  capacities (docs/todo/retention-trace.md landed the instrument 2026-07-28).
+  The pending decision is whether distance-from-playhead beats the plain ring
+  by enough to be worth being a second eviction rule; nobody but the person at
+  the keyboard can produce the trace that settles it.
 reads:
   - src/sieve/gui/proxy_cache.py
   - src/sieve/pipeline/cache.py
   - src/sieve/gui/player.py
+  - src/sieve/bench/retention_trace.py
   - docs/todo/render-fed-playback.md
 ---
 
@@ -142,6 +145,46 @@ scrub stall. Adopt the policy only if it beats the plain ring by a margin
 worth its complexity; if it does not, the ring stays and this item closes as
 a finding rather than code. Trace and comparison both belong in
 `docs/findings/`.
+
+## Deferred 2026-07-28: what is left, and how to settle it in one sitting
+
+The instrument the hypothesis test asked for is built —
+`src/sieve/bench/retention_trace.py`, split out as
+`docs/todo/retention-trace.md` and landed the same day. What remains is a
+measurement nobody at a terminal can fake and the one decision that follows
+from it.
+
+**To produce the trace.** Start the GUI with `SIEVE_RETENTION_TRACE` pointing
+at a path, tune something real — a chain edit, a window render, and the
+scrubbing back and forth that a render invites — for a few minutes, and quit.
+Then `compare(load_trace(path), capacity_frames=n)` for a sweep of `n` around
+the ring's current bound (256 MB / 0.9 MB is ~284 frames), and put the curve in
+`docs/findings/`.
+
+**The decision the curve settles.** Whether `RenderFrameRing` keeps its LRU or
+adopts distance-from-playhead with the frontier pinned. Three outcomes, and
+each has a different right answer:
+
+* *The proposal wins by a wide margin at the capacity the ledger actually
+  grants.* Adopt it. The change is contained — an eviction rule inside
+  `RenderFrameRing`, plus a playhead the player pushes into the ring, since the
+  render thread does not know where the user is looking.
+* *The two are within a few percent.* Keep the ring. A second eviction rule
+  that has to be explained, and a playhead crossing a thread boundary to feed
+  it, are real costs against a difference nobody can feel; this item then
+  closes as a finding rather than as code, which it explicitly allows.
+* *The proposal wins only at small capacities.* Keep the ring and raise
+  `RENDER_RING_SHARE`'s fraction off zero instead — the cheaper lever, and the
+  ledger is where a share is supposed to grow.
+
+**Recommendation: expect the second outcome and be pleased to be wrong.** The
+frames a backward scrub wants are the ones the render produced most recently
+*in the direction the user came from*, and at ~284 retained frames the ring
+already holds ~4.7 s behind the frontier — which covers the reflexive scrub
+back that this item was opened on. The proposal's advantage should appear only
+once the playhead parks further behind the frontier than the ring is deep, and
+whether a real session does that is exactly what nobody knows. That is why the
+trace is worth taking before either answer is written into the ring.
 
 **Constraint worth recording before anyone starts:** whatever is kept must not be
 mistakable for truth. These are display proxies — downscaled, single-channel, and

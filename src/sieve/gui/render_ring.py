@@ -31,6 +31,10 @@ The bound is `RENDER_RING_SHARE` in `gui/concurrency.py` — declared there so
 the ledger's sum stays the whole session, and fixed at the item's 256 MB
 until `docs/todo/proxy-retention-policy.md` replaces the number with policy.
 
+Every accepted `put` is offered to `bench/retention_trace.py`, which is off
+unless a session declares a path — the render's production sequence is half of
+what that experiment replays, and it exists nowhere else.
+
 The frontier is "the last frame the render has produced", reset when a window
 render starts. It is *not* the settled frontier (`DetectorResult.settled` is
 "will not change", this is "exists"), and the player folds playback at this
@@ -46,6 +50,13 @@ import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
 
+from sieve.bench.retention_trace import (
+    PUT,
+    TRACE,
+    UNKNOWN_PLAYHEAD,
+    AccessEvent,
+    TraceRecorder,
+)
 from sieve.core.types import ChannelSpec, Frame
 from sieve.gui.concurrency import RENDER_RING_SHARE, resolved_bytes
 from sieve.gui.decode_worker import PROXY_WIDTH
@@ -55,8 +66,14 @@ from sieve.gui.proxy_cache import ProxyFrameCache
 class RenderFrameRing:
     """Bounded, lock-guarded ring of the render's source frames as gray proxies."""
 
-    def __init__(self, capacity_bytes: int | None = None) -> None:
+    def __init__(
+        self, capacity_bytes: int | None = None, *, trace: TraceRecorder | None = None
+    ) -> None:
         self._lock = Lock()
+        # Off unless a session was started with `SIEVE_RETENTION_TRACE` set.
+        # Injectable so a test hears only its own writes, for the reason
+        # `bench/metrics.py` gives about the process-wide bus.
+        self._trace = TRACE if trace is None else trace
         self._frames = ProxyFrameCache(
             capacity_bytes=resolved_bytes(RENDER_RING_SHARE)
             if capacity_bytes is None
@@ -116,6 +133,17 @@ class RenderFrameRing:
                 image = image.copy()
             self._frames.put(frame.index, image)
             self._frontier = frame.index
+        if self._trace.enabled:
+            self._trace.record(
+                AccessEvent(
+                    op=PUT,
+                    index=frame.index,
+                    playhead=UNKNOWN_PLAYHEAD,
+                    kind="",
+                    source="",
+                    frontier=frame.index,
+                )
+            )
 
     def get(self, index: int) -> QImage | None:
         """The proxy at `index`, or None. GUI thread; a hit refreshes its LRU slot."""

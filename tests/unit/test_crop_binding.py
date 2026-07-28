@@ -1,4 +1,4 @@
-"""Which of the four states a card is looking at, and what the freeze follows.
+"""Which of the four states a card is looking at.
 
 `test_resolve_source.py` already pins the match rule itself; nothing here
 re-tests whether a record backs a replicate. What this file pins is the part
@@ -15,9 +15,9 @@ The overlap rule's whole content is the case where it declines to answer; a
 card that guesses which replicate a moved record belonged to is worse than one
 that stays quiet about a file the user can still see in the folder.
 
-**The frozen span is an intersection that is allowed to be empty.** Freezing to
-an impossible span would refuse every clip edit including the ones that fix it,
-so the empty case must return None rather than a reversed range.
+**Nothing here holds anything still.** This module reports; the freeze it once
+derived was removed, and every claim below is about what the card *says* rather
+than about what an edit is allowed to do.
 
 Nothing here opens a video, for `test_resolve_source.py`'s reason: the only
 thing a file is asked is whether it exists.
@@ -32,7 +32,7 @@ import pytest
 from sieve.core.pipeline_model import ClipRange, CropArtifact, Project, SourceRef
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
-from sieve.gui.crop_binding import CropBacking, CropState, backing_for, frozen_span
+from sieve.gui.crop_binding import CropBacking, CropState, backing_for
 
 ARENA = ROI(x=100, y=100, width=64, height=48)
 SPAN = ClipRange(start=10, end=20)
@@ -91,24 +91,22 @@ def _backing(
 
 
 class TestTheGoalState:
-    def test_a_matching_record_covering_the_window_is_at_rest_and_freezes(
+    def test_a_matching_record_covering_the_window_is_at_rest(
         self, tmp_path: Path, record: CropArtifact
     ) -> None:
-        """At rest carries the record, says nothing, and binds the freeze."""
+        """At rest carries the record and says nothing."""
         backing = _backing((record,), tmp_path)
 
         assert backing.state is CropState.AT_REST
         assert backing.artifact is record
         assert backing.reason == ""
-        assert backing.frozen
 
-    def test_no_records_at_all_is_absent_and_freezes_nothing(self, tmp_path: Path) -> None:
+    def test_no_records_at_all_is_absent(self, tmp_path: Path) -> None:
         """The status quo, and the path every project takes until one is cut."""
         backing = _backing((), tmp_path)
 
         assert backing.state is CropState.ABSENT
         assert backing.artifact is None
-        assert not backing.frozen
 
 
 class TestEveryNearMissReportsStaleWithTheClauseThatMissed:
@@ -165,20 +163,6 @@ class TestEveryNearMissReportsStaleWithTheClauseThatMissed:
 
         assert backing.state is CropState.STALE
         assert backing.artifact is record
-        assert not backing.frozen
-
-    def test_a_stale_record_never_freezes_the_edits_that_would_fix_it(
-        self, tmp_path: Path, record: CropArtifact
-    ) -> None:
-        """Rule 6's mirror direction, and the reason `frozen` is AT_REST only.
-
-        A stale record is already orphaned. Freezing the box to protect a file
-        that has stopped serving would trap the user in the one state they most
-        need to edit their way out of.
-        """
-        record.resolve(tmp_path).unlink()
-
-        assert not _backing((record,), tmp_path).frozen
 
 
 class TestAnOrphanIsAttributedByOverlapOrNotAtAll:
@@ -219,63 +203,6 @@ class TestAnOrphanIsAttributedByOverlapOrNotAtAll:
         elsewhere = _replicate(ROI(x=500, y=500, width=64, height=48))
 
         assert _backing((record,), tmp_path, replicates=(elsewhere,)).state is CropState.ABSENT
-
-
-class TestTheFrozenSpanIsAnIntersection:
-    def _record(self, tmp_path: Path, roi: ROI, span: ClipRange, name: str) -> CropArtifact:
-        path = tmp_path / name
-        path.write_bytes(b"not really a video")
-        return CropArtifact(
-            path=path.name,
-            roi=roi,
-            format="luma",
-            span=span,
-            cut_from=SOURCE,
-            decoder="decoder|1",
-        )
-
-    def test_two_backed_replicates_freeze_the_overlap(self, tmp_path: Path) -> None:
-        """Not the union, and not the first one found: the common span."""
-        first_roi = ROI(x=100, y=100, width=64, height=48)
-        second_roi = ROI(x=300, y=100, width=64, height=48)
-        crops = (
-            self._record(tmp_path, first_roi, ClipRange(start=10, end=30), "one.mkv"),
-            self._record(tmp_path, second_roi, ClipRange(start=20, end=40), "two.mkv"),
-        )
-        replicates = (_replicate(first_roi, "a"), _replicate(second_roi, "b"))
-
-        span = frozen_span(crops, replicates, source=SOURCE, luma=True, project_dir=tmp_path)
-
-        assert span == ClipRange(start=20, end=30)
-
-    def test_records_with_no_common_span_freeze_nothing(self, tmp_path: Path) -> None:
-        """An impossible freeze would refuse the edits that resolve it.
-
-        No clip preserves both records, so the honest state is not a reversed
-        range and not the first record's span — it is no freeze at all, leaving
-        the user free to edit their way out of a project only hand-editing
-        could have produced.
-        """
-        first_roi = ROI(x=100, y=100, width=64, height=48)
-        second_roi = ROI(x=300, y=100, width=64, height=48)
-        crops = (
-            self._record(tmp_path, first_roi, ClipRange(start=10, end=20), "one.mkv"),
-            self._record(tmp_path, second_roi, ClipRange(start=30, end=40), "two.mkv"),
-        )
-        replicates = (_replicate(first_roi, "a"), _replicate(second_roi, "b"))
-
-        assert (
-            frozen_span(crops, replicates, source=SOURCE, luma=True, project_dir=tmp_path) is None
-        )
-
-    def test_nothing_backed_freezes_nothing(self, tmp_path: Path, record: CropArtifact) -> None:
-        """A record that does not back anything contributes no span."""
-        elsewhere = (_replicate(ROI(x=500, y=500, width=64, height=48)),)
-
-        assert (
-            frozen_span((record,), elsewhere, source=SOURCE, luma=True, project_dir=tmp_path)
-            is None
-        )
 
 
 class TestTheDocumentOwnsTheWholeSet:

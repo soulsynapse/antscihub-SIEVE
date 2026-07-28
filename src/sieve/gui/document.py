@@ -52,7 +52,7 @@ from sieve.gui.commands import (
     SetReplicateROI,
     SetReplicateROIs,
 )
-from sieve.gui.crop_binding import CropBacking, CropState, backing_for, frozen_span
+from sieve.gui.crop_binding import CropBacking, CropState, backing_for
 from sieve.gui.timeline_model import containing, effective_window, ended_at, fitted, moved_to
 from sieve.pipeline.dag import graph_needs_chroma
 
@@ -436,29 +436,6 @@ class ReplicateDocument(QObject):
             luma=self.decodes_luma(),
             project_dir=home.project_dir,
             window=self.window,
-        )
-
-    def is_crop_frozen(self, index: int) -> bool:
-        """Whether an artifact is depending on this replicate's box standing still."""
-        return self.crop_backing(index).frozen
-
-    def frozen_rows(self) -> frozenset[int]:
-        """Every row whose geometry a live artifact holds still."""
-        return frozenset(
-            index for index in range(len(self._replicates)) if self.is_crop_frozen(index)
-        )
-
-    def frozen_clip_span(self) -> ClipRange | None:
-        """The span the clip may not leave, or None when nothing is backed."""
-        home = self._home
-        if home is None:
-            return None
-        return frozen_span(
-            self._crops,
-            self._replicates.as_list(),
-            source=home.identity,
-            luma=self.decodes_luma(),
-            project_dir=home.project_dir,
         )
 
     def decodes_luma(self) -> bool:
@@ -882,19 +859,14 @@ class ReplicateDocument(QObject):
         leaves a region that is already inside untouched, so the safety net
         costs a stamp none of its exact extent.
 
-        A box a materialized crop is cut at is *refused* here, not offered.
-        That is the difference between this and the geometry lock one method
-        down: the lock protects tuning, which the user may reasonably decide to
-        throw away in place, while a moved box orphans a file — so the way out
-        is discarding the artifact, deliberately, and this is the last gate
-        every edit path passes through (a drag, a typed number, set-all).
+        **A materialized crop does not hold the box still.** It used to, and
+        that was the wrong trade: an artifact is an acceleration, and an
+        acceleration that refuses an edit has stopped being one. A moved box
+        misses `CropArtifact.backs` on the ROI by construction, so the render
+        falls back to the parent — same pixels, same keys, slower — and the card
+        says the region has moved since. The file is still there to be re-cut or
+        discarded, and neither is a prerequisite for moving anything.
         """
-        if self.is_crop_frozen(index):
-            self.edit_refused.emit(
-                f"{self._replicates[index].name} is cut to a materialized crop. "
-                "Discard the crop to move its box."
-            )
-            return
         # Before the no-op check below, not after: a gesture whose first step
         # lands the box exactly where it already was is still that gesture, and
         # recording its origin one step later would record a box that has
@@ -1001,23 +973,17 @@ class ReplicateDocument(QObject):
         no-op onto the history every time it is pressed teaches users not to
         press it.
 
-        A frozen row is left out and said so, rather than taking the whole
-        gesture down with it: a rack of twelve with one materialized arena
-        should still square up the other eleven, and refusing all of them would
-        make one artifact a reason to unfreeze it.
+        Every row, including the ones a materialized crop was cut at: see
+        `set_roi` for why an artifact no longer holds a box still. A rack that
+        squared up all but the arenas someone had already accelerated would be
+        the one shape this gesture exists to rule out.
         """
-        frozen = self.frozen_rows()
         changed = {
             index: resized
             for index, replicate in enumerate(self._replicates.as_list())
-            if index not in frozen
-            and (resized := replicate.roi.resized_in(width, height, self._source_size))
+            if (resized := replicate.roi.resized_in(width, height, self._source_size))
             != replicate.roi
         }
-        if frozen:
-            self.edit_refused.emit(
-                f"{len(frozen)} arena(s) cut to a materialized crop were left as they are."
-            )
         if not changed:
             return
         self.undo_stack.push(SetReplicateROIs(self, changed, f"Set All to {width}x{height}"))
@@ -1106,32 +1072,19 @@ class ReplicateDocument(QObject):
         self._push_clip(None, "Clear Clip")
 
     def _push_clip(self, clip: ClipRange | None, text: str) -> None:
-        """Record a clip edit, unless a materialized crop is holding the span.
+        """Record a clip edit. Nothing refuses one.
 
-        The clip's freeze is the same rule as the box's, one axis over: a crop
-        was cut over exactly the span it was asked for, and a window reaching
-        past either end of it un-backs the replicate entirely
+        A materialized crop used to hold the window inside the span it was cut
+        over, because a window reaching past either end un-backs the replicate
         (`pipeline/resolve_source.py` declines whole rather than half-serving).
-        So the frozen span is the intersection of every backing cut, and a clip
-        that would leave it is refused with the span named.
-
-        Clearing the clip is refused for the same reason and not a special case:
-        `window` falls back to the default ten seconds, which is a different span
-        from the one that was cut in all but a coincidence.
+        The answer to that is on the writing side, not here: the cut is taken
+        over the whole source (`gui/filter_tab.py`'s materialize), so every
+        window is inside it and there is nothing left to hold. A cut that
+        predates that — or one hand-edited to a shorter span — simply stops
+        backing its replicate when the window leaves it, and the card says so.
         """
         if clip == self._clip:
             return
-        held = self.frozen_clip_span()
-        if held is not None:
-            wanted = fitted(clip, self._source_frames) or effective_window(
-                None, self._source_frames, self._source_fps
-            )
-            if wanted is None or wanted.start < held.start or wanted.end > held.end:
-                self.edit_refused.emit(
-                    f"a materialized crop holds frames [{held.start}:{held.end}). "
-                    "Discard it to move the clip outside them."
-                )
-                return
         self.undo_stack.push(SetClip(self, clip, text))
 
     # ---- command-facing primitives ---------------------------------------

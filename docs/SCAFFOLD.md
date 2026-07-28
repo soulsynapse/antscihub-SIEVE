@@ -98,7 +98,7 @@ src/sieve/gui/zoom.py                   # the magnifier: zoom, pan centre, and t
 src/sieve/gui/filter_tab.py             # the tuning surface: composite, chain, plots
 src/sieve/gui/chain_stack.py            # the step cards, and the source card above them
 src/sieve/gui/chain_model.py            # its Qt-free half
-src/sieve/gui/crop_binding.py           # which record backs a replicate, and what that freezes; Qt-free
+src/sieve/gui/crop_binding.py           # which record backs a replicate, and why one stopped; Qt-free
 src/sieve/gui/param_form.py             # widgets generated from a filter's params model
 src/sieve/gui/commit_combo.py           # a drop menu that commits on selection, never on highlight
 src/sieve/gui/block_spin.py             # the Block knob, refusing the sizes the density graph cannot bin

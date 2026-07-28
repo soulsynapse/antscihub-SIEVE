@@ -299,7 +299,15 @@ class StepCard(QWidget):
 #: decode to write 77 seconds, and 0.09 ms/frame to read it back against the
 #: parent's 9.93. A control whose price is a surprise is a control the user
 #: presses once.
-MATERIALIZE_PRICE = "about one render to write · roughly 100x cheaper to decode after"
+#:
+#: The cut is over the whole source rather than the working window, so the
+#: write scales with the *video*, not with what is on the timeline — and the
+#: sentence says so, because "one render" would now understate it on any
+#: footage longer than a window. What it buys is that moving the window is free
+#: afterwards; a window-shaped cut re-encodes every time the user scrolls.
+MATERIALIZE_PRICE = (
+    "one decode of the whole video to write · roughly 100x cheaper to read at any window after"
+)
 
 _OFFER_CSS = (
     "QPushButton {background: #2f3a33; color: #cfe6d6; border: 1px solid #4d6a57;"

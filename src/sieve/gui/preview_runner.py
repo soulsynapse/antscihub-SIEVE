@@ -75,7 +75,7 @@ from threading import Lock
 from time import perf_counter
 
 from pydantic import ValidationError
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 
 from sieve.backend.dispatch import Backend, KernelRegistry, NoKernelError
 from sieve.bench.metrics import METRICS, MetricBus
@@ -338,6 +338,29 @@ class _RenderWorker(QObject):
             self._reader.close()
             self._reader = None
 
+    @Slot()
+    def release_files(self) -> None:
+        """Let go of every file this thread has open, without unloading anything.
+
+        The step between the GUI deciding to delete a crop artifact and deleting
+        it. A record being served is a file this thread holds a *pool* of
+        captures over, and on Windows an open handle is a refusal to unlink — so
+        a discard that did not come through here reports that it could not
+        delete the file and leaves the record standing, which is the gesture
+        appearing to do nothing at all.
+
+        Not `close`: the footage stays open and the session is merely dropped,
+        so the next render rebuilds a reader over whatever now resolves — after
+        a discard, the parent. The store goes with the reader for `_reader_for`'s
+        reason: its entries are keyed under a root the next file does not share.
+        """
+        self._ring.clear()
+        self._session = None
+        self._resolved = None
+        if self._reader is not None:
+            self._reader.close()
+            self._reader = None
+
     @Slot(object)
     def set_crops(self, crops: _Crops) -> None:
         """Adopt the project's crop records. Takes effect on the next render.
@@ -511,6 +534,7 @@ class PreviewRunner(QObject):
     _render_requested = Signal(RenderRequest)
     _crops_requested = Signal(object)
     _close_requested = Signal()
+    _release_requested = Signal()
 
     def __init__(
         self,
@@ -594,6 +618,12 @@ class PreviewRunner(QObject):
         self._render_requested.connect(self._worker.render)
         self._crops_requested.connect(self._worker.set_crops)
         self._close_requested.connect(self._worker.close)
+        # Blocking, and that is the whole of what this connection is for: the
+        # caller's next statement deletes the file the worker has open, and a
+        # queued release would run after the unlink it exists to permit.
+        self._release_requested.connect(
+            self._worker.release_files, Qt.ConnectionType.BlockingQueuedConnection
+        )
         self._worker.opened.connect(self._on_opened)
         self._worker.open_failed.connect(self._on_open_failed)
         self._worker.frame_timed.connect(self._on_frame_timed)
@@ -703,6 +733,24 @@ class PreviewRunner(QObject):
         exactly as it was.
         """
         self._crops_requested.emit(_Crops(records=crops, project_dir=project_dir))
+
+    def release_files(self) -> None:
+        """Close every file the render thread holds open, before this returns.
+
+        For the caller that is about to delete one of them. Synchronous by
+        construction (see the connection in `__init__`), because the whole value
+        of the call is that the handles are gone by the time the next statement
+        runs.
+
+        Pause first or this waits out a whole window render: `set_paused` bumps
+        the revision, so the render in flight abandons at its next frame
+        boundary and the release is delivered a frame later rather than a
+        window later. Nothing is resubmitted here — the caller resubmits once it
+        has changed whatever it was deleting the file to change.
+        """
+        if not self._thread.isRunning():
+            return
+        self._release_requested.emit()
 
     def close(self) -> None:
         """Unload the footage and forget everything about this source's session.

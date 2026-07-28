@@ -26,12 +26,15 @@ two replicates overlap the orphan, it is shown on neither, because a card that
 guesses is worse than one that stays quiet about a file the user can still see
 in the folder.
 
-**The frozen span is an intersection, and it can be empty.** Every backed
-replicate pins the clip inside its own cut; the clip is one value shared by all
-of them, so what is left is the overlap. A set of records with no common span
-cannot all be preserved by any clip — a project only reaches that state by
-hand-editing — and freezing to an impossible span would refuse every clip edit
-including the ones that fix it, so that case freezes nothing.
+**Nothing here refuses an edit.** This module reports; it does not hold
+anything still. An earlier version froze the box a record was cut at and the
+window it was cut over, on the reasoning that either edit orphans a file — but
+an artifact exists to make tuning faster, and one that refuses the tuning has
+inverted its own purpose. Both edits already fail safe without a gate: a moved
+box misses `backs` on the ROI, a window outside the span misses in
+`resolve_source`, and the render falls back to the parent with the same pixels
+under the same keys. What is left for the user is a `STALE` card naming the
+clause that missed, which is the report this module owes them.
 """
 
 from __future__ import annotations
@@ -47,7 +50,7 @@ from sieve.core.types import ROI
 
 
 class CropState(Enum):
-    """The four states the source card renders, and the freeze follows.
+    """The four states the source card renders.
 
     `WRITING` is not derivable from any record — it is the tab holding a write
     pass open — and it is in this enum anyway so that the card has one state
@@ -83,16 +86,6 @@ class CropBacking:
     #: Why a `STALE` record no longer backs the replicate, as a sentence the
     #: card shows verbatim. Empty in every other state.
     reason: str = ""
-
-    @property
-    def frozen(self) -> bool:
-        """Whether edits that would orphan the artifact are refused.
-
-        `AT_REST` only. A stale record is already orphaned — freezing the box
-        to protect a file that has stopped serving would trap the user in the
-        state they most need to edit their way out of.
-        """
-        return self.state is CropState.AT_REST
 
 
 def backing_for(
@@ -156,35 +149,6 @@ def backing_for(
             "the region has moved since",
         )
     return CropBacking(CropState.ABSENT)
-
-
-def frozen_span(
-    crops: Sequence[CropArtifact],
-    replicates: Sequence[Replicate],
-    *,
-    source: str,
-    luma: bool,
-    project_dir: Path,
-) -> ClipRange | None:
-    """The span the clip may not leave, or None when nothing is backed.
-
-    Every record that currently backs some replicate contributes its cut; what
-    the clip is held inside is the overlap of all of them. See the module
-    docstring for why an empty overlap freezes nothing.
-    """
-    spans = [
-        artifact.span
-        for replicate in replicates
-        for artifact in crops
-        if artifact.backs(replicate, source=source, luma=luma, project_dir=project_dir)
-    ]
-    if not spans:
-        return None
-    start = max(span.start for span in spans)
-    end = min(span.end for span in spans)
-    if start >= end:
-        return None
-    return ClipRange(start=start, end=end)
 
 
 def _near_miss(

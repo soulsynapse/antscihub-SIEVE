@@ -22,11 +22,28 @@ reads:
 boundary — the replicate crop — moved to docs/todo/crop-boundary-gesture.md and
 was built the same day
 (docs/completed-todo/2026.07.28-crop-boundary-gesture.md): the
-card, the four states, the write pass, and the freeze it puts on a backed
-replicate's box and on the clip. Everything the two boundaries share is
-therefore no longer a design question here but a shipped mechanism to match —
-faded-means-frozen, discard-as-the-only-unfreeze, and the deliberate register a
-materialize offer sits in. This item keeps only what remains: descent through
+card, the four states, and the write pass. Everything the two boundaries share
+is therefore no longer a design question here but a shipped mechanism to match —
+the four-state reading, the write-with-progress, and the deliberate register a
+materialize offer sits in.
+
+**The freeze is not among them, and that is a correction to this item.** The
+source boundary shipped freezing the backed replicate's box and the clip, with
+discard as the only way back, and that was removed later the same day: an
+artifact is an acceleration, and one that refuses the tuning it exists to
+accelerate has inverted its purpose. Both edits already fail safe without a
+gate — a moved box misses `CropArtifact.backs`, a window outside the cut misses
+in `resolve_source`, and the render falls back to the parent with the same
+pixels under the same keys — so what the user gets is a `STALE` card naming the
+clause that missed. The cut is also taken over the whole source rather than the
+working window, which is what makes moving the window free. **A node boundary
+must answer the same question for itself**: descent below a materialized node
+output is not obviously the same shape, because there the ancestry is *the
+thing being displayed as at rest*, and "faded means frozen" is still the rule
+if anything is faded at all. What is no longer available is citing the source
+boundary as precedent for freezing.
+
+This item keeps only what remains: descent through
 *node* output boundaries, the fading ancestry above one, the suggestion
 machinery, and the sibling question. One premise shifted with the crop's
 identity model (child source, not byte-exact stand-in): a materialize offer is
@@ -72,7 +89,7 @@ it, and the descent lands when the writer finishes. Before the writer exists the
 descent must refuse rather than fake — a faded "at rest" ancestry that is
 actually recomputed per frame is rule 6's failure verbatim. The source boundary
 has already been through this cycle and is what the node boundary should copy:
-offer, write with progress and cancel, register, freeze — `gui/chain_stack.py`'s
+offer, write with progress and cancel, register — `gui/chain_stack.py`'s
 `SourceCard` and `gui/materialize_worker.py`.
 
 **Suggestions ride the boundary, divided by rule 7.** The boundary element is

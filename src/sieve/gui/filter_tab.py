@@ -80,7 +80,7 @@ from PySide6.QtWidgets import (
 
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import METRICS, MetricBus
-from sieve.core.pipeline_model import CropArtifact
+from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.pool_meter import PoolMeter
 from sieve.core.wavelet import default_freqs
 from sieve.filters.block_signal import min_block_for, resolve_block
@@ -2192,20 +2192,25 @@ class FilterTab(QWidget):
 
     @Slot()
     def _on_materialize(self) -> None:
-        """Cut the selected replicate's crop over the working window.
+        """Cut the selected replicate's crop over the whole source.
 
-        The window rather than the clip, because the window is what a render
-        actually asks for and what `resolve_source` matches an artifact
-        against — cutting the clip and then serving a window that falls back to
-        the parent would be a minute of encoding for nothing.
+        The whole source, not the working window, and the difference is the
+        difference between an artifact that survives the user's next gesture and
+        one that does not. `resolve_source` declines a record whose span does not
+        cover what is being asked for, and moving the window is the single most
+        ordinary thing anyone does here — cutting to the window would put a
+        minute of re-encoding behind an action the user reads as scrolling. A
+        full-source cut is asked for once and covers every window afterwards, at
+        the cost of a longer write (`MATERIALIZE_PRICE` says so on the card).
         """
         document = self._document
         home = document.source_home
         replicate = document.selected_replicate
-        window = document.window
+        frames = document.source_frames
         index = document.selected_index
-        if home is None or replicate is None or window is None or index is None:
+        if home is None or replicate is None or frames <= 0 or index is None:
             return
+        span = ClipRange(start=0, end=frames)
         if self._materializer.busy:
             self.status_message.emit("a crop is already being written")
             return
@@ -2218,7 +2223,7 @@ class FilterTab(QWidget):
             MaterializeRequest(
                 video=home.video,
                 replicate=replicate,
-                span=window,
+                span=span,
                 project_dir=home.project_dir,
                 luma=document.decodes_luma(),
             )
@@ -2278,10 +2283,19 @@ class FilterTab(QWidget):
         rediscovers an unrecorded file — so keeping the bytes would leave the
         user a folder of artifacts SIEVE can neither serve nor explain.
 
-        This is also the *unfreeze* gesture: while a record backs a replicate,
-        its box and the clip are refused, and discarding is the deliberate act
-        that releases them (rule 6's mirror — faded means frozen, and unfreezing
-        is a decision, never a side effect).
+        **The render thread is holding the file open, and it has to let go
+        first.** A record that is serving is a file the preview has a pool of
+        captures over, and an open handle is an unlink that fails on Windows —
+        which is how this gesture came to do nothing at all. So the preview is
+        paused (which abandons the render in flight at its next frame boundary)
+        and then told to release, synchronously, before the delete is attempted.
+
+        **The record goes first, and a delete that fails does not take it with
+        it.** The record is what makes the file serve; dropping it is the whole
+        of what the user asked for, and it is exactly the "never registered"
+        state `materialize.py` already treats as safe. A file that survives is
+        reported by name — it is in a folder the user can open — rather than
+        being a reason to refuse the gesture.
         """
         document = self._document
         home = document.source_home
@@ -2296,21 +2310,22 @@ class FilterTab(QWidget):
             self,
             "Discard crop",
             f"Discard {path.name}?\n\n"
-            "The file is deleted and this replicate is read from the source again. "
-            "Its box and the clip are released.",
+            "The file is deleted and this replicate is read from the source again.",
             QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
         if answer != QMessageBox.StandardButton.Discard:
             return
+        self._runner.set_paused(True)
+        self._runner.release_files()
+        document.discard_crop(artifact)
         try:
             path.unlink(missing_ok=True)
         except OSError as error:
-            # The record stays: dropping it while the file survives would leave
-            # an artifact nothing can name and nothing can delete from here.
-            self.status_message.emit(f"could not delete {path.name}: {error}")
-            return
-        document.discard_crop(artifact)
+            self.status_message.emit(
+                f"the record is dropped, but {path.name} is still on disk: {error}"
+            )
+        self._runner.set_paused(False)
         self._refresh_source_card()
         self.resubmit()
 

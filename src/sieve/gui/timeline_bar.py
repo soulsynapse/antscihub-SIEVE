@@ -94,7 +94,6 @@ _PLAYHEAD = QColor(240, 240, 245)
 #: Over the track, outside the span a crop at rest holds the window inside. A
 #: wash rather than a hatch: what it says is "not reachable", and the frames
 #: under it are still real footage the playhead may sit on.
-_FENCE = QColor(16, 16, 20, 165)
 _BUBBLE = QColor(18, 18, 22, 235)
 _BUBBLE_EDGE = QColor(80, 84, 96)
 _BUBBLE_TEXT = QColor(232, 233, 238)
@@ -170,7 +169,6 @@ class TimelineStrip(QWidget):
         #: The span a materialized crop is holding the window inside, or None.
         #: Pushed in by the bar from the document; the strip derives nothing
         #: about artifacts and only draws and clamps against it.
-        self._frozen: ClipRange | None = None
         self.setFixedHeight(STRIP_HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.SizeHorCursor)
@@ -198,19 +196,6 @@ class TimelineStrip(QWidget):
     def set_window(self, window: ClipRange | None) -> None:
         """Show `window` as the working span, or nothing for None."""
         self._window = window
-        self.update()
-
-    def set_frozen_span(self, span: ClipRange | None) -> None:
-        """Declare the span a crop at rest holds the window inside, or None.
-
-        Everything outside it is fenced off — painted dim and unreachable by a
-        handle — which is the timeline's half of "faded means frozen". The
-        replicate's box is the other half (`video_view.set_frozen_rows`), and
-        both lift together when the record is discarded.
-        """
-        if span == self._frozen:
-            return
-        self._frozen = span
         self.update()
 
     def set_playhead(self, frame: int) -> None:
@@ -364,8 +349,6 @@ class TimelineStrip(QWidget):
             painter.end()
             return
 
-        self._paint_fence(painter, track)
-
         window = self.window_rect()
         if not window.isEmpty():
             painter.fillRect(window, _WINDOW)
@@ -380,24 +363,6 @@ class TimelineStrip(QWidget):
         painter.drawLine(QPointF(x, 0.0), QPointF(x, float(self.height())))
         self._paint_bubble(painter)
         painter.end()
-
-    def _paint_fence(self, painter: QPainter, track: QRectF) -> None:
-        """Dim the frames the window may not reach while a crop is at rest.
-
-        Under the window and over the track, so the span the user *can* still
-        use keeps its ordinary contrast and only the unreachable part recedes.
-        Nothing is drawn when nothing is frozen — a fence that appeared at the
-        asset's ends on every project would teach users to ignore it.
-        """
-        held = self._frozen
-        if held is None:
-            return
-        geometry = self.geometry_now()
-        left, right = geometry.span(held.start, held.end)
-        painter.fillRect(QRectF(0.0, track.top(), left, track.height()), _FENCE)
-        painter.fillRect(
-            QRectF(right, track.top(), max(self.width() - right, 0.0), track.height()), _FENCE
-        )
 
     def _paint_bubble(self, painter: QPainter) -> None:
         """The hover readout, and nothing while a drag is under way.
@@ -482,47 +447,16 @@ class TimelineStrip(QWidget):
             self.update()
 
     def _dragged_to(self, x: float) -> ClipRange:
-        """The window this drag has arrived at. Never written; only painted, until release.
-
-        Clamped to the frozen span when there is one, so a window a crop is
-        holding still simply cannot be dragged out of it. The clamp lives here
-        rather than only in the document's refusal because a handle that
-        travelled past the fence and then snapped back on release is a control
-        that looked live and was not.
-        """
+        """The window this drag has arrived at. Never written; only painted, until release."""
         window = self._draft if self._draft is not None else self._window
         frame = self.geometry_now().frame_at(x)
-        if self._frozen is not None:
-            frame = min(max(frame, self._frozen.start), self._frozen.end)
         if window is None:
             return ClipRange(start=0, end=max(self._frame_count, 1))
         if self._grab is Grab.START:
-            return self._held(started_at(window, frame, self._frame_count, self.floor_frames))
+            return started_at(window, frame, self._frame_count, self.floor_frames)
         if self._grab is Grab.END:
-            return self._held(ended_at_handle(window, frame, self._frame_count, self.floor_frames))
-        return self._held(moved_to(window, frame - self._grab_offset, self._frame_count))
-
-    def _held(self, window: ClipRange) -> ClipRange:
-        """`window` pushed back inside the frozen span, whole, if there is one.
-
-        The span is the intersection of every backing cut and is at least one
-        frame wide by construction (`crop_binding.frozen_span` declines to
-        freeze an empty overlap), so there is always somewhere to put a window
-        that has run past an edge.
-
-        A window *longer* than the span is shortened to it, which is the one
-        case where the clamp changes a length the user chose — and it has to:
-        no window of that length fits inside the fence, so the alternatives are
-        this or refusing a drag that was already under way. It arises only from
-        a clip that was already outside the cut when the project was loaded,
-        which the card is reporting as stale in the same moment.
-        """
-        held = self._frozen
-        if held is None:
-            return window
-        length = min(window.frame_count, held.frame_count)
-        start = min(max(window.start, held.start), held.end - length)
-        return ClipRange(start=start, end=start + length)
+            return ended_at_handle(window, frame, self._frame_count, self.floor_frames)
+        return moved_to(window, frame - self._grab_offset, self._frame_count)
 
     def _follow_cursor(self, position: QPointF) -> None:
         """Say what the zone under the cursor does before it is pressed.
@@ -698,7 +632,6 @@ class TimelineBar(QWidget):
         """
         window = self._document.window
         self._strip.set_window(window)
-        self._strip.set_frozen_span(self._document.frozen_clip_span())
         self._player.set_window(window)
         self._write_boxes(window)
 

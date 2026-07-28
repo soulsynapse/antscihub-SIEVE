@@ -53,8 +53,8 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 4. **Every budget has a producer, and a miss is visible.**
    `src/sieve/bench/budgets.py` is the table; `WITHOUT_PRODUCER` is the honest
    gap in it. A ceiling nothing publishes is a number, not a budget.
-5. **No consumer starves another.** Every path that can take more than one core
-   declares its share in `gui/concurrency.py`.
+5. **No consumer starves another.** Every path that can take more than one core,
+   or a bounded slab of memory, declares its share in `gui/concurrency.py`.
 6. **A result must never look better-founded than it is.** Refuse rather than
    approximate. Absent must not render as zero; unexamined must not render as
    quiet. Mirror direction: a control must never look more live than it is —

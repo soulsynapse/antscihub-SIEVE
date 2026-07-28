@@ -157,7 +157,7 @@ work cite it instead of re-deriving it per feature.
 |2|Pipeline is a data structure|Serializable DAG. No GUI-only state in the pipeline artifact. It is the *complete* input to rule 1's one path.|
 |3|Filter = one module + one markdown|Discovery is automatic. No registration elsewhere.|
 |4|Every budget has a producer, and a miss is visible|A budget nothing publishes is a number, not a ceiling. A miss is a defect unless the degradation that causes it is a user's explicit choice.|
-|5|No consumer starves another|No consumer improves its latency at another's expense. Every path that can take more than one core declares its share. See *Dividing the machine*.|
+|5|No consumer starves another|No consumer improves its latency at another's expense. Every path that can take more than one core, or a bounded slab of memory, declares its share. See *Dividing the machine*.|
 |6|A result must never look better-founded than it is|Refuse rather than approximate. Absent must not render as zero, and an unexamined stretch must not render as a quiet one. The mirror direction: a control must never look more live than it is — an edit the system would discard or silently invalidate must be visibly inert.|
 |7|Everything sits on one side of the identity line|A field either changes *what a result is* — then it is hashed — or only *where it lives and how fast it arrives* — then it is never hashed. Nothing straddles. `checkpoints` and `outputs` live on `Project`, off `Node`, for this reason.|
 
@@ -270,8 +270,10 @@ higher limit — and never a silent miss.
 
 See *Dividing the machine*, which is the whole of it.
 
-**Enforced by:** `gui/concurrency.py` declares the split and
-`tests/unit/test_concurrency.py` asserts the sum leaves a core for the GUI thread.
+**Enforced by:** `gui/concurrency.py` declares the split — threads and bytes
+both, since 2026.07.27 — and `tests/unit/test_concurrency.py` asserts the
+thread sum leaves a core for the GUI thread and the byte floors plus the
+reserve fit a 16 GB machine.
 `chain_model.recompute` takes `workers` as a required argument so that a caller
 cannot silently inherit every core — pyright is what checks that, which makes it
 the one part of this rule enforced at the point a violation would be written
@@ -496,11 +498,32 @@ that this derivation still runs on the GUI thread at all; capping it at
 `DETECTOR_WORKERS` restores the split but lengthens the stall it causes, and
 routing it through `detector_worker.py` is the real fix.
 
+**The byte column (2026.07.27).** The bandwidth finding showed that counting
+threads misses resources that actually bind, and memory was the next one:
+retention wanted a byte budget, eviction wanted a bound, render-fed playback
+wanted a ring size, and each would have been a number in a different file,
+wrong on most machines, and unaccountable in sum. So the rule's text is taken
+at its word — a bounded slab of memory declares its share exactly as a pool
+of cores does. `core/machine.py` reads the machine once (`available_memory`
+reports the *allocation*: cgroup limit, then scheduler declaration, then
+physical RAM — because exceeding a cgroup is an OOM kill, not a slowdown),
+`gui/concurrency.py` holds the shares as fractions of the post-reserve budget
+with declared floors, and the test asserts the floors fit a 16 GB machine.
+The reserve is provisional until measured (`docs/todo/ledger-measurements.md`),
+`MemoryFrameStore` is the named unbounded gap (`UNBOUNDED`, the same honest
+form as `WITHOUT_PRODUCER`), and worker counts resolve at startup through
+`resolve_worker_split`, degrading detector first on small allocations and
+never scaling up on big ones — the four-worker wall is a bandwidth property,
+not a core count. The ledger is a sum a test checks, never a runtime governor;
+what to *keep* under a budget stays with the retention and eviction items.
+
 `core/` deliberately holds none of this and defaults to every core.
 A CLI run, a whole-clip pass, and a headless parity check on a cluster node
 have nobody to leave room for, and a cap living in `core/` would throttle
 precisely the runs that should saturate a node. Policy about sharing a machine
-belongs to the process that is sharing one.
+belongs to the process that is sharing one. The machine *readings* live in
+`core/machine.py` so the CLI and HPC paths reach them headless — a reading is
+not a policy; the shares declared against it are, and those stay here.
 
 ---
 

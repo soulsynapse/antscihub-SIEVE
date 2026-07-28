@@ -57,7 +57,7 @@ from sieve.core.detection import settled_frames as settled_after_window
 from sieve.core.wavelet import band_indices, default_freqs, morlet_power
 from sieve.core.wavelet import settled_frames as settled_after_coi
 from sieve.gui.chain_model import DetectorState, DetectorUpdate, recompute
-from sieve.gui.concurrency import DETECTOR_WORKERS
+from sieve.gui.concurrency import resolve_worker_split
 
 FloatArray = NDArray[np.floating[Any]]
 
@@ -154,10 +154,11 @@ def derive(request: DetectorRequest) -> DetectorResult:
     series2d = grids.reshape(frames, -1)
     fps = request.fps
     freqs = default_freqs(fps)
+    workers = resolve_worker_split().detector
     update = recompute(
-        series2d, fps, request.state, start_index=request.start_index, workers=DETECTOR_WORKERS
+        series2d, fps, request.state, start_index=request.start_index, workers=workers
     )
-    pooled = morlet_power(series2d.mean(axis=1), fps, freqs, workers=DETECTOR_WORKERS)
+    pooled = morlet_power(series2d.mean(axis=1), fps, freqs, workers=workers)
 
     settled = settled_for(frames, fps, request.state, final=request.final)
 

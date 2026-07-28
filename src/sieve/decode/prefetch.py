@@ -87,12 +87,16 @@ environment variables, for the reasons in that function's docstring.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from threading import Condition, Thread
 from types import TracebackType
 from typing import Self
 
+# Re-exported, not just used: callers learned `available_cpus` at this name
+# before it moved to `core/machine.py` beside the memory resolver, and a decode
+# module is still a sensible place to ask how many decode threads a machine
+# supports.
+from sieve.core.machine import available_cpus as available_cpus
 from sieve.core.types import Frame, VideoMetadata
 from sieve.decode.reader import VideoDecodeError, VideoReader
 
@@ -107,21 +111,6 @@ from sieve.decode.reader import VideoDecodeError, VideoReader
 #: capped: the curve belongs to this footage on this machine, and a cluster node
 #: measuring its own is the caller that should win.
 INFERRED_WORKER_CAP = 4
-
-
-def available_cpus() -> int:
-    """CPUs this process may actually use, not the ones the machine has.
-
-    `os.cpu_count()` reports the machine and is the wrong answer inside a cgroup,
-    a container, or a job step pinned to a subset of a node — all three being the
-    ordinary case on the hardware this is meant to run on. `sched_getaffinity` is
-    the right answer and exists only on Linux, which is why the fallback is here
-    rather than at the call site.
-    """
-    affinity = getattr(os, "sched_getaffinity", None)
-    if affinity is not None:
-        return max(len(affinity(0)), 1)
-    return max(os.cpu_count() or 1, 1)
 
 
 def resolve_workers(requested: int | None = None) -> int:

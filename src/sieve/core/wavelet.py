@@ -56,13 +56,15 @@ ALL_CORES = -1
 def _pool_size(workers: int) -> int | None:
     """`workers` as a `ThreadPoolExecutor` size; `None` is the stdlib default.
 
-    `ALL_CORES` becomes `None` rather than `os.cpu_count()` on purpose. Core
-    may not import `decode.prefetch.available_cpus` — that is a layer up — and
-    re-deriving "how much of this machine do I have" here is exactly the second
-    answer `resolve_workers` documents at length as the thing to avoid. The
-    stdlib's own default is a third party to the disagreement rather than a
-    party in it, and it is what "every core" already meant when this number
-    went to `scipy.fft`.
+    `ALL_CORES` becomes `None` rather than `os.cpu_count()` on purpose.
+    `core.machine.available_cpus` is importable from here now that the machine
+    reading lives in `core/`, but taking it would still be this module holding
+    a policy about how much of the machine a caller meant — and re-deriving
+    "how much do I have" via `os.cpu_count` is exactly the second answer
+    `resolve_workers` documents at length as the thing to avoid. The stdlib's
+    own default is a third party to the disagreement rather than a party in
+    it, and it is what "every core" already meant when this number went to
+    `scipy.fft`.
     """
     return None if workers <= 0 else workers
 

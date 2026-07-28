@@ -5,9 +5,20 @@ from __future__ import annotations
 import pytest
 from PySide6.QtGui import QImage
 
-from sieve.gui.proxy_cache import ProxyFrameCache
+from sieve.gui.concurrency import PROXY_CACHE_SHARE
+from sieve.gui.proxy_cache import DEFAULT_CAPACITY_BYTES, ProxyFrameCache
 
 pytestmark = pytest.mark.gui
+
+
+def test_the_default_capacity_is_the_ledger_floor() -> None:
+    """The class default and the declared share are two homes for one number.
+
+    `gui/concurrency.py` cannot import this module (a QImage import would make
+    the ledger's unit test need Qt), so the two literals are pinned equal here
+    instead. If they drift, the ledger describes a cache nobody is running.
+    """
+    assert PROXY_CACHE_SHARE.floor_bytes == DEFAULT_CAPACITY_BYTES
 
 
 def image(width: int = 100, height: int = 100) -> QImage:

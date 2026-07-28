@@ -85,7 +85,7 @@ from sieve.core.replicates import Replicate
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.filters import discover
-from sieve.gui.concurrency import PREVIEW_WORKERS as _PREVIEW_WORKERS
+from sieve.gui.concurrency import resolve_worker_split
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
@@ -96,14 +96,6 @@ from sieve.pipeline.preview import Consumer, PreviewRender, PreviewSession
 #: constraint but the same discipline: `MetricBus.publish` refusing an unknown
 #: key is what turns a misspelling into a failure rather than a dead metric.
 FIRST_TICK_BUDGET = "filter_to_first_tick"
-
-#: Re-exported so this module's call site reads as it always did. The number
-#: and the reasoning moved to `gui/concurrency.py` when the detector's FFT
-#: became a third consumer of the same cores: one constant justified against
-#: one other consumer stops being a rule the moment there are three, and
-#: non-negotiable #5 is arithmetic that should add up in a place a test can
-#: reach.
-PREVIEW_WORKERS = _PREVIEW_WORKERS
 
 
 class _AbandonedError(Exception):
@@ -211,7 +203,7 @@ class _RenderWorker(QObject):
         is where anything can be said about.
 
         **What this opens is one capture, and it closes it again.** The reader a
-        render uses is `PREVIEW_WORKERS` captures in a format only the graph can
+        render uses is a pool of captures in a format only the graph can
         decide (`_reader_for`), and no graph exists yet — a project's footage
         loads before its chain resolves. Building the real reader here would mean
         building it in whichever format was guessed and then rebuilding it on the
@@ -298,7 +290,7 @@ class _RenderWorker(QObject):
         handing BGR to a graph keyed for luma would fill the store with entries
         labelled as something they are not.
 
-        A rebuild is expensive (`PREVIEW_WORKERS` captures) and unreachable
+        A rebuild is expensive (one capture per preview worker) and unreachable
         today, since nothing on the shelf declares a chroma-only input. It exists
         so that the day one does, the wrong thing is slow rather than wrong. The
         session goes with the reader: its store holds frames decoded in the
@@ -315,7 +307,12 @@ class _RenderWorker(QObject):
         self._reader = None
         self._session = None
         try:
-            reader = PrefetchFrameSource(self._path, workers=PREVIEW_WORKERS, luma=luma)
+            # The resolved split, not the declared constant: on an allocation
+            # smaller than the reference class the preview's pool degrades
+            # before the player's does (`concurrency.resolve_worker_split`).
+            reader = PrefetchFrameSource(
+                self._path, workers=resolve_worker_split().preview, luma=luma
+            )
         except VideoDecodeError as error:
             self.render_failed.emit(request.revision, str(error))
             return None

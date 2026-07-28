@@ -53,6 +53,7 @@ from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.pipeline_model import ClipRange
 from sieve.core.types import VideoMetadata
 from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
+from sieve.gui.concurrency import PROXY_CACHE_SHARE, resolved_bytes
 from sieve.gui.decode_worker import DecodeWorker
 from sieve.gui.preferences import Preferences
 from sieve.gui.proxy_cache import ProxyFrameCache
@@ -102,7 +103,10 @@ class VideoPlayer(QObject):
         self._window: ClipRange | None = None
         self._coalescer = RequestCoalescer()
 
-        self._cache = ProxyFrameCache()
+        # Sized by the ledger, not by the class's own default: the share's
+        # floor is that default, and the fraction lets a bigger allocation buy
+        # more warmed grid points without a second number existing anywhere.
+        self._cache = ProxyFrameCache(capacity_bytes=resolved_bytes(PROXY_CACHE_SHARE))
         # Injectable so the degradation path can be exercised against a
         # threshold a test can actually cross. On a machine fast enough to
         # meet the budget the default policy never degrades, which is correct

@@ -39,6 +39,7 @@ src/sieve/core/pipeline_model.py        # THE SAVED ARTIFACT: pydantic DAG, sche
 src/sieve/core/replicates.py            # replicate identity, overrides, resolved_params, equivalence groups
 src/sieve/core/detection.py             # windowed_mean + detect_gate, the detection chain tail
 src/sieve/core/wavelet.py               # morlet_band_power, default_freqs (capped at 0.45*fps)
+src/sieve/core/machine.py               # the machine read once: available_cpus, available_memory
 
 src/sieve/decode/reader.py              # the only path to a frame; OpenCV VideoCapture, pinned
 src/sieve/decode/prefetch.py            # threaded span reads, measured 1.61x and no further

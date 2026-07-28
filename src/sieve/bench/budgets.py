@@ -158,6 +158,25 @@ BUDGETS: dict[str, Budget] = _table(
         limit_ms=3000.0,
     ),
     Budget(
+        key="density_rebuild",
+        label="Band power arrives → density rebuilt",
+        regime=Regime.IN_PIPELINE,
+        # `DensityPlot.set_series` bins the whole `(T, B)` band power on the
+        # GUI thread, so this is the one graph cost that blocks the repaint it
+        # exists to cause. 100 ms is the instantaneous band: a partial pass
+        # lands repeatedly while a window renders, and each rebuild must fit
+        # inside one perceived beat rather than merely inside the 500 ms
+        # `knob_to_first_partial` it sits within.
+        #
+        # It is also the *only* budget in this table that a control is derived
+        # from. `gui/density_plot.MAX_BLOCKS` is the largest B pinned against
+        # this ceiling by `tests/bench/test_density_rebuild.py`, and the Block
+        # spin box refuses any size implying more — rule 4's producer clause
+        # reaching a widget, so the refusal threshold is a measured ceiling
+        # rather than a number somebody liked.
+        limit_ms=100.0,
+    ),
+    Budget(
         key="knob_to_first_partial",
         label="Knob settle → graphs start filling",
         regime=Regime.IN_PIPELINE,

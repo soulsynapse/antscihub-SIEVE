@@ -73,17 +73,18 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSlider,
-    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.pipeline_model import CropArtifact
 from sieve.core.wavelet import default_freqs
-from sieve.filters.block_signal import resolve_block
+from sieve.filters.block_signal import min_block_for, resolve_block
 from sieve.gui.band_plot import DIM
+from sieve.gui.block_spin import BlockSpinBox
 from sieve.gui.chain_model import (
     SIGNAL_LABELS,
     ChainKind,
@@ -104,8 +105,9 @@ from sieve.gui.composite_view import StepCompositeView
 from sieve.gui.concurrency import resolve_worker_split
 from sieve.gui.count_plot import CountPlot
 from sieve.gui.crop_binding import CropBacking, CropState
-from sieve.gui.density_plot import DensityPlot
+from sieve.gui.density_plot import MAX_BLOCKS, DensityPlot
 from sieve.gui.detector_worker import (
+    DetectorFailure,
     DetectorRequest,
     DetectorResult,
     DetectorRunner,
@@ -132,6 +134,10 @@ KNOB_BUDGET = "knob_to_graphs"
 #: since the detector derives partial passes is the latency a user actually
 #: waits through before there is something to read.
 FIRST_PARTIAL_BUDGET = "knob_to_first_partial"
+#: The rebuild of the density surface, inside both of the above. The only
+#: budget a *control* is derived from — `gui/block_spin.py` refuses block sizes
+#: whose implied block count exceeds the B this ceiling is pinned at.
+DENSITY_BUDGET = "density_rebuild"
 
 #: The high percentile of the window's band power that reads as full heat on
 #: the block grid — fixed across the window so a cell's colour holds its
@@ -187,12 +193,18 @@ class FilterTab(QWidget):
         self._grid: tuple[int, int] = (1, 1)
         self._update: DetectorUpdate | None = None
         self._pooled_power: np.ndarray | None = None
+        #: Why the newest derivation did not land, or None. Held in state
+        #: rather than written straight to the plot because `_apply` rebuilds
+        #: every notice from the chain on each repaint: a notice set from the
+        #: failure slot alone would survive exactly until the next mouse-move.
+        self._derive_failure: str | None = None
         self._playhead = 0
         #: Derives the detector off the GUI thread so the graphs can fill while
         #: the render is still producing frames. Owns a thread; `shutdown` is
         #: required, and the window calls it from `closeEvent`.
         self._detector = DetectorRunner(self)
         self._detector.ready.connect(self._on_detector_ready)
+        self._detector.failed.connect(self._on_detector_failed)
         #: The x axis the plots are drawn against while a render fills it: the
         #: whole working window, set once when the render is submitted. An axis
         #: that grew with the data would slide every curve leftward on each
@@ -338,8 +350,9 @@ class FilterTab(QWidget):
         self._downsample.setDecimals(2)
         self._normalize = CommitCombo()
         self._normalize.addItems(["off", "zscore"])
-        self._block = QSpinBox()
+        self._block = BlockSpinBox()
         self._block.setRange(0, 256)
+        self._refresh_block_floor()
         self._signal_buttons: dict[str, QPushButton] = {}
         for signal_id, label in SIGNAL_LABELS.items():
             button = QPushButton(label)
@@ -1033,6 +1046,7 @@ class FilterTab(QWidget):
         final result are applied identically apart from what they may claim —
         the whole point of routing both through one path.
         """
+        self._derive_failure = None
         self._series_start = result.start_index
         self._series2d = result.series2d
         self._grid = result.grid
@@ -1065,6 +1079,23 @@ class FilterTab(QWidget):
             # otherwise the next kick would find the worker busy, be skipped,
             # and nothing would restart it.
             self._kick_partial()
+
+    @Slot(object)
+    def _on_detector_failed(self, failure: DetectorFailure) -> None:
+        """A derivation raised: say so on the graph, and leave the curve alone.
+
+        Two halves of rule 6, and they pull in opposite directions. The curve
+        already drawn is not overwritten — it is what the last successful pass
+        derived, and blanking it would claim the record was empty. But it is no
+        longer *current*, and a plot that said nothing would read as the graph
+        having caught up. So the last honest picture stays and the notice on
+        top of it says the newest pass did not land.
+
+        Cleared by the next result through `_on_detector_ready`, which is the
+        only thing that can honestly clear it.
+        """
+        self._derive_failure = failure.message
+        self._apply()
 
     @Slot(str)
     def _on_render_failed(self, message: str) -> None:
@@ -1158,7 +1189,9 @@ class FilterTab(QWidget):
         if update is None or self._series_start is None:
             self._count.set_series(np.zeros(0, np.float32), region_blocks=1, armed=False)
             self._count.set_gate(None)
-            if not temporal_ok:
+            if self._derive_failure is not None:
+                self._count.set_notice(f"the graphs did not derive — {self._derive_failure}")
+            elif not temporal_ok:
                 self._count.set_notice("no reachable temporal filter step")
             elif not detection_ok:
                 self._count.set_notice("no reachable detection step")
@@ -1196,7 +1229,14 @@ class FilterTab(QWidget):
 
         solo = detector.solo_block
         solo_trace = update.band_power[:, solo] if solo is not None and solo < blocks else None
+        # The one graph cost on the GUI thread that scales with the block
+        # count, and so the one the Block spin box's floor is derived from.
+        # Timed here rather than inside the widget: the identity cache means a
+        # repeat call does no work, and a producer that only published on the
+        # rebuild path would report a budget nothing ever missed.
+        started = perf_counter()
         self._density.set_series(update.band_power, solo_trace)
+        self._metrics.publish(DENSITY_BUDGET, (perf_counter() - started) * 1000.0)
         self._density.set_span(start, span)
         self._density.set_filled(frames, self._settled)
         self._density.set_playhead(self._playhead)
@@ -1283,6 +1323,51 @@ class FilterTab(QWidget):
         in_band = (values >= lo) & (values <= hi)
         self._composite.set_block_state(values, in_band, self._chain.detector.solo_block)
 
+    def _working_extent(self) -> tuple[int, int] | None:
+        """`(height, width)` in working pixels the block grid is formed over.
+
+        The selected replicate's ROI at the current rescale — the same two
+        numbers the kernel sees, and `rescale`'s own rounding
+        (`max(1, round(src x scale))`) rather than a second approximation of
+        it. None before a source is open, when there is no extent to speak of.
+        """
+        replicate = self._document.selected_replicate
+        source = self._document.source_size
+        if replicate is not None:
+            width, height = replicate.roi.width, replicate.roi.height
+        elif source is not None:
+            width, height = source
+        else:
+            return None
+        scale = 1.0
+        for step in self._chain.steps:
+            if step.node is not None and step.node.filter_id == "rescale":
+                scale = float(step.node.params["scale"])
+                break
+        return max(1, round(height * scale)), max(1, round(width * scale))
+
+    def _refresh_block_floor(self) -> None:
+        """Re-derive the smallest block size the Block spin box will accept.
+
+        Called wherever the extent or the rescale can have moved — a replicate
+        selection, a downsample edit, any chain sync. The floor is a function
+        of both, so the same block size is legal over a small crop and refused
+        over a large one, and a control carrying a constant here would be
+        wrong on one of the two.
+        """
+        extent = self._working_extent()
+        if extent is None:
+            return
+        height, width = extent
+        self._block.set_floor(
+            min_block_for(height, width, MAX_BLOCKS),
+            reason=(
+                f"a {width}x{height} working frame below it is more than "
+                f"{MAX_BLOCKS:,} blocks, and the density graph is held to "
+                f"{BUDGETS[DENSITY_BUDGET].limit_ms:.0f} ms at that count"
+            ),
+        )
+
     def _signal_label(self) -> str:
         step = self._block_step()
         if step is None or step.node is None:
@@ -1345,6 +1430,9 @@ class FilterTab(QWidget):
         finally:
             for widget in knobs:
                 widget.blockSignals(False)
+        # After the echo, not inside it: the floor depends on the rescale this
+        # loop just wrote, and it changes no value — only what may be entered.
+        self._refresh_block_floor()
 
     # ---- the step composite ----------------------------------------------
 
@@ -1554,6 +1642,10 @@ class FilterTab(QWidget):
         self._submit_params(
             {"rescale": {"scale": scale}, "block_signal": {"scale": scale}}, "Set Downsample"
         )
+        # After the submit, which is what moves the chain the floor reads. A
+        # smaller working frame is fewer blocks at the same block size, so this
+        # direction *lowers* the floor as often as it raises it.
+        self._refresh_block_floor()
 
     @Slot(str)
     def _on_normalize(self, mode: str) -> None:
@@ -2251,6 +2343,9 @@ class FilterTab(QWidget):
         self._knob_armed_at = None
         self._selected_step = None
         self._frame_image = None
+        # A failure is a fact about the chain that raised it, and this is a
+        # different one — carrying it over would blame the new replicate.
+        self._derive_failure = None
         self._composite_grab.clear()
         self._composite_revisions.clear()
         self._series_pending = False

@@ -477,6 +477,7 @@ IN-PIPELINE (feels like direct manipulation)
   Slider drag → graph update:      < 200 ms
   Full preview render (5–10s clip): < 3 s
   Band drag → graphs repaint:      < 50 ms
+  Band power arrives → density rebuilt: < 100 ms
   Knob settle → graphs rebuilt:    < 3 s
   Knob settle → graphs start filling: < 500 ms
 ```

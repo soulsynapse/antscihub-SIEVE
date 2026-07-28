@@ -27,11 +27,11 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from PySide6.QtCore import QPointF, QRect, QRectF
+from PySide6.QtCore import QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-from sieve.gui.band_plot import ACCENT, BandPlot, argb_to_qimage, ramp_lut
+from sieve.gui.band_plot import ACCENT, DIM, BandPlot, argb_to_qimage, plot_font, ramp_lut
 
 FloatArray = NDArray[np.floating[Any]]
 
@@ -47,6 +47,24 @@ DENSITY_STOPS: tuple[tuple[int, int, int], ...] = (
 
 #: Vertical resolution of the histogram, in value bins.
 _BINS = 96
+
+#: The largest `B` this surface will bin, and so the largest block count the
+#: Block spin box accepts (`gui/block_spin.py` derives its floor from it).
+#:
+#: A ceiling with a producer, per rule 4: `tests/bench/test_density_rebuild.py`
+#: pins `set_series` at exactly this B over the reference window against the
+#: `density_rebuild` budget, so the number below is the one the benchmark holds
+#: and not a number a widget chose. It is a bound on *B*, not on block size —
+#: block size implies B only together with the crop extent, which is why the
+#: spin box's floor is derived per replicate.
+#:
+#: Refusing rather than computing slowly is rule 6's preference (a control must
+#: never look more live than it is, and a multi-second GUI-thread stall is the
+#: same lie told with a frozen window). 16,384 is a 128x128 grid: an order of
+#: magnitude above any grid anyone tunes with, and an order below the 210,672
+#: that `docs/findings/2026.07.27-the-density-histogram-was-a-scatter.md`
+#: measured at seconds a tick.
+MAX_BLOCKS = 16_384
 
 
 def bin_counts(band_power: FloatArray, value_max: float, bins: int = _BINS) -> NDArray[np.float32]:
@@ -103,11 +121,17 @@ class DensityPlot(BandPlot):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._image: QImage | None = None
+        self._notice = ""
         self._max = 1.0
         self._solo: NDArray[np.float32] | None = None
         #: The exact array `_image` was binned over. Identity, not equality —
         #: see `set_series`.
         self._source: FloatArray | None = None
+
+    @property
+    def notice(self) -> str:
+        """Why there is no surface, or empty. Set only by `set_series`."""
+        return self._notice
 
     # ---- data ---------------------------------------------------------------
 
@@ -141,7 +165,24 @@ class DensityPlot(BandPlot):
         if m is not self._source:
             self._source = m
             blocks = m.shape[1]
+            # Before the bound, so the value axis and the band handles keep
+            # meaning this array's units even when the surface is refused.
+            # One pass over the array; the histogram is the expensive part.
             self._max = float(m.max()) or 1.0
+            if blocks > MAX_BLOCKS:
+                # Refused, not computed slowly, and not left as the previous
+                # grid's picture either — that image is a histogram of a
+                # different population and would read as this one's. The Block
+                # spin box refuses these sizes at entry; this is the same bound
+                # held at the surface, for the values entry cannot reach: a
+                # project saved before the bound, or a crop grown under a fixed
+                # block size.
+                self._image = None
+                self._solo = None
+                self._notice = f"{blocks:,} blocks — above the {MAX_BLOCKS:,} this graph bins"
+                self.update()
+                return
+            self._notice = ""
             counts = bin_counts(m, self._max)
             norm = np.log1p(counts) / math.log1p(max(blocks, 2))
             lut = ramp_lut(DENSITY_STOPS)
@@ -167,6 +208,13 @@ class DensityPlot(BandPlot):
         target = self.content_rect()
         if self._image is not None and target.width() > 0:
             painter.drawImage(QRectF(target), self._image)
+        if self._notice:
+            # A refused surface says why, in the space the surface would have
+            # filled. An empty dark rectangle is a population of zero, which is
+            # the claim rule 6 forbids this widget from making by accident.
+            painter.setPen(DIM)
+            painter.setFont(plot_font(8))
+            painter.drawText(r, int(Qt.AlignmentFlag.AlignCenter), self._notice)
         if self._solo is None or self._count <= 0:
             return
         painter.setPen(QPen(ACCENT, 1.4))

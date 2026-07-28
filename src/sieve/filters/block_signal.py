@@ -48,6 +48,7 @@ side of that trade.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, cast
@@ -103,6 +104,31 @@ def grid_shape(height: int, width: int, block: int) -> tuple[int, int]:
     count threshold's denominator is `ny * nx` from here and nowhere else.
     """
     return -(-height // block), -(-width // block)
+
+
+def min_block_for(height: int, width: int, max_blocks: int) -> int:
+    """The smallest block size whose grid over `(height, width)` fits `max_blocks`.
+
+    The inverse of `grid_shape`, and here rather than in the GUI because it is
+    the same ceiling-division arithmetic read backwards: a caller that derived
+    its own bound would be free to disagree with the grid the kernel actually
+    forms, and a control refusing the wrong values is worse than one refusing
+    none.
+
+    Ceiling division does not invert in closed form — `ceil(h/b) * ceil(w/b)`
+    is a step function that can sit flat across several `b` — so the closed
+    form is used only as a lower bound and the exact answer is stepped up to
+    from there. The walk is a handful of iterations at any real extent.
+    """
+    if height <= 0 or width <= 0 or max_blocks <= 0:
+        return 1
+    block = max(1, math.isqrt(height * width // max_blocks))
+    while block < max(height, width):
+        ny, nx = grid_shape(height, width, block)
+        if ny * nx <= max_blocks:
+            break
+        block += 1
+    return block
 
 
 class Signal(StrEnum):

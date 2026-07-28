@@ -199,24 +199,51 @@ def gate_to(update: DetectorUpdate, settled: int, start_index: int) -> DetectorU
     )
 
 
+@dataclass(frozen=True, slots=True)
+class DetectorFailure:
+    """A derivation that raised, carried back so the graphs can say so."""
+
+    revision: int
+    #: One line for the plot's notice. The exception's own text, prefixed with
+    #: its type, because the two together are what distinguishes a shape
+    #: mismatch from an allocation that could not be met — and the second is
+    #: the one a user can act on by making the block size larger.
+    message: str
+
+
 class _DetectorWorker(QObject):
     """Lives on the detector thread. Its one slot runs off the GUI thread."""
 
     computed = Signal(object)
+    failed = Signal(object)
 
     @Slot(DetectorRequest)
     def compute(self, request: DetectorRequest) -> None:
-        """Derive and report. Nothing here touches Qt beyond the emit.
+        """Derive and report — the result, or the failure. Never neither.
 
-        A derivation that raises is dropped rather than reported: every input
-        was validated by the chain that produced it, so a failure here is a
-        defect in this module and not something a user can act on — and a
-        partial pass that reported an error would replace a graph that is
-        merely incomplete with one that says it is broken.
+        The original argument for swallowing was sound about modals and wrong
+        about silence: every input here was validated by the chain that
+        produced it, so a raise *is* a defect in this module rather than
+        something a user can act on, and a partial pass must not replace a
+        merely-incomplete graph with one claiming to be broken. None of that
+        licenses the graph going quiet with nothing said, which is rule 6
+        exactly — unexamined must not render as quiet. So the failure crosses
+        back and the tab renders it as a notice on the plot: no modal, no
+        stale curve passed off as current.
+
+        `MemoryError` is caught with the two value errors because it is the
+        failure this path actually reaches under a large block count, and it
+        was the one escaping to kill the pass some other way.
         """
         try:
             result = derive(request)
-        except (ValueError, FloatingPointError):
+        except (ValueError, FloatingPointError, MemoryError) as error:
+            self.failed.emit(
+                DetectorFailure(
+                    revision=request.revision,
+                    message=f"{type(error).__name__}: {error}",
+                )
+            )
             return
         self.computed.emit(result)
 
@@ -233,6 +260,11 @@ class DetectorRunner(QObject):
     #: Already filtered: a result for a superseded revision never gets here.
     ready = Signal(object)
 
+    #: A derivation that raised, as a `DetectorFailure`. Filtered by revision
+    #: the same way `ready` is: a failure on a chain the user has already
+    #: edited is not a fact about the chain they are looking at.
+    failed = Signal(object)
+
     _requested = Signal(DetectorRequest)
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -247,6 +279,7 @@ class DetectorRunner(QObject):
         self._worker.moveToThread(self._thread)
         self._requested.connect(self._worker.compute)
         self._worker.computed.connect(self._on_computed)
+        self._worker.failed.connect(self._on_failed)
         self._thread.start()
 
     @property
@@ -303,8 +336,25 @@ class DetectorRunner(QObject):
         already finished.
         """
         self._busy = False
+        self._issue_pending()
+        if result.revision == self._revision:
+            self.ready.emit(result)
+
+    @Slot(object)
+    def _on_failed(self, failure: DetectorFailure) -> None:
+        """A pass raised. Free the slot exactly as a success does, then report.
+
+        The pacing loop must not care which way a pass ended — a worker left
+        marked busy by a failure would take the tab's idle gate down with it
+        and stop every later prefix, turning one raised derivation into a tab
+        that never derives again.
+        """
+        self._busy = False
+        self._issue_pending()
+        if failure.revision == self._revision:
+            self.failed.emit(failure)
+
+    def _issue_pending(self) -> None:
         pending, self._pending = self._pending, None
         if pending is not None and pending.revision == self._revision:
             self._issue(pending)
-        if result.revision == self._revision:
-            self.ready.emit(result)

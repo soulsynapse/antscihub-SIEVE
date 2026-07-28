@@ -418,6 +418,7 @@ class Dag:
         source: str,
         backend: Backend | Mapping[str, Backend],
         replicate: Replicate | None = None,
+        pre_cropped: bool = False,
     ) -> dict[str, str]:
         """Every cacheable node's key, for one replicate.
 
@@ -453,6 +454,12 @@ class Dag:
             replicate: The replicate being processed. Its ROI enters at the
                 root through `source_key`. `None` is the baseline a project
                 with no fan-out runs.
+            pre_cropped: Whether `source` already identifies footage holding
+                this replicate's crop. Then the ROI does *not* enter the root
+                key — the region was cut before the file existed, and claiming
+                it here would describe a crop of a crop. The replicate's
+                parameter overrides still enter every node's key, which is the
+                whole reason this is a separate flag and not `replicate=None`.
 
         Returns:
             `node_id` to key, for the cacheable nodes only.
@@ -468,7 +475,7 @@ class Dag:
         # reader asks this same graph the same question.
         root_key = source_key(
             source,
-            None if replicate is None else replicate.roi,
+            None if pre_cropped or replicate is None else replicate.roi,
             luma=not self.needs_chroma,
         )
         keys: dict[str, str] = {}

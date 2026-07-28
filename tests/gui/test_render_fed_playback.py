@@ -27,10 +27,13 @@ from PySide6.QtGui import QImage
 from pytestqt.qtbot import QtBot
 
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
-from sieve.core.types import ChannelSpec, Frame, VideoMetadata
+from sieve.core.replicates import Replicate
+from sieve.core.types import ROI, ChannelSpec, Frame, VideoMetadata
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.render_ring import RenderFrameRing
+from sieve.pipeline.materialize import materialize_crop
+from sieve.pipeline.preview import PreviewRender
 
 pytestmark = pytest.mark.gui
 
@@ -197,5 +200,48 @@ class TestTheRenderFillsTheRing:
             first, last = runner.ring.get(10), runner.ring.get(15)
             assert first is not None and last is not None
             assert first.pixelColor(0, 0).red() != last.pixelColor(0, 0).red()
+        finally:
+            runner.shutdown()
+
+    def test_a_crop_served_render_feeds_it_nothing(
+        self, qtbot: QtBot, qapp: object, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """Rule 6's mirror at the one seam an artifact breaks.
+
+        A render served from a materialized crop never decodes the whole frame,
+        so the only thing it could offer the ring is one arena's region — and the
+        pane that plays these frames draws replicate boxes over them in source
+        coordinates. So the frame is declined, exactly as a chroma frame is, and
+        the player decodes for itself as it did before the ring existed.
+
+        The `pre_cropped` assertion is what makes the emptiness mean something:
+        without it, a resolution that quietly fell back to the parent would leave
+        a full ring and this test would fail for the right reason — but a
+        resolution that failed to *render at all* would leave it empty and pass.
+        """
+        del qapp
+        window = ClipRange(start=10, end=16)
+        arena = Replicate(replicate_id="a", name="Arena 1", roi=ROI(x=16, y=8, width=64, height=48))
+        artifact = materialize_crop(synthetic_video, arena, window, project_dir=tmp_path, luma=True)
+        runner = PreviewRunner()
+        finished: list[PreviewRender] = []
+        runner.render_finished.connect(finished.append)
+        graph = Pipeline(
+            nodes=(
+                Node(
+                    node_id="small", filter_id="downsample", version="1.0.0", params={"factor": 2}
+                ),
+            )
+        )
+        try:
+            runner.open(synthetic_video)
+            qtbot.waitUntil(lambda: runner.is_open, timeout=OPEN_TIMEOUT_MS)
+            runner.set_crops((artifact,), tmp_path)
+            assert runner.request_render(graph, window, arena)
+            qtbot.waitUntil(lambda: bool(finished), timeout=RENDER_TIMEOUT_MS)
+
+            assert finished[-1].plan.pre_cropped, "the artifact did not serve the render"
+            assert runner.ring.frontier is None
+            assert all(runner.ring.get(index) is None for index in range(window.start, window.end))
         finally:
             runner.shutdown()

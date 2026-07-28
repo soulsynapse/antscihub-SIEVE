@@ -80,7 +80,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from sieve.backend.dispatch import Backend, KernelRegistry, NoKernelError
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.filter_registry import FilterRegistry
-from sieve.core.pipeline_model import ClipRange, Pipeline
+from sieve.core.pipeline_model import ClipRange, CropArtifact, Pipeline
 from sieve.core.replicates import Replicate
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
@@ -91,6 +91,7 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
 from sieve.pipeline.preview import Consumer, PreviewRender, PreviewSession
+from sieve.pipeline.resolve_source import ResolvedSource, resolve
 
 #: The budget this module exists to give a producer. A literal for the reason
 #: `pipeline/preview.py` uses literals — except here it is not a layering
@@ -159,6 +160,22 @@ class RenderRequest:
     frame_index: int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _Crops:
+    """The project's crop artifacts, as the render thread sees them.
+
+    A value crossing a queued signal rather than a reference to the document,
+    for `RenderRequest`'s reason: the worker must not read a model the GUI
+    thread is free to replace underneath it. Records are frozen pydantic models
+    and the tuple is a snapshot, so what arrives is what was true at the moment
+    the project was adopted or saved.
+    """
+
+    records: tuple[CropArtifact, ...]
+    #: What `CropArtifact.path` is relative to — the project file's directory.
+    project_dir: Path
+
+
 class _RenderWorker(QObject):
     """Lives on the render thread. Every slot here runs off the GUI thread.
 
@@ -193,7 +210,9 @@ class _RenderWorker(QObject):
         self._kernels = kernels
         self._source = ""
         self._path: Path | None = None
+        self._crops: _Crops | None = None
         self._reader: PrefetchFrameSource | None = None
+        self._resolved: ResolvedSource | None = None
         self._session: PreviewSession | None = None
 
     @Slot(str, str)
@@ -261,7 +280,18 @@ class _RenderWorker(QObject):
             # cost on the GUI thread instead. `source` is None exactly when
             # the store served every root, which is the warm re-render where
             # there was no decode to share.
-            if window_render and result.source is not None:
+            #
+            # `source_cropped` is the other refusal, and it is a rule 6 one:
+            # a render served from a crop artifact never decodes the whole
+            # frame, so what it could offer the ring is one arena's region.
+            # The pane that plays these frames draws replicate boxes over them
+            # in source coordinates — a crop there is not a smaller picture,
+            # it is the wrong picture — and the contention render-fed playback
+            # exists to remove is already gone for a crop-served render, which
+            # touches the parent not at all. So the player decodes for itself,
+            # exactly as it did before the ring existed. Same shape as the
+            # ring's own refusal of chroma: decline, never convert.
+            if window_render and result.source is not None and not result.source_cropped:
                 self._ring.put(result.source)
             if request.consumer is not None:
                 request.consumer(result)
@@ -299,12 +329,49 @@ class _RenderWorker(QObject):
         self._ring.clear()
         self._session = None
         self._path = None
+        self._crops = None
+        self._resolved = None
         if self._reader is not None:
             self._reader.close()
             self._reader = None
 
-    def _reader_for(self, request: RenderRequest) -> PrefetchFrameSource | None:
-        """The reader in the format this graph resolves to, built or rebuilt.
+    @Slot(object)
+    def set_crops(self, crops: _Crops) -> None:
+        """Adopt the project's crop records. Takes effect on the next render.
+
+        Not applied to the session in flight: resolution happens where a render
+        is planned, and a record arriving mid-render must not change which file
+        the remaining frames come from. The next `_session_for` sees it, which
+        is at most one render away.
+        """
+        self._crops = crops
+
+    def _resolve(self, request: RenderRequest) -> ResolvedSource | None:
+        """Which file this request reads: a crop artifact for its arena, or the parent.
+
+        `pipeline/resolve_source.py`'s one step, asked once per render on the
+        thread that owns the reader. It is asked against the *request's* window
+        rather than the project's clip, because that is what is about to be
+        decoded — a hover outside what was cut falls back to the parent instead
+        of asking the artifact for a frame it does not hold.
+        """
+        if self._path is None:
+            return None
+        crops = self._crops
+        return resolve(
+            () if crops is None else crops.records,
+            request.replicate,
+            project_dir=self._path.parent if crops is None else crops.project_dir,
+            parent=self._path,
+            parent_identity=self._source,
+            luma=not graph_needs_chroma(request.pipeline, self._registry),
+            want=request.window,
+        )
+
+    def _reader_for(
+        self, request: RenderRequest, resolved: ResolvedSource
+    ) -> PrefetchFrameSource | None:
+        """The reader over the resolved file in the format this graph wants.
 
         The decode format is a property of the graph (`Dag.needs_chroma`), so it
         is not knowable at `open` and this is the first place it is. Built here
@@ -313,33 +380,50 @@ class _RenderWorker(QObject):
         handing BGR to a graph keyed for luma would fill the store with entries
         labelled as something they are not.
 
-        A rebuild is expensive (one capture per preview worker) and unreachable
-        today, since nothing on the shelf declares a chroma-only input. It exists
-        so that the day one does, the wrong thing is slow rather than wrong. The
-        session goes with the reader: its store holds frames decoded in the
-        format being left behind.
+        The *file* can change too, and for one reason: the selected arena moved
+        to one that a crop artifact backs, or away from one. That is a rebuild
+        on the same terms — a reader is bound to a path as firmly as to a
+        format, and serving frame `i` of an artifact where the keys say frame
+        `i` of the parent is the wrong-pixels failure with no symptom.
+
+        A rebuild is expensive (one capture per preview worker). Format
+        rebuilds are unreachable today, since nothing on the shelf declares a
+        chroma-only input; file rebuilds are reachable the moment a session has
+        one backed arena and one unbacked one, and are paid back within a render
+        (0.09 ms/frame against 9.93). The session goes with the reader: its
+        store holds frames keyed under a root the new file does not share.
+
+        The comparison is on `identity` rather than on `path`, so footage
+        replaced under the same name rebuilds too — `source_identity` is what
+        every key is rooted in, and a reader outliving it would serve the new
+        file's pixels under the old file's keys.
         """
-        if self._path is None:
-            return None
         luma = not graph_needs_chroma(request.pipeline, self._registry)
-        if self._reader is not None and self._reader.luma == luma:
+        if (
+            self._reader is not None
+            and self._reader.luma == luma
+            and self._resolved is not None
+            and self._resolved.identity == resolved.identity
+        ):
             return self._reader
 
         if self._reader is not None:
             self._reader.close()
         self._reader = None
+        self._resolved = None
         self._session = None
         try:
             # The resolved split, not the declared constant: on an allocation
             # smaller than the reference class the preview's pool degrades
             # before the player's does (`concurrency.resolve_worker_split`).
             reader = PrefetchFrameSource(
-                self._path, workers=resolve_worker_split().preview, luma=luma
+                resolved.path, workers=resolve_worker_split().preview, luma=luma
             )
         except VideoDecodeError as error:
             self.render_failed.emit(request.revision, str(error))
             return None
         self._reader = reader
+        self._resolved = resolved
         return reader
 
     def _session_for(self, request: RenderRequest) -> PreviewSession | None:
@@ -350,20 +434,31 @@ class _RenderWorker(QObject):
         rather than rebuilt because the store is the whole reason a second
         render is cheap. `set_window` and `set_replicate` both keep every
         entry; see `pipeline/preview.py` for why each of them can.
+
+        Re-aiming stops being legal when the resolved file changes, and
+        `_reader_for` has already dropped the session in that case: a session
+        over a crop artifact is a session over *one* arena's pixels, so
+        `set_replicate` on it would run the new arena's parameters over the old
+        arena's footage.
         """
-        reader = self._reader_for(request)
+        resolved = self._resolve(request)
+        if resolved is None:
+            return None
+        reader = self._reader_for(request, resolved)
         if reader is None:
             return None
         if self._session is None:
             self._session = PreviewSession(
-                source=self._source,
-                reader=reader,
+                source=resolved.identity,
+                reader=resolved.wrap(reader),
                 window=request.window,
                 measure=self._bus.measure,
                 replicate=request.replicate,
                 backend=self._backend,
                 registry=self._registry,
                 kernels=self._kernels,
+                pre_cropped=resolved.pre_cropped,
+                source_start=resolved.first_index,
             )
         else:
             self._session.set_window(request.window)
@@ -405,6 +500,7 @@ class PreviewRunner(QObject):
 
     _open_requested = Signal(str, str)
     _render_requested = Signal(RenderRequest)
+    _crops_requested = Signal(object)
     _close_requested = Signal()
 
     def __init__(
@@ -475,6 +571,7 @@ class PreviewRunner(QObject):
 
         self._open_requested.connect(self._worker.open)
         self._render_requested.connect(self._worker.render)
+        self._crops_requested.connect(self._worker.set_crops)
         self._close_requested.connect(self._worker.close)
         self._worker.opened.connect(self._on_opened)
         self._worker.open_failed.connect(self._on_open_failed)
@@ -532,6 +629,21 @@ class PreviewRunner(QObject):
             self.open_failed.emit(f"cannot preview footage that is not there: {video}")
             return
         self._open_requested.emit(str(video), source)
+
+    def set_crops(self, crops: tuple[CropArtifact, ...], project_dir: Path) -> None:
+        """Declare the crop artifacts renders of this footage may be served from.
+
+        Call after adopting or saving a project — those are the two moments
+        `Project.crops` changes, and the runner is told rather than asked
+        because it holds no reference to the document (`gui/document.py` is a
+        GUI-thread model and this is a worker's input).
+
+        A replicate whose record matches is rendered from its crop from the next
+        render onward, which is 107x cheaper per frame and re-keys once. No
+        record and no match are the same thing here, and both leave every path
+        exactly as it was.
+        """
+        self._crops_requested.emit(_Crops(records=crops, project_dir=project_dir))
 
     def close(self) -> None:
         """Unload the footage and forget everything about this source's session.

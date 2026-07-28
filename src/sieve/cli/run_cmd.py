@@ -23,6 +23,12 @@ every frame, reported success, and wrote none of the outputs the project
 declares would be a silent wrong answer of exactly the kind `cache_key.py`'s
 asymmetry rule spends effort avoiding. It refuses with the sinks named.
 
+**Which file each replicate reads is resolved, not assumed.**
+`pipeline/resolve_source.py` decides per replicate whether a materialized crop
+can serve this span or the parent is read and the region cut at the root. It is
+one call and the same call the GUI makes; what is left here is opening the
+files it names, which is why the reader is no longer hoisted out of the loop.
+
 **`--dry-run` opens no video.** It stats the footage — a cache key is a fact
 about which file, and a plan that omitted it would be a plan for a different
 run — but nothing decodes, so it answers on a login node with the footage on a
@@ -42,6 +48,7 @@ from sieve.backend.dispatch import Backend, NoKernelError
 from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
 from sieve.core.pipeline_model import Project
 from sieve.core.replicates import Replicate
+from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore, NullFrameStore
@@ -49,6 +56,7 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag, GraphError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan
+from sieve.pipeline.resolve_source import ResolvedSource, resolve
 
 
 def run_project(
@@ -104,23 +112,76 @@ def run_project(
 
     span = span_for(project, frames, video, dry_run=dry_run)
     targets = _targets(project, replicate_ids)
-    plans = [
-        ExecutionPlan.build(dag, source=source, span=span, backend=backend, replicate=target)
+    # The format the keys in `plans` are derived under — `dag.needs_chroma` is
+    # what `Dag.node_keys` asks, so asking it once here is one derivation read
+    # twice rather than two decisions that could differ. It also decides which
+    # artifacts may serve: a colour crop cannot feed a luma session.
+    luma = not dag.needs_chroma
+    sources = [
+        resolve(
+            project.crops,
+            target,
+            project_dir=project_path.parent,
+            parent=video,
+            parent_identity=source,
+            luma=luma,
+            want=span,
+        )
         for target in targets
+    ]
+    plans = [
+        ExecutionPlan.build(
+            dag,
+            source=resolved.identity,
+            span=span,
+            backend=backend,
+            replicate=target,
+            pre_cropped=resolved.pre_cropped,
+            source_start=resolved.first_index,
+        )
+        for target, resolved in zip(targets, sources, strict=True)
     ]
 
     if dry_run:
-        for plan in plans:
-            typer.echo(_describe(plan))
+        for plan, resolved in zip(plans, sources, strict=True):
+            typer.echo(_describe(plan, resolved))
         return
 
     store: FrameStore = NullFrameStore() if no_cache else MemoryFrameStore()
-    # The format the keys in `plans` were derived under — `dag.needs_chroma` is
-    # what `Dag.node_keys` asked, so asking it again here is one derivation read
-    # twice rather than two decisions that could differ.
-    with frame_source(video, workers, luma=not dag.needs_chroma) as reader:
-        for plan in plans:
-            _execute_one(plan, reader, store)
+    _execute_all(plans, sources, store, workers=workers, luma=luma)
+
+
+def _execute_all(
+    plans: Sequence[ExecutionPlan],
+    sources: Sequence[ResolvedSource],
+    store: FrameStore,
+    *,
+    workers: int | None,
+    luma: bool,
+) -> None:
+    """Run every plan against the file its replicate resolved to.
+
+    **One reader open at a time, not one per file.** A backed replicate reads
+    its artifact and an unbacked one reads the parent, so a project part-way
+    through materialization needs both — and a reader is a pool of `workers`
+    captures, which rule 5 makes a declared share rather than something to
+    allocate twelve of because it saved a reopen. Runs are sequential and batch:
+    reopening at each transition costs one pool build, and the alternative costs
+    every pool at once for the length of the run.
+    """
+    reader: PrefetchFrameSource | None = None
+    opened: Path | None = None
+    try:
+        for plan, resolved in zip(plans, sources, strict=True):
+            if reader is None or opened != resolved.path:
+                if reader is not None:
+                    reader.close()
+                reader = frame_source(resolved.path, workers, luma=luma)
+                opened = resolved.path
+            _execute_one(plan, resolved.wrap(reader), store)
+    finally:
+        if reader is not None:
+            reader.close()
 
 
 def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) -> None:
@@ -186,13 +247,19 @@ def _targets(project: Project, replicate_ids: Sequence[str] | None) -> tuple[Rep
     return selected
 
 
-def _describe(plan: ExecutionPlan) -> str:
+def _describe(plan: ExecutionPlan, resolved: ResolvedSource) -> str:
     """What `--dry-run` prints: one plan, one block.
 
     Every line is something the plan already knows, and the selection is what a
     user checks before committing a cluster to it — how much gets decoded that
     is not asked for, which nodes will be looked up rather than computed, and
     where each one runs.
+
+    Which *file* each replicate reads is printed only when it is not the
+    project's source. A dry run is where a user finds out an artifact they cut
+    is not being used — the fallback is deliberately silent at run time (see
+    `pipeline/resolve_source.py`), and silent everywhere would make a stale
+    record indistinguishable from a live one until somebody timed the run.
     """
     label = "baseline" if plan.replicate is None else plan.replicate.name
     lines = [
@@ -202,6 +269,8 @@ def _describe(plan: ExecutionPlan) -> str:
         + (f", {plan.lead_in_shortfall} unavailable" if not plan.warmed else "")
         + ")",
     ]
+    if resolved.artifact is not None:
+        lines.append(f"  served by {resolved.artifact.path} (crop, uncropped at the root)")
     for node in plan.dag.order:
         spec = plan.dag.spec(node.node_id)
         key = plan.key(node.node_id)

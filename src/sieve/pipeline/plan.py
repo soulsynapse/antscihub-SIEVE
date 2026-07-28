@@ -49,6 +49,7 @@ from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import ParamsBase, input_warmup_frames
 from sieve.core.pipeline_model import ClipRange, Node, resolved_params
 from sieve.core.replicates import Replicate
+from sieve.core.types import ROI
 from sieve.pipeline.dag import Dag
 
 
@@ -89,6 +90,27 @@ class ExecutionPlan:
     #: caller changes.
     backends: Mapping[str, Backend]
     replicate: Replicate | None
+    #: Whether the source this run reads already holds the replicate's pixels.
+    #:
+    #: False for footage a replicate is cut *out of*, which is every run there
+    #: was before crop artifacts existed. True when the reader is a materialized
+    #: crop of this replicate (`pipeline/resolve_source.py`): the fan-out already
+    #: happened on disk, so there is no crop left to apply and the root key must
+    #: not claim one — the artifact is a source in its own right with an identity
+    #: of its own, and `roi` below is where both consequences are read from.
+    #:
+    #: Separate from `replicate` rather than folded into it, because the two
+    #: answer different questions: which arena's *parameters* resolve (still this
+    #: replicate's, artifact or not) and which *pixels* the reader hands over.
+    #: Under the child-source model those stopped being the same fact.
+    pre_cropped: bool = False
+    #: The lowest source frame index the reader can supply. Zero for a whole
+    #: video; `CropArtifact.span.start` for a crop, whose frame 0 *is* that
+    #: source frame. `decode_start` clamps here, so lead-in that falls before
+    #: the artifact begins is reported by `lead_in_shortfall` rather than
+    #: requested and refused — the same treatment a clip near frame 0 already
+    #: gets, for the same reason.
+    source_start: int = 0
 
     @classmethod
     def build(
@@ -99,6 +121,8 @@ class ExecutionPlan:
         span: ClipRange,
         backend: Backend | Mapping[str, Backend],
         replicate: Replicate | None = None,
+        pre_cropped: bool = False,
+        source_start: int = 0,
     ) -> ExecutionPlan:
         """Derive the run of `dag` over `span`.
 
@@ -121,6 +145,13 @@ class ExecutionPlan:
             replicate: The replicate being processed. Its ROI enters the keys at
                 the root and its overrides enter every node's params. `None` is
                 the baseline a project with no fan-out runs.
+            pre_cropped: Whether `source` already names footage holding this
+                replicate's crop — a materialized artifact rather than the
+                parent. The overrides still resolve; the ROI stops applying, at
+                the root key and at the executor's crop alike. Defaulted so a
+                caller that has never heard of artifacts gets the behaviour that
+                predates them.
+            source_start: Lowest source frame index the reader can supply.
 
         Raises:
             ValidationError: if any node's resolved parameters are not valid for
@@ -145,25 +176,51 @@ class ExecutionPlan:
             dag=dag,
             span=span,
             params=params,
-            keys=dag.node_keys(source=source, backend=backends, replicate=replicate),
+            keys=dag.node_keys(
+                source=source, backend=backends, replicate=replicate, pre_cropped=pre_cropped
+            ),
             lead_in=_lead_in(dag, params),
             backends=backends,
             replicate=replicate,
+            pre_cropped=pre_cropped,
+            source_start=source_start,
         )
 
     # ---- what the reader is asked for ------------------------------------
 
     @property
+    def roi(self) -> ROI | None:
+        """The region the executor cuts from each decoded frame, or None.
+
+        The one place the two ways of having no crop are answered together: a
+        project with no fan-out (`replicate is None`) and a run whose reader is
+        already this replicate's crop (`pre_cropped`). Both mean *do not cut*,
+        and both mean the root key names no region — so `dag.node_keys` and
+        `executor.execute` ask this rather than reaching for `replicate.roi`,
+        which under the child-source model is the geometry of a cut that has
+        already happened.
+        """
+        if self.pre_cropped or self.replicate is None:
+            return None
+        return self.replicate.roi
+
+    @property
     def decode_start(self) -> int:
-        """First source frame to decode, clamped at the start of the video.
+        """First source frame to decode, clamped at the start of the footage.
 
         Clamped rather than rejected. A clip that begins at frame 3 behind a
         filter wanting 30 frames of lead-in cannot be warmed, and there is no
         footage that would fix it — refusing to run would make the opening
         seconds of every video untunable, which is worse than a first frame
         that is under-warmed and reported as such by `lead_in_shortfall`.
+
+        The floor is `source_start` and not 0 for exactly that reason applied
+        once more: a crop artifact's footage begins partway into the source's
+        numbering, and lead-in reaching before it is unavailable in the same
+        unfixable way. It is the same clamp, and the shortfall reports it in
+        the same field.
         """
-        return max(self.span.start - self.lead_in, 0)
+        return max(self.span.start - self.lead_in, self.source_start)
 
     @property
     def decode_range(self) -> range:

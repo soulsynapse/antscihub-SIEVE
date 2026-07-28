@@ -64,6 +64,7 @@ src/sieve/pipeline/cache.py             # store protocol
 src/sieve/pipeline/executor.py          # THE ONE EXECUTION PATH. CLI, GUI, and HPC all call this
 src/sieve/pipeline/preview.py           # PreviewSession: re-render the working window, pay only below the edit
 src/sieve/pipeline/materialize.py       # the replicate crop artifact: cut it, verify the read-back, record it
+src/sieve/pipeline/resolve_source.py    # which file a replicate reads — a crop artifact or the parent — and in whose numbering
 
 src/sieve/storage/crop_writer.py        # FFV1/Matroska encode from arrays; knows no identity
 
@@ -134,8 +135,8 @@ tests/unit/test_cache_key.py            # cache isolation between sibling branch
 ```
 
 Directories not listed line by line, because their contents are conventional and
-the test only guards the named files: `tests/unit/` (37 modules), `tests/gui/`
-(28), `tests/integration/` (6), `tests/property/` (4).
+the test only guards the named files: `tests/unit/` (38 modules), `tests/gui/`
+(28), `tests/integration/` (7), `tests/property/` (4).
 
 ---
 

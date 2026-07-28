@@ -148,12 +148,23 @@ def source_key(source: str, roi: ROI | None = None, *, luma: bool = False) -> st
     This field distinguishes two runs on one build; that constant distinguishes
     two builds.
 
-    A materialized crop on disk does not appear and must not: it is a faster
-    route to the same pixels, and letting its presence move a key would make a
-    storage decision into a semantic one. See
-    `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`. The contrast
-    with `luma` is the whole distinction rule 7 draws: a crop on disk is where
-    the pixels live, the luma plane is which pixels they are.
+    **Whether a materialized crop exists does not appear here, and must not.**
+    Not because it cannot change a key — under the child-source model settled
+    2026-07-28 it does, and knowingly — but because the way it does is by being
+    passed a *different `source`*, computed from the artifact file itself
+    (`pipeline/resolve_source.py`). This function is never asked "is there a
+    crop"; it is handed footage and a region, and an artifact is footage. A
+    presence test in here would be the storage-decision-as-semantic-decision the
+    earlier byte-parity model was written to avoid, and it would additionally
+    be a second answer to a question `resolve_source` already owns.
+
+    The `roi` argument is where that lands: a run over the parent names the
+    replicate's region, a run over that replicate's artifact names none, because
+    the region was cut before the file existed. `ExecutionPlan.roi` is the one
+    place those two are told apart. See
+    `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` for why the crop
+    is in the graph at all, and `CropArtifact` for what re-keying onto a child
+    source buys and costs.
 
     Args:
         source: What identifies the footage — `source_identity` builds one.

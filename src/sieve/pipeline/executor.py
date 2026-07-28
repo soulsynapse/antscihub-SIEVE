@@ -42,10 +42,15 @@ failure that is silent. Choosing is the plan's job precisely so that by the
 time execution starts there is nothing left to choose — a fallback here could
 only ever contradict a key that has already been derived.
 
-**A crop on every root, every frame.** The replicate's ROI is what the graph
-consumes; the materialized crop VISION step 4 offers is a faster route to the
-same pixels and never a different input. See
-`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
+**A crop on every root, every frame — unless the reader already is one.** The
+replicate's ROI is what the graph consumes, and `plan.roi` is where "which
+pixels" is decided: it is the replicate's region over the parent, and `None`
+over a materialized crop of that same replicate, whose file holds those pixels
+already (`pipeline/resolve_source.py`). Nothing here knows which it was handed;
+the plan resolved it, and the loop below crops or does not. See
+`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` for why the crop is
+in the graph at all, and `CropArtifact` for why an artifact is a source with an
+identity of its own rather than a proxy for the parent.
 """
 
 from __future__ import annotations
@@ -121,7 +126,21 @@ class FrameResult:
     #: no decode happened, which is exactly the warm re-render where there is
     #: nothing to share. Carrying it costs one frame's reference for as long
     #: as the caller holds this, the same argument as `outputs` above.
+    #:
+    #: Read `source_cropped` before believing that promise: when the run is
+    #: served from a materialized crop there *is* no whole frame to have, and
+    #: this field carries the crop.
     source: Frame | None = None
+    #: Whether `source` is already the replicate's crop rather than the whole
+    #: decoded frame — `plan.pre_cropped`, carried to the consumer.
+    #:
+    #: It exists because the field above promises something a crop-served run
+    #: cannot keep, and a consumer that painted a crop where it expected a frame
+    #: would be showing a region of the arena as the whole of it. Rule 6 in its
+    #: mirror direction: never let a result look better-founded than it is. The
+    #: one consumer today declines the frame on this flag rather than drawing it
+    #: (`gui/preview_runner.py`, feeding `gui/render_ring.py`).
+    source_cropped: bool = False
 
     def __getitem__(self, node_id: str) -> Frame:
         """That node's output.
@@ -172,7 +191,11 @@ def execute(
     shelf = KERNELS if kernels is None else kernels
     keep = NullFrameStore() if store is None else store
     bindings = _bind(plan, shelf)
-    roi = None if plan.replicate is None else plan.replicate.roi
+    # `plan.roi`, not `plan.replicate.roi`: a run served from a materialized
+    # crop has its replicate — its overrides are what the params resolved from —
+    # and no crop left to apply. The plan is the one place those two facts are
+    # reconciled.
+    roi = plan.roi
 
     for index in plan.decode_range:
         decoded: Frame | None = None
@@ -213,7 +236,11 @@ def execute(
                 keep.put(key, index, produced)
         if index >= plan.span.start:
             yield FrameResult(
-                index=index, outputs=outputs, from_cache=frozenset(hits), source=decoded
+                index=index,
+                outputs=outputs,
+                from_cache=frozenset(hits),
+                source=decoded,
+                source_cropped=plan.pre_cropped,
             )
 
 

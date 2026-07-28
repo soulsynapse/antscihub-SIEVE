@@ -128,13 +128,18 @@ def plan_for(
     *,
     span: ClipRange = DEFAULT_SPAN,
     replicate: Replicate | None = None,
+    source: str = SOURCE,
+    pre_cropped: bool = False,
+    source_start: int = 0,
 ) -> ExecutionPlan:
     return ExecutionPlan.build(
         Dag.build(pipeline, SHELF),
-        source=SOURCE,
+        source=source,
         span=span,
         backend=Backend.CPU,
         replicate=replicate,
+        pre_cropped=pre_cropped,
+        source_start=source_start,
     )
 
 
@@ -215,3 +220,73 @@ def test_the_replicates_overrides_reach_the_resolved_params() -> None:
     )
     plan = plan_for(pipeline, replicate=replicate)
     assert plan.params["j"].model_dump() == {"amount": 9}
+
+
+class TestPlanningAgainstACropThatAlreadyExists:
+    """`pre_cropped` and `source_start`: what a run over an artifact changes.
+
+    Three separable claims, because the child-source model splits one fact into
+    three and the parts fail independently. The ROI stops applying (the crop
+    happened on disk). The overrides do *not* stop applying (they are about
+    parameters, not pixels). And the footage begins partway into the source's
+    numbering, which is a shortfall to report rather than a frame to demand.
+    """
+
+    def test_the_replicates_region_leaves_both_the_crop_and_the_key(self) -> None:
+        """A crop of a crop is the one wrong answer available here.
+
+        `plan.roi` is what the executor cuts with and what the root key names,
+        and over an artifact both must be nothing. If only one of them dropped
+        the region, the run would either cut twice or key the correct pixels
+        under a claim of a region nobody applied.
+        """
+        pipeline = Pipeline(nodes=(node("s", "settle1"),))
+        arena = Replicate(name="arena 1", roi=ROI(x=4, y=4, width=8, height=8))
+
+        over_parent = plan_for(pipeline, replicate=arena)
+        over_artifact = plan_for(pipeline, replicate=arena, pre_cropped=True)
+        whole_frame = plan_for(pipeline)
+
+        assert over_parent.roi == arena.roi
+        assert over_artifact.roi is None
+        # And the key follows the ROI rather than the `replicate` argument:
+        # with no overrides in play, an uncropped run over this source is keyed
+        # identically however the arena reached it.
+        assert over_artifact.keys == whole_frame.keys
+        assert over_artifact.keys != over_parent.keys
+
+    def test_the_overrides_survive_the_crop_leaving(self) -> None:
+        """`pre_cropped` is not `replicate=None`, and this is the difference.
+
+        The cheap way to say "no ROI" would have been to plan the artifact with
+        no replicate at all. That silently reverts every per-arena parameter pin
+        to the node's baseline — a wrong answer with no symptom, since the run
+        completes and reports the same frame count.
+        """
+        pipeline = Pipeline(nodes=(node("j", "jitter", amount=1),))
+        arena = Replicate(name="arena 2", roi=ROI(x=0, y=0, width=8, height=8)).with_override(
+            "j", {"amount": 9}
+        )
+
+        plan = plan_for(pipeline, replicate=arena, pre_cropped=True)
+
+        assert plan.params["j"].model_dump() == {"amount": 9}
+        assert plan.replicate is arena
+
+    def test_lead_in_before_the_artifact_begins_is_a_shortfall_not_a_request(self) -> None:
+        """The clamp at frame 0, applied once more at the artifact's own start.
+
+        A crop covering exactly the clip can never supply a warmup reaching
+        before it, from any file. Without the floor the plan would ask the
+        reader for frames the artifact does not hold, and a run over footage
+        that is entirely correct would fail.
+        """
+        pipeline = Pipeline(nodes=(node("s", "settle5"),))
+
+        plan = plan_for(pipeline, span=ClipRange(start=40, end=46), source_start=40)
+
+        assert plan.lead_in == 5
+        assert plan.decode_start == 40
+        assert plan.decode_range == range(40, 46)
+        assert plan.lead_in_shortfall == 5
+        assert not plan.warmed

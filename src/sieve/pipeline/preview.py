@@ -172,6 +172,8 @@ class PreviewSession:
         store: FrameStore | None = None,
         registry: FilterRegistry | None = None,
         kernels: KernelRegistry | None = None,
+        pre_cropped: bool = False,
+        source_start: int = 0,
     ) -> None:
         """Open a preview over `window` of the footage `reader` reads.
 
@@ -199,6 +201,14 @@ class PreviewSession:
                 that has not thought about caching gets what it obviously meant.
             registry: The filter shelf graphs resolve against.
             kernels: The kernel shelf nodes are bound through.
+            pre_cropped: Whether `reader` already hands over this replicate's
+                crop. `ExecutionPlan.pre_cropped`, fixed for the session's life
+                because it is a property of the file behind `reader` — a caller
+                whose replicate stops being backed rebuilds the session, since
+                the reader changed with it.
+            source_start: Lowest source frame index `reader` can supply.
+                `ExecutionPlan.source_start`; nonzero over a crop artifact,
+                whose frame 0 is a source frame partway in.
         """
         self._source = source
         self._reader = reader
@@ -209,6 +219,8 @@ class PreviewSession:
         self._store = MemoryFrameStore() if store is None else store
         self._registry = registry
         self._kernels = kernels
+        self._pre_cropped = pre_cropped
+        self._source_start = source_start
 
     # ---- state -----------------------------------------------------------
 
@@ -251,6 +263,13 @@ class PreviewSession:
         valid for the moment the user clicks back. Two arenas that cropped the
         same pixels share them, which is `equivalence_groups`' claim arriving
         here as a saving rather than as a report.
+
+        **Not valid on a session reading a crop artifact.** `pre_cropped` says
+        the reader hands over *this* replicate's pixels, so re-aiming at another
+        arena would run the new arena's parameters over the old one's footage —
+        and key it as if that were fine. A caller whose arena changes resolves
+        the source again and builds a new session; `gui/preview_runner.py` is
+        the one that does, and it rebuilds on any change of resolved source.
         """
         self._replicate = replicate
 
@@ -335,6 +354,8 @@ class PreviewSession:
             span=span,
             backend=self._backend,
             replicate=self._replicate,
+            pre_cropped=self._pre_cropped,
+            source_start=self._source_start,
         )
 
     def _run(self, plan: ExecutionPlan, on_frame: Consumer | None, *, whole: bool) -> PreviewRender:

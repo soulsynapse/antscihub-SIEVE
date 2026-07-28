@@ -53,6 +53,7 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import UnrunnableNodeError
 from sieve.pipeline.preview import PreviewRender, PreviewSession
+from sieve.pipeline.resolve_source import ResolvedSource, resolve
 
 
 def preview_project(
@@ -129,17 +130,31 @@ def preview_project(
 
     # `--edit` rewrites parameters, never the shelf a node names, so no edit can
     # move the answer: the format is the project's and holds for every repeat.
-    with frame_source(video, workers, luma=not graph_needs_chroma(project.pipeline)) as reader:
+    # Which is also why the source resolves once, before the loop — an edit
+    # cannot make a crop artifact stop backing this arena.
+    luma = not graph_needs_chroma(project.pipeline)
+    resolved = resolve(
+        project.crops,
+        target,
+        project_dir=project_path.parent,
+        parent=video,
+        parent_identity=source,
+        luma=luma,
+        want=window,
+    )
+    with frame_source(resolved.path, workers, luma=luma) as reader:
         session = PreviewSession(
-            source=source,
-            reader=reader,
+            source=resolved.identity,
+            reader=resolved.wrap(reader),
             window=window,
             measure=bus.measure,
             replicate=target,
             backend=backend,
             store=MemoryFrameStore(),
+            pre_cropped=resolved.pre_cropped,
+            source_start=resolved.first_index,
         )
-        typer.echo(_header(project, target, window, at=at))
+        typer.echo(_header(project, target, window, at=at, resolved=resolved))
         for attempt in range(repeat):
             edited = project.pipeline if attempt == 0 else _apply(project, target, parsed).pipeline
             render = _render(session, edited, at)
@@ -250,18 +265,29 @@ def _apply(
 
 
 def _header(
-    project: Project, target: Replicate | None, window: ClipRange, *, at: int | None
+    project: Project,
+    target: Replicate | None,
+    window: ClipRange,
+    *,
+    at: int | None,
+    resolved: ResolvedSource,
 ) -> str:
     """One line naming what is being previewed, before anything is rendered.
 
     Printed first so that a run that then fails has already said which arena and
     which frames it was working on — the two things that make a refusal
     actionable, and the two the flags most easily get wrong.
+
+    The artifact is named when there is one, for `sieve run --dry-run`'s reason:
+    the timings this command exists to report differ by two orders of magnitude
+    between a crop-served render and a parent-served one, and a number that did
+    not say which it measured would be the wrong kind of measurement.
     """
     arena = "whole frame" if target is None else target.name
     span = f"frame {at}" if at is not None else f"window {window.start}:{window.end}"
     nodes = len(project.pipeline.nodes)
-    return f"{arena}: {span}, {nodes} node{'' if nodes == 1 else 's'}"
+    served = "" if resolved.artifact is None else f", served by {resolved.artifact.path}"
+    return f"{arena}: {span}, {nodes} node{'' if nodes == 1 else 's'}{served}"
 
 
 def _describe(render: PreviewRender, edits: Sequence[str] | None) -> str:

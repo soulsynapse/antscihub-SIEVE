@@ -506,6 +506,11 @@ class MainWindow(QMainWindow):
         self._document.load_project(project)
         self._project = project
         self._project_path = path
+        # The one thing the render worker needs from the document that the
+        # document does not hand it: which replicates have a crop on disk it
+        # can read instead of the parent. Told at adoption and at save, the
+        # two moments `Project.crops` changes.
+        self._preview.set_crops(project.crops, path.parent)
         self._document.undo_stack.setClean()
         self._update_title()
         self._retarget_history()
@@ -535,6 +540,10 @@ class MainWindow(QMainWindow):
 
         self._project = project
         self._project_path = path
+        # A Save As rebases every relative path in the document, `CropArtifact`
+        # included, so the worker's copy is re-declared against the new home
+        # rather than left pointing through the old one.
+        self._preview.set_crops(project.crops, path.parent)
         self._document.undo_stack.setClean()
         self._update_title()
         # A Save As moves the project's home, and history follows it. Snapshots

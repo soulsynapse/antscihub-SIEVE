@@ -230,6 +230,32 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
 )
 
 
+#: Budgets a CI benchmark actually asserts a limit on, as opposed to publishes.
+#: The two are independent gaps and this is the wider one: a published budget
+#: shows a session it was missed, but only a timed one catches the miss before
+#: it ships.
+#:
+#: Declared rather than derived for the same reason `WITHOUT_PRODUCER` is —
+#: `src/` may not read `tests/`, and a number nobody wrote down is a number
+#: nobody has to defend. `tests/bench/test_budget_producers.py` scans every
+#: `within_budget("...")` call site in `tests/bench/` and fails in both
+#: directions, so this cannot claim coverage that does not exist and cannot
+#: hide coverage that arrived.
+#:
+#: The composition is the honest part, and it is worse than the count looks.
+#: `open_to_first_frame` and `scrub_settle` are pre-pipeline, so of the nine
+#: in-pipeline budgets — the regime the product is sold on — exactly one
+#: (`density_rebuild`) has a clock on it in CI, and that one is the entry in
+#: `IN_DEBT`.
+TIMED: frozenset[str] = frozenset(
+    {
+        "open_to_first_frame",
+        "scrub_settle",
+        "density_rebuild",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Debt:
     """A budget miss that is declared, scheduled for repayment, and tolerated

@@ -2,11 +2,17 @@
 
 `test_budget_table.py` pins the table against the architecture document, so the
 two cannot disagree about what a limit *is*. Neither of them can say whether
-anything ever measures against it — and four of eleven budgets did not, silently,
-while the table read as eleven enforced ceilings. A budget with no producer
+anything ever measures against it — and four of twelve budgets do not, silently,
+while the table reads as twelve enforced ceilings. A budget with no producer
 cannot be missed, which is indistinguishable from compliance.
 
-Two checks, one per direction a key can go wrong:
+*Published* and *timed* are two different gaps and the second is wider: nine
+of the twelve have no CI benchmark asserting a limit, so `TIMED` is pinned here
+the same way. The prose that used to hold these counts got both of them wrong
+(AUTO-GUARDRAILS §4 said "7 of the 11" and "2 of the 11"), which is the whole
+argument for a set a test can read.
+
+Checks, one per direction a key can go wrong:
 
 - a budget in `BUDGETS` that no module under `src/` names, and is not declared
   in `WITHOUT_PRODUCER`;
@@ -25,13 +31,15 @@ nobody wired up — does not need the stronger claim to be caught.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
 
-from sieve.bench.budgets import BUDGETS, WITHOUT_PRODUCER
+from sieve.bench.budgets import BUDGETS, TIMED, WITHOUT_PRODUCER
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "sieve"
+BENCH_TESTS = Path(__file__).resolve().parent
 
 #: `bench/` declares the keys; naming one there is not producing it.
 _DECLARING_PACKAGE = SRC / "bench"
@@ -82,3 +90,34 @@ def test_every_budget_constant_names_a_real_budget() -> None:
                 if named_budget and value not in BUDGETS:
                     offenders.append(f"{path.name}:{ast.unparse(target)} = {value!r}")
     assert offenders == [], f"budget constants naming no budget: {offenders}"
+
+
+#: `tests/bench/gate.py` is the single adjudicator, so a budget is timed in CI
+#: if and only if some module here passes its key to `within_budget`. Matching
+#: the call site rather than the key alone is what keeps this from counting the
+#: meta-tests in this file, which name every key by construction.
+TIMED_CALL = re.compile(r'within_budget\(\s*"([a-z_]+)"')
+
+
+@pytest.fixture(scope="module")
+def asserted() -> set[str]:
+    """Budget keys some benchmark in `tests/bench/` judges against a limit."""
+    keys: set[str] = set()
+    for path in BENCH_TESTS.glob("test_*.py"):
+        keys |= set(TIMED_CALL.findall(path.read_text(encoding="utf-8")))
+    return keys
+
+
+def test_timed_says_exactly_which_budgets_have_a_clock_on_them(asserted: set[str]) -> None:
+    # Both directions, because both have been wrong. AUTO-GUARDRAILS §4 claimed
+    # two timed budgets out of eleven while the table held twelve and three were
+    # timed — a prose count nobody could check, which is what this replaces.
+    assert asserted == set(TIMED), (
+        "`budgets.TIMED` must name exactly the keys passed to `within_budget` in "
+        f"tests/bench/; missing: {sorted(asserted - TIMED)}, "
+        f"claimed but not asserted anywhere: {sorted(TIMED - asserted)}"
+    )
+
+
+def test_timed_names_only_real_budgets() -> None:
+    assert set(BUDGETS) >= TIMED

@@ -566,6 +566,33 @@ def render_settled(completed: Sequence[Entry]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def budget_health() -> str:
+    """One line: how much of rule 4's table is actually holding anything up.
+
+    Rule 4 has the largest declared gap of any rule and reading it currently
+    costs three files — the table, `WITHOUT_PRODUCER`, and the benchmark
+    modules. All three counts are derived from `bench/budgets.py`, which is
+    itself machine-checked against `ARCHITECTURE.md` and against the call
+    sites, so this line cannot say something the gate would not already have
+    caught. That is also why it is safe in a file `--check` compares: nothing
+    here varies with the working tree or the clock.
+
+    One line, and it displaces nothing — `.state.md`'s budget is lines, not
+    scripts. The two other candidates for this block are deliberately absent:
+    tree state and `doc_drift`'s worst line both move with `HEAD`, which would
+    make the primer stale on every commit and turn a real staleness failure
+    into noise. Tree state went to the session Stop hook instead.
+    """
+    from sieve.bench.budgets import BUDGETS, IN_DEBT, TIMED, WITHOUT_PRODUCER
+
+    total = len(BUDGETS)
+    return (
+        f"**Budgets ({total}):** {total - len(WITHOUT_PRODUCER)} published, "
+        f"{len(TIMED)} timed in CI, {len(IN_DEBT)} in declared debt "
+        f"({', '.join(sorted(IN_DEBT)) or 'none'})."
+    )
+
+
 def render_state(root: Path = DOCS_ROOT) -> str:
     """Build `docs/.state.md` from the item folder and the indexes."""
     by_dir = {spec.directory: spec for spec in SPECS}
@@ -601,6 +628,7 @@ def render_state(root: Path = DOCS_ROOT) -> str:
     if mermaid:
         lines += ["", *mermaid]
 
+    lines += ["", budget_health()]
     lines += [
         "",
         "**Last completed** (full list in `completed-todo/.index.md`):",

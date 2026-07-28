@@ -3,9 +3,9 @@ title: Render-fed playback, and the frontier it loops at
 status: open
 opened: 2026-07-27
 gated_on: >
-  nothing structurally — but it reads best after
-  docs/todo/grayscale-and-the-luma-decode.md, which changes the numbers it is
-  scoped against
+  nothing structurally — but take docs/todo/grayscale-viewport-toggle.md FIRST;
+  this is the second of the two, and the pane being able to go gray is what lets
+  the render's frames feed it at all
 reads:
   - src/sieve/gui/player.py
   - src/sieve/gui/preview_runner.py
@@ -14,6 +14,13 @@ reads:
 ---
 
 # Render-fed playback, and the frontier it loops at
+
+Priority **2 of 2**, after docs/todo/grayscale-viewport-toggle.md. The
+dependency is real and not just sequencing: the pipeline decodes luma, so frames
+the render could hand the player are single-channel. A colour viewport and a
+luma render are two formats and therefore two decodes, which is the thing this
+item exists to stop — so the pane must be able to go gray before its frames can
+come from anywhere but its own reader.
 
 While a window render is filling, the same frames are decoded twice: the
 preview's `PrefetchFrameSource` decodes the window at full resolution to compute
@@ -117,6 +124,43 @@ which is the same kind of switch: an automatic behaviour the user may not want).
 Off means today's behaviour — the player decodes independently and stutters,
 which is the right choice for someone who needs true wall-clock coverage of the
 whole window more than they need smooth motion.
+
+## The frames are discarded, not unavailable — and the render now outruns playback
+
+Noted 2026-07-27, and it moves this item's centre of gravity.
+
+The pane is frozen because the render's frames are *thrown away* after the
+consumer has looked at them, not because they do not exist. `execute` decodes
+into a local and drops it (`pipeline/executor.py:170`); the consumer sees each
+frame once, on the render thread, and nothing keeps it. Every pixel the viewport
+wants has already been decoded and then deliberately released.
+
+And since the luma decode landed, the producer is **faster than real time**:
+
+```
+render, luma, 2 workers      11.2-11.4 ms/frame     ~88 fps
+playback at source rate      16.7 ms/frame          59.94 fps
+```
+
+That inverts the premise the section above was written on. When this item was
+scoped the render was 22.4 ms a frame and the player would outrun it, which is
+what the loop-at-the-frontier mechanism exists to handle. At 11.2 ms the
+frontier outruns the *playhead* instead, and it pulls further ahead the moment
+the player stops decoding and stops competing for bandwidth. So in the steady
+state there is no frontier to fold at — only at the very start, before the
+render has any lead, and after a seek backwards into a region already passed.
+
+The loop is still worth building as the honest behaviour at the edge, but it
+stops being the main path. The main path is: keep what the render produced, and
+play it.
+
+**Which makes retention the real question, and it is a planning job rather than
+a coding one.** A window of 1280-wide gray proxies is 0.9 MB a frame — 3.8 GB
+for 70 s at 59.94 fps — so "keep everything" is not available and the design is
+entirely about what to keep and what to drop. That is
+docs/todo/proxy-retention-policy.md, deliberately deferred to a planning pass
+rather than decided inline here, because a retention rule chosen to make one
+demo smooth is how a cache becomes something nobody can reason about.
 
 ## What to not get wrong
 

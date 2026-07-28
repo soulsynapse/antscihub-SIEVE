@@ -22,18 +22,30 @@ module's docstring. The same goes for the stamp's dimensions — the view decide
 them (a drawn region, or the replicate being tuned) and these fields show what
 it decided, which is why `set_stamp_size` writes without re-announcing.
 
-The fields also announce their own focus. Space is playback and Delete removes
-the selected replicate, both as *window* shortcuts, and Qt dispatches a
-shortcut before the focused widget sees the key — so without the announcement,
-typing into a width field would start the video and Delete would remove the
-replicate being edited. `replicate_table.EditingAwareDelegate` solves the same
-problem for the table and for the same reason.
+**A field's value moves when the user says it does, and not before.** Typing
+`15` into a box showing `9` must not set the region to 9 pixels wide on the way
+past — one keystroke is not an edit, and a document that took each digit would
+also take each digit's undo entry. So the fields commit: Enter, Esc, or
+clicking away, and nothing in between reaches `ReplicateDocument`.
+
+That boundary is also what the fields announce. Space is playback and Delete
+removes the selected replicate, both as *window* shortcuts, and Qt dispatches a
+shortcut before the focused widget sees the key — so while a number is half
+typed, those shortcuts have to stand down or Delete would remove the replicate
+being edited. What they no longer stand down for is *focus*: a field merely
+holding the keyboard is not an edit, and suppressing on focus is what let a
+missed focus-out strand playback for the rest of the session. The claim begins
+at the first keystroke and ends at the commit, which is a state with a defined
+exit rather than a flag that can be left behind.
+`replicate_table.EditingAwareDelegate` announces the same boundary for the
+table's cell editors, and `gui/editing_sources.py` is what lets the two of them
+speak at once.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal, Slot
-from PySide6.QtGui import QFocusEvent
+from PySide6.QtGui import QHideEvent, QKeyEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFormLayout,
@@ -58,23 +70,78 @@ _NO_SOURCE_MAX = 1_000_000
 
 
 class _NumberField(QSpinBox):
-    """A spin box that says when it holds the keyboard.
+    """A spin box whose value, and whose claim on the keyboard, move on commit.
 
-    See the module docstring: the window's single-key shortcuts have to stand
-    down while this has focus, and only the widget itself knows when that is.
+    See the module docstring. Two halves, and they are the same boundary seen
+    from either side:
+
+    - `setKeyboardTracking(False)` is Qt's own name for it. `valueChanged` then
+      fires when the text is *interpreted* — Enter, focus-out, or a step from
+      the arrows or the wheel — instead of once per digit, so the half-typed
+      `1` of a `15` never becomes a region.
+    - `editing_changed` reports the same interval to the window, opening at the
+      first keystroke and closing at that interpretation.
+
+    It identifies itself by object name because the window's guard is a set of
+    sources (`gui/editing_sources.py`), and a set needs a key it can drop by
+    identity when a field disappears mid-edit.
     """
 
-    focus_changed = Signal(bool)
+    #: `(object name, editing)`. The name travels with the signal so a field
+    #: that is hidden or destroyed while typing can still be dropped by name.
+    editing_changed = Signal(str, bool)
 
-    def focusInEvent(self, event: QFocusEvent) -> None:
-        """Take focus and announce it."""
-        super().focusInEvent(event)
-        self.focus_changed.emit(True)
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setKeyboardTracking(False)
+        self._editing = False
+        self.lineEdit().textEdited.connect(self._on_text_edited)
+        # `editingFinished` is Qt's commit: Enter, and losing focus. Both end
+        # the claim, and both have already written the value by the time it
+        # arrives, which is why this is the closing edge and not a second one.
+        self.editingFinished.connect(self._end_edit)
 
-    def focusOutEvent(self, event: QFocusEvent) -> None:
-        """Give up focus and announce it."""
-        super().focusOutEvent(event)
-        self.focus_changed.emit(False)
+    @Slot(str)
+    def _on_text_edited(self, text: str) -> None:
+        """A keystroke, which is where an edit starts."""
+        del text
+        if not self._editing:
+            self._editing = True
+            self.editing_changed.emit(self.objectName(), True)
+
+    @Slot()
+    def _end_edit(self) -> None:
+        """Hand the keys back, once, whatever ended the edit."""
+        if self._editing:
+            self._editing = False
+            self.editing_changed.emit(self.objectName(), False)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Esc abandons what was typed; every other key is Qt's business.
+
+        `QAbstractSpinBox` has no cancel of its own — it ignores Esc, which in
+        a dialog closes the dialog and here does nothing at all. The decision
+        this field implements needs all three exits to exist, so this is the
+        third: the text goes back to the committed value and the claim ends.
+        """
+        if event.key() == Qt.Key.Key_Escape and self._editing:
+            committed = self.prefix() + self.textFromValue(self.value()) + self.suffix()
+            self.lineEdit().setText(committed)
+            self.lineEdit().selectAll()
+            self._end_edit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        """A field that goes away mid-edit gives the keys back on the way out.
+
+        The panel collapsing or the tab changing hides this widget without a
+        focus-out ever being delivered. Without this, that half-typed number
+        would hold playback disabled with nothing left on screen to commit it.
+        """
+        super().hideEvent(event)
+        self._end_edit()
 
 
 class CropToolsPanel(QWidget):
@@ -95,8 +162,11 @@ class CropToolsPanel(QWidget):
     #: this panel by the tab, so the numbers the user was looking at when they
     #: pressed it are the numbers that get applied.
     set_all_requested = Signal(int, int)
-    #: A numeric field took or gave up the keyboard.
-    editor_open_changed = Signal(bool)
+    #: `(field name, editing)` — a numeric field started or finished being
+    #: typed into. Not focus: see the module docstring. Relayed rather than
+    #: aggregated here, because the tab is where this pane's fields and the
+    #: table's cell editors become one answer.
+    editing_changed = Signal(str, bool)
 
     def __init__(self, document: ReplicateDocument, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -228,7 +298,7 @@ class CropToolsPanel(QWidget):
         for field in self._fields.values():
             field.valueChanged.connect(self._on_geometry_edited)
         for field in (self._stamp_width, self._stamp_height, *self._fields.values()):
-            field.focus_changed.connect(self.editor_open_changed)
+            field.editing_changed.connect(self.editing_changed)
 
         self._document.selection_changed.connect(self.refresh)
         self._document.structure_changed.connect(self.refresh)

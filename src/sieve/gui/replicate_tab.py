@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 from sieve.core.types import ROI, VideoMetadata
 from sieve.gui.crop_tools import CropToolsPanel
 from sieve.gui.document import ReplicateDocument
+from sieve.gui.editing_sources import EditingSources
 from sieve.gui.player import VideoPlayer
 from sieve.gui.replicate_table import Column, EditingAwareDelegate, ReplicateTableModel
 from sieve.gui.video_view import NO_SELECTION, CropMode, VideoView
@@ -61,9 +62,12 @@ class ReplicateTab(QWidget):
     asks the window to move over to the filter tab with that arena under it.
     """
 
-    #: True while a table cell editor is open. Window shortcuts that collide
-    #: with typing (space, delete) are disabled for the duration.
-    editor_open_changed = Signal(bool)
+    #: True while *anything* in this tab is being typed into — a table cell
+    #: editor, or a crop-tools number field between its first keystroke and its
+    #: commit. Window shortcuts that collide with typing (space, delete, I, O)
+    #: are disabled for the duration. One aggregate over a set of named
+    #: sources, so no source's close can clear another's live claim.
+    editing_changed = Signal(bool)
     #: A box on the video was clicked: the replicate at this row is accepted,
     #: and the window should show the filter tab. The selection itself has
     #: already gone through the document by the time this fires.
@@ -78,6 +82,10 @@ class ReplicateTab(QWidget):
         super().__init__(parent)
         self._player = player
         self._document = document
+        #: Who currently claims the keyboard. Two independent sources feed it —
+        #: the table's cell editors and the crop-tools fields — and the window
+        #: is told only when the aggregate flips.
+        self._editing = EditingSources()
 
         self._view = VideoView()
         self._model = ReplicateTableModel(document, self)
@@ -179,7 +187,7 @@ class ReplicateTab(QWidget):
         self._tools_panel.stamp_size_changed.connect(self._view.set_stamp_size)
         self._tools_panel.fit_requested.connect(self._view.reset_zoom)
         self._tools_panel.set_all_requested.connect(self._document.set_all_to_size)
-        self._tools_panel.editor_open_changed.connect(self.editor_open_changed)
+        self._tools_panel.editing_changed.connect(self._on_source_editing)
 
         self._document.structure_changed.connect(self._refresh_overlay)
         self._document.replicate_changed.connect(self._refresh_overlay)
@@ -189,10 +197,32 @@ class ReplicateTab(QWidget):
         self._table.selectionModel().selectionChanged.connect(self._on_table_selection_changed)
 
         self._delete_button.clicked.connect(self.delete_selected)
-        self._delegate.editing_started.connect(lambda: self.editor_open_changed.emit(True))
-        self._delegate.editing_finished.connect(lambda: self.editor_open_changed.emit(False))
+        self._delegate.editing_started.connect(self._on_cell_editor_opened)
+        self._delegate.editing_finished.connect(self._on_cell_editor_closed)
 
     # ---- window-facing actions -------------------------------------------
+
+    @Slot(str)
+    def _on_cell_editor_opened(self, key: str) -> None:
+        self._on_source_editing(key, True)
+
+    @Slot(str)
+    def _on_cell_editor_closed(self, key: str) -> None:
+        self._on_source_editing(key, False)
+
+    @Slot(str, bool)
+    def _on_source_editing(self, source: str, editing: bool) -> None:
+        """One source changed its mind; tell the window only if the answer did.
+
+        The signal is edge-triggered on the *aggregate*, not relayed per
+        source: the window's guard is "is anything being typed into", and
+        re-asserting True while a second editor opens would make the two
+        sources' closes look like they had to arrive in order. They do not.
+        """
+        was_active = self._editing.active
+        self._editing.mark(source, editing)
+        if self._editing.active != was_active:
+            self.editing_changed.emit(self._editing.active)
 
     def selected_row(self) -> int:
         """Currently selected replicate row, or `NO_SELECTION`.

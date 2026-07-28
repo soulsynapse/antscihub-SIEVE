@@ -198,17 +198,37 @@ class ReplicateTableModel(QAbstractTableModel):
 
 
 class EditingAwareDelegate(QStyledItemDelegate):
-    """Reports when a cell editor is open.
+    """Reports which cell editors are open, by name.
 
     Playback is on the space bar and deletion is on Delete. Both are window
     shortcuts, and Qt dispatches shortcuts before the focused widget sees the
     key — so without this, typing a space into a replicate name would start
     the video and Delete would remove the row being renamed. The tab disables
     those actions while an editor is live.
+
+    Each editor is named rather than counted because the tab aggregates these
+    with the crop-tools fields into one set (`gui/editing_sources.py`), and a
+    bare "an editor closed" from one source could otherwise clear another
+    source's live claim. Persistent editors make this reachable: a table can
+    hold several open at once, closing in any order.
     """
 
-    editing_started = Signal()
-    editing_finished = Signal()
+    #: The key of an editor that just opened, or that is about to be destroyed.
+    editing_started = Signal(str)
+    editing_finished = Signal(str)
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        #: Live editors and the keys they were announced under. Held rather
+        #: than recomputed, because the name has to be *the same string* on the
+        #: way out as on the way in — a key derived twice from the widget is a
+        #: key that can differ twice, and a close under the wrong name strands
+        #: the keyboard exactly the way this item was filed for. Holding the
+        #: editor also keeps its Python wrapper alive for as long as the entry
+        #: it identifies, which is what makes the identity stable at all.
+        self._keys: dict[QWidget, str] = {}
+        #: Never reused, so no editor can inherit a name a previous one wore.
+        self._opened = 0
 
     def createEditor(
         self,
@@ -216,12 +236,24 @@ class EditingAwareDelegate(QStyledItemDelegate):
         option: QStyleOptionViewItem,
         index: QModelIndex | QPersistentModelIndex,
     ) -> QWidget:
-        """Open an editor and announce it."""
+        """Open an editor, name it, and announce it."""
         editor = super().createEditor(parent, option, index)
-        self.editing_started.emit()
+        self._opened += 1
+        key = f"cell:{self._opened}:{index.row()}.{index.column()}"
+        self._keys[editor] = key
+        self.editing_started.emit(key)
         return editor
 
     def destroyEditor(self, editor: QWidget, index: QModelIndex | QPersistentModelIndex) -> None:
-        """Close an editor and announce it."""
+        """Announce the close, then destroy — in that order.
+
+        The lookup needs the editor alive: after `super()` has deleted it, the
+        widget is a stale wrapper and nothing can be asked of it. An editor
+        this delegate never opened is not an error either — it closes nothing,
+        which is the same reason `EditingSources.mark` discards rather than
+        removes.
+        """
+        key = self._keys.pop(editor, None)
+        if key is not None:
+            self.editing_finished.emit(key)
         super().destroyEditor(editor, index)
-        self.editing_finished.emit()

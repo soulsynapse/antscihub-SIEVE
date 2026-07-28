@@ -263,7 +263,7 @@ class MainWindow(QMainWindow):
 
         # I and O, which is what every editor binds them to. Bare letters are
         # safe here for the same reason period and comma are: they are window
-        # shortcuts, and `_on_editor_open_changed` hands them back the moment a
+        # shortcuts, and `_on_editing_changed` hands them back the moment a
         # table cell is being typed into.
         #
         # What they mean has changed with the model behind them: I *moves* the
@@ -292,7 +292,7 @@ class MainWindow(QMainWindow):
         self._player.opened.connect(self._on_opened)
         self._player.failed.connect(self._on_failed)
         self._player.scrub_degraded.connect(self._on_scrub_degraded)
-        self._replicate_tab.editor_open_changed.connect(self._on_editor_open_changed)
+        self._replicate_tab.editing_changed.connect(self._on_editing_changed)
         self._replicate_tab.replicate_accepted.connect(self._on_replicate_accepted)
         self._preferences.changed.connect(self._on_preferences_changed)
         self._document.clip_changed.connect(self._on_clip_changed)
@@ -704,11 +704,17 @@ class MainWindow(QMainWindow):
         self.setWindowModified(not clean)
 
     @Slot(bool)
-    def _on_editor_open_changed(self, editing: bool) -> None:
-        """Yield the typing keys to a cell editor while one is open.
+    def _on_editing_changed(self, editing: bool) -> None:
+        """Yield the typing keys while something is actually being typed into.
 
         Space and delete, and now I and O — a rename typed into the table
         would otherwise mark a clip once per vowel.
+
+        A plain `bool` again, and it can be: the tab arrives here having already
+        aggregated its named sources (`gui/editing_sources.py`), so this is one
+        answer from one sender rather than the latch two senders used to fight
+        over. `editing` is *being typed into*, not *has focus* — a spin box
+        holding the keyboard without a keystroke in it does not stop playback.
         """
         has_video = self._player.metadata is not None
         self._play_action.setEnabled(has_video and not editing)

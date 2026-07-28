@@ -172,7 +172,7 @@ As of `e3d044c`:
   wrong variable.
 
 **Nothing here has been started.** The nearest work is
-`docs/todo/ledger-producers.md`, which is I1's first producer.
+`docs/completed-todo/2026.07.28-ledger-producers.md`, which is I1's first producer.
 
 ---
 

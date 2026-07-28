@@ -124,7 +124,7 @@ For a sample to carry an identity, two things must exist that do not:
   off by default, scoped to ring access, and has no clock.
 
 So A1−2 is: **a dimensioned sample and a durable sink that survives a kill.**
-That is `docs/todo/ledger-producers.md` plus the persistence half of
+That is `docs/completed-todo/2026.07.28-ledger-producers.md` plus the persistence half of
 `docs/todo/slow-path-surfacing.md`, which is where the backward chain lands on
 work the repo already has open — the first evidence that this derivation is not
 fantasy.
@@ -203,7 +203,7 @@ in psychophysics and in online experimentation alike.
   `resolve_worker_split()` runs once and returns a value nothing records. You
   cannot A/B a variable you cannot set, and you cannot interpret last week's
   sample without knowing what it was set to.
-- **Every sample must be tagged with its mode.** `docs/todo/ledger-producers.md`
+- **Every sample must be tagged with its mode.** `docs/completed-todo/2026.07.28-ledger-producers.md`
   already names this trap concretely: the 2026-07-28 session read as total
   throughput failure (0 ring hits) purely because ring mode was not engaged. A
   controller reading that would have tuned hard against a mode that was not
@@ -415,7 +415,7 @@ optimizer identically, and it is what "robust" reduces to when made checkable.
 The −2 layer under all three is buildable now and is mostly one item:
 `Sample` gains dimensions, something durable writes it, the resolved allocation
 is recorded, and comparison is repeated rather than single-shot. Three of those
-four are `docs/todo/ledger-producers.md`,
+four are `docs/completed-todo/2026.07.28-ledger-producers.md`,
 `docs/todo/slow-path-surfacing.md`, and
 `docs/todo/budget-checks-under-ambient-load.md`, all of which already exist and
 two of which are already open.

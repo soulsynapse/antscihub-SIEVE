@@ -53,7 +53,8 @@ Carries a readout: "47% of the clip examined · 3 detections · 1.2 s detected �
 30 s under other settings", and a legend, because none of the above is legible
 without one.
 
-Read: V1 `gui/explorers/detection_timeline.py`, `gui/track_store.py`.
+Read: V1 `../antscihub-optical-flow-detector/gui/explorers/detection_timeline.py`,
+`../antscihub-optical-flow-detector/gui/track_store.py`.
 
 ---
 
@@ -89,5 +90,6 @@ Two constraints for tick rendering, both from the mockup contract in
 `docs/filter-tab-parity-plan.md` §Seeker: ticks are floored to 1 px so a
 one-frame detection stays visible at any zoom, and green remains a status
 colour used for nothing else. The variant is settled as `lanes`, so ticks share
-the strip's top edge with the window header — watch that seam, since it is the
-one thing `mockups/seeker/README.md` flagged as possibly too crowded.
+the strip's top edge with the window header — watch that seam, since the seeker
+mockup flagged it as possibly too crowded before it was deleted on 2026.07.27
+(`docs/completed-todo/2026.07.27-seeker-upgrades.md`).

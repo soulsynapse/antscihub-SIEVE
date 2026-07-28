@@ -31,4 +31,4 @@ materialization landing and needing somewhere for a compacted array to go. The
 first is the likelier trigger and is the one VISION step 1 is blocked on.
 
 Read: `src/sieve/core/pipeline_model.py` `Sink`, `src/sieve/cli/run_cmd.py`
-`_refuse_sinks`, `docs/SCAFFOLD.md` `pipeline/results.py`.
+`_refuse_sinks`, `docs/SCAFFOLD.md` `src/sieve/observe/results.py`.

@@ -38,6 +38,7 @@ def docs(session: nox.Session) -> None:
     here so revisits are targeted, and gating on it would make every code
     change a doc chore."""
     session.run("python", "tools/doc_index.py", *session.posargs)
+    session.run("python", "tools/doc_refs.py")
     session.run("python", "tools/doc_drift.py")
 
 

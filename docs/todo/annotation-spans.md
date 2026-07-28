@@ -29,4 +29,4 @@ video. A span is one region's answer. V1 wrote every region into one
 one behaviour label should be one colour across every replicate in a source,
 which is a display contract about the clip and not about the region.
 
-Read: V1 `gui/marks_store.py`.
+Read: V1 `../antscihub-optical-flow-detector/gui/marks_store.py`.

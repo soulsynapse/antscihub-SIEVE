@@ -32,8 +32,10 @@ Not a scoping problem — the plan's §6 item 9 is specific enough to execute.
 The blocker is that **v1 is not in this repository and cannot be made to be**:
 it lives in the sibling `antscihub-optical-flow-detector` folder, which is
 outside any working directory a session is granted, and the four modules that
-matter (`core/wavelet.py`, `core/detection.py`, `core/tensor_channels.py`,
-`core/structure_tensor.py`) are reachable only from a shell that already has
+matter (`../antscihub-optical-flow-detector/core/wavelet.py`,
+`../antscihub-optical-flow-detector/core/detection.py`,
+`../antscihub-optical-flow-detector/core/tensor_channels.py`,
+`../antscihub-optical-flow-detector/core/structure_tensor.py`) are reachable only from a shell that already has
 it checked out. The second half compounds it: "interaction latencies" means a
 hand on a slider, which no headless run produces.
 

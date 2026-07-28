@@ -8,7 +8,7 @@ gated_on: >
   (docs/completed-todo/2026.07.28-ledger-producers.md): the resource probe and
   the pool meters now publish, so there is something to aggregate.
 reads:
-  - docs/todo/ledger-producers.md
+  - docs/completed-todo/2026.07.28-ledger-producers.md
   - src/sieve/bench/budgets.py
   - src/sieve/bench/retention_trace.py
   - tools/doc_index.py

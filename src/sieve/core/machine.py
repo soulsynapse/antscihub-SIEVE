@@ -52,20 +52,157 @@ import psutil
 #: an allocation.
 _CGROUP_V1_UNLIMITED = 1 << 60
 
+#: `SYSTEM_CPU_SET_INFORMATION.Type` for the only record kind defined, and the
+#: byte offsets of the two fields read out of it. Named because three magic
+#: numbers walking a byte stream is where this file would become unreadable.
+_CPU_SET_INFORMATION = 0
+_CPU_SET_LOGICAL_INDEX = 14
+_CPU_SET_EFFICIENCY_CLASS = 18
+
+
+def available_cpu_ids() -> tuple[int, ...]:
+    """Logical CPU ids this process may run on, ascending.
+
+    The ids, not the count, because `cpu_classes` has to say *which* CPUs are
+    fast and a count cannot name one. `available_cpus` is `len` of this.
+
+    `psutil` rather than `os.sched_getaffinity`, which exists only on Linux —
+    and the gap was not theoretical: on Windows the affinity branch was
+    unreachable and the fallback reported `os.cpu_count()`, so a process pinned
+    to four cores sized its pools for thirty-two. `gui/concurrency.py`'s
+    `fits_machine` documents itself as reading "the process's affinity or
+    cgroup allocation", which was true on one of the two platforms this ships
+    on. macOS has no affinity API at all and falls through to the machine,
+    which is the honest reading there rather than a silent one: nothing can
+    pin a thread, so nothing can be pinned away from.
+    """
+    try:
+        affinity = psutil.Process().cpu_affinity()
+    except (AttributeError, NotImplementedError, psutil.Error):
+        return tuple(range(max(os.cpu_count() or 1, 1)))
+    return tuple(sorted(affinity)) or (0,)
+
 
 def available_cpus() -> int:
     """CPUs this process may actually use, not the ones the machine has.
 
     `os.cpu_count()` reports the machine and is the wrong answer inside a cgroup,
     a container, or a job step pinned to a subset of a node — all three being the
-    ordinary case on the hardware this is meant to run on. `sched_getaffinity` is
-    the right answer and exists only on Linux, which is why the fallback is here
-    rather than at the call site.
+    ordinary case on the hardware this is meant to run on.
+
+    **A count of CPUs is not a count of equal CPUs**, which is what every
+    consumer of this number assumes. On a machine with more than one
+    `cpu_classes` entry the same integer buys different throughput depending on
+    which cores the scheduler hands out, and it hands out different ones over a
+    process's life. This function keeps answering the question it was asked;
+    `cpu_classes` is how a caller finds out the question was underspecified.
     """
-    affinity = getattr(os, "sched_getaffinity", None)
-    if affinity is not None:
-        return max(len(affinity(0)), 1)
-    return max(os.cpu_count() or 1, 1)
+    return max(len(available_cpu_ids()), 1)
+
+
+def cpu_classes() -> dict[int, int]:
+    """Performance class of each CPU in this process's allocation.
+
+    Higher is faster, and the values are ordinal only — class 1 is quicker than
+    class 0 by an amount nothing here claims. A machine whose cores are uniform
+    reports every CPU in class 0, so `len(set(cpu_classes().values())) == 1` is
+    the question "are my cores fungible", and it is the one `core/shares.py`'s
+    constants silently assume the answer to.
+
+    Read from the OS rather than inferred from a CPU model string: Windows'
+    CPU-set API and Linux's `cpu_capacity` both publish this, and a table of
+    model names would be wrong the week after it was written. Where neither
+    answers — macOS, older kernels — every CPU reports class 0, which is the
+    same shape as a uniform machine. That collapse is deliberate and it is a
+    *reporting* limit, not a claim: Apple silicon has performance and
+    efficiency cores this cannot see, so a caller must treat "one class" as
+    "no evidence of more", never as proof of uniformity.
+
+    Restricted to the allocation for `available_cpu_ids`' reason — a class map
+    covering cores this process cannot run on would let a caller build an
+    affinity set the OS refuses.
+    """
+    allocation = set(available_cpu_ids())
+    published = _published_cpu_classes()
+    return {cpu: published.get(cpu, 0) for cpu in sorted(allocation)}
+
+
+def _published_cpu_classes() -> Mapping[int, int]:
+    if sys.platform == "win32":
+        return _windows_cpu_classes()
+    return linux_cpu_classes()
+
+
+def _windows_cpu_classes() -> Mapping[int, int]:
+    """`GetSystemCpuSetInformation`'s efficiency class, per logical processor.
+
+    The struct is walked by offset rather than declared as a `ctypes.Structure`
+    because it is a variable-length record stream — each entry states its own
+    `Size` and the union's shape depends on `Type` — so a fixed structure would
+    have to assume a stride the API explicitly does not promise.
+
+    Verified against measurement on the machine this was written on rather than
+    against the documentation: efficiency class 1 was the set that binned the
+    reference density surface in 84 ms and class 0 the set that took 145 ms, so
+    "higher is faster" is a reading of the hardware and not of a sentence.
+    """
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    needed = ctypes.c_ulong(0)
+    kernel32.GetSystemCpuSetInformation(None, 0, ctypes.byref(needed), None, 0)
+    if needed.value == 0:
+        return {}
+    buffer = (ctypes.c_ubyte * needed.value)()
+    if not kernel32.GetSystemCpuSetInformation(buffer, needed.value, ctypes.byref(needed), None, 0):
+        return {}
+
+    raw = bytes(buffer)
+    classes: dict[int, int] = {}
+    offset = 0
+    while offset + _CPU_SET_EFFICIENCY_CLASS < len(raw):
+        size = int.from_bytes(raw[offset : offset + 4], "little")
+        kind = int.from_bytes(raw[offset + 4 : offset + 8], "little")
+        if size == 0:
+            break
+        if kind == _CPU_SET_INFORMATION:
+            logical = raw[offset + _CPU_SET_LOGICAL_INDEX]
+            classes[logical] = raw[offset + _CPU_SET_EFFICIENCY_CLASS]
+        offset += size
+    return classes
+
+
+def linux_cpu_classes(root: Path = Path("/sys/devices/system/cpu")) -> Mapping[int, int]:
+    """`cpu_capacity` ranked into ordinal classes, for big.LITTLE and friends.
+
+    The kernel publishes a capacity number, not a class, and the number is
+    normalised per-machine (the fastest core is 1024 by convention) — so it is
+    comparable *within* a machine and meaningless across two. Ranking the
+    distinct values discards a scale that never meant anything and keeps the
+    ordering, which is the whole of what `cpu_classes` promises.
+
+    Public for `physical_memory`'s reason — a distinct reading a test has to
+    drive directly — and `root` is what lets it be driven, against a fixture
+    tree. The Windows reader beside it stays private because there is no
+    equivalent seam: it asks the kernel and there is nothing to point
+    elsewhere, so it is exercised only on the platform it runs on.
+    """
+    capacities: dict[int, int] = {}
+    try:
+        entries = sorted(root.glob("cpu[0-9]*"))
+    except OSError:
+        return {}
+    for entry in entries:
+        try:
+            raw = (entry / "cpu_capacity").read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if raw.isdigit():
+            capacities[int(entry.name[3:])] = int(raw)
+    if not capacities:
+        return {}
+    ranked = {value: rank for rank, value in enumerate(sorted(set(capacities.values())))}
+    return {cpu: ranked[value] for cpu, value in capacities.items()}
 
 
 def available_memory(

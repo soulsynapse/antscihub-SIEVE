@@ -11,8 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from sieve.core.machine import (
+    available_cpu_ids,
     available_cpus,
     available_memory,
+    cpu_classes,
+    linux_cpu_classes,
     physical_memory,
     process_memory_bytes,
 )
@@ -125,3 +128,44 @@ def test_the_session_rss_reading_is_real_and_monotone_in_allocation() -> None:
     after = process_memory_bytes()
     assert after - before > 32 * MIB
     del slab
+
+
+def test_the_class_map_covers_the_allocation_and_nothing_outside_it() -> None:
+    """Every CPU this process may use has a class, and no other CPU appears.
+
+    A map naming cores outside the allocation is not a cosmetic error: its
+    first consumer builds affinity masks out of these keys
+    (`bench/sweep.py`), and a mask naming an unavailable core is refused by
+    the OS rather than trimmed.
+    """
+    assert tuple(cpu_classes()) == available_cpu_ids()
+    assert available_cpus() == len(available_cpu_ids())
+
+
+def test_an_os_that_publishes_nothing_reports_one_class_rather_than_no_map() -> None:
+    """The uniform-machine shape, which callers must be able to ask about.
+
+    An empty map would make `len(set(...)) == 1` — the "are my cores
+    fungible" question — raise or read as False on exactly the machines where
+    the answer is "no evidence of difference".
+    """
+    assert set(cpu_classes().values()) != set()
+
+
+def test_linux_capacities_become_ordinal_classes_keeping_only_the_ordering(
+    tmp_path: Path,
+) -> None:
+    """Two big cores and two little ones, ranked, with the scale discarded.
+
+    The kernel's capacity numbers are normalised per-machine, so 1024 and 460
+    mean "fastest here" and "less than that" and nothing portable. Ranking is
+    what makes two machines' readings comparable at all, and the assertion is
+    on the ranks rather than on any arithmetic over the raw values.
+    """
+    for cpu, capacity in ((0, "460"), (1, "1024"), (2, "460"), (3, "1024")):
+        node = tmp_path / f"cpu{cpu}"
+        node.mkdir()
+        (node / "cpu_capacity").write_text(capacity, encoding="utf-8")
+    (tmp_path / "cpufreq").mkdir()  # a sibling entry with no capacity file
+
+    assert dict(linux_cpu_classes(tmp_path)) == {0: 0, 1: 1, 2: 0, 3: 1}

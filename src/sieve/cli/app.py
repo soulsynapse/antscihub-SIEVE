@@ -24,6 +24,7 @@ from sieve.cli.inspect_cmd import inspect_filters
 from sieve.cli.materialize_cmd import materialize_replicate
 from sieve.cli.preview_cmd import preview_project
 from sieve.cli.run_cmd import run_project
+from sieve.cli.sweep_cmd import sweep_decode
 from sieve.decode.quiet import silence_raw_format_warning
 
 app = typer.Typer(
@@ -41,6 +42,7 @@ app.command("run")(run_project)
 app.command("preview")(preview_project)
 app.command("materialize")(materialize_replicate)
 app.command("detect")(detect_project)
+app.command("sweep")(sweep_decode)
 
 
 def _print_version(value: bool) -> None:

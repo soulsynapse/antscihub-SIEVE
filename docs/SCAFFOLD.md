@@ -84,6 +84,7 @@ src/sieve/detect/detector.py            # DetectorSettings -> intervals, below b
 src/sieve/bench/budgets.py              # the budget table; character-exact against ARCHITECTURE.md
 src/sieve/bench/metrics.py              # Qt-free metric bus; judges samples against BUDGETS on the way past
 src/sieve/bench/retention_trace.py      # session recorder + the retention policies a trace is replayed through
+src/sieve/bench/sweep.py                # response surface over core sets and worker counts; affinity is the machine axis
 
 src/sieve/cli/app.py                    # Typer entry point
 src/sieve/cli/common.py                 # shared option plumbing
@@ -92,6 +93,7 @@ src/sieve/cli/run_cmd.py                # `sieve run` — execute a YAML project
 src/sieve/cli/preview_cmd.py            # `sieve preview` — headless window render, --check is an exit code
 src/sieve/cli/materialize_cmd.py        # `sieve materialize` — one replicate's crop, written and registered
 src/sieve/cli/detect_cmd.py             # `sieve detect` — a saved project's intervals, no Qt
+src/sieve/cli/sweep_cmd.py              # `sieve sweep` — decode throughput over core sets; changes affinity, so never a test
 
 src/sieve/gui/app.py                    # QApplication bootstrap
 src/sieve/gui/main_window.py            # tabs, the cross-tab timeline, panel orchestration

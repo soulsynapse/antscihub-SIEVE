@@ -27,14 +27,25 @@ what "moving" means for the experiment:
   low coherence" is a grooming detector with no state and no time constants.
   Being a pure ratio, it is also the one signal whose thresholds transfer
   across lighting and gain unchanged.
+- **`flow_agreement`** measures whether the pixels that moved moved the *same
+  way*, on a fixed 0-1 scale: 1 when the block translates as a piece, 0 when
+  its motion cancels. It is coherence's question asked of the flow field
+  instead of the eigenspectrum, and on the reference clip the two disagree
+  far more than they agree — coherence counts all change against a single
+  translation, agreement ignores everything that never resolved into a
+  vector, so a block that is half featureless floor reads on the half that
+  moved. Choose it when the event is a group of pixels turning together —
+  or a group failing to, which is what a struggle looks like next to a walk.
 
-Blocks with no resolvable texture report `flow_speed` of exactly zero — the
-honest answer under the aperture problem, not noise. A smooth arena floor
-scoring zero means "nothing measurable here", not "nothing happened".
+Blocks with no resolvable texture report `flow_speed` of exactly zero, and
+`flow_agreement` of exactly zero — the honest answer under the aperture
+problem, not noise. A smooth arena floor scoring zero means "nothing
+measurable here", not "nothing happened"; for agreement in particular it does
+*not* mean "these pixels disagreed".
 
 ## Parameters
 
-### `signal` (`change_energy` | `flow_speed` | `coherence`)
+### `signal` (`change_energy` | `flow_speed` | `coherence` | `flow_agreement`)
 
 Which read of the tensor leaves the node. Swapping it changes the *units*
 of everything downstream (energy vs px/s vs a dimensionless ratio), so
@@ -81,7 +92,10 @@ Dominated by the Gaussian blur of the tensor products (the blur is the
 tensor's spatial window). `change_energy` blurs one plane; `flow_speed`
 blurs five and solves a 2x2 system per pixel; `coherence` blurs six and
 eigendecomposes one 3x3 matrix per block (a few hundred tiny solves — not
-the cost), so the last two sit at ~4x `change_energy`. All are ~realtime at
+the cost); `flow_agreement` is `flow_speed`'s five blurs and the same solve,
+plus two more block reductions, so it is free in the tier sense — there is no
+cost argument for preferring one of those two over the other. The last three
+sit at ~4x `change_energy`, and all are ~realtime at
 a typical working resolution, which is why this step is recomputed rather
 than cached (it carries the previous frame as state, and stateful nodes are
 uncacheable by contract).

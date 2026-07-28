@@ -27,6 +27,15 @@ semantics-intact:
   direction (lam3 ~ 0), so walking reads near 1 and in-place change
   (grooming, flicker) near 0. Same six blurs as flow_speed plus a few
   hundred 3x3 eigensolves.
+* **flow_agreement** (new in SIEVE, 2026-07-28): the circular resultant of
+  the block's unit LK vectors in [0, 1] — of the pixels that resolved a
+  flow, how many moved the same way. Free on top of flow_speed's solve: no
+  new product, no new blur, no new state. It asks coherence's question of
+  different evidence (the above-determinant flow field, not the
+  eigenspectrum) and measurably gets a different answer — rank correlation
+  0.09-0.17 against coherence over the reference clip, which falsified the
+  prediction that it would be redundant. See
+  `docs/findings/2026.07.28-four-free-block-measures-two-survive.md`.
 
 One filter with a `signal` parameter rather than two filters: the two share
 the state, the gradient, and the reduction, and the tab's quick-switch swaps
@@ -141,6 +150,9 @@ class Signal(StrEnum):
     #: Spatial coherency of the block tensor in [0, 1]: does one translation
     #: explain this block's change? All six products, flow_speed's cost tier.
     COHERENCE = "coherence"
+    #: Circular resultant of the block's unit flow vectors in [0, 1]: do the
+    #: pixels that moved, move the same way? Free on top of flow_speed.
+    FLOW_AGREEMENT = "flow_agreement"
 
 
 @register_filter(
@@ -230,6 +242,8 @@ def block_signal_cpu(frame: Frame, params: BlockSignalParams, state: BlockSignal
         out = _block_mean(_blur(it * it), block, ny, nx)
     elif params.signal is Signal.COHERENCE:
         out = _coherence(prev, gray, block, ny, nx)
+    elif params.signal is Signal.FLOW_AGREEMENT:
+        out = _flow_agreement(prev, gray, block, ny, nx)
     else:
         out = _block_mean(_flow_speed(prev, gray, params.fps), block, ny, nx)
 
@@ -256,13 +270,21 @@ def _blur(plane: FloatArray) -> NDArray[np.float32]:
     return cast(NDArray[np.float32], cv2.GaussianBlur(plane, (0, 0), SIGMA))
 
 
-def _flow_speed(prev: FloatArray, gray: FloatArray, fps: float) -> NDArray[np.float32]:
-    """Per-pixel LK speed in px/s from the blurred structure tensor.
+def _lk_flow(
+    prev: FloatArray, gray: FloatArray
+) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.bool_]]:
+    """Per-pixel LK flow `(u, v)` and the mask of pixels that resolved it.
 
     Five products, each blurred with `SIGMA` before the solve — the blur is
     the tensor window, and solving on unblurred products would make every
     pixel its own (rank-deficient) window. (The sixth component, tt, is not
     read by the solve and is not formed.)
+
+    The mask is returned rather than re-derived by each caller because it is
+    the same honesty guard twice: `flow_speed` reports zero where it is false,
+    `flow_agreement` averages only where it is true, and two copies of the
+    determinant test are two things that can disagree about which pixels were
+    measured at all.
     """
     it = gray - prev
     grads = np.gradient(gray)  # d/drow, d/dcol
@@ -276,9 +298,51 @@ def _flow_speed(prev: FloatArray, gray: FloatArray, fps: float) -> NDArray[np.fl
     det = xx * yy - xy * xy
     safe = np.abs(det) > DET_EPS
     inv = np.where(safe, 1.0 / np.where(safe, det, 1.0), 0.0)
-    u = -(yy * xt - xy * yt) * inv
-    v = -(xx * yt - xy * xt) * inv
+    u = (-(yy * xt - xy * yt) * inv).astype(np.float32)
+    v = (-(xx * yt - xy * xt) * inv).astype(np.float32)
+    return u, v, safe
+
+
+def _flow_speed(prev: FloatArray, gray: FloatArray, fps: float) -> NDArray[np.float32]:
+    """Per-pixel LK speed in px/s. Zero exactly where the solve was degenerate."""
+    u, v, _ = _lk_flow(prev, gray)
     return (np.hypot(u, v) * fps).astype(np.float32)
+
+
+def _flow_agreement(
+    prev: FloatArray, gray: FloatArray, block: int, ny: int, nx: int
+) -> NDArray[np.float32]:
+    """Resultant length of the block's unit flow vectors, in [0, 1].
+
+    Direction is a circular quantity, so the block reduction is a *circular*
+    mean: each measurable pixel contributes a unit vector, and the length of
+    their mean is how much they agree. Averaging `atan2` instead would make
+    two pixels moving in exactly opposite directions average to a direction
+    nobody moved in; averaging unit vectors makes them cancel, which is the
+    answer.
+
+    The mean runs over the above-determinant pixels only — dividing the
+    summed unit vectors by the *count of measured pixels*, not by the block's
+    pixel count. That is what makes this differently robust from `coherence`
+    rather than a restatement of it: the eigensolve sees all change in the
+    block, this sees only the change that resolved into a flow vector. A
+    block half of which is featureless floor then reports the agreement of
+    the half that moved, instead of reporting half of it.
+
+    A block with no measurable pixel reports 0 — the same position
+    `flow_speed` takes under the aperture problem, and it means "nothing
+    measured here", not "these pixels disagreed".
+    """
+    u, v, safe = _lk_flow(prev, gray)
+    speed = np.hypot(u, v)
+    moving = safe & (speed > 0.0)
+    scale = np.where(moving, 1.0 / np.where(moving, speed, 1.0), 0.0)
+    sum_x = _block_mean((u * scale).astype(np.float32), block, ny, nx)
+    sum_y = _block_mean((v * scale).astype(np.float32), block, ny, nx)
+    share = _block_mean(moving.astype(np.float32), block, ny, nx)
+    ok = share > 0.0
+    inv_share = np.where(ok, 1.0 / np.where(ok, share, 1.0), 0.0)
+    return np.minimum(np.hypot(sum_x * inv_share, sum_y * inv_share), 1.0).astype(np.float32)
 
 
 def _coherence(

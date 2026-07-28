@@ -62,6 +62,7 @@ SIGNAL_LABELS: dict[str, str] = {
     "change_energy": "change energy (Jtt)",
     "flow_speed": "LK optical flow",
     "coherence": "coherence (0-1)",
+    "flow_agreement": "flow agreement (0-1)",
 }
 
 

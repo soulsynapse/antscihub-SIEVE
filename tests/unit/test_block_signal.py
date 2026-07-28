@@ -123,6 +123,65 @@ def test_opposing_motions_in_one_block_read_incoherent() -> None:
     assert float(out[0, 0]) < 0.2
 
 
+def test_flow_agreement_spans_its_two_poles() -> None:
+    # The scale's ends. A texture translating as a piece has every measurable
+    # pixel pointing the same way and must read ~1; two halves of one block
+    # translating in opposite directions cancel and must read ~0. A mean of
+    # `atan2` instead of a mean of unit vectors fails the second — opposite
+    # angles average to a direction nobody moved in, at full resultant length.
+    field = textured()
+    params = BlockSignalParams(signal=Signal.FLOW_AGREEMENT, block=16, fps=FPS)
+    walking = run_frames([np.roll(field, i, axis=1) for i in range(3)], params)[2]
+    assert float(np.median(walking[1:-1, 1:-1])) > 0.9
+
+    moved = np.vstack([np.roll(field[:48], 2, axis=1), np.roll(field[48:], -2, axis=1)])
+    one_block = BlockSignalParams(signal=Signal.FLOW_AGREEMENT, block=96, fps=FPS)
+    out = run_frames([field, moved], one_block)[1]
+    assert out.shape == (1, 1)
+    assert float(out[0, 0]) < 0.2
+
+
+def test_flow_agreement_is_zero_where_nothing_resolved_not_one() -> None:
+    # Stripes varying only along x, translated along y: real motion, no local
+    # measurement can see it. Every pixel is excluded, so the block has no
+    # unit vectors to average. Zero is the honest report; the failure this
+    # guards against is the opposite one — an unmeasured block whose empty
+    # circular mean is treated as perfect agreement and renders as a
+    # confident 1, which is rule 6 exactly.
+    x = np.arange(96, dtype=np.float32)
+    stripes = np.tile(128.0 + 64.0 * np.sin(x / 4.0), (96, 1)).astype(np.float32)
+    frames = [np.roll(stripes, shift=i, axis=0) for i in range(3)]
+    out = run_frames(frames, BlockSignalParams(signal=Signal.FLOW_AGREEMENT, block=16, fps=FPS))[2]
+    np.testing.assert_array_equal(out, 0.0)
+
+
+def test_flow_agreement_reads_only_the_pixels_that_moved() -> None:
+    # Half the block is featureless floor, half is texture translating as a
+    # piece. Agreement is the resultant over the *measured* pixels, so it must
+    # still read high — normalising by the block's pixel count instead would
+    # halve it, and the block would report "half the pixels disagreed" about a
+    # scene in which nothing disagreed with anything.
+    field = textured()
+    half = field.copy()
+    half[48:] = 128.0
+    moved = half.copy()
+    moved[:48] = np.roll(field[:48], 2, axis=1)
+    params = BlockSignalParams(signal=Signal.FLOW_AGREEMENT, block=96, fps=FPS)
+    out = run_frames([half, moved], params)[1]
+    assert out.shape == (1, 1)
+    assert float(out[0, 0]) > 0.8
+
+
+def test_every_signal_has_a_label_on_the_quick_switch() -> None:
+    # The enum is discovered; the labels are hand-written. A signal the kernel
+    # computes but the switcher cannot name is reachable only by editing a
+    # saved file, which is the failure mode rule 3's discovery rule exists to
+    # prevent one layer down.
+    from sieve.gui.chain_model import SIGNAL_LABELS
+
+    assert set(SIGNAL_LABELS) == {s.value for s in Signal}
+
+
 def test_block_resolution_is_the_one_source_of_grid_truth() -> None:
     # auto = 64 source px at scale; explicit block wins; the grid ceils so
     # ragged edges are real blocks. These three numbers denominate the count

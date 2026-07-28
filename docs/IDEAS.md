@@ -26,4 +26,8 @@ Are there any hooks that could be useful that we are underutilizing?
 
 Is there any part of the general workflow that would greatly benefit from doing mockups first?
 
-Given the codebase, you make comments on functions a lot. Is there a way we could categorize them
+Given the codebase, you make comments on functions a lot. Is there a way we could categorize the comments?
+
+We should probably make more scripts to update state.md. Which are the most valuable?
+
+Is there a danger to spawning too many todos? How do we mitigate it?

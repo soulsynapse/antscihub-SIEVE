@@ -341,3 +341,63 @@ the argument it cites is the one this item inverted.
 default, and should — that is the enforcement the ARCHITECTURE.md passage calls
 "the one part of this rule enforced at the point a violation would be written".
 The item lists it as a symptom; it is the fix, not the disease.
+
+## one-edit-is-three-regions — the decision, made, and option B is refused
+
+**Nothing converted.** The item's first job is a decision and it says taking the
+mechanical half without making it is churn. The decision is made here and the
+reason is one the item does not consider.
+
+**Option B is wrong as stated, and the thing that refutes it is the signal
+surface.** The item reads region 3 (`apply_params`, `apply_clip`,
+`apply_replace`, `apply_detector`) as "a second public surface that exists only
+for step 2 to call, mutating without history" — pure duplication, deletable once
+commands hold before/after states. It is not. Each `apply_*` is also the **per-
+edit signal contract**, and they are not interchangeable:
+
+| primitive | emits |
+|---|---|
+| `apply_clip` | `clip_changed` |
+| `apply_replace` | `replicate_changed(index)` |
+| `apply_params` | `tuning_changed`, `grouping_changed` |
+| `apply_detector` | `detector_changed`, `grouping_changed` |
+| `apply_state` | `structure_changed`, `grouping_changed`, `selection_changed`, `pipeline_changed`, `tuning_changed`, `detector_changed`, `clip_changed` |
+
+If every command collapses to a before/after `DocumentState` restored through
+`apply_state`, then two things break that no test in `test_document.py` or
+`test_history.py` would catch:
+
+1. **Every Ctrl+Z becomes a full broadcast.** Undoing a clip edit would fire
+   `structure_changed` and `pipeline_changed`, resyncing every view and
+   rebuilding what a clip move has no business rebuilding. That is a latency
+   regression on the one loop this whole app exists to keep fast.
+2. **`replicate_changed(index)` has no producer left.** It is the only
+   *parameterized* signal in the set, and `apply_state` cannot emit it —
+   nothing on the undo path could say which row changed, only that something
+   did.
+
+So the trio does not collapse. A command still needs its own `apply_*` to emit
+the right signal, which is region 3, which is the region B was going to delete.
+
+**What survives, and it is worth taking.** The half of B that is real is killing
+the *displacement bookkeeping*, not the apply surface: commands hold a before
+and an after value, `_would_change` becomes `before != after` (asked once
+instead of twice — `edited_params` is currently called twice per edit), and
+`_displaced_*` / `_previous` go away. Each command keeps calling its own
+targeted `apply_*`. That gets the double-computation win and the "hold a
+before-state instead of remembering what you displaced" win without touching
+the signal contract. It does *not* remove the back-reference, so the seam test
+the item quotes still fails — which means the honest verdict is that this item
+buys less than it claims.
+
+**Option A (merge `commands.py` into `document.py`) is now the better half** of
+the item's own framing: with B reduced to bookkeeping cleanup, the command
+classes do *not* mostly stop existing, so the merge is not churn against code
+about to be deleted — which was the item's only stated reason to prefer B first.
+
+**The item's stated gate is already substantially met**, separately worth
+knowing: it asks for `mergeWith` to be pinned by a test over a simulated drag
+before converting anything. `tests/gui/test_crop_tools.py` already does this —
+undo granularity across a five-position drag, per-gesture tokens not collapsing
+successive drags, and the Escape/`setObsolete` path. What has no coverage is the
+snapshot-merge *equivalence* claim, and with B refused nothing needs it.

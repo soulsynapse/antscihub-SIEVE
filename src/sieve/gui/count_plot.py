@@ -23,6 +23,13 @@ can honestly show. Nothing is latched: the axis is the current window's, which
 is v1's one deliberate exception to its sticky axes and for v1's reason —
 accumulating pins the scale to the loudest burst the whole run ever saw.
 
+**And the axis says which ceiling it is on.** A moving axis with no reading is
+a shape whose height means nothing across two tunings, so the title row
+carries `scale_label()` — the ceiling in force and the region's block count,
+both always, plus `· full` when they meet. That line is derived at paint time
+rather than pushed in (`readout_text`), because an axis this plot computes
+inside `_range` is one nobody outside it can keep a label in step with.
+
 **A drag freezes the axis.** Both ends are otherwise live at once — the range
 widens to hold the band, the band follows the mouse through the range — and
 the handle would chase its own rescale. The gesture finishes in the axis it
@@ -124,6 +131,25 @@ class CountPlot(BandPlot):
                     top = max(top, edge)
         top = min(top * _HEADROOM, float(self._blocks))
         return 0.0, top if top > 0.0 else min(1.0, float(self._blocks))
+
+    def scale_label(self) -> str:
+        """The ceiling in force and the region it is a fraction of.
+
+        Both numbers, always, because the regime is the thing a reader has to
+        be able to tell apart: "0-7 of 512 blocks" and "0-512 of 512 blocks ·
+        full" are the same sentence with different numbers, and neither can be
+        mistaken for the other at a glance. A plot that autoscaled silently
+        would make two tunings whose counts differ by two orders of magnitude
+        draw identically — a result looking better-founded than it is (rule 6),
+        which is the cost the fixed 0..B axis was paying to avoid.
+        """
+        top = self._range()[1]
+        full = " · full" if top >= float(self._blocks) else ""
+        return f"0-{top:.0f} of {self._blocks} blocks{full}"
+
+    def readout_text(self) -> str:
+        """The scale label is this plot's truth line, derived rather than told."""
+        return self.scale_label()
 
     def format_value(self, value: float) -> str:
         if math.isinf(value):

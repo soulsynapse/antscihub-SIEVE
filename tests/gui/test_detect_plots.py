@@ -8,11 +8,12 @@ gate floor is what keeps a single-frame detection visible at any zoom; and
 solo living in the state model is what keeps the composite's grid overlay and
 the density plot from ever disagreeing about which block is soloed.
 
-The count axis's three claims are here for the same reason: an axis that ran
-to the region's block count left the only tunable graph unreadable at a
-realistic block count, and the two rules that make autoscaling safe — the band
-is unioned in, a drag freezes the frame — are each a way the naive version
-loses the handle.
+The count axis's claims are here for the same reason: an axis that ran to the
+region's block count left the only tunable graph unreadable at a realistic
+block count, and the three rules that make autoscaling safe — the band is
+unioned in, a drag freezes the frame, the ceiling in force is written on the
+plot — are each a way the naive version loses something. The first two lose
+the handle; the third loses the reader's ability to tell two tunings apart.
 """
 
 from __future__ import annotations
@@ -197,6 +198,45 @@ class TestTheCountAxis:
 
         assert len(emitted) == 2
         assert emitted[0][1] == pytest.approx(emitted[1][1])
+
+
+class TestTheAxisSaysWhichCeiling:
+    """Rule 6: an autoscaled plot must not be readable as a full-scale one."""
+
+    def test_the_autoscaled_ceiling_is_the_one_reported(self, qtbot: QtBot) -> None:
+        """The label names the data ceiling, not the region — and both numbers."""
+        plot = _count(qtbot)
+
+        assert plot.scale_label() == f"0-{round(PEAK * 1.06)} of {BLOCKS} blocks"
+        assert "full" not in plot.scale_label()
+
+    def test_a_peak_at_the_region_size_reads_as_full(self, qtbot: QtBot) -> None:
+        """Capped at B, the label says so — the regime the fixed axis always had."""
+        plot = _count(qtbot, peak=float(BLOCKS))
+
+        assert plot.scale_label() == f"0-{BLOCKS} of {BLOCKS} blocks · full"
+
+    def test_the_label_follows_the_frozen_axis_through_a_drag(self, qtbot: QtBot) -> None:
+        """One `_range` feeds both the geometry and the reading of it.
+
+        A label re-derived independently would report a ceiling the handles are
+        not actually placed against for the length of every gesture.
+        """
+        plot = _count(qtbot)
+        plot.set_band(0.0, 40.0)
+        during = f"0-{round(40.0 * 1.06)} of {BLOCKS} blocks"
+        assert plot.scale_label() == during
+
+        r = plot.plot_rect()
+        x = float(r.center().x())
+        qt_input.press(plot, QPointF(x, plot.handle_y("hi")))
+        qt_input.move(plot, QPointF(x, r.bottom() - 1.0))
+
+        assert plot.scale_label() == during
+
+        qt_input.release(plot, QPointF(x, r.bottom() - 1.0))
+
+        assert plot.scale_label() != during
 
 
 class TestTheGateFloor:

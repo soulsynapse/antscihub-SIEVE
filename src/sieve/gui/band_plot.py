@@ -236,6 +236,17 @@ class BandPlot(QWidget):
         self._readout = text
         self.update()
 
+    def readout_text(self) -> str:
+        """What the top-right truth line says at paint time.
+
+        The setter above is for lines a *caller* knows (the snapped band the
+        transform used). A subclass whose truth line is derived from its own
+        paint-time state — an axis it computes rather than is told — overrides
+        this instead, so the line cannot fall out of step with the frame it
+        describes.
+        """
+        return self._readout
+
     # ---- the value axis (subclass hooks) ----------------------------------
 
     def _fwd(self, value: float) -> float:
@@ -424,11 +435,12 @@ class BandPlot(QWidget):
         painter.setPen(DIM)
         painter.setFont(plot_font(8, bold=True, spaced=True))
         painter.drawText(QRect(10, 4, self.width() - 20, 14), 0, self.title.upper())
-        if self._readout:
+        readout = self.readout_text()
+        if readout:
             painter.drawText(
                 QRect(10, 4, self.width() - 20, 14),
                 int(Qt.AlignmentFlag.AlignRight),
-                self._readout,
+                readout,
             )
 
         grid = QColor(LINE)

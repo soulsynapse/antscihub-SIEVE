@@ -173,8 +173,9 @@ class ReplicateTab(QWidget):
         self._view.roi_adjusted.connect(self._on_roi_adjusted)
         self._view.stamp_size_changed.connect(self._tools_panel.set_stamp_size)
         self._view.zoom_changed.connect(self._tools_panel.set_zoom)
+        self._view.mode_changed.connect(self._tools_panel.set_mode)
 
-        self._tools_panel.mode_changed.connect(self._on_mode_changed)
+        self._tools_panel.mode_requested.connect(self._on_mode_requested)
         self._tools_panel.stamp_size_changed.connect(self._view.set_stamp_size)
         self._tools_panel.fit_requested.connect(self._view.reset_zoom)
         self._tools_panel.set_all_requested.connect(self._document.set_all_to_size)
@@ -280,8 +281,15 @@ class ReplicateTab(QWidget):
             )
 
     @Slot(str)
-    def _on_mode_changed(self, mode: str) -> None:
-        """The tools panel's toggle, widened back into the view's enum."""
+    def _on_mode_requested(self, mode: str) -> None:
+        """The tools panel's toggle, widened back into the view's enum.
+
+        One direction of a two-way binding, and the tab carries both halves so
+        neither widget has to know the other exists: the view announces
+        `mode_changed` and the panel repaints from it. The view is the owner —
+        see its module docstring — because it is the one that flips to `STAMP`
+        of its own accord once a region has been drawn.
+        """
         self._view.set_mode(CropMode(mode))
 
     @Slot(QItemSelection, QItemSelection)

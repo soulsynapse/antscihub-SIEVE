@@ -17,6 +17,18 @@ in `gui/zoom.Magnifier`, which is where its reasoning is — this widget owns
 the fit and the source-pixel units, and the magnifier owns everything between
 them.
 
+**This widget owns the crop mode, and the tools panel is a view over it.**
+The mode used to be a one-way panel→view push, which was fine only while the
+panel was the sole thing that could change it. It is not: a completed draw
+establishes a stamp size, and the gesture the user wants next is placing it,
+so the *view* flips itself to `STAMP`. With two owners and no back-channel the
+panel's radio buttons would go stale the moment that happened — a toggle
+reading "draw" while clicks stamp is rule 6's mirror direction exactly. So
+there is one owner, this one, because it is the widget that both acts on the
+mode and has cause to change it; `set_mode` is idempotent and announces, and
+the panel checks a button and emits a *request*. The echo that costs nothing
+is what makes a guard unnecessary on either side.
+
 **Adjustment is for the selected replicate only.** A dozen arenas each wearing
 eight handles is an unreadable overlay, and the tab's other rule settles it
 anyway: a click on a box the user is *not* tuning accepts it and moves them to
@@ -168,8 +180,12 @@ class VideoView(QWidget):
     #: knows whether a handle or the box body was grabbed, and "Undo Resize" on
     #: a drag that moved a box is a small lie the menu does not have to tell.
     roi_adjusted = Signal(int, ROI, int, str)
-    #: A drag defined a new region, so the stamp now has that size.
+    #: The stamp's size moved: a region was drawn, or the replicate being
+    #: tuned changed and the stamp took its extent. Carries source pixels.
     stamp_size_changed = Signal(int, int)
+    #: The crop mode changed, carrying a `CropMode` value. This widget owns the
+    #: mode (see the module docstring); the tools panel follows this signal.
+    mode_changed = Signal(str)
     #: The magnification changed, as a multiple of the fit scale.
     zoom_changed = Signal(float)
 
@@ -218,6 +234,7 @@ class VideoView(QWidget):
     def set_replicates(self, replicates: list[Replicate]) -> None:
         """Replace the overlay boxes."""
         self._replicates = replicates
+        self._take_stamp_from_selection()
         self.update()
 
     def set_selected(self, index: int) -> None:
@@ -225,6 +242,7 @@ class VideoView(QWidget):
         if index == self._selected:
             return
         self._selected = index
+        self._take_stamp_from_selection()
         self.update()
 
     def set_hint(self, text: str) -> None:
@@ -240,8 +258,17 @@ class VideoView(QWidget):
         return self._mode
 
     def set_mode(self, mode: CropMode) -> None:
-        """Choose between drawing a box and stamping the remembered size."""
+        """Choose between drawing a box and stamping the remembered size.
+
+        Idempotent, and that is load-bearing rather than tidy: the tools panel
+        follows `mode_changed` by checking a radio button, which emits its own
+        request straight back here, and the early return is what stops that
+        round trip at one lap.
+        """
+        if mode is self._mode:
+            return
         self._mode = mode
+        self.mode_changed.emit(mode)
 
     @property
     def stamp_size(self) -> tuple[int, int] | None:
@@ -253,11 +280,37 @@ class VideoView(QWidget):
 
         Does not echo `stamp_size_changed`: this is the setter the tools panel
         calls when its own fields are typed into, and a signal back would race
-        the widget that sent it. Only a *drawn* region announces a new size.
+        the widget that sent it. Only a size this widget *decides* — a drawn
+        region, or the selection moving — announces itself.
         """
         if width <= 0 or height <= 0:
             return
         self._stamp_size = (width, height)
+
+    def _take_stamp_from_selection(self) -> None:
+        """The stamp takes the extent of the replicate being tuned.
+
+        The vision's third claim: a stamp is placed "based on the highlighted
+        replicate". Written into the one stamp size rather than read at
+        placement time, and the difference is rule 6. The panel shows the stamp
+        size in a field beside the button that applies it to the whole rack; a
+        placement that quietly used the selection instead would leave that
+        field reading one number while clicks produced another, every time a
+        box of a different size was highlighted. Writing it means there stays
+        exactly one stamp size, it is on screen, and a typed one stands until
+        the selection actually moves.
+
+        Called from both `set_selected` and `set_replicates` because either can
+        change the answer — the second is what makes the stamp follow a box
+        being resized by its handles, not merely one being clicked.
+        """
+        if not 0 <= self._selected < len(self._replicates):
+            return
+        roi = self._replicates[self._selected].roi
+        if self._stamp_size == (roi.width, roi.height):
+            return
+        self._stamp_size = (roi.width, roi.height)
+        self.stamp_size_changed.emit(roi.width, roi.height)
 
     @property
     def zoom(self) -> float:
@@ -571,6 +624,14 @@ class VideoView(QWidget):
             # it — an ordering nobody would guess.
             self._stamp_size = (roi.width, roi.height)
             self.stamp_size_changed.emit(roi.width, roi.height)
+            # And stamping is what the user wants next. Drawing the first arena
+            # of a rack is how the size gets established; the eleven after it
+            # are placements, so the tool that costs no gesture to reach should
+            # be the one they need eleven times, not the one they needed once.
+            # The flip forecloses nothing: the mode is consulted only in
+            # `_release_click`, so a drag draws in either mode and this changes
+            # what a *click* means and nothing else.
+            self.set_mode(CropMode.STAMP)
             self.roi_drawn.emit(roi)
 
     def _release_click(self, point: QPointF) -> None:

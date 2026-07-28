@@ -16,6 +16,12 @@ useful, not what they can express: the table is for reading a rack of a dozen
 arenas against each other, and these fields are for the one box being placed,
 beside the picture it is being placed on.
 
+**Nor is the draw/stamp toggle a second answer to what the tool is.** It asks
+and it displays; `VideoView` holds the mode, for the reason set out in that
+module's docstring. The same goes for the stamp's dimensions — the view decides
+them (a drawn region, or the replicate being tuned) and these fields show what
+it decided, which is why `set_stamp_size` writes without re-announcing.
+
 The fields also announce their own focus. Space is playback and Delete removes
 the selected replicate, both as *window* shortcuts, and Qt dispatches a
 shortcut before the focused widget sees the key — so without the announcement,
@@ -74,8 +80,11 @@ class _NumberField(QSpinBox):
 class CropToolsPanel(QWidget):
     """Crop tools, the selected box's dimensions, and the source it came from."""
 
-    #: The draw/stamp toggle moved, carrying a `CropMode` value.
-    mode_changed = Signal(str)
+    #: The draw/stamp toggle was moved by the user, carrying a `CropMode`
+    #: value. A *request*, not a statement: `VideoView` owns the mode — it is
+    #: the widget that acts on it and the widget that flips to `STAMP` once a
+    #: region has been drawn — and this panel repaints from `set_mode` below.
+    mode_requested = Signal(str)
     #: The stamp's dimensions were typed. Not emitted when the fields are
     #: refilled from a drawn region — that would race the view that sent it.
     stamp_size_changed = Signal(int, int)
@@ -118,6 +127,8 @@ class CropToolsPanel(QWidget):
         # its position in a layout. Qt styling and `findChild` both read them;
         # a test that located these by traversal order would be a test that
         # breaks when a row is inserted above them.
+        self._draw_button.setObjectName("mode-draw")
+        self._stamp_button.setObjectName("mode-stamp")
         self._stamp_width.setObjectName("stamp-width")
         self._stamp_height.setObjectName("stamp-height")
         self._set_all_button.setObjectName("set-all")
@@ -322,9 +333,22 @@ class CropToolsPanel(QWidget):
 
     # ---- tools ----------------------------------------------------------
 
+    @Slot(str)
+    def set_mode(self, mode: str) -> None:
+        """Show the mode the view is actually in.
+
+        No `_refreshing` guard, unlike the numeric fields: checking a button
+        emits `mode_requested`, which reaches `VideoView.set_mode`, which
+        returns without a second signal because the mode is already what is
+        being asked for. The round trip stops itself, and a guard here would
+        only hide that it does.
+        """
+        button = self._draw_button if CropMode(mode) is CropMode.DRAW else self._stamp_button
+        button.setChecked(True)
+
     @Slot(bool)
     def _on_mode_toggled(self, drawing: bool) -> None:
-        self.mode_changed.emit(CropMode.DRAW if drawing else CropMode.STAMP)
+        self.mode_requested.emit(CropMode.DRAW if drawing else CropMode.STAMP)
 
     @Slot()
     def _on_stamp_edited(self) -> None:

@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtWidgets import QLabel, QPushButton, QSpinBox
+from PySide6.QtWidgets import QLabel, QPushButton, QRadioButton, QSpinBox
 from pytestqt.qtbot import QtBot
 
 from sieve.core.types import ROI, VideoMetadata
@@ -85,6 +85,12 @@ def panel(tab: ReplicateTab) -> CropToolsPanel:
 def _field(panel: CropToolsPanel, name: str) -> QSpinBox:
     found = panel.findChild(QSpinBox, name)
     assert found is not None, f"no field named {name}"
+    return found
+
+
+def _toggle(panel: CropToolsPanel, name: str) -> QRadioButton:
+    found = panel.findChild(QRadioButton, name)
+    assert found is not None, f"no toggle named {name}"
     return found
 
 
@@ -273,6 +279,117 @@ class TestToolsPanel:
         panel.fit_requested.emit()
 
         assert view.zoom == 1.0
+
+
+#: The drag that cuts a 137x91 arena, in source pixels, for the class below.
+FIRST_DRAW = (_widget_point(500, 400), _widget_point(637, 491))
+
+
+class TestStampByDefault:
+    """Draw once, then click: what the toggle says, and what size lands.
+
+    Three claims from one line of the vision — "stamp should be the default
+    once one is drawn … it should stamp based on the highlighted replicate" —
+    and they fail in three different places, which is why they are three tests.
+    The first is about two widgets agreeing, the second about which of two
+    remembered sizes wins, the third about the flip not costing the gesture it
+    replaced.
+    """
+
+    def test_a_completed_draw_puts_both_widgets_in_stamp_mode(
+        self, view: VideoView, panel: CropToolsPanel
+    ) -> None:
+        """The view flips itself, and the panel has to come with it.
+
+        The mode used to be a one-way panel→view push, under which the view
+        could not flip at all — and a version that flipped anyway would leave
+        the radio buttons reading "Draw" while clicks stamped, which is rule 6's
+        mirror direction: a control looking more truthful than it is.
+        """
+        assert view.mode is CropMode.DRAW
+
+        drag(view, *FIRST_DRAW)
+
+        assert view.mode is CropMode.STAMP
+        assert _toggle(panel, "mode-stamp").isChecked()
+        assert not _toggle(panel, "mode-draw").isChecked()
+
+    def test_a_click_stamps_the_highlighted_replicate_not_the_last_drawn(
+        self, view: VideoView, panel: CropToolsPanel, document: ReplicateDocument
+    ) -> None:
+        """The claim the previous behaviour got wrong.
+
+        `_stamp_size` was whatever was drawn or typed last, with no relation to
+        the selection. Draw a 137x91 arena, go back to the 200x200 one, and a
+        stamp placing 137x91 would be placing the size of a box the user is no
+        longer looking at. The panel field is asserted alongside because the
+        stamp size is *written* rather than read at placement — if the two ever
+        disagree, the field is the one telling the lie.
+        """
+        drag(view, *FIRST_DRAW)
+        assert (document.at(1).roi.width, document.at(1).roi.height) == (137, 91)
+        # The drawn box is the selection now, so the stamp is already following
+        # it and not merely remembering the draw. Without this the assertion
+        # below passes by coincidence: adding a row rebuilds the overlay while
+        # the view still holds the *old* selection, which leaves 200x200 behind
+        # for the wrong reason.
+        assert view.stamp_size == (137, 91)
+
+        document.select(0)
+        click(view, _widget_point(800, 700))
+
+        placed = document.at(len(document) - 1).roi
+        assert (placed.width, placed.height) == (BOX.width, BOX.height)
+        assert _field(panel, "stamp-width").value() == BOX.width
+        assert _field(panel, "stamp-height").value() == BOX.height
+
+    def test_a_drag_in_stamp_mode_still_draws(
+        self, view: VideoView, document: ReplicateDocument
+    ) -> None:
+        """The flip must cost nothing, or it is a mode switch wearing a default.
+
+        Stamp mode is consulted only for a click that travelled nowhere, so a
+        second arena of a new size is still one drag — no trip back to the
+        radio buttons to draw it, and no trip forward to stamp it again.
+        """
+        drag(view, *FIRST_DRAW)
+        assert view.mode is CropMode.STAMP
+        before = len(document)
+
+        drag(view, _widget_point(700, 600), _widget_point(900, 750))
+
+        assert len(document) == before + 1
+        drawn = document.at(len(document) - 1).roi
+        assert (drawn.x, drawn.y, drawn.width, drawn.height) == (700, 600, 200, 150)
+
+    def test_the_stamp_follows_the_selected_box_being_resized(
+        self, view: VideoView, panel: CropToolsPanel
+    ) -> None:
+        """ "The highlighted replicate" moves without the highlight moving.
+
+        A handle drag changes the size of the box the user is looking at
+        without changing *which* box it is, so a stamp size synced only on
+        selection would go stale the moment a rack was tuned — which is the one
+        gesture that happens between cutting the first arena and stamping the
+        rest of them.
+        """
+        drag(view, _widget_point(300, 300), _widget_point(400, 400))
+
+        assert view.stamp_size == (300, 300)
+        assert _field(panel, "stamp-width").value() == 300
+
+    def test_the_toggle_still_drives_the_view(self, view: VideoView, panel: CropToolsPanel) -> None:
+        """Ownership moved to the view; the panel is still how a user asks.
+
+        Asserted through the widget rather than the signal because the round
+        trip is the part that could break: checking a button emits a request,
+        which sets the mode, which announces, which checks the button again.
+        """
+        _toggle(panel, "mode-stamp").setChecked(True)
+        assert view.mode is CropMode.STAMP
+
+        _toggle(panel, "mode-draw").setChecked(True)
+        assert view.mode is CropMode.DRAW
 
 
 #: A box hard against the right edge of the 1000x800 source, small enough that

@@ -18,6 +18,7 @@ whole window rather than one table in it.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
@@ -44,11 +45,32 @@ from sieve.gui.commands import (
     RemoveReplicate,
     RenameReplicate,
     ResetTuning,
+    RestoreSnapshot,
     SetClip,
     SetReplicateROI,
     SetReplicateROIs,
 )
 from sieve.gui.timeline_model import containing, effective_window, ended_at, fitted, moved_to
+
+
+@dataclass(frozen=True)
+class DocumentState:
+    """The whole of what a document owns, in one comparable value.
+
+    What a rollback moves the document between, and deliberately *not* a
+    `Project`: `source`, `checkpoints`, and `outputs` are the window's, so a
+    state that carried them would let a restore silently rewrite fields the GUI
+    is not allowed to edit. Restoring a snapshot must return the user's editing
+    to an earlier point, not reassign the video underneath it.
+
+    Frozen and compared by value, which is what lets `restore` refuse a no-op:
+    picking the snapshot you are already at should not stack a history entry.
+    """
+
+    replicates: tuple[Replicate, ...]
+    pipeline: Pipeline
+    detector: DetectorSettings | None
+    clip: ClipRange | None
 
 
 class ReplicateDocument(QObject):
@@ -431,6 +453,51 @@ class ReplicateDocument(QObject):
             .with_pipeline(self._pipeline)
         )
 
+    def capture(self) -> DocumentState:
+        """Everything this document owns, right now.
+
+        What autosave writes and what a restore's undo puts back. Cheap: every
+        field is already immutable or is copied into a tuple here, so the value
+        does not move when the document does.
+        """
+        return DocumentState(
+            replicates=tuple(self._replicates),
+            pipeline=self._pipeline,
+            detector=self._detector,
+            clip=self._clip,
+        )
+
+    def state_from_project(self, project: Project) -> DocumentState:
+        """`project`'s editable half, refitted onto the source actually bound.
+
+        `load_project`'s refitting, factored out and reused for the same reason
+        it exists there: a snapshot names its video by path, and a path is not a
+        promise about dimensions or length. A history file written before the
+        footage was re-encoded must not come back as replicates hanging off the
+        frame.
+        """
+        return DocumentState(
+            replicates=tuple(
+                replicate.with_roi(self._fit(replicate.roi)) for replicate in project.replicates
+            ),
+            pipeline=project.pipeline,
+            detector=project.detector,
+            clip=self._fit_clip(project.clip),
+        )
+
+    def restore(self, state: DocumentState, text: str) -> None:
+        """Roll the document back to `state`, as an undoable action.
+
+        The rollback half of "no save prompts": the user is never asked to
+        predict a mistake, and the correction for one they have made is on the
+        undo stack like everything else. Restoring is therefore itself covered
+        by the net — a restore chosen by accident is one Ctrl+Z, not a hunt
+        through the history of histories.
+        """
+        if state == self.capture():
+            return
+        self.undo_stack.push(RestoreSnapshot(self, state, text))
+
     def _fit_clip(self, clip: ClipRange | None) -> ClipRange | None:
         """A saved span trimmed onto the bound source, or `None` if none of it lands.
 
@@ -811,6 +878,37 @@ class ReplicateDocument(QObject):
         self.tuning_changed.emit()
         self.detector_changed.emit()
         self.grouping_changed.emit()
+
+    def apply_state(self, state: DocumentState) -> None:
+        """Replace everything the document owns, without recording history.
+
+        `RestoreSnapshot`'s primitive, in both directions. Distinct from
+        `load_project`, which clears the undo stack: a rollback is a *step* in
+        the session's history rather than the start of a new one, so the stack
+        has to survive it.
+
+        Signals go out in `load_project`'s order and for its reasons, with one
+        difference: the selection is held where the user left it when the row
+        still exists, because a rollback that also moved which arena is on
+        screen would make the safety net a navigation gesture.
+        """
+        self._replicates = ReplicateSet(state.replicates)
+        self._pipeline = state.pipeline
+        self._detector = state.detector
+        self._clip = state.clip
+        previous = self._selected
+        if len(self._replicates) == 0:
+            self._selected = None
+        else:
+            self._selected = min(previous or 0, len(self._replicates) - 1)
+        self.structure_changed.emit()
+        self.grouping_changed.emit()
+        if self._selected != previous:
+            self.selection_changed.emit()
+        self.pipeline_changed.emit()
+        self.tuning_changed.emit()
+        self.detector_changed.emit()
+        self.clip_changed.emit()
 
     def _fit(self, roi: ROI) -> ROI:
         """Trim an ROI to the source frame.

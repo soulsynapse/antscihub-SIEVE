@@ -22,9 +22,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from pydantic import ValidationError
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
+    QDialog,
     QFileDialog,
     QMainWindow,
     QMessageBox,
@@ -39,6 +40,8 @@ from sieve.core.types import VideoMetadata
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.executor_adapter import ExecutorAdapter
 from sieve.gui.filter_tab import FilterTab
+from sieve.gui.history import SnapshotStore, history_directory
+from sieve.gui.history_dialog import HistoryDialog
 from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.preferences_dialog import PreferencesDialog
@@ -68,6 +71,17 @@ COARSE_SCRUB_NOTICE = (
     "exact frame when you release. If you never want SIEVE to do this, you "
     "can turn it off under Preferences."
 )
+
+
+#: Said once when a snapshot cannot be written. Autosave then stays off for the
+#: session rather than retrying into the same failure every keystroke — a
+#: history that is silently not being kept is rule 6's failure, and the user has
+#: to be told which state they are in before they trust it.
+HISTORY_FAILED = "History is not being kept: {error}"
+
+#: Said when a rollback lands, because nothing else on screen announces it — the
+#: replicates and the graph simply become what they were.
+RESTORED = "Rolled back to {text}  ·  Ctrl+Z to change your mind"
 
 
 class MainWindow(QMainWindow):
@@ -124,6 +138,21 @@ class MainWindow(QMainWindow):
         # first — the project has to wait for the clear it would otherwise be
         # erased by.
         self._pending_project: tuple[Project, Path] | None = None
+
+        # Automatic rollback history. The store is retargeted whenever the
+        # project's home moves, and set to None when there is nothing open or
+        # when writing has failed — `None` is the one "history is off" state, so
+        # nothing has to consult two flags to know.
+        self._history: SnapshotStore | None = None
+        # Zero-interval and single-shot: restarted on every undo-stack index
+        # change, it fires once the event loop drains, so a burst of commands
+        # from one gesture writes one snapshot. A drag does not even reach here
+        # — `SetReplicateROI.mergeWith` folds it into a single command, and a
+        # merge moves no index.
+        self._history_timer = QTimer(self)
+        self._history_timer.setInterval(0)
+        self._history_timer.setSingleShot(True)
+        self._history_timer.timeout.connect(self._write_snapshot)
 
         # Kept as an attribute because accepting a replicate navigates: the
         # click on a box in the replicate tab lands the user on the filter tab,
@@ -183,6 +212,11 @@ class MainWindow(QMainWindow):
         self._save_as_action.setEnabled(False)
         self._save_as_action.triggered.connect(self.save_project_as)
         file_menu.addAction(self._save_as_action)
+
+        self._history_action = QAction("&History…", self)
+        self._history_action.setEnabled(False)
+        self._history_action.triggered.connect(self.show_history)
+        file_menu.addAction(self._history_action)
 
         file_menu.addSeparator()
 
@@ -326,6 +360,10 @@ class MainWindow(QMainWindow):
         # can come from and no bookkeeping to keep in step — which is also why
         # `load_project` and a save both end by declaring it clean.
         self._document.undo_stack.cleanChanged.connect(self._on_clean_changed)
+        # And the same stack is what autosave is keyed to, for the same reason:
+        # an index change is exactly one user-meaningful action, which a
+        # wall-clock interval is not — it would cut across gestures.
+        self._document.undo_stack.indexChanged.connect(self._on_undo_index_changed)
 
     # ---- commands --------------------------------------------------------
 
@@ -500,6 +538,7 @@ class MainWindow(QMainWindow):
         self._project_path = path
         self._document.undo_stack.setClean()
         self._update_title()
+        self._retarget_history()
 
     def _write_project(self, path: Path) -> bool:
         """Assemble the document into a project file at `path`."""
@@ -528,6 +567,11 @@ class MainWindow(QMainWindow):
         self._project_path = path
         self._document.undo_stack.setClean()
         self._update_title()
+        # A Save As moves the project's home, and history follows it. Snapshots
+        # do not migrate: they are anchored to the directory they were written
+        # in, and copying them would produce two histories claiming the same
+        # sequence numbers.
+        self._retarget_history()
         self.statusBar().showMessage(f"Saved {path.name}")
         return True
 
@@ -551,6 +595,95 @@ class MainWindow(QMainWindow):
         # announcing unconditionally would claim a restore that did not happen.
         if self._project_path == path:
             self.statusBar().showMessage(f"Restored {path.name}  ·  {path.parent}")
+
+    # ---- history ---------------------------------------------------------
+
+    def _retarget_history(self) -> None:
+        """Point autosave at the history directory for whatever is open now.
+
+        The project's home may not exist yet — a video opened on its own has
+        never been saved — and history is kept anyway, at the conventional
+        project path beside the video. That is the point of the whole item: a
+        session that never chooses a file is exactly the session with the most
+        to lose.
+
+        A retarget to the directory already in use is a no-op rather than a new
+        store, which is what keeps the session-start mark meaning "the first
+        snapshot of this session" across the several places this is called from.
+        """
+        metadata = self._player.metadata
+        if metadata is None:
+            self._history = None
+            return
+        anchor = self._project_path or project_path_for(metadata.path)
+        directory = history_directory(anchor)
+        if self._history is not None and self._history.directory == directory:
+            return
+        self._history = SnapshotStore(directory)
+
+    @Slot(int)
+    def _on_undo_index_changed(self, index: int) -> None:
+        del index
+        # Every path that clears the stack emits this too — binding a source, a
+        # load — and none of them is an edit worth a snapshot of an empty
+        # document. The count is what tells them apart from an undo back to the
+        # start, which is a real state to be able to return to.
+        if self._history is not None and self._document.undo_stack.count() > 0:
+            self._history_timer.start()
+
+    @Slot()
+    def _write_snapshot(self) -> None:
+        """Write the document as it stands to the history directory.
+
+        The snapshot is anchored to the history directory rather than to the
+        project's, so `source` resolves from where the file actually sits: each
+        snapshot is a project that opens on its own, not a fragment.
+
+        A failure turns history off for the session and says so. Retrying every
+        keystroke into a directory that is read-only would bury the one message
+        that matters under a hundred identical ones.
+        """
+        store = self._history
+        metadata = self._player.metadata
+        if store is None or metadata is None:
+            return
+        stack = self._document.undo_stack
+        if stack.count() == 0:
+            return
+        base = self._project
+        if base is None or self._project_path is None:
+            base = Project.for_video(metadata.path, store.directory)
+        else:
+            base = base.relocated(self._project_path.parent, store.directory)
+        try:
+            store.record(self._document.apply_to(base), stack.text(stack.index() - 1))
+        except (OSError, ValidationError) as error:
+            self._history = None
+            self.statusBar().showMessage(HISTORY_FAILED.format(error=error))
+
+    @Slot()
+    def show_history(self) -> None:
+        """List what autosave has kept, and roll back to whatever is picked.
+
+        Modal, unlike Preferences: this is a decision about the document rather
+        than a setting to judge against the video, and the list is answerable
+        without looking at anything behind it.
+        """
+        store = self._history
+        if store is None:
+            self.statusBar().showMessage(HISTORY_FAILED.format(error="no project is open"))
+            return
+        dialog = HistoryDialog(store.entries(), self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        snapshot = dialog.chosen()
+        if snapshot is None:
+            return
+        project = self._read_project(snapshot.path)
+        if project is None:
+            return
+        self._document.restore(self._document.state_from_project(project), snapshot.text)
+        self.statusBar().showMessage(RESTORED.format(text=snapshot.text))
 
     def _update_title(self) -> None:
         """Restate what is open and whether it is saved.
@@ -607,6 +740,10 @@ class MainWindow(QMainWindow):
         self._project = None
         self._project_path = None
         self._pending_project = None
+        # The pending write goes with the document it was about. Letting it fire
+        # would snapshot the emptiness the close just produced.
+        self._history_timer.stop()
+        self._history = None
         self._update_title()
         self.statusBar().showMessage("Open a video to begin  ·  Ctrl+O")
 
@@ -642,6 +779,10 @@ class MainWindow(QMainWindow):
             self._project_path = None
             self._update_title()
             self._open_neighbour_project(metadata.path)
+
+        # After both branches, because the neighbour open can adopt a project
+        # and move where history belongs. Idempotent when it already has.
+        self._retarget_history()
 
         # Last, and on both branches, because the document has to be bound
         # before the transport starts moving through it. The neighbour path no
@@ -736,6 +877,7 @@ class MainWindow(QMainWindow):
         for action in (
             self._save_action,
             self._save_as_action,
+            self._history_action,
             self._close_action,
             self._play_action,
             self._next_frame_action,
@@ -756,6 +898,12 @@ class MainWindow(QMainWindow):
         if not self.confirm_discard():
             event.ignore()
             return
+        # The last edit of a session is the one a rollback is most likely to be
+        # reaching for, and a zero-interval timer still pending here would never
+        # fire — the event loop this window is leaving is what would have run it.
+        if self._history_timer.isActive():
+            self._history_timer.stop()
+            self._write_snapshot()
         self._player.shutdown()
         # The adapter before the runner: the runner's last act is to abandon a
         # render, and a subscription still live on a QObject Qt is about to

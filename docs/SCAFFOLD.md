@@ -77,6 +77,8 @@ src/sieve/gui/app.py                    # QApplication bootstrap
 src/sieve/gui/main_window.py            # tabs, the cross-tab timeline, panel orchestration
 src/sieve/gui/document.py               # ReplicateDocument: the edited project, clip, selection
 src/sieve/gui/commands.py               # QUndoCommands; the only writers of document state
+src/sieve/gui/history.py                # automatic rollback snapshots: whole projects on disk; Qt-free
+src/sieve/gui/history_dialog.py         # File > History: action text plus age, and the restore
 src/sieve/gui/wizard.py                 # project creation flow
 src/sieve/gui/wizard_model.py           # its Qt-free half
 src/sieve/gui/replicate_tab.py          # video + tools panel + replicate table
@@ -126,8 +128,8 @@ tests/unit/test_cache_key.py            # cache isolation between sibling branch
 ```
 
 Directories not listed line by line, because their contents are conventional and
-the test only guards the named files: `tests/unit/` (29 modules), `tests/gui/`
-(18), `tests/integration/` (5), `tests/property/` (4).
+the test only guards the named files: `tests/unit/` (37 modules), `tests/gui/`
+(28), `tests/integration/` (6), `tests/property/` (4).
 
 ---
 

@@ -29,7 +29,7 @@ from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
 
 if TYPE_CHECKING:
-    from sieve.gui.document import ReplicateDocument
+    from sieve.gui.document import DocumentState, ReplicateDocument
 
 
 class AddReplicate(QUndoCommand):
@@ -391,3 +391,34 @@ class SetClip(QUndoCommand):
     def undo(self) -> None:
         """Restore the range this displaced, including no range at all."""
         self._document.apply_clip(self._previous)
+
+
+class RestoreSnapshot(QUndoCommand):
+    """Roll the whole document back to a state autosave wrote earlier.
+
+    The one command that replaces everything at once, and the reason it is a
+    command at all: rollback is the safety net that replaced the save prompt, so
+    the net has to cover itself. A restore chosen by mistake is one Ctrl+Z, not
+    a hunt through the history of histories.
+
+    The displaced state is captured on `redo` for the reason every command here
+    does it — a redo after other edits must displace what is there *then*. That
+    also makes a chain of restores self-inverse: undoing the second returns to
+    what the first left, not to where the session started.
+    """
+
+    def __init__(self, document: ReplicateDocument, state: DocumentState, text: str) -> None:
+        super().__init__(text)
+        self._document = document
+        self._state = state
+        self._previous: DocumentState | None = None
+
+    def redo(self) -> None:
+        """Put the snapshot's state into the document."""
+        self._previous = self._document.capture()
+        self._document.apply_state(self._state)
+
+    def undo(self) -> None:
+        """Return the document to whatever the restore displaced."""
+        if self._previous is not None:
+            self._document.apply_state(self._previous)

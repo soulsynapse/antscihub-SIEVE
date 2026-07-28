@@ -60,7 +60,19 @@ block count (`tests/bench/`, `pytestmark = [gui, benchmark]`) — the budget
 table in `bench/budgets.py` has no producer for this surface today, and rule 4
 says a ceiling nothing publishes is not a budget.
 
-Open question worth settling while here: whether a block size that implies more
-than some bound on B should be refused outright at the control rather than
-computed slowly. Refusing is rule 6's preference over approximating, and the
-spin box's minimum is where it is cheapest to state.
+**Decided 2026-07-27: refuse at the control.** A block size whose implied B
+exceeds a stated bound is rejected by the spin box, with the bound and the
+reason in its tooltip — refusing over computing slowly is rule 6's preference,
+and a value one wheel notch from a multi-second GUI-thread stall is not a
+value the control should accept silently. The bound is coupled to the
+benchmark this item already requires: the `set_series` budget in
+`bench/budgets.py` is the producer, and the refusal threshold is the B that
+budget is pinned at — a ceiling with a producer, per rule 4, not a magic
+number in a widget. Provisional until that benchmark lands: **B <= 16,384**
+(a 128x128 grid — an order of magnitude above any grid anyone tunes with,
+and two below where the scatter was measured to hurt). Note the bound is on
+*B*, which depends on the crop extent, so the spin box minimum is derived
+per-replicate rather than constant. *Rejected side:* computing every legal
+value and letting the benchmark alone guard the cost — the benchmark runs in
+CI against the reference count, not against the value a wheel notch just set,
+so it cannot protect the session that matters.

@@ -14,9 +14,10 @@ Bundle these together to not have to do the full test/gate suites for minor thin
 
 If any of these are a compounding bug - something that will cause something else to be rewritten if not immediately addressed, address it at the first availability. If it is better at a different time, move it to later, otherwise, todo is fine.
 
-The thirteen below were read against the code on 2026.07.27 and each now has a
+The bullets below were read against the code on 2026.07.27 and each has a
 file in `docs/todo/` holding the diagnosis, the file:line anchors, and the
-ordering. A bullet here is the noticed-date record and a pointer; the item is
+ordering (the two grid-overlay ones were noticed later that day and share one
+file). A bullet here is the noticed-date record and a pointer; the item is
 the home. **Suggested order:** the four compounding ones first
 (ratio-after-undo → wheel → spacebar → band power), then the save/history
 policy decision, then the composite-view batch as one pass (zoom first, for its
@@ -34,6 +35,8 @@ geometry), then stamp, then the rest.
 - If the user draws boxes and undoes it, then clicks into a replicate, the ratio is wrong (noticed <=2026.07.27) → `todo/ratio-wrong-after-undo.md`
 - It shouldn't ask to save the project or load the project. But it should automatically keep project history so if the user messes stuff up it can roll back. (noticed <=2026.07.27) → `todo/no-save-prompts-keep-history.md`
 - The zoom function should work on the replicate tab too. (noticed <=2026.07.27) → `todo/zoom-on-the-composite-view.md`
+- With heat on there is a gap in the footage making a yellow line — probably cropping, pixel numbers, or block size vs resolution (noticed 2026.07.27) → `todo/grid-overlay-seam-and-border-width.md`
+- Detection borders are 2 px when detected blocks sit next to each other; they should be 1 px (noticed 2026.07.27) → `todo/grid-overlay-seam-and-border-width.md`
 - We had a beautiful bottom bar previously but it's now gone (noticed <=2026.07.27) → `todo/seeker-upgrades.md`. Not a regression: `gui/timeline_bar.py` is the v2 base (its `STRIP_HEIGHT` comment reserves room for the lanes) and the loaded seeker in `mockups/seeker/` was never built. Resolved 2026.07.27; the item it duplicated is deleted. Built 2026.07.27 as far as it has producers — bracket drag and hover bubble; the mockup is deleted, ticks and coverage are `todo/coverage-and-detection-lanes.md`.
 
 ## Keeping this file small

@@ -166,6 +166,14 @@ smooth is how a cache becomes something nobody can reason about.
 This item does not wait on it. A plain bounded ring is enough for the first
 version, and the ring's size is exactly the knob that item exists to replace.
 
+**The v1 ring's bound, fixed 2026-07-27 so it does not get invented at the
+keyboard:** 256 MB — ~280 proxies, ~4.7 s at 59.94 fps — declared as a named
+constant beside `ProxyFrameCache`'s bound with a comment saying the resource
+ledger (docs/todo/resource-ledger.md) owns the real answer. Enough that the
+playhead following a few seconds behind the frontier never misses, small
+enough to be safe on a 16 GB machine even with the browser open. It is a
+placeholder with a stated successor, which is the honest kind.
+
 ## What to not get wrong
 
 The ring is bounded and small. A full window of 1280-wide proxies is 4200 x 2.8

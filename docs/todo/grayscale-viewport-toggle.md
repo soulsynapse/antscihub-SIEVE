@@ -50,15 +50,20 @@ Off by default. The pane is colour until the user says otherwise, because a
 grayscale video pane is a surprise to everyone who did not ask for it, and the
 analytical cost of colour is zero — the graphs are computed from luma either way.
 
-**Unresolved and worth one sentence from Kendrick before building the auto
-half:** "off by default unless the render needs it" was the instruction, and it
-has two readings. Either (a) the toggle is purely manual and "unless the render
-needs it" describes *when a user would reach for it*, or (b) the pane drops to
-gray on its own while a render is filling and returns to colour when it finishes.
-(b) is more helpful and is also a pane that changes appearance without being
-touched, which wants the same honesty the toggle's label does — it must be
-visible that it happened and why. Build (a) first regardless: it is the whole
-mechanism, and (b) is a policy on top of it.
+**Decided 2026-07-27: reading (b).** "Off by default unless the render needs
+it" parses as a condition, not a description — the pane drops to gray on its
+own while a render is filling and returns to colour when it finishes. The
+honesty requirement stands and is the toggle itself: while auto-gray is in
+force, the viewport control shows it engaged with the reason in its label
+("gray while rendering"), so the state is announced by the same affordance
+that can override it, not by a separate badge. Clicking it during a render
+pins colour and the automatic behaviour stands down for that render.
+*Rejected side:* (a), purely manual — it leaves the default experience exactly
+the stutter this item exists to fix, for every user who has not yet found the
+toggle. *Falsifier:* if the pane changing appearance unbidden reads as a fault
+in practice (the thing rule 6's mirror clause worries about), retreat to (a);
+the manual toggle is unchanged either way. Build order stands: (a) first — it
+is the whole mechanism — then (b) as the policy on top.
 
 ## Shape
 

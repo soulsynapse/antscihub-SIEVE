@@ -3,8 +3,8 @@ title: A drop menu applies on selection, not on highlight
 status: open
 opened: 2026-07-27
 gated_on: >
-  nothing structurally — the rule is already decided; what is unsettled is
-  which Qt mechanism carries it, and that is a defensible call to make in code
+  nothing — rule and mechanism are both decided (2026-07-27, below): arrow
+  keys open the popup, and `textActivated` is the one commit signal
 reads:
   - src/sieve/gui/param_form.py
   - src/sieve/gui/filter_tab.py
@@ -41,7 +41,22 @@ a click in the popup, because Qt considers arrowing a closed combo an act of
 selection. So `currentTextChanged` → `textActivated` removes the popup-highlight
 case and leaves the arrow-key case exactly as it is.
 
-The options, and none of them is a line:
+**Decided 2026-07-27: option (1).** Arrow keys on a closed combo open the
+popup instead of stepping the value; inside the popup, arrowing highlights
+and only Enter or a click selects, so `textActivated` becomes a complete
+statement of "the user chose this" and is the only signal wired to the
+document. This makes highlight and selection distinct states everywhere,
+which is the number fields' rule restated for a different widget, with no
+pending-value display to invent. *Rejected sides:* (2) debounce — makes
+"chosen" a function of how fast the user moves, the per-keystroke defect in
+new clothes; (3) pending-and-commit — consistent but the most work, and its
+pending state must be visibly distinct or it breaks rule 6's mirror clause,
+a cost (1) simply does not incur. The measurement below is worth taking
+anyway, but as a finding about cache behaviour, not as this item's gate —
+even a fully cache-served pass-through value is a wasted render queued in
+front of the one the user wants.
+
+The options as originally weighed, kept for the record:
 
 1. **Open the popup on arrow keys** instead of stepping the closed combo, so
    there is a highlight state to be distinct from a selection. Qt has

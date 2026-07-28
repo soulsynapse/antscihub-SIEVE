@@ -29,10 +29,13 @@ docstring already warns about: a setting that travels to another machine as an
 assertion about hardware it has never seen.
 
 **What would make it the right time.** The first setting the CLI and the GUI
-both need to read. Cache bounds and backend selection policy are the two
-candidates, and both are downstream of the deferred **Cache eviction, and
-spilling to disk** (docs/todo/cache-eviction.md) and **GPU execution**
-(docs/todo/gpu-execution.md) items.
+both need to read. **One of the two candidates withdrew 2026-07-27:** cache
+bounds became *derived* rather than configured — docs/todo/resource-ledger.md
+reads the machine's allocation and consumers declare shares of it, so there is
+no cache-size number for a config file to carry, and carrying one would
+reintroduce exactly the travelling-hardware-assertion failure this file warns
+about. Backend selection policy remains the live candidate, downstream of the
+deferred **GPU execution** (docs/todo/gpu-execution.md) item.
 
 Read: `src/sieve/gui/preferences.py` module docstring, `docs/SCAFFOLD.md`
 `core/config.py`, `docs/ARCHITECTURE.md` non-negotiable #2.

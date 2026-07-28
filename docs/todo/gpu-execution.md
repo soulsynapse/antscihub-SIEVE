@@ -59,6 +59,23 @@ measure it" — and that measurement is step one of acting on this entry.
   precisely so a test can drive both sides, and has no caller doing that.
   `@pytest.mark.cuda` is declared in `pyproject.toml` and used by nothing.
 
+**Two postures fixed 2026-07-27, so the item starts from decisions rather
+than open ends** (each with the condition that would revise it):
+
+- **Selection policy: fastest-available-per-node until residency exists,
+  fewest-transfers after.** The item's own text already implies this ordering;
+  it is now the decision. The first version may therefore GPU-place only nodes
+  that win *including* their own transfers (which the arithmetic below says is
+  none until `background_ema`-class filters) — honest, and it cannot regress a
+  working graph. `FrameStore` holds **host arrays** until a measured workload
+  says VRAM residency pays; device-side caching is the revision, not the
+  default, because VRAM exhaustion over a tuning session is the OOM-kill class
+  of failure and nobody has measured a session's device footprint.
+- **VRAM joins the resource ledger** (docs/todo/resource-ledger.md) as a third
+  column the day the first kernel lands: resolved device allocation, declared
+  consumers, a reserve. The ledger item holds the shape; this one brings the
+  tenant.
+
 **The arithmetic that says this is not free — not a measurement.** On the
 reference source (5312x2988 BGR, ~47 MB a frame), a PCIe round trip is order
 5 ms each way, against `downsample`'s declared 0.35 ms/MP — about 5 ms for that

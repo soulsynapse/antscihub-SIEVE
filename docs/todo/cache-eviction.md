@@ -22,6 +22,18 @@ or `materialize.py` landing — compaction to Zarr is where spilling belongs, an
 an eviction policy written before it would be a second answer to where a frame
 goes when it stops fitting.
 
+**Sharpened 2026-07-27, two decisions that will already be made when this
+lands:** the *bound* is not this item's to pick — it is a declared share of
+docs/todo/resource-ledger.md's byte budget, so what remains here is only the
+policy (*which* entry goes when the share is full). And the first step stays a
+measurement, now with a vehicle: the ledger item's H4 instruments a reference
+tuning session's actual footprint, which is exactly the "what a session holds"
+number this file says nobody has taken — one instrumented session serves both.
+Spilling remains materialization's, not eviction's: an evicted frame is
+recomputable by construction (that is what the cache key means), so eviction
+discards, and anything worth keeping instead goes through the user-initiated
+compaction path.
+
 **Also deferred here, for a related reason:** cache-aware lead-in shortening. A
 cached upstream could in principle shorten a decode range, but only if the entry
 covered the lead-in span too, which the store does not record. Slow and correct

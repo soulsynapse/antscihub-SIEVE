@@ -77,6 +77,31 @@ docs/todo/grayscale-and-the-luma-decode.md removes the colour convert (19.4 →
 being decoded twice. Both make the decode cheaper. Only this one makes it stop
 happening.
 
+**The crop artifact's own decisions, settled 2026-07-27 so the takeable half
+starts without a design stop:**
+
+- **Lossless is not a preference, it is the identity line.** The crop is
+  hashed geometry: decoding the artifact must yield byte-identical pixels to
+  decoding the source and cropping, or every cache key downstream of it lies
+  about what a result is. A lossy re-encode is therefore not a smaller
+  version of this artifact but a *different source*, and rule 7 refuses the
+  straddle. (If a lossy proxy tier is ever wanted for review on a laptop,
+  it is a new identity, declared as one — a decision for review mode, not
+  here.)
+- **The codec inside "lossless" is a measurement, not a debate.** The access
+  pattern is the preview loop's own — sequential playback plus scrubbing —
+  so the test is decode throughput and seek latency under exactly that
+  pattern, plus bytes on disk: FFV1 against lossless H.264 (`-qp 0`) against
+  frame-array-in-Zarr, on the reference crop. Pre-stated expectations, so
+  the result can surprise: FFV1 to win on size, `-qp 0` on decode speed and
+  on reusing `VideoReader` unchanged, Zarr on seek but at a size that
+  disqualifies it for footage. The winner is a finding; the writer cites it.
+- **The artifact registers in `Project.outputs`, keyed identity-side** by
+  source identity plus crop geometry (and decoder identity, exactly as
+  `source_key` folds it today) — so a moved ROI misses it by construction,
+  the same argument the lock item makes for cache entries. Where the file
+  *lives* is location, not identity, and stays out of the hash.
+
 **Related and settled enough to record:** compaction is user-initiated, never
 automatic per step. ARCHITECTURE says so and VISION's "you can save that
 representative few seconds" is a user gesture. An automatic policy would be a

@@ -3,10 +3,10 @@ title: What the viewport keeps of a render, and what it drops
 status: deferred
 opened: 2026-07-27
 gated_on: >
-  a planning pass — three existing caches to reconcile, a memory-budget resolver
-  that does not exist yet, and HPC consequences; plan before coding.
-  docs/todo/render-fed-playback.md can land its first version on a plain bounded
-  ring without waiting
+  the planning pass ran 2026-07-27 (decisions below); what remains is gated on
+  docs/todo/resource-ledger.md landing (the byte budget) and
+  docs/todo/render-fed-playback.md's v1 ring existing (the thing this policy
+  replaces the bound of)
 reads:
   - src/sieve/gui/proxy_cache.py
   - src/sieve/pipeline/cache.py
@@ -99,13 +99,49 @@ Three caches already exist and none of them is the right home as written:
   "the source frame at index N as the viewport would draw it".
 * the player's own in-flight coalescing — one frame, not a store.
 
-The open questions a plan has to answer, none of which a bounded ring answers by
-itself: whether retention is keyed on the playhead or on the frontier; whether a
-scrubbed-to region outranks a recently-rendered one; whether the policy differs
-while a render is filling from when it is over; and whether any of this should
-survive a re-render of the same window, which is the point at which it stops
-being a viewport concern and starts overlapping materialization
-(docs/todo/materialization.md).
+The open questions a plan had to answer, none of which a bounded ring answers
+by itself — **answered 2026-07-27, the planning pass this item was gated on:**
+
+- **The budget comes from the resource ledger, never from this file.** The
+  memory resolver this item said was probably step one is now its own item,
+  docs/todo/resource-ledger.md, landing in `gui/concurrency.py` exactly as the
+  section above argued — the session's claim on the machine in one place. This
+  item consumes a declared byte share; it never reads the machine itself.
+- **Keyed on the playhead, with the frontier pinned.** Eviction drops the
+  retained frame farthest from the playhead, which keeps one contiguous
+  interval around where the user is looking, growing toward the frontier. This
+  answers the scrubbed-vs-recently-rendered question without a second rule:
+  scrubbing *moves the playhead*, so a scrubbed-to region is preferred by
+  construction, and it ages out naturally as the user moves on — no pin list,
+  no decay constant to tune. The frontier's latest frame is always retained
+  regardless of distance, because follow-the-render mode displays it.
+  *Rejected sides:* frontier-keyed (a pure ring) — evicts exactly the frames a
+  backward scrub wants, which is the observation that opened this item; LRU by
+  access — a render *touches* every frame once, so filling the window evicts
+  the scrub-warmed region, the same defect `gui/proxy_cache.py`'s docstring
+  already refuses playback for.
+- **One policy, filling or not.** The only render-state dependence is the
+  frontier pin, which is vacuous once the render completes. Two policies with
+  a handover was considered and dropped: the handover moment is exactly when a
+  user is watching, and a retention set that reshuffles at that boundary is
+  the unreasonable-afterwards behaviour this item exists to prevent.
+- **Nothing survives a re-render; durable replay is materialization's.**
+  Retention is session-transient display state, dropped with the render it
+  followed (as the format-flip in the grayscale item already drops warmed
+  proxies). The moment "keep it for next time" is worth paying for, the answer
+  is the replicate crop — docs/todo/materialization.md — which is truth-grade
+  and on disk; a long-lived proxy hoard would be a second, worse materializer
+  on the wrong side of the max_width line the constraint below draws.
+
+**The hypothesis test, before the policy is trusted:** the distance-from-
+playhead rule is a reasoned guess, and the honest check is cheap — instrument
+the player to log (playhead, request, hit/miss) events during a real tuning
+session, then replay the trace through candidate policies (plain ring, LRU,
+distance-from-playhead) in a unit-level harness scoring hit rate and worst
+scrub stall. Adopt the policy only if it beats the plain ring by a margin
+worth its complexity; if it does not, the ring stays and this item closes as
+a finding rather than code. Trace and comparison both belong in
+`docs/findings/`.
 
 **Constraint worth recording before anyone starts:** whatever is kept must not be
 mistakable for truth. These are display proxies — downscaled, single-channel, and

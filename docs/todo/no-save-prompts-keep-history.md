@@ -83,6 +83,33 @@ documents unless someone decides otherwise; at replicate-scale that is fine and
 at output-scale it may not be, which rule 7 already anticipates by keeping
 `checkpoints` and `outputs` on `Project` rather than on `Node`.
 
+**The subsystem's remaining decisions, settled 2026-07-27 so the item is
+takeable without a design stop:**
+
+- **Where snapshots live: a `<project>.history/` directory beside the project
+  file.** Whole documents (per the rule-7 note above), named by monotonic
+  sequence plus the undo action's text, so a directory listing already reads
+  as history. *Rejected sides:* inside the project file — turns every
+  snapshot into a rewrite of the artifact the CLI reads and makes history
+  travel where preferences must not; an app-data directory keyed by project
+  path — history that silently detaches when a project is moved or copied.
+- **What is written and when: on undo-stack index change, coalesced to
+  idle.** The keying decision above already picked the stack; coalescing
+  means a burst of commands writes once, and writing routes through
+  `_write_project` — the canonical path, not a second serializer.
+- **Retention: the last 50 snapshots plus the first of each session.** At
+  replicate scale a document is small enough that 50 whole copies are noise;
+  the session-start snapshot is the "before today" restore point that pure
+  LRU would age out mid-session. Revisit only when outputs make documents
+  heavy — the rule-7 note above already anticipates which fields would do it.
+  *Rejected side:* unbounded — a policy nobody chose, enforced by disk.
+- **Restore is an undoable action, not an open.** File > History lists
+  action text plus age; choosing one pushes a restore command onto the undo
+  stack. Restoring is therefore itself covered by the net, and a mistaken
+  restore is one Ctrl+Z, not a hunt through the history of histories.
+  *Rejected side:* restore-as-file-open, which discards the stack and makes
+  the safety mechanism the one destructive gesture in the app.
+
 This item is now scoped to *the autosave half only*. Prompt removal is its own
 item, taken after this one lands; 300–500 lines with a new store does not fit
 one context window alongside the removal, which is why they are two.

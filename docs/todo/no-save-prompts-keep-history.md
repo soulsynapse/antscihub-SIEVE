@@ -20,11 +20,17 @@ stuff up it can roll back."
 ## Decided 2026.07.27: rollback is the safety net, and it lands first
 
 **Rollback, not confirmation.** The user is not asked to predict mistakes.
-`docs/todo/confirm-before-changing-the-replicate.md` is closed by this — a
-modal in front of a geometry edit is the pattern being removed one screen over.
 *Rejected side:* confirmation as the net, which would have made automatic
 history redundant for the case it covers and left the user answering a question
 about a mistake they have not made yet.
+
+*Scope correction, same day.* This was first written as closing
+`docs/todo/lock-a-visited-replicate.md`, on the reading that any box in front of
+a geometry edit is the pattern being removed here. It is not. That item's box is
+conditional on the replicate having been tuned against, which makes it a
+statement about work that exists downstream rather than a request to foresee an
+error. Rollback is the net for the accidental case; that lock is the deliberate
+case. Both stand.
 
 **Autosave lands before the prompts come out.** The obvious order is the wrong
 one. `confirm_discard` exists because every path it guards silently destroyed a

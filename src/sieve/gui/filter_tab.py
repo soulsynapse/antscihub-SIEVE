@@ -593,10 +593,14 @@ class FilterTab(QWidget):
             return
         try:
             rebuilt = chain_from_pipeline(self._document.pipeline, self._fps())
-        except ValueError as error:
+        except Exception as error:
             # Refused, and said so, rather than drawn wrong — and the
             # document's graph is left alone: the tab only writes structure
             # on its own structural edits, so what was loaded stays loadable.
+            # `Exception`, not `ValueError`: a narrower catch let anything
+            # else a loaded graph raised abort this rebuild *silently*, before
+            # the `resubmit` at the tail — a tab that then believed nothing
+            # needed rendering, with no message saying why.
             self.status_message.emit(f"cannot display the loaded graph: {error}")
             return
         self._chain = rebuilt
@@ -707,6 +711,15 @@ class FilterTab(QWidget):
 
     @Slot(int)
     def _collector_start(self, revision: int) -> None:
+        # A single-frame refresh (composite repaint, wizard hover) is not a
+        # new series: restarting the collector for one would erase the window
+        # render's rows, and re-stamping the detector would drop its in-flight
+        # derivation on arrival — under playback, the graphs would fill and
+        # then silently never finish, because the first playhead move after
+        # `render_finished` assassinated the final pass. The same exemption
+        # `_hud_begin` and `_on_frame_cost` already grant.
+        if revision in self._composite_revisions:
+            return
         self._collector.start(revision)
         # Same stamp, both sides: a partial pass still deriving for the render
         # this one replaces is finished but never painted.
@@ -774,13 +787,16 @@ class FilterTab(QWidget):
         """
         if not final and (self._detector.busy or not self._series_pending):
             return
-        series = self._collector.snapshot(self._runner.revision)
-        if series is None or (not final and series.data.shape[0] <= self._filled):
+        # The unstacked snapshot: the stack is O(frames x blocks) and runs in
+        # `derive` on the detector thread, so a kick costs the GUI thread a
+        # pointer copy rather than a copy of the whole series so far.
+        series = self._collector.snapshot_rows(self._runner.revision)
+        if series is None or (not final and len(series.rows) <= self._filled):
             return
         self._detector.submit(
             DetectorRequest(
                 revision=self._runner.revision,
-                series=series.data,
+                series=series.rows,
                 start_index=series.start_index,
                 fps=self._fps(),
                 state=self._chain.detector,
@@ -796,7 +812,7 @@ class FilterTab(QWidget):
             self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
         if self._composite_grab:
             self._apply_composite(*self._composite_grab.pop())
-        if self._collector.take(self._runner.revision) is None:
+        if self._collector.snapshot_rows(self._runner.revision) is None:
             # A render whose prefix stopped above the extraction step — the
             # graphs have nothing new; `_apply` already says why.
             return
@@ -1208,6 +1224,17 @@ class FilterTab(QWidget):
             return None
         node_id = step.node.node_id
         is_grid = step.kind_out is ChainKind.BLOCK_SERIES
+        # A first step has no upstream node and the fallback base is the
+        # player's frame — decoded through the scrub proxy, so blending it
+        # under a full-resolution output reads as a quality slider the graph
+        # does not have. When the first step is an identity rescale its
+        # output *is* its input, bit for bit (`rescale_cpu`'s no-op path),
+        # so the output is the honest base and the blend is honestly a no-op.
+        base_is_over = (
+            upstream is None
+            and step.node.filter_id == "rescale"
+            and float(step.node.params.get("scale", 1.0)) >= 1.0
+        )
         want = min(max(self._playhead, window.start), window.end - 1)
         slot = self._composite_grab
 
@@ -1218,7 +1245,8 @@ class FilterTab(QWidget):
             over = outputs.get(node_id)
             if over is None:
                 return
-            base = outputs.get(upstream) if upstream is not None else None
+            fallthrough = outputs.get(upstream) if upstream is not None else None
+            base = over if base_is_over else fallthrough
             slot[:] = [
                 (
                     None if base is None else np.asarray(base.data),
@@ -1571,7 +1599,13 @@ class FilterTab(QWidget):
             return
         want = min(max(self._playhead, window.start), window.end - 1)
         replicate = self._document.selected_replicate
-        self._runner.request_frame(chain.pipeline(), want, replicate, consumer=grab)
+        # A hover is a single-frame look, not a render the graphs wait on.
+        # Registered like a composite refresh so `_collector_start` and
+        # `_hud_begin` leave the window series and the HUD alone.
+        expected = self._runner.revision + 1
+        self._composite_revisions.add(expected)
+        if not self._runner.request_frame(chain.pipeline(), want, replicate, consumer=grab):
+            self._composite_revisions.discard(expected)
 
     def _on_hover_ended(self) -> None:
         """The pointer left the candidates: the video returns to the selection."""

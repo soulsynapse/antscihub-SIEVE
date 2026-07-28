@@ -157,6 +157,55 @@ def test_a_playhead_refresh_never_displaces_a_pending_window_render(
     assert stub.frame_renders == [7]
 
 
+def test_a_playhead_refresh_never_erases_the_series_or_the_final_derivation(
+    qtbot: QtBot,
+    tab: FilterTab,
+    stub: _StubRunner,
+    document: ReplicateDocument,
+    player: VideoPlayer,
+) -> None:
+    """The refresh guard's other half — state, not slots.
+
+    A composite refresh is issued through the runner like any render, so its
+    `render_started` reached `_collector_start`, which restarted the collector
+    and re-stamped the detector. Under playback the sequence was fatal every
+    time: the window render finishes, the final derivation is submitted, the
+    next playhead move starts a composite refresh — and the final result is
+    dropped on arrival as stale while the series it came from is erased. The
+    graphs filled and then silently never finished; a signal switch appeared
+    to do nothing at all.
+
+    The ordering is exact and single-threaded up to the wait: the refresh is
+    issued before the event loop can deliver the detector's queued result, so
+    without the guard the final pass is always assassinated.
+    """
+    document.bind_source(1000, 800, 40, 20.0)
+    consumer = stub.consumers[-1]
+    assert consumer is not None
+    stub.render_started.emit(stub.revision)
+
+    node_id = next(
+        s.node.node_id
+        for s in tab.chain.steps
+        if s.node is not None and s.node.filter_id == "block_signal"
+    )
+    for index in range(3):
+        consumer(  # type: ignore[operator]
+            SimpleNamespace(
+                index=index, outputs={node_id: SimpleNamespace(data=np.ones((2, 2), np.float32))}
+            )
+        )
+
+    with qtbot.waitSignal(tab.graphs_updated, timeout=10_000):
+        # `render_finished` submits the final derivation; the playhead move
+        # right behind it issues the refresh before the result can arrive.
+        stub.render_finished.emit(object())
+        player.frame_changed.emit(1, QImage(160, 120, QImage.Format.Format_RGB32))
+        assert stub.frame_renders == [1], "the refresh this test needs was never issued"
+
+    assert not tab.summary_text.endswith(" · filling"), "the final pass never landed"
+
+
 def test_the_pair_paints_at_the_playhead_frame_not_at_render_finished(
     tab: FilterTab, stub: _StubRunner
 ) -> None:
@@ -233,11 +282,14 @@ def test_a_first_step_targets_base_is_the_replicates_crop(
     The one composite base that comes from the player rather than the render
     is the first step's input, and the ROI is in source pixels (1000x800
     here) while the player frame may be a half-size proxy — so the crop must
-    scale by the image's actual size.
+    scale by the image's actual size. Scale 0.5, not the default: an identity
+    rescale's base is the render's own output (the no-op path is bit-exact),
+    and only a first step that really transforms falls back to the player.
     """
     card = tab.stack.card_for("rescale")
     assert card is not None
     card.mousePressEvent(None)
+    tab.downsample_knob.setValue(0.5)
 
     document.add_roi(ROI(x=200, y=100, width=300, height=200))
     document.select(0)  # selection change resubmits the window render
@@ -255,6 +307,37 @@ def test_a_first_step_targets_base_is_the_replicates_crop(
     base, _ = tab.composite.frames()
     assert base is not None
     assert (base.width(), base.height()) == (150, 100), "the crop ignored the proxy scale"
+
+
+def test_an_identity_rescale_first_steps_base_is_its_own_output(
+    tab: FilterTab, stub: _StubRunner, document: ReplicateDocument, player: VideoPlayer
+) -> None:
+    """At scale 1.0 the rescale output is bit-identical to its input
+    (`rescale_cpu`'s no-op path), so the render's own frame is the honest
+    base. The player fallback is a scrub proxy: blending a proxy under a
+    full-resolution output painted a quality difference the graph does not
+    have — the input·output slider at 0% degraded a downsample-1.0 chain.
+    """
+    card = tab.stack.card_for("rescale")
+    assert card is not None
+    card.mousePressEvent(None)
+
+    document.add_roi(ROI(x=200, y=100, width=300, height=200))
+    document.select(0)
+    stub.render_finished.emit(object())
+    player.frame_changed.emit(3, QImage(500, 400, QImage.Format.Format_RGB32))
+
+    grab = stub.frame_consumers[-1]
+    assert grab is not None
+    node = next(s.node for s in tab.chain.steps if s.step_id == "rescale")
+    assert node is not None
+    outputs = {node.node_id: SimpleNamespace(data=np.full((8, 8), 100, np.uint8))}
+    grab(SimpleNamespace(index=3, outputs=outputs))  # type: ignore[operator]
+    stub.frame_cost.emit(3, 0.1)
+
+    base, _ = tab.composite.frames()
+    assert base is not None
+    assert (base.width(), base.height()) == (8, 8), "the base is not the render's own output"
 
 
 def test_border_alpha_zero_separates_blocks_and_equal_alphas_read_as_a_mass(

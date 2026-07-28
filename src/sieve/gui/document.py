@@ -392,12 +392,17 @@ class ReplicateDocument(QObject):
         self.undo_stack.clear()
         self.structure_changed.emit()
         self.grouping_changed.emit()
-        self.clip_changed.emit()
         self.selection_changed.emit()
-        # Last, so a view rebuilding its chain from the graph already sees
-        # the restored selection and resolves the right arena's values.
+        # After the selection, so a view rebuilding its chain from the graph
+        # already sees the restored selection and resolves the right arena's
+        # values.
         self.pipeline_changed.emit()
         self.detector_changed.emit()
+        # Last, and after the graph above all: `clip_changed` is a render
+        # trigger, and one that fired before `pipeline_changed` submitted a
+        # render of whatever chain the tab held *before* the load — a stale
+        # graph holding the runner's slot while the loaded one queued.
+        self.clip_changed.emit()
 
     def apply_to(self, project: Project) -> Project:
         """`project` carrying this document's replicates, clip, detector, and graph.

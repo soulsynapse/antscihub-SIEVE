@@ -75,10 +75,12 @@ class DetectorRequest:
     #: result for a chain that has since been edited, the same stamp-not-a-flag
     #: rule `preview_runner.py` runs on.
     revision: int
-    #: `(T, ny, nx)` block grids as the collector assembled them, `T` frames of
-    #: the window so far. Flattened to columns inside `derive` rather than by
-    #: the caller, so the reshape and the grid it implies are stated once.
-    series: NDArray[np.float32]
+    #: `T` frames of `(ny, nx)` block grids as the collector assembled them —
+    #: a `(T, ny, nx)` array, or the collector's unstacked row tuple, which
+    #: `derive` stacks on this thread so the GUI thread never pays the copy.
+    #: Flattened to columns inside `derive` rather than by the caller, so the
+    #: reshape and the grid it implies are stated once.
+    series: NDArray[np.float32] | tuple[NDArray[np.float32], ...]
     #: Source index of `series[0]`, so intervals come back absolute.
     start_index: int
     fps: float
@@ -145,7 +147,8 @@ def derive(request: DetectorRequest) -> DetectorResult:
     gate stops where the window stops being honest — is arithmetic, and a test
     of it should not need an event loop or a thread to reach it.
     """
-    grids = request.series
+    series = request.series
+    grids: NDArray[np.float32] = np.stack(series) if isinstance(series, tuple) else series
     frames = int(grids.shape[0])
     grid = (int(grids.shape[1]), int(grids.shape[2]))
     series2d = grids.reshape(frames, -1)

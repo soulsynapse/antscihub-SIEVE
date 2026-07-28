@@ -42,6 +42,21 @@ class CollectedSeries:
     data: NDArray[np.float32]
 
 
+@dataclass(frozen=True, slots=True)
+class CollectedRows:
+    """One revision's rows so far, unstacked — the cheap snapshot.
+
+    `rows` are the collector's own arrays. A row is never written to after its
+    append, so a consumer on another thread may stack them without a copy
+    race; what it must not do is write into them.
+    """
+
+    #: Source index of `rows[0]` — the rendered span's start.
+    start_index: int
+    #: `len(rows)` frames, each `(ny, nx)` float32, contiguous from `start_index`.
+    rows: tuple[NDArray[np.float32], ...]
+
+
 class SeriesCollector:
     """Rows in on the render thread, one array out on the GUI thread.
 
@@ -123,6 +138,20 @@ class SeriesCollector:
             return CollectedSeries(
                 start_index=self._start, data=np.stack(self._rows).astype(np.float32, copy=False)
             )
+
+    def snapshot_rows(self, revision: int) -> CollectedRows | None:
+        """`snapshot` without the stack: an O(rows) pointer copy, GUI-thread cheap.
+
+        The stack itself is O(frames x blocks) — tens of megabytes at a small
+        block size — and belongs on the thread that will transform the result
+        (`detector_worker.derive` stacks), not on the GUI thread once per
+        pacing kick, where it was a per-kick stall the playback timer and
+        every queued repaint sat behind.
+        """
+        with self._lock:
+            if revision != self._revision or self._start is None or not self._rows:
+                return None
+            return CollectedRows(start_index=self._start, rows=tuple(self._rows))
 
     def take(self, revision: int) -> CollectedSeries | None:
         """The finished series for `revision`, or None if it was superseded.

@@ -12,12 +12,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QSettings
 from pytestqt.qtbot import QtBot
 
 from sieve.bench.metrics import MetricBus
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import FilterTab
 from sieve.gui.player import VideoPlayer
+from sieve.gui.preferences import Preferences
 from sieve.gui.preview_runner import PreviewRunner
 from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
 
@@ -44,9 +46,16 @@ def runner(qapp: object) -> Iterator[PreviewRunner]:
 
 @pytest.fixture
 def tab(
-    qtbot: QtBot, player: VideoPlayer, document: ReplicateDocument, runner: PreviewRunner
+    qtbot: QtBot,
+    tmp_path: Path,
+    player: VideoPlayer,
+    document: ReplicateDocument,
+    runner: PreviewRunner,
 ) -> Iterator[FilterTab]:
-    instance = FilterTab(player, document, runner, metrics=MetricBus())
+    # The store is injected so a test that clicks the gray toggle writes to a
+    # file the test owns, never to the developer's real settings.
+    preferences = Preferences(QSettings(str(tmp_path / "sieve.ini"), QSettings.Format.IniFormat))
+    instance = FilterTab(player, document, runner, metrics=MetricBus(), preferences=preferences)
     qtbot.addWidget(instance)
     yield instance
     # The tab owns the detector thread, so it carries the same
@@ -101,6 +110,34 @@ def test_the_speed_button_cycles_the_named_rates_and_reports_the_active_one(
     tab.speed_button.click()
     assert player.playback_rate == 1.0
     assert tab.speed_button.text() == "1x"
+
+
+def test_the_gray_decode_applies_only_while_the_tab_is_showing(
+    tab: FilterTab, player: VideoPlayer
+) -> None:
+    """The format follows the tab; the toggle's state survives the excursion.
+
+    A player left gray after leaving the tab would paint the replicate tab's
+    arenas in a format chosen for a loop that is not on screen — and a toggle
+    reset by the excursion would forget a preference the user did state.
+    """
+    tab.show()
+    assert not player.viewport_luma
+
+    tab.gray_toggle.click()
+    assert player.viewport_luma, "the manual choice did not reach the player"
+
+    tab.hide()
+    assert not player.viewport_luma, "leaving the tab must hand the pane back in colour"
+    assert tab.gray_toggle.effective_luma, "hiding must not unset the preference"
+
+    # A change while hidden stays with the toggle until the tab returns.
+    tab.gray_toggle.click()
+    tab.gray_toggle.click()
+    assert not player.viewport_luma
+
+    tab.show()
+    assert player.viewport_luma, "returning must reapply the toggle's answer"
 
 
 def test_a_knob_burst_mid_render_yields_one_final_recompute_with_the_last_value(

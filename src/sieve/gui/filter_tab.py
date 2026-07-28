@@ -63,7 +63,7 @@ from time import perf_counter
 import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QRect, Qt, Signal, Slot
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QHideEvent, QImage, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -346,18 +346,22 @@ class FilterTab(QWidget):
         d_row.addWidget(self._centered)
         d_row.addWidget(self._summary)
 
-        left = QVBoxLayout()
-        left.setSpacing(4)
-        left.addWidget(self._composite, 6)
-        left.addWidget(self._count, 2)
-        left.addLayout(d_row)
-        left.addWidget(self._hud, 1)
-
+        # Top-right of the *player*, not of the tab: a corner row spanning the
+        # whole tab puts these over the chain stack, which they say nothing
+        # about. They govern the pane that stutters, so they sit on it.
         controls = QHBoxLayout()
         controls.setSpacing(6)
         controls.addStretch(1)
         controls.addWidget(self._speed)
         controls.addWidget(self._gray_toggle)
+
+        left = QVBoxLayout()
+        left.setSpacing(4)
+        left.addLayout(controls)
+        left.addWidget(self._composite, 6)
+        left.addWidget(self._count, 2)
+        left.addLayout(d_row)
+        left.addWidget(self._hud, 1)
 
         columns = QHBoxLayout()
         columns.setSpacing(10)
@@ -367,18 +371,17 @@ class FilterTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(4)
-        layout.addLayout(controls)
         layout.addLayout(columns, 1)
 
     def _connect(self) -> None:
         self._speed.clicked.connect(self._on_speed_clicked)
         # The toggle decides the format, the player obeys it, and the runner
-        # feeds the automatic half. Pushed once at construction too: a
-        # persisted gray preference must reach the decode thread before the
-        # first video opens, not on the first click.
-        self._gray_toggle.luma_changed.connect(self._player.set_viewport_luma)
+        # feeds the automatic half — but only while this tab is on screen.
+        # Gray is the tuning loop's tradeoff; on the replicate tab colour is
+        # what identifies an arena, so the format follows the tab
+        # (`showEvent`/`hideEvent`) rather than being pushed unconditionally.
+        self._gray_toggle.luma_changed.connect(self._on_luma_changed)
         self._runner.window_render_changed.connect(self._gray_toggle.set_rendering)
-        self._player.set_viewport_luma(self._gray_toggle.effective_luma)
 
         self._player.frame_changed.connect(self._on_frame_changed)
         self._document.source_changed.connect(self._on_source_changed)
@@ -521,6 +524,26 @@ class FilterTab(QWidget):
         rate = PLAYBACK_RATES[(index + 1) % len(PLAYBACK_RATES)]
         self._player.set_playback_rate(rate)
         self._speed.setText(f"{self._player.playback_rate:g}x")
+
+    @Slot(bool)
+    def _on_luma_changed(self, enabled: bool) -> None:
+        """The toggle's answer reaches the decode thread only while shown."""
+        if self.isVisible():
+            self._player.set_viewport_luma(enabled)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """This tab owns the pane's format from the moment it is the page."""
+        super().showEvent(event)
+        self._player.set_viewport_luma(self._gray_toggle.effective_luma)
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        """Leaving the tab hands the pane back in colour, whatever made it gray.
+
+        The toggle's state is untouched — a manual preference or a pin
+        survives the excursion and reapplies on return.
+        """
+        super().hideEvent(event)
+        self._player.set_viewport_luma(False)
 
     # ---- the chain value -------------------------------------------------
 

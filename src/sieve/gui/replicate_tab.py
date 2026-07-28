@@ -17,8 +17,10 @@ the window and outside every tab. A transport living inside a tab answers
 "where am I" once per tab, and the copies drift; a transport that spans the
 window answers it once. What this tab keeps is the only thing that is genuinely
 about *this* tab — the frame, the boxes drawn on it, and the table of them.
-The decode-format toggle is deliberately *not* here: the stutter it fixes is
-felt in the tuning loop, so it lives on the filter tab (`gui/gray_toggle.py`).
+The decode-format toggle is deliberately *not* here, and neither is its
+effect: the stutter it fixes is felt in the tuning loop, so it lives on the
+filter tab (`gui/gray_toggle.py`) and the gray decode applies only while that
+tab is showing — here, colour is what identifies an arena.
 """
 
 from __future__ import annotations

@@ -3,8 +3,11 @@
 A preferences checkbox is where a setting goes to be found by someone who
 already knows it exists. The person who needs this is watching a stuttering
 pane *right now* and does not know that colour is what they are paying for —
-so the control sits in the filter tab's top-right corner, over the tuning
-surface where the stutter is felt, beside the playback-speed cycler. Both
+so the control sits in the player's top-right corner on the filter tab, over
+the tuning surface where the stutter is felt, beside the playback-speed
+cycler. The format is scoped to that tab too (the tab's `showEvent`/
+`hideEvent` hand the pane to gray and back): gray is the tuning loop's
+tradeoff, and on the replicate tab colour is what identifies an arena. Both
 its states name the format and the multiplier ("Color · 1x", "Gray · ~2.5x"):
 a label that said just "grayscale" would read as a viewing preference, which
 is the one thing this is not — nobody wants gray, they want the frame rate.

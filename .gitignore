@@ -10,3 +10,5 @@ __pycache__/
 videos-testing/
 tests/results/
 tests/fixtures/decoder-corpus/mockups/renders/
+retention-session.jsonl
+rss-session.csv

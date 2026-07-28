@@ -24,6 +24,17 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python tools/session_hooks.py subagent",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

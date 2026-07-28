@@ -15,7 +15,7 @@ from typing import cast
 
 import pytest
 
-from session_hooks import main, primer, tree
+from session_hooks import RETURN_BUDGET, main, primer, subagent, tree
 
 
 def _fake_git(responses: dict[tuple[str, ...], str]) -> Callable[..., str]:
@@ -104,3 +104,32 @@ def test_the_commands_emit_parseable_json(
     monkeypatch.setattr("session_hooks._git", _fake_git(responses))
     assert main(["tree"]) == 0
     assert "systemMessage" in json.loads(capsys.readouterr().out)
+
+
+def test_a_tight_subagent_return_is_logged_and_not_announced(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The whole point of the threshold. A hook that reports every subagent is
+    # the nag `tree` is written to avoid, and the log is what makes refinement
+    # a number rather than a feeling.
+    monkeypatch.setattr("session_hooks.REPO_ROOT", tmp_path)
+    assert subagent({"agent_type": "critic", "last_assistant_message": "3 findings, x.md"}) == {}
+    logged = (tmp_path / ".claude" / "subagent-returns.jsonl").read_text(encoding="utf-8")
+    assert '"chars": 16' in logged
+
+
+def test_a_bloated_subagent_return_names_the_agent_and_the_size(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("session_hooks.REPO_ROOT", tmp_path)
+    out = subagent({"agent_type": "critic", "last_assistant_message": "x" * (RETURN_BUDGET + 1)})
+    message = str(out["systemMessage"])
+    assert "critic" in message and str(RETURN_BUDGET + 1) in message
+
+
+def test_a_payload_missing_every_field_does_not_take_the_session_down(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Hook payload shapes are the harness's to change, not ours.
+    monkeypatch.setattr("session_hooks.REPO_ROOT", tmp_path)
+    assert subagent({}) == {}

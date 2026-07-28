@@ -36,8 +36,10 @@ tools/complete_item.py                  # scaffolds a completed-todo entry; git-
 tools/transcript_stats.py               # mines session transcripts: where agent wall-clock went
 tools/doc_drift.py                      # reports stamped prose docs whose subject paths moved
 tools/doc_refs.py                       # every path a live doc names must resolve; symbols reported
-tools/session_hooks.py                  # what the SessionStart and Stop hooks run; jq-free by necessity
-.claude/settings.json                   # the two session hooks: the primer, and the tree report
+tools/session_hooks.py                  # what the session hooks run; jq-free by necessity
+.claude/settings.json                   # the three session hooks: primer, tree report, subagent return size
+.claude/agents/comment-critic.md        # naive reader; judges a comment against the code it sits on
+.claude/skills/comment-check/SKILL.md   # runs it over the working diff, by line range not by file
 
 src/sieve/core/types.py                 # Frame, ROI, value objects everything pattern-matches on
 src/sieve/core/filter_base.py           # THE FILTER CONTRACT: FilterSpec, ParamsBase, Mode, warmup arithmetic

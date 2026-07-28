@@ -1,4 +1,4 @@
-"""What Claude Code's session hooks run. One script, two subcommands.
+"""What Claude Code's session hooks run. One script, three subcommands.
 
 Both hooks exist because of recorded incidents, which is the only bar a hook
 should clear — it fires with no explanation attached, so a nice-to-have is not
@@ -8,6 +8,15 @@ enough.
 skipped it re-derived what it says — transcript mining attributed ~11% of
 active time to re-orientation
 (`docs/findings/2026.07.27-session-time-is-generation-not-tools.md`).
+
+**`subagent`**: a subagent's report lands in the caller's context whole, so a
+loose return contract is paid for on every call. Three critics returned ~25k
+tokens between them on 2026.07.28 by reporting the comments that *passed* and
+appending ten open questions each. `SubagentStop` carries no token counts, so
+size of `last_assistant_message` is the proxy — it is also the number that
+actually matters, being the context cost rather than the billing one. This
+logs every return and speaks only above the threshold, because "remember to
+refine this" fired on every call is the nag `tree` is written to avoid.
 
 **`tree`**: a 99-file uncommitted sweep discovered on arrival, 23 commits
 sitting local because "commit" was read as "done", and the work loop
@@ -23,6 +32,7 @@ nothing.
 
     python tools/session_hooks.py primer
     python tools/session_hooks.py tree
+    python tools/session_hooks.py subagent   # reads the hook payload on stdin
 """
 
 from __future__ import annotations
@@ -32,6 +42,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 REPO_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path(__file__).resolve().parent.parent)
 
@@ -95,7 +106,41 @@ def tree() -> dict[str, object]:
     return {"systemMessage": "git: " + "; ".join(parts)}
 
 
-COMMANDS = {"primer": primer, "tree": tree}
+#: Characters of returned text above which a subagent's contract is too loose.
+#: A report that names only its findings and writes the detail to a file comes
+#: back in one line; 2000 is generous against that and well under the ~9000 a
+#: single unconstrained critic returned.
+RETURN_BUDGET = 2000
+
+RETURNS_LOG = Path(".claude/subagent-returns.jsonl")
+
+
+def subagent(payload: dict[str, object] | None = None) -> dict[str, object]:
+    if payload is None:
+        # `json.loads` is typed as returning `Any`; the cast is what keeps this
+        # inside the repo's no-ignores rule, and the isinstance is what keeps a
+        # payload shape the harness changes from raising in a hook.
+        loaded = cast(object, json.loads(sys.stdin.read() or "{}"))
+        payload = cast(dict[str, object], loaded) if isinstance(loaded, dict) else {}
+    text = str(payload.get("last_assistant_message", ""))
+    kind = str(payload.get("agent_type", "?"))
+
+    log = REPO_ROOT / RETURNS_LOG
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"agent": kind, "chars": len(text)}) + "\n")
+
+    if len(text) <= RETURN_BUDGET:
+        return {}
+    return {
+        "systemMessage": (
+            f"{kind} returned {len(text)} chars (budget {RETURN_BUDGET}). "
+            "Tighten its return contract: report failures only, write detail to a file."
+        )
+    }
+
+
+COMMANDS = {"primer": primer, "tree": tree, "subagent": subagent}
 
 
 def main(argv: list[str] | None = None) -> int:

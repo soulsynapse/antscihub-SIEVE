@@ -76,7 +76,7 @@ from __future__ import annotations
 import json
 import math
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any, Self
 from uuid import uuid4
@@ -115,7 +115,14 @@ from sieve.core.replicates import Replicate
 #: loads unchanged — no detector was ever tuned, which is exactly what the
 #: defaults say — but every save now writes both fields, and a version-2
 #: build would report them as stray for the same reason as above.
-SCHEMA_VERSION = 3
+#:
+#: 4: `Project` gained `visited` (2026-07-28, the geometry lock). A version-3
+#: document loads unchanged — no replicate had ever been recorded as opened in
+#: the filter tab, which is what the empty default says, and the consequence is
+#: that a project written before this build comes back with every replicate
+#: unlocked until it is looked at again. Every save now writes the field, and a
+#: version-3 build would report it as stray for the same reason as above.
+SCHEMA_VERSION = 4
 
 #: Project files are named `<video stem>.sieve.yaml` and live *beside* the
 #: video they describe. VISION step 1 fixes the layout — a source in a folder,
@@ -706,6 +713,22 @@ class Project(_Artifact):
     #: change a single cache key.
     checkpoints: tuple[str, ...] = ()
     outputs: tuple[Sink, ...] = ()
+    #: Replicates that have been opened in the filter tab, by `replicate_id`.
+    #: The geometry lock's whole state: a replicate named here has been tuned
+    #: *against*, so moving its box is refused until the user accepts what the
+    #: move costs (`gui/document.py`, `finish_roi_gesture`).
+    #:
+    #: Here rather than on `Replicate` for `checkpoints`' reason one field up,
+    #: and it is the same test: whether the GUI interposes a dialog changes
+    #: nothing about what a result *is*, so this must not reach a cache key.
+    #: Rule 7 admits no third place — a field is hashed or it is not — and
+    #: visitation is plainly the second kind.
+    #:
+    #: Not derived from non-empty `overrides` / `detector_overrides`, which
+    #: would have needed no field at all: a replicate can be opened, looked at,
+    #: and used to validate the shared baseline without ever taking a pin of
+    #: its own, and the derived version would leave exactly those unlocked.
+    visited: tuple[str, ...] = ()
 
     @field_validator("schema_version")
     @classmethod
@@ -781,6 +804,15 @@ class Project(_Artifact):
         for sink in self.outputs:
             if sink.node_id not in self.pipeline:
                 raise ValueError(f"sink names no such node: {sink.node_id!r}")
+        known = set(ids)
+        for replicate_id in self.visited:
+            # A checkpoint's staleness rule applied to the lock: an id naming
+            # no replicate is a lock nothing can engage, and it would survive
+            # every save waiting for a generated id to collide with it.
+            if replicate_id not in known:
+                raise ValueError(f"visited names no such replicate: {replicate_id!r}")
+        if len(set(self.visited)) != len(self.visited):
+            raise ValueError("duplicate visited replicate")
         return self
 
     # ---- serialization ---------------------------------------------------
@@ -874,6 +906,31 @@ class Project(_Artifact):
     def with_clip(self, clip: ClipRange | None) -> Self:
         """Copy carrying a different representative clip."""
         return self.model_copy(update={"clip": clip})
+
+    def with_visited(self, visited: Iterable[str]) -> Self:
+        """Copy whose geometry locks are exactly these replicates.
+
+        Kept in `replicates` order rather than in the caller's, and deduplicated
+        on the way: the field is a set the artifact has to spell as a tuple, and
+        letting the order follow the caller would make two documents that lock
+        the same arenas differ byte for byte in YAML — the stability `to_yaml`
+        exists to protect.
+
+        Filtering is what makes this safe to assign without revalidating, and
+        it has to be — `with_pipeline` is the validating one *because* the
+        graph is written last, and a check here would fire on the intermediate
+        document a save passes through, where the replicates are already in
+        place and the nodes their overrides name are not yet. So an id that
+        matches no replicate is dropped rather than refused: this is the path a
+        deleted arena's lock leaves the file by.
+        """
+        wanted = set(visited)
+        kept = tuple(
+            replicate.replicate_id
+            for replicate in self.replicates
+            if replicate.replicate_id in wanted
+        )
+        return self.model_copy(update={"visited": kept})
 
     # ---- per-replicate deviation -----------------------------------------
 

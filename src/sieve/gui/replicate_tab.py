@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSplitter,
     QTableView,
@@ -39,6 +40,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sieve.core.replicates import Replicate
 from sieve.core.types import ROI, VideoMetadata
 from sieve.gui.crop_tools import CropToolsPanel
 from sieve.gui.document import ReplicateDocument
@@ -183,6 +185,7 @@ class ReplicateTab(QWidget):
         self._view.roi_drawn.connect(self._document.add_roi)
         self._view.selection_requested.connect(self._on_video_clicked)
         self._view.roi_adjusted.connect(self._on_roi_adjusted)
+        self._view.roi_adjust_finished.connect(self._on_roi_adjust_finished)
         self._view.stamp_size_changed.connect(self._tools_panel.set_stamp_size)
         self._view.zoom_changed.connect(self._tools_panel.set_zoom)
         self._view.mode_changed.connect(self._tools_panel.set_mode)
@@ -313,6 +316,45 @@ class ReplicateTab(QWidget):
             self._document.set_roi(
                 row, roi, gesture=gesture, text=f"{verb} {self._document.at(row).name}"
             )
+
+    @Slot(int, int)
+    def _on_roi_adjust_finished(self, row: int, gesture: int) -> None:
+        """The button came up: let the document refuse the move if it must.
+
+        The tab supplies the wording and the modal; the rule lives on the
+        document. See `ReplicateDocument.finish_roi_gesture` for why the
+        question is asked here rather than on every mouse-move.
+        """
+        self._document.finish_roi_gesture(row, gesture, self._confirm_locked_move)
+
+    def _confirm_locked_move(self, replicate: Replicate) -> bool:
+        """Ask whether a tuned arena may be moved, and say what it costs.
+
+        Both sides, explicitly. "You may lose your work" is the overstatement
+        rule 6 forbids in its other direction, and it is worse than useless: a
+        user told their tuning is at risk declines moves that were free, and
+        stops reading the box by the third time. Nothing tuned is lost — pins
+        are parameter choices and re-resolve against the new box untouched —
+        and what does go is recomputation, which is worth a sentence and not a
+        warning triangle.
+        """
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("SIEVE")
+        box.setText(f"Move {replicate.name}?")
+        box.setInformativeText(
+            f"{replicate.name} has been tuned at its current position.\n\n"
+            "Its settings stay — every parameter you pinned re-resolves against "
+            "the new region.\n"
+            "Everything computed there is recomputed: the signal, the band "
+            "power, and the detections come back from scratch the next time you "
+            "look at it."
+        )
+        box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        box.button(QMessageBox.StandardButton.Ok).setText("Move it")
+        box.button(QMessageBox.StandardButton.Cancel).setText("Leave it")
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        return box.exec() == QMessageBox.StandardButton.Ok
 
     @Slot(str)
     def _on_mode_requested(self, mode: str) -> None:

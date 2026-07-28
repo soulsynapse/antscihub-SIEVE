@@ -151,6 +151,16 @@ class SetReplicateROI(QUndoCommand):
         if other._index != self._index:
             return False
         self._roi = other._roi
+        # A gesture that ends where it began is not an edit, and Qt is willing
+        # to say so: a command that reports itself obsolete after a merge is
+        # deleted off the stack rather than left there as an entry Ctrl+Z has
+        # to be pressed through. Two callers put the box back under the live
+        # token for exactly this — Escape (`VideoView._cancel_gesture`) and a
+        # declined geometry lock (`ReplicateDocument.finish_roi_gesture`) — and
+        # the second one's contract is that the user cannot tell afterwards
+        # that they dragged at all, which one stray undo entry would break.
+        if self._previous is not None and self._roi == self._previous.roi:
+            self.setObsolete(True)
         return True
 
     def redo(self) -> None:

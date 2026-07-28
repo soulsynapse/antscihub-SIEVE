@@ -51,6 +51,11 @@ def no_modal_dialogs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(QMessageBox, "warning", answering(QMessageBox.StandardButton.Ok))
     monkeypatch.setattr(QMessageBox, "question", answering(QMessageBox.StandardButton.No))
     monkeypatch.setattr(QMessageBox, "information", answering(QMessageBox.StandardButton.Ok))
+    # And the constructed kind, which the static helpers cannot cover: the
+    # geometry lock's dialog carries its own button wording, so it is a
+    # `QMessageBox` instance and its `exec` is what would hang. Cancel is the
+    # safe stand-in answer — the reply that changes nothing.
+    monkeypatch.setattr(QMessageBox, "exec", answering(QMessageBox.StandardButton.Cancel))
 
 
 @pytest.fixture

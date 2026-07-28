@@ -143,6 +143,23 @@ class TestIsolation:
         assert keys_for(project, left)["a"] != keys_for(project, right)["a"]
         assert keys_for(project, left)["a"] != keys_for(project, None)["a"]
 
+    def test_locking_a_replicate_moves_no_key(self) -> None:
+        # Rule 7's test applied to `Project.visited`: whether the GUI interposes
+        # a dialog in front of a geometry drag changes nothing about what a
+        # result *is*, so recording that an arena has been tuned must not cost
+        # a single cache entry. The failure this closes is not a wrong frame but
+        # a silent one — every arena recomputing from scratch the first time
+        # anybody opened it, which reads as the store being cold rather than as
+        # the lock being hashed.
+        arena = Replicate(roi=ARENA, name="Replicate 1")
+        project = make_project(arena)
+        before = keys_for(project, arena)
+
+        locked = project.with_visited([arena.replicate_id])
+
+        assert locked.visited == (arena.replicate_id,)
+        assert keys_for(locked, locked.replicate(arena.replicate_id)) == before
+
 
 class TestInputs:
     def test_backend_identity_leaves_the_key_only_when_the_filter_claims_agreement(

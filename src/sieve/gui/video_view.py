@@ -180,6 +180,14 @@ class VideoView(QWidget):
     #: knows whether a handle or the box body was grabbed, and "Undo Resize" on
     #: a drag that moved a box is a small lie the menu does not have to tell.
     roi_adjusted = Signal(int, ROI, int, str)
+    #: The button came up on a move or resize: row and the same token. The end
+    #: of the gesture is a fact only this widget holds — `roi_adjusted` looks
+    #: identical on the last step and on every step before it — and a rule that
+    #: has to run once per drag rather than once per pixel needs to be told.
+    #: The geometry lock (`ReplicateDocument.finish_roi_gesture`) is that rule.
+    #: Emitted after the final `roi_adjusted`, so a receiver sees the geometry
+    #: the gesture reached and not the one before it.
+    roi_adjust_finished = Signal(int, int)
     #: The stamp's size moved: a region was drawn, or the replicate being
     #: tuned changed and the stamp took its extent. Carries source pixels.
     stamp_size_changed = Signal(int, int)
@@ -605,6 +613,7 @@ class VideoView(QWidget):
             # by whether the cursor went anywhere.
             if self._is_adjustment(start, end):
                 self._emit_adjustment(adjustment, end)
+                self.roi_adjust_finished.emit(adjustment.row, adjustment.token)
             else:
                 self.selection_requested.emit(adjustment.row)
             return

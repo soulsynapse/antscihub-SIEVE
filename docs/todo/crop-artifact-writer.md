@@ -94,8 +94,8 @@ cut at), `format` (`"luma" | "bgr"`), `span` (start/end, reuse `ClipRange`),
 `cut_from` (the parent's `source_identity` string at write time), `decoder`
 (`decoder_identity()` at write time — provenance, deliberately *not* matched
 at serve time; the artifact outlives decoder upgrades by design). Bump
-`SCHEMA_VERSION` to 4 with the usual constant comment; a v3 document loads
-unchanged. Matching rules (used by the serving item, stated here once): a
+`SCHEMA_VERSION` to 5 with the usual constant comment — 4 was taken by the
+geometry lock's `visited` on 2026-07-28 — and a v4 document loads unchanged. Matching rules (used by the serving item, stated here once): a
 record backs a replicate iff `cut_from` equals the parent's current
 `source_identity`, `roi` equals the replicate's current ROI, and the file at
 `path` exists — a moved ROI or re-exported source misses by construction.

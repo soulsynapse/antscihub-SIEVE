@@ -17,7 +17,7 @@ whole window rather than one table in it.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -65,12 +65,27 @@ class DocumentState:
 
     Frozen and compared by value, which is what lets `restore` refuse a no-op:
     picking the snapshot you are already at should not stack a history entry.
+
+    The geometry lock's visitation set is absent for a different reason than
+    those three, and a deliberate one: it is edited by the GUI, but not by the
+    *user*. Rolling back to Friday's geometry does not unsee the arena, and a
+    restore that reinstated a dropped lock would re-arm it behind a user who
+    had already been asked and had already answered.
     """
 
     replicates: tuple[Replicate, ...]
     pipeline: Pipeline
     detector: DetectorSettings | None
     clip: ClipRange | None
+
+
+@dataclass(frozen=True)
+class _Gesture:
+    """One continuous geometry drag, and the box it started from."""
+
+    token: int
+    index: int
+    roi: ROI
 
 
 class ReplicateDocument(QObject):
@@ -124,6 +139,16 @@ class ReplicateDocument(QObject):
         self._source_fps = 0.0
         self._clip: ClipRange | None = None
         self._selected: int | None = None
+        #: Replicates opened in the filter tab, by id — the geometry lock's
+        #: state, saved with the project and *not* on the undo stack. See
+        #: `mark_visited`.
+        self._visited: set[str] = set()
+        #: The live geometry gesture: its token, the row, and where the box was
+        #: before the first step of it. Held so a refused move can be put back
+        #: exactly, which the command cannot do for itself — its `_previous` is
+        #: private and a caller asking for it would be asking the undo stack to
+        #: report a state it is in the middle of building.
+        self._gesture: _Gesture | None = None
         self.undo_stack = QUndoStack(self)
 
     # ---- reading ---------------------------------------------------------
@@ -375,6 +400,8 @@ class ReplicateDocument(QObject):
         self._detector = None
         self._clip = None
         self._selected = None
+        self._visited.clear()
+        self._gesture = None
         self.undo_stack.clear()
 
     # ---- project ---------------------------------------------------------
@@ -407,6 +434,11 @@ class ReplicateDocument(QObject):
         self._pipeline = project.pipeline
         self._detector = project.detector
         self._clip = self._fit_clip(project.clip)
+        # The locks come back with the file. A lock that evaporated on close
+        # would protect only the session that did not need it: the drag that
+        # costs a user a week of tuning is the one they make on Monday over
+        # footage they tuned on Friday.
+        self._visited = set(project.visited)
         # The first row, not none: a loaded project must open looking at *an*
         # arena, and with nothing remembered in the file the first is the only
         # unarbitrary one.
@@ -448,6 +480,11 @@ class ReplicateDocument(QObject):
         """
         return (
             project.with_replicates(tuple(self._replicates))
+            # After the replicates and before the graph: `with_visited` drops
+            # ids that name no replicate, which is how a deleted arena's lock
+            # leaves the file without the document having to prune on every
+            # removal — and be re-locked by an undo of that removal.
+            .with_visited(self._visited)
             .with_clip(self._clip)
             .with_detector(self._detector)
             .with_pipeline(self._pipeline)
@@ -650,10 +687,89 @@ class ReplicateDocument(QObject):
         leaves a region that is already inside untouched, so the safety net
         costs a stamp none of its exact extent.
         """
+        # Before the no-op check below, not after: a gesture whose first step
+        # lands the box exactly where it already was is still that gesture, and
+        # recording its origin one step later would record a box that has
+        # already moved.
+        if gesture is not None and (self._gesture is None or self._gesture.token != gesture):
+            self._gesture = _Gesture(token=gesture, index=index, roi=self._replicates[index].roi)
         fitted = self._fit(roi)
         if fitted == self._replicates[index].roi:
             return
         self.undo_stack.push(SetReplicateROI(self, index, fitted, gesture=gesture, text=text))
+
+    def finish_roi_gesture(
+        self,
+        index: int,
+        gesture: int,
+        confirm: Callable[[Replicate], bool],
+    ) -> None:
+        """Close a live drag, refusing it first if the arena has been tuned.
+
+        The geometry lock, and the whole of it. A replicate that has been opened
+        in the filter tab has had work done *against* its geometry, so moving
+        its box is refused and then offered: `confirm` is called once, with the
+        replicate as it now stands, and returns whether the user accepts what
+        the move costs. It is a callback rather than a dialog because the rule
+        is the document's and the wording is a widget's — and because a test
+        that had to click a modal would pin neither.
+
+        **On release, not per step.** `set_roi` fires per mouse-move, so a
+        refusal hung there would put a dialog under a held button; this is the
+        merged command's boundary, one drag and one question. Nothing is
+        interrupted mid-gesture and the box follows the pointer throughout —
+        the user sees the move they are being asked about.
+
+        Declined, the box goes back and *no command is left on the stack*: the
+        restore rides the gesture's own token, merges into the entry the drag
+        built, and takes it with it (`SetReplicateROI.mergeWith`). The user
+        should be unable to tell afterwards that they dragged, which one no-op
+        undo entry would give away.
+
+        Accepted, the replicate leaves the visitation set — it has not been
+        opened in the filter tab *at this geometry*, so the lock re-arms the
+        next time it is. Nothing else is done to make the old results go away:
+        the ROI is hashed, so a moved box misses every entry keyed on the old
+        one by construction, and `replicate_id` is deliberately not rotated —
+        it is what the pins, the visitation set, and the undo history are all
+        keyed on.
+        """
+        live, self._gesture = self._gesture, None
+        if live is None or live.token != gesture or live.index != index:
+            return
+        replicate = self._replicates[index]
+        if replicate.roi == live.roi or replicate.replicate_id not in self._visited:
+            return
+        if confirm(replicate):
+            self._visited.discard(replicate.replicate_id)
+            return
+        self.set_roi(index, live.roi, gesture=gesture)
+        self._gesture = None
+
+    def mark_visited(self, index: int) -> None:
+        """Record that the replicate at `index` has been opened for tuning.
+
+        The lock's trigger, and it is *being looked at*, not *having pins*: an
+        arena can be opened, watched, and used to confirm that the shared
+        baseline works without ever deviating from it, and that is real work
+        done against its geometry.
+
+        Not an undoable command. Undo returns the user's edits, and looking at
+        an arena is not one — a Ctrl+Z that un-looked at footage would be
+        claiming to reverse something that happened to the user rather than to
+        the document. The consequence at the other end is the reason to accept
+        it: undoing an accepted move restores the tuned geometry with the lock
+        still down, and the next look re-arms it.
+        """
+        if 0 <= index < len(self._replicates):
+            self._visited.add(self._replicates[index].replicate_id)
+
+    def is_visited(self, index: int) -> bool:
+        """Whether the replicate at `index` has been opened for tuning."""
+        return (
+            0 <= index < len(self._replicates)
+            and self._replicates[index].replicate_id in self._visited
+        )
 
     def set_all_to_size(self, width: int, height: int) -> None:
         """Give every replicate this extent, each held about its own centre.

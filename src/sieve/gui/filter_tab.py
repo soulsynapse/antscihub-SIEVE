@@ -538,6 +538,25 @@ class FilterTab(QWidget):
         """This tab owns the pane's format from the moment it is the page."""
         super().showEvent(event)
         self._player.set_viewport_luma(self._gray_toggle.effective_luma)
+        self._record_visit()
+
+    def _record_visit(self) -> None:
+        """Note that the selected arena has been opened for tuning.
+
+        This tab *is* the trigger of the geometry lock — "opened in the filter
+        tab" is the condition, and being the page is the whole of it. Recorded
+        on becoming visible and on every selection change while visible, which
+        between them cover both ways an arena arrives here: the user walked
+        over to it, or it arrived under them.
+
+        Deliberately not conditioned on a render finishing. A frame that never
+        arrived is still an arena the user chose and looked at, and a lock that
+        engaged only on success would leave the slowest footage — the footage
+        most worth not re-rendering — unprotected.
+        """
+        index = self._document.selected_index
+        if index is not None:
+            self._document.mark_visited(index)
 
     def hideEvent(self, event: QHideEvent) -> None:
         """Leaving the tab hands the pane back in colour, whatever made it gray.
@@ -1999,6 +2018,8 @@ class FilterTab(QWidget):
         """
         self._refresh_from_document()
         self.resubmit()
+        if self.isVisible():
+            self._record_visit()
 
     @Slot(int, QImage)
     def _on_frame_changed(self, index: int, image: QImage) -> None:

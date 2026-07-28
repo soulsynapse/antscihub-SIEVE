@@ -94,13 +94,9 @@ SPECS: tuple[IndexSpec, ...] = (
             ColumnSpec("Commit", "commit"),
             ColumnSpec("Summary", "summary"),
         ),
-        # `settled` is required rather than optional, and `none` is a legal
-        # value, because optional is how the hand-written table it replaces
-        # died: it grew 20 -> 26 rows in one afternoon and then took twelve
-        # commits of real building without gaining one. Adding a row was a
-        # separate step in a separate file that nothing asked for. Requiring
-        # the key makes *deciding* the step, and `complete_item.py` scaffolds
-        # it with a marker the hygiene test fails on.
+        # `none` is legal because optional is how the hand-written table this
+        # replaces died: 20 -> 26 rows in one afternoon, then twelve commits
+        # of building without gaining one.
         required=("title", "date", "commit", "summary", "settled"),
     ),
     IndexSpec(
@@ -492,13 +488,11 @@ def aspiration_lines(items: Sequence[Entry]) -> list[str]:
 
 SETTLED_NAME = "SETTLED.md"
 
-#: Keys every `settled:` row carries. `do_not_redecide` is the load-bearing
-#: one — the other two only say where to look.
+#: `do_not_redecide` is the load-bearing one; the other two say where to look.
 SETTLED_KEYS = ("what", "where", "do_not_redecide")
 
-#: The spelling for "this item settled nothing a later item must not
-#: re-decide". Written out rather than allowed to be absent, so the answer is
-#: a decision somebody made and not a field somebody skipped.
+#: Written out rather than allowed to be absent, so the answer is a decision
+#: somebody made and not a field somebody skipped.
 SETTLED_NONE = "none"
 
 

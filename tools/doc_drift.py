@@ -61,10 +61,6 @@ DOC_STATUS = ("current", "record")
 #: SETTLED.md and .state.md, which are current by construction or the gate is
 #: already red; IDEAS.md and SCRATCH.md are workbenches that are drained
 #: rather than maintained.
-#:
-#: A third `status: working` was tried for the second pair and cut — it was an
-#: enum member, a branch, a paragraph and a test to say "not in the report",
-#: which is what this tuple already said.
 UNSTAMPED = ("SETTLED.md", ".state.md", "IDEAS.md", "SCRATCH.md")
 
 

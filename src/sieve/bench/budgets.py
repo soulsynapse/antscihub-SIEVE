@@ -230,23 +230,17 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
 )
 
 
-#: Budgets a CI benchmark actually asserts a limit on, as opposed to publishes.
-#: The two are independent gaps and this is the wider one: a published budget
-#: shows a session it was missed, but only a timed one catches the miss before
-#: it ships.
+#: Timed and published are independent gaps, and this is the wider one: a
+#: published budget shows a session it was missed, a timed one catches the
+#: miss before it ships.
 #:
-#: Declared rather than derived for the same reason `WITHOUT_PRODUCER` is —
-#: `src/` may not read `tests/`, and a number nobody wrote down is a number
-#: nobody has to defend. `tests/bench/test_budget_producers.py` scans every
-#: `within_budget("...")` call site in `tests/bench/` and fails in both
-#: directions, so this cannot claim coverage that does not exist and cannot
-#: hide coverage that arrived.
+#: Declared, not derived, because `src/` may not read `tests/`.
+#: `tests/bench/test_budget_producers.py` scans every `within_budget("...")`
+#: call site and fails in both directions.
 #:
-#: The composition is the honest part, and it is worse than the count looks.
-#: `open_to_first_frame` and `scrub_settle` are pre-pipeline, so of the nine
-#: in-pipeline budgets — the regime the product is sold on — exactly one
-#: (`density_rebuild`) has a clock on it in CI, and that one is the entry in
-#: `IN_DEBT`.
+#: The composition is worse than the count: `open_to_first_frame` and
+#: `scrub_settle` are pre-pipeline, so of the ten in-pipeline budgets exactly
+#: one (`density_rebuild`) has a CI clock, and that one is the `IN_DEBT` entry.
 TIMED: frozenset[str] = frozenset(
     {
         "open_to_first_frame",

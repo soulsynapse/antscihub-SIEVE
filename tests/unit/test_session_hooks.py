@@ -19,12 +19,8 @@ from session_hooks import main, primer, tree
 
 
 def _fake_git(responses: dict[tuple[str, ...], str]) -> Callable[..., str]:
-    """Stand in for `_git`, keyed by the exact argument tuple.
-
-    Anything unlisted returns `""`, which is what the real `_git` returns
-    on a git failure — so an unanticipated call reads as the failure path
-    rather than as a test-harness error.
-    """
+    """Unlisted calls return `""` — the real `_git`'s failure path, so an
+    unanticipated call reads as a git failure and not a harness error."""
 
     def fake(*args: str) -> str:
         return responses.get(args, "")

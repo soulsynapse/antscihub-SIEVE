@@ -47,11 +47,9 @@ REPO_ROOT = DOCS_ROOT.parent
 PATH_SUFFIXES = (".py", ".md", ".toml", ".yml", ".yaml", ".json", ".lock", ".qmd", ".cfg")
 ROOT_FILES = (".importlinter", ".gitignore")
 
-#: `[text](target)`, with the target captured. Bare `<http...>` autolinks and
-#: image links share the shape and are filtered by scheme below.
+#: Autolinks and image links share this shape; `path_claims` filters by scheme.
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 
-#: Text between single backticks, no newline inside.
 BACKTICKED = re.compile(r"`([^`\n]+)`")
 
 
@@ -73,7 +71,6 @@ def body_of(path: Path) -> str:
 
 
 def live_docs() -> list[Path]:
-    """The documents a session is expected to act on today."""
     docs = [REPO_ROOT / "CLAUDE.md"]
     docs += [
         path
@@ -182,7 +179,6 @@ def resolves(claim: str, absent: set[str]) -> bool:
 
 
 def dangling(docs: Iterable[Path]) -> list[tuple[str, str]]:
-    """`(doc, path)` for every path claim that resolves to nothing."""
     absent = declared_absent()
     missing: list[tuple[str, str]] = []
     for doc in docs:

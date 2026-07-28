@@ -4,18 +4,15 @@ Both hooks exist because of recorded incidents, which is the only bar a hook
 should clear — it fires with no explanation attached, so a nice-to-have is not
 enough.
 
-**`primer`** prints `docs/.state.md` as SessionStart context. That file exists
-specifically to orient a session in one read instead of four, and nothing
-guaranteed it was read; a session that skipped it re-derived what it says, at
-roughly the ~11% of active time transcript mining attributed to re-orientation
+**`primer`**: nothing guaranteed `.state.md` was read, and a session that
+skipped it re-derived what it says — transcript mining attributed ~11% of
+active time to re-orientation
 (`docs/findings/2026.07.27-session-time-is-generation-not-tools.md`).
 
-**`tree`** reports uncommitted files and unpushed commits when the model stops.
-Three incidents: a 99-file uncommitted sweep discovered on arrival, 23 commits
+**`tree`**: a 99-file uncommitted sweep discovered on arrival, 23 commits
 sitting local because "commit" was read as "done", and the work loop
-self-blocking on a dirty tree after a usage halt. It prints nothing when the
-tree is clean and everything is pushed — a hook that speaks every turn is a
-hook that gets ignored on the turn it matters.
+self-blocking on a dirty tree after a usage halt. Silence when clean is the
+point — a hook that speaks every turn is ignored on the turn it matters.
 
 Deliberately not here: anything that runs the suite. The gate is the gate, it
 is ~35 seconds, and a hook that runs it turns every stop into a wait.

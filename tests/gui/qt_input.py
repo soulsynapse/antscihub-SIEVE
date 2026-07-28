@@ -55,6 +55,11 @@ def click(widget: QWidget, point: QPointF) -> None:
     drag(widget, point, point)
 
 
+def leave(widget: QWidget) -> None:
+    """The cursor leaving the widget, which is what clears a hover readout."""
+    widget.leaveEvent(QEvent(QEvent.Type.Leave))
+
+
 def wheel(widget: QWidget, point: QPointF, detents: int) -> None:
     """Scroll `detents` notches at `point`; positive is towards the user's screen."""
     widget.wheelEvent(

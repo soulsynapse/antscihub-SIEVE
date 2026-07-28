@@ -47,6 +47,14 @@ DEFAULT_WINDOW = ClipRange(start=0, end=300)
 #: so every frame owns exactly one column and a click can name any of them.
 STRIP_WIDTH = 1000
 
+#: A y inside the track but *below* the window's header band, so a press there
+#: is a scrub. Named because the difference between this and `HEADER_Y` is the
+#: whole distinction between seeking and grabbing the window.
+SCRUB_Y = 30.0
+
+#: A y inside the header band along the window's top edge.
+HEADER_Y = 8.0
+
 
 class TestTheWindowIsAlwaysThere:
     def test_a_bound_document_has_a_window_before_anything_is_marked(
@@ -212,6 +220,7 @@ class TestTheStrip:
         qtbot.addWidget(band)
         band.resize(STRIP_WIDTH, band.height())
         band.set_source_frames(SOURCE_FRAMES)
+        band.set_timebase(SOURCE_FPS)
         return band
 
     def test_the_band_covers_the_span_it_was_given(self, strip: TimelineStrip) -> None:
@@ -293,7 +302,7 @@ class TestTheBarDrivesTheWindow:
     ) -> None:
         document.move_window_to(400)
         before = document.undo_stack.count()
-        qt_input.click(bar.strip, QPointF(500.0, 10.0))
+        qt_input.click(bar.strip, QPointF(500.0, SCRUB_Y))
         assert document.clip == ClipRange(start=400, end=700)
         assert document.undo_stack.count() == before
 
@@ -301,7 +310,7 @@ class TestTheBarDrivesTheWindow:
         self, bar: TimelineBar, document: ReplicateDocument
     ) -> None:
         document.move_window_to(400)
-        qt_input.click(bar.strip, QPointF(900.0, 10.0))
+        qt_input.click(bar.strip, QPointF(900.0, SCRUB_Y))
         assert document.clip == ClipRange(start=601, end=901)
 
     def test_the_strip_repaints_from_the_document(
@@ -312,6 +321,153 @@ class TestTheBarDrivesTheWindow:
         assert bar.strip.window_rect().left() == pytest.approx(400.0)
         document.undo_stack.undo()
         assert bar.strip.window_rect().left() == pytest.approx(0.0)
+
+
+class TestTheWindowBracketIsGrabbable:
+    """The drag, and the four ways it can be wrong.
+
+    A press on a handle can seek before it resizes, which throws the playhead
+    across the asset on the way to a resize. Containment can be tested before
+    the handles, which makes the handles unreachable. A drag can write per
+    mouse-move, which is one undo entry per pixel travelled. And it can commit a
+    window shorter than anything anybody tunes against.
+    """
+
+    @pytest.fixture
+    def bar(self, qtbot: QtBot, document: ReplicateDocument) -> Iterator[TimelineBar]:
+        """The bar over a window at frames 400-700: left edge at x=400, right at x=700."""
+        player = VideoPlayer()
+        widget = TimelineBar(player, document)
+        qtbot.addWidget(widget)
+        widget.strip.resize(STRIP_WIDTH, widget.strip.height())
+        document.move_window_to(400)
+        yield widget
+        player.shutdown()
+
+    def test_a_press_on_an_edge_does_not_seek(self, bar: TimelineBar) -> None:
+        """`pressed` is the seek, so classifying after emitting is already too late.
+
+        The failure is visible rather than subtle: reaching for the left handle
+        would throw the playhead to the window's start before the resize began.
+        """
+        sought: list[int] = []
+        bar.strip.pressed.connect(sought.append)
+        qt_input.press(bar.strip, QPointF(400.0, SCRUB_Y))
+        assert sought == []
+
+    def test_an_edge_wins_over_the_body_it_sits_in(
+        self, bar: TimelineBar, document: ReplicateDocument
+    ) -> None:
+        """A point on the edge is inside the window too — the edge is tested first."""
+        qt_input.drag(bar.strip, QPointF(400.0, SCRUB_Y), QPointF(250.0, SCRUB_Y))
+        assert document.clip == ClipRange(start=250, end=700)
+
+    def test_the_right_handle_resizes_and_pins_the_start(
+        self, bar: TimelineBar, document: ReplicateDocument
+    ) -> None:
+        qt_input.drag(bar.strip, QPointF(700.0, SCRUB_Y), QPointF(899.0, SCRUB_Y))
+        assert document.clip == ClipRange(start=400, end=900)
+
+    def test_the_header_moves_the_window_whole(
+        self, bar: TimelineBar, document: ReplicateDocument
+    ) -> None:
+        """Length held: this is the same edit as typing a new start."""
+        qt_input.drag(bar.strip, QPointF(500.0, HEADER_Y), QPointF(600.0, HEADER_Y))
+        assert document.clip == ClipRange(start=500, end=800)
+
+    def test_a_press_below_the_header_is_still_a_scrub(self, bar: TimelineBar) -> None:
+        """Most of the window's area is not a handle, or the band could not be seeked."""
+        sought: list[int] = []
+        bar.strip.pressed.connect(sought.append)
+        qt_input.press(bar.strip, QPointF(500.0, SCRUB_Y))
+        assert sought == [500]
+
+    def test_a_drag_shorter_than_a_second_stops_at_a_second(
+        self, bar: TimelineBar, document: ReplicateDocument
+    ) -> None:
+        """Thirty frames at 30 fps. The floor is a duration, not a frame count."""
+        qt_input.drag(bar.strip, QPointF(700.0, SCRUB_Y), QPointF(405.0, SCRUB_Y))
+        assert document.clip == ClipRange(start=400, end=430)
+
+    def test_one_drag_is_one_undo_entry(
+        self, bar: TimelineBar, document: ReplicateDocument
+    ) -> None:
+        """`SetClip` has no `mergeWith`: a write per move is a shredded history."""
+        before = document.undo_stack.count()
+        qt_input.press(bar.strip, QPointF(700.0, SCRUB_Y))
+        for x in (720.0, 760.0, 800.0, 850.0):
+            qt_input.move(bar.strip, QPointF(x, SCRUB_Y))
+        assert document.undo_stack.count() == before
+        qt_input.release(bar.strip, QPointF(899.0, SCRUB_Y))
+
+        assert document.undo_stack.count() == before + 1
+        document.undo_stack.undo()
+        assert document.clip == ClipRange(start=400, end=700)
+
+    def test_the_bracket_follows_the_drag_before_it_is_written(
+        self, bar: TimelineBar, document: ReplicateDocument
+    ) -> None:
+        """The outline is local, and the document is untouched until release."""
+        qt_input.press(bar.strip, QPointF(400.0, SCRUB_Y))
+        qt_input.move(bar.strip, QPointF(250.0, SCRUB_Y))
+
+        assert bar.strip.window_rect().left() == pytest.approx(250.0)
+        assert document.clip == ClipRange(start=400, end=700)
+
+    def test_the_bracket_and_the_boxes_agree_afterwards(self, bar: TimelineBar) -> None:
+        """The lockstep claim, checked on the numbers actually on screen."""
+        qt_input.drag(bar.strip, QPointF(700.0, SCRUB_Y), QPointF(899.0, SCRUB_Y))
+        start_seconds, length_seconds = bar.window_seconds
+        assert start_seconds == pytest.approx(400.0 / SOURCE_FPS, abs=0.01)
+        assert length_seconds == pytest.approx(500.0 / SOURCE_FPS, abs=0.01)
+        assert bar.strip.window_rect().left() == pytest.approx(400.0)
+        assert bar.strip.window_rect().right() == pytest.approx(900.0)
+
+
+class TestTheHoverBubble:
+    @pytest.fixture
+    def strip(self, qtbot: QtBot) -> TimelineStrip:
+        band = TimelineStrip()
+        qtbot.addWidget(band)
+        band.resize(STRIP_WIDTH, band.height())
+        band.set_source_frames(SOURCE_FRAMES)
+        band.set_timebase(SOURCE_FPS)
+        return band
+
+    def test_it_names_the_frame_under_the_cursor_in_both_units(self, strip: TimelineStrip) -> None:
+        qt_input.move(strip, QPointF(300.5, SCRUB_Y))
+        assert strip.hover_frame == 300
+        assert strip.bubble_text() == "0:10.000   frame 300"
+
+    def test_it_appears_without_a_button_held(self, strip: TimelineStrip) -> None:
+        """The widget hears an unpressed move only because it tracks the mouse."""
+        assert strip.bubble_rect().isEmpty()
+        qt_input.move(strip, QPointF(300.5, SCRUB_Y))
+        assert not strip.bubble_rect().isEmpty()
+
+    @pytest.mark.parametrize("x", [1.0, 999.0])
+    def test_it_stays_inside_the_widget_at_either_end(self, strip: TimelineStrip, x: float) -> None:
+        """Otherwise the readout runs off the edge exactly where the user is marking."""
+        qt_input.move(strip, QPointF(x, SCRUB_Y))
+        box = strip.bubble_rect()
+        assert box.left() >= 0.0
+        assert box.right() <= float(STRIP_WIDTH)
+
+    def test_it_clears_when_the_cursor_leaves(self, strip: TimelineStrip) -> None:
+        """A bubble left behind is a claim about where a cursor that has gone is."""
+        qt_input.move(strip, QPointF(300.5, SCRUB_Y))
+        qt_input.leave(strip)
+        assert strip.hover_frame is None
+        assert strip.bubble_rect().isEmpty()
+
+    def test_without_a_timebase_it_says_only_what_it_knows(self, qtbot: QtBot) -> None:
+        """No fps means no second, and a guessed timecode is worse than none."""
+        band = TimelineStrip()
+        qtbot.addWidget(band)
+        band.resize(STRIP_WIDTH, band.height())
+        band.set_source_frames(SOURCE_FRAMES)
+        qt_input.move(band, QPointF(300.5, SCRUB_Y))
+        assert band.bubble_text() == "frame 300"
 
 
 class TestPlaybackIsBounded:

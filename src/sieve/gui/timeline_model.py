@@ -22,7 +22,10 @@ is stored is not the question. The question is which one survives an edit, and
 the answer is the length: the user's gesture is "keep the ten seconds, move
 them", and two independent marks cannot express it — an in point dragged past
 the out point has to invent a new out point, and whatever it invents is a span
-nobody asked for.
+nobody asked for. `started_at` and `ended_at_handle` are the one gesture that
+*is* two marks — a bracket handle held under the cursor — and they carry a
+floor for exactly the reason the keystroke marks do not need one: the invented
+span is what a drag would produce continuously on the way past zero.
 
 **The playback rule** wraps at the window's end. It is here rather than in
 `player.py` because "the last frame shown before looping is `stop - 1`" is an
@@ -122,6 +125,37 @@ def ended_at(window: ClipRange | None, frame: int, frame_count: int) -> ClipRang
     if window is not None and window.start < end:
         start = window.start
     return ClipRange(start=start, end=end)
+
+
+def started_at(window: ClipRange, frame: int, frame_count: int, floor: int) -> ClipRange:
+    """`window` with its start dragged to `frame`, its end pinned. The left handle.
+
+    Not `moved_to`, which is the *body* drag: a handle moves one edge and the
+    other must not travel, or the user resizing from the left would watch the
+    right edge slide away from the frame they were holding it against.
+
+    `floor` is the shortest window a drag may produce. A drag past it stops
+    there rather than being refused outright — a handle that goes dead under the
+    cursor reads as a broken widget, where one that stops reads as a limit. A
+    source shorter than `floor` is its own floor.
+    """
+    limit = min(max(floor, 1), frame_count)
+    end = min(max(window.end, limit), frame_count)
+    return ClipRange(start=min(max(frame, 0), end - limit), end=end)
+
+
+def ended_at_handle(window: ClipRange, frame: int, frame_count: int, floor: int) -> ClipRange:
+    """`window` with its end dragged past `frame`, its start pinned. The right handle.
+
+    The mirror of `started_at`, and deliberately *not* `ended_at`: an out point
+    marked before the origin releases the origin to the head of the source,
+    because a keystroke that does nothing says nothing. A handle drag says
+    something continuously — the bracket is under the cursor — so the same input
+    means "as short as you are allowed", not "start over from zero".
+    """
+    limit = min(max(floor, 1), frame_count)
+    start = min(max(window.start, 0), frame_count - limit)
+    return ClipRange(start=start, end=min(max(frame + 1, start + limit), frame_count))
 
 
 def fitted(window: ClipRange | None, frame_count: int) -> ClipRange | None:

@@ -658,6 +658,25 @@ class ReplicateDocument(QObject):
         origin = min(window.start, self._source_frames - length)
         self._push_clip(ClipRange(start=origin, end=origin + length), "Set Window Length")
 
+    def place_window(self, start: int, end: int) -> None:
+        """Put the window at exactly `[start, end)`. The bracket-handle drag.
+
+        The only window edit that names both edges, because a handle drag is the
+        only gesture that has already decided both — the strip resolved the
+        cursor into a span before it let go, and re-deriving one edge from a
+        length here would fight it. What is clamped here is only the structural
+        invariant (inside the source, at least one frame); the one-second floor
+        on a *drag* is the strip's, and deliberately not imposed on the keystroke
+        marks, which are allowed to name a single frame.
+        """
+        if self._source_frames <= 0:
+            return
+        origin = min(max(start, 0), self._source_frames - 1)
+        self._push_clip(
+            ClipRange(start=origin, end=min(max(end, origin + 1), self._source_frames)),
+            "Resize Window",
+        )
+
     def bring_window_to(self, frame: int) -> None:
         """Move the window the least distance that puts `frame` inside it.
 

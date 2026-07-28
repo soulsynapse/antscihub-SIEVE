@@ -23,12 +23,17 @@ from sieve.gui.timeline_model import (
     default_window,
     effective_window,
     ended_at,
+    ended_at_handle,
     fitted,
     moved_to,
     playback_step,
+    started_at,
 )
 
 SOURCE_FRAMES = 1000
+
+#: A one-second floor at 30 fps, which is what a handle drag on the strip carries.
+FLOOR = 30
 
 
 class TestTheWindowHoldsItsLength:
@@ -65,6 +70,46 @@ class TestTheWindowHoldsItsLength:
         """`end == start` is a range `ClipRange` refuses to construct at all."""
         window = ClipRange(start=100, end=400)
         assert ended_at(window, 100, SOURCE_FRAMES) == ClipRange(start=100, end=101)
+
+
+class TestTheBracketHandles:
+    """A handle drag is the one window gesture that moves one edge and not the other.
+
+    Each of these is a distinct way the pair can be wrong: the pinned edge can
+    travel, the floor can be crossed, and a floor larger than the asset can
+    produce a span that does not exist.
+    """
+
+    @pytest.fixture
+    def window(self) -> ClipRange:
+        return ClipRange(start=400, end=700)
+
+    def test_the_left_handle_moves_the_start_and_pins_the_end(self, window: ClipRange) -> None:
+        assert started_at(window, 250, SOURCE_FRAMES, FLOOR) == ClipRange(start=250, end=700)
+
+    def test_the_right_handle_moves_the_end_and_pins_the_start(self, window: ClipRange) -> None:
+        """Inclusive of the frame under the cursor, like every other out mark."""
+        assert ended_at_handle(window, 799, SOURCE_FRAMES, FLOOR) == ClipRange(start=400, end=800)
+
+    def test_a_left_drag_past_the_end_stops_at_the_floor(self, window: ClipRange) -> None:
+        """Not `ended_at`'s release-the-origin rule: a held handle stops, it does not jump."""
+        assert started_at(window, 690, SOURCE_FRAMES, FLOOR) == ClipRange(start=670, end=700)
+        assert started_at(window, 5000, SOURCE_FRAMES, FLOOR) == ClipRange(start=670, end=700)
+
+    def test_a_right_drag_past_the_start_stops_at_the_floor(self, window: ClipRange) -> None:
+        assert ended_at_handle(window, 100, SOURCE_FRAMES, FLOOR) == ClipRange(start=400, end=430)
+
+    def test_a_handle_dragged_off_the_source_stops_against_it(self, window: ClipRange) -> None:
+        assert started_at(window, -50, SOURCE_FRAMES, FLOOR) == ClipRange(start=0, end=700)
+        assert ended_at_handle(window, 5000, SOURCE_FRAMES, FLOOR) == ClipRange(
+            start=400, end=SOURCE_FRAMES
+        )
+
+    def test_a_source_shorter_than_the_floor_is_its_own_floor(self) -> None:
+        """Twenty frames of video cannot hold a one-second window, and must not pretend to."""
+        window = ClipRange(start=0, end=20)
+        assert started_at(window, 15, 20, FLOOR) == ClipRange(start=0, end=20)
+        assert ended_at_handle(window, 2, 20, FLOOR) == ClipRange(start=0, end=20)
 
 
 class TestContaining:

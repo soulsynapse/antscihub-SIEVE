@@ -20,12 +20,30 @@ coarse. A release is the commitment again, and is what guarantees they land
 exactly where they let go however coarse the drag was. Collapsing any two of
 them either makes the drag decode every pixel or leaves the user a frame or two
 from where they stopped.
+
+**Why a window drag is two-tier and a scrub is not.** A scrub emits on every
+move because a guess is what the user is asking to see. A window drag paints
+from a local draft and writes through exactly once, on release, because
+`commands.SetClip` has no `mergeWith` — a command per mouse-move would be one
+undo entry per pixel travelled, and the history is the thing that cannot be
+un-shredded afterwards. The draft is the one piece of window state this widget
+holds, and it exists only between a press and its release.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal, Slot
-from PySide6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPaintEvent, QPen
+from enum import Enum, auto
+
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal, Slot
+from PySide6.QtGui import (
+    QColor,
+    QFontMetricsF,
+    QImage,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPen,
+)
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
@@ -40,7 +58,7 @@ from sieve.core.pipeline_model import ClipRange
 from sieve.core.types import VideoMetadata
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.player import VideoPlayer
-from sieve.gui.timeline_model import Geometry
+from sieve.gui.timeline_model import Geometry, ended_at_handle, moved_to, started_at
 
 #: Height of the band. Tall enough to be a target for a mouse rather than a
 #: hairline to be aimed at, and sized now for the coverage and detection lanes
@@ -51,15 +69,54 @@ STRIP_HEIGHT = 44
 #: Vertical inset of the painted track inside that height.
 _TRACK_INSET = 4.0
 
+#: How far either side of a window edge counts as grabbing that edge. Wider than
+#: the painted line, because the line is a claim about a frame and the handle is
+#: a target for a hand; six is what `video_view.py` settled on for crop handles.
+_EDGE_GRAB = 6.0
+
+#: Depth of the darker band along the window's top that moves it whole.
+_HEADER_HEIGHT = 9.0
+
+#: Shortest window a drag may produce. A window under a second is a misclick —
+#: nothing in VISION step 4 is tuned against less — and the floor is in seconds
+#: rather than frames so it means the same thing at 30 fps and at 240.
+MIN_WINDOW_SECONDS = 1.0
+
 _PLAY_GLYPH = "▶"
 _PAUSE_GLYPH = "⏸"
 
 _TRACK = QColor(30, 30, 36)
 _WINDOW = QColor(90, 170, 255, 70)
 _WINDOW_EDGE = QColor(90, 170, 255)
+_WINDOW_HEADER = QColor(90, 170, 255, 110)
+_WINDOW_HEADER_HELD = QColor(90, 170, 255, 180)
 _PLAYHEAD = QColor(240, 240, 245)
+_BUBBLE = QColor(18, 18, 22, 235)
+_BUBBLE_EDGE = QColor(80, 84, 96)
+_BUBBLE_TEXT = QColor(232, 233, 238)
+
+#: Padding inside the hover bubble, horizontal and vertical.
+_BUBBLE_PAD = (8.0, 3.0)
 
 _EMPTY_HINT = "Open a video to begin"
+
+
+class Grab(Enum):
+    """What a press on the band is taking hold of.
+
+    Classified once, on press, and held for the gesture: a drag that
+    re-classified as it travelled would change what it was doing halfway
+    through, because the window it is testing against is moving under it.
+    """
+
+    #: Neither edge nor header: the position itself, which is a seek.
+    SCRUB = auto()
+    #: The window's left edge. Resizes, pinning the right.
+    START = auto()
+    #: The window's right edge. Resizes, pinning the left.
+    END = auto()
+    #: The header band. Moves the window whole, holding its length.
+    BODY = auto()
 
 
 def format_timecode(seconds: float) -> str:
@@ -88,16 +145,30 @@ class TimelineStrip(QWidget):
     scrubbed = Signal(int)
     #: Mouse-up. The commitment again: land here exactly.
     committed = Signal(int)
+    #: A finished header drag, as the window's new origin. Release only.
+    window_moved = Signal(int)
+    #: A finished handle drag, as the window's new span. Release only.
+    window_resized = Signal(int, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._frame_count = 0
+        self._fps = 0.0
         self._window: ClipRange | None = None
         self._playhead = 0
         self._dragging = False
+        # The window as the drag has it so far, painted in place of the
+        # document's until release. None whenever no handle is held.
+        self._draft: ClipRange | None = None
+        self._grab: Grab | None = None
+        self._grab_offset = 0
+        self._hover: int | None = None
         self.setFixedHeight(STRIP_HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.SizeHorCursor)
+        # Without this the widget hears a move only while a button is down, and
+        # the bubble would appear on press rather than on approach.
+        self.setMouseTracking(True)
 
     # ---- what it paints --------------------------------------------------
 
@@ -105,6 +176,16 @@ class TimelineStrip(QWidget):
         """Establish the asset's length, which is the whole horizontal axis."""
         self._frame_count = max(frame_count, 0)
         self.update()
+
+    def set_timebase(self, fps: float) -> None:
+        """Tell the band what a second is.
+
+        Two things need it and neither is a frame index: the bubble reads a
+        timecode, and the floor on a window drag is a duration. Not truth the
+        strip owns — it is the source's, restated here for the same reason the
+        frame count is.
+        """
+        self._fps = max(fps, 0.0)
 
     def set_window(self, window: ClipRange | None) -> None:
         """Show `window` as the working span, or nothing for None."""
@@ -127,6 +208,28 @@ class TimelineStrip(QWidget):
         """
         return Geometry(frame_count=self._frame_count, width=float(self.width()))
 
+    @property
+    def shown_window(self) -> ClipRange | None:
+        """The span on screen: the draft while a handle is held, else the document's.
+
+        Everything that reads the window — the paint, the hit test, the rect a
+        test asks about — goes through here, so a drag cannot be visible in one
+        of them and absent from another.
+        """
+        return self._draft if self._draft is not None else self._window
+
+    @property
+    def floor_frames(self) -> int:
+        """`MIN_WINDOW_SECONDS` in frames, or one frame when there is no timebase.
+
+        One rather than a guessed frame count: without an fps the container has
+        not said how long a second is, and a floor invented here would refuse
+        drags for a duration nobody stated.
+        """
+        if self._fps <= 0.0:
+            return 1
+        return max(round(MIN_WINDOW_SECONDS * self._fps), 1)
+
     def window_rect(self) -> QRectF:
         """Where the working window is painted, empty when there is none.
 
@@ -135,14 +238,90 @@ class TimelineStrip(QWidget):
         can ask about.
         """
         geometry = self.geometry_now()
-        if self._window is None or geometry.is_empty:
+        window = self.shown_window
+        if window is None or geometry.is_empty:
             return QRectF()
-        left, right = geometry.span(self._window.start, self._window.end)
+        left, right = geometry.span(window.start, window.end)
         return QRectF(left, _TRACK_INSET, right - left, self.height() - 2.0 * _TRACK_INSET)
+
+    def header_rect(self) -> QRectF:
+        """The band along the window's top that moves it whole, empty when there is none."""
+        window = self.window_rect()
+        if window.isEmpty():
+            return QRectF()
+        return QRectF(window.left(), window.top(), window.width(), _HEADER_HEIGHT)
+
+    def column_centre(self, frame: int) -> float:
+        """Centre of the column `frame` occupies. Where a mark on it is drawn."""
+        return self.geometry_now().centre_of_frame(frame)
 
     def playhead_x(self) -> float:
         """Centre of the column the playhead sits in."""
-        return self.geometry_now().centre_of_frame(self._playhead)
+        return self.column_centre(self._playhead)
+
+    # ---- the hit test ----------------------------------------------------
+
+    def grab_at(self, position: QPointF) -> Grab:
+        """What a press at `position` would take hold of.
+
+        **Edges before containment**, which is the rule `video_view.py` already
+        settled for crop handles: a point on an edge is inside the window too,
+        so a containment test run first makes the edges unreachable and leaves
+        the user resizing by typing. The header is tested after both, because it
+        is the only zone whose claim is about a region rather than a line.
+        """
+        window = self.window_rect()
+        if window.isEmpty():
+            return Grab.SCRUB
+        x = position.x()
+        if abs(x - window.left()) <= _EDGE_GRAB:
+            return Grab.START
+        if abs(x - window.right()) <= _EDGE_GRAB:
+            return Grab.END
+        if self.header_rect().contains(position):
+            return Grab.BODY
+        return Grab.SCRUB
+
+    # ---- the hover bubble ------------------------------------------------
+
+    @property
+    def hover_frame(self) -> int | None:
+        """The frame under the cursor, or None when the cursor is not on the band."""
+        return self._hover
+
+    def bubble_text(self) -> str:
+        """What the bubble says: where the cursor is, in both units the user thinks in.
+
+        Coverage and the nearest detection belong here too and are absent, not
+        blank: neither has a producer yet (see the coverage-and-detection-lanes
+        item), and a line reading "not examined" from a module that has never
+        been told anything is rule 6's failure exactly — unexamined rendered as
+        quiet.
+        """
+        if self._hover is None:
+            return ""
+        if self._fps <= 0.0:
+            return f"frame {self._hover:,}"
+        return f"{format_timecode(self._hover / self._fps)}   frame {self._hover:,}"
+
+    def bubble_rect(self) -> QRectF:
+        """Where the bubble sits, empty when there is nothing to say.
+
+        Clamped to the widget, so a cursor near either end reads a bubble that
+        stops at the edge rather than one trailing off it. It sits *below* the
+        header band rather than at the very top of the track: the bubble follows
+        the cursor, the header is what the cursor is often approaching, and a
+        readout that covers the handle it is guiding you to is worse than one
+        sitting a few pixels lower.
+        """
+        if self._hover is None or self.geometry_now().is_empty:
+            return QRectF()
+        pad_x, pad_y = _BUBBLE_PAD
+        metrics = QFontMetricsF(self.font())
+        width = metrics.horizontalAdvance(self.bubble_text()) + 2.0 * pad_x
+        height = metrics.height() + 2.0 * pad_y
+        left = max(min(self.column_centre(self._hover) - width / 2.0, self.width() - width), 0.0)
+        return QRectF(left, _TRACK_INSET + _HEADER_HEIGHT, width, height)
 
     # ---- painting --------------------------------------------------------
 
@@ -167,35 +346,126 @@ class TimelineStrip(QWidget):
         window = self.window_rect()
         if not window.isEmpty():
             painter.fillRect(window, _WINDOW)
-            painter.setPen(QPen(_WINDOW_EDGE, 1.0))
+            held = self._grab is Grab.BODY
+            painter.fillRect(self.header_rect(), _WINDOW_HEADER_HELD if held else _WINDOW_HEADER)
+            edge = 2.0 if self._grab in (Grab.START, Grab.END) else 1.0
+            painter.setPen(QPen(_WINDOW_EDGE, edge))
             painter.drawRect(window.adjusted(0.5, 0.5, -0.5, -0.5))
 
         x = self.playhead_x()
         painter.setPen(QPen(_PLAYHEAD, 1.0))
         painter.drawLine(QPointF(x, 0.0), QPointF(x, float(self.height())))
+        self._paint_bubble(painter)
         painter.end()
 
-    # ---- scrubbing -------------------------------------------------------
+    def _paint_bubble(self, painter: QPainter) -> None:
+        """The hover readout, and nothing while a drag is under way.
+
+        A drag already answers "where am I" through the thing being dragged, and
+        a bubble tracking the cursor through a resize covers the edge the user
+        is placing.
+        """
+        box = self.bubble_rect()
+        if box.isEmpty() or self._dragging or self._grab is not None:
+            return
+        painter.setPen(QPen(_BUBBLE_EDGE, 1.0))
+        painter.setBrush(_BUBBLE)
+        painter.drawRoundedRect(box, 3.0, 3.0)
+        painter.setPen(_BUBBLE_TEXT)
+        painter.drawText(
+            box,
+            int(Qt.AlignmentFlag.AlignCenter),
+            self.bubble_text(),
+        )
+
+    # ---- scrubbing and dragging ------------------------------------------
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """Take the position under the cursor as a committed one."""
+        """Classify first, and only then take the position as a committed one.
+
+        The classification has to come before the emit and not after it:
+        `pressed` *is* the seek, so a strip that emitted unconditionally would
+        jump the playhead to the window's left edge the moment the user reached
+        for that edge to resize it, before the resize had begun.
+        """
         if self.geometry_now().is_empty or event.button() is not Qt.MouseButton.LeftButton:
             return
-        self._dragging = True
-        self.pressed.emit(self.geometry_now().frame_at(event.position().x()))
+        grab = self.grab_at(event.position())
+        if grab is Grab.SCRUB:
+            self._dragging = True
+            self.pressed.emit(self.geometry_now().frame_at(event.position().x()))
+            return
+        window = self.shown_window
+        if window is None:
+            return
+        self._grab = grab
+        self._draft = window
+        self._grab_offset = self.geometry_now().frame_at(event.position().x()) - window.start
+        self.update()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         """Follow the drag. A guess, and the player is allowed to approximate it."""
-        if not self._dragging:
-            return
-        self.scrubbed.emit(self.geometry_now().frame_at(event.position().x()))
+        position = event.position()
+        self._hover = self.geometry_now().frame_at(position.x())
+        if self._dragging:
+            self.scrubbed.emit(self._hover)
+        elif self._grab is not None:
+            self._draft = self._dragged_to(position.x())
+        else:
+            self._follow_cursor(position)
+        self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        """Land exactly where the user let go, however coarse the drag was."""
-        if not self._dragging or event.button() is not Qt.MouseButton.LeftButton:
+        """Land exactly where the user let go, or write the drag through once."""
+        if event.button() is not Qt.MouseButton.LeftButton:
             return
-        self._dragging = False
-        self.committed.emit(self.geometry_now().frame_at(event.position().x()))
+        if self._dragging:
+            self._dragging = False
+            self.committed.emit(self.geometry_now().frame_at(event.position().x()))
+            return
+        if self._grab is None:
+            return
+        window = self._dragged_to(event.position().x())
+        grab, self._grab, self._draft = self._grab, None, None
+        self.update()
+        if grab is Grab.BODY:
+            self.window_moved.emit(window.start)
+        else:
+            self.window_resized.emit(window.start, window.end)
+
+    def leaveEvent(self, event: QEvent) -> None:
+        """Drop the bubble. A cursor that has left names no frame."""
+        del event
+        if self._hover is not None:
+            self._hover = None
+            self.update()
+
+    def _dragged_to(self, x: float) -> ClipRange:
+        """The window this drag has arrived at. Never written; only painted, until release."""
+        window = self._draft if self._draft is not None else self._window
+        frame = self.geometry_now().frame_at(x)
+        if window is None:
+            return ClipRange(start=0, end=max(self._frame_count, 1))
+        if self._grab is Grab.START:
+            return started_at(window, frame, self._frame_count, self.floor_frames)
+        if self._grab is Grab.END:
+            return ended_at_handle(window, frame, self._frame_count, self.floor_frames)
+        return moved_to(window, frame - self._grab_offset, self._frame_count)
+
+    def _follow_cursor(self, position: QPointF) -> None:
+        """Say what the zone under the cursor does before it is pressed.
+
+        The band is one surface with three behaviours on it and no visual
+        boundary between two of them; the cursor is where that is announced.
+        """
+        self.setCursor(
+            {
+                Grab.START: Qt.CursorShape.SizeHorCursor,
+                Grab.END: Qt.CursorShape.SizeHorCursor,
+                Grab.BODY: Qt.CursorShape.OpenHandCursor,
+                Grab.SCRUB: Qt.CursorShape.PointingHandCursor,
+            }[self.grab_at(position)]
+        )
 
 
 class TimelineBar(QWidget):
@@ -237,6 +507,18 @@ class TimelineBar(QWidget):
     def strip(self) -> TimelineStrip:
         """The band. Exposed for the window's shortcuts and for tests."""
         return self._strip
+
+    @property
+    def window_seconds(self) -> tuple[float, float]:
+        """The window as the two boxes read it: (start, length), in seconds.
+
+        Exposed for the same reason `strip` is. "The bracket and the boxes can
+        never disagree" is the lockstep claim this bar exists to keep, and it is
+        only checkable if the numbers actually on screen can be read back —
+        recomputing them from the document would test the arithmetic twice and
+        the lockstep not at all.
+        """
+        return self._start_box.value(), self._length_box.value()
 
     # ---- construction ----------------------------------------------------
 
@@ -294,6 +576,12 @@ class TimelineBar(QWidget):
         self._strip.pressed.connect(self._on_pressed)
         self._strip.scrubbed.connect(self._player.scrub)
         self._strip.committed.connect(self._on_committed)
+        # Straight at the document's own window verbs: a header drag holds the
+        # length and so is the same edit as a typed start, and a handle drag has
+        # already resolved both edges. Neither needs a translation here, and the
+        # Edit menu reads back the gesture the user made.
+        self._strip.window_moved.connect(self._document.move_window_to)
+        self._strip.window_resized.connect(self._document.place_window)
 
         self._document.clip_changed.connect(self._on_window_changed)
 
@@ -309,6 +597,7 @@ class TimelineBar(QWidget):
         """
         frames = self._document.source_frames
         self._strip.set_source_frames(frames)
+        self._strip.set_timebase(self._document.source_fps)
         enabled = frames > 0
         for widget in (self._play_button, self._start_box, self._length_box, self._strip):
             widget.setEnabled(enabled)

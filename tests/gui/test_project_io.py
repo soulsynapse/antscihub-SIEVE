@@ -43,9 +43,9 @@ from sieve.core.pipeline_model import (
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
 from sieve.gui.document import ReplicateDocument
+from sieve.gui.history import SnapshotStore, history_directory
 from sieve.gui.main_window import MainWindow
 from sieve.gui.preferences import Preferences
-from tests.gui.conftest import answering
 
 pytestmark = pytest.mark.gui
 
@@ -93,12 +93,10 @@ def window(qtbot: QtBot, tmp_path: Path) -> Iterator[MainWindow]:
     main = MainWindow(Preferences(settings))
     qtbot.addWidget(main)
     yield main
-    # Declared clean before closing, because teardown is not a user decision.
-    # Two tests here deliberately refuse a close, and a window that refuses one
-    # never reaches `_player.shutdown()` — the decode thread outlives the
-    # QApplication and takes the interpreter down with it, mid-suite and with no
-    # traceback naming the test that did it.
-    _document(main).undo_stack.setClean()
+    # No declared-clean dance any more: nothing in the window can refuse a
+    # close, so teardown always reaches `_player.shutdown()`. A window that
+    # refused one used to leave the decode thread outliving the QApplication,
+    # which took the interpreter down mid-suite with no traceback naming it.
     main.close()
 
 
@@ -134,6 +132,27 @@ def _choosing(path: str) -> Callable[..., tuple[str, str]]:
         return path, ""
 
     return chosen
+
+
+def _recording(seen: list[object]) -> Callable[..., QMessageBox.StandardButton]:
+    """A message-box stand-in that logs the call instead of answering a question.
+
+    The `no_modal_dialogs` fixture already answers everything, so a leftover
+    prompt would not hang the suite — it would pass silently. Recording the
+    calls is what makes "asks nothing" assertable rather than assumed.
+    """
+
+    def reply(*args: object, **_kwargs: object) -> QMessageBox.StandardButton:
+        seen.append(args)
+        return QMessageBox.StandardButton.Ok
+
+    return reply
+
+
+def _history_texts(video: Path) -> list[str]:
+    """What autosave kept for the project conventionally filed beside `video`."""
+    store = SnapshotStore(history_directory(project_path_for(video)))
+    return [snapshot.text for snapshot in store.entries()]
 
 
 def _save_as(monkeypatch: pytest.MonkeyPatch, window: MainWindow, path: Path) -> bool:
@@ -292,33 +311,80 @@ class TestUnsavedChanges:
         assert _save_as(monkeypatch, window, project_path_for(video)) is True
         assert window.isWindowModified() is False
 
-    def test_cancelling_the_prompt_refuses_the_close(
+    def test_closing_with_unsaved_edits_asks_nothing_and_keeps_the_edit(
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Cancel means cancel. Returning True here loses the session silently."""
+        """The close proceeds, and the work it dropped is in the history.
+
+        This is the pair of assertions the prompt used to stand in for. Either
+        one alone would pass on a broken build: a close that asks nothing and
+        keeps nothing is the silent loss the prompt existed to prevent, and a
+        history written by a close the user could still refuse is the state
+        before this item.
+        """
+        asked: list[object] = []
+        monkeypatch.setattr(QMessageBox, "warning", _recording(asked))
         _open(qtbot, window, video)
         _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
-        monkeypatch.setattr(QMessageBox, "warning", answering(QMessageBox.StandardButton.Cancel))
 
-        assert window.confirm_discard() is False
-        assert window.close() is False
+        assert window.close() is True
+        assert asked == []
+        assert _history_texts(video) == ["Add Replicate 1"]
 
-    def test_backing_out_of_the_save_dialog_is_not_consent_to_discard(
-        self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
+    def test_closing_the_video_keeps_the_edit_it_dropped(
+        self, qtbot: QtBot, window: MainWindow, video: Path
     ) -> None:
-        """Save, then Cancel at the file dialog, is a user who has saved nothing.
+        """The hole the prompt used to cover on this path, not on `closeEvent`'s.
 
-        The bug this exists for is `confirm_discard` treating "the user chose
-        Save" as the end of the question rather than waiting to hear whether a
-        file was actually written.
+        `close_video` stopped the pending snapshot rather than flushing it, which
+        was correct while a prompt stood in front of it — the timer would
+        otherwise have fired after the unbind and snapshotted the emptiness. With
+        nothing asking, stopping it is the silent loss, so the flush moved above
+        the close and the stop below it stayed.
         """
         _open(qtbot, window, video)
         _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
-        monkeypatch.setattr(QMessageBox, "warning", answering(QMessageBox.StandardButton.Save))
+
+        window.close_video()
+
+        assert _history_texts(video) == ["Add Replicate 1"]
+        assert len(_document(window)) == 0
+
+    def test_opening_another_video_over_unsaved_edits_asks_nothing(
+        self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Same rule on the other three paths, of which this is the one with a dialog.
+
+        `open_video_dialog` is where the prompt came *before* the file chooser,
+        so a leftover guard here shows up as a question the user answers before
+        they have even picked a file.
+        """
+        asked: list[object] = []
+        monkeypatch.setattr(QMessageBox, "warning", _recording(asked))
+        _open(qtbot, window, video)
+        _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
+        monkeypatch.setattr(QFileDialog, "getOpenFileName", _choosing(""))
+
+        window.open_video_dialog()
+
+        assert asked == []
+
+    def test_backing_out_of_the_save_dialog_writes_nothing(
+        self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Save As, then Cancel at the file dialog, is a user who has saved nothing.
+
+        Save and Save As outlive the prompt — a file the user chose the location
+        of is a different artifact from a session history — so the outcome a
+        cancelled chooser reports still has to be the truthful one.
+        """
+        _open(qtbot, window, video)
+        _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
         monkeypatch.setattr(QFileDialog, "getSaveFileName", _choosing(""))
 
-        assert window.confirm_discard() is False
+        assert window.save_project_as() is False
         assert window.isWindowModified() is True
+        assert not project_path_for(video).exists()
 
 
 class TestNeighbourOpen:

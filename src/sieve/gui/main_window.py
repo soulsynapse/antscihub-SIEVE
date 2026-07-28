@@ -58,11 +58,6 @@ VIDEO_FILTER = (
 
 PROJECT_FILTER = f"SIEVE projects (*{PROJECT_SUFFIX});;All files (*)"
 
-#: Asked before anything that discards the document. Names the file rather than
-#: the concept where there is one, because "this project" is ambiguous the
-#: moment a user has two open in two windows.
-UNSAVED_PROMPT = "There are unsaved changes to {name}."
-
 #: Shown once, when the player gives up on decoding every drag position. Says
 #: what changed, why, and where to refuse it — in that order, because the user
 #: is mid-drag and will read the first clause and nothing else.
@@ -411,9 +406,11 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def open_video_dialog(self) -> None:
-        """Prompt for a video file and load it."""
-        if not self.confirm_discard():
-            return
+        """Prompt for a video file and load it.
+
+        Nothing is asked about the document this replaces: autosave has it, and
+        File ▸ History is the way back.
+        """
         start_directory = ""
         remembered = self._preferences.last_video
         if remembered is not None and remembered.parent.is_dir():
@@ -425,8 +422,6 @@ class MainWindow(QMainWindow):
     @Slot()
     def open_project_dialog(self) -> None:
         """Prompt for a project file and load it, video and all."""
-        if not self.confirm_discard():
-            return
         start = self._project_path.parent if self._project_path is not None else None
         if start is None:
             remembered = self._preferences.last_video
@@ -469,9 +464,10 @@ class MainWindow(QMainWindow):
     def save_project(self) -> bool:
         """Write to the file this project came from, choosing one if there is none.
 
-        Returns whether anything was written — `confirm_discard` needs the
-        answer, because a Save the user backed out of at the file dialog must
-        not be treated as consent to discard.
+        Returns whether anything was written. No caller needs the answer now
+        that nothing asks before discarding, but a Save the user backed out of
+        at the file dialog and a Save that succeeded are different outcomes, and
+        the return value is the only place that distinction exists.
         """
         if self._project_path is None:
             return self.save_project_as()
@@ -488,32 +484,6 @@ class MainWindow(QMainWindow):
         if not chosen:
             return False
         return self._write_project(_with_project_suffix(Path(chosen)))
-
-    def confirm_discard(self) -> bool:
-        """Ask about unsaved edits before something throws them away.
-
-        Returns whether to proceed. Guards every path that replaces or drops the
-        document — opening a video, opening a project, closing the video, and
-        closing the window — because each of them silently destroyed a session's
-        work before this existed.
-        """
-        if self._document.undo_stack.isClean():
-            return True
-        name = self._project_path.name if self._project_path is not None else "this project"
-        answer = QMessageBox.warning(
-            self,
-            "SIEVE",
-            UNSAVED_PROMPT.format(name=name),
-            QMessageBox.StandardButton.Save
-            | QMessageBox.StandardButton.Discard
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Save,
-        )
-        if answer == QMessageBox.StandardButton.Cancel:
-            return False
-        if answer == QMessageBox.StandardButton.Save:
-            return self.save_project()
-        return True
 
     # ---- project plumbing ------------------------------------------------
 
@@ -728,9 +698,15 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def close_video(self) -> None:
-        """Unload the current video, its replicates, and the project they were in."""
-        if not self.confirm_discard():
-            return
+        """Unload the current video, its replicates, and the project they were in.
+
+        The pending snapshot below is flushed rather than dropped for the same
+        reason `closeEvent` flushes one: the edit a rollback is most likely to
+        reach for is the last one before the document went away.
+        """
+        if self._history_timer.isActive():
+            self._history_timer.stop()
+            self._write_snapshot()
         self._player.close()
         self._preview.close()
         self._document.unbind_source()
@@ -889,15 +865,11 @@ class MainWindow(QMainWindow):
             action.setEnabled(enabled)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Offer to save, then stop the decode thread before the window goes away.
+        """Flush the history, then stop the decode thread before the window goes away.
 
-        The prompt comes first and can refuse the close outright. Shutting the
-        player down before asking would leave a window the user chose to keep
-        with a dead decoder in it.
+        Nothing here can refuse the close any more: a window that asked whether
+        to keep unsaved work is a window whose answer autosave already knows.
         """
-        if not self.confirm_discard():
-            event.ignore()
-            return
         # The last edit of a session is the one a rollback is most likely to be
         # reaching for, and a zero-interval timer still pending here would never
         # fire — the event loop this window is leaving is what would have run it.

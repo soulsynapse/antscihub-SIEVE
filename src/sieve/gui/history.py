@@ -1,9 +1,9 @@
 """Automatic project history: whole documents, one per user-meaningful action.
 
-The safety net that replaces the save prompt. `confirm_discard` existed because
-every path that dropped the document destroyed a session's work; that reason is
-transferred here rather than retired, which is why this lands before the prompts
-come out — see `docs/completed-todo/` for the item that decided it.
+The safety net that replaced the save prompt. `confirm_discard` existed because
+every path that dropped the document destroyed a session's work; that reason was
+transferred here rather than retired, and the prompt came out once it had been —
+see `docs/completed-todo/` for the two items that did it, in that order.
 
 Three decisions are worth stating here because the shape of this module is all
 three:

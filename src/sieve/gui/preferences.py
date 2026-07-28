@@ -39,6 +39,14 @@ DEFAULT_PROXY_WIDTH: Final = 1280
 MIN_PROXY_WIDTH: Final = 320
 MAX_PROXY_WIDTH: Final = 3840
 
+#: Decode the viewport in grayscale. A speed decision, not a viewing one: the
+#: luma path is ~2.4x cheaper per frame and the graphs read luma either way.
+#: Written by the viewport's own toggle (`gui/gray_toggle.py`), never by a
+#: dialog — the person who needs it is watching a stuttering pane and does not
+#: know colour is what they are paying for.
+VIEWPORT_LUMA: Final = "decode/viewport_luma"
+DEFAULT_VIEWPORT_LUMA: Final = False
+
 #: The last video successfully opened, reoffered at the next launch. Session
 #: state rather than a tunable: it has no entry in the preferences pane and is
 #: written by the window, not by the user.
@@ -109,6 +117,15 @@ class Preferences(QObject):
         )
 
     @property
+    def viewport_luma(self) -> bool:
+        """Whether the viewport decodes grayscale for speed."""
+        return _as_bool(self._settings.value(VIEWPORT_LUMA), DEFAULT_VIEWPORT_LUMA)
+
+    @viewport_luma.setter
+    def viewport_luma(self, enabled: bool) -> None:
+        self._store(VIEWPORT_LUMA, bool(enabled), current=self.viewport_luma)
+
+    @property
     def last_video(self) -> Path | None:
         """The video to reoffer at launch, or `None` if there is nothing to offer.
 
@@ -143,7 +160,7 @@ class Preferences(QObject):
         statement about how the application should behave, and forgetting which
         file the user was working on is not one of the things they asked for.
         """
-        for key in (ADAPTIVE_SCRUB, COARSE_INTERVAL_SECONDS, PROXY_WIDTH):
+        for key in (ADAPTIVE_SCRUB, COARSE_INTERVAL_SECONDS, PROXY_WIDTH, VIEWPORT_LUMA):
             self._settings.remove(key)
         self._settings.sync()
         self.changed.emit()

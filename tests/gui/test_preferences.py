@@ -19,6 +19,7 @@ from sieve.gui.preferences import (
     DEFAULT_ADAPTIVE_SCRUB,
     DEFAULT_COARSE_INTERVAL_SECONDS,
     DEFAULT_PROXY_WIDTH,
+    DEFAULT_VIEWPORT_LUMA,
     MAX_PROXY_WIDTH,
     MIN_PROXY_WIDTH,
     PROXY_WIDTH,
@@ -44,6 +45,7 @@ class TestDefaults:
         assert preferences.adaptive_scrub is DEFAULT_ADAPTIVE_SCRUB
         assert preferences.coarse_interval_seconds == DEFAULT_COARSE_INTERVAL_SECONDS
         assert preferences.proxy_width == DEFAULT_PROXY_WIDTH
+        assert preferences.viewport_luma is DEFAULT_VIEWPORT_LUMA
 
 
 class TestRoundTrip:
@@ -53,11 +55,13 @@ class TestRoundTrip:
         preferences.adaptive_scrub = False
         preferences.coarse_interval_seconds = 2.5
         preferences.proxy_width = 1920
+        preferences.viewport_luma = True
 
         reopened = Preferences(QSettings(settings.fileName(), QSettings.Format.IniFormat))
         assert reopened.adaptive_scrub is False
         assert reopened.coarse_interval_seconds == pytest.approx(2.5)
         assert reopened.proxy_width == 1920
+        assert reopened.viewport_luma is True
 
 
 class TestLastVideo:

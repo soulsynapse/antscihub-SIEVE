@@ -11,12 +11,15 @@ box's dimensions, and what the source video is. That pane is a control surface
 and a provenance claim in one, which is what `REFINED-VISION.md` asks for when
 it says the settings should "point to the parent".
 
-**The left half is the picture and nothing else.** There is no seeker here and
-no clip editor: both are `gui/timeline_bar.py`, one band across the bottom of
-the window and outside every tab. A transport living inside a tab answers
-"where am I" once per tab, and the copies drift; a transport that spans the
-window answers it once. What this tab keeps is the only thing that is genuinely
-about *this* tab — the frame, the boxes drawn on it, and the table of them.
+**The left half is the picture, and the one control that is about the picture
+itself.** There is no seeker here and no clip editor: both are
+`gui/timeline_bar.py`, one band across the bottom of the window and outside
+every tab. A transport living inside a tab answers "where am I" once per tab,
+and the copies drift; a transport that spans the window answers it once. What
+this tab keeps is the frame, the boxes drawn on it, the table of them — and
+the gray toggle (`gui/gray_toggle.py`), which sits on the viewport because the
+person who needs it is watching *this* pane stutter and must not have to know
+a preferences dialog exists to find out that colour is what it costs.
 """
 
 from __future__ import annotations
@@ -39,7 +42,9 @@ from sieve.core.types import ROI, VideoMetadata
 from sieve.gui.crop_tools import CropToolsPanel
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.editing_sources import EditingSources
+from sieve.gui.gray_toggle import GrayToggle
 from sieve.gui.player import VideoPlayer
+from sieve.gui.preferences import Preferences
 from sieve.gui.replicate_table import Column, EditingAwareDelegate, ReplicateTableModel
 from sieve.gui.video_view import NO_SELECTION, CropMode, VideoView
 
@@ -78,10 +83,18 @@ class ReplicateTab(QWidget):
         player: VideoPlayer,
         document: ReplicateDocument,
         parent: QWidget | None = None,
+        *,
+        preferences: Preferences | None = None,
     ) -> None:
         super().__init__(parent)
         self._player = player
         self._document = document
+        # The toggle needs somewhere to persist its manual half. The window
+        # passes its store; a tab built bare (tests, mostly) gets a default
+        # one, exactly as `MainWindow` itself does when none is injected.
+        self._gray_toggle = GrayToggle(
+            preferences if preferences is not None else Preferences(parent=self)
+        )
         #: Who currently claims the keyboard. Two independent sources feed it —
         #: the table's cell editors and the crop-tools fields — and the window
         #: is told only when the aggregate flips.
@@ -127,14 +140,25 @@ class ReplicateTab(QWidget):
         """The crop tools and source information occupying the right half."""
         return self._tools_panel
 
+    @property
+    def gray_toggle(self) -> GrayToggle:
+        """The viewport's decode-format control. The window feeds it renders."""
+        return self._gray_toggle
+
     # ---- construction ----------------------------------------------------
 
     def _build_viewport_panel(self) -> QWidget:
-        """The picture, and nothing under it."""
+        """The picture, with the picture's one control in a strip above it."""
+        strip = QHBoxLayout()
+        strip.setContentsMargins(4, 2, 4, 2)
+        strip.addStretch(1)
+        strip.addWidget(self._gray_toggle)
+
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        layout.addLayout(strip)
         layout.addWidget(self._view, 1)
         return panel
 
@@ -175,6 +199,12 @@ class ReplicateTab(QWidget):
     def _connect(self) -> None:
         self._player.opened.connect(self._on_opened)
         self._player.frame_changed.connect(self._on_frame_changed)
+
+        # The toggle decides the format, the player obeys it. Pushed once at
+        # construction too: a persisted gray preference must reach the decode
+        # thread before the first video opens, not on the first click.
+        self._gray_toggle.luma_changed.connect(self._player.set_viewport_luma)
+        self._player.set_viewport_luma(self._gray_toggle.effective_luma)
 
         self._view.roi_drawn.connect(self._document.add_roi)
         self._view.selection_requested.connect(self._on_video_clicked)

@@ -373,6 +373,12 @@ class PreviewRunner(QObject):
     opened = Signal()
     #: The footage could not be opened for previewing.
     open_failed = Signal(str)
+    #: A *window* render is outstanding (in flight or pending), or none is any
+    #: more. Single-frame renders — composite refreshes, wizard hovers — do not
+    #: count: they are over in ~100 ms and arrive one at a time, and a consumer
+    #: treating them as "a render is filling" would flap once per playhead
+    #: move. This is what the viewport's auto-gray policy listens to.
+    window_render_changed = Signal(bool)
 
     _open_requested = Signal(str, str)
     _render_requested = Signal(RenderRequest)
@@ -419,6 +425,7 @@ class PreviewRunner(QObject):
         self._revision = 0
         self._in_flight: RenderRequest | None = None
         self._pending: RenderRequest | None = None
+        self._window_render_active = False
 
         # The one thing both threads touch. Written here on every submission
         # and on every close, read by the worker once per frame.
@@ -459,6 +466,11 @@ class PreviewRunner(QObject):
     def revision(self) -> int:
         """The newest submitted render. Anything older is dropped on arrival."""
         return self._revision
+
+    @property
+    def window_render_active(self) -> bool:
+        """Whether a window render is outstanding. `window_render_changed`'s state."""
+        return self._window_render_active
 
     @property
     def has_ticked(self) -> bool:
@@ -504,6 +516,7 @@ class PreviewRunner(QObject):
         # its last.
         self._revision += 1
         self._wanted.set(self._revision)
+        self._note_slots_changed()
         self._close_requested.emit()
 
     def shutdown(self) -> None:
@@ -598,6 +611,7 @@ class PreviewRunner(QObject):
             # The worker notices at its next frame boundary and reports back;
             # `_settle` is what issues this.
             self._pending = request
+        self._note_slots_changed()
 
     def _issue(self, request: RenderRequest) -> None:
         self._in_flight = request
@@ -617,6 +631,23 @@ class PreviewRunner(QObject):
         pending, self._pending = self._pending, None
         if pending is not None:
             self._issue(pending)
+        self._note_slots_changed()
+
+    def _note_slots_changed(self) -> None:
+        """Recompute whether a window render is outstanding, announcing a flip.
+
+        Derived from the two slots rather than kept as its own state machine:
+        every path that starts, supersedes, finishes, fails, abandons, or
+        closes a render already mutates the slots, so reading them is the one
+        way this cannot drift from what the worker is actually doing.
+        """
+        active = any(
+            request is not None and request.frame_index is None
+            for request in (self._in_flight, self._pending)
+        )
+        if active != self._window_render_active:
+            self._window_render_active = active
+            self.window_render_changed.emit(active)
 
     def _is_current(self, revision: int) -> bool:
         """Whether anything arriving for `revision` is still worth forwarding."""

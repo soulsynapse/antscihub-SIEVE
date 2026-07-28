@@ -84,6 +84,7 @@ src/sieve/gui/replicate_table.py        # per-replicate rows, numeric ROI entry
 src/sieve/gui/crop_tools.py             # draw/stamp toggle, stamp size, magnifier reset, parent info
 src/sieve/gui/editing_sources.py        # who claims the keyboard: a set of named sources, Qt-free
 src/sieve/gui/video_view.py             # the four crop gestures and the source<->widget mapping
+src/sieve/gui/gray_toggle.py            # the viewport's decode-format control: manual, auto while rendering, pin
 src/sieve/gui/zoom.py                   # the magnifier: zoom, pan centre, and the fit it is clamped against
 src/sieve/gui/filter_tab.py             # the tuning surface: composite, chain, plots
 src/sieve/gui/chain_stack.py            # the step cards

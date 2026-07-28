@@ -87,6 +87,7 @@ class VideoPlayer(QObject):
     _open_requested = Signal(str)
     _frame_requested = Signal(int)
     _proxy_width_changed = Signal(int)
+    _luma_changed = Signal(bool)
     _close_requested = Signal()
 
     def __init__(
@@ -127,9 +128,12 @@ class VideoPlayer(QObject):
         self._worker = DecodeWorker()
         self._worker.moveToThread(self._thread)
 
+        self._viewport_luma = False
+
         self._open_requested.connect(self._worker.open)
         self._frame_requested.connect(self._worker.request_frame)
         self._proxy_width_changed.connect(self._worker.set_proxy_width)
+        self._luma_changed.connect(self._worker.set_luma)
         self._close_requested.connect(self._worker.close)
         self._worker.opened.connect(self._on_opened)
         self._worker.failed.connect(self._on_failed)
@@ -181,6 +185,38 @@ class VideoPlayer(QObject):
         # size the moment the width changes and must not be served again.
         self._cache.clear()
         self._proxy_width_changed.emit(preferences.proxy_width)
+
+    @property
+    def viewport_luma(self) -> bool:
+        """Whether the viewport is currently being decoded grayscale."""
+        return self._viewport_luma
+
+    def set_viewport_luma(self, enabled: bool) -> None:
+        """Switch the viewport's decode format between colour and luma.
+
+        Not part of `apply_preferences`, because the effective format is not
+        the stored preference: the viewport toggle (`gui/gray_toggle.py`)
+        folds the preference together with the render-in-progress policy and
+        hands the answer here.
+
+        Three things must happen with the flip, and the first two are the
+        same discipline a source change follows. The cache is dropped — it is
+        keyed by frame index and says nothing about format, so a cache warmed
+        in colour would hand colour frames back into a gray viewport wherever
+        the user happened to have scrubbed. The generation is bumped — a
+        decode already in flight will come back in the old format, and the
+        stamp is what stops it being painted or cached. And the frame on
+        screen is re-requested at the new format, so the playhead survives
+        the reopen and the pane never blanks.
+        """
+        if enabled == self._viewport_luma:
+            return
+        self._viewport_luma = enabled
+        self._cache.clear()
+        self._coalescer.new_generation()
+        self._luma_changed.emit(enabled)
+        if self._metadata is not None:
+            self._request(self._current_index, RequestKind.EXACT)
 
     # ---- transport -------------------------------------------------------
 

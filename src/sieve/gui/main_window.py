@@ -94,7 +94,9 @@ class MainWindow(QMainWindow):
 
         self._player = VideoPlayer(self)
         self._document = ReplicateDocument(self)
-        self._replicate_tab = ReplicateTab(self._player, self._document, self)
+        self._replicate_tab = ReplicateTab(
+            self._player, self._document, self, preferences=self._preferences
+        )
         self._timeline = TimelineBar(self._player, self._document, self)
 
         # The graph side of the window. The filter tab below is now what draws
@@ -304,6 +306,12 @@ class MainWindow(QMainWindow):
         self._preview.open_failed.connect(self._on_preview_unavailable)
         self._preview.render_finished.connect(self._on_render_finished)
         self._preview.render_failed.connect(self._on_render_failed)
+        # The auto-gray policy's input: the viewport drops to luma while a
+        # window render is filling, because the two contend for the decode
+        # bandwidth that is actually scarce. The toggle owns the policy and
+        # the tab owns the toggle; what the window adds is only that the
+        # runner and the tab exist in the same place here.
+        self._preview.window_render_changed.connect(self._replicate_tab.gray_toggle.set_rendering)
         self._filter_tab.status_message.connect(self.statusBar().showMessage)
 
         # The bus's whole-render verdicts reach the HUD here rather than in

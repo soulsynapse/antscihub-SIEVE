@@ -340,6 +340,43 @@ class TestPerFrameDelivery:
         assert landings.failures == []
 
 
+class TestWindowRenderFlag:
+    """What the viewport's auto-gray policy listens to, and what it must not hear.
+
+    The distinction is the whole signal: a *window* render is seconds of
+    contention worth going gray for, while a single-frame refresh arrives once
+    per playhead move and treating it as "rendering" would flap the viewport's
+    format at playback rate.
+    """
+
+    def test_a_window_render_raises_the_flag_and_its_end_lowers_it(
+        self, qtbot: QtBot, runner: PreviewRunner
+    ) -> None:
+        landings = Landings(runner)
+        flags: list[bool] = []
+        runner.window_render_changed.connect(flags.append)
+
+        assert not runner.window_render_active
+        assert runner.request_render(downsampling(), WINDOW)
+        assert runner.window_render_active, "the flag must rise with the submission"
+        qtbot.waitUntil(lambda: bool(landings.finished), timeout=RENDER_TIMEOUT_MS)
+
+        assert flags == [True, False]
+
+    def test_a_single_frame_render_is_not_a_window_render(
+        self, qtbot: QtBot, runner: PreviewRunner
+    ) -> None:
+        landings = Landings(runner)
+        flags: list[bool] = []
+        runner.window_render_changed.connect(flags.append)
+
+        assert runner.request_frame(downsampling(), 7)
+        assert not runner.window_render_active
+        qtbot.waitUntil(lambda: bool(landings.finished), timeout=RENDER_TIMEOUT_MS)
+
+        assert flags == []
+
+
 def _slow_graph(*, bias: int) -> Pipeline:
     return Pipeline(
         nodes=(Node(node_id="slow", filter_id="slow", version="1.0.0", params={"bias": bias}),)

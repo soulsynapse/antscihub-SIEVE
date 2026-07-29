@@ -2,12 +2,12 @@
 title: Qt-free logic is stranded under gui/
 status: open
 priority: unassessed
-after: [headless-detection]
+after: [headless-detection, the-mutual-tier]
 opened: 2026-07-28
 
 gated_on: >
-  nothing structurally — but do headless-detection.md first, which moves the
-  largest of these on its own terms
+  nothing structurally — but the rework moves the biggest rows on its own
+  terms (rescoped 2026-07-29: this item is the residue, not the plan)
 
 reads:
   - docs/SCAFFOLD.md
@@ -17,6 +17,16 @@ reads:
 ---
 
 # Qt-free logic is stranded under gui/
+
+> **Rescoped 2026-07-29.** The rework claims the big rows on its own terms:
+> `chain_model`'s computation dissolves through `detection-is-a-filter` and
+> `detector-state-dies`, `concurrency`'s readings move with `the-mutual-tier`
+> (its *policy* stays in `gui/` — ARCHITECTURE's "policy belongs to the
+> process sharing a machine"), and `wizard_model`'s judging half follows
+> `one-definition-of-edge-legality`. What this item still owns is the
+> residue's per-module call — `timeline_model`, `crop_binding`,
+> `series_collector`, and the probably-stay set below — made after those
+> land, with the stays recorded so the analysis is not re-run.
 
 Ten modules under `src/sieve/gui/` import no PySide6 at all — 2,685 lines of
 domain logic sitting in the topmost layer, where nothing below can reach it:

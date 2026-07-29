@@ -1,14 +1,13 @@
 ---
 title: The GUI holds the enumeration rule 3 forbids
-status: deferred
+status: superseded
+superseded_by: [presentation-is-a-channel-not-a-switch, a-filter-id-spelled-twice]
 priority: unassessed
 
 gated_on: >
-  the temporal chain becoming real nodes — two of the five enumerated steps
-  have no filter module to be discovered *from*, so the enumeration cannot go
-  before `Mode.WINDOWED` (docs/todo/kernel-protocol-beyond-one-frame.md); the
-  parity comparison (docs/todo/parity-comparison-finding.md) frees the other
-  three
+  superseded 2026-07-29 — the literal sites this item catalogued are now the
+  exception list of `a-filter-id-spelled-twice`, and the caption/card question
+  is decided in `presentation-is-a-channel-not-a-switch`
 
 reads:
   - src/sieve/gui/param_form.py
@@ -18,6 +17,16 @@ reads:
 ---
 
 # The GUI holds the enumeration rule 3 forbids
+
+> **Superseded 2026-07-29.** The catalogue below became the seeded exception
+> set of `a-filter-id-spelled-twice`, and the presentation question was
+> decided the other way from this file's last section: hints go on the spec's
+> *presentation channel* (REWORK.md ## Decided). The objection below — that
+> UI hints on `FilterSpec` put presentation on the identity line — was the
+> right objection and is answered rather than overruled: the spec-channel
+> partition (`the-spec-has-three-channels`) makes "a presentation edit moves
+> no cache key" a test result, which is what the objection was missing. The
+> body stays as the argument's record.
 
 Rule 3: *discovery is automatic; nothing enumerates filters. Adding one must
 require no edit to a registry.* `filters/__init__.py` names nothing, a test

@@ -55,6 +55,44 @@ source_modules =
 forbidden_modules =
     PySide6
 
+[importlinter:contract:gui-computes-nothing]
+name = the GUI renders values and emits intents; it computes nothing
+type = forbidden
+# REWORK.md R1's gate. The layers contract governs direction of dependency and
+# so could never say this: `gui` sits above `core`, which makes importing
+# `morlet_power` into a widget legal under all four contracts below while being
+# exactly the second implementation rule 1 forbids.
+#
+# Direct imports only, for `opencv-containment`'s reason and a sharper version
+# of it: once detection is a filter, `gui -> pipeline -> filters ->
+# core.wavelet` is the supported path — the one execution path reached from
+# above. What this forbids is `gui/` *holding* a computation, which is only
+# ever a direct import.
+#
+# `sieve.core.detection` carries no exceptions: nothing in `gui/` imports it
+# today, and the line exists to refuse the sideways move — deleting a wavelet
+# import by reaching for `count_band_to_counts` instead.
+allow_indirect_imports = True
+source_modules =
+    sieve.gui
+forbidden_modules =
+    sieve.core.wavelet
+    sieve.core.detection
+    sieve.detect
+# The exception list is the work list (REWORK.md). The `error` alerting below
+# is what makes it shrink-only: an entry whose import is gone fails the
+# contract, so removing the code and removing its exception are one edit, and
+# adding an entry is a reviewed widening of the rework itself.
+unmatched_ignore_imports_alerting = error
+ignore_imports =
+    sieve.gui.chain_model -> sieve.core.wavelet
+    sieve.gui.chain_model -> sieve.detect
+    sieve.gui.detector_worker -> sieve.core.wavelet
+    sieve.gui.detector_worker -> sieve.detect
+    sieve.gui.filter_tab -> sieve.core.wavelet
+    sieve.gui.filter_tab -> sieve.detect
+    sieve.gui.scalogram_plot -> sieve.core.wavelet
+
 [importlinter:contract:opencv-containment]
 name = OpenCV stays out of core, bench, and the GUI
 type = forbidden

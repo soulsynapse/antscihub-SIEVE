@@ -1,6 +1,6 @@
 ---
 status: current
-reviewed: a1bc99f
+reviewed: 6596d13
 subjects: [noxfile.py, .github/workflows/, pyproject.toml, tests/docs/, .importlinter]
 ---
 
@@ -28,8 +28,9 @@ write it as **OPEN** and it stays visible.
 - `pipeline/`, `bench/`, `cli/`, `decode/`, `filters/`, `backend/` import no Qt.
 - `core/`, `bench/`, `gui/`, `cli/` import no `cv2`. `filters/` deliberately may.
 
-**Enforced by:** `.importlinter`, four contracts, run by `nox -s imports` inside
-`checks`.
+**Enforced by:** `.importlinter`, five contracts, run by `nox -s imports` inside
+`checks`. The fifth (`gui-computes-nothing`, 2026-07-29) is §9's — the layer
+contract governs direction of dependency and could never say it.
 
 **OPEN:** "`gui/` never bypasses `pipeline/` to reach `workers/`" is not
 expressible in the current contract and is not checked. `pipeline/` and
@@ -190,6 +191,31 @@ the thing they guard lands — the unexamined-versus-quiet rendering rule most o
 all, which `docs/todo/coverage-and-detection-lanes.md` names as V1's standing
 failure and which is inherited
 by three widgets that do not exist yet.
+
+## 9. Placement — the GUI computes nothing — ENFORCED, with the violations as the work list
+
+REWORK.md R1: everything that touches the footage, or anything derived from it,
+is a filter — so `gui/` renders values and emits intents, and holds no second
+implementation of a computation. The layer contract cannot say this: `gui` sits
+above `core`, which makes importing `morlet_power` into a widget legal under
+every direction-of-dependency rule while being exactly what rule 1 forbids.
+This is the gap through which the most expensive computation in the tuning
+loop came to run in a widget, in full compliance (§7's story, one level
+deeper).
+
+**Enforced by:** `.importlinter`'s `gui-computes-nothing` forbidden contract —
+`sieve.gui` may not import `sieve.core.wavelet`, `sieve.core.detection`, or
+`sieve.detect`. Indirect imports are allowed for `opencv-containment`'s
+reason: reaching computation *through* `pipeline/` is the supported path; what
+is forbidden is holding it. The seven current violations are the
+`ignore_imports` exception list, and `unmatched_ignore_imports_alerting =
+error` makes it shrink-only — a stale entry fails the contract, so deleting
+the code and its exception are one edit, and *adding* an entry is a visible
+widening of the rework.
+
+**OPEN:** the same rule for fields rather than imports — `primary_params` is
+GUI policy declared in `core/`, and no import contract can see a field. Its
+gate is the spec-channel partition, REWORK.md R5's Gate line, not yet written.
 
 ---
 

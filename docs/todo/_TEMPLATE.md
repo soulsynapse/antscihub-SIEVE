@@ -2,6 +2,8 @@
 # ---- identity -------------------------------------------------------------
 title: Sink writers                       # short name, under five words
 status: deferred                          # open — takeable now | deferred — timing is the decision
+                                          # | superseded — scope moved; name it in superseded_by
+                                          #   and keep the file so references resolve
 opened: 2026-07-27                        # the day the item was written
 
 # How much it matters, which is a different axis from `status`: a deferred

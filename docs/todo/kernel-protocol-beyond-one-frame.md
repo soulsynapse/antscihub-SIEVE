@@ -1,16 +1,31 @@
 ---
 title: A kernel protocol that is not one frame in, one frame out
-status: deferred
+status: superseded
+superseded_by: [a-kernel-that-sees-a-span, a-kernel-that-changes-the-rate]
 priority: unassessed
 gated_on: >
-  a filter that actually needs one — for `Mode.WINDOWED`, a filter needing a
-  span before it can emit; for `rate_changing`, a decimator
+  superseded 2026-07-29 — the trigger fired from inside the tree (REWORK.md
+  R2: detection is the arrived case for windowed execution, and
+  motion_history's own docstring asks for `Mode.WINDOWED`); the two remaining
+  shapes split into one item each, and the decimator's anti-alias record
+  moved with its shape
 reads:
   - src/sieve/backend/dispatch.py
   - src/sieve/pipeline/executor.py
 ---
 
 # A kernel protocol that is not one frame in, one frame out
+
+> **Superseded 2026-07-29.** This item's gate was "a filter that actually
+> needs one", and its blocker cited an enumeration that could not become
+> filters before the protocol widened — while the protocol waited for a
+> filter. Naming that deadlock was the unlock (REWORK.md R2): detection *is*
+> the arrived case, so `a-kernel-that-sees-a-span` writes the windowed
+> signature against it, and `a-kernel-that-changes-the-rate` keeps the
+> decimator trigger and the anti-alias obligation recorded below. The
+> caution this file preserves — a signature designed against zero instances
+> locks in — was tested by `MergingKernel` and held: protocols here extend.
+> The body stays as the record of both arguments.
 
 **Why not now.** Two node shapes are valid graphs that the executor refuses at
 run time, and both refuse for one reason: `Kernel` takes a frame and returns a

@@ -17,6 +17,13 @@ reads:
 
 # filter_tab.py is eleven jobs in one widget
 
+> **One line added 2026-07-29:** the model-side extractions come first. The
+> jobs that reach into `chain_model`/`detector_worker` internals (render
+> pacing, detector orchestration, the cheap/expensive drag tiers) shrink to
+> signal wiring when `detection-is-a-filter` and `detector-state-dies` land —
+> attacking them here first would move the tangle around inside one file.
+> The three seams below are the ones this item still owns either way.
+
 2,425 lines, one `QWidget`, about ninety-five methods. The responsibilities are
 nameable from the outline alone: widget construction, layout, chain editing,
 param submission to the document, detector orchestration and failure handling,

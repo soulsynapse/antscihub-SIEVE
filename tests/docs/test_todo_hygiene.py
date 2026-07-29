@@ -19,11 +19,14 @@ from doc_index import (
     SETTLED_KEYS,
     SKIP_PREFIXES,
     SPECS,
+    STATUSES,
     ItemGraph,
     build_graph,
     collect,
+    overturns_list,
     render_state,
     settled_rows,
+    superseded_by_slugs,
 )
 
 
@@ -54,15 +57,53 @@ def test_a_settled_row_points_at_something_that_exists() -> None:
 
 
 def test_every_item_status_is_in_the_vocabulary() -> None:
-    # `.state.md` splits on exactly these two values; a third spelling
-    # ("blocked", "Open") would silently vanish from both lists.
+    # `.state.md` splits on exactly these values; another spelling
+    # ("blocked", "Open") would silently vanish from every list.
     spec = next(spec for spec in SPECS if spec.directory == "todo")
     bad = [
         (entry.path.name, entry.fields.get("status"))
         for entry in collect(spec)
-        if entry.fields.get("status") not in ("open", "deferred")
+        if entry.fields.get("status") not in STATUSES
     ]
-    assert not bad, f"item status must be open or deferred: {bad}"
+    assert not bad, f"item status must be one of {STATUSES}: {bad}"
+
+
+def test_every_superseded_item_names_a_live_successor() -> None:
+    # A superseded item with no successor, or one whose successor is itself
+    # superseded, is scope that quietly left the tree — the exact silent
+    # vanishing the status exists to prevent.
+    graph = _graph()
+    spec = next(spec for spec in SPECS if spec.directory == "todo")
+    problems: list[str] = []
+    for entry in collect(spec):
+        if entry.fields.get("status") != "superseded":
+            continue
+        successors = superseded_by_slugs(entry)
+        if not successors:
+            problems.append(f"{entry.path.name}: no superseded_by")
+        for slug in successors:
+            target = graph.nodes.get(slug)
+            if target is None:
+                problems.append(f"{entry.path.name}: superseded_by names no item ({slug})")
+            elif target.fields.get("status") == "superseded":
+                problems.append(f"{entry.path.name}: successor {slug} is itself superseded")
+    assert not problems, "; ".join(problems)
+
+
+def test_every_overturned_row_was_a_settled_row() -> None:
+    # `overturns:` matches on a settled row's `what`, exact. A typo here would
+    # leave the old row standing as law while the entry believes it re-decided
+    # it — both tables lying in opposite directions.
+    spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
+    completed = collect(spec)
+    whats = {row["what"] for entry in completed for row in settled_rows(entry)}
+    missing = [
+        f"{entry.path.name}: {what!r}"
+        for entry in completed
+        for what in overturns_list(entry)
+        if what not in whats
+    ]
+    assert not missing, "overturns naming no settled row: " + "; ".join(missing)
 
 
 def test_every_item_priority_is_in_the_vocabulary() -> None:

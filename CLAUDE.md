@@ -15,6 +15,7 @@ Read the file that answers your question, not all of them.
 | Question | File |
 |---|---|
 | What is the state of play right now, in one read? | `docs/.state.md` — generated; read it first |
+| What binds during the rework, and what has already been decided? | `docs/REWORK.md` — six rules strengthening the eight; read it before any item it names, and before trusting a pre-2026-07-29 item or settled row |
 | What am I building, and what is the workflow supposed to feel like? | `docs/VISION.md`, then `docs/REFINED-VISION.md` |
 | What is this ultimately for, and is my item walking toward it? | `docs/ASPIRATIONS.md` — A1–A3 and the invariants; derivation in `docs/WORKING-BACKWARDS.md` |
 | What are the invariants, layers, and latency budgets? | `docs/ARCHITECTURE.md` |
@@ -38,6 +39,10 @@ and the entry, not a separate spec file.
 ## The eight rules
 
 Full text in `docs/ARCHITECTURE.md`. A violation is a defect, not a tradeoff.
+During the rework (2026-07-29 →), `docs/REWORK.md` strengthens these with six
+rules of its own, each binding through the gate its **Gate:** line names — and
+where a rule there disagrees with an older item or `docs/SETTLED.md` row, the
+rule wins.
 Older docstrings call these "non-negotiable #N"; the numbers still hold.
 Each rule there now states the **objective** it serves (O1–O4, defined at the
 top of that document) and its **falsifier** — the pre-stated condition under

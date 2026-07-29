@@ -152,6 +152,15 @@ SPECS: tuple[IndexSpec, ...] = (
 #: unassessable.
 PRIORITIES: tuple[str, ...] = ("high", "normal", "low", "unassessed")
 
+#: Item status, in the order rows sort: takeable, then waiting on a trigger,
+#: then folded into other items. `superseded` exists because the other two
+#: moves both lie about an absorbed item: completing it puts unfinished work
+#: in the Completed index (rule 6's failure arriving through the docs), and
+#: deferring it says timing was the decision when the decision was scope. A
+#: superseded item keeps its file — inbound references, including ones in
+#: `src/`, keep resolving — and names where its scope went in `superseded_by`.
+STATUSES: tuple[str, ...] = ("open", "deferred", "superseded")
+
 
 @dataclass(frozen=True, slots=True)
 class Entry:
@@ -177,6 +186,14 @@ class Entry:
         value = str(self.fields.get("priority", "")).strip()
         return PRIORITIES.index(value) if value in PRIORITIES else len(PRIORITIES)
 
+    @property
+    def status_rank(self) -> int:
+        """Position in `STATUSES`; anything unrecognised sorts last, as with
+        `priority_rank` and for the same window-between-typo-and-suite reason.
+        """
+        value = str(self.fields.get("status", "")).strip()
+        return STATUSES.index(value) if value in STATUSES else len(STATUSES)
+
 
 def item_order(entries: Iterable[Entry]) -> list[Entry]:
     """Most urgent first, takeable before waiting, then by filename.
@@ -194,7 +211,7 @@ def item_order(entries: Iterable[Entry]) -> list[Entry]:
         entries,
         key=lambda entry: (
             entry.priority_rank,
-            entry.fields.get("status") != "open",
+            entry.status_rank,
             entry.path.name,
         ),
     )
@@ -372,6 +389,21 @@ def after_slugs(entry: Entry) -> list[str]:
     `serves:` accepts them.
     """
     raw: object = entry.fields.get("after")
+    return _slug_list(raw)
+
+
+def superseded_by_slugs(entry: Entry) -> list[str]:
+    """Slugs a `status: superseded` item names as where its scope went.
+
+    The same shape as `after:` and resolved against the same graph, because
+    the failure is the same: a pointer written as prose survives a rename
+    silently, a slug fails the suite.
+    """
+    raw: object = entry.fields.get("superseded_by")
+    return _slug_list(raw)
+
+
+def _slug_list(raw: object) -> list[str]:
     if raw is None:
         return []
     if isinstance(raw, str):
@@ -555,7 +587,13 @@ def aspiration_lines(items: Sequence[Entry]) -> list[str]:
         "",
     ]
     for key, title in ASPIRATIONS:
-        serving = [entry for entry in items if key in served_ids(entry)]
+        # Superseded items are excluded: their scope, and with it the
+        # aspiration claim, lives in the successor named in `superseded_by`.
+        serving = [
+            entry
+            for entry in items
+            if key in served_ids(entry) and entry.fields.get("status") != "superseded"
+        ]
         # Open items first: a session picking work should see takeable items
         # before it sees the deferred ones it cannot act on. Priority orders
         # within each half, for the same reason it orders the lists above.
@@ -615,6 +653,21 @@ def settled_rows(entry: Entry) -> list[dict[str, str]]:
     return rows
 
 
+def overturns_list(entry: Entry) -> list[str]:
+    """The `what` values of settled rows this completed entry re-decided.
+
+    A settled row is law until the entry that re-decides it lands; editing the
+    original entry to retract the row would edit a dated record, and leaving
+    both standing would put two contradictory instructions in one table. So
+    the overturning entry names the row, the row moves to the Overturned
+    section with both pointers, and the original file is never touched. The
+    match is on the row's `what` column, exact — a typo is a suite failure
+    (`test_todo_hygiene`), not a row that quietly stays law.
+    """
+    raw: object = entry.fields.get("overturns")
+    return _slug_list(raw)
+
+
 def render_settled(completed: Sequence[Entry]) -> str:
     """Build `docs/SETTLED.md` — what a new item must not re-decide.
 
@@ -623,8 +676,14 @@ def render_settled(completed: Sequence[Entry]) -> str:
     order was the alternative and is wrong here: a reader arrives with a
     module in hand, not a date.
     """
-    rows = [(row, entry) for entry in completed for row in settled_rows(entry)]
+    overturned_by: dict[str, Entry] = {
+        what: entry for entry in completed for what in overturns_list(entry)
+    }
+    all_rows = [(row, entry) for entry in completed for row in settled_rows(entry)]
+    rows = [(row, entry) for row, entry in all_rows if row["what"] not in overturned_by]
+    overturned = [(row, entry) for row, entry in all_rows if row["what"] in overturned_by]
     rows.sort(key=lambda pair: (pair[0]["where"].strip("`"), pair[0]["what"]))
+    overturned.sort(key=lambda pair: (pair[0]["where"].strip("`"), pair[0]["what"]))
 
     lines = [
         GENERATED_NOTICE,
@@ -642,11 +701,30 @@ def render_settled(completed: Sequence[Entry]) -> str:
         link = f"[{entry.fields.get('date')}](completed-todo/{entry.path.name})"
         lines.append(f"| {row['what']} | {row['where']} | {row['do_not_redecide']} | {link} |")
 
+    if overturned:
+        lines += [
+            "",
+            "## Overturned",
+            "",
+            "Rows a later entry re-decided. The original entry is a dated record",
+            "and stands unedited; the row is no longer law, and the second link",
+            "says what replaced it.",
+            "",
+            "| What | Was settled by | Overturned by |",
+            "|---|---|---|",
+        ]
+        for row, entry in overturned:
+            over = overturned_by[row["what"]]
+            was = f"[{entry.fields.get('date')}](completed-todo/{entry.path.name})"
+            now = f"[{over.fields.get('date')}](completed-todo/{over.path.name})"
+            lines.append(f"| {row['what']} | {was} | {now} |")
+
     silent = sum(1 for entry in completed if not settled_rows(entry))
     lines += [
         "",
         f"*{len(rows)} rows from {len(completed) - silent} entries; "
-        f"{silent} entries settled nothing.*",
+        f"{silent} entries settled nothing"
+        + (f"; {len(overturned)} rows overturned.*" if overturned else ".*"),
     ]
     return "\n".join(lines) + "\n"
 
@@ -671,12 +749,45 @@ def budget_health() -> str:
     )
 
 
+def placement_health(root: Path = DOCS_ROOT) -> str | None:
+    """One line: how much of the rework's exception list remains.
+
+    REWORK.md's claim is that the exception list is the work list; a list
+    nobody opens the file for is a list that grows, so its size is rendered
+    into the one file every session reads. Derived from `.importlinter` by
+    parse, so it is safe in a byte-exact `--check` — the same constraint
+    `budget_health` documents. `None` once the contract is gone (graduated
+    into ARCHITECTURE.md), which removes the line rather than rendering a
+    zero for a ceiling that no longer exists.
+    """
+    import configparser
+
+    path = root.parent / ".importlinter"
+    if not path.is_file():
+        # A fixture tree (`render_state(tmp_path)` in the tests) has no
+        # contract file; that is a tree with no work list, not an error.
+        return None
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read_string(path.read_text(encoding="utf-8"))
+    section = "importlinter:contract:gui-computes-nothing"
+    if not parser.has_section(section):
+        return None
+    raw = parser.get(section, "ignore_imports", fallback="")
+    ignored = [line for line in raw.splitlines() if line.strip()]
+    plural = "import" if len(ignored) == 1 else "imports"
+    return (
+        f"**Placement:** {len(ignored)} GUI {plural} of computation remain "
+        f"(`gui-computes-nothing` in `.importlinter` — the rework's work list)."
+    )
+
+
 def render_state(root: Path = DOCS_ROOT) -> str:
     """Build `docs/.state.md` from the item folder and the indexes."""
     by_dir = {spec.directory: spec for spec in SPECS}
     items = collect(by_dir["todo"], root)
     open_items = [e for e in items if e.fields.get("status") == "open"]
     deferred = [e for e in items if e.fields.get("status") == "deferred"]
+    superseded = [e for e in items if e.fields.get("status") == "superseded"]
     completed = collect(by_dir["completed-todo"], root)
     findings = collect(by_dir["findings"], root)
 
@@ -695,6 +806,17 @@ def render_state(root: Path = DOCS_ROOT) -> str:
     lines += [item_line(e, _cell(e.fields.get("gated_on"))) for e in open_items]
     lines += ["", f"**Deferred ({len(deferred)})** — the trigger is the whole line:", ""]
     lines += [item_line(e, _cell(e.fields.get("gated_on"))) for e in deferred]
+    if superseded:
+        lines += [
+            "",
+            f"**Superseded ({len(superseded)})** — the scope moved; the tail says where.",
+            "The file stays so references keep resolving; do not take these:",
+            "",
+        ]
+        lines += [
+            item_line(e, ", ".join(f"`{slug}`" for slug in superseded_by_slugs(e)))
+            for e in superseded
+        ]
 
     graph = build_graph(items, completed)
     lines += ["", *frontier_lines(open_items, graph)]
@@ -704,6 +826,9 @@ def render_state(root: Path = DOCS_ROOT) -> str:
         lines += ["", *mermaid]
 
     lines += ["", budget_health()]
+    placement = placement_health(root)
+    if placement:
+        lines += ["", placement]
     lines += [
         "",
         "**Last completed** (full list in `completed-todo/.index.md`):",

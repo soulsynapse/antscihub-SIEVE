@@ -1,7 +1,7 @@
 ---
 title: A GUI-saved pipeline must run identically in the CLI
 status: open
-priority: unassessed
+priority: high
 opened: 2026-07-28
 
 gated_on: >
@@ -12,12 +12,24 @@ reads:
   - docs/AUTO-GUARDRAILS.md
   - src/sieve/core/pipeline_model.py
   - src/sieve/pipeline/executor.py
-  - src/sieve/cli/run_cmd.py
+  - src/sieve/cli/preview_cmd.py
+  - src/sieve/cli/detect_cmd.py
   - tests/integration/test_cli_run.py
   - src/sieve/gui/document.py
 ---
 
 # A GUI-saved pipeline must run identically in the CLI
+
+**Promoted to high 2026-07-29, and made a hard prerequisite of the schema
+migration** (REWORK.md's fourth ordering constraint;
+`the-graph-carries-the-crop-the-span-and-the-detector` names it in `after:`).
+The migration's failure mode is a plausible frame — a synthesized crop node in
+the wrong coordinate numbering, a span off by the lead-in — and this diff is
+the only instrument that can see it. Landed after the flip, it can only
+confirm both front ends agree about the same wrong thing. A scoping note
+rode along: the earlier `reads:` named `cli/run_cmd.py`, which emits nothing
+to diff — the comparable outputs are `sieve preview --check` and the detect
+tables.
 
 AUTO-GUARDRAILS §2 calls this "the most valuable unwritten check in this file",
 and it is right for a reason worth restating: rule 1 says

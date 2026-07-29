@@ -15,6 +15,7 @@ that did not go through `sieve.gui`.
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -106,3 +107,77 @@ def test_two_sinks_are_refused_rather_than_one_being_picked(
 
     assert result.exit_code == 1
     assert "--node" in result.output
+
+
+def _rows(path: Path) -> list[dict[str, str]]:
+    """Read a written table the way something that is not SIEVE would."""
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def test_csv_carries_the_series_the_summary_only_counts(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """One row per frame, in absolute frames, readable by stdlib csv alone.
+
+    The claim is the one `docs/todo/parity-comparison-finding.md` needs and
+    stdout cannot make: not that intervals were found, but that the per-frame
+    count and gate a later run is diffed against actually left the process.
+    Fails if the export summarises rather than emits — a file of intervals
+    only would still print "wrote" and satisfy the armed test above.
+    """
+    project = _project(
+        synthetic_video,
+        tmp_path,
+        detector=DetectorSettings(count_frac=(0.0, 1.0), window_frames=5, centered=True),
+    )
+    out = tmp_path / "tables"
+
+    result = runner.invoke(app, ["detect", str(project), "--frames", "10:40", "--csv", str(out)])
+
+    assert result.exit_code == 0, result.output
+    series = _rows(out / "series.csv")
+    assert len(series) == 30
+    assert [int(row["frame"]) for row in series] == list(range(10, 40))
+    assert {row["node"] for row in series} == {"blocks"}
+    assert {row["gated"] for row in series} <= {"TRUE", "FALSE"}
+    intervals = _rows(out / "intervals.csv")
+    assert all(int(row["start_frame"]) < int(row["end_frame"]) for row in intervals)
+
+
+def test_a_disarmed_detector_writes_no_intervals_file(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """Rule 6 at the file boundary: absent must not arrive as empty.
+
+    A header-only `intervals.csv` is indistinguishable from an armed run that
+    found nothing, and a reader in R would not know to ask. The series is
+    still real and is still written, with `gated` as `NA` — the value R and
+    pandas both already read as absent, rather than `FALSE`.
+    """
+    project = _project(synthetic_video, tmp_path, detector=DetectorSettings(window_frames=5))
+    out = tmp_path / "tables"
+
+    result = runner.invoke(app, ["detect", str(project), "--frames", "0:40", "--csv", str(out)])
+
+    assert result.exit_code == 0, result.output
+    assert not (out / "intervals.csv").exists()
+    assert {row["gated"] for row in _rows(out / "series.csv")} == {"NA"}
+
+
+def test_csv_against_an_untuned_project_is_refused_before_any_decode(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """No detector means no series either, so there is nothing to write.
+
+    Refused up front rather than after the run: the alternative that looks
+    reasonable is writing `series.csv` anyway, and `count` is derived through
+    the value band, so those columns do not exist to be written.
+    """
+    project = _project(synthetic_video, tmp_path, detector=None)
+    out = tmp_path / "tables"
+
+    result = runner.invoke(app, ["detect", str(project), "--frames", "0:40", "--csv", str(out)])
+
+    assert result.exit_code == 1
+    assert not out.exists()

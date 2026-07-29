@@ -27,6 +27,15 @@ frames — while an array sink writing frames back out is compaction, which is
 `materialize.py`'s question about Zarr layout rather than a format choice.
 Writing a parquet writer now means designing a schema against zero producers.
 
+**`sieve detect --csv` is not this, and did not fire the trigger** (2026-07-28,
+`docs/completed-todo/2026.07.28-detection-csv-export.md`). It writes the
+*detector's* series and intervals, which are computed outside the graph from
+`DetectorUpdate` and needed no schema invented. VISION step 1's csv is
+therefore half-answered — measured detections leave the process, block
+coordinates still do not — and the gap this item names is unchanged: no filter
+emits a `TableSpec`, so `Sink` still has no producer and `_refuse_sinks` still
+stands.
+
 **What would make it the right time.** Either the first filter that emits a
 `TableSpec` — a detector, a thresholder producing coordinates — or
 materialization landing and needing somewhere for a compacted array to go. The

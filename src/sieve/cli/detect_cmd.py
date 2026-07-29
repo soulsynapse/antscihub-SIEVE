@@ -18,6 +18,14 @@ frontier arithmetic applies — `settled_for(..., final=True)` is the whole
 record, and the intervals printed here are the ones that will not move. That
 is the difference between this and the tab, where the record is still filling.
 
+**`--csv` is the measurement leaving the process, and stdout is not.** The
+printed report is a summary — a count of intervals and their bounds — and
+`docs/todo/parity-comparison-finding.md` needs the count/gate series itself to
+compare a run against. `detect/tables.py` holds the two tables and the reason
+they are two; this command's part is refusing the export up front when the
+project has no detector, since there is then no series either and a directory
+of empty files would say the opposite.
+
 **Workers is `ALL_CORES` and says so.** `core/shares.py` is explicit that
 policy about sharing a machine belongs to the process sharing one; a whole-clip
 pass on a node is not that process, and `--workers` here caps decode, which is
@@ -40,6 +48,8 @@ from sieve.core.replicates import Replicate
 from sieve.core.wavelet import ALL_CORES
 from sieve.decode.reader import VideoDecodeError
 from sieve.detect import detect
+from sieve.detect.detector import DetectorUpdate
+from sieve.detect.tables import DetectionExport, TableVerificationError, write_tables
 from sieve.filters import discover
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
@@ -68,6 +78,14 @@ def detect_project(
         str | None,
         typer.Option("--node", help="Node whose output is the series. Defaults to the sink."),
     ] = None,
+    csv_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--csv",
+            file_okay=False,
+            help="Also write series.csv (and intervals.csv, if armed) into this directory.",
+        ),
+    ] = None,
     backend: Annotated[
         Backend, typer.Option("--backend", help="Where every node runs.")
     ] = Backend.CPU,
@@ -79,11 +97,17 @@ def detect_project(
         typer.Exit: code 1 for anything refused deliberately — an invalid
             document, a graph that does not resolve or does not chain, an
             ambiguous or unknown series node, a node this executor cannot
-            call, or footage that cannot be read.
+            call, footage that cannot be read, or `--csv` against a project
+            with no detector.
     """
     discover()
     project = load_project(project_path)
     video = project.source_path(project_path)
+    if csv_dir is not None and project.detector is None:
+        raise refuse(
+            "--csv has nothing to write: this project has no detector, so there is no "
+            "series and no intervals. Tune one in the GUI and save."
+        )
 
     try:
         dag = Dag.build(project.pipeline)
@@ -99,6 +123,7 @@ def detect_project(
     targets = tuple(project.replicates) or (None,)
     luma = not dag.needs_chroma
     store = MemoryFrameStore()
+    exports: list[DetectionExport] = []
 
     for target in targets:
         if replicate_ids and (target is None or target.replicate_id not in replicate_ids):
@@ -124,8 +149,21 @@ def detect_project(
         with frame_source(resolved.path, workers, luma=luma) as reader:
             fps = reader.metadata.fps
             rows = _collect(plan, resolved.wrap(reader), store, series_node)
-        typer.echo(_report(target, project.detector, rows, fps=fps, start=span.start))
+        update = _detect_one(project.detector, target, rows, fps=fps, start=span.start)
+        typer.echo(_report(_label(target), rows, update, fps=fps))
+        if csv_dir is not None and update is not None:
+            exports.append(
+                DetectionExport(
+                    replicate=_label(target),
+                    node=series_node,
+                    fps=fps,
+                    start=span.start,
+                    update=update,
+                )
+            )
 
+    if csv_dir is not None:
+        typer.echo(_export(csv_dir, exports))
     _refuse_unknown(project, replicate_ids)
 
 
@@ -180,13 +218,62 @@ def _collect(
     return np.stack(rows)
 
 
-def _report(
-    target: Replicate | None,
+def _label(target: Replicate | None) -> str:
+    return "baseline" if target is None else target.name
+
+
+def _detect_one(
     settings: DetectorSettings | None,
+    target: Replicate | None,
     series: NDArray[np.float32],
     *,
     fps: float,
     start: int,
+) -> DetectorUpdate | None:
+    """The derivation, or `None` for a project that never tuned one.
+
+    Split out from `_report` when `--csv` became a second consumer of the same
+    update: printing it and writing it are two readings of one derivation, and
+    running `detect` twice would let a stdout summary and a file on disk
+    disagree about a run that was supposed to be one pass.
+    """
+    if settings is None:
+        return None
+    return detect(
+        series, fps, resolved_detector(settings, target), start_index=start, workers=ALL_CORES
+    )
+
+
+def _export(directory: Path, exports: list[DetectionExport]) -> str:
+    """Write the tables and say what was written, naming the file left absent.
+
+    Raises:
+        typer.Exit: code 1 if a table does not read back as what was written,
+            or the directory cannot be written.
+    """
+    if not exports:
+        return f"--csv wrote nothing to {directory}: no replicate was run"
+    try:
+        written = write_tables(directory, exports)
+    except TableVerificationError as error:
+        raise refuse(str(error)) from error
+    except OSError as error:
+        raise refuse(f"--csv could not write to {directory}: {error}") from error
+    names = ", ".join(path.name for path in written)
+    if len(written) == 1:
+        return (
+            f"{directory}: wrote {names}. No intervals.csv — every replicate's detector is "
+            "disarmed, and an empty one would read as 'found nothing'."
+        )
+    return f"{directory}: wrote {names}"
+
+
+def _report(
+    label: str,
+    series: NDArray[np.float32],
+    update: DetectorUpdate | None,
+    *,
+    fps: float,
 ) -> str:
     """One replicate's intervals, in absolute frames and in seconds.
 
@@ -199,14 +286,11 @@ def _report(
     zero intervals for either would be a wrong answer that looks like a right
     one.
     """
-    label = "baseline" if target is None else target.name
-    if settings is None:
+    if update is None:
         return (
             f"{label}: {series.shape[0]} frames, {series.shape[1]} blocks — this project has no "
             "detector, so it claims nothing. Tune one in the GUI and save."
         )
-    effective = resolved_detector(settings, target)
-    update = detect(series, fps, effective, start_index=start, workers=ALL_CORES)
     if update.intervals is None:
         return (
             f"{label}: {series.shape[0]} frames, {series.shape[1]} blocks — detector disarmed "

@@ -80,6 +80,7 @@ src/sieve/pipeline/resolve_source.py    # which file a replicate reads — a cro
 src/sieve/storage/crop_writer.py        # FFV1/Matroska encode from arrays; knows no identity
 
 src/sieve/detect/detector.py            # DetectorSettings -> intervals, below both front ends; the settled frontier
+src/sieve/detect/tables.py              # a detection as CSV for R — series and intervals as two files
 
 src/sieve/bench/budgets.py              # the budget table; character-exact against ARCHITECTURE.md
 src/sieve/bench/metrics.py              # Qt-free metric bus; judges samples against BUDGETS on the way past

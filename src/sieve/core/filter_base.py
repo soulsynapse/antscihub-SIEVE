@@ -569,10 +569,18 @@ class FilterSpec:
                 "cannot reproduce its own output cannot agree with another backend's"
             )
         if isinstance(self.emits, ArraySpec) and self.element is None:
+            # The message carries the argument because this is where somebody
+            # meets the rule: a test fixture author who wanted to register a
+            # filter and got a raise wants to know why it cannot simply
+            # default, and that answer lives in a completed-item entry nobody
+            # is going to go and read.
             raise ValueError(
-                f"{self.filter_id}: emits an array and declares no element meaning — what one "
-                "value of an emitted frame is a value of decides whether a detection over this "
-                "node is admissible, so it is stated or the filter is not registered"
+                f"{self.filter_id}: emits an array and declares no element meaning — pass "
+                "element=ElementKind.PIXEL/BLOCK if this filter decides what one value is, or "
+                "element=ElementRelation.PRESERVED/AGGREGATED if it relates to what it was "
+                "handed. There is no default on purpose: a filter that redefines its elements "
+                "and inherited PRESERVED would still register, and the only symptom is a count "
+                "written to a CSV under a noun nothing checked"
             )
         if not isinstance(self.emits, ArraySpec) and self.element is not None:
             raise ValueError(

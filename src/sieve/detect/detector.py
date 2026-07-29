@@ -1,26 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -46,20 +23,11 @@ FloatArray = NDArray[np.floating[Any]]
 
 @dataclass(frozen=True, slots=True)
 class DetectorUpdate:
-
-
-
-
-
-
-
-
     band_power: NDArray[np.float32]
     count: NDArray[np.float32]
     windowed: NDArray[np.float32]
     gate: NDArray[np.bool_] | None
     intervals: tuple[tuple[int, int], ...] | None
-
 
     band_rows: tuple[int, int]
 
@@ -73,29 +41,6 @@ def detect(
     band_power: NDArray[np.float32] | None = None,
     workers: int,
 ) -> DetectorUpdate:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     freqs = default_freqs(fps)
     i, j = band_indices(freqs, settings.freq_band[0], settings.freq_band[1])
     if band_power is None:
@@ -121,19 +66,9 @@ def detect(
     )
 
 
-def settled_for(frames: int, fps: float, settings: DetectorSettings, *, final: bool) -> int:
-
-
-
-
-
-
-
-
-
-
-
-
+def settled_for(
+    frames: int, fps: float, settings: DetectorSettings, *, final: bool
+) -> int:
     if final:
         return frames
     freqs = default_freqs(fps)
@@ -145,12 +80,6 @@ def settled_for(frames: int, fps: float, settings: DetectorSettings, *, final: b
 
 
 def gate_to(update: DetectorUpdate, settled: int, start_index: int) -> DetectorUpdate:
-
-
-
-
-
-
     gate = update.gate
     if gate is None or settled >= gate.shape[0]:
         return update

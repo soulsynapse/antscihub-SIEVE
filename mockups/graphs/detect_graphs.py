@@ -1,49 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import argparse
@@ -72,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 REPO = Path(__file__).resolve().parents[2]
 
 
-
 BG = QColor(21, 22, 25)
 PANEL = QColor(31, 33, 38)
 LINE = QColor(55, 58, 66)
@@ -84,10 +37,21 @@ DETECT = QColor(96, 210, 120)
 WARN = QColor(224, 176, 96)
 
 
-SCALO_STOPS = ((12, 8, 20), (86, 24, 48), (168, 60, 44), (226, 130, 56), (250, 214, 130))
+SCALO_STOPS = (
+    (12, 8, 20),
+    (86, 24, 48),
+    (168, 60, 44),
+    (226, 130, 56),
+    (250, 214, 130),
+)
 
-DENSITY_STOPS = ((21, 22, 25), (24, 56, 74), (32, 110, 138), (70, 180, 200), (190, 240, 248))
-
+DENSITY_STOPS = (
+    (21, 22, 25),
+    (24, 56, 74),
+    (32, 110, 138),
+    (70, 180, 200),
+    (190, 240, 248),
+)
 
 
 FPS = 50.0
@@ -102,7 +66,6 @@ CLUSTER = [r * GRID[1] + c for r in range(2, 6) for c in range(2, 6)]
 
 
 def synth_blocks() -> np.ndarray:
-
     rng = np.random.default_rng(11)
     x = np.exp(rng.normal(0.0, 0.35, (T, B))).astype(np.float32) * 30.0
     tt = np.arange(T) / FPS
@@ -116,7 +79,6 @@ def synth_blocks() -> np.ndarray:
 
 
 def morlet_power(x: np.ndarray) -> np.ndarray:
-
     n = 4096
     scales = (W0 + math.sqrt(2.0 + W0 * W0)) / (4.0 * math.pi * FREQS)
     omega = 2.0 * np.pi * np.fft.fftfreq(n, d=1.0 / FPS)
@@ -137,7 +99,6 @@ def morlet_power(x: np.ndarray) -> np.ndarray:
 
 
 def coi_samples(f_hz: float) -> float:
-
     return 1.369 / f_hz * FPS
 
 
@@ -147,7 +108,6 @@ POOLED = morlet_power(BLOCKS.mean(axis=1))
 
 
 def sample_frame() -> tuple[QImage, str]:
-
     videos = sorted((REPO / "videos-testing").glob("*.MP4"))
     if videos:
         try:
@@ -175,11 +135,10 @@ def sample_frame() -> tuple[QImage, str]:
         yy, xx = np.ogrid[:height, :width]
         mask = (xx - cx) ** 2 + (yy - cy) ** 2 < radius * radius
         canvas[mask] = color
-    image = QImage(canvas.tobytes(), width, height, width * 3, QImage.Format.Format_RGB888)
+    image = QImage(
+        canvas.tobytes(), width, height, width * 3, QImage.Format.Format_RGB888
+    )
     return image.copy(), "generated - no footage in videos-testing/"
-
-
-
 
 
 @dataclass
@@ -215,7 +174,6 @@ class Derived:
 
 
 def derive(det: Detector) -> Derived:
-
     i, j = det.freq_indices()
     m = CUBE[i : j + 1].sum(axis=0)
     v_lo = -np.inf if det.v_lo is None else det.v_lo
@@ -237,9 +195,6 @@ def derive(det: Detector) -> Derived:
     return Derived(m, count, windowed, np.asarray(gate, bool), armed)
 
 
-
-
-
 def _font(size: int, *, bold: bool = False, spaced: bool = False) -> QFont:
     font = QFont()
     font.setPointSize(size)
@@ -249,8 +204,9 @@ def _font(size: int, *, bold: bool = False, spaced: bool = False) -> QFont:
     return font
 
 
-def ramp_lut(stops: tuple[tuple[int, int, int], ...], alpha: bool = False) -> np.ndarray:
-
+def ramp_lut(
+    stops: tuple[tuple[int, int, int], ...], alpha: bool = False
+) -> np.ndarray:
     positions = np.linspace(0.0, 1.0, len(stops))
     t = np.linspace(0.0, 1.0, 256)
     channels = []
@@ -268,20 +224,11 @@ def to_qimage(argb: np.ndarray) -> QImage:
     return QImage(data.tobytes(), w, h, w * 4, QImage.Format.Format_ARGB32).copy()
 
 
-
-
 MARGIN_L, MARGIN_R, MARGIN_T, MARGIN_B = 48, 66, 24, 8
 GRAB_PX = 8
 
 
 class BasePlot(QWidget):
-
-
-
-
-
-
-
     band_changed = Signal(object, object)
     band_committed = Signal(object, object)
     scrubbed = Signal(int)
@@ -300,7 +247,6 @@ class BasePlot(QWidget):
         self.readout = ""
         self.hover: QPointF | None = None
         self._drag: str | None = None
-
 
     def _fwd(self, v: float) -> float:
         return v
@@ -325,7 +271,9 @@ class BasePlot(QWidget):
     def y_of(self, value: float) -> float:
         lo, hi = self._range()
         r = self.plot_rect()
-        t = (self._fwd(value) - self._fwd(lo)) / max(self._fwd(hi) - self._fwd(lo), 1e-9)
+        t = (self._fwd(value) - self._fwd(lo)) / max(
+            self._fwd(hi) - self._fwd(lo), 1e-9
+        )
         return r.bottom() - t * r.height()
 
     def value_of(self, y: float) -> float:
@@ -333,8 +281,6 @@ class BasePlot(QWidget):
         r = self.plot_rect()
         t = (r.bottom() - y) / max(r.height(), 1)
         return self._inv(self._fwd(lo) + t * (self._fwd(hi) - self._fwd(lo)))
-
-
 
     def _handle_y(self, which: str) -> float:
         value = self.lo if which == "lo" else self.hi
@@ -349,8 +295,12 @@ class BasePlot(QWidget):
 
     def mousePressEvent(self, event) -> None:
         pos = event.position()
-        if self.handles_on and self.plot_rect().adjusted(0, -12, 60, 12).contains(pos.toPoint()):
-            near = sorted(("lo", "hi"), key=lambda w: abs(self._handle_y(w) - pos.y()))[0]
+        if self.handles_on and self.plot_rect().adjusted(0, -12, 60, 12).contains(
+            pos.toPoint()
+        ):
+            near = sorted(("lo", "hi"), key=lambda w: abs(self._handle_y(w) - pos.y()))[
+                0
+            ]
             if abs(self._handle_y(near) - pos.y()) <= GRAB_PX:
                 self._drag = near
                 return
@@ -395,8 +345,6 @@ class BasePlot(QWidget):
         if self._drag in ("lo", "hi"):
             self.band_committed.emit(self.lo, self.hi)
         self._drag = None
-
-
 
     def fmt(self, value: float | None, which: str) -> str:
         if value is None:
@@ -460,8 +408,6 @@ class BasePlot(QWidget):
 
 
 class ScalogramPlot(BasePlot):
-
-
     title = "scalogram - drag the frequency band"
     unbounded_allowed = False
 
@@ -514,8 +460,6 @@ class ScalogramPlot(BasePlot):
 
 
 class DensityPlot(BasePlot):
-
-
     title = "band power by block - drag the value band"
     BINS = 96
 
@@ -537,7 +481,9 @@ class DensityPlot(BasePlot):
     def set_matrix(self, m: np.ndarray, solo: int | None) -> None:
         self._max = float(m.max()) or 1.0
         top = math.log1p(self._max)
-        idx = np.minimum((np.log1p(m) / top * (self.BINS - 1)).astype(np.int32), self.BINS - 1)
+        idx = np.minimum(
+            (np.log1p(m) / top * (self.BINS - 1)).astype(np.int32), self.BINS - 1
+        )
         counts = np.zeros((self.BINS, T), np.float32)
         cols = np.repeat(np.arange(T), B)
         np.add.at(counts, (idx.ravel(), cols), 1.0)
@@ -555,15 +501,14 @@ class DensityPlot(BasePlot):
             painter.setPen(QPen(ACCENT, 1.4))
             step = max(1, T // max(r.width(), 1))
             points = [
-                QPointF(self.x_of(t), self.y_of(float(self._solo[t]))) for t in range(0, T, step)
+                QPointF(self.x_of(t), self.y_of(float(self._solo[t])))
+                for t in range(0, T, step)
             ]
             for a, b in pairwise(points):
                 painter.drawLine(a, b)
 
 
 class CountPlot(BasePlot):
-
-
     title = "blocks in band - windowed over D"
 
     def __init__(self) -> None:
@@ -598,17 +543,14 @@ class CountPlot(BasePlot):
         painter.setPen(QPen(DETECT if self.armed else DIM, 1.6))
         step = max(1, T // max(r.width(), 1))
         points = [
-            QPointF(self.x_of(t), self.y_of(float(self.windowed[t]))) for t in range(0, T, step)
+            QPointF(self.x_of(t), self.y_of(float(self.windowed[t])))
+            for t in range(0, T, step)
         ]
         for a, b in pairwise(points):
             painter.drawLine(a, b)
 
 
 class BlockHeat(QWidget):
-
-
-
-
     solo_toggled = Signal(object)
 
     def __init__(self, frame: QImage, caption: str) -> None:
@@ -623,7 +565,9 @@ class BlockHeat(QWidget):
         self.setMouseTracking(True)
         self.setMinimumSize(420, 300)
 
-    def set_state(self, values: np.ndarray, in_band: np.ndarray, solo: int | None) -> None:
+    def set_state(
+        self, values: np.ndarray, in_band: np.ndarray, solo: int | None
+    ) -> None:
         self.values, self.in_band, self.solo = values, in_band, solo
         self.update()
 
@@ -658,12 +602,16 @@ class BlockHeat(QWidget):
         painter.fillRect(self.rect(), PANEL)
         painter.setPen(DIM)
         painter.setFont(_font(8, bold=True, spaced=True))
-        painter.drawText(QRect(10, 4, self.width() - 20, 14), 0, "BLOCK HEAT - CLICK TO SOLO")
+        painter.drawText(
+            QRect(10, 4, self.width() - 20, 14), 0, "BLOCK HEAT - CLICK TO SOLO"
+        )
 
         g = self._grid_rect()
         source = QRectF(self.frame.rect())
         side = min(source.width(), source.height())
-        square = QRectF(source.center().x() - side / 2, source.center().y() - side / 2, side, side)
+        square = QRectF(
+            source.center().x() - side / 2, source.center().y() - side / 2, side, side
+        )
         painter.setOpacity(0.42)
         painter.drawImage(g, self.frame, square)
         painter.setOpacity(1.0)
@@ -671,7 +619,9 @@ class BlockHeat(QWidget):
         cell_w, cell_h = g.width() / GRID[1], g.height() / GRID[0]
         for b in range(B):
             row, col = divmod(b, GRID[1])
-            cell = QRectF(g.left() + col * cell_w, g.top() + row * cell_h, cell_w, cell_h)
+            cell = QRectF(
+                g.left() + col * cell_w, g.top() + row * cell_h, cell_w, cell_h
+            )
             heat = min(float(self.values[b]) / self.scale_max, 1.0)
             stop = SCALO_STOPS[-2]
             fill = QColor(*stop)
@@ -698,13 +648,7 @@ class BlockHeat(QWidget):
         painter.drawText(QRect(10, self.height() - 18, self.width() - 20, 14), 0, note)
 
 
-
-
-
 class DetectWindow(QWidget):
-
-
-
     def __init__(self) -> None:
         super().__init__()
         self.det = Detector()
@@ -769,12 +713,24 @@ class DetectWindow(QWidget):
         foot.addWidget(self.summary)
         outer.addLayout(foot)
 
-        self.scalo.band_changed.connect(lambda lo, hi: self._on_band("freq", lo, hi, False))
-        self.scalo.band_committed.connect(lambda lo, hi: self._on_band("freq", lo, hi, True))
-        self.density.band_changed.connect(lambda lo, hi: self._on_band("value", lo, hi, False))
-        self.density.band_committed.connect(lambda lo, hi: self._on_band("value", lo, hi, True))
-        self.count.band_changed.connect(lambda lo, hi: self._on_band("count", lo, hi, False))
-        self.count.band_committed.connect(lambda lo, hi: self._on_band("count", lo, hi, True))
+        self.scalo.band_changed.connect(
+            lambda lo, hi: self._on_band("freq", lo, hi, False)
+        )
+        self.scalo.band_committed.connect(
+            lambda lo, hi: self._on_band("freq", lo, hi, True)
+        )
+        self.density.band_changed.connect(
+            lambda lo, hi: self._on_band("value", lo, hi, False)
+        )
+        self.density.band_committed.connect(
+            lambda lo, hi: self._on_band("value", lo, hi, True)
+        )
+        self.count.band_changed.connect(
+            lambda lo, hi: self._on_band("count", lo, hi, False)
+        )
+        self.count.band_committed.connect(
+            lambda lo, hi: self._on_band("count", lo, hi, True)
+        )
         for plot in (self.scalo, self.density, self.count):
             plot.scrubbed.connect(self._on_scrub)
         self.heat.solo_toggled.connect(self._on_solo)
@@ -783,8 +739,6 @@ class DetectWindow(QWidget):
         self.reset_btn.clicked.connect(self._on_reset)
 
         self._apply("initial")
-
-
 
     def _apply(self, why: str) -> None:
         det = self.det
@@ -805,12 +759,12 @@ class DetectWindow(QWidget):
 
         i, j = det.freq_indices()
         self.scalo.readout = f"band {FREQS[i]:.2f}-{FREQS[j]:.2f} Hz"
-        self.density.readout = (
-            f"value {self.density.fmt(det.v_lo, 'lo')}-{self.density.fmt(det.v_hi, 'hi')}"
-        )
+        self.density.readout = f"value {self.density.fmt(det.v_lo, 'lo')}-{self.density.fmt(det.v_hi, 'hi')}"
         self.d_label.setText(f"D {det.d} fr ({det.d / FPS:.2f} s)")
         if derived.armed:
-            spans = int(np.count_nonzero(np.diff(np.r_[0, derived.gate.view(np.int8)]) == 1))
+            spans = int(
+                np.count_nonzero(np.diff(np.r_[0, derived.gate.view(np.int8)]) == 1)
+            )
             seconds = float(derived.gate.sum()) / FPS
             self.summary.setText(f"{spans} detections - {seconds:.1f} s total")
             self.summary.setStyleSheet(f"color: {DETECT.name()};")
@@ -820,8 +774,6 @@ class DetectWindow(QWidget):
         for widget in (self.scalo, self.density, self.count, self.heat):
             widget.update()
 
-
-
     def _on_band(self, which: str, lo, hi, committed: bool) -> None:
         if which == "freq":
             self.det.f_lo, self.det.f_hi = lo, hi
@@ -830,7 +782,9 @@ class DetectWindow(QWidget):
         else:
             self.det.c_lo, self.det.c_hi = lo, hi
         tier = (
-            "committed - rebuild anything deferred" if committed else "dragging - cheap re-derive"
+            "committed - rebuild anything deferred"
+            if committed
+            else "dragging - cheap re-derive"
         )
         self.status.setText(f"{which} band -> {tier}")
         self._apply(which)
@@ -842,7 +796,9 @@ class DetectWindow(QWidget):
 
     def _on_solo(self, block) -> None:
         self.det.solo = block
-        label = "off" if block is None else f"block ({block // GRID[1]},{block % GRID[1]})"
+        label = (
+            "off" if block is None else f"block ({block // GRID[1]},{block % GRID[1]})"
+        )
         self.status.setText(f"solo -> {label}")
         self._apply("solo")
 
@@ -859,11 +815,10 @@ class DetectWindow(QWidget):
         self.det = Detector(playhead=self.det.playhead)
         self.d_slider.setValue(self.det.d)
         self.centered_box.setChecked(True)
-        self.status.setText("reset -> bands cleared, D back to 0.5 s, detector disarmed")
+        self.status.setText(
+            "reset -> bands cleared, D back to 0.5 s, detector disarmed"
+        )
         self._apply("reset")
-
-
-
 
 
 @dataclass
@@ -873,15 +828,15 @@ class ColorSample:
 
 
 class ColorFrame(QWidget):
-
-
     sampled = Signal(object)
 
     def __init__(self, frame: QImage) -> None:
         super().__init__()
         self.frame = frame.convertToFormat(QImage.Format.Format_RGB888)
         width = 480
-        small = self.frame.scaledToWidth(width, Qt.TransformationMode.SmoothTransformation)
+        small = self.frame.scaledToWidth(
+            width, Qt.TransformationMode.SmoothTransformation
+        )
         buffer = small.constBits().tobytes()
         self.small = (
             np.frombuffer(buffer, np.uint8)
@@ -947,8 +902,6 @@ class ColorFrame(QWidget):
 
 
 class ColorWindow(QWidget):
-
-
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("graphs mockup - color gate")
@@ -1040,7 +993,9 @@ class ColorWindow(QWidget):
                 f"QPushButton {{background: rgb({r},{g},{b}); color: {fg};"
                 f" border: 2px solid {edge}; border-radius: 5px; padding: 2px 8px;}}"
             )
-            chip.setToolTip(f"rgb({r},{g},{b}) - {'include' if sample.include else 'exclude'}")
+            chip.setToolTip(
+                f"rgb({r},{g},{b}) - {'include' if sample.include else 'exclude'}"
+            )
             chip.clicked.connect(lambda checked=False, i=index: self._remove(i))
             self.chips.insertWidget(self.chips.count() - 1, chip)
 
@@ -1064,9 +1019,6 @@ class ColorWindow(QWidget):
         share = 100.0 * float(mask.mean())
         self.coverage.setText(f"{share:.1f}% of the frame is in the color gate")
         self.coverage.setStyleSheet(f"color: {ACCENT.name()};")
-
-
-
 
 
 def apply_shot(window: QWidget, shot: str) -> None:
@@ -1095,7 +1047,9 @@ def apply_shot(window: QWidget, shot: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--variant", choices=("detect", "color"), default="detect")
-    parser.add_argument("--shot", choices=("none", "tuned", "solo", "sampled"), default="none")
+    parser.add_argument(
+        "--shot", choices=("none", "tuned", "solo", "sampled"), default="none"
+    )
     parser.add_argument("--png", type=str, default="")
     parser.add_argument("--size", type=str, default="1280x800")
     args = parser.parse_args()

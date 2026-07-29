@@ -1,37 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import itertools
@@ -45,8 +11,6 @@ from numpy.typing import NDArray
 
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
 from sieve.core.wavelet import band_indices, default_freqs
-
-
 
 
 from sieve.detect import DetectorUpdate, detect
@@ -64,21 +28,12 @@ SIGNAL_LABELS: dict[str, str] = {
 
 
 class ChainKind(StrEnum):
-
-
-
-
-
-
-
     IMAGE = "image"
     BLOCK_SERIES = "block series"
     EVENTS = "events"
 
 
 class Stage(StrEnum):
-
-
     SPATIAL_PREP = "spatial prep"
     EXTRACTION = "signal extraction"
     TEMPORAL_FILTER = "temporal filter"
@@ -86,8 +41,6 @@ class Stage(StrEnum):
 
 
 class Status(StrEnum):
-
-
     OK = "ok"
     CONFLICT = "conflict"
     UNREACHED = "unreached"
@@ -95,14 +48,6 @@ class Status(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ChainStep:
-
-
-
-
-
-
-
-
     step_id: str
     title: str
     stage: Stage
@@ -113,24 +58,12 @@ class ChainStep:
 
 @dataclass(frozen=True, slots=True)
 class StepGrade:
-
-
     status: Status
-
-
 
     message: str = ""
 
 
 def grade(steps: tuple[ChainStep, ...]) -> tuple[StepGrade, ...]:
-
-
-
-
-
-
-
-
     grades: list[StepGrade] = []
     current = ChainKind.IMAGE
     broken = False
@@ -152,68 +85,40 @@ def grade(steps: tuple[ChainStep, ...]) -> tuple[StepGrade, ...]:
 
 
 def runnable_prefix(steps: tuple[ChainStep, ...]) -> Pipeline:
-
-
-
-
-
-
-
     nodes: list[Node] = []
     for step, step_grade in zip(steps, grade(steps), strict=True):
         if step_grade.status is not Status.OK or step.node is None:
             break
         nodes.append(step.node)
     edges = tuple(
-        Edge(upstream=a.node_id, downstream=b.node_id) for a, b in itertools.pairwise(nodes)
+        Edge(upstream=a.node_id, downstream=b.node_id)
+        for a, b in itertools.pairwise(nodes)
     )
     return Pipeline(nodes=tuple(nodes), edges=edges)
 
 
 @dataclass(frozen=True, slots=True)
 class DetectorState:
-
-
-
-
-
-
-
-
-
-
-
     freq_band: tuple[float, float] = (0.0, math.inf)
 
     value_band: tuple[float, float] = (-math.inf, math.inf)
-
 
     count_frac: tuple[float, float] | None = None
 
     window_frames: int = 30
     centered: bool = True
 
-
     solo_block: int | None = None
 
     @property
     def armed(self) -> bool:
-
         return self.count_frac is not None
 
     @classmethod
     def default(cls, fps: float) -> DetectorState:
-
         return cls(window_frames=max(1, round(fps)))
 
     def as_settings_changes(self) -> dict[str, Any]:
-
-
-
-
-
-
-
         return {
             "freq_band": self.freq_band,
             "value_band": self.value_band,
@@ -223,25 +128,12 @@ class DetectorState:
         }
 
     def to_settings(self) -> DetectorSettings:
-
-
-
-
-
-
-
-
-
         return DetectorSettings(**self.as_settings_changes())
 
     @classmethod
-    def from_settings(cls, settings: DetectorSettings, *, solo_block: int | None) -> DetectorState:
-
-
-
-
-
-
+    def from_settings(
+        cls, settings: DetectorSettings, *, solo_block: int | None
+    ) -> DetectorState:
         return cls(
             freq_band=settings.freq_band,
             value_band=settings.value_band,
@@ -261,14 +153,6 @@ def recompute(
     band_power: NDArray[np.float32] | None = None,
     workers: int,
 ) -> DetectorUpdate:
-
-
-
-
-
-
-
-
     return detect(
         series,
         fps,
@@ -280,28 +164,12 @@ def recompute(
 
 
 def snapped_band_label(freq_band: tuple[float, float], fps: float) -> str:
-
-
-
-
-
-
     freqs = default_freqs(fps)
     i, j = band_indices(freqs, freq_band[0], freq_band[1])
     return f"band {freqs[i]:.2f}-{freqs[j - 1]:.2f} Hz"
 
 
 def caption_for(step: ChainStep, detector: DetectorState, fps: float) -> str:
-
-
-
-
-
-
-
-
-
-
     node = step.node
     if node is not None:
         if node.filter_id == "rescale":
@@ -326,7 +194,6 @@ def caption_for(step: ChainStep, detector: DetectorState, fps: float) -> str:
 
 
 def _threshold_caption(detector: DetectorState) -> str:
-
     if detector.count_frac is None:
         return "threshold off"
     lo, hi = detector.count_frac
@@ -335,10 +202,6 @@ def _threshold_caption(detector: DetectorState) -> str:
     if math.isinf(lo) or lo <= 0.0:
         return f"threshold ≤ {hi:.0%} of blocks"
     return f"threshold {lo:.0%}-{hi:.0%} of blocks"
-
-
-
-
 
 
 STAGE_CHIPS: tuple[tuple[Stage, str], ...] = (
@@ -351,63 +214,37 @@ STAGE_CHIPS: tuple[tuple[Stage, str], ...] = (
 
 @dataclass(frozen=True, slots=True)
 class LiveChain:
-
-
-
-
-
-
-
     steps: tuple[ChainStep, ...]
     detector: DetectorState
     fps: float = 30.0
 
     def grades(self) -> tuple[StepGrade, ...]:
-
         return grade(self.steps)
 
     def pipeline(self) -> Pipeline:
-
         return runnable_prefix(self.steps)
 
     def detection_reachable(self) -> bool:
-
-
-
-
-
         for step, step_grade in zip(self.steps, self.grades(), strict=True):
             if step.stage is Stage.DETECTION and step_grade.status is Status.OK:
                 return True
         return False
 
     def without(self, step_id: str) -> LiveChain:
-
         return replace(self, steps=tuple(s for s in self.steps if s.step_id != step_id))
 
     def reset(self, defaults: LiveChain) -> LiveChain:
-
-
-
-
-
-
-
-
         by_id = {s.step_id: s for s in defaults.steps}
         steps = tuple(
-            replace(s, node=by_id[s.step_id].node) if s.step_id in by_id and s.node else s
+            replace(s, node=by_id[s.step_id].node)
+            if s.step_id in by_id and s.node
+            else s
             for s in self.steps
         )
         return replace(self, steps=steps, detector=DetectorState.default(self.fps))
 
 
 def parity_chain(fps: float, *, scale: float = 1.0) -> LiveChain:
-
-
-
-
-
     rescale = Node(filter_id="rescale", version="1.0.0", params={"scale": scale})
     normalize = Node(filter_id="normalize", version="1.0.0", params={"mode": "off"})
     signal = Node(

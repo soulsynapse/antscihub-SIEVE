@@ -1,43 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -48,7 +8,13 @@ import typer
 from numpy.typing import NDArray
 
 from sieve.backend.dispatch import Backend, NoKernelError
-from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
+from sieve.cli.common import (
+    WORKERS_OPTION,
+    frame_source,
+    load_project,
+    refuse,
+    span_for,
+)
 from sieve.core.filter_base import ArraySpec, ElementKind
 from sieve.core.pipeline_model import DetectorSettings, Project, resolved_detector
 from sieve.core.replicates import Replicate
@@ -70,7 +36,10 @@ def detect_project(
     project_path: Annotated[
         Path,
         typer.Argument(
-            exists=True, dir_okay=False, readable=True, help="A .sieve.yaml project file."
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="A .sieve.yaml project file.",
         ),
     ],
     frames: Annotated[
@@ -83,7 +52,9 @@ def detect_project(
     ] = None,
     node_id: Annotated[
         str | None,
-        typer.Option("--node", help="Node whose output is the series. Defaults to the sink."),
+        typer.Option(
+            "--node", help="Node whose output is the series. Defaults to the sink."
+        ),
     ] = None,
     csv_dir: Annotated[
         Path | None,
@@ -98,15 +69,6 @@ def detect_project(
     ] = Backend.CPU,
     workers: Annotated[int | None, WORKERS_OPTION] = None,
 ) -> None:
-
-
-
-
-
-
-
-
-
     discover()
     project = load_project(project_path)
     video = project.source_path(project_path)
@@ -115,7 +77,6 @@ def detect_project(
             "--csv has nothing to write: this project has no detector, so there is no "
             "series and no intervals. Tune one in the GUI and save."
         )
-
     try:
         dag = Dag.build(project.pipeline)
     except GraphError as error:
@@ -124,7 +85,6 @@ def detect_project(
         source = source_identity(video)
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
-
     series_node, element = _series_node(dag, node_id)
     series_filter = dag.specs[series_node].filter_id
     span = span_for(project, frames, video)
@@ -132,9 +92,10 @@ def detect_project(
     luma = not dag.needs_chroma
     store = MemoryFrameStore()
     exports: list[DetectionExport] = []
-
     for target in targets:
-        if replicate_ids and (target is None or target.replicate_id not in replicate_ids):
+        if replicate_ids and (
+            target is None or target.replicate_id not in replicate_ids
+        ):
             continue
         resolved = resolve(
             project.crops,
@@ -171,31 +132,15 @@ def detect_project(
                     settings=resolved_detector(project.detector, target),
                 )
             )
-
     if csv_dir is not None:
         typer.echo(_export(csv_dir, exports, element))
     _refuse_unknown(project, replicate_ids)
 
 
 def _series_node(dag: Dag, node_id: str | None) -> tuple[str, ElementKind]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    sinks = tuple(node.node_id for node in dag.order if not dag.downstreams[node.node_id])
+    sinks = tuple(
+        node.node_id for node in dag.order if not dag.downstreams[node.node_id]
+    )
     if node_id is None:
         if len(sinks) != 1:
             raise refuse(
@@ -205,20 +150,13 @@ def _series_node(dag: Dag, node_id: str | None) -> tuple[str, ElementKind]:
         node_id = sinks[0]
     elif node_id not in {node.node_id for node in dag.order}:
         raise refuse(f"no such node: {node_id}")
-
     spec = dag.specs[node_id]
     if not isinstance(spec.emits, ArraySpec):
-
-
         raise refuse(
             f"{node_id} ({spec.filter_id}) emits rows, not frames, so there is no per-frame "
             "series to detect over"
         )
     if not dag.source_indexed[node_id]:
-
-
-
-
         raise refuse(
             f"{node_id} ({spec.filter_id}) is downstream of a filter that changes rate, so a "
             "row of its output is not a source frame and every timestamp this would write "
@@ -226,10 +164,6 @@ def _series_node(dag: Dag, node_id: str | None) -> tuple[str, ElementKind]:
         )
     element = dag.elements[node_id]
     if element is None:
-
-
-
-
         lost = dag.element_lost_at(node_id)
         culprit = dag.specs[lost]
         raise refuse(
@@ -247,17 +181,6 @@ def _collect(
     store: MemoryFrameStore,
     node_id: str,
 ) -> NDArray[np.float32]:
-
-
-
-
-
-
-
-
-
-
-
     rows: list[NDArray[np.float32]] = []
     try:
         for result in execute(plan, reader, store=store):
@@ -284,27 +207,20 @@ def _detect_one(
     fps: float,
     start: int,
 ) -> DetectorUpdate | None:
-
-
-
-
-
-
-
     if settings is None:
         return None
     return detect(
-        series, fps, resolved_detector(settings, target), start_index=start, workers=ALL_CORES
+        series,
+        fps,
+        resolved_detector(settings, target),
+        start_index=start,
+        workers=ALL_CORES,
     )
 
 
-def _export(directory: Path, exports: list[DetectionExport], element: ElementKind) -> str:
-
-
-
-
-
-
+def _export(
+    directory: Path, exports: list[DetectionExport], element: ElementKind
+) -> str:
     if not exports:
         return f"--csv wrote nothing to {directory}: no replicate was run"
     try:
@@ -330,17 +246,6 @@ def _report(
     fps: float,
     element: ElementKind,
 ) -> str:
-
-
-
-
-
-
-
-
-
-
-
     counted = f"{series.shape[1]} {element.value}s"
     if update is None:
         return (
@@ -353,7 +258,9 @@ def _report(
             "(no count threshold placed), so nothing is claimed"
         )
     found = len(update.intervals)
-    lines = [f"{label}: {series.shape[0]} frames, {found} interval{'' if found == 1 else 's'}"]
+    lines = [
+        f"{label}: {series.shape[0]} frames, {found} interval{'' if found == 1 else 's'}"
+    ]
     lines.extend(
         f"  {first}:{last} ({first / fps:.2f}s - {last / fps:.2f}s, {last - first} frames)"
         for first, last in update.intervals
@@ -362,12 +269,6 @@ def _report(
 
 
 def _refuse_unknown(project: Project, replicate_ids: list[str] | None) -> None:
-
-
-
-
-
-
     if not replicate_ids:
         return
     known = {rep.replicate_id for rep in project.replicates}

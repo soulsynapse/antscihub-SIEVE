@@ -12,9 +12,7 @@ from pathlib import Path
 
 EXCLUDED_DIRECTORIES = {
     ".git",
-    ".hypothesis",
     ".mypy_cache",
-    ".pytest_cache",
     ".pyright",
     ".ruff_cache",
     ".tox",
@@ -84,14 +82,10 @@ def remove_docstrings(source: str) -> tuple[str, int]:
         start_line = statement.lineno - 1
         end_line = statement.end_lineno - 1
         start_column = len(
-            lines[start_line]
-            .encode("utf-8")[: statement.col_offset]
-            .decode("utf-8")
+            lines[start_line].encode("utf-8")[: statement.col_offset].decode("utf-8")
         )
         end_column = len(
-            lines[end_line]
-            .encode("utf-8")[: statement.end_col_offset]
-            .decode("utf-8")
+            lines[end_line].encode("utf-8")[: statement.end_col_offset].decode("utf-8")
         )
         start = offsets[start_line] + start_column
         end = offsets[end_line] + end_column
@@ -104,7 +98,9 @@ def remove_docstrings(source: str) -> tuple[str, int]:
 
     result = source
     for start, end, needs_pass, indent in sorted(spans, reverse=True):
-        newlines = "".join(character for character in result[start:end] if character in "\r\n")
+        newlines = "".join(
+            character for character in result[start:end] if character in "\r\n"
+        )
         replacement = (f"{indent}pass" if needs_pass else "") + newlines
         result = result[:start] + replacement + result[end:]
     return result, len(spans)

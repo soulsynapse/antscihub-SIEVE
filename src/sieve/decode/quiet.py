@@ -1,45 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import atexit
@@ -51,10 +9,6 @@ import sys
 import threading
 
 
-
-
-
-
 _RAW_FORMAT_LINE = re.compile(rb"retrieveFrame.*will be treated as 8UC1")
 
 _installed = False
@@ -62,16 +16,6 @@ _lock = threading.Lock()
 
 
 def silence_raw_format_warning() -> bool:
-
-
-
-
-
-
-
-
-
-
     global _installed
     with _lock:
         if _installed:
@@ -83,19 +27,6 @@ def silence_raw_format_warning() -> bool:
             os.close(write_fd)
         except OSError:
             return False
-
-
-
-
-
-
-
-
-
-
-
-
-
         previous = sys.stderr
         with contextlib.suppress(ValueError):
             previous.flush()
@@ -105,7 +36,6 @@ def silence_raw_format_warning() -> bool:
             errors="backslashreplace",
             line_buffering=True,
         )
-
         thread = threading.Thread(
             target=_pump,
             args=(read_fd, saved),
@@ -119,13 +49,6 @@ def silence_raw_format_warning() -> bool:
 
 
 def _pump(read_fd: int, out_fd: int) -> None:
-
-
-
-
-
-
-
     with os.fdopen(read_fd, "rb", buffering=0) as stream:
         for line in stream:
             if not _RAW_FORMAT_LINE.search(line):
@@ -136,19 +59,6 @@ def _pump(read_fd: int, out_fd: int) -> None:
 
 
 def _restore(saved: int, thread: threading.Thread) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
     with contextlib.suppress(ValueError):
         sys.stderr.flush()
     with contextlib.suppress(OSError):

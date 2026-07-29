@@ -1,29 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
@@ -39,15 +13,8 @@ class AffinityUnavailableError(RuntimeError):
     pass
 
 
-
-
-
-
-
 @dataclass(frozen=True, slots=True)
 class CoreSet:
-
-
     label: str
     cpus: tuple[int, ...]
 
@@ -58,45 +25,25 @@ class CoreSet:
 
 @dataclass(frozen=True, slots=True)
 class Cell:
-
-
     cores: CoreSet
     workers: int
 
 
 @dataclass(frozen=True, slots=True)
 class Reading:
-
-
     cell: Cell
     samples: tuple[float, ...]
 
     @property
     def best(self) -> float:
-
-
-
-
-
-
-
         return min(self.samples)
 
     @property
     def typical(self) -> float:
-
         return median(self.samples)
 
 
 def class_core_sets(classes: dict[int, int] | None = None) -> tuple[CoreSet, ...]:
-
-
-
-
-
-
-
-
     published = cpu_classes() if classes is None else classes
     by_class: dict[int, list[int]] = {}
     for cpu, performance in sorted(published.items()):
@@ -110,27 +57,16 @@ def class_core_sets(classes: dict[int, int] | None = None) -> tuple[CoreSet, ...
 
 
 def sized_core_sets(source: CoreSet, sizes: Iterable[int]) -> tuple[CoreSet, ...]:
-
-
-
-
-
-
     out: list[CoreSet] = []
     for size in sorted({int(size) for size in sizes}):
         if 0 < size <= len(source.cpus):
-            out.append(CoreSet(label=f"{source.label}[:{size}]", cpus=source.cpus[:size]))
+            out.append(
+                CoreSet(label=f"{source.label}[:{size}]", cpus=source.cpus[:size])
+            )
     return tuple(out)
 
 
 def design(cores: Sequence[CoreSet], workers: Sequence[int]) -> tuple[Cell, ...]:
-
-
-
-
-
-
-
     return tuple(
         Cell(cores=core_set, workers=count)
         for core_set in cores
@@ -146,35 +82,13 @@ def sweep(
     repeats: int = 3,
     warmup: bool = True,
 ) -> tuple[Reading, ...]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     process = psutil.Process()
     try:
         original = process.cpu_affinity()
     except (AttributeError, NotImplementedError, psutil.Error) as error:
-        raise AffinityUnavailableError(f"this platform cannot pin a process: {error}") from error
-
+        raise AffinityUnavailableError(
+            f"this platform cannot pin a process: {error}"
+        ) from error
     samples: dict[Cell, list[float]] = {cell: [] for cell in cells}
     try:
         if warmup:
@@ -187,36 +101,27 @@ def sweep(
                 samples[cell].append(objective(cell))
     finally:
         process.cpu_affinity(original)
-
-    return tuple(Reading(cell=cell, samples=tuple(taken)) for cell, taken in samples.items())
+    return tuple(
+        Reading(cell=cell, samples=tuple(taken)) for cell, taken in samples.items()
+    )
 
 
 def _pin(process: psutil.Process, cell: Cell) -> None:
-
-
-
-
-
-
-
     try:
         process.cpu_affinity(list(cell.cores.cpus))
-    except (AttributeError, NotImplementedError, psutil.Error, OSError, ValueError) as error:
+    except (
+        AttributeError,
+        NotImplementedError,
+        psutil.Error,
+        OSError,
+        ValueError,
+    ) as error:
         raise AffinityUnavailableError(
             f"could not pin to {cell.cores.label} ({list(cell.cores.cpus)}): {error}"
         ) from error
 
 
 def curvature(readings: Sequence[Reading]) -> dict[str, float]:
-
-
-
-
-
-
-
-
-
     by_label: dict[str, list[float]] = {}
     for reading in readings:
         by_label.setdefault(reading.cell.cores.label, []).append(reading.best)

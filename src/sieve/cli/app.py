@@ -1,17 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from typing import Annotated
@@ -30,9 +16,6 @@ from sieve.decode.quiet import silence_raw_format_warning
 app = typer.Typer(
     name="sieve",
     help="Signal Isolation for Ethological Video Events.",
-
-
-
     no_args_is_help=True,
     add_completion=False,
 )
@@ -46,7 +29,6 @@ app.command("sweep")(sweep_decode)
 
 
 def _print_version(value: bool) -> None:
-
     if value:
         typer.echo(f"sieve {__version__}")
         raise typer.Exit()
@@ -57,32 +39,17 @@ def root_options(
     version: Annotated[
         bool,
         typer.Option(
-            "--version", callback=_print_version, is_eager=True, help="Print the version."
+            "--version",
+            callback=_print_version,
+            is_eager=True,
+            help="Print the version.",
         ),
     ] = False,
 ) -> None:
     pass
 
 
-
-
-
-
-
-
-
-
 def main() -> None:
-
-
-
-
-
-
-
-
-
-
     silence_raw_format_warning()
     app()
 

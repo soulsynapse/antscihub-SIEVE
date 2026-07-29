@@ -1,36 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from typing import Any
@@ -84,12 +51,6 @@ _CHAIN_INCOMPLETE = "chain incomplete — see the stack"
 
 
 def last_image_node_id(chain: LiveChain) -> str | None:
-
-
-
-
-
-
     found: str | None = None
     for step, step_grade in zip(chain.steps, grade(chain.steps), strict=True):
         if step_grade.status is not Status.OK or step.node is None:
@@ -100,12 +61,6 @@ def last_image_node_id(chain: LiveChain) -> str | None:
 
 
 def frame_to_qimage(frame: NDArray[Any]) -> QImage | None:
-
-
-
-
-
-
     data = np.asarray(frame)
     if data.ndim == 3 and data.shape[2] == 3:
         contiguous = np.ascontiguousarray(data.astype(np.uint8, copy=False))
@@ -127,8 +82,6 @@ def frame_to_qimage(frame: NDArray[Any]) -> QImage | None:
 
 
 class _FramePane(QWidget):
-
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._image: QImage | None = None
@@ -146,7 +99,9 @@ class _FramePane(QWidget):
             painter.setPen(DIM)
             painter.setFont(plot_font(9))
             painter.drawText(
-                self.rect(), int(Qt.AlignmentFlag.AlignCenter), "waiting for a preview frame"
+                self.rect(),
+                int(Qt.AlignmentFlag.AlignCenter),
+                "waiting for a preview frame",
             )
             painter.end()
             return
@@ -162,9 +117,6 @@ class _FramePane(QWidget):
 
 
 class StepWizard(QWidget):
-
-
-
     chain_proposed = Signal(object, str)
 
     hover_preview = Signal(object)
@@ -179,23 +131,13 @@ class StepWizard(QWidget):
         target: int | str,
         parent: QWidget | None = None,
     ) -> None:
-
-
-
-
-
-
-
         super().__init__(parent)
         self._original = chain
         self._target = target
         self._selected: CatalogEntry | None = None
         self._provisional: LiveChain | None = None
         self._provisional_id: str | None = None
-
-
         self._params: dict[str, dict[str, object]] = {}
-
         if isinstance(target, int):
             self._candidates = candidates_for_insert(chain, target)
             heading = "INSERT A STEP"
@@ -203,21 +145,12 @@ class StepWizard(QWidget):
             self._candidates = candidates_for_swap(chain, target)
             step = next(s for s in chain.steps if s.step_id == target)
             heading = f"REPLACE {step.title.upper()}"
-
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._build(heading)
         self._populate()
 
     def start(self) -> None:
-
-
-
-
-
-
         self._select_initial()
-
-
 
     def _build(self, heading: str) -> None:
         self._panel = QWidget(self)
@@ -226,12 +159,9 @@ class StepWizard(QWidget):
             f"#wizardPanel {{background: {PANEL.name()}; border: 1px solid {LINE.name()};"
             " border-radius: 8px;}"
         )
-
         title = QLabel(heading)
         title.setFont(plot_font(9, bold=True, spaced=True))
         title.setStyleSheet(f"color: {DIM.name()};")
-
-
         self._search = QLineEdit()
         self._search.setPlaceholderText("search operations")
         self._search.textChanged.connect(self._filter_rows)
@@ -244,8 +174,6 @@ class StepWizard(QWidget):
         left.setSpacing(6)
         left.addWidget(self._search)
         left.addWidget(self._list, 1)
-
-
         self._frame_pane = _FramePane()
         self.density = DensityPlot()
         self.density.setMinimumHeight(140)
@@ -267,8 +195,6 @@ class StepWizard(QWidget):
         center.addWidget(self.density, 2)
         center.addWidget(self.count, 2)
         center.addLayout(d_row)
-
-
         self._step_title = QLabel()
         self._step_title.setFont(plot_font(10, bold=True))
         self._step_title.setStyleSheet(f"color: {TEXT.name()};")
@@ -300,7 +226,6 @@ class StepWizard(QWidget):
         right.addWidget(self._settings_host)
         right.addWidget(guidance_scroll, 1)
         right.addLayout(buttons)
-
         columns = QHBoxLayout(self._panel)
         columns.setContentsMargins(16, 12, 16, 12)
         columns.setSpacing(14)
@@ -312,7 +237,6 @@ class StepWizard(QWidget):
         columns.addLayout(right, 4)
 
     def _populate(self) -> None:
-
         last_stage = None
         for candidate in self._candidates:
             if candidate.entry.stage is not last_stage:
@@ -335,13 +259,6 @@ class StepWizard(QWidget):
         return f"{candidate.entry.title} — {candidate.reason}"
 
     def _select_initial(self) -> None:
-
-
-
-
-
-
-
         wanted = self._target if isinstance(self._target, str) else None
         enabled = [c for c in self._candidates if c.enabled]
         first = next((c for c in enabled if c.entry.entry_id == wanted), None)
@@ -349,8 +266,6 @@ class StepWizard(QWidget):
             first = enabled[0]
         if first is not None:
             self.select_entry(first.entry.entry_id)
-
-
 
     def _candidate(self, entry_id: str) -> Candidate | None:
         return next((c for c in self._candidates if c.entry.entry_id == entry_id), None)
@@ -362,12 +277,6 @@ class StepWizard(QWidget):
         return swap_step(self._original, self._target, entry, params)
 
     def select_entry(self, entry_id: str) -> bool:
-
-
-
-
-
-
         candidate = self._candidate(entry_id)
         if candidate is None or not candidate.enabled:
             return False
@@ -392,18 +301,15 @@ class StepWizard(QWidget):
             self.select_entry(entry_id)
 
     def _on_row_hovered(self, item: QListWidgetItem) -> None:
-
-
-
-
-
-
         entry_id = item.data(_STAGE_ROLE)
         candidate = self._candidate(entry_id) if isinstance(entry_id, str) else None
         if candidate is None or not candidate.enabled:
             self.hover_ended.emit()
             return
-        if self._selected is not None and candidate.entry.entry_id == self._selected.entry_id:
+        if (
+            self._selected is not None
+            and candidate.entry.entry_id == self._selected.entry_id
+        ):
             self.hover_ended.emit()
             return
         hypothetical, _ = self._propose(candidate.entry)
@@ -429,10 +335,7 @@ class StepWizard(QWidget):
             )
             item.setHidden(bool(wanted) and wanted not in haystack)
 
-
-
     def _rebuild_settings(self) -> None:
-
         while self._settings.count():
             item = self._settings.takeAt(0)
             widget = None if item is None else item.widget()
@@ -442,8 +345,9 @@ class StepWizard(QWidget):
         if entry is None or self._provisional is None:
             return
         self._step_title.setText(entry.title)
-
-        step = next(s for s in self._provisional.steps if s.step_id == self._provisional_id)
+        step = next(
+            s for s in self._provisional.steps if s.step_id == self._provisional_id
+        )
         if step.node is not None:
             for row in param_rows(step.node, entry.hidden_params, self._on_param_edit):
                 self._settings.addWidget(row)
@@ -451,7 +355,6 @@ class StepWizard(QWidget):
             note = QLabel("its parameters are the graphs below — drag them")
             note.setStyleSheet(f"color: {DIM.name()};")
             self._settings.addWidget(note)
-
         guidance = guidance_for(entry)
         parts = [f"**{guidance.summary}**"]
         if guidance.when_to_use:
@@ -463,25 +366,19 @@ class StepWizard(QWidget):
         self._guidance.setText("\n\n".join(parts))
 
     def _on_param_edit(self, name: str, value: object) -> None:
-
         if self._selected is None:
             return
         self._params.setdefault(self._selected.entry_id, {})[name] = value
         self._provisional, self._provisional_id = self._propose(self._selected)
         self.chain_proposed.emit(self._provisional, self._provisional_id)
 
-
-
     def show_frame(self, image: QImage | None) -> None:
-
         self._frame_pane.show_frame(image)
 
     def apply_state(
         self,
         *,
         update: DetectorUpdate | None,
-
-
         surface: DensitySurface | None = None,
         start: int,
         frames: int,
@@ -491,13 +388,6 @@ class StepWizard(QWidget):
         detection_ok: bool,
         playhead: int,
     ) -> None:
-
-
-
-
-
-
-
         seconds = detector.window_frames / fps if fps > 0 else 0.0
         self._d_label.setText(f"D {detector.window_frames} fr ({seconds:.2f} s)")
         for widget in (self.d_slider, self.centered):
@@ -506,24 +396,27 @@ class StepWizard(QWidget):
         self.centered.setChecked(detector.centered)
         for widget in (self.d_slider, self.centered):
             widget.blockSignals(False)
-
         if update is None:
             self.count.set_series(np.zeros(0, np.float32), region_blocks=1, armed=False)
             self.count.set_gate(None)
             self.count.set_notice(
-                "no reachable temporal filter step" if not temporal_ok else "no series yet"
+                "no reachable temporal filter step"
+                if not temporal_ok
+                else "no series yet"
             )
-            self._summary.setText(_CHAIN_INCOMPLETE if not (temporal_ok and detection_ok) else "")
+            self._summary.setText(
+                _CHAIN_INCOMPLETE if not (temporal_ok and detection_ok) else ""
+            )
             return
-
         blocks = update.band_power.shape[1]
         solo = detector.solo_block
-        solo_trace = update.band_power[:, solo] if solo is not None and solo < blocks else None
+        solo_trace = (
+            update.band_power[:, solo] if solo is not None and solo < blocks else None
+        )
         self.density.set_series(update.band_power, solo_trace, surface=surface)
         self.density.set_span(start, frames)
         self.density.set_playhead(playhead)
         self.density.set_band(*detector.value_band)
-
         self.count.set_span(start, frames)
         self.count.set_playhead(playhead)
         self.count.set_series(
@@ -542,7 +435,6 @@ class StepWizard(QWidget):
             self.count.set_notice("")
         if not detection_ok:
             self.count.set_notice("no reachable detection step")
-
         if not temporal_ok or not detection_ok:
             self._summary.setText(_CHAIN_INCOMPLETE)
         elif update.intervals is None:
@@ -551,48 +443,37 @@ class StepWizard(QWidget):
             gated = float(update.gate.sum()) / fps if update.gate is not None else 0.0
             self._summary.setText(f"{len(update.intervals)} detections · {gated:.1f} s")
 
-
-
     @property
     def provisional_chain(self) -> LiveChain | None:
-
         return self._provisional
 
     @property
     def provisional_step_id(self) -> str | None:
-
         return self._provisional_id
 
     @property
     def selected_entry(self) -> CatalogEntry | None:
-
         return self._selected
 
     @property
     def add_button(self) -> QPushButton:
-
         return self._add
 
     @property
     def settings_host(self) -> QWidget:
-
         return self._settings_host
 
     @property
     def candidate_list(self) -> QListWidget:
-
         return self._list
 
     def candidate_rows(self) -> list[QListWidgetItem]:
-
         rows: list[QListWidgetItem] = []
         for index in range(self._list.count()):
             item = self._list.item(index)
             if isinstance(item.data(_STAGE_ROLE), str):
                 rows.append(item)
         return rows
-
-
 
     def _on_add(self) -> None:
         if self._selected is not None and self._provisional is not None:
@@ -604,13 +485,14 @@ class StepWizard(QWidget):
             return
         super().keyPressEvent(event)
 
-
-
     def resizeEvent(self, event: object) -> None:
         del event
         margin = 28
         self._panel.setGeometry(
-            margin, margin, max(0, self.width() - 2 * margin), max(0, self.height() - 2 * margin)
+            margin,
+            margin,
+            max(0, self.width() - 2 * margin),
+            max(0, self.height() - 2 * margin),
         )
 
     def paintEvent(self, event: QPaintEvent) -> None:
@@ -620,7 +502,4 @@ class StepWizard(QWidget):
         painter.end()
 
     def mousePressEvent(self, event: object) -> None:
-
-
-
         del event

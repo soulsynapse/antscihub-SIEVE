@@ -1,40 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import hashlib
@@ -55,12 +18,7 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.storage.crop_writer import write_ffv1
 
 
-
-
 MAX_STATISTIC_DRIFT = 2.0
-
-
-
 
 
 CROPS_SUFFIX = ".crops"
@@ -76,22 +34,11 @@ class CropVerificationError(RuntimeError):
     pass
 
 
-
-
-
-
 def crops_dir(video: Path, project_dir: Path) -> Path:
-
     return project_dir / f"{video.stem}{CROPS_SUFFIX}"
 
 
 def artifact_filename(name: str, fmt: CropFormat, span: ClipRange) -> str:
-
-
-
-
-
-
     slug = _SLUG_STRIP.sub("-", name.lower()).strip("-") or "replicate"
     return f"{slug}-{fmt}-{span.start}-{span.end}.mkv"
 
@@ -106,49 +53,12 @@ def materialize_crop(
     cancelled: Callable[[], bool] | None = None,
     progress: Callable[[int, int], None] | None = None,
 ) -> CropArtifact:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     fmt: CropFormat = "luma" if luma else "bgr"
-
-
-
     cut_from = source_identity(video)
-
     destination = crops_dir(video, project_dir)
     destination.mkdir(parents=True, exist_ok=True)
     final = destination / artifact_filename(replicate.name, fmt, span)
     part = final.with_name(f"{final.stem}.part.mkv")
-
     fed = _FedFrames()
     try:
         with VideoReader(video, luma=luma) as reader:
@@ -161,7 +71,6 @@ def materialize_crop(
     except BaseException:
         part.unlink(missing_ok=True)
         raise
-
     part.replace(final)
     return CropArtifact(
         path=_relative_posix(final, project_dir),
@@ -174,23 +83,12 @@ def materialize_crop(
 
 
 class _FedFrames:
-
-
-
-
-
-
-
-
-
-
     def __init__(self) -> None:
         self.digests: list[str] = []
         self.stats: list[tuple[float, float]] = []
         self.shape: tuple[int, ...] = ()
 
     def tee(self, frames: Iterator[NDArray[Any]]) -> Iterator[NDArray[Any]]:
-
         for array in frames:
             self.shape = self.shape or array.shape
             self.digests.append(_digest(array))
@@ -208,16 +106,11 @@ def _cropped(
     cancelled: Callable[[], bool] | None,
     progress: Callable[[int, int], None] | None,
 ) -> Iterator[NDArray[Any]]:
-
-
-
-
-
-
-
     for index in range(span.start, span.end):
         if cancelled is not None and cancelled():
-            raise MaterializeCancelledError(f"withdrawn after {index - span.start} frames")
+            raise MaterializeCancelledError(
+                f"withdrawn after {index - span.start} frames"
+            )
         frame = reader.read(index)
         yield roi.clamped_to(frame.width, frame.height).crop(frame.data)
         if progress is not None:
@@ -225,16 +118,6 @@ def _cropped(
 
 
 def _verify(path: Path, fed: _FedFrames, *, luma: bool) -> None:
-
-
-
-
-
-
-
-
-
-
     with VideoReader(path, luma=luma) as reader:
         if reader.metadata.frame_count != len(fed):
             raise CropVerificationError(
@@ -251,7 +134,9 @@ def _verify(path: Path, fed: _FedFrames, *, luma: bool) -> None:
                 )
             if _digest(data) == digest:
                 continue
-            drift = max(abs(float(data.mean()) - mean), abs(float(data.std()) - deviation))
+            drift = max(
+                abs(float(data.mean()) - mean), abs(float(data.std()) - deviation)
+            )
             if drift > MAX_STATISTIC_DRIFT:
                 raise CropVerificationError(
                     f"{path.name} frame {index} reads back as different pixels than were fed "
@@ -261,17 +146,12 @@ def _verify(path: Path, fed: _FedFrames, *, luma: bool) -> None:
 
 
 def _digest(array: NDArray[Any]) -> str:
-
-    return hashlib.blake2b(np.ascontiguousarray(array).tobytes(), digest_size=16).hexdigest()
+    return hashlib.blake2b(
+        np.ascontiguousarray(array).tobytes(), digest_size=16
+    ).hexdigest()
 
 
 def _relative_posix(target: Path, base: Path) -> str:
-
-
-
-
-
-
     try:
         relative = target.resolve().relative_to(base.resolve())
     except ValueError:

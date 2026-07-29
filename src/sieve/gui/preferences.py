@@ -1,20 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,54 +16,34 @@ MIN_COARSE_INTERVAL_SECONDS: Final = 0.25
 MAX_COARSE_INTERVAL_SECONDS: Final = 10.0
 
 
-
 PROXY_WIDTH: Final = "decode/proxy_width"
 DEFAULT_PROXY_WIDTH: Final = 1280
 MIN_PROXY_WIDTH: Final = 320
 MAX_PROXY_WIDTH: Final = 3840
 
 
-
-
-
-
 VIEWPORT_LUMA: Final = "decode/viewport_luma"
 DEFAULT_VIEWPORT_LUMA: Final = False
-
-
-
-
-
 
 
 RENDER_FED_PLAYBACK: Final = "playback/render_fed"
 DEFAULT_RENDER_FED_PLAYBACK: Final = True
 
 
-
-
 LAST_VIDEO: Final = "session/last_video"
 
 
 class Preferences(QObject):
-
-
-
-
-
     changed = Signal()
 
-    def __init__(self, settings: QSettings | None = None, parent: QObject | None = None) -> None:
+    def __init__(
+        self, settings: QSettings | None = None, parent: QObject | None = None
+    ) -> None:
         super().__init__(parent)
-
-
         self._settings = settings if settings is not None else QSettings()
-
-
 
     @property
     def adaptive_scrub(self) -> bool:
-
         return _as_bool(self._settings.value(ADAPTIVE_SCRUB), DEFAULT_ADAPTIVE_SCRUB)
 
     @adaptive_scrub.setter
@@ -89,7 +52,6 @@ class Preferences(QObject):
 
     @property
     def coarse_interval_seconds(self) -> float:
-
         return _as_float(
             self._settings.value(COARSE_INTERVAL_SECONDS),
             DEFAULT_COARSE_INTERVAL_SECONDS,
@@ -101,13 +63,14 @@ class Preferences(QObject):
     def coarse_interval_seconds(self, seconds: float) -> None:
         self._store(
             COARSE_INTERVAL_SECONDS,
-            _clamp(float(seconds), MIN_COARSE_INTERVAL_SECONDS, MAX_COARSE_INTERVAL_SECONDS),
+            _clamp(
+                float(seconds), MIN_COARSE_INTERVAL_SECONDS, MAX_COARSE_INTERVAL_SECONDS
+            ),
             current=self.coarse_interval_seconds,
         )
 
     @property
     def proxy_width(self) -> int:
-
         return round(
             _as_float(
                 self._settings.value(PROXY_WIDTH),
@@ -127,7 +90,6 @@ class Preferences(QObject):
 
     @property
     def viewport_luma(self) -> bool:
-
         return _as_bool(self._settings.value(VIEWPORT_LUMA), DEFAULT_VIEWPORT_LUMA)
 
     @viewport_luma.setter
@@ -136,21 +98,18 @@ class Preferences(QObject):
 
     @property
     def render_fed_playback(self) -> bool:
-
-        return _as_bool(self._settings.value(RENDER_FED_PLAYBACK), DEFAULT_RENDER_FED_PLAYBACK)
+        return _as_bool(
+            self._settings.value(RENDER_FED_PLAYBACK), DEFAULT_RENDER_FED_PLAYBACK
+        )
 
     @render_fed_playback.setter
     def render_fed_playback(self, enabled: bool) -> None:
-        self._store(RENDER_FED_PLAYBACK, bool(enabled), current=self.render_fed_playback)
+        self._store(
+            RENDER_FED_PLAYBACK, bool(enabled), current=self.render_fed_playback
+        )
 
     @property
     def last_video(self) -> Path | None:
-
-
-
-
-
-
         raw = self._settings.value(LAST_VIDEO)
         if not isinstance(raw, str) or not raw.strip():
             return None
@@ -158,9 +117,6 @@ class Preferences(QObject):
 
     @last_video.setter
     def last_video(self, path: Path | None) -> None:
-
-
-
         stored = self.last_video
         self._store(
             LAST_VIDEO,
@@ -169,15 +125,7 @@ class Preferences(QObject):
             notify=False,
         )
 
-
-
     def restore_defaults(self) -> None:
-
-
-
-
-
-
         for key in (
             ADAPTIVE_SCRUB,
             COARSE_INTERVAL_SECONDS,
@@ -189,19 +137,9 @@ class Preferences(QObject):
         self._settings.sync()
         self.changed.emit()
 
-    def _store(self, key: str, value: object, *, current: object, notify: bool = True) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
+    def _store(
+        self, key: str, value: object, *, current: object, notify: bool = True
+    ) -> None:
         if current == value:
             return
         self._settings.setValue(key, value)
@@ -215,7 +153,6 @@ def _clamp(value: float, low: float, high: float) -> float:
 
 
 def _as_bool(raw: object, default: bool) -> bool:
-
     if isinstance(raw, bool):
         return raw
     if isinstance(raw, str):
@@ -228,12 +165,6 @@ def _as_bool(raw: object, default: bool) -> bool:
 
 
 def _as_float(raw: object, default: float, low: float, high: float) -> float:
-
-
-
-
-
-
     if isinstance(raw, bool) or raw is None:
         return default
     if isinstance(raw, int | float):

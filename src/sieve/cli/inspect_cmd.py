@@ -1,26 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from typing import Annotated
@@ -40,20 +17,17 @@ def inspect_filters(
     ] = None,
     version: Annotated[
         str | None,
-        typer.Option("--version", "-v", help="Which version. Defaults to the newest installed."),
+        typer.Option(
+            "--version", "-v", help="Which version. Defaults to the newest installed."
+        ),
     ] = None,
     guidance: Annotated[
         bool,
-        typer.Option("--guidance/--no-guidance", help="Print the filter's markdown guidance."),
+        typer.Option(
+            "--guidance/--no-guidance", help="Print the filter's markdown guidance."
+        ),
     ] = True,
 ) -> None:
-
-
-
-
-
-
-
     specs = discover()
     if filter_id is None:
         if version is not None:
@@ -65,41 +39,24 @@ def inspect_filters(
 
 
 def _resolve(filter_id: str, version: str | None) -> FilterSpec:
-
-
-
-
-
-
-
-
-
-
-
-
-
     try:
-        return REGISTRY.latest(filter_id) if version is None else REGISTRY.get(filter_id, version)
+        return (
+            REGISTRY.latest(filter_id)
+            if version is None
+            else REGISTRY.get(filter_id, version)
+        )
     except UnknownFilterError as error:
         typer.echo(str(error), err=True)
         installed = REGISTRY.versions(filter_id)
         if installed:
-            typer.echo(f"installed versions of {filter_id}: {', '.join(installed)}", err=True)
+            typer.echo(
+                f"installed versions of {filter_id}: {', '.join(installed)}", err=True
+            )
         raise typer.Exit(1) from error
 
 
 def _list(specs: tuple[FilterSpec, ...]) -> None:
-
-
-
-
-
-
-
     if not specs:
-
-
-
         typer.echo("no filters installed")
         return
     width = max(len(spec.filter_id) for spec in specs)
@@ -108,26 +65,12 @@ def _list(specs: tuple[FilterSpec, ...]) -> None:
 
 
 def _warmup_note(spec: FilterSpec) -> str:
-
-
-
-
-
-
-
     if spec.params_model.warmup_frames is ParamsBase.warmup_frames:
         return ""
     return "  (worst case; each configuration is charged its own)"
 
 
 def _describe(spec: FilterSpec, *, guidance: bool) -> str:
-
-
-
-
-
-
-
     lines = [
         f"{spec.filter_id} {spec.version}",
         f"  {spec.summary}",
@@ -152,12 +95,6 @@ def _describe(spec: FilterSpec, *, guidance: bool) -> str:
     return "\n".join(lines)
 
 
-
-
-
-
-
-
 _CONSTRAINT_KEYS = (
     "minimum",
     "maximum",
@@ -172,19 +109,6 @@ _CONSTRAINT_KEYS = (
 
 
 def _parameters(spec: FilterSpec) -> list[str]:
-
-
-
-
-
-
-
-
-
-
-
-
-
     schema = spec.params_model.model_json_schema()
     properties: dict[str, dict[str, object]] = schema.get("properties", {})
     if not properties:
@@ -195,8 +119,12 @@ def _parameters(spec: FilterSpec) -> list[str]:
     for name, described in properties.items():
         marker = "*" if name in spec.primary_params else " "
         parts = [str(described.get("type", "any"))]
-        parts.append("required" if name in required else f"default {described.get('default')!r}")
-        parts.extend(f"{key}={described[key]!r}" for key in _CONSTRAINT_KEYS if key in described)
+        parts.append(
+            "required" if name in required else f"default {described.get('default')!r}"
+        )
+        parts.extend(
+            f"{key}={described[key]!r}" for key in _CONSTRAINT_KEYS if key in described
+        )
         description = str(described.get("description", "")).strip()
         if description:
             parts.append(description)
@@ -205,13 +133,6 @@ def _parameters(spec: FilterSpec) -> list[str]:
 
 
 def _guidance(spec: FilterSpec) -> list[str]:
-
-
-
-
-
-
-
     try:
         path = guidance_path(spec)
     except LookupError as error:

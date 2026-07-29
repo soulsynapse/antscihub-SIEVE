@@ -1,37 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import re
@@ -39,8 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Project
-
-
 
 
 HISTORY_SUFFIX = ".history"
@@ -53,7 +17,6 @@ SESSION_KIND = "session"
 STEP_KIND = "step"
 
 
-
 UNTITLED = "Edit"
 
 _FILENAME = re.compile(
@@ -64,59 +27,30 @@ _FILENAME = re.compile(
 _UNSAFE = re.compile(r"[^A-Za-z0-9]+")
 
 
-
-
 _SLUG_LIMIT = 48
 
 
 def slugged(text: str) -> str:
-
-
-
-
-
-
-
-
     cleaned = _UNSAFE.sub("_", text).strip("_")[:_SLUG_LIMIT].strip("_")
     return cleaned or UNTITLED
 
 
 @dataclass(frozen=True)
 class Snapshot:
-
-
-
-
-
-
-
     path: Path
     sequence: int
 
-
     session_start: bool
-
-
 
     written_at: float
 
     @property
     def text(self) -> str:
-
         match = _FILENAME.match(self.path.name)
         return match["slug"].replace("_", " ") if match else UNTITLED
 
 
 class SnapshotStore:
-
-
-
-
-
-
-
-
     def __init__(self, directory: Path, *, limit: int = SNAPSHOT_LIMIT) -> None:
         self._directory = directory
         self._limit = max(limit, 1)
@@ -124,17 +58,9 @@ class SnapshotStore:
 
     @property
     def directory(self) -> Path:
-
         return self._directory
 
     def entries(self) -> list[Snapshot]:
-
-
-
-
-
-
-
         if not self._directory.is_dir():
             return []
         found: list[Snapshot] = []
@@ -153,25 +79,14 @@ class SnapshotStore:
         return sorted(found, key=lambda snapshot: snapshot.sequence)
 
     def record(self, project: Project, text: str) -> Snapshot:
-
-
-
-
-
-
-
-
-
-
-
-
-
         self._directory.mkdir(parents=True, exist_ok=True)
         existing = self.entries()
         sequence = existing[-1].sequence + 1 if existing else 1
         session_start = self._written == 0
         kind = SESSION_KIND if session_start else STEP_KIND
-        path = self._directory / f"{sequence:06d}-{kind}-{slugged(text)}{PROJECT_SUFFIX}"
+        path = (
+            self._directory / f"{sequence:06d}-{kind}-{slugged(text)}{PROJECT_SUFFIX}"
+        )
         project.save(path)
         self._written += 1
         self._prune()
@@ -183,13 +98,6 @@ class SnapshotStore:
         )
 
     def _prune(self) -> None:
-
-
-
-
-
-
-
         entries = self.entries()
         ordinary = [snapshot for snapshot in entries if not snapshot.session_start]
         doomed = set(ordinary[: max(len(ordinary) - self._limit, 0)])
@@ -201,18 +109,10 @@ class SnapshotStore:
 
 
 def history_directory(project_path: Path) -> Path:
-
     return project_path.with_name(project_path.name + HISTORY_SUFFIX)
 
 
 def age_text(seconds: float) -> str:
-
-
-
-
-
-
-
     if seconds < 60:
         return "just now"
     if seconds < 3600:

@@ -1,23 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,23 +5,18 @@ from enum import StrEnum
 
 
 class Regime(StrEnum):
-
-
     PRE_PIPELINE = "pre-pipeline"
     IN_PIPELINE = "in-pipeline"
 
 
 @dataclass(frozen=True, slots=True)
 class Budget:
-
-
     key: str
     label: str
     regime: Regime
     limit_ms: float
 
     def exceeded_by(self, elapsed_ms: float) -> float:
-
         return elapsed_ms - self.limit_ms
 
 
@@ -53,159 +28,80 @@ def _table(*budgets: Budget) -> dict[str, Budget]:
     return {budget.key: budget for budget in budgets}
 
 
-
-
 BUDGETS: dict[str, Budget] = _table(
     Budget(
         key="open_to_first_frame",
         label="Open file → first frame",
         regime=Regime.PRE_PIPELINE,
-
-
-
         limit_ms=500.0,
     ),
     Budget(
         key="scrub_to_repaint",
         label="Scrub/seek → frame repaint",
         regime=Regime.PRE_PIPELINE,
-
-
-
-
-
-
         limit_ms=100.0,
     ),
     Budget(
         key="scrub_settle",
         label="Scrub release → exact frame",
         regime=Regime.PRE_PIPELINE,
-
-
-
         limit_ms=250.0,
     ),
     Budget(
         key="cut_to_ready",
         label="Cut confirmed → ready",
         regime=Regime.PRE_PIPELINE,
-
-
         limit_ms=200.0,
     ),
     Budget(
         key="filter_to_first_tick",
         label="First filter → first graph tick",
         regime=Regime.IN_PIPELINE,
-
-
-
-
         limit_ms=2000.0,
     ),
     Budget(
         key="slider_to_preview",
         label="Slider drag → preview repaint",
         regime=Regime.IN_PIPELINE,
-
-
         limit_ms=100.0,
     ),
     Budget(
         key="slider_to_graph",
         label="Slider drag → graph update",
         regime=Regime.IN_PIPELINE,
-
-
         limit_ms=200.0,
     ),
     Budget(
         key="full_preview_render",
         label="Full preview render (5–10s clip)",
         regime=Regime.IN_PIPELINE,
-
-
         limit_ms=3000.0,
     ),
     Budget(
         key="band_drag_repaint",
         label="Band drag → graphs repaint",
         regime=Regime.IN_PIPELINE,
-
-
-
-
         limit_ms=50.0,
     ),
     Budget(
         key="knob_to_graphs",
         label="Knob settle → graphs rebuilt",
         regime=Regime.IN_PIPELINE,
-
-
-
-
         limit_ms=3000.0,
     ),
     Budget(
         key="density_rebuild",
         label="Band power arrives → density rebuilt",
         regime=Regime.IN_PIPELINE,
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         limit_ms=100.0,
     ),
     Budget(
         key="knob_to_first_partial",
         label="Knob settle → graphs start filling",
         regime=Regime.IN_PIPELINE,
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         limit_ms=500.0,
     ),
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
@@ -216,17 +112,6 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
         "slider_to_graph",
     }
 )
-
-
-
-
-
-
-
-
-
-
-
 
 
 TIMED: frozenset[str] = frozenset(
@@ -240,13 +125,9 @@ TIMED: frozenset[str] = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class Debt:
-
-
-
     key: str
 
     why: str
-
 
 
 IN_DEBT: dict[str, Debt] = {
@@ -265,17 +146,6 @@ IN_DEBT: dict[str, Debt] = {
 
 
 def check(key: str, elapsed_ms: float, *, honor_debt: bool = False) -> Debt | None:
-
-
-
-
-
-
-
-
-
-
-
     budget = BUDGETS[key]
     over = budget.exceeded_by(elapsed_ms)
     if over <= 0.0:

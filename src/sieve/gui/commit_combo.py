@@ -1,43 +1,8 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent, QWheelEvent
 from PySide6.QtWidgets import QComboBox, QWidget
-
-
 
 
 NAVIGATION_KEYS = frozenset(
@@ -53,29 +18,12 @@ NAVIGATION_KEYS = frozenset(
 
 
 class CommitCombo(QComboBox):
-
-
-
-
-
-
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-
-
-
         if self.focusPolicy() is Qt.FocusPolicy.WheelFocus:
             self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
-
-
-
-
-
-
-
         if e.key() in NAVIGATION_KEYS and not self.view().isVisible():
             self.showPopup()
             e.accept()
@@ -83,13 +31,4 @@ class CommitCombo(QComboBox):
         super().keyPressEvent(e)
 
     def wheelEvent(self, e: QWheelEvent) -> None:
-
-
-
-
-
-
-
-
-
         e.ignore()

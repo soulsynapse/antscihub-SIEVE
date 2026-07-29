@@ -1,18 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,15 +10,6 @@ from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoReader
 
 
-
-
-
-
-
-
-
-
-
 WORKERS_OPTION = typer.Option(
     "--workers",
     min=1,
@@ -42,46 +18,18 @@ WORKERS_OPTION = typer.Option(
 )
 
 
-def frame_source(video: Path, workers: int | None, *, luma: bool = False) -> PrefetchFrameSource:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def frame_source(
+    video: Path, workers: int | None, *, luma: bool = False
+) -> PrefetchFrameSource:
     return PrefetchFrameSource(video, workers=workers, luma=luma)
 
 
 def refuse(message: str) -> typer.Exit:
-
-
-
-
-
-
-
     typer.echo(message, err=True)
     return typer.Exit(1)
 
 
 def load_project(path: Path) -> Project:
-
-
-
-
-
-
-
-
-
     try:
         return Project.load(path)
     except ValidationError as error:
@@ -89,17 +37,6 @@ def load_project(path: Path) -> Project:
 
 
 def parse_span(frames: str) -> ClipRange:
-
-
-
-
-
-
-
-
-
-
-
     start, separator, end = frames.partition(":")
     if not separator:
         raise refuse(f"--frames takes START:END, got {frames!r}")
@@ -113,17 +50,6 @@ def parse_span(frames: str) -> ClipRange:
 def span_for(
     project: Project, frames: str | None, video: Path, *, dry_run: bool = False
 ) -> ClipRange:
-
-
-
-
-
-
-
-
-
-
-
     if frames is not None:
         return parse_span(frames)
     if project.clip is not None:

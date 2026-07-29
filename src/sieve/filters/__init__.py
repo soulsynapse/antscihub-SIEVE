@@ -1,21 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import importlib
@@ -27,30 +9,10 @@ from sieve.core.filter_base import FilterSpec
 from sieve.core.filter_registry import REGISTRY
 
 
-
-
 GUIDANCE_SUFFIX = ".md"
 
 
 def discover() -> tuple[FilterSpec, ...]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     for module in pkgutil.iter_modules(__path__, f"{__name__}."):
         if module.name.rpartition(".")[2].startswith("_"):
             continue
@@ -59,22 +21,6 @@ def discover() -> tuple[FilterSpec, ...]:
 
 
 def guidance_path(spec: FilterSpec) -> Path:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     module = sys.modules.get(spec.params_model.__module__)
     source = getattr(module, "__file__", None)
     if source is None:

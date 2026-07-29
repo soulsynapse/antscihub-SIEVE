@@ -1,14 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -33,26 +22,22 @@ if TYPE_CHECKING:
 
 
 class AddReplicate(QUndoCommand):
-
-
-    def __init__(self, document: ReplicateDocument, index: int, replicate: Replicate) -> None:
+    def __init__(
+        self, document: ReplicateDocument, index: int, replicate: Replicate
+    ) -> None:
         super().__init__(f"Add {replicate.name}")
         self._document = document
         self._index = index
         self._replicate = replicate
 
     def redo(self) -> None:
-
         self._document.apply_insert(self._index, self._replicate)
 
     def undo(self) -> None:
-
         self._document.apply_remove(self._index)
 
 
 class RemoveReplicate(QUndoCommand):
-
-
     def __init__(self, document: ReplicateDocument, index: int) -> None:
         super().__init__(f"Delete {document.at(index).name}")
         self._document = document
@@ -60,18 +45,14 @@ class RemoveReplicate(QUndoCommand):
         self._removed: Replicate | None = None
 
     def redo(self) -> None:
-
         self._removed = self._document.apply_remove(self._index)
 
     def undo(self) -> None:
-
         if self._removed is not None:
             self._document.apply_insert(self._index, self._removed)
 
 
 class RenameReplicate(QUndoCommand):
-
-
     def __init__(self, document: ReplicateDocument, index: int, name: str) -> None:
         super().__init__(f"Rename to {name}")
         self._document = document
@@ -80,41 +61,19 @@ class RenameReplicate(QUndoCommand):
         self._previous: Replicate | None = None
 
     def redo(self) -> None:
-
         current = self._document.at(self._index)
         self._previous = current
         self._document.apply_replace(self._index, current.renamed(self._name))
 
     def undo(self) -> None:
-
         if self._previous is not None:
             self._document.apply_replace(self._index, self._previous)
-
-
 
 
 ROI_MERGE_ID = 1
 
 
 class SetReplicateROI(QUndoCommand):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def __init__(
         self,
         document: ReplicateDocument,
@@ -132,18 +91,9 @@ class SetReplicateROI(QUndoCommand):
         self._previous: Replicate | None = None
 
     def id(self) -> int:
-
         return ROI_MERGE_ID if self._gesture is not None else -1
 
     def mergeWith(self, other: QUndoCommand) -> bool:
-
-
-
-
-
-
-
-
         if not isinstance(other, SetReplicateROI):
             return False
         if self._gesture is None or other._gesture != self._gesture:
@@ -151,55 +101,30 @@ class SetReplicateROI(QUndoCommand):
         if other._index != self._index:
             return False
         self._roi = other._roi
-
-
-
-
-
-
-
-
         if self._previous is not None and self._roi == self._previous.roi:
             self.setObsolete(True)
         return True
 
     def redo(self) -> None:
-
         current = self._document.at(self._index)
         self._previous = current
         self._document.apply_replace(self._index, current.with_roi(self._roi))
 
     def undo(self) -> None:
-
         if self._previous is not None:
             self._document.apply_replace(self._index, self._previous)
 
 
 class SetReplicateROIs(QUndoCommand):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def __init__(self, document: ReplicateDocument, rois: Mapping[int, ROI], text: str) -> None:
+    def __init__(
+        self, document: ReplicateDocument, rois: Mapping[int, ROI], text: str
+    ) -> None:
         super().__init__(text)
         self._document = document
         self._rois = dict(rois)
         self._previous: dict[int, Replicate] = {}
 
     def redo(self) -> None:
-
         self._previous = {}
         for index, roi in self._rois.items():
             current = self._document.at(index)
@@ -207,26 +132,11 @@ class SetReplicateROIs(QUndoCommand):
             self._document.apply_replace(index, current.with_roi(roi))
 
     def undo(self) -> None:
-
         for index, replicate in self._previous.items():
             self._document.apply_replace(index, replicate)
 
 
 class EditTuningParams(QUndoCommand):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def __init__(
         self,
         document: ReplicateDocument,
@@ -237,12 +147,13 @@ class EditTuningParams(QUndoCommand):
         super().__init__(text)
         self._document = document
         self._index = index
-        self._changes = {node_id: dict(params) for node_id, params in changes_by_node.items()}
+        self._changes = {
+            node_id: dict(params) for node_id, params in changes_by_node.items()
+        }
         self._displaced_nodes: dict[str, Node] = {}
         self._displaced_replicate: Replicate | None = None
 
     def redo(self) -> None:
-
         replicate = None if self._index is None else self._document.at(self._index)
         self._displaced_replicate = replicate
         self._displaced_nodes = {}
@@ -251,32 +162,23 @@ class EditTuningParams(QUndoCommand):
             node = self._document.pipeline.node(node_id)
             self._displaced_nodes[node_id] = node
             if replicate is None:
-                updated[node_id] = node.model_copy(update={"params": {**node.params, **params}})
+                updated[node_id] = node.model_copy(
+                    update={"params": {**node.params, **params}}
+                )
             else:
                 updated[node_id], replicate = edited_params(node, replicate, params)
         self._document.apply_params(updated, self._index, replicate)
 
     def undo(self) -> None:
-
-        self._document.apply_params(self._displaced_nodes, self._index, self._displaced_replicate)
-
-
+        self._document.apply_params(
+            self._displaced_nodes, self._index, self._displaced_replicate
+        )
 
 
 DETECTOR_MERGE_ID = 2
 
 
 class EditDetector(QUndoCommand):
-
-
-
-
-
-
-
-
-
-
     def __init__(
         self,
         document: ReplicateDocument,
@@ -295,11 +197,9 @@ class EditDetector(QUndoCommand):
         self._displaced_replicate: Replicate | None = None
 
     def id(self) -> int:
-
         return DETECTOR_MERGE_ID if self._gesture is not None else -1
 
     def mergeWith(self, other: QUndoCommand) -> bool:
-
         if not isinstance(other, EditDetector):
             return False
         if self._gesture is None or other._gesture != self._gesture:
@@ -310,48 +210,40 @@ class EditDetector(QUndoCommand):
         return True
 
     def redo(self) -> None:
-
         settings = self._document.detector_baseline()
         replicate = None if self._index is None else self._document.at(self._index)
         self._displaced_settings = self._document.detector
         self._displaced_replicate = replicate
         if replicate is None:
-            moved = DetectorSettings.model_validate({**settings.model_dump(), **self._changes})
+            moved = DetectorSettings.model_validate(
+                {**settings.model_dump(), **self._changes}
+            )
         else:
             moved, replicate = edited_detector(settings, replicate, self._changes)
         self._document.apply_detector(moved, self._index, replicate)
 
     def undo(self) -> None:
-
         self._document.apply_detector(
             self._displaced_settings, self._index, self._displaced_replicate
         )
 
 
 class ResetTuning(QUndoCommand):
-
-
-
-
-
-
-
-
-
-
-
     def __init__(
-        self, document: ReplicateDocument, defaults_by_node: Mapping[str, Mapping[str, Any]]
+        self,
+        document: ReplicateDocument,
+        defaults_by_node: Mapping[str, Mapping[str, Any]],
     ) -> None:
         super().__init__("Reset Tuning")
         self._document = document
-        self._defaults = {node_id: dict(params) for node_id, params in defaults_by_node.items()}
-        self._displaced: tuple[Pipeline, DetectorSettings | None, tuple[Replicate, ...]] | None = (
-            None
-        )
+        self._defaults = {
+            node_id: dict(params) for node_id, params in defaults_by_node.items()
+        }
+        self._displaced: (
+            tuple[Pipeline, DetectorSettings | None, tuple[Replicate, ...]] | None
+        ) = None
 
     def redo(self) -> None:
-
         document = self._document
         self._displaced = (document.pipeline, document.detector, tuple(document.all()))
         nodes = tuple(
@@ -362,73 +254,47 @@ class ResetTuning(QUndoCommand):
         )
         pipeline = document.pipeline.model_copy(update={"nodes": nodes})
         replicates = tuple(
-            replace(replicate, overrides={}, detector_overrides={}) for replicate in document.all()
+            replace(replicate, overrides={}, detector_overrides={})
+            for replicate in document.all()
         )
         document.apply_tuning_state(pipeline, None, replicates)
 
     def undo(self) -> None:
-
         if self._displaced is not None:
             document = self._document
             document.apply_tuning_state(*self._displaced)
 
 
 class SetClip(QUndoCommand):
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def __init__(self, document: ReplicateDocument, clip: ClipRange | None, text: str) -> None:
+    def __init__(
+        self, document: ReplicateDocument, clip: ClipRange | None, text: str
+    ) -> None:
         super().__init__(text)
         self._document = document
         self._clip = clip
         self._previous: ClipRange | None = None
 
     def redo(self) -> None:
-
         self._previous = self._document.clip
         self._document.apply_clip(self._clip)
 
     def undo(self) -> None:
-
         self._document.apply_clip(self._previous)
 
 
 class RestoreSnapshot(QUndoCommand):
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def __init__(self, document: ReplicateDocument, state: DocumentState, text: str) -> None:
+    def __init__(
+        self, document: ReplicateDocument, state: DocumentState, text: str
+    ) -> None:
         super().__init__(text)
         self._document = document
         self._state = state
         self._previous: DocumentState | None = None
 
     def redo(self) -> None:
-
         self._previous = self._document.capture()
         self._document.apply_state(self._state)
 
     def undo(self) -> None:
-
         if self._previous is not None:
             self._document.apply_state(self._previous)

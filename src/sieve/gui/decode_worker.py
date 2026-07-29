@@ -1,26 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,23 +10,15 @@ from sieve.core.types import ChannelSpec, VideoMetadata
 from sieve.decode.reader import VideoDecodeError, VideoReader
 
 
-
-
-
 PROXY_WIDTH = 1280
 
 
 class DecodeWorker(QObject):
-
-
     opened = Signal(VideoMetadata)
     failed = Signal(str)
     frame_ready = Signal(int, QImage)
 
     def __init__(self, meter: PoolMeter | None = None) -> None:
-
-
-
         super().__init__()
         self._meter = PoolMeter() if meter is None else meter
         self._reader: VideoReader | None = None
@@ -59,24 +28,10 @@ class DecodeWorker(QObject):
 
     @Slot(int)
     def set_proxy_width(self, width: int) -> None:
-
-
-
-
-
         self._proxy_width = max(width, 1)
 
     @Slot(bool)
     def set_luma(self, enabled: bool) -> None:
-
-
-
-
-
-
-
-
-
         if enabled == self._luma:
             return
         self._luma = enabled
@@ -94,7 +49,6 @@ class DecodeWorker(QObject):
 
     @Slot(str)
     def open(self, path: str) -> None:
-
         self.close()
         try:
             self._reader = VideoReader(Path(path), luma=self._luma)
@@ -106,13 +60,6 @@ class DecodeWorker(QObject):
 
     @Slot(int)
     def request_frame(self, index: int) -> None:
-
-
-
-
-
-
-
         reader = self._reader
         if reader is None:
             return
@@ -122,7 +69,6 @@ class DecodeWorker(QObject):
         except VideoDecodeError as error:
             self.failed.emit(str(error))
             return
-
         data = frame.data
         if frame.channels is ChannelSpec.GRAY:
             image = QImage(
@@ -140,13 +86,10 @@ class DecodeWorker(QObject):
                 frame.width * 3,
                 QImage.Format.Format_BGR888,
             )
-
-
         self.frame_ready.emit(index, image.copy())
 
     @Slot()
     def close(self) -> None:
-
         if self._reader is not None:
             self._reader.close()
             self._reader = None

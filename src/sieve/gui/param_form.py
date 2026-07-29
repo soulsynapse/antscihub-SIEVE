@@ -1,17 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -42,12 +28,6 @@ def param_rows(
     hidden: frozenset[str],
     on_edit: Callable[[str, object], None],
 ) -> list[QWidget]:
-
-
-
-
-
-
     spec = REGISTRY.get(node.filter_id, node.version)
     rows: list[QWidget] = []
     for name, field in spec.params_model.model_fields.items():
@@ -71,23 +51,15 @@ def _widget_for(
         combo = CommitCombo()
         combo.addItems([member.value for member in annotation])
         combo.setCurrentText(str(current))
-
         def text_edited(text: str) -> None:
             on_edit(name, text)
-
-
-
-
-
         combo.textActivated.connect(text_edited)
         return combo
     if annotation is bool:
         box = QCheckBox()
         box.setChecked(bool(current))
-
         def bool_edited(checked: bool) -> None:
             on_edit(name, checked)
-
         box.toggled.connect(bool_edited)
         return box
     if annotation is int:
@@ -95,10 +67,8 @@ def _widget_for(
         spin = QSpinBox()
         spin.setRange(int(low), int(high))
         spin.setValue(current if isinstance(current, int) else int(float(str(current))))
-
         def int_edited(value: int) -> None:
             on_edit(name, value)
-
         spin.valueChanged.connect(int_edited)
         return spin
     if annotation is float:
@@ -108,19 +78,14 @@ def _widget_for(
         dspin.setRange(low, high)
         dspin.setSingleStep(0.05 if high - low <= 2.0 else 1.0)
         dspin.setValue(current if isinstance(current, float) else float(str(current)))
-
         def float_edited(value: float) -> None:
             on_edit(name, value)
-
         dspin.valueChanged.connect(float_edited)
         return dspin
-
-
     return None
 
 
 def _bounds(metadata: list[Any], *, integer: bool) -> tuple[float, float]:
-
     low, high = float(-_UNBOUNDED), float(_UNBOUNDED)
     nudge = 1.0 if integer else 1e-6
     for constraint in metadata:

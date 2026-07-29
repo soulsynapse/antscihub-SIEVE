@@ -1,50 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -61,72 +14,28 @@ from sieve.pipeline.executor import FrameSource
 
 @dataclass(frozen=True, slots=True)
 class ResolvedSource:
-
-
-
-
-
-
-
-
-
-
     path: Path
 
     identity: str
-
 
     pre_cropped: bool
 
     first_index: int
 
-
-
     artifact: CropArtifact | None = None
 
     def wrap(self, reader: FrameSource) -> FrameSource:
-
-
-
-
-
-
-
-
         if self.first_index == 0:
             return reader
         return OffsetFrameSource(reader, self.first_index)
 
 
 class OffsetFrameSource:
-
-
-
-
-
-
-
-
-
-
-
-
-
     def __init__(self, inner: FrameSource, first: int) -> None:
-
         self._inner = inner
         self._first = first
 
     def read(self, index: int) -> Frame:
-
-
-
-
-
-
-
-
-
         if index < self._first:
             raise VideoDecodeError(
                 f"frame {index} is before this footage begins (frame {self._first})"
@@ -145,30 +54,6 @@ def resolve(
     luma: bool,
     want: ClipRange,
 ) -> ResolvedSource:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     if replicate is None:
         return ResolvedSource(
             path=parent, identity=parent_identity, pre_cropped=False, first_index=0
@@ -184,9 +69,6 @@ def resolve(
         try:
             identity = source_identity(path)
         except OSError:
-
-
-
             continue
         return ResolvedSource(
             path=path,
@@ -195,4 +77,6 @@ def resolve(
             first_index=artifact.span.start,
             artifact=artifact,
         )
-    return ResolvedSource(path=parent, identity=parent_identity, pre_cropped=False, first_index=0)
+    return ResolvedSource(
+        path=parent, identity=parent_identity, pre_cropped=False, first_index=0
+    )

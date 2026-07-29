@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
@@ -25,8 +13,6 @@ from sieve.core.filter_base import (
 )
 
 
-
-
 ParamsT = TypeVar("ParamsT", bound=ParamsBase)
 
 
@@ -39,8 +25,6 @@ class DuplicateFilterError(LookupError):
 
 
 class FilterRegistry:
-
-
     def __init__(self) -> None:
         self._specs: dict[tuple[str, str], FilterSpec] = {}
 
@@ -54,49 +38,30 @@ class FilterRegistry:
         return key in self._specs
 
     def register(self, spec: FilterSpec) -> FilterSpec:
-
-
-
-
-
-
-
-
-
-
-
         if spec.key in self._specs:
-            raise DuplicateFilterError(f"{spec.filter_id} {spec.version} is already registered")
+            raise DuplicateFilterError(
+                f"{spec.filter_id} {spec.version} is already registered"
+            )
         self._specs[spec.key] = spec
         return spec
 
     def get(self, filter_id: str, version: str) -> FilterSpec:
-
-
-
-
-
         try:
             return self._specs[filter_id, version]
         except KeyError:
-            raise UnknownFilterError(f"no filter {filter_id} at version {version}") from None
+            raise UnknownFilterError(
+                f"no filter {filter_id} at version {version}"
+            ) from None
 
     def latest(self, filter_id: str) -> FilterSpec:
-
-
-
-
-
-
-
-
-        candidates = [spec for spec in self._specs.values() if spec.filter_id == filter_id]
+        candidates = [
+            spec for spec in self._specs.values() if spec.filter_id == filter_id
+        ]
         if not candidates:
             raise UnknownFilterError(f"no filter {filter_id} at any version")
         return max(candidates, key=lambda spec: spec.version_tuple)
 
     def versions(self, filter_id: str) -> tuple[str, ...]:
-
         candidates = sorted(
             (spec for spec in self._specs.values() if spec.filter_id == filter_id),
             key=lambda spec: spec.version_tuple,
@@ -104,13 +69,10 @@ class FilterRegistry:
         return tuple(spec.version for spec in candidates)
 
     def ids(self) -> tuple[str, ...]:
-
         return tuple(sorted({spec.filter_id for spec in self._specs.values()}))
 
     def clear(self) -> None:
-
         self._specs.clear()
-
 
 
 REGISTRY = FilterRegistry()
@@ -134,18 +96,6 @@ def register_filter(
     element: ElementDeclaration | None = None,
     registry: FilterRegistry | None = None,
 ) -> Callable[[type[ParamsT]], type[ParamsT]]:
-
-
-
-
-
-
-
-
-
-
-
-
     def decorate(params_model: type[ParamsT]) -> type[ParamsT]:
         spec = FilterSpec(
             filter_id=filter_id,
@@ -167,5 +117,4 @@ def register_filter(
         (registry if registry is not None else REGISTRY).register(spec)
         params_model.__filter_spec__ = spec
         return params_model
-
     return decorate

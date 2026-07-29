@@ -1,51 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import json
@@ -56,10 +8,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from threading import Lock
 from typing import IO, Protocol
-
-
-
-
 
 
 TRACE_ENV_VAR = "SIEVE_RETENTION_TRACE"
@@ -73,18 +21,12 @@ GET = "get"
 FROM_RING = "ring"
 
 
-
 FROM_CACHE = "cache"
 
 FROM_DECODE = "decode"
 
 
-
 UNKNOWN_PLAYHEAD = -1
-
-
-
-
 
 
 SCRUB_KIND = "scrub"
@@ -92,9 +34,6 @@ SCRUB_KIND = "scrub"
 
 @dataclass(frozen=True, slots=True)
 class AccessEvent:
-
-
-
     op: str
 
     index: int
@@ -109,31 +48,6 @@ class AccessEvent:
 
 
 class TraceRecorder:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def __init__(self, path: Path | None = None) -> None:
         self._lock = Lock()
         self._path = path
@@ -144,16 +58,13 @@ class TraceRecorder:
 
     @property
     def enabled(self) -> bool:
-
         return self._stream is not None
 
     @property
     def path(self) -> Path | None:
-
         return self._path
 
     def record(self, event: AccessEvent) -> None:
-
         stream = self._stream
         if stream is None:
             return
@@ -162,7 +73,6 @@ class TraceRecorder:
             stream.write(line + "\n")
 
     def close(self) -> None:
-
         with self._lock:
             if self._stream is not None:
                 self._stream.close()
@@ -170,26 +80,15 @@ class TraceRecorder:
 
 
 def recorder_from_env(environ: Mapping[str, str] | None = None) -> TraceRecorder:
-
     source = os.environ if environ is None else environ
     path = source.get(TRACE_ENV_VAR, "").strip()
     return TraceRecorder(Path(path)) if path else TraceRecorder()
-
-
-
-
 
 
 TRACE = recorder_from_env()
 
 
 def load_trace(path: Path) -> tuple[AccessEvent, ...]:
-
-
-
-
-
-
     events: list[AccessEvent] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
@@ -202,42 +101,17 @@ def load_trace(path: Path) -> tuple[AccessEvent, ...]:
     return tuple(events)
 
 
-
-
-
 class RetentionSim(Protocol):
-
-
-
-
-
-
-
-
-
     name: str
 
-    def get(self, index: int) -> bool:
+    def get(self, index: int) -> bool: ...
 
-        ...
+    def put(self, index: int, playhead: int, frontier: int | None) -> None: ...
 
-    def put(self, index: int, playhead: int, frontier: int | None) -> None:
-
-        ...
-
-    def __len__(self) -> int:
-
-        ...
+    def __len__(self) -> int: ...
 
 
 class RingSim:
-
-
-
-
-
-
-
     name = "ring"
 
     def __init__(self, capacity_frames: int) -> None:
@@ -262,8 +136,6 @@ class RingSim:
 
 
 class LruSim:
-
-
     name = "lru"
 
     def __init__(self, capacity_frames: int) -> None:
@@ -288,14 +160,6 @@ class LruSim:
 
 
 class PlayheadDistanceSim:
-
-
-
-
-
-
-
-
     name = "playhead-distance"
 
     def __init__(self, capacity_frames: int) -> None:
@@ -314,17 +178,6 @@ class PlayheadDistanceSim:
             self._kept.discard(victim)
 
     def _victim(self, playhead: int, frontier: int | None) -> int | None:
-
-
-
-
-
-
-
-
-
-
-
         candidates = [index for index in self._kept if index != frontier]
         if not candidates:
             return None
@@ -334,17 +187,11 @@ class PlayheadDistanceSim:
         return len(self._kept)
 
 
-
 POLICIES = (RingSim, LruSim, PlayheadDistanceSim)
-
-
-
 
 
 @dataclass(frozen=True, slots=True)
 class ReplayScore:
-
-
     policy: str
     requests: int
     hits: int
@@ -354,36 +201,25 @@ class ReplayScore:
 
     @property
     def hit_rate(self) -> float:
-
         return self.hits / self.requests if self.requests else 0.0
 
     @property
     def scrub_hit_rate(self) -> float:
-
         return self.scrub_hits / self.scrub_requests if self.scrub_requests else 0.0
 
 
 def replayable(events: Iterable[AccessEvent]) -> Iterator[AccessEvent]:
-
-
-
-
     for event in events:
         if event.op == PUT or event.source != FROM_CACHE:
             yield event
 
 
 def replay(events: Sequence[AccessEvent], policy: RetentionSim) -> ReplayScore:
-
-
-
-
-
-
-    playhead = next((event.playhead for event in events if event.playhead != UNKNOWN_PLAYHEAD), 0)
+    playhead = next(
+        (event.playhead for event in events if event.playhead != UNKNOWN_PLAYHEAD), 0
+    )
     requests = hits = scrub_requests = scrub_hits = 0
     miss_run = worst_miss_run = 0
-
     for event in replayable(events):
         if event.op == PUT:
             policy.put(event.index, playhead, event.frontier)
@@ -400,7 +236,6 @@ def replay(events: Sequence[AccessEvent], policy: RetentionSim) -> ReplayScore:
             scrub_requests += 1
             scrub_hits += int(hit)
         playhead = event.index
-
     return ReplayScore(
         policy=policy.name,
         requests=requests,
@@ -411,12 +246,7 @@ def replay(events: Sequence[AccessEvent], policy: RetentionSim) -> ReplayScore:
     )
 
 
-def compare(events: Sequence[AccessEvent], capacity_frames: int) -> tuple[ReplayScore, ...]:
-
-
-
-
-
-
-
+def compare(
+    events: Sequence[AccessEvent], capacity_frames: int
+) -> tuple[ReplayScore, ...]:
     return tuple(replay(events, policy(capacity_frames)) for policy in POLICIES)

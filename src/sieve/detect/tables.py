@@ -1,77 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import csv
@@ -93,34 +19,13 @@ Source = TypeVar("Source")
 
 @dataclass(frozen=True, slots=True)
 class Column(Generic[Source]):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     name: str
-
 
     meaning: str
     of: Callable[[Source], str]
 
 
-
-
-
 ABSENT = "NA"
-
-
-
 
 
 SECONDS_DECIMALS = 3
@@ -133,14 +38,9 @@ class TableVerificationError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class DetectionExport:
-
-
     replicate: str
 
-
     node_id: str
-
-
 
     filter_id: str
     fps: float
@@ -148,26 +48,17 @@ class DetectionExport:
     start: int
     update: DetectorUpdate
 
-
-
     settings: DetectorSettings
 
 
 @dataclass(frozen=True, slots=True)
 class Frame:
-
-
     export: DetectionExport
 
     offset: int
 
     @property
     def elements(self) -> int:
-
-
-
-
-
         return self.export.update.band_power.shape[1]
 
     @property
@@ -177,27 +68,12 @@ class Frame:
 
 @dataclass(frozen=True, slots=True)
 class Interval:
-
-
     export: DetectionExport
     first: int
     last: int
 
 
 def series_columns(element: ElementKind) -> tuple[Column[Frame], ...]:
-
-
-
-
-
-
-
-
-
-
-
-
-
     unit = f"{element.value}s"
     return (
         Column(
@@ -271,13 +147,23 @@ INTERVAL_COLUMNS: tuple[Column[Interval], ...] = (
         lambda r: r.export.filter_id,
     ),
     Column("start_frame", "first detected frame, inclusive", lambda r: str(r.first)),
-    Column("end_frame_exclusive", "one past the last detected frame", lambda r: str(r.last)),
-    Column("start_seconds", "`start_frame` in time", lambda r: _seconds(r.first / r.export.fps)),
     Column(
-        "end_seconds", "`end_frame_exclusive` in time", lambda r: _seconds(r.last / r.export.fps)
+        "end_frame_exclusive", "one past the last detected frame", lambda r: str(r.last)
     ),
     Column(
-        "duration_frames", "`end_frame_exclusive - start_frame`", lambda r: str(r.last - r.first)
+        "start_seconds",
+        "`start_frame` in time",
+        lambda r: _seconds(r.first / r.export.fps),
+    ),
+    Column(
+        "end_seconds",
+        "`end_frame_exclusive` in time",
+        lambda r: _seconds(r.last / r.export.fps),
+    ),
+    Column(
+        "duration_frames",
+        "`end_frame_exclusive - start_frame`",
+        lambda r: str(r.last - r.first),
     ),
     Column(
         "duration_seconds",
@@ -290,36 +176,14 @@ INTERVAL_COLUMNS: tuple[Column[Interval], ...] = (
 def write_tables(
     directory: Path, exports: Sequence[DetectionExport], *, element: ElementKind
 ) -> tuple[Path, ...]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     directory.mkdir(parents=True, exist_ok=True)
     columns = series_columns(element)
     written = [write_table(directory / "series.csv", columns, _series_rows(exports))]
-
-
-
-
     if any(export.update.intervals is not None for export in exports):
         written.append(
-            write_table(directory / "intervals.csv", INTERVAL_COLUMNS, _interval_rows(exports))
+            write_table(
+                directory / "intervals.csv", INTERVAL_COLUMNS, _interval_rows(exports)
+            )
         )
     readme = directory / "README.md"
     readme.write_text(_readme(exports, written, columns, element), encoding="utf-8")
@@ -335,12 +199,6 @@ def _series_rows(exports: Sequence[DetectionExport]) -> list[Frame]:
 
 
 def _interval_rows(exports: Sequence[DetectionExport]) -> list[Interval]:
-
-
-
-
-
-
     return [
         Interval(export, first, last)
         for export in exports
@@ -349,12 +207,6 @@ def _interval_rows(exports: Sequence[DetectionExport]) -> list[Interval]:
 
 
 def _detected(row: Frame) -> str:
-
-
-
-
-
-
     gate = row.export.update.gate
     if gate is None:
         return ABSENT
@@ -362,14 +214,6 @@ def _detected(row: Frame) -> str:
 
 
 def _measured(value: Any) -> str:
-
-
-
-
-
-
-
-
     scalar = np.float32(value)
     if not math.isfinite(float(scalar)):
         return _nonfinite(float(scalar))
@@ -377,12 +221,6 @@ def _measured(value: Any) -> str:
 
 
 def _fraction(value: Any, elements: int) -> str:
-
-
-
-
-
-
     if elements == 0:
         return ABSENT
     quotient = float(value) / elements
@@ -404,12 +242,6 @@ def _nonfinite(value: float) -> str:
 
 
 def _band(bounds: tuple[float, float]) -> str:
-
-
-
-
-
-
     lo, hi = bounds
     if math.isinf(lo) and math.isinf(hi):
         return "unbounded"
@@ -421,7 +253,6 @@ def _band(bounds: tuple[float, float]) -> str:
 
 
 def _dictionary(columns: Sequence[Column[Any]]) -> list[str]:
-
     return [
         "| column | meaning |",
         "|---|---|",
@@ -436,16 +267,6 @@ def _readme(
     columns: Sequence[Column[Frame]],
     element: ElementKind,
 ) -> str:
-
-
-
-
-
-
-
-
-
-
     lines = [
         "# What is in this folder",
         "",
@@ -495,22 +316,9 @@ def _readme(
     return "\n".join(lines)
 
 
-def write_table(path: Path, columns: Sequence[Column[Source]], rows: Sequence[Source]) -> Path:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def write_table(
+    path: Path, columns: Sequence[Column[Source]], rows: Sequence[Source]
+) -> Path:
     cells = [[column.of(row) for column in columns] for row in rows]
     header = [column.name for column in columns]
     part = path.with_name(f"{path.name}.part")

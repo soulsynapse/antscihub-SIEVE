@@ -1,71 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import json
@@ -96,53 +28,16 @@ from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 SCHEMA_VERSION = 5
 
 
-
-
-
-
 PROJECT_SUFFIX = ".sieve.yaml"
-
-
 
 
 _SINK_FORMAT_PATTERN = FILTER_ID_PATTERN
 
 
 def project_path_for(video: Path) -> Path:
-
-
-
-
     return video.parent / (video.stem + PROJECT_SUFFIX)
 
 
@@ -151,23 +46,10 @@ def _new_id() -> str:
 
 
 def _resolved(path: Path) -> Path:
-
-
-
-
-
-
-
-
     return path.resolve()
 
 
 def _posix_relative(target: Path, base: Path) -> str:
-
-
-
-
-
     resolved = _resolved(target)
     try:
         relative = os.path.relpath(resolved, _resolved(base))
@@ -177,36 +59,10 @@ def _posix_relative(target: Path, base: Path) -> str:
 
 
 class _Artifact(BaseModel):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     model_config = ConfigDict(frozen=True, extra="forbid", ser_json_inf_nan="constants")
 
 
 class SourceRef(_Artifact):
-
-
-
-
-
-
-
-
     path: str
 
     @field_validator("path")
@@ -218,31 +74,13 @@ class SourceRef(_Artifact):
 
     @classmethod
     def relative_to(cls, video: Path, project_dir: Path) -> Self:
-
         return cls(path=_posix_relative(video, project_dir))
 
     def resolve(self, project_dir: Path) -> Path:
-
-
-
-
-
-
         return _resolved(Path(project_dir, self.path))
 
 
 class ClipRange(_Artifact):
-
-
-
-
-
-
-
-
-
-
-
     start: int
     end: int
 
@@ -251,39 +89,17 @@ class ClipRange(_Artifact):
         if self.start < 0:
             raise ValueError(f"clip start must be non-negative, got {self.start}")
         if self.end <= self.start:
-            raise ValueError(f"clip must cover at least one frame, got [{self.start}, {self.end})")
+            raise ValueError(
+                f"clip must cover at least one frame, got [{self.start}, {self.end})"
+            )
         return self
 
     @property
     def frame_count(self) -> int:
-
         return self.end - self.start
 
 
 class DetectorSettings(_Artifact):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     freq_band: tuple[float, float] = (0.0, math.inf)
 
     value_band: tuple[float, float] = (-math.inf, math.inf)
@@ -302,38 +118,19 @@ class DetectorSettings(_Artifact):
         if self.freq_band[0] < 0:
             raise ValueError(f"freq_band must be non-negative, got {self.freq_band}")
         if self.window_frames < 1:
-            raise ValueError(f"window_frames must be at least 1, got {self.window_frames}")
+            raise ValueError(
+                f"window_frames must be at least 1, got {self.window_frames}"
+            )
         return self
 
     @classmethod
     def default_for(cls, fps: float) -> Self:
-
-
-
-
-
-
-
         return cls(window_frames=max(1, round(fps)) if fps > 0 else 30)
 
 
 def resolved_detector(
     settings: DetectorSettings, replicate: Replicate | None = None
 ) -> DetectorSettings:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     if replicate is None or not replicate.detector_overrides:
         return settings
     return DetectorSettings.model_validate(
@@ -342,33 +139,9 @@ def resolved_detector(
 
 
 class Node(_Artifact):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     node_id: str = Field(default_factory=_new_id)
     filter_id: str
     version: str
-
-
-
-
-
 
     params: dict[str, Any] = Field(default_factory=dict)
 
@@ -376,7 +149,9 @@ class Node(_Artifact):
     @classmethod
     def _known_shape_id(cls, value: str) -> str:
         if not FILTER_ID_PATTERN.match(value):
-            raise ValueError(f"filter_id must match {FILTER_ID_PATTERN.pattern!r}, got {value!r}")
+            raise ValueError(
+                f"filter_id must match {FILTER_ID_PATTERN.pattern!r}, got {value!r}"
+            )
         return value
 
     @field_validator("version")
@@ -388,22 +163,6 @@ class Node(_Artifact):
 
 
 def resolved_params(node: Node, replicate: Replicate | None = None) -> dict[str, Any]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     if replicate is None:
         return dict(node.params)
     return {**node.params, **replicate.overrides.get(node.node_id, {})}
@@ -412,22 +171,11 @@ def resolved_params(node: Node, replicate: Replicate | None = None) -> dict[str,
 def edited_params(
     node: Node, replicate: Replicate, params: Mapping[str, Any]
 ) -> tuple[Node, Replicate]:
-
-
-
-
-
-
-
-
-
-
-
-
-
     before = resolved_params(node, replicate)
     changed = {
-        name: value for name, value in params.items() if name not in before or before[name] != value
+        name: value
+        for name, value in params.items()
+        if name not in before or before[name] != value
     }
     updated = node.model_copy(update={"params": {**node.params, **params}})
     return updated, replicate.with_override(node.node_id, changed)
@@ -436,36 +184,15 @@ def edited_params(
 def edited_detector(
     settings: DetectorSettings, replicate: Replicate, changes: Mapping[str, Any]
 ) -> tuple[DetectorSettings, Replicate]:
-
-
-
-
-
-
-
-
-
     moved = DetectorSettings.model_validate({**settings.model_dump(), **changes})
     before = resolved_detector(settings, replicate)
-    changed = {name: value for name, value in changes.items() if getattr(before, name) != value}
+    changed = {
+        name: value for name, value in changes.items() if getattr(before, name) != value
+    }
     return moved, replicate.with_detector_pins(changed)
 
 
 class Edge(_Artifact):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     upstream: str
     downstream: str
     port: str = DEFAULT_PORT
@@ -485,32 +212,12 @@ class Edge(_Artifact):
 
 
 class Sink(_Artifact):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     sink_id: str = Field(default_factory=_new_id)
 
     node_id: str
 
-
-
-
     format: str
     path: str
-
 
     params: dict[str, Any] = Field(default_factory=dict)
 
@@ -531,60 +238,17 @@ class Sink(_Artifact):
         return value
 
     def resolve(self, project_dir: Path) -> Path:
-
         return _resolved(Path(project_dir, self.path))
-
-
-
-
-
 
 
 CropFormat = Literal["luma", "bgr"]
 
 
 class CropArtifact(_Artifact):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     path: str
-
-
-
-
-
 
     roi: ROI
     format: CropFormat
-
 
     span: ClipRange
 
@@ -601,39 +265,17 @@ class CropArtifact(_Artifact):
 
     @property
     def luma(self) -> bool:
-
         return self.format == "luma"
 
     def resolve(self, project_dir: Path) -> Path:
-
         return _resolved(Path(project_dir, self.path))
 
     def identity(self) -> tuple[str, ROI, CropFormat, ClipRange]:
-
-
-
-
-
-
         return (self.cut_from, self.roi, self.format, self.span)
 
-    def backs(self, replicate: Replicate, *, source: str, luma: bool, project_dir: Path) -> bool:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    def backs(
+        self, replicate: Replicate, *, source: str, luma: bool, project_dir: Path
+    ) -> bool:
         return (
             self.cut_from == source
             and self.roi == replicate.roi
@@ -643,21 +285,6 @@ class CropArtifact(_Artifact):
 
 
 class Pipeline(_Artifact):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     nodes: tuple[Node, ...] = ()
     edges: tuple[Edge, ...] = ()
 
@@ -672,17 +299,13 @@ class Pipeline(_Artifact):
             for endpoint in (edge.upstream, edge.downstream):
                 if endpoint not in seen:
                     raise ValueError(f"edge names no such node: {endpoint!r}")
-
-
-
-
-
-
         fed: set[tuple[str, str]] = set()
         for edge in self.edges:
             target = (edge.downstream, edge.port)
             if target in fed:
-                raise ValueError(f"two edges feed {edge.downstream!r} on port {edge.port!r}")
+                raise ValueError(
+                    f"two edges feed {edge.downstream!r} on port {edge.port!r}"
+                )
             fed.add(target)
         return self
 
@@ -690,11 +313,6 @@ class Pipeline(_Artifact):
         return any(node.node_id == node_id for node in self.nodes)
 
     def node(self, node_id: str) -> Node:
-
-
-
-
-
         for candidate in self.nodes:
             if candidate.node_id == node_id:
                 return candidate
@@ -706,24 +324,6 @@ def _params_fingerprint(
     replicate: Replicate | None,
     detector: DetectorSettings | None,
 ) -> str:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     resolved = resolved_detector(detector or DetectorSettings(), replicate)
     return json.dumps(
         [
@@ -740,43 +340,6 @@ def equivalence_groups(
     replicates: Sequence[Replicate],
     detector: DetectorSettings | None = None,
 ) -> tuple[int, ...]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     groups: dict[str, int] = {}
     numbers: list[int] = []
     for replicate in replicates:
@@ -786,77 +349,26 @@ def equivalence_groups(
 
 
 class Project(_Artifact):
-
-
-
-
-
-
-
-
     schema_version: int = SCHEMA_VERSION
     source: SourceRef
-
 
     replicates: tuple[Replicate, ...] = ()
 
     clip: ClipRange | None = None
     pipeline: Pipeline = Pipeline()
 
-
-
-
-
-
     detector: DetectorSettings | None = None
-
-
-
-
 
     checkpoints: tuple[str, ...] = ()
     outputs: tuple[Sink, ...] = ()
 
-
-
-
-
-
-
-
     crops: tuple[CropArtifact, ...] = ()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     visited: tuple[str, ...] = ()
 
     @field_validator("schema_version")
     @classmethod
     def _readable(cls, value: int) -> int:
-
-
-
-
-
-
-
-
-
-
-
-
         if value > SCHEMA_VERSION:
             raise ValueError(
                 f"project uses schema version {value}; this build reads up to {SCHEMA_VERSION}"
@@ -870,34 +382,16 @@ class Project(_Artifact):
             raise ValueError("duplicate replicate_id")
         for replicate in self.replicates:
             for node_id in replicate.overrides:
-
-
-
-
                 if node_id not in self.pipeline:
                     raise ValueError(
                         f"replicate {replicate.replicate_id!r} overrides no such node: {node_id!r}"
                     )
             for field_name in replicate.detector_overrides:
-
-
                 if field_name not in DetectorSettings.model_fields:
                     raise ValueError(
                         f"replicate {replicate.replicate_id!r} pins no such detector "
                         f"field: {field_name!r}"
                     )
-
-
-
-
-
-
-
-
-
-
-
-
             try:
                 resolved_detector(self.detector or DetectorSettings(), replicate)
             except ValidationError as error:
@@ -916,37 +410,18 @@ class Project(_Artifact):
         for sink in self.outputs:
             if sink.node_id not in self.pipeline:
                 raise ValueError(f"sink names no such node: {sink.node_id!r}")
-
-
-
-
-
-
         cuts = [artifact.identity() for artifact in self.crops]
         if len(set(cuts)) != len(cuts):
             raise ValueError("two crop artifacts record the same cut")
         known = set(ids)
         for replicate_id in self.visited:
-
-
-
             if replicate_id not in known:
                 raise ValueError(f"visited names no such replicate: {replicate_id!r}")
         if len(set(self.visited)) != len(self.visited):
             raise ValueError("duplicate visited replicate")
         return self
 
-
-
     def to_yaml(self) -> str:
-
-
-
-
-
-
-
-
         return yaml.safe_dump(
             self.model_dump(mode="json"),
             sort_keys=False,
@@ -956,56 +431,29 @@ class Project(_Artifact):
 
     @classmethod
     def from_yaml(cls, text: str) -> Self:
-
-
-
-
-
         return cls.model_validate(yaml.safe_load(text))
 
     def save(self, path: Path) -> None:
-
-
-
-
-
-
-
         path.write_text(self.to_yaml(), encoding="utf-8")
 
     @classmethod
     def load(cls, path: Path) -> Self:
-
-
-
-
-
         return cls.from_yaml(path.read_text(encoding="utf-8"))
-
-
 
     @classmethod
     def for_video(cls, video: Path, project_dir: Path | None = None) -> Self:
-
         directory = project_dir if project_dir is not None else video.parent
         return cls(source=SourceRef.relative_to(video, directory))
 
     def relocated(self, from_dir: Path, to_dir: Path) -> Self:
-
-
-
-
-
-
-
         def rebase(sink: Sink) -> Sink:
-            return sink.model_copy(update={"path": _posix_relative(sink.resolve(from_dir), to_dir)})
-
+            return sink.model_copy(
+                update={"path": _posix_relative(sink.resolve(from_dir), to_dir)}
+            )
         def rebase_crop(artifact: CropArtifact) -> CropArtifact:
             return artifact.model_copy(
                 update={"path": _posix_relative(artifact.resolve(from_dir), to_dir)}
             )
-
         return self.model_copy(
             update={
                 "source": SourceRef.relative_to(self.source.resolve(from_dir), to_dir),
@@ -1015,35 +463,18 @@ class Project(_Artifact):
         )
 
     def source_path(self, project_path: Path) -> Path:
-
         return self.source.resolve(project_path.parent)
 
     def with_replicates(self, replicates: tuple[Replicate, ...]) -> Self:
-
         return self.model_copy(update={"replicates": replicates})
 
     def with_pipeline(self, pipeline: Pipeline) -> Self:
-
-
-
-
-
         return self.model_validate(self.model_copy(update={"pipeline": pipeline}))
 
     def with_clip(self, clip: ClipRange | None) -> Self:
-
         return self.model_copy(update={"clip": clip})
 
     def with_crop(self, artifact: CropArtifact) -> Self:
-
-
-
-
-
-
-
-
-
         existing = [candidate.identity() for candidate in self.crops]
         if artifact.identity() in existing:
             index = existing.index(artifact.identity())
@@ -1053,52 +484,21 @@ class Project(_Artifact):
         return self.model_copy(update={"crops": crops})
 
     def with_crops(self, crops: Iterable[CropArtifact]) -> Self:
-
-
-
-
-
-
-
-
         return self.model_validate(self.model_copy(update={"crops": tuple(crops)}))
 
     def without_crop(self, artifact: CropArtifact) -> Self:
-
-
-
-
-
-
-
-
-
         wanted = artifact.identity()
         return self.model_copy(
             update={
                 "crops": tuple(
-                    candidate for candidate in self.crops if candidate.identity() != wanted
+                    candidate
+                    for candidate in self.crops
+                    if candidate.identity() != wanted
                 )
             }
         )
 
     def with_visited(self, visited: Iterable[str]) -> Self:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         wanted = set(visited)
         kept = tuple(
             replicate.replicate_id
@@ -1107,125 +507,50 @@ class Project(_Artifact):
         )
         return self.model_copy(update={"visited": kept})
 
-
-
     def replicate(self, replicate_id: str) -> Replicate:
-
-
-
-
-
         for candidate in self.replicates:
             if candidate.replicate_id == replicate_id:
                 return candidate
         raise KeyError(replicate_id)
 
-    def params_for(self, node_id: str, replicate_id: str | None = None) -> dict[str, Any]:
-
-
-
-
-
-
-
-
-
+    def params_for(
+        self, node_id: str, replicate_id: str | None = None
+    ) -> dict[str, Any]:
         node = self.pipeline.node(node_id)
-        return resolved_params(node, None if replicate_id is None else self.replicate(replicate_id))
+        return resolved_params(
+            node, None if replicate_id is None else self.replicate(replicate_id)
+        )
 
     def equivalence_groups(self) -> tuple[int, ...]:
-
-
-
-
-
-
-
         return equivalence_groups(self.pipeline, self.replicates, self.detector)
 
-    def with_param_edit(self, node_id: str, replicate_id: str, params: Mapping[str, Any]) -> Self:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    def with_param_edit(
+        self, node_id: str, replicate_id: str, params: Mapping[str, Any]
+    ) -> Self:
         node = self.pipeline.node(node_id)
         target = self.replicate(replicate_id)
         updated_node, edited = edited_params(node, target, params)
         return self._replacing(node, updated_node, target, edited)
 
     def with_param_reset(self, node_id: str, replicate_id: str) -> Self:
-
-
-
-
-
-
-
-
         node = self.pipeline.node(node_id)
         target = self.replicate(replicate_id)
         return self._replacing(node, node, target, target.without_override(node_id))
 
     def with_detector(self, detector: DetectorSettings | None) -> Self:
-
         return self.model_copy(update={"detector": detector})
 
     def with_detector_edit(self, replicate_id: str, changes: Mapping[str, Any]) -> Self:
-
-
-
-
-
-
-
-
-
-
-
-
         target = self.replicate(replicate_id)
-        moved, edited = edited_detector(self.detector or DetectorSettings(), target, changes)
+        moved, edited = edited_detector(
+            self.detector or DetectorSettings(), target, changes
+        )
         replicates = tuple(edited if r is target else r for r in self.replicates)
         return self.model_copy(update={"detector": moved, "replicates": replicates})
 
     def _replacing(
         self, node: Node, new_node: Node, replicate: Replicate, new_replicate: Replicate
     ) -> Self:
-
-
-
-
-
-
-
         return self.model_copy(
             update={
                 "pipeline": self.pipeline.model_copy(

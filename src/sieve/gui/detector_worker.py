@@ -1,47 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -65,21 +21,7 @@ FloatArray = NDArray[np.floating[Any]]
 
 @dataclass(frozen=True, slots=True)
 class DetectorRequest:
-
-
-
-
-
-
-
-
-
-
     revision: int
-
-
-
-
 
     series: NDArray[np.float32] | tuple[NDArray[np.float32], ...]
 
@@ -87,65 +29,39 @@ class DetectorRequest:
     fps: float
     state: DetectorState
 
-
     final: bool
 
 
 @dataclass(frozen=True, slots=True)
 class DetectorResult:
-
-
     revision: int
     update: DetectorUpdate
     start_index: int
 
-
-
-
-
     series2d: NDArray[np.float32]
     grid: tuple[int, int]
 
-
     frames: int
-
 
     settled: int
 
     pooled_power: NDArray[np.float32]
 
-
-
     density: DensitySurface
-
-
-
 
     density_ms: float
     final: bool
 
 
 def settled_for(frames: int, fps: float, state: DetectorState, *, final: bool) -> int:
-
-
-
-
-
-
-
     return settled_for_settings(frames, fps, state.to_settings(), final=final)
 
 
 def derive(request: DetectorRequest) -> DetectorResult:
-
-
-
-
-
-
-
     series = request.series
-    grids: NDArray[np.float32] = np.stack(series) if isinstance(series, tuple) else series
+    grids: NDArray[np.float32] = (
+        np.stack(series) if isinstance(series, tuple) else series
+    )
     frames = int(grids.shape[0])
     grid = (int(grids.shape[1]), int(grids.shape[2]))
     series2d = grids.reshape(frames, -1)
@@ -156,17 +72,10 @@ def derive(request: DetectorRequest) -> DetectorResult:
         series2d, fps, request.state, start_index=request.start_index, workers=workers
     )
     pooled = morlet_power(series2d.mean(axis=1), fps, freqs, workers=workers)
-
     settled = settled_for(frames, fps, request.state, final=request.final)
-
-
-
-
-
     started = perf_counter()
     density = density_surface(update.band_power)
     density_ms = (perf_counter() - started) * 1000.0
-
     return DetectorResult(
         revision=request.revision,
         update=gate_to(update, settled, request.start_index),
@@ -184,19 +93,12 @@ def derive(request: DetectorRequest) -> DetectorResult:
 
 @dataclass(frozen=True, slots=True)
 class DetectorFailure:
-
-
     revision: int
-
-
-
 
     message: str
 
 
 class _DetectorWorker(QObject):
-
-
     computed = Signal(object)
     failed = Signal(object)
 
@@ -206,22 +108,6 @@ class _DetectorWorker(QObject):
 
     @Slot(DetectorRequest)
     def compute(self, request: DetectorRequest) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         try:
             with self._meter.working():
                 result = derive(request)
@@ -237,33 +123,20 @@ class _DetectorWorker(QObject):
 
 
 class DetectorRunner(QObject):
-
-
-
-
-
-
-
-
-
     ready = Signal(object)
-
-
-
 
     failed = Signal(object)
 
     _requested = Signal(DetectorRequest)
 
-    def __init__(self, parent: QObject | None = None, *, meter: PoolMeter | None = None) -> None:
+    def __init__(
+        self, parent: QObject | None = None, *, meter: PoolMeter | None = None
+    ) -> None:
         super().__init__(parent)
         self._revision = 0
         self._busy = False
         self._pending: DetectorRequest | None = None
-
-
         self._meter = PoolMeter() if meter is None else meter
-
         self._thread = QThread()
         self._thread.setObjectName("sieve-detector")
         self._worker = _DetectorWorker(self._meter)
@@ -275,36 +148,18 @@ class DetectorRunner(QObject):
 
     @property
     def busy(self) -> bool:
-
         return self._busy
 
     @property
     def meter(self) -> PoolMeter:
-
         return self._meter
 
     def set_revision(self, revision: int) -> None:
-
-
-
-
-
-
-
         self._revision = revision
         self._pending = None
         self._meter.set_depth(0)
 
     def submit(self, request: DetectorRequest) -> bool:
-
-
-
-
-
-
-
-
-
         if request.revision != self._revision:
             return False
         if self._busy:
@@ -315,7 +170,6 @@ class DetectorRunner(QObject):
         return True
 
     def shutdown(self) -> None:
-
         self._pending = None
         self._thread.quit()
         self._thread.wait()
@@ -326,13 +180,6 @@ class DetectorRunner(QObject):
 
     @Slot(object)
     def _on_computed(self, result: DetectorResult) -> None:
-
-
-
-
-
-
-
         self._busy = False
         self._issue_pending()
         if result.revision == self._revision:
@@ -340,13 +187,6 @@ class DetectorRunner(QObject):
 
     @Slot(object)
     def _on_failed(self, failure: DetectorFailure) -> None:
-
-
-
-
-
-
-
         self._busy = False
         self._issue_pending()
         if failure.revision == self._revision:

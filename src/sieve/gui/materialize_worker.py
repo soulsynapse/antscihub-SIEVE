@@ -1,26 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,27 +12,15 @@ from sieve.pipeline.materialize import MaterializeCancelledError, materialize_cr
 
 @dataclass(frozen=True, slots=True)
 class MaterializeRequest:
-
-
-
-
-
-
-
-
     video: Path
     replicate: Replicate
     span: ClipRange
     project_dir: Path
 
-
-
     luma: bool
 
 
 class _Worker(QObject):
-
-
     written = Signal(object)
     failed = Signal(str)
     cancelled = Signal()
@@ -66,25 +31,10 @@ class _Worker(QObject):
         self._cancel = False
 
     def request_cancel(self) -> None:
-
-
-
-
-
-
-
         self._cancel = True
 
     @Slot(MaterializeRequest)
     def write(self, request: MaterializeRequest) -> None:
-
-
-
-
-
-
-
-
         self._cancel = False
         try:
             record = materialize_crop(
@@ -106,20 +56,6 @@ class _Worker(QObject):
 
 
 class MaterializeRunner(QObject):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     written = Signal(object)
 
     failed = Signal(str)
@@ -133,7 +69,6 @@ class MaterializeRunner(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._busy = False
-
         self._thread = QThread()
         self._thread.setObjectName("sieve-materialize")
         self._worker = _Worker()
@@ -147,11 +82,9 @@ class MaterializeRunner(QObject):
 
     @property
     def busy(self) -> bool:
-
         return self._busy
 
     def start(self, request: MaterializeRequest) -> bool:
-
         if self._busy:
             return False
         self._busy = True
@@ -159,18 +92,10 @@ class MaterializeRunner(QObject):
         return True
 
     def cancel(self) -> None:
-
         if self._busy:
             self._worker.request_cancel()
 
     def shutdown(self) -> None:
-
-
-
-
-
-
-
         self.cancel()
         self._thread.quit()
         self._thread.wait()

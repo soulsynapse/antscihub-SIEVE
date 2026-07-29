@@ -1,38 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -76,8 +41,6 @@ _REPAIR_CSS = (
 
 
 class SeamStrip(QWidget):
-
-
     clicked = Signal(int)
 
     def __init__(self, index: int, parent: QWidget | None = None) -> None:
@@ -118,8 +81,6 @@ class SeamStrip(QWidget):
 
 
 class StageHeader(QWidget):
-
-
     def __init__(self, stage: Stage, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         chip_text = dict(STAGE_CHIPS)[stage]
@@ -137,13 +98,6 @@ class StageHeader(QWidget):
 
 
 class StepCard(QWidget):
-
-
-
-
-
-
-
     swap_clicked = Signal(str)
     remove_clicked = Signal(str)
     select_clicked = Signal(str)
@@ -165,13 +119,11 @@ class StepCard(QWidget):
         self.provisional = provisional
         self.selected = selected
         self._hot = False
-
         conflicted = grade.status is Status.CONFLICT
         header = _HEADER_H + (_CONFLICT_EXTRA if conflicted else 0)
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(14, header, 14, 10)
         self.body.setSpacing(6)
-
         self._swap_hover = QPushButton("swap", self)
         self._remove_hover = QPushButton("x", self)
         for button in (self._swap_hover, self._remove_hover):
@@ -180,22 +132,22 @@ class StepCard(QWidget):
             button.setStyleSheet(_HOVER_CSS)
         self._swap_hover.setToolTip("Replace this step")
         self._remove_hover.setToolTip("Remove this step")
-
-
         self._swap_repair = QPushButton("Swap…", self)
         self._remove_repair = QPushButton("Remove", self)
         for button in (self._swap_repair, self._remove_repair):
             button.setVisible(conflicted)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setStyleSheet(_REPAIR_CSS)
-
         for button in (self._swap_hover, self._swap_repair):
-            button.clicked.connect(lambda _=False: self.swap_clicked.emit(self.step.step_id))
+            button.clicked.connect(
+                lambda _=False: self.swap_clicked.emit(self.step.step_id)
+            )
         for button in (self._remove_hover, self._remove_repair):
-            button.clicked.connect(lambda _=False: self.remove_clicked.emit(self.step.step_id))
+            button.clicked.connect(
+                lambda _=False: self.remove_clicked.emit(self.step.step_id)
+            )
 
     def removal_buttons(self) -> tuple[QPushButton, ...]:
-
         return (self._remove_hover, self._remove_repair)
 
     def resizeEvent(self, event: object) -> None:
@@ -214,8 +166,6 @@ class StepCard(QWidget):
         del event
         self._hot = True
         if self.grade.status is not Status.CONFLICT:
-
-
             self._swap_hover.setVisible(True)
             self._remove_hover.setVisible(True)
         self.update()
@@ -228,13 +178,6 @@ class StepCard(QWidget):
         self.update()
 
     def mousePressEvent(self, event: object) -> None:
-
-
-
-
-
-
-
         del event
         self.select_clicked.emit(self.step.step_id)
 
@@ -245,27 +188,24 @@ class StepCard(QWidget):
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         conflicted = self.grade.status is Status.CONFLICT
         unreached = self.grade.status is Status.UNREACHED
-
         painter.setBrush(_PANEL_HOT if (self._hot and not unreached) else PANEL)
         edge = QPen(CONFLICT if conflicted else LINE, 1.0)
         if self.provisional:
-
-
             edge = QPen(DIM, 1.0, Qt.PenStyle.DashLine)
         painter.setPen(edge)
         painter.drawRoundedRect(rect, 6, 6)
         if self.selected and not conflicted:
-
-
-
             painter.setBrush(ACCENT)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2)
+            painter.drawRoundedRect(
+                QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2
+            )
         if conflicted:
             painter.setBrush(CONFLICT)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2)
-
+            painter.drawRoundedRect(
+                QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2
+            )
         text = QColor(TEXT)
         dim = QColor(DIM)
         if unreached:
@@ -293,20 +233,7 @@ class StepCard(QWidget):
         painter.end()
 
 
-
-
-
-
-
-
-
-
-
-
-
-MATERIALIZE_PRICE = (
-    "one decode of the whole video to write · roughly 100x cheaper to read at any window after"
-)
+MATERIALIZE_PRICE = "one decode of the whole video to write · roughly 100x cheaper to read at any window after"
 
 _OFFER_CSS = (
     "QPushButton {background: #2f3a33; color: #cfe6d6; border: 1px solid #4d6a57;"
@@ -321,22 +248,6 @@ _QUIET_CSS = (
 
 
 class SourceCard(QWidget):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     materialize_requested = Signal()
     cancel_requested = Signal()
     discard_requested = Signal()
@@ -344,7 +255,6 @@ class SourceCard(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._state = CropState.ABSENT
-
         self._title = QLabel("SOURCE")
         self._title.setFont(plot_font(8, bold=True, spaced=True))
         self._title.setStyleSheet(f"color: {DIM.name()};")
@@ -355,15 +265,15 @@ class SourceCard(QWidget):
         self._detail.setFont(plot_font(8))
         self._detail.setWordWrap(True)
         self._detail.setStyleSheet(f"color: {DIM.name()};")
-
         self._progress = QProgressBar()
         self._progress.setTextVisible(True)
         self._progress.setFixedHeight(14)
-
         self._materialize = QPushButton("Materialize…")
         self._materialize.setStyleSheet(_OFFER_CSS)
         self._materialize.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._materialize.clicked.connect(lambda _=False: self.materialize_requested.emit())
+        self._materialize.clicked.connect(
+            lambda _=False: self.materialize_requested.emit()
+        )
         self._cancel = QPushButton("Cancel")
         self._cancel.setStyleSheet(_QUIET_CSS)
         self._cancel.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -372,13 +282,11 @@ class SourceCard(QWidget):
         self._discard.setStyleSheet(_QUIET_CSS)
         self._discard.setCursor(Qt.CursorShape.PointingHandCursor)
         self._discard.clicked.connect(lambda _=False: self.discard_requested.emit())
-
         head = QHBoxLayout()
         head.setContentsMargins(0, 0, 0, 0)
         head.addWidget(self._title)
         head.addStretch(1)
         head.addWidget(self._subject)
-
         buttons = QHBoxLayout()
         buttons.setContentsMargins(0, 0, 0, 0)
         buttons.addWidget(self._progress, 1)
@@ -386,42 +294,33 @@ class SourceCard(QWidget):
         buttons.addWidget(self._discard)
         buttons.addWidget(self._cancel)
         buttons.addWidget(self._materialize)
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 8, 14, 8)
         layout.setSpacing(4)
         layout.addLayout(head)
         layout.addWidget(self._detail)
         layout.addLayout(buttons)
-
         self.set_state(CropState.ABSENT, subject="", detail="")
 
     @property
     def state(self) -> CropState:
-
         return self._state
 
     def buttons(self) -> tuple[QPushButton, QPushButton, QPushButton]:
-
         return (self._materialize, self._cancel, self._discard)
 
     @property
     def detail(self) -> str:
-
         return self._detail.text()
 
     def set_state(self, state: CropState, *, subject: str, detail: str) -> None:
-
-
-
-
-
-
         self._state = state
         self._subject.setText(subject)
         self._detail.setText(detail)
         self._materialize.setVisible(state in (CropState.ABSENT, CropState.STALE))
-        self._materialize.setText("Re-materialize…" if state is CropState.STALE else "Materialize…")
+        self._materialize.setText(
+            "Re-materialize…" if state is CropState.STALE else "Materialize…"
+        )
         self._cancel.setVisible(state is CropState.WRITING)
         self._discard.setVisible(state in (CropState.AT_REST, CropState.STALE))
         self._progress.setVisible(state is CropState.WRITING)
@@ -430,20 +329,12 @@ class SourceCard(QWidget):
         self.update()
 
     def set_progress(self, written: int, total: int) -> None:
-
         if self._state is not CropState.WRITING:
             return
         self._progress.setMaximum(max(total, 1))
         self._progress.setValue(written)
 
     def paintEvent(self, event: QPaintEvent) -> None:
-
-
-
-
-
-
-
         del event
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -454,13 +345,13 @@ class SourceCard(QWidget):
         if self._state in (CropState.ABSENT, CropState.WRITING):
             painter.setBrush(ACCENT if self._state is CropState.WRITING else DIM)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2)
+            painter.drawRoundedRect(
+                QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2
+            )
         painter.end()
 
 
 class ChainStackView(QWidget):
-
-
     reset_clicked = Signal()
     remove_requested = Signal(str)
     swap_requested = Signal(str)
@@ -471,7 +362,6 @@ class ChainStackView(QWidget):
         super().__init__(parent)
         self._cards: list[StepCard] = []
         self._borrowed: list[QWidget] = []
-
         head = QHBoxLayout()
         title = QLabel("LIVE CHAIN")
         title.setFont(plot_font(8, bold=True, spaced=True))
@@ -479,13 +369,13 @@ class ChainStackView(QWidget):
         head.addWidget(title)
         head.addStretch(1)
         self._reset = QPushButton("Reset")
-        self._reset.setToolTip("Parameters, bands, and D back to defaults; the chain stays")
+        self._reset.setToolTip(
+            "Parameters, bands, and D back to defaults; the chain stays"
+        )
         self._reset.setCursor(Qt.CursorShape.PointingHandCursor)
         self._reset.clicked.connect(self.reset_clicked)
         head.addWidget(self._reset)
-
         self._source = SourceCard()
-
         self._host = QWidget()
         self._column = QVBoxLayout(self._host)
         self._column.setContentsMargins(0, 0, 6, 0)
@@ -494,7 +384,6 @@ class ChainStackView(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setWidget(self._host)
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(head)
@@ -503,16 +392,15 @@ class ChainStackView(QWidget):
 
     @property
     def source_card(self) -> SourceCard:
-
         return self._source
 
     def cards(self) -> list[StepCard]:
-
         return list(self._cards)
 
     def card_for(self, step_id: str) -> StepCard | None:
-
-        return next((card for card in self._cards if card.step.step_id == step_id), None)
+        return next(
+            (card for card in self._cards if card.step.step_id == step_id), None
+        )
 
     def rebuild(
         self,
@@ -523,28 +411,10 @@ class ChainStackView(QWidget):
         provisional: str | None = None,
         selected: str | None = None,
     ) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         for widget in self._borrowed:
             widget.setParent(None)
             widget.hide()
         self._borrowed = []
-
         while self._column.count():
             item = self._column.takeAt(0)
             widget = None if item is None else item.widget()
@@ -552,9 +422,10 @@ class ChainStackView(QWidget):
                 widget.setParent(None)
                 widget.deleteLater()
         self._cards = []
-
         seen_stages: set[Stage] = set()
-        for index, (step, grade, caption) in enumerate(zip(steps, grades, captions, strict=True)):
+        for index, (step, grade, caption) in enumerate(
+            zip(steps, grades, captions, strict=True)
+        ):
             seam = SeamStrip(index)
             seam.clicked.connect(self.insert_requested)
             self._column.addWidget(seam)
@@ -584,7 +455,6 @@ class ChainStackView(QWidget):
         self._column.addStretch(1)
 
     def set_selected(self, step_id: str | None) -> None:
-
         for card in self._cards:
             wanted = card.step.step_id == step_id
             if card.selected != wanted:
@@ -592,7 +462,6 @@ class ChainStackView(QWidget):
                 card.update()
 
     def update_captions(self, captions: Mapping[str, str]) -> None:
-
         for card in self._cards:
             text = captions.get(card.step.step_id)
             if text is not None and text != card.caption:

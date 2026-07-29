@@ -1,23 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -43,7 +23,10 @@ def materialize_replicate(
     project_path: Annotated[
         Path,
         typer.Argument(
-            exists=True, dir_okay=False, readable=True, help="A .sieve.yaml project file."
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="A .sieve.yaml project file.",
         ),
     ],
     replicate: Annotated[
@@ -58,24 +41,12 @@ def materialize_replicate(
         ),
     ] = None,
 ) -> None:
-
-
-
-
-
-
-
-
-
-
-
     discover()
     project = load_project(project_path)
     video = project.source_path(project_path)
     target = _target(project, replicate)
     span = span_for(project, frames, video)
     luma = not graph_needs_chroma(project.pipeline)
-
     typer.echo(
         f"{target.name}: cutting {span.frame_count} frames "
         f"[{span.start}:{span.end}) at {target.roi.width}x{target.roi.height}, "
@@ -95,23 +66,14 @@ def materialize_replicate(
         raise refuse(str(error)) from error
     except OSError as error:
         raise refuse(f"could not write the crop: {error}") from error
-
     project.with_crop(artifact).save(project_path)
     written = artifact.resolve(project_path.parent)
-    typer.echo(f"{target.name}: wrote {artifact.path} ({written.stat().st_size / 1e6:.1f} MB)")
+    typer.echo(
+        f"{target.name}: wrote {artifact.path} ({written.stat().st_size / 1e6:.1f} MB)"
+    )
 
 
 def _target(project: Project, wanted: str) -> Replicate:
-
-
-
-
-
-
-
-
-
-
     for candidate in project.replicates:
         if candidate.replicate_id == wanted:
             return candidate
@@ -122,4 +84,6 @@ def _target(project: Project, wanted: str) -> Replicate:
         known = ", ".join(candidate.name for candidate in project.replicates) or "none"
         raise refuse(f"no replicate named {wanted!r}; this project has: {known}")
     ids = ", ".join(candidate.replicate_id for candidate in named)
-    raise refuse(f"{len(named)} replicates are named {wanted!r}; pass one of these ids: {ids}")
+    raise refuse(
+        f"{len(named)} replicates are named {wanted!r}; pass one of these ids: {ids}"
+    )

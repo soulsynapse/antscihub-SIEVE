@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 from sieve.core.filter_base import (
     UNCHANGED_RATE,
     ArraySpec,

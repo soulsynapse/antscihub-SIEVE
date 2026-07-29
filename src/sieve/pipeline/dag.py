@@ -1,43 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -62,73 +22,39 @@ class GraphError(ValueError):
     pass
 
 
-
-
-
-
-
-
-
-
 class UnresolvedFilterError(GraphError):
-
-
-
-
-
-
-
-
     def __init__(self, missing: Sequence[tuple[str, str]]) -> None:
         self.missing = tuple(missing)
-        listed = ", ".join(f"{filter_id} {version}" for filter_id, version in self.missing)
+        listed = ", ".join(
+            f"{filter_id} {version}" for filter_id, version in self.missing
+        )
         super().__init__(
             f"no filter {listed}" if len(self.missing) == 1 else f"no filters: {listed}"
         )
 
 
 class CycleError(GraphError):
-
-
-
-
-
-
-
-
-
     def __init__(self, nodes: Iterable[str]) -> None:
         self.nodes = tuple(sorted(nodes))
-        super().__init__(f"pipeline contains a cycle among nodes: {', '.join(self.nodes)}")
+        super().__init__(
+            f"pipeline contains a cycle among nodes: {', '.join(self.nodes)}"
+        )
 
 
 class PortWiringError(GraphError):
-
-
-
-
-
-
-
-
-
-
     def __init__(self, node_id: str, message: str) -> None:
         self.node_id = node_id
         super().__init__(message)
 
 
 class EdgeTypeError(GraphError):
-
-
-
-
-
-
-
-
     def __init__(
-        self, upstream: str, downstream: str, port: str, emits: StreamSpec, accepts: StreamSpec
+        self,
+        upstream: str,
+        downstream: str,
+        port: str,
+        emits: StreamSpec,
+        accepts: StreamSpec,
     ) -> None:
         self.upstream = upstream
         self.downstream = downstream
@@ -141,64 +67,24 @@ class EdgeTypeError(GraphError):
 
 @dataclass(frozen=True, slots=True)
 class Dag:
-
-
-
-
-
-
-
-
-
-
     pipeline: Pipeline
 
     order: tuple[Node, ...]
 
     specs: Mapping[str, FilterSpec]
 
-
     upstreams: Mapping[str, tuple[str, ...]]
 
     downstreams: Mapping[str, tuple[str, ...]]
 
-
-
-
-
     ports: Mapping[str, Mapping[str, str]]
 
-
-
-
     elements: Mapping[str, ElementKind | None]
-
-
-
-
-
-
 
     source_indexed: Mapping[str, bool]
 
     @classmethod
     def build(cls, pipeline: Pipeline, registry: FilterRegistry | None = None) -> Dag:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         shelf = REGISTRY if registry is None else registry
         specs = cls._resolve(pipeline, shelf)
         upstreams, downstreams, ports = cls._adjacency(pipeline)
@@ -216,8 +102,6 @@ class Dag:
             source_indexed=cls._source_indexed(order, specs, ports),
         )
 
-
-
     @staticmethod
     def _resolve(pipeline: Pipeline, registry: FilterRegistry) -> dict[str, FilterSpec]:
         specs: dict[str, FilterSpec] = {}
@@ -226,9 +110,6 @@ class Dag:
             try:
                 specs[node.node_id] = registry.get(node.filter_id, node.version)
             except UnknownFilterError:
-
-
-
                 if (node.filter_id, node.version) not in missing:
                     missing.append((node.filter_id, node.version))
         if missing:
@@ -243,15 +124,6 @@ class Dag:
         dict[str, tuple[str, ...]],
         dict[str, dict[str, str]],
     ]:
-
-
-
-
-
-
-
-
-
         up: dict[str, list[str]] = {node.node_id: [] for node in pipeline.nodes}
         down: dict[str, list[str]] = {node.node_id: [] for node in pipeline.nodes}
         ports: dict[str, dict[str, str]] = {node.node_id: {} for node in pipeline.nodes}
@@ -271,20 +143,6 @@ class Dag:
         upstreams: Mapping[str, tuple[str, ...]],
         downstreams: Mapping[str, tuple[str, ...]],
     ) -> tuple[Node, ...]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         position = {node.node_id: index for index, node in enumerate(pipeline.nodes)}
         remaining = {node_id: len(ids) for node_id, ids in upstreams.items()}
         ready = sorted(
@@ -300,9 +158,6 @@ class Dag:
                 remaining[downstream] -= 1
                 if remaining[downstream] == 0:
                     freed.append(downstream)
-
-
-
             ready = sorted([*ready, *freed], key=lambda candidate: position[candidate])
         if len(ordered) != len(pipeline.nodes):
             placed = {node.node_id for node in ordered}
@@ -315,17 +170,6 @@ class Dag:
         specs: Mapping[str, FilterSpec],
         ports: Mapping[str, Mapping[str, str]],
     ) -> None:
-
-
-
-
-
-
-
-
-
-
-
         for node in order:
             declared = specs[node.node_id].input_ports
             fed = ports[node.node_id]
@@ -360,20 +204,6 @@ class Dag:
         specs: Mapping[str, FilterSpec],
         ports: Mapping[str, Mapping[str, str]],
     ) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         for node in order:
             declared = specs[node.node_id].input_ports
             for port, upstream_id in ports[node.node_id].items():
@@ -388,23 +218,6 @@ class Dag:
         specs: Mapping[str, FilterSpec],
         ports: Mapping[str, Mapping[str, str]],
     ) -> dict[str, ElementKind | None]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         resolved: dict[str, ElementKind | None] = {}
         for node in order:
             fed = ports[node.node_id]
@@ -422,19 +235,6 @@ class Dag:
         specs: Mapping[str, FilterSpec],
         ports: Mapping[str, Mapping[str, str]],
     ) -> dict[str, bool]:
-
-
-
-
-
-
-
-
-
-
-
-
-
         indexed: dict[str, bool] = {}
         for node in order:
             spec = specs[node.node_id]
@@ -442,62 +242,24 @@ class Dag:
             indexed[node.node_id] = upstream and not spec.rate_changing
         return indexed
 
-
-
     @property
     def roots(self) -> tuple[Node, ...]:
-
-
-
-
-
-
-
         return tuple(node for node in self.order if not self.upstreams[node.node_id])
 
     @property
     def leaves(self) -> tuple[Node, ...]:
-
         return tuple(node for node in self.order if not self.downstreams[node.node_id])
 
     def element_lost_at(self, node_id: str) -> str:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         if self.elements[node_id] is not None:
             raise ValueError(
                 f"{node_id} has element meaning {self.elements[node_id]}, so nothing was lost "
                 "along the paths feeding it — read `elements` before asking this"
             )
-
-
         feeding = {node_id}
         for node in reversed(self.order):
             if node.node_id in feeding:
                 feeding.update(self.upstreams[node.node_id])
-
         return next(
             node.node_id
             for node in self.order
@@ -505,36 +267,10 @@ class Dag:
         )
 
     def spec(self, node_id: str) -> FilterSpec:
-
-
-
-
-
         return self.specs[node_id]
 
     @property
     def needs_chroma(self) -> bool:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         return any(_requires_chroma(spec) for spec in self.specs.values())
 
     def node_keys(
@@ -545,59 +281,6 @@ class Dag:
         replicate: Replicate | None = None,
         pre_cropped: bool = False,
     ) -> dict[str, str]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         root_key = source_key(
             source,
             None if pre_cropped or replicate is None else replicate.roi,
@@ -611,10 +294,6 @@ class Dag:
                     continue
                 upstream = {port: keys[parent] for port, parent in fed.items()}
             else:
-
-
-
-
                 (port,) = self.specs[node.node_id].input_ports
                 upstream = {port: root_key}
             try:
@@ -622,7 +301,11 @@ class Dag:
                     node,
                     spec=self.specs[node.node_id],
                     upstream=upstream,
-                    backend=(backend[node.node_id] if isinstance(backend, Mapping) else backend),
+                    backend=(
+                        backend[node.node_id]
+                        if isinstance(backend, Mapping)
+                        else backend
+                    ),
                     replicate=replicate,
                 )
             except NotCacheableError:
@@ -630,24 +313,9 @@ class Dag:
         return keys
 
 
-def graph_needs_chroma(pipeline: Pipeline, registry: FilterRegistry | None = None) -> bool:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def graph_needs_chroma(
+    pipeline: Pipeline, registry: FilterRegistry | None = None
+) -> bool:
     try:
         return Dag.build(pipeline, registry).needs_chroma
     except GraphError:
@@ -655,17 +323,6 @@ def graph_needs_chroma(pipeline: Pipeline, registry: FilterRegistry | None = Non
 
 
 def _requires_chroma(spec: FilterSpec) -> bool:
-
-
-
-
-
-
-
-
-
-
-
     accepts = spec.accepts
     if not isinstance(accepts, ArraySpec) or not accepts.channels:
         return False

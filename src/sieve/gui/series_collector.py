@@ -1,26 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -34,9 +11,6 @@ from sieve.pipeline.executor import FrameResult
 
 @dataclass(frozen=True, slots=True)
 class CollectedSeries:
-
-
-
     start_index: int
 
     data: NDArray[np.float32]
@@ -44,27 +18,12 @@ class CollectedSeries:
 
 @dataclass(frozen=True, slots=True)
 class CollectedRows:
-
-
-
-
-
-
-
-
     start_index: int
 
     rows: tuple[NDArray[np.float32], ...]
 
 
 class SeriesCollector:
-
-
-
-
-
-
-
     def __init__(self, node_id: str) -> None:
         self._node_id = node_id
         self._lock = Lock()
@@ -74,29 +33,15 @@ class SeriesCollector:
 
     @property
     def node_id(self) -> str:
-
         return self._node_id
 
     def start(self, revision: int) -> None:
-
-
-
-
-
-
         with self._lock:
             self._revision = revision
             self._start = None
             self._rows = []
 
     def add(self, revision: int, result: FrameResult) -> None:
-
-
-
-
-
-
-
         frame = result.outputs.get(self._node_id)
         if frame is None:
             return
@@ -115,55 +60,19 @@ class SeriesCollector:
             self._rows.append(row)
 
     def snapshot(self, revision: int) -> CollectedSeries | None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         with self._lock:
             if revision != self._revision or self._start is None or not self._rows:
                 return None
             return CollectedSeries(
-                start_index=self._start, data=np.stack(self._rows).astype(np.float32, copy=False)
+                start_index=self._start,
+                data=np.stack(self._rows).astype(np.float32, copy=False),
             )
 
     def snapshot_rows(self, revision: int) -> CollectedRows | None:
-
-
-
-
-
-
-
-
         with self._lock:
             if revision != self._revision or self._start is None or not self._rows:
                 return None
             return CollectedRows(start_index=self._start, rows=tuple(self._rows))
 
     def take(self, revision: int) -> CollectedSeries | None:
-
-
-
-
-
-
-
-
-
-
-
-
-
         return self.snapshot(revision)

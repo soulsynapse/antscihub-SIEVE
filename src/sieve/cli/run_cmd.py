@@ -1,41 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -45,7 +7,13 @@ from typing import Annotated
 import typer
 
 from sieve.backend.dispatch import Backend, NoKernelError
-from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
+from sieve.cli.common import (
+    WORKERS_OPTION,
+    frame_source,
+    load_project,
+    refuse,
+    span_for,
+)
 from sieve.core.pipeline_model import Project
 from sieve.core.replicates import Replicate
 from sieve.decode.prefetch import PrefetchFrameSource
@@ -63,7 +31,10 @@ def run_project(
     project_path: Annotated[
         Path,
         typer.Argument(
-            exists=True, dir_okay=False, readable=True, help="A .sieve.yaml project file."
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="A .sieve.yaml project file.",
         ),
     ],
     frames: Annotated[
@@ -88,19 +59,10 @@ def run_project(
     ] = False,
     workers: Annotated[int | None, WORKERS_OPTION] = None,
 ) -> None:
-
-
-
-
-
-
-
-
     discover()
     project = load_project(project_path)
     _refuse_sinks(project)
     video = project.source_path(project_path)
-
     try:
         dag = Dag.build(project.pipeline)
     except GraphError as error:
@@ -109,13 +71,8 @@ def run_project(
         source = source_identity(video)
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
-
     span = span_for(project, frames, video, dry_run=dry_run)
     targets = _targets(project, replicate_ids)
-
-
-
-
     luma = not dag.needs_chroma
     sources = [
         resolve(
@@ -141,12 +98,10 @@ def run_project(
         )
         for target, resolved in zip(targets, sources, strict=True)
     ]
-
     if dry_run:
         for plan, resolved in zip(plans, sources, strict=True):
             typer.echo(_describe(plan, resolved))
         return
-
     store: FrameStore = NullFrameStore() if no_cache else MemoryFrameStore()
     _execute_all(plans, sources, store, workers=workers, luma=luma)
 
@@ -159,16 +114,6 @@ def _execute_all(
     workers: int | None,
     luma: bool,
 ) -> None:
-
-
-
-
-
-
-
-
-
-
     reader: PrefetchFrameSource | None = None
     opened: Path | None = None
     try:
@@ -185,13 +130,6 @@ def _execute_all(
 
 
 def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) -> None:
-
-
-
-
-
-
-
     label = "baseline" if plan.replicate is None else plan.replicate.name
     if not plan.warmed:
         typer.echo(
@@ -215,7 +153,6 @@ def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) ->
 
 
 def _refuse_sinks(project: Project) -> None:
-
     if project.outputs:
         listed = ", ".join(f"{sink.format} -> {sink.path}" for sink in project.outputs)
         raise refuse(
@@ -224,19 +161,9 @@ def _refuse_sinks(project: Project) -> None:
         )
 
 
-def _targets(project: Project, replicate_ids: Sequence[str] | None) -> tuple[Replicate | None, ...]:
-
-
-
-
-
-
-
-
-
-
-
-
+def _targets(
+    project: Project, replicate_ids: Sequence[str] | None
+) -> tuple[Replicate | None, ...]:
     if not replicate_ids:
         return tuple(project.replicates) or (None,)
     wanted = set(replicate_ids)
@@ -248,19 +175,6 @@ def _targets(project: Project, replicate_ids: Sequence[str] | None) -> tuple[Rep
 
 
 def _describe(plan: ExecutionPlan, resolved: ResolvedSource) -> str:
-
-
-
-
-
-
-
-
-
-
-
-
-
     label = "baseline" if plan.replicate is None else plan.replicate.name
     lines = [
         f"{label}: frames {plan.span.start}:{plan.span.end}, "
@@ -270,7 +184,9 @@ def _describe(plan: ExecutionPlan, resolved: ResolvedSource) -> str:
         + ")",
     ]
     if resolved.artifact is not None:
-        lines.append(f"  served by {resolved.artifact.path} (crop, uncropped at the root)")
+        lines.append(
+            f"  served by {resolved.artifact.path} (crop, uncropped at the root)"
+        )
     for node in plan.dag.order:
         spec = plan.dag.spec(node.node_id)
         key = plan.key(node.node_id)

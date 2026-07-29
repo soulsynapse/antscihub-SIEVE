@@ -1,77 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -88,20 +14,13 @@ from sieve.pipeline.executor import FrameResult, FrameSource, execute
 from sieve.pipeline.plan import ExecutionPlan
 
 
-
-
-
-
 Measure = Callable[[str], AbstractContextManager[None]]
-
 
 
 Consumer = Callable[[FrameResult], None]
 
 
-
 FIRST_FRAME_BUDGET = "slider_to_preview"
-
 
 
 WHOLE_WINDOW_BUDGET = "full_preview_render"
@@ -109,56 +28,25 @@ WHOLE_WINDOW_BUDGET = "full_preview_render"
 
 @dataclass(frozen=True, slots=True)
 class PreviewRender:
-
-
-
-
-
-
-
-
     plan: ExecutionPlan
-
 
     frames: int
 
     computed: int
 
-
     from_cache: int
 
     @property
     def span(self) -> ClipRange:
-
         return self.plan.span
 
     @property
     def reuse(self) -> float:
-
-
-
-
-
-
         total = self.computed + self.from_cache
         return 0.0 if total == 0 else self.from_cache / total
 
 
 class PreviewSession:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def __init__(
         self,
         *,
@@ -174,41 +62,6 @@ class PreviewSession:
         pre_cropped: bool = False,
         source_start: int = 0,
     ) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         self._source = source
         self._reader = reader
         self._window = window
@@ -221,132 +74,39 @@ class PreviewSession:
         self._pre_cropped = pre_cropped
         self._source_start = source_start
 
-
-
     @property
     def window(self) -> ClipRange:
-
         return self._window
 
     @property
     def replicate(self) -> Replicate | None:
-
         return self._replicate
 
     @property
     def store(self) -> FrameStore:
-
-
-
-
-
-
         return self._store
 
     def set_window(self, window: ClipRange) -> None:
-
-
-
-
-
-
-
-
         self._window = window
 
     def set_replicate(self, replicate: Replicate | None) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         self._replicate = replicate
 
-
-
-    def render_window(self, pipeline: Pipeline, on_frame: Consumer | None = None) -> PreviewRender:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    def render_window(
+        self, pipeline: Pipeline, on_frame: Consumer | None = None
+    ) -> PreviewRender:
         return self._run(self._plan(pipeline, self._window), on_frame, whole=True)
 
     def render_frame(
         self, pipeline: Pipeline, index: int, on_frame: Consumer | None = None
     ) -> PreviewRender:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         return self._run(
-            self._plan(pipeline, ClipRange(start=index, end=index + 1)), on_frame, whole=False
+            self._plan(pipeline, ClipRange(start=index, end=index + 1)),
+            on_frame,
+            whole=False,
         )
 
-
-
     def _plan(self, pipeline: Pipeline, span: ClipRange) -> ExecutionPlan:
-
-
-
-
-
-
-
-
-
         return ExecutionPlan.build(
             Dag.build(pipeline, self._registry),
             source=self._source,
@@ -357,52 +117,34 @@ class PreviewSession:
             source_start=self._source_start,
         )
 
-    def _run(self, plan: ExecutionPlan, on_frame: Consumer | None, *, whole: bool) -> PreviewRender:
-
-
-
-
-
-
-
-
-
-
-
-
-
+    def _run(
+        self, plan: ExecutionPlan, on_frame: Consumer | None, *, whole: bool
+    ) -> PreviewRender:
         deliver = _discard if on_frame is None else on_frame
         tally = _Tally()
         with self._measure(WHOLE_WINDOW_BUDGET) if whole else nullcontext():
-            stream = execute(plan, self._reader, store=self._store, kernels=self._kernels)
+            stream = execute(
+                plan, self._reader, store=self._store, kernels=self._kernels
+            )
             with self._measure(FIRST_FRAME_BUDGET):
-
-
-
-
                 tally.add(next(stream), deliver)
             for result in stream:
                 tally.add(result, deliver)
         return PreviewRender(
-            plan=plan, frames=tally.frames, computed=tally.computed, from_cache=tally.from_cache
+            plan=plan,
+            frames=tally.frames,
+            computed=tally.computed,
+            from_cache=tally.from_cache,
         )
 
 
 class _Tally:
-
-
-
-
-
-
-
     def __init__(self) -> None:
         self.frames = 0
         self.computed = 0
         self.from_cache = 0
 
     def add(self, result: FrameResult, deliver: Consumer) -> None:
-
         self.frames += 1
         self.from_cache += len(result.from_cache)
         self.computed += len(result.outputs) - len(result.from_cache)
@@ -410,10 +152,4 @@ class _Tally:
 
 
 def _discard(result: FrameResult) -> None:
-
-
-
-
-
-
     del result

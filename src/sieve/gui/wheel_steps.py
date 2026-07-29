@@ -1,45 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -62,28 +20,13 @@ DETENT = 120
 ACCEL_WINDOW_S = 0.25
 
 
-
 ACCEL_EVERY = 4
-
 
 
 ACCEL_MAX = 8
 
 
 def _scrollable_ancestor(watched: QWidget, event: QWheelEvent) -> bool:
-
-
-
-
-
-
-
-
-
-
-
-
-
     delta = event.angleDelta()
     parent = watched.parentWidget()
     while parent is not None:
@@ -102,13 +45,6 @@ def _scrollable_ancestor(watched: QWidget, event: QWheelEvent) -> bool:
 
 
 class WheelSteps(QObject):
-
-
-
-
-
-
-
     def __init__(
         self,
         parent: QObject | None = None,
@@ -129,9 +65,6 @@ class WheelSteps(QObject):
             return super().eventFilter(watched, event)
         if not isinstance(watched, (QAbstractSlider, QAbstractSpinBox)):
             return super().eventFilter(watched, event)
-
-
-
         if isinstance(watched, QScrollBar):
             return super().eventFilter(watched, event)
         if kind is QEvent.Type.Polish:
@@ -141,14 +74,12 @@ class WheelSteps(QObject):
             return super().eventFilter(watched, event)
         if not watched.hasFocus() and _scrollable_ancestor(watched, event):
             return self._pass_through(watched, event)
-
         now = self._clock()
         if watched is not self._target or now - self._last > ACCEL_WINDOW_S:
             self._run = 0
             self._residual = 0.0
         self._target = watched
         self._last = now
-
         self._residual += event.angleDelta().y()
         detents = int(self._residual / DETENT)
         self._residual -= detents * DETENT
@@ -160,66 +91,16 @@ class WheelSteps(QObject):
                 watched.setValue(watched.value() + steps * watched.singleStep())
             else:
                 watched.stepBy(steps)
-
-
         return True
 
     @staticmethod
     def _drop_wheel_focus(watched: QWidget) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         if watched.focusPolicy() is Qt.FocusPolicy.WheelFocus:
             watched.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def _pass_through(self, watched: QWidget, event: QWheelEvent) -> bool:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         if self._forwarding:
             return True
-
-
-
         self._forwarding = True
         try:
             target = watched.parentWidget()

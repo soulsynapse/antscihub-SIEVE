@@ -9,21 +9,19 @@ model.
 The project uses [uv](https://docs.astral.sh/uv/):
 
 ```powershell
-uv sync --extra gui --group dev-gui
+uv sync --extra gui --group dev
 ```
 
-Run the application and checks without activating the environment:
+Run the application and static checks without activating the environment:
 
 ```powershell
 uv run sieve-gui
 uv run pyright
 uv run lint-imports
-uv run pytest --benchmark-disable
-uv run pytest -m benchmark --benchmark-only
 ```
 
-The first three checks cover static types, architectural import contracts, and
-behavior. The final command runs the performance budgets separately.
+The checks cover static types and architectural import contracts. The previous
+test suite has been removed and will be rederived later.
 
 ## Commands
 
@@ -44,6 +42,6 @@ Manage dependencies with uv:
 
 ```powershell
 uv add scipy
-uv add --group dev pytest-cov
+uv add --group dev pyright
 uv remove scipy
 ```

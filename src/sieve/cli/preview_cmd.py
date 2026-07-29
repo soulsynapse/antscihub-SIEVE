@@ -1,35 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import json
@@ -42,7 +10,13 @@ import typer
 from sieve.backend.dispatch import Backend, NoKernelError
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import MetricBus, Recorder
-from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
+from sieve.cli.common import (
+    WORKERS_OPTION,
+    frame_source,
+    load_project,
+    refuse,
+    span_for,
+)
 from sieve.core.pipeline_model import ClipRange, Pipeline, Project
 from sieve.core.replicates import Replicate
 from sieve.decode.reader import VideoDecodeError
@@ -59,7 +33,10 @@ def preview_project(
     project_path: Annotated[
         Path,
         typer.Argument(
-            exists=True, dir_okay=False, readable=True, help="A .sieve.yaml project file."
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="A .sieve.yaml project file.",
         ),
     ],
     frames: Annotated[
@@ -78,13 +55,18 @@ def preview_project(
     ] = None,
     replicate_id: Annotated[
         str | None,
-        typer.Option("--replicate", help="Which arena to preview. Defaults to the first."),
+        typer.Option(
+            "--replicate", help="Which arena to preview. Defaults to the first."
+        ),
     ] = None,
     backend: Annotated[
         Backend, typer.Option("--backend", help="Where every node runs.")
     ] = Backend.CPU,
     repeat: Annotated[
-        int, typer.Option("--repeat", min=1, help="Render this many times, reusing one store.")
+        int,
+        typer.Option(
+            "--repeat", min=1, help="Render this many times, reusing one store."
+        ),
     ] = 1,
     edits: Annotated[
         list[str] | None,
@@ -94,18 +76,11 @@ def preview_project(
         ),
     ] = None,
     check: Annotated[
-        bool, typer.Option("--check", help="Exit non-zero if any render missed its budget.")
+        bool,
+        typer.Option("--check", help="Exit non-zero if any render missed its budget."),
     ] = False,
     workers: Annotated[int | None, WORKERS_OPTION] = None,
 ) -> None:
-
-
-
-
-
-
-
-
     discover()
     project = load_project(project_path)
     video = project.source_path(project_path)
@@ -116,21 +91,14 @@ def preview_project(
             "--edit applies from the second render onward, so it does nothing with one render. "
             "Pass --repeat 2 to measure what the edit cost."
         )
-
     try:
         source = source_identity(video)
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
     window = span_for(project, frames, video)
-
     bus = MetricBus()
     recorder = Recorder()
     bus.subscribe(recorder.record)
-
-
-
-
-
     luma = not graph_needs_chroma(project.pipeline)
     resolved = resolve(
         project.crops,
@@ -155,10 +123,15 @@ def preview_project(
         )
         typer.echo(_header(project, target, window, at=at, resolved=resolved))
         for attempt in range(repeat):
-            edited = project.pipeline if attempt == 0 else _apply(project, target, parsed).pipeline
+            edited = (
+                project.pipeline
+                if attempt == 0
+                else _apply(project, target, parsed).pipeline
+            )
             render = _render(session, edited, at)
-            typer.echo(f"render {attempt + 1}: {_describe(render, edits if attempt else None)}")
-
+            typer.echo(
+                f"render {attempt + 1}: {_describe(render, edits if attempt else None)}"
+            )
     for key in recorder.keys:
         typer.echo(_timings(recorder, key))
     missed = recorder.misses()
@@ -169,13 +142,9 @@ def preview_project(
         )
 
 
-def _render(session: PreviewSession, pipeline: Pipeline, at: int | None) -> PreviewRender:
-
-
-
-
-
-
+def _render(
+    session: PreviewSession, pipeline: Pipeline, at: int | None
+) -> PreviewRender:
     try:
         if at is None:
             return session.render_window(pipeline)
@@ -185,15 +154,6 @@ def _render(session: PreviewSession, pipeline: Pipeline, at: int | None) -> Prev
 
 
 def _target(project: Project, replicate_id: str | None) -> Replicate | None:
-
-
-
-
-
-
-
-
-
     if replicate_id is None:
         return project.replicates[0] if project.replicates else None
     try:
@@ -202,19 +162,9 @@ def _target(project: Project, replicate_id: str | None) -> Replicate | None:
         raise refuse(f"no such replicate: {replicate_id}") from error
 
 
-def _parse_edits(project: Project, edits: Sequence[str]) -> tuple[tuple[str, str, Any], ...]:
-
-
-
-
-
-
-
-
-
-
-
-
+def _parse_edits(
+    project: Project, edits: Sequence[str]
+) -> tuple[tuple[str, str, Any], ...]:
     parsed: list[tuple[str, str, Any]] = []
     for edit in edits:
         target_name, separator, assignment = edit.partition(":")
@@ -234,15 +184,6 @@ def _parse_edits(project: Project, edits: Sequence[str]) -> tuple[tuple[str, str
 def _apply(
     project: Project, target: Replicate | None, edits: Sequence[tuple[str, str, Any]]
 ) -> Project:
-
-
-
-
-
-
-
-
-
     edited = project
     for node_id, param, value in edits:
         if target is None:
@@ -259,7 +200,9 @@ def _apply(
                 )
             )
         else:
-            edited = edited.with_param_edit(node_id, target.replicate_id, {param: value})
+            edited = edited.with_param_edit(
+                node_id, target.replicate_id, {param: value}
+            )
     return edited
 
 
@@ -271,31 +214,16 @@ def _header(
     at: int | None,
     resolved: ResolvedSource,
 ) -> str:
-
-
-
-
-
-
-
-
-
-
-
     arena = "whole frame" if target is None else target.name
     span = f"frame {at}" if at is not None else f"window {window.start}:{window.end}"
     nodes = len(project.pipeline.nodes)
-    served = "" if resolved.artifact is None else f", served by {resolved.artifact.path}"
+    served = (
+        "" if resolved.artifact is None else f", served by {resolved.artifact.path}"
+    )
     return f"{arena}: {span}, {nodes} node{'' if nodes == 1 else 's'}{served}"
 
 
 def _describe(render: PreviewRender, edits: Sequence[str] | None) -> str:
-
-
-
-
-
-
     applied = f" after {', '.join(edits)}" if edits else ""
     warning = (
         ""
@@ -310,19 +238,6 @@ def _describe(render: PreviewRender, edits: Sequence[str] | None) -> str:
 
 
 def _timings(recorder: Recorder, key: str) -> str:
-
-
-
-
-
-
-
-
-
-
-
-
-
     budget = BUDGETS[key]
     worst = recorder.worst(key)
     verdict = "" if worst.within_budget else f"  MISS by {worst.over_ms:.1f} ms"
@@ -332,20 +247,10 @@ def _timings(recorder: Recorder, key: str) -> str:
     )
 
 
-
-
 _SEQUENCE_LIMIT = 8
 
 
 def _sequence(recorder: Recorder, key: str) -> str:
-
-
-
-
-
-
-
-
     samples = recorder.samples(key)
     if len(samples) > _SEQUENCE_LIMIT:
         return f"{len(samples)} samples, worst {recorder.worst(key).elapsed_ms:.1f} ms"

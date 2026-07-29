@@ -1,41 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 import hashlib
@@ -52,22 +14,7 @@ from sieve.core.types import ROI
 from sieve.decode.identity import decoder_identity
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 HASH_VERSION = 3
-
-
 
 
 DIGEST_BYTES = 32
@@ -77,101 +24,25 @@ class NotCacheableError(ValueError):
     pass
 
 
-
-
-
-
-
-
-
-
-
 def _digest(*parts: object) -> str:
-
-
-
-
-
-
-
-
     payload = json.dumps([HASH_VERSION, *parts], separators=(",", ":"))
-    return hashlib.blake2b(payload.encode("utf-8"), digest_size=DIGEST_BYTES).hexdigest()
+    return hashlib.blake2b(
+        payload.encode("utf-8"), digest_size=DIGEST_BYTES
+    ).hexdigest()
 
 
 def source_identity(video: Path) -> str:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     stat = video.stat()
-    return f"{PurePosixPath(video.resolve()).as_posix()}|{stat.st_size}|{stat.st_mtime_ns}"
+    return (
+        f"{PurePosixPath(video.resolve()).as_posix()}|{stat.st_size}|{stat.st_mtime_ns}"
+    )
 
 
 def source_key(source: str, roi: ROI | None = None, *, luma: bool = False) -> str:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     region = None if roi is None else [roi.x, roi.y, roi.width, roi.height]
-    return _digest("source", source, decoder_identity(), region, "luma" if luma else "bgr")
+    return _digest(
+        "source", source, decoder_identity(), region, "luma" if luma else "bgr"
+    )
 
 
 def node_key(
@@ -182,44 +53,6 @@ def node_key(
     backend: Backend,
     replicate: Replicate | None = None,
 ) -> str:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     if spec.key != (node.filter_id, node.version):
         raise ValueError(
             f"spec is {spec.filter_id} {spec.version} but node names "

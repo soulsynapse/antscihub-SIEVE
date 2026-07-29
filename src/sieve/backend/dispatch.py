@@ -1,29 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -37,27 +11,16 @@ from sieve.core.types import Frame
 
 
 class Backend(StrEnum):
-
-
-
     CPU = "cpu"
 
-
     GPU = "gpu"
-
-
-
 
 
 DEFAULT_PREFERENCE: tuple[Backend, ...] = (Backend.GPU, Backend.CPU)
 
 
-
-
 ParamsT_contra = TypeVar("ParamsT_contra", bound=ParamsBase, contravariant=True)
 ParamsT = TypeVar("ParamsT", bound=ParamsBase)
-
-
 
 
 StateT_contra = TypeVar("StateT_contra", contravariant=True)
@@ -65,60 +28,19 @@ StateT = TypeVar("StateT")
 
 
 class Kernel(Protocol[ParamsT_contra]):
-
-
-
-
-
-
-
-
-
-
     def __call__(self, frame: Frame, params: ParamsT_contra, /) -> Frame: ...
 
 
 class MergingKernel(Protocol[ParamsT_contra]):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def __call__(self, frames: Mapping[str, Frame], params: ParamsT_contra, /) -> Frame: ...
+    def __call__(
+        self, frames: Mapping[str, Frame], params: ParamsT_contra, /
+    ) -> Frame: ...
 
 
 class StatefulKernel(Protocol[ParamsT_contra, StateT_contra]):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def __call__(self, frame: Frame, params: ParamsT_contra, state: StateT_contra, /) -> Frame: ...
+    def __call__(
+        self, frame: Frame, params: ParamsT_contra, state: StateT_contra, /
+    ) -> Frame: ...
 
 
 class DuplicateKernelError(LookupError):
@@ -131,37 +53,12 @@ class NoKernelError(LookupError):
 
 @dataclass(frozen=True, slots=True)
 class KernelBinding:
-
-
-
-
-
-
-
-
-
-
-
-
-
     backend: Backend
     run: Kernel[Any] | StatefulKernel[Any, Any] | MergingKernel[Any]
 
     state_factory: Callable[[], Any] | None = None
 
     def start(self) -> Kernel[Any] | MergingKernel[Any]:
-
-
-
-
-
-
-
-
-
-
-
-
         if self.state_factory is None:
             return cast("Kernel[Any] | MergingKernel[Any]", self.run)
         stateful = cast(StatefulKernel[Any, Any], self.run)
@@ -170,27 +67,13 @@ class KernelBinding:
 
 
 def runtime_available(backend: Backend) -> bool:
-
-
-
-
-
-
-
-
-
     if backend is Backend.CPU:
         return True
     return find_spec("cupy") is not None
 
 
 class KernelRegistry:
-
-
     def __init__(self) -> None:
-
-
-
         self._kernels: dict[tuple[str, str, Backend], KernelBinding] = {}
 
     def __len__(self) -> int:
@@ -204,30 +87,6 @@ class KernelRegistry:
         *,
         state_factory: Callable[[], Any] | None = None,
     ) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         if state_factory is not None and not spec.stateful:
             raise ValueError(
                 f"{spec.filter_id} {spec.version} registers a stateful {backend} kernel but its "
@@ -239,13 +98,11 @@ class KernelRegistry:
             raise DuplicateKernelError(
                 f"{spec.filter_id} {spec.version} already has a {backend} kernel"
             )
-        self._kernels[key] = KernelBinding(backend=backend, run=run, state_factory=state_factory)
+        self._kernels[key] = KernelBinding(
+            backend=backend, run=run, state_factory=state_factory
+        )
 
     def backends_for(self, spec: FilterSpec) -> tuple[Backend, ...]:
-
-
-
-
         return tuple(
             backend
             for backend in Backend
@@ -255,20 +112,6 @@ class KernelRegistry:
     def select(
         self, spec: FilterSpec, preference: tuple[Backend, ...] = DEFAULT_PREFERENCE
     ) -> KernelBinding:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         for backend in preference:
             binding = self._kernels.get((spec.filter_id, spec.version, backend))
             if binding is not None and runtime_available(backend):
@@ -282,9 +125,7 @@ class KernelRegistry:
         )
 
     def clear(self) -> None:
-
         self._kernels.clear()
-
 
 
 KERNELS = KernelRegistry()
@@ -296,25 +137,6 @@ def kernel(
     *,
     registry: KernelRegistry | None = None,
 ) -> Callable[[Kernel[ParamsT]], Kernel[ParamsT]]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     spec = params_model.__filter_spec__
     if spec is None:
         raise TypeError(
@@ -326,11 +148,9 @@ def kernel(
             f"{spec.filter_id} declares input ports {sorted(spec.input_ports)}, so its kernel "
             "is called with a mapping of them — register it with @merging_kernel"
         )
-
     def decorate(run: Kernel[ParamsT]) -> Kernel[ParamsT]:
         (registry if registry is not None else KERNELS).register(spec, backend, run)
         return run
-
     return decorate
 
 
@@ -340,20 +160,6 @@ def merging_kernel(
     *,
     registry: KernelRegistry | None = None,
 ) -> Callable[[MergingKernel[ParamsT]], MergingKernel[ParamsT]]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     spec = params_model.__filter_spec__
     if spec is None:
         raise TypeError(
@@ -365,11 +171,9 @@ def merging_kernel(
             f"{spec.filter_id} declares one input port, so its kernel is called with a bare "
             "frame — register it with @kernel"
         )
-
     def decorate(run: MergingKernel[ParamsT]) -> MergingKernel[ParamsT]:
         (registry if registry is not None else KERNELS).register(spec, backend, run)
         return run
-
     return decorate
 
 
@@ -380,29 +184,6 @@ def stateful_kernel(
     state: Callable[[], StateT],
     registry: KernelRegistry | None = None,
 ) -> Callable[[StatefulKernel[ParamsT, StateT]], StatefulKernel[ParamsT, StateT]]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     spec = params_model.__filter_spec__
     if spec is None:
         raise TypeError(
@@ -414,10 +195,10 @@ def stateful_kernel(
             f"{spec.filter_id} declares input ports {sorted(spec.input_ports)}, and no stateful "
             "merging protocol exists yet — the filter that needs one should bring its signature"
         )
-
-    def decorate(run: StatefulKernel[ParamsT, StateT]) -> StatefulKernel[ParamsT, StateT]:
+    def decorate(
+        run: StatefulKernel[ParamsT, StateT],
+    ) -> StatefulKernel[ParamsT, StateT]:
         shelf = registry if registry is not None else KERNELS
         shelf.register(spec, backend, run, state_factory=state)
         return run
-
     return decorate

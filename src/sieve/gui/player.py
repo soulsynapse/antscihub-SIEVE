@@ -1,52 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from time import perf_counter
@@ -78,26 +29,20 @@ from sieve.gui.scrub_policy import ScrubPolicy
 from sieve.gui.timeline_model import feed_bounds, playback_step
 
 
-
 TICK_INTERVAL_MS = 8
 
 
 FALLBACK_FPS = 30.0
 
 
-
 _SCRUB_BUDGET_MS = BUDGETS["scrub_to_repaint"].limit_ms
 
 
 class VideoPlayer(QObject):
-
-
     opened = Signal(VideoMetadata)
     failed = Signal(str)
     frame_changed = Signal(int, QImage)
     playing_changed = Signal(bool)
-
-
 
     scrub_degraded = Signal()
 
@@ -116,53 +61,28 @@ class VideoPlayer(QObject):
         trace: TraceRecorder | None = None,
     ) -> None:
         super().__init__(parent)
-
         self._metadata: VideoMetadata | None = None
         self._current_index = 0
         self._window: ClipRange | None = None
         self._coalescer = RequestCoalescer()
-
-
-
-
         self._cache = ProxyFrameCache(capacity_bytes=resolved_bytes(PROXY_CACHE_SHARE))
-
-
-
-
         self._policy = policy if policy is not None else ScrubPolicy(_SCRUB_BUDGET_MS)
-
-
-
         self._metrics = METRICS if metrics is None else metrics
-
-
-
         self._trace = TRACE if trace is None else trace
-
         self._playing = False
         self._play_anchor_time = 0.0
         self._play_anchor_index = 0
         self._playback_rate = 1.0
         self._tick_timer_id = 0
-
         self._thread = QThread()
         self._thread.setObjectName("sieve-decode")
-
         self._decode_meter = PoolMeter()
         self._worker = DecodeWorker(self._decode_meter)
         self._worker.moveToThread(self._thread)
-
         self._viewport_luma = False
-
-
-
-
-
         self._render_ring: RenderFrameRing | None = None
         self._render_fed = True
         self._render_filling = False
-
         self._open_requested.connect(self._worker.open)
         self._frame_requested.connect(self._worker.request_frame)
         self._proxy_width_changed.connect(self._worker.set_proxy_width)
@@ -171,140 +91,73 @@ class VideoPlayer(QObject):
         self._worker.opened.connect(self._on_opened)
         self._worker.failed.connect(self._on_failed)
         self._worker.frame_ready.connect(self._on_frame_ready)
-
         self._thread.start()
-
-
 
     @property
     def metadata(self) -> VideoMetadata | None:
-
         return self._metadata
 
     @property
     def current_index(self) -> int:
-
         return self._current_index
 
     @property
     def decode_meter(self) -> PoolMeter:
-
         return self._decode_meter
 
     @property
     def render_fed(self) -> bool:
-
-
-
-
-
-
-
         return self._feed_ring() is not None
 
     @property
     def is_playing(self) -> bool:
-
         return self._playing
 
     @property
     def is_scrub_degraded(self) -> bool:
-
         return self._policy.is_degraded
 
     @property
     def window(self) -> ClipRange | None:
-
         return self._window
 
     @property
     def fps(self) -> float:
-
         if self._metadata is None or self._metadata.fps <= 0.0:
             return FALLBACK_FPS
         return self._metadata.fps
 
-
-
     def apply_preferences(self, preferences: Preferences) -> None:
-
         self._policy.set_allow_degrade(preferences.adaptive_scrub)
         self._policy.set_coarse_interval_seconds(preferences.coarse_interval_seconds)
         self._render_fed = preferences.render_fed_playback
-
-
-
         self._cache.clear()
         if self._render_ring is not None:
             self._render_ring.set_proxy_width(preferences.proxy_width)
         self._proxy_width_changed.emit(preferences.proxy_width)
 
     def set_render_feed(self, ring: RenderFrameRing | None) -> None:
-
-
-
-
-
-
         self._render_ring = ring
 
     @Slot(bool)
     def set_render_filling(self, active: bool) -> None:
-
-
-
-
-
-
-
-
-
         self._render_filling = active
 
     @property
     def viewport_luma(self) -> bool:
-
         return self._viewport_luma
 
     @property
     def playback_rate(self) -> float:
-
         return self._playback_rate
 
     def set_playback_rate(self, rate: float) -> None:
-
-
-
-
-
-
-
-
-
-
         if rate <= 0.0 or rate == self._playback_rate:
             return
         self._playback_rate = rate
         self._anchor_playback(self._current_index)
 
     def set_viewport_luma(self, enabled: bool) -> None:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         if enabled == self._viewport_luma:
             return
         self._viewport_luma = enabled
@@ -314,29 +167,17 @@ class VideoPlayer(QObject):
         if self._metadata is not None:
             self._request(self._current_index, RequestKind.EXACT)
 
-
-
     def open(self, path: str) -> None:
-
         self.pause()
         self._reset_source_state()
         self._open_requested.emit(path)
 
     def close(self) -> None:
-
         self.pause()
         self._reset_source_state()
         self._close_requested.emit()
 
     def set_window(self, window: ClipRange | None) -> None:
-
-
-
-
-
-
-
-
         self._window = window
         if self._metadata is None:
             return
@@ -345,31 +186,16 @@ class VideoPlayer(QObject):
             self.seek(bounded)
 
     def seek(self, index: int) -> None:
-
-
-
-
-
-
-
         self._go_to(index, RequestKind.EXACT)
 
     def scrub(self, index: int) -> None:
-
-
-
-
-
-
         self._go_to(index, RequestKind.SCRUB)
 
     def step(self, delta: int) -> None:
-
         self.pause()
         self.seek(self._current_index + delta)
 
     def play(self) -> None:
-
         if self._metadata is None or self._playing:
             return
         window = self._bounds()
@@ -381,7 +207,6 @@ class VideoPlayer(QObject):
         self.playing_changed.emit(True)
 
     def pause(self) -> None:
-
         if not self._playing:
             return
         self._playing = False
@@ -391,33 +216,21 @@ class VideoPlayer(QObject):
         self.playing_changed.emit(False)
 
     def toggle_play(self) -> None:
-
         if self._playing:
             self.pause()
         else:
             self.play()
 
     def shutdown(self) -> None:
-
         self.pause()
         self._close_requested.emit()
         self._thread.quit()
         self._thread.wait()
 
-
-
     def timerEvent(self, event: object) -> None:
-
-
-
-
-
-
-
         del event
         if not self._playing or self._metadata is None:
             return
-
         elapsed = perf_counter() - self._play_anchor_time
         target = self._play_anchor_index + int(elapsed * self.fps * self._playback_rate)
         bounds = self._bounds()
@@ -425,7 +238,6 @@ class VideoPlayer(QObject):
         if ring is not None and self._render_filling:
             bounds = feed_bounds(bounds, ring.frontier)
         step = playback_step(target, self._current_index, bounds)
-
         if step.rewound:
             self._anchor_playback(step.index)
         if step.index != self._current_index or self._coalescer.in_flight is not None:
@@ -436,18 +248,19 @@ class VideoPlayer(QObject):
             return
         index = self._clamp(index)
         self._anchor_playback(index)
-
-        target = self._clamp(self._policy.snap(index)) if kind is RequestKind.SCRUB else index
+        target = (
+            self._clamp(self._policy.snap(index))
+            if kind is RequestKind.SCRUB
+            else index
+        )
         if self._display_cached(target, kind):
             return
         self._request(target, kind)
 
     def _display_cached(self, index: int, kind: RequestKind) -> bool:
-
         image = self._cache.get(index)
         if image is None:
             return False
-
         self._record(index, kind, FROM_CACHE)
         self._coalescer.served_without_decode(kind)
         self._current_index = index
@@ -459,14 +272,6 @@ class VideoPlayer(QObject):
         self._play_anchor_index = index
 
     def _bounds(self) -> ClipRange:
-
-
-
-
-
-
-
-
         if self._window is not None:
             return self._window
         frames = self._metadata.frame_count if self._metadata is not None else 1
@@ -487,26 +292,11 @@ class VideoPlayer(QObject):
         self._policy.reset()
 
     def _feed_ring(self) -> RenderFrameRing | None:
-
-
-
-
-
-
-
-
-
         if self._render_fed and self._viewport_luma:
             return self._render_ring
         return None
 
     def _display_from_ring(self, index: int, kind: RequestKind) -> bool:
-
-
-
-
-
-
         ring = self._feed_ring()
         if ring is None:
             return False
@@ -520,24 +310,12 @@ class VideoPlayer(QObject):
         return True
 
     def _request(self, index: int, kind: RequestKind) -> None:
-
         if self._display_from_ring(index, kind):
             return
         self._record(index, kind, FROM_DECODE)
         self._issue(self._coalescer.request(index, kind))
 
     def _record(self, index: int, kind: RequestKind, source: str) -> None:
-
-
-
-
-
-
-
-
-
-
-
         if not self._trace.enabled:
             return
         ring = self._render_ring
@@ -553,7 +331,6 @@ class VideoPlayer(QObject):
         )
 
     def _issue(self, request: Request | None) -> None:
-
         if request is not None:
             self._frame_requested.emit(request.index)
 
@@ -568,44 +345,23 @@ class VideoPlayer(QObject):
     @Slot(int, QImage)
     def _on_frame_ready(self, index: int, image: QImage) -> None:
         arrival = self._coalescer.arrived()
-
-
-
-
-
-
         if arrival.stale or arrival.request is None:
             self._issue(self._coalescer.drain())
             return
-
         if arrival.request.kind is not RequestKind.PLAYBACK:
             self._cache.put(index, image)
-
         if arrival.display:
             self._current_index = index
             self.frame_changed.emit(index, image)
-
-
-
-
-
-
-
-
-
-
         if arrival.request.kind is RequestKind.SCRUB:
             round_trip_ms = self._coalescer.round_trip_ms()
             self._metrics.publish("scrub_to_repaint", round_trip_ms)
             if self._policy.observe(round_trip_ms):
                 self.scrub_degraded.emit()
-
         self._issue(self._coalescer.drain())
 
     @Slot(str)
     def _on_failed(self, message: str) -> None:
-
-
         self._issue(self._coalescer.drain())
         self.pause()
         self.failed.emit(message)

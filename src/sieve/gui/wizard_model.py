@@ -1,34 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -47,7 +16,6 @@ from sieve.gui.chain_model import (
 )
 
 
-
 IN_CHAIN = "in chain"
 BREAKS_BELOW = "breaks below"
 CONFLICT_ABOVE = "conflict above — repair it first"
@@ -55,15 +23,6 @@ CONFLICT_ABOVE = "conflict above — repair it first"
 
 @dataclass(frozen=True, slots=True)
 class CatalogEntry:
-
-
-
-
-
-
-
-
-
     entry_id: str
     title: str
     stage: Stage
@@ -73,15 +32,11 @@ class CatalogEntry:
     filter_id: str | None = None
     hidden_params: frozenset[str] = frozenset()
 
-
-
     repeatable: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
-
-
     entry: CatalogEntry
     enabled: bool
     reason: str = ""
@@ -89,14 +44,10 @@ class Candidate:
 
 @dataclass(frozen=True, slots=True)
 class Guidance:
-
-
     summary: str
     when_to_use: str
     not_do: str
     cost: str
-
-
 
 
 _TAB_SIDE_GUIDANCE: dict[str, Guidance] = {
@@ -131,14 +82,6 @@ _TAB_SIDE_GUIDANCE: dict[str, Guidance] = {
 
 
 def catalog() -> tuple[CatalogEntry, ...]:
-
-
-
-
-
-
-
-
     discover()
     return (
         CatalogEntry(
@@ -213,16 +156,7 @@ def _summary(filter_id: str) -> str:
         return filter_id
 
 
-
-
-
 def incoming_kind(steps: tuple[ChainStep, ...], position: int) -> ChainKind | None:
-
-
-
-
-
-
     current = ChainKind.IMAGE
     for step in steps[:position]:
         if step.kind_in is not current:
@@ -232,13 +166,6 @@ def incoming_kind(steps: tuple[ChainStep, ...], position: int) -> ChainKind | No
 
 
 def candidates_for_insert(chain: LiveChain, seam: int) -> tuple[Candidate, ...]:
-
-
-
-
-
-
-
     kind = incoming_kind(chain.steps, seam)
     suggested = _seam_stage(chain.steps, seam)
     offers: list[Candidate] = []
@@ -253,13 +180,6 @@ def candidates_for_insert(chain: LiveChain, seam: int) -> tuple[Candidate, ...]:
 
 
 def candidates_for_swap(chain: LiveChain, step_id: str) -> tuple[Candidate, ...]:
-
-
-
-
-
-
-
     position = _position(chain.steps, step_id)
     current = chain.steps[position]
     kind = incoming_kind(chain.steps, position)
@@ -271,7 +191,9 @@ def candidates_for_swap(chain: LiveChain, step_id: str) -> tuple[Candidate, ...]
         if entry.kind_in is not kind:
             continue
         offers.append(
-            _judge(entry, chain, swap_step(chain, step_id, entry)[0].steps, exempt=step_id)
+            _judge(
+                entry, chain, swap_step(chain, step_id, entry)[0].steps, exempt=step_id
+            )
         )
     return tuple(offers)
 
@@ -282,7 +204,6 @@ def _judge(
     hypothetical: tuple[ChainStep, ...],
     exempt: str | None = None,
 ) -> Candidate:
-
     if not entry.repeatable:
         for step in chain.steps:
             if step.step_id == entry.entry_id and step.step_id != exempt:
@@ -293,7 +214,6 @@ def _judge(
 
 
 def _stage_ordered(suggested: Stage) -> tuple[CatalogEntry, ...]:
-
     entries = catalog()
     lead = tuple(e for e in entries if e.stage is suggested)
     rest = tuple(e for e in entries if e.stage is not suggested)
@@ -301,7 +221,6 @@ def _stage_ordered(suggested: Stage) -> tuple[CatalogEntry, ...]:
 
 
 def _seam_stage(steps: tuple[ChainStep, ...], seam: int) -> Stage:
-
     if seam < len(steps):
         return steps[seam].stage
     if steps:
@@ -316,21 +235,11 @@ def _position(steps: tuple[ChainStep, ...], step_id: str) -> int:
     raise KeyError(step_id)
 
 
-
-
-
 def build_step(
     entry: CatalogEntry,
     chain: LiveChain,
     params: dict[str, object] | None = None,
 ) -> ChainStep:
-
-
-
-
-
-
-
     node = None
     if entry.filter_id is not None:
         spec = REGISTRY.latest(entry.filter_id)
@@ -363,7 +272,6 @@ def insert_step(
     entry: CatalogEntry,
     params: dict[str, object] | None = None,
 ) -> tuple[LiveChain, str]:
-
     step = build_step(entry, chain, params)
     steps = (*chain.steps[:seam], step, *chain.steps[seam:])
     return replace(chain, steps=steps), step.step_id
@@ -375,12 +283,6 @@ def swap_step(
     entry: CatalogEntry,
     params: dict[str, object] | None = None,
 ) -> tuple[LiveChain, str]:
-
-
-
-
-
-
     position = _position(chain.steps, step_id)
     outgoing = chain.steps[position]
     carried: dict[str, object] = {}
@@ -397,24 +299,6 @@ def swap_step(
 
 
 def chain_from_pipeline(pipeline: Pipeline, fps: float) -> LiveChain:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     by_filter = {e.filter_id: e for e in catalog() if e.filter_id is not None}
     steps: list[ChainStep] = []
     for node in _linear_order(pipeline):
@@ -442,23 +326,10 @@ def chain_from_pipeline(pipeline: Pipeline, fps: float) -> LiveChain:
                     kind_out=entry.kind_out,
                 )
             )
-
-
-
     return LiveChain(steps=tuple(steps), detector=DetectorState.default(fps), fps=fps)
 
 
 def _linear_order(pipeline: Pipeline) -> tuple[Node, ...]:
-
-
-
-
-
-
-
-
-
-
     if not pipeline.nodes:
         return ()
     downstream_of = {edge.upstream: edge.downstream for edge in pipeline.edges}
@@ -476,16 +347,7 @@ def _linear_order(pipeline: Pipeline) -> tuple[Node, ...]:
     return tuple(ordered)
 
 
-
-
-
 def parse_guidance(text: str) -> dict[str, str]:
-
-
-
-
-
-
     sections: dict[str, str] = {}
     header = ""
     lines: list[str] = []
@@ -501,13 +363,6 @@ def parse_guidance(text: str) -> dict[str, str]:
 
 
 def guidance_for(entry: CatalogEntry) -> Guidance:
-
-
-
-
-
-
-
     if entry.filter_id is None:
         return _TAB_SIDE_GUIDANCE[entry.entry_id]
     spec = REGISTRY.latest(entry.filter_id)

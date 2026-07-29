@@ -1,42 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -50,40 +11,20 @@ from sieve.core.types import ROI
 
 
 class CropState(Enum):
-
-
-
-
-
-
-
-
-
     ABSENT = "absent"
 
     WRITING = "writing"
 
     AT_REST = "at rest"
 
-
     STALE = "stale"
 
 
 @dataclass(frozen=True, slots=True)
 class CropBacking:
-
-
-
-
-
-
-
-
     state: CropState
 
-
     artifact: CropArtifact | None = None
-
 
     reason: str = ""
 
@@ -98,33 +39,11 @@ def backing_for(
     project_dir: Path,
     window: ClipRange | None,
 ) -> CropBacking:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     replicate = replicates[index]
     for artifact in crops:
-        if not artifact.backs(replicate, source=source, luma=luma, project_dir=project_dir):
+        if not artifact.backs(
+            replicate, source=source, luma=luma, project_dir=project_dir
+        ):
             continue
         if window is not None and (
             artifact.span.start > window.start or artifact.span.end < window.end
@@ -136,8 +55,9 @@ def backing_for(
                 f"[{artifact.span.start}:{artifact.span.end})",
             )
         return CropBacking(CropState.AT_REST, artifact)
-
-    near = _near_miss(crops, replicate, source=source, luma=luma, project_dir=project_dir)
+    near = _near_miss(
+        crops, replicate, source=source, luma=luma, project_dir=project_dir
+    )
     if near is not None:
         return near
     orphan = _orphan_for(crops, index, replicates, source=source)
@@ -159,21 +79,18 @@ def _near_miss(
     luma: bool,
     project_dir: Path,
 ) -> CropBacking | None:
-
-
-
-
-
-
-
     for artifact in crops:
         if artifact.roi != replicate.roi:
             continue
         if not artifact.resolve(project_dir).is_file():
-            return CropBacking(CropState.STALE, artifact, f"the file is not at {artifact.path}")
+            return CropBacking(
+                CropState.STALE, artifact, f"the file is not at {artifact.path}"
+            )
         if artifact.cut_from != source:
             return CropBacking(
-                CropState.STALE, artifact, "the source has been re-exported since this was cut"
+                CropState.STALE,
+                artifact,
+                "the source has been re-exported since this was cut",
             )
         if artifact.luma != luma:
             written = "colour" if not artifact.luma else "luma"
@@ -193,7 +110,6 @@ def _orphan_for(
     *,
     source: str,
 ) -> CropArtifact | None:
-
     claimed = {other.roi for other in replicates}
     for artifact in crops:
         if artifact.cut_from != source or artifact.roi in claimed:
@@ -209,7 +125,6 @@ def _orphan_for(
 
 
 def _overlaps(one: ROI, other: ROI) -> bool:
-
     return (
         one.x < other.right
         and other.x < one.right

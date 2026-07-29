@@ -20,7 +20,7 @@ from sieve.backend.dispatch import (
     NoKernelError,
     kernel,
 )
-from sieve.core.filter_base import ArraySpec, CostEstimate, FilterSpec, ParamsBase
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, FilterSpec, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.types import Frame
 
@@ -45,6 +45,7 @@ def cpu_only() -> Registered:
         summary="Returns its input.",
         accepts=ArraySpec(),
         emits=ArraySpec(),
+        element=ElementRelation.PRESERVED,
         cost=CostEstimate(seconds_per_megapixel=0.0),
         registry=specs,
     )

@@ -15,7 +15,14 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator, Mapping
 from typing import TypeVar
 
-from sieve.core.filter_base import CostEstimate, FilterSpec, Mode, ParamsBase, StreamSpec
+from sieve.core.filter_base import (
+    CostEstimate,
+    ElementDeclaration,
+    FilterSpec,
+    Mode,
+    ParamsBase,
+    StreamSpec,
+)
 
 #: The decorator returns the class it was given, not `ParamsBase` — erasing the
 #: subclass would cost every filter's own fields their static types at the one
@@ -124,6 +131,7 @@ def register_filter(
     stateful: bool = False,
     backend_agnostic: bool = False,
     primary_params: tuple[str, ...] = (),
+    element: ElementDeclaration | None = None,
     registry: FilterRegistry | None = None,
 ) -> Callable[[type[ParamsT]], type[ParamsT]]:
     """Decorate a `ParamsBase` subclass to build and register its spec.
@@ -154,6 +162,7 @@ def register_filter(
             stateful=stateful,
             backend_agnostic=backend_agnostic,
             primary_params=primary_params,
+            element=element,
         )
         (registry if registry is not None else REGISTRY).register(spec)
         params_model.__filter_spec__ = spec

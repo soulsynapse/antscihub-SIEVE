@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from sieve.backend.dispatch import Backend, KernelRegistry, kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, ParamsBase, TableSpec
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase, TableSpec
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.types import ChannelSpec, Frame
@@ -33,6 +33,7 @@ SHELF = FilterRegistry()
     summary="Says nothing about channels, so it accepts any.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     registry=SHELF,
 )
@@ -46,6 +47,7 @@ class AgnosticParams(ParamsBase):
     summary="Single channel in, single channel out — the extraction shape.",
     accepts=ArraySpec(channels=(ChannelSpec.GRAY,)),
     emits=ArraySpec(channels=(ChannelSpec.GRAY,)),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     registry=SHELF,
 )
@@ -59,6 +61,7 @@ class GrayOnlyParams(ParamsBase):
     summary="Colour only. The filter that does not yet exist.",
     accepts=ArraySpec(channels=(ChannelSpec.BGR,)),
     emits=ArraySpec(channels=(ChannelSpec.GRAY,)),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     registry=SHELF,
 )
@@ -72,6 +75,7 @@ class HueParams(ParamsBase):
     summary="Names colour but tolerates gray, so it demands nothing.",
     accepts=ArraySpec(channels=(ChannelSpec.BGR, ChannelSpec.GRAY)),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     registry=SHELF,
 )

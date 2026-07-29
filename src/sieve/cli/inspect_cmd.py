@@ -134,6 +134,7 @@ def _describe(spec: FilterSpec, *, guidance: bool) -> str:
         "",
         f"accepts           {spec.accepts}",
         f"emits             {spec.emits}",
+        f"element           {spec.element}",
         f"mode              {spec.mode}",
         f"warmup_frames     {spec.warmup_frames}{_warmup_note(spec)}",
         f"rate_changing     {spec.rate_changing}",

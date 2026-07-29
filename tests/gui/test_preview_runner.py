@@ -40,7 +40,7 @@ from pytestqt.qtbot import QtBot
 
 from sieve.backend.dispatch import Backend, KernelRegistry, kernel
 from sieve.bench.metrics import MetricBus, Recorder
-from sieve.core.filter_base import ArraySpec, CostEstimate, ParamsBase
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
 from sieve.core.types import Frame
@@ -197,6 +197,7 @@ class TestSuperseding:
             summary="Sleeps, then adds a constant to every pixel.",
             accepts=ArraySpec(),
             emits=ArraySpec(),
+            element=ElementRelation.PRESERVED,
             cost=CostEstimate(seconds_per_megapixel=0.001),
             registry=filters,
         )

@@ -76,7 +76,13 @@ from numpy.typing import NDArray
 from pydantic import Field
 
 from sieve.backend.dispatch import Backend, stateful_kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementRelation,
+    Mode,
+    ParamsBase,
+)
 from sieve.core.filter_registry import register_filter
 from sieve.core.types import Frame
 
@@ -165,6 +171,11 @@ class Emit(StrEnum):
     # Channels unstated on both sides: the estimate is per cell and the layout
     # carries through untouched.
     emits=ArraySpec(dtypes=("float32",)),
+    # Per cell, so the meaning carries through — and this filter is why the
+    # relation exists rather than a constant on every spec: it accepts any
+    # array, so it emits blocks over `block_signal` and pixels over a raw
+    # frame, and either constant would be a lie in the other position.
+    element=ElementRelation.PRESERVED,
     cost=CostEstimate(
         # The worst case, and it is not the longest window — it is the longest
         # window that still admits every frame. Measured on a 34x60 float32

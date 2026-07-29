@@ -44,7 +44,13 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import ArraySpec, FilterSpec, StreamSpec
+from sieve.core.filter_base import (
+    ArraySpec,
+    ElementKind,
+    FilterSpec,
+    StreamSpec,
+    node_element,
+)
 from sieve.core.filter_registry import REGISTRY, FilterRegistry, UnknownFilterError
 from sieve.core.pipeline_model import Node, Pipeline
 from sieve.core.replicates import Replicate
@@ -161,6 +167,19 @@ class Dag:
     #: cache key read, because for a merging filter *which port* a stream
     #: arrives on is part of what the node computes: a minus b is not b minus a.
     ports: Mapping[str, Mapping[str, str]]
+    #: What one value of each node's output is a value of, or `None` where
+    #: nothing can honestly say. Total over `order`. Read by any consumer that
+    #: *counts* elements rather than moving them — `sieve detect --csv` names
+    #: its columns from this, and refuses the node when it is `None`.
+    elements: Mapping[str, ElementKind | None]
+    #: Whether each node's output is still indexed in source frames. Total over
+    #: `order`. False from the first `rate_changing` node onward, and a
+    #: separate question from `elements`: one says what a *column* is, this says
+    #: what a *row* is. A consumer that turns a row offset into a frame number
+    #: — `detect/tables.py` computes `start + offset` — is wrong by the
+    #: decimation factor wherever this is false, silently and by a ratio
+    #: plausible enough to survive being looked at.
+    source_indexed: Mapping[str, bool]
 
     @classmethod
     def build(cls, pipeline: Pipeline, registry: FilterRegistry | None = None) -> Dag:
@@ -193,6 +212,8 @@ class Dag:
             upstreams=upstreams,
             downstreams=downstreams,
             ports=ports,
+            elements=cls._elements(order, specs, ports),
+            source_indexed=cls._source_indexed(order, specs, ports),
         )
 
     # ---- construction ----------------------------------------------------
@@ -360,6 +381,66 @@ class Dag:
                 emits = specs[upstream_id].emits
                 if not accepts.admits(emits):
                     raise EdgeTypeError(upstream_id, node.node_id, port, emits, accepts)
+
+    @staticmethod
+    def _elements(
+        order: Sequence[Node],
+        specs: Mapping[str, FilterSpec],
+        ports: Mapping[str, Mapping[str, str]],
+    ) -> dict[str, ElementKind | None]:
+        """Element meaning, folded forward from the source.
+
+        One pass in topological order, so a node's upstreams are resolved when
+        it is reached. `filter_base.node_element` is the conversion and this is
+        only the traversal that supplies its second argument — the same split
+        `input_warmup_frames` and `plan._lead_in` have, so that there is one
+        answer to what a preserving filter preserves.
+
+        A root's input is the replicate's cropped source, which is frames of
+        pixels; `ElementKind.PIXEL` enters here and nowhere else.
+
+        A merging filter takes its upstreams' answer only if they agree. Two
+        streams whose elements mean different things have no single meaning to
+        preserve, and inventing one would be the mislabelling this whole
+        declaration exists to refuse — rather than a wrong answer it is `None`,
+        which every consumer already has to handle.
+        """
+        resolved: dict[str, ElementKind | None] = {}
+        for node in order:
+            fed = ports[node.node_id]
+            if not fed:
+                upstream: ElementKind | None = ElementKind.PIXEL
+            else:
+                arriving = {resolved[parent] for parent in fed.values()}
+                upstream = arriving.pop() if len(arriving) == 1 else None
+            resolved[node.node_id] = node_element(specs[node.node_id].element, upstream)
+        return resolved
+
+    @staticmethod
+    def _source_indexed(
+        order: Sequence[Node],
+        specs: Mapping[str, FilterSpec],
+        ports: Mapping[str, Mapping[str, str]],
+    ) -> dict[str, bool]:
+        """Whether each node still emits one frame per source frame.
+
+        `rate_changing` is already the declaration and `ParamsBase.output_rate`
+        already the arithmetic; neither says which *nodes* are downstream of a
+        rate change, and that is the question a consumer converting a row
+        offset into a frame number has. Folded here rather than derived by
+        walking `root_paths` at the call site, because it is a property of the
+        graph and a caller that recomputed it would be a second answer.
+
+        The flag, not the rate: a node whose params happen to resolve to 1 is
+        still one an executor may reindex, and this is read where a wrong
+        answer is a wrong timestamp rather than a slower one.
+        """
+        indexed: dict[str, bool] = {}
+        for node in order:
+            spec = specs[node.node_id]
+            upstream = all(indexed[parent] for parent in ports[node.node_id].values())
+            indexed[node.node_id] = upstream and not spec.rate_changing
+        return indexed
 
     # ---- queries ---------------------------------------------------------
 

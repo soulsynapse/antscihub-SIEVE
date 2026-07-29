@@ -67,7 +67,7 @@ from numpy.typing import NDArray
 from pydantic import Field
 
 from sieve.backend.dispatch import Backend, stateful_kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementKind, Mode, ParamsBase
 from sieve.core.filter_registry import register_filter
 from sieve.core.types import ChannelSpec, Frame
 
@@ -136,6 +136,10 @@ class Signal(StrEnum):
     accepts=ArraySpec(dtypes=SUPPORTED_DTYPES),
     # The output is always a block grid: one float32 value per block, GRAY.
     emits=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
+    # The filter that redefines what one element is, whatever it was handed —
+    # which is why `blocks_in_band` is a name a detection over this node's
+    # output may honestly use, and one over its input may not.
+    element=ElementKind.BLOCK,
     cost=CostEstimate(
         # Dominated by the Gaussian blurs. v1's change-only pass measured the
         # products + one blur at ~7% of a full six-component pass; this

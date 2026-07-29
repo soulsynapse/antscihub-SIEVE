@@ -10,10 +10,19 @@ does, and that a node with no key takes its descendants with it and nobody else.
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import ArraySpec, CostEstimate, ParamsBase, TableSpec
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementKind,
+    ElementRelation,
+    ParamsBase,
+    TableSpec,
+)
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
@@ -43,6 +52,7 @@ SHELF = FilterRegistry()
     summary="Frames in, frames out.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     registry=SHELF,
 )
@@ -69,6 +79,7 @@ class DetectParams(ParamsBase):
     summary="Left minus right, so which port is which matters.",
     accepts={"left": ArraySpec(), "right": ArraySpec()},
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     registry=SHELF,
 )
@@ -82,12 +93,57 @@ class MinusParams(ParamsBase):
     summary="Frames in, frames out, never the same ones twice.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     deterministic=False,
     registry=SHELF,
 )
 class JitterParams(ParamsBase):
     pass
+
+
+@register_filter(
+    filter_id="gridify",
+    version="1.0.0",
+    summary="Redefines the element: pixels in, blocks out.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    element=ElementKind.BLOCK,
+    cost=COST,
+    registry=SHELF,
+)
+class GridifyParams(ParamsBase):
+    pass
+
+
+@register_filter(
+    filter_id="shrink",
+    version="1.0.0",
+    summary="Many elements in, one out — `downsample`'s relation.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    element=ElementRelation.AGGREGATED,
+    cost=COST,
+    registry=SHELF,
+)
+class ShrinkParams(ParamsBase):
+    pass
+
+
+@register_filter(
+    filter_id="decimate",
+    version="1.0.0",
+    summary="Keeps one frame in ten, so a row stops being a source frame.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
+    cost=COST,
+    rate_changing=True,
+    registry=SHELF,
+)
+class DecimateParams(ParamsBase):
+    def output_rate(self) -> Fraction:
+        return Fraction(1, 10)
 
 
 def node(node_id: str, filter_id: str = "blur", version: str = "1.0.0", **params: object) -> Node:
@@ -306,3 +362,89 @@ class TestKeyWalk:
         keys = Dag.build(diamond(b="jitter"), SHELF).node_keys(source=SOURCE, backend=Backend.CPU)
 
         assert set(keys) == {"a", "c"}
+
+
+class TestElementMeaning:
+    """What one value of each node's output is a value of, folded from the source.
+
+    The walk is the half `filter_base.node_element` deliberately cannot do: the
+    conversion needs the upstream's answer, and only a graph has it. Each test
+    here is a shape of chain where reading one spec in isolation gives the
+    wrong answer.
+    """
+
+    def test_the_source_is_pixels_and_a_preserving_root_says_so(self) -> None:
+        # Where `PIXEL` enters. A filter that preserves has no constant to
+        # declare, so a root's element is a fact about the decoder, not about
+        # the filter — and it has to be stated somewhere or every chain of
+        # preserving filters resolves to nothing.
+        graph = Pipeline(nodes=(node("a"),))
+
+        assert Dag.build(graph, SHELF).elements == {"a": ElementKind.PIXEL}
+
+    def test_meaning_carries_through_every_preserving_node_after_a_redefinition(self) -> None:
+        # The real chain, and the reason `PRESERVED` exists at all:
+        # `temporal_baseline` accepts any array, so it cannot declare a
+        # constant, and a detection over it is the normal case rather than an
+        # exotic one. Reading its spec alone says nothing; reading the graph
+        # says blocks.
+        graph = Pipeline(
+            nodes=(node("a"), node("b", "gridify"), node("c"), node("d")),
+            edges=edges("a>b", "b>c", "c>d"),
+        )
+
+        assert Dag.build(graph, SHELF).elements == {
+            "a": ElementKind.PIXEL,
+            "b": ElementKind.BLOCK,
+            "c": ElementKind.BLOCK,
+            "d": ElementKind.BLOCK,
+        }
+
+    def test_aggregating_blocks_loses_the_meaning_and_it_never_returns(self) -> None:
+        # `--node` at `c` is the invocation that wrote a pixel count under
+        # `blocks_in_band`. Aggregating pixels is fine and stays pixels;
+        # aggregating blocks is not a block, and `d` preserving that cannot
+        # invent the meaning back.
+        graph = Pipeline(
+            nodes=(node("a", "shrink"), node("b", "gridify"), node("c", "shrink"), node("d")),
+            edges=edges("a>b", "b>c", "c>d"),
+        )
+
+        assert Dag.build(graph, SHELF).elements == {
+            "a": ElementKind.PIXEL,
+            "b": ElementKind.BLOCK,
+            "c": None,
+            "d": None,
+        }
+
+    def test_a_merge_of_two_meanings_resolves_to_neither(self) -> None:
+        # `d` subtracts a block grid from a pixel frame. Nothing it emits has
+        # one meaning, and picking an upstream's would be the invented noun
+        # under a different name.
+        graph = Pipeline(
+            nodes=(node("a"), node("b", "gridify"), node("c"), node("d", "minus")),
+            edges=edges("a>b", "a>c", "b>d:left", "c>d:right"),
+        )
+
+        assert Dag.build(graph, SHELF).elements["d"] is None
+
+    def test_a_table_emitter_has_no_element_at_all(self) -> None:
+        graph = Pipeline(nodes=(node("a"), node("b", "detect")), edges=edges("a>b"))
+
+        assert Dag.build(graph, SHELF).elements["b"] is None
+
+
+class TestSourceIndexing:
+    def test_a_rate_change_unindexes_itself_and_everything_after_it(self) -> None:
+        # The declaration `detect/tables.py` needs and `rate_changing` alone
+        # does not give: which *nodes* sit behind a rate change. `a` is still
+        # source-indexed, and `frame = start + offset` is only true there.
+        graph = Pipeline(
+            nodes=(node("a"), node("b", "decimate"), node("c")),
+            edges=edges("a>b", "b>c"),
+        )
+
+        assert Dag.build(graph, SHELF).source_indexed == {"a": True, "b": False, "c": False}
+
+    def test_a_graph_with_no_rate_change_is_indexed_throughout(self) -> None:
+        assert all(Dag.build(diamond(), SHELF).source_indexed.values())

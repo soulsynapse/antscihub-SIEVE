@@ -7,11 +7,20 @@ project to detected intervals that did not start a Qt application
 (docs/todo/headless-detection.md).
 
 **The series is the sink's output, and the sink is the graph's.** The detector
-runs over a `(T, B)` stack of block-signal grids, and the node that produces
+runs over a `(T, B)` stack of one node's grids, and the node that produces
 them is the one nothing else consumes. Refusing a graph with two sinks is
 deliberate: which of them a detection was taken over is part of what the
 answer means, and a command that picked one would make the choice invisible.
 `--node` is how a two-sink graph says which.
+
+**And what the `B` columns *are* is the graph's too.** `--node` at any node
+used to be admitted and the count written out as `blocks_in_band` whatever the
+node emitted, which for a `downsample` node is a pixel count under an invented
+noun — the numbers real, the label a lie, and the lie on disk after the session
+ends. `_series_node` now asks `Dag` and refuses three answers it cannot label:
+rows rather than frames, a node downstream of a rate change (where a row is not
+a source frame), and a node whose elements have no declared meaning at all.
+What survives names its own columns.
 
 **A whole-clip pass is final by construction**, so none of the partial-record
 frontier arithmetic applies — `settled_for(..., final=True)` is the whole
@@ -43,6 +52,7 @@ from numpy.typing import NDArray
 
 from sieve.backend.dispatch import Backend, NoKernelError
 from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
+from sieve.core.filter_base import ArraySpec, ElementKind
 from sieve.core.pipeline_model import DetectorSettings, Project, resolved_detector
 from sieve.core.replicates import Replicate
 from sieve.core.wavelet import ALL_CORES
@@ -118,8 +128,8 @@ def detect_project(
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
 
-    series_node = _series_node(dag, node_id)
-    series_filter = next(node.filter_id for node in dag.order if node.node_id == series_node)
+    series_node, element = _series_node(dag, node_id)
+    series_filter = dag.specs[series_node].filter_id
     span = span_for(project, frames, video)
     targets = tuple(project.replicates) or (None,)
     luma = not dag.needs_chroma
@@ -151,7 +161,7 @@ def detect_project(
             fps = reader.metadata.fps
             rows = _collect(plan, resolved.wrap(reader), store, series_node)
         update = _detect_one(project.detector, target, rows, fps=fps, start=span.start)
-        typer.echo(_report(_label(target), rows, update, fps=fps))
+        typer.echo(_report(_label(target), rows, update, fps=fps, element=element))
         if csv_dir is not None and update is not None and project.detector is not None:
             exports.append(
                 DetectionExport(
@@ -166,28 +176,65 @@ def detect_project(
             )
 
     if csv_dir is not None:
-        typer.echo(_export(csv_dir, exports))
+        typer.echo(_export(csv_dir, exports, element))
     _refuse_unknown(project, replicate_ids)
 
 
-def _series_node(dag: Dag, node_id: str | None) -> str:
-    """The node whose per-frame output is the detector's series.
+def _series_node(dag: Dag, node_id: str | None) -> tuple[str, ElementKind]:
+    """The node whose per-frame output is the detector's series, and what it emits.
 
     A named node is checked against the graph rather than trusted, because the
     failure of a typo is otherwise a `KeyError` deep in the loop after the run
     has been paid for.
+
+    **The element and the node id leave together.** Three of the four checks
+    below are about what the node's output *means*, and a caller that admitted
+    the node here and asked the graph what it emits somewhere else would be
+    reading two derivations of one fact — which is how a graph gets admitted
+    under one and named under the other.
+
+    Raises:
+        typer.Exit: code 1 for an unknown node, an ambiguous sink, a node
+            emitting rows, a node whose elements have no declared meaning, or
+            one downstream of a rate change.
     """
     sinks = tuple(node.node_id for node in dag.order if not dag.downstreams[node.node_id])
-    if node_id is not None:
-        if node_id not in {node.node_id for node in dag.order}:
-            raise refuse(f"no such node: {node_id}")
-        return node_id
-    if len(sinks) != 1:
+    if node_id is None:
+        if len(sinks) != 1:
+            raise refuse(
+                f"this graph has {len(sinks)} sinks ({', '.join(sinks)}), so which series a "
+                "detection is taken over is not something the document says. Pass --node."
+            )
+        node_id = sinks[0]
+    elif node_id not in {node.node_id for node in dag.order}:
+        raise refuse(f"no such node: {node_id}")
+
+    spec = dag.specs[node_id]
+    if not isinstance(spec.emits, ArraySpec):
+        # Reached `_collect`'s `reshape(-1)` as an opaque numpy error before,
+        # after the whole run had been paid for.
         raise refuse(
-            f"this graph has {len(sinks)} sinks ({', '.join(sinks)}), so which series a "
-            "detection is taken over is not something the document says. Pass --node."
+            f"{node_id} ({spec.filter_id}) emits rows, not frames, so there is no per-frame "
+            "series to detect over"
         )
-    return sinks[0]
+    if not dag.source_indexed[node_id]:
+        # `Frame.frame` is `start + offset`. Behind a rate change that is wrong
+        # by the decimation factor for every row — every frame number, every
+        # timestamp, every interval bound — and wrong by a ratio plausible
+        # enough to survive being looked at.
+        raise refuse(
+            f"{node_id} ({spec.filter_id}) is downstream of a filter that changes rate, so a "
+            "row of its output is not a source frame and every timestamp this would write "
+            "would be wrong by the rate"
+        )
+    element = dag.elements[node_id]
+    if element is None:
+        raise refuse(
+            f"{node_id} ({spec.filter_id}) does not declare what one value of its output is a "
+            "value of, so a count taken over it has no honest noun. Detect over a node that "
+            "does — a count labelled with an invented unit outlives the session in the CSV."
+        )
+    return node_id, element
 
 
 def _collect(
@@ -247,7 +294,7 @@ def _detect_one(
     )
 
 
-def _export(directory: Path, exports: list[DetectionExport]) -> str:
+def _export(directory: Path, exports: list[DetectionExport], element: ElementKind) -> str:
     """Write the tables and say what was written, naming the file left absent.
 
     Raises:
@@ -257,7 +304,7 @@ def _export(directory: Path, exports: list[DetectionExport]) -> str:
     if not exports:
         return f"--csv wrote nothing to {directory}: no replicate was run"
     try:
-        written = write_tables(directory, exports)
+        written = write_tables(directory, exports, element=element)
     except TableVerificationError as error:
         raise refuse(str(error)) from error
     except OSError as error:
@@ -277,6 +324,7 @@ def _report(
     update: DetectorUpdate | None,
     *,
     fps: float,
+    element: ElementKind,
 ) -> str:
     """One replicate's intervals, in absolute frames and in seconds.
 
@@ -289,14 +337,15 @@ def _report(
     zero intervals for either would be a wrong answer that looks like a right
     one.
     """
+    counted = f"{series.shape[1]} {element.value}s"
     if update is None:
         return (
-            f"{label}: {series.shape[0]} frames, {series.shape[1]} blocks — this project has no "
+            f"{label}: {series.shape[0]} frames, {counted} — this project has no "
             "detector, so it claims nothing. Tune one in the GUI and save."
         )
     if update.intervals is None:
         return (
-            f"{label}: {series.shape[0]} frames, {series.shape[1]} blocks — detector disarmed "
+            f"{label}: {series.shape[0]} frames, {counted} — detector disarmed "
             "(no count threshold placed), so nothing is claimed"
         )
     found = len(update.intervals)

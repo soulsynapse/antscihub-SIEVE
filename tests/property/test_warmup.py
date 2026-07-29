@@ -25,7 +25,13 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import ArraySpec, CostEstimate, ParamsBase, source_warmup_frames
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementRelation,
+    ParamsBase,
+    source_warmup_frames,
+)
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.pipeline.dag import Dag
@@ -84,6 +90,7 @@ def _register(warmup: int, rate: Fraction, arity: int) -> type[ParamsBase]:
         # check would refuse the generator's `p0`.
         "accepts": {f"p{port}": ArraySpec() for port in range(arity)},
         "emits": ArraySpec(),
+        "element": ElementRelation.PRESERVED,
         "cost": COST,
         "warmup_frames": warmup,
         "registry": SHELF,

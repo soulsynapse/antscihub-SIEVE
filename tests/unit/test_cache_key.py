@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import ArraySpec, CostEstimate, FilterSpec, ParamsBase
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, FilterSpec, ParamsBase
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
@@ -37,6 +37,7 @@ def make_spec(**overrides: object) -> FilterSpec:
         "params_model": BlurParams,
         "accepts": ArraySpec(),
         "emits": ArraySpec(),
+        "element": ElementRelation.PRESERVED,
         "cost": COST,
     }
     fields.update(overrides)

@@ -63,7 +63,13 @@ from numpy.typing import NDArray
 from pydantic import Field
 
 from sieve.backend.dispatch import Backend, stateful_kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementRelation,
+    Mode,
+    ParamsBase,
+)
 from sieve.core.filter_registry import register_filter
 from sieve.core.types import Frame
 
@@ -127,6 +133,9 @@ class Emit(StrEnum):
     # carries through untouched, so constraining either side would reject frames
     # this handles.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
+    # The model is per element and so is the difference from it; the geometry
+    # is untouched, exactly as the unstated channels above say.
+    element=ElementRelation.PRESERVED,
     cost=CostEstimate(
         # 9.9 ms/MP measured on 1080p BGR uint8 (20.6 ms/frame) on the
         # foreground path, 8.7 on the background one; the declaration takes the

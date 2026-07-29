@@ -25,7 +25,13 @@ import cv2
 from pydantic import Field
 
 from sieve.backend.dispatch import Backend, kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementRelation,
+    Mode,
+    ParamsBase,
+)
 from sieve.core.filter_registry import register_filter
 from sieve.core.types import Frame
 
@@ -42,6 +48,8 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
     # Channels unstated on both sides: the filter preserves whatever layout it
     # is handed.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
+    # `downsample`'s relation at a float scale, and for its reason.
+    element=ElementRelation.AGGREGATED,
     cost=CostEstimate(
         # Same kernel as `downsample`'s anti-aliased path; its measured
         # 0.33 ms/MP on 1080p BGR carries over.

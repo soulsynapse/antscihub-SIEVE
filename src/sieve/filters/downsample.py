@@ -20,7 +20,13 @@ import numpy as np
 from pydantic import Field
 
 from sieve.backend.dispatch import Backend, kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementRelation,
+    Mode,
+    ParamsBase,
+)
 from sieve.core.filter_registry import register_filter
 from sieve.core.types import Frame
 
@@ -40,6 +46,12 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
     # constraining `emits` would claim knowledge of the source that this filter
     # does not have, and constraining `accepts` would reject frames it handles.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
+    # One output element is `factor**2` input elements. Kind-dependent rather
+    # than destructive: a mean of pixels is the scene sampled more coarsely and
+    # is still pixels, so a detection here counts pixels honestly; a mean of
+    # `block_signal`'s blocks is not a block, and a count threshold denominated
+    # in blocks has nothing to be taken over.
+    element=ElementRelation.AGGREGATED,
     cost=CostEstimate(
         # 0.33 ms/MP measured on 1080p BGR with `anti_alias` on, 0.14 ms with it
         # off. The declaration takes the slower path because it is the default,

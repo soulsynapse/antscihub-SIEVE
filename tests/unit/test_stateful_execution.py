@@ -41,7 +41,7 @@ from sieve.backend.dispatch import (
     KernelRegistry,
     stateful_kernel,
 )
-from sieve.core.filter_base import ArraySpec, CostEstimate, ParamsBase
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
 from sieve.core.types import ChannelSpec, Frame
@@ -176,6 +176,7 @@ def test_a_filter_whose_warmup_is_a_lie_disagrees_with_itself_across_spans() -> 
         summary="Running sum, declaring it needs no warmup, which is false.",
         accepts=ArraySpec(),
         emits=ArraySpec(),
+        element=ElementRelation.PRESERVED,
         cost=CostEstimate(seconds_per_megapixel=0.001),
         stateful=True,
         registry=scratch,
@@ -335,6 +336,7 @@ def test_a_stateful_kernel_behind_a_spec_that_does_not_declare_it_is_refused() -
         summary="Claims to keep nothing and is about to be handed a state.",
         accepts=ArraySpec(),
         emits=ArraySpec(),
+        element=ElementRelation.PRESERVED,
         cost=CostEstimate(seconds_per_megapixel=0.001),
         registry=scratch,
     )

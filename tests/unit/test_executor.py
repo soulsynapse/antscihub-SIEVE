@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from sieve.backend.dispatch import Backend, KernelRegistry, NoKernelError, kernel, merging_kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, Mode, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
@@ -42,6 +42,7 @@ ARENA = ROI(x=4, y=2, width=10, height=6)
     summary="Adds `amount` to every pixel, and remembers being called.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     warmup_frames=3,
     registry=SHELF,
@@ -72,6 +73,7 @@ def tag_cpu(frame: Frame, params: TagParams) -> Frame:
     summary="A filter nobody wrote a GPU kernel for, which is not a defect.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     registry=SHELF,
 )
@@ -96,6 +98,7 @@ def cpu_only_cpu(frame: Frame, params: CpuOnlyParams) -> Frame:
     summary="Left minus right, so a swapped wiring is a different result.",
     accepts={"left": ArraySpec(), "right": ArraySpec()},
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     registry=SHELF,
 )
@@ -119,6 +122,7 @@ def minus_cpu(frames: Mapping[str, Frame], params: MinusParams) -> Frame:
     summary="Needs a window, so nothing can call it.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     mode=Mode.WINDOWED,
     registry=SHELF,

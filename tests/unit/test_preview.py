@@ -35,7 +35,7 @@ import pytest
 
 from sieve.backend.dispatch import Backend, KernelRegistry, kernel
 from sieve.bench.budgets import BUDGETS
-from sieve.core.filter_base import ArraySpec, CostEstimate, ParamsBase
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.types import ChannelSpec, Frame
@@ -107,6 +107,7 @@ def shelves() -> Iterator[tuple[FilterRegistry, KernelRegistry]]:
         summary="Adds a constant to every pixel.",
         accepts=ArraySpec(),
         emits=ArraySpec(),
+        element=ElementRelation.PRESERVED,
         cost=CostEstimate(seconds_per_megapixel=0.001),
         registry=filters,
     )

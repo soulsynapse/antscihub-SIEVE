@@ -31,7 +31,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from sieve.backend.dispatch import Backend, kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementRelation,
+    Mode,
+    ParamsBase,
+)
 from sieve.core.filter_registry import register_filter
 from sieve.core.types import ChannelSpec, Frame
 
@@ -68,6 +74,9 @@ class NormalizeMode(StrEnum):
     # declared set is the union, because a declaration holds for every
     # parameter setting. Channels are preserved either way.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
+    # An affine map applied elementwise: whatever one value described going in,
+    # it describes coming out.
+    element=ElementRelation.PRESERVED,
     cost=CostEstimate(
         # One meanStdDev pass plus one fused multiply-add, all SIMD; in v1
         # this was a small slice of a preprocess span dominated by resize.

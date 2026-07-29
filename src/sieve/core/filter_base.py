@@ -101,6 +101,107 @@ class StreamKind(StrEnum):
     TABLE = "table"
 
 
+class ElementKind(StrEnum):
+    """What one value of a frame *is a value of*.
+
+    `ArraySpec` says a frame is float32 and single-channel, which is enough to
+    reject a graph that cannot run and is what it was built for. It does not
+    say whether one of those floats describes a pixel or a 64x64 block of them,
+    and nothing needed the difference while the only consumer was the executor,
+    which moves arrays without interpreting them. A consumer that *counts*
+    elements does need it: `sieve detect` reports how many of a frame's values
+    fell inside a value band, and the noun in that sentence comes from here or
+    it is invented.
+
+    Two members, and the second is not speculative padding: `block_signal`
+    emits one float per block and `downsample` emits one per pixel, both under
+    `ArraySpec(dtypes=("float32",))`. A third member arrives with the filter
+    that needs it and not before.
+    """
+
+    #: One value per pixel of the frame it was measured from. What a decoded
+    #: source frame carries, and therefore where every graph's walk starts.
+    PIXEL = "pixel"
+    #: One value per block of a grid the frame was divided into.
+    BLOCK = "block"
+
+
+class ElementRelation(StrEnum):
+    """What a filter does to the element meaning it was handed.
+
+    A sibling of `ElementKind` rather than more members on it, because these
+    are not answers to "what is one value of" — they are relations between a
+    filter's input and its output, and a filter that preserves has no constant
+    to declare. `temporal_baseline` is why this axis exists at all: it accepts
+    any array and estimates per cell, so it emits blocks over `block_signal`
+    and pixels over a raw frame, and any constant it declared would be a lie in
+    one of the two positions.
+    """
+
+    #: One output element is one input element, whatever that was. The per-cell
+    #: and per-pixel filters: `normalize`, `background_ema`, `motion_history`,
+    #: `temporal_baseline`.
+    PRESERVED = "preserved"
+    #: One output element is *many* input elements, spatially. `downsample` and
+    #: `rescale`. Kind-dependent rather than simply destructive, and the
+    #: asymmetry is the point: a mean of pixels is still a sample of the scene
+    #: at a coarser spacing, so `PIXEL` survives; a mean of blocks is not a
+    #: block, because a block is already an aggregate and re-aggregating it
+    #: leaves a quantity no count threshold is denominated in.
+    AGGREGATED = "aggregated"
+
+
+#: What a filter declares about its output's elements: a kind outright, or a
+#: relation to its input's. A union rather than one enum with four members so
+#: that the *resolved* answer has a type of its own — `ElementKind | None` is
+#: what a walk produces and what a consumer may read, and `PRESERVED` must not
+#: be assignable to it. The narrowing goes through `isinstance`, which is what
+#: a type checker can follow, exactly as `StreamSpec`'s does.
+ElementDeclaration: TypeAlias = "ElementKind | ElementRelation"
+
+
+def node_element(
+    declaration: ElementDeclaration | None, upstream: ElementKind | None
+) -> ElementKind | None:
+    """One node's element meaning, given its input's. `None` is *undeclarable*.
+
+    The single-node conversion, kept here beside the declaration that defines
+    it while the walk that supplies `upstream` lives in `pipeline/dag.py` —
+    `input_warmup_frames` and `plan.py`'s fold are the same split for the same
+    reason, and a second implementation of the conversion is what that
+    arrangement exists to prevent.
+
+    `None` propagates and never recovers: a filter downstream of a node whose
+    elements have no meaning cannot give them one back by preserving them.
+
+    **`AGGREGATED` defaults over `ElementKind`, and the polarity is the whole
+    reason that is allowed.** `FilterSpec.element` refuses a default because an
+    omission there resolves to a confident wrong noun; the branch below names
+    `PIXEL` and sends every other kind to `None`, so a third `ElementKind`
+    member added tomorrow is *refused* under aggregation until somebody decides
+    what a mean of one means. Fails closed rather than open, which is the only
+    kind of default this file has any business carrying.
+
+    Args:
+        declaration: `FilterSpec.element`. `None` only for a table emitter,
+            which has no elements at all.
+        upstream: The element meaning arriving at this node, or `None` if that
+            was itself undeclarable. A root is handed `ElementKind.PIXEL` —
+            the source is frames of pixels.
+
+    Returns:
+        What one value of this node's output is a value of, or `None` when
+        nothing can honestly say.
+    """
+    if declaration is None:
+        return None
+    if isinstance(declaration, ElementKind):
+        return declaration
+    if declaration is ElementRelation.AGGREGATED:
+        return upstream if upstream is ElementKind.PIXEL else None
+    return upstream
+
+
 #: Rate `1`, allocated once. `Fraction` is immutable, so every unchanged filter
 #: can share it, and `output_rate() is UNCHANGED_RATE` is a cheap fast path.
 UNCHANGED_RATE = Fraction(1, 1)
@@ -421,6 +522,21 @@ class FilterSpec:
     #: exist on `params_model`; that is checked below, because the failure mode
     #: of a stale name is a widget that silently stops appearing.
     primary_params: tuple[str, ...] = field(default_factory=tuple)
+    #: What one value of an emitted frame is a value of — a kind outright, or a
+    #: relation to what arrived. Required of every array emitter and refused of
+    #: every table emitter; `__post_init__` enforces both, which is what makes
+    #: the default of `None` a spelling of "this emits rows" rather than a
+    #: filter that forgot.
+    #:
+    #: **Defaulting this to `PRESERVED` is the shortcut to refuse.** It costs
+    #: nothing today — every filter on the shelf that preserves would be
+    #: correct by accident — and it converts the *next* element-redefining
+    #: filter's omission into a silent wrong noun on a CSV column, which is the
+    #: failure this field exists to close. `output_rate`'s treatment, and for
+    #: `output_rate`'s reason: the declaration decides whether a detection is
+    #: admissible at all, so forgetting it must be an error at registration
+    #: rather than a plausible number nobody checks.
+    element: ElementDeclaration | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.accepts, Mapping):
@@ -451,6 +567,17 @@ class FilterSpec:
             raise ValueError(
                 f"{self.filter_id}: backend_agnostic requires deterministic — a filter that "
                 "cannot reproduce its own output cannot agree with another backend's"
+            )
+        if isinstance(self.emits, ArraySpec) and self.element is None:
+            raise ValueError(
+                f"{self.filter_id}: emits an array and declares no element meaning — what one "
+                "value of an emitted frame is a value of decides whether a detection over this "
+                "node is admissible, so it is stated or the filter is not registered"
+            )
+        if not isinstance(self.emits, ArraySpec) and self.element is not None:
+            raise ValueError(
+                f"{self.filter_id}: emits rows and declares element {self.element!r} — a table "
+                "has columns, not elements"
             )
         known = set(self.params_model.model_fields)
         unknown = [name for name in self.primary_params if name not in known]

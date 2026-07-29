@@ -15,11 +15,14 @@ import pytest
 from sieve.core.filter_base import (
     ArraySpec,
     CostEstimate,
+    ElementKind,
+    ElementRelation,
     FilterSpec,
     Mode,
     ParamsBase,
     TableSpec,
     input_warmup_frames,
+    node_element,
     source_warmup_frames,
 )
 from sieve.core.filter_registry import (
@@ -95,6 +98,7 @@ def make_spec(**overrides: object) -> FilterSpec:
         "params_model": SampleParams,
         "accepts": ArraySpec(),
         "emits": ArraySpec(),
+        "element": ElementRelation.PRESERVED,
         "cost": COST,
     }
     fields.update(overrides)
@@ -210,6 +214,42 @@ class TestRate:
             make_spec(rate_changing=True)
 
 
+class TestElementMeaning:
+    def test_an_array_emitter_without_an_element_is_refused_at_registration(self) -> None:
+        # The whole enforcement. A default here would be free today — every
+        # filter on the shelf that preserves would be right by accident — and
+        # would turn the next element-redefining filter's omission into a CSV
+        # column with an invented noun, which is the failure the declaration
+        # exists to close. Refusing at registration is what makes forgetting
+        # impossible rather than merely unlikely.
+        with pytest.raises(ValueError, match="declares no element meaning"):
+            make_spec(element=None)
+
+    def test_a_table_emitter_declaring_one_is_refused(self) -> None:
+        # The mirror, and not symmetry for its own sake: `None` has to mean
+        # "emits rows" rather than "an array emitter that forgot", or the
+        # check above has a hole exactly the shape of a default.
+        with pytest.raises(ValueError, match="a table has columns, not elements"):
+            make_spec(emits=TableSpec(columns=("x",)), element=ElementKind.BLOCK)
+
+    def test_aggregation_keeps_pixels_and_refuses_blocks(self) -> None:
+        # The asymmetry `downsample` declares. A mean of pixels is the scene
+        # sampled more coarsely and is still pixels, so a count over it is
+        # honest; a mean of blocks is not a block, because a block is already
+        # an aggregate, and no count threshold is denominated in it.
+        assert node_element(ElementRelation.AGGREGATED, ElementKind.PIXEL) is ElementKind.PIXEL
+        assert node_element(ElementRelation.AGGREGATED, ElementKind.BLOCK) is None
+
+    def test_an_undeclarable_element_never_recovers_downstream(self) -> None:
+        # Preserving `None` cannot invent a meaning. Without this a chain of
+        # `block_signal -> downsample -> normalize` would report blocks again
+        # two nodes after the meaning was lost.
+        assert node_element(ElementRelation.PRESERVED, None) is None
+
+    def test_a_kind_overrides_whatever_arrived(self) -> None:
+        assert node_element(ElementKind.BLOCK, ElementKind.PIXEL) is ElementKind.BLOCK
+
+
 class TestStoredBytes:
     def test_stored_size_multiplies_rate_by_frame_size(self) -> None:
         # Two filters that know nothing about each other: one drops nine frames
@@ -308,6 +348,7 @@ class TestFilterRegistry:
             summary="Gaussian blur.",
             accepts=ArraySpec(),
             emits=ArraySpec(),
+            element=ElementRelation.PRESERVED,
             cost=COST,
             primary_params=("factor",),
             registry=registry,

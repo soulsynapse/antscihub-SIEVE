@@ -23,6 +23,18 @@ carries, and `README.md` beside the tables carries the rest — the value band
 these counts were taken inside is not derivable from any column, so the file
 records the settings the run resolved.
 
+**And the something comes from the pipeline, not from here.** `blocks_in_band`
+was a literal in this module until the element declaration existed, which made
+it an assumption about the series node written down as a noun: `sieve detect
+--node` at a `downsample` node wrote a pixel count under it, no refusal and no
+warning, and shipped the invented noun to disk where it outlived the session.
+`series_columns` takes the `ElementKind` the graph resolved and names four
+columns from it; a node whose elements have no declared meaning never reaches
+here, because `cli/detect_cmd.py` refuses it instead. Renaming these to
+something shape-neutral was the alternative and is worse than either:
+`units_in_band` is honest and unreadable, which is the trade rule 6 exists to
+refuse rather than to make.
+
 **Two files, because they are two claims with different lifetimes.** The
 series is what the transform and the gate *measured*; the intervals are what
 the current `DetectorSettings` *claims* from it. A re-tune moves the second
@@ -38,18 +50,18 @@ project with no detector never reaches here — the counts are taken inside the
 value band, so there is no series either, and the caller refuses.
 
 **`windowed_mean_fraction` is the column the threshold is drawn on.**
-`detect_gate` compares the windowed mean against `count_frac x blocks_total`,
+`detect_gate` compares the windowed mean against `count_frac x <element>s_total`,
 so the quantity a `DetectorSettings` threshold sits on is a *fraction* while
 the series is a *count*. Both divisions are done here, so they are done once
-and against the block count the run really had, rather than in every plot.
+and against the element count the run really had, rather than in every plot.
 
 **Measured numbers print at `float32` precision; derived ones are rounded.**
-The two are not the same decision. `blocks_in_band` and the windowed mean come
+The two are not the same decision. The in-band count and the windowed mean come
 out of `float32` arrays, and the shortest string that round-trips *as float32*
 is both exactly lossless and short — `0.1`, not `float64` repr's
 `0.10000000149011612`. That keeps the parity fixture bit-exact and legible at
 once. Times and fractions are *derived* from columns that are themselves exact
-(`frame`, `blocks_total`), so a reader can recompute them to any precision and
+(`frame`, the element total), so a reader can recompute them to any precision and
 rounding them loses nothing; they are rounded because six ugly digits of a
 convenience column is what makes a table unreadable.
 
@@ -75,6 +87,7 @@ from typing import Any, Generic, TypeVar
 
 import numpy as np
 
+from sieve.core.filter_base import ElementKind
 from sieve.core.pipeline_model import DetectorSettings
 from sieve.detect.detector import DetectorUpdate
 
@@ -113,7 +126,7 @@ ABSENT = "NA"
 #: Decimals on the two derived kinds. Seconds to a millisecond is finer than a
 #: frame at any rate SIEVE sees; a fraction to six significant figures is finer
 #: than one block in the largest grid anyone has run. Both stay recomputable
-#: from `frame` and `blocks_total`, which are exact.
+#: from `frame` and the element total, which are exact.
 SECONDS_DECIMALS = 3
 FRACTION_FIGURES = 6
 
@@ -153,7 +166,12 @@ class Frame:
     offset: int
 
     @property
-    def blocks(self) -> int:
+    def elements(self) -> int:
+        """How many values the series node emitted per frame.
+
+        What *kind* of value is `series_columns`' argument and not knowable
+        from the array; this is only how many there were.
+        """
         return self.export.update.band_power.shape[1]
 
     @property
@@ -170,57 +188,75 @@ class Interval:
     last: int
 
 
-SERIES_COLUMNS: tuple[Column[Frame], ...] = (
-    Column(
-        "replicate",
-        "which arena; `baseline` when the project defines none",
-        lambda r: r.export.replicate,
-    ),
-    Column(
-        "node_id",
-        "the graph node the signal was taken from (a generated id)",
-        lambda r: r.export.node_id,
-    ),
-    Column(
-        "filter",
-        "that node's filter, for reading and for plot legends",
-        lambda r: r.export.filter_id,
-    ),
-    Column("frame", "absolute source frame", lambda r: str(r.frame)),
-    Column(
-        "time_seconds",
-        "`frame / fps`, to the millisecond",
-        lambda r: _seconds(r.frame / r.export.fps),
-    ),
-    Column(
-        "blocks_total", "blocks in the grid this frame was divided into", lambda r: str(r.blocks)
-    ),
-    Column(
-        "blocks_in_band",
-        "how many of them fell inside the value band",
-        lambda r: _measured(r.export.update.count[r.offset]),
-    ),
-    Column(
-        "blocks_in_band_fraction",
-        "the same, over `blocks_total`",
-        lambda r: _fraction(r.export.update.count[r.offset], r.blocks),
-    ),
-    Column(
-        "windowed_mean_blocks",
-        "`blocks_in_band` averaged over the detection window",
-        lambda r: _measured(r.export.update.windowed[r.offset]),
-    ),
-    Column(
-        "windowed_mean_fraction",
-        "the same, over `blocks_total` — **the count threshold is compared against this**",
-        lambda r: _fraction(r.export.update.windowed[r.offset], r.blocks),
-    ),
-    Column(
-        "detected",
-        "whether the threshold was met; `NA` where the detector is disarmed",
-        lambda r: _detected(r),
-    ),
-)
+def series_columns(element: ElementKind) -> tuple[Column[Frame], ...]:
+    """`series.csv`'s columns, four of them named for what was counted.
+
+    A function rather than a constant because the noun is the graph's:
+    `blocks_total` over a `block_signal` node, `pixels_total` over a
+    per-pixel one, and a node that could not say which never gets here. The
+    plural is the enum's value plus `s` — `ElementKind` members are chosen to
+    read that way, and a table of exceptions would be a second place to
+    forget one.
+
+    Args:
+        element: What one value of the series node's output is a value of, as
+            `pipeline/dag.py`'s `Dag.elements` resolved it.
+    """
+    unit = f"{element.value}s"
+    return (
+        Column(
+            "replicate",
+            "which arena; `baseline` when the project defines none",
+            lambda r: r.export.replicate,
+        ),
+        Column(
+            "node_id",
+            "the graph node the signal was taken from (a generated id)",
+            lambda r: r.export.node_id,
+        ),
+        Column(
+            "filter",
+            "that node's filter, for reading and for plot legends",
+            lambda r: r.export.filter_id,
+        ),
+        Column("frame", "absolute source frame", lambda r: str(r.frame)),
+        Column(
+            "time_seconds",
+            "`frame / fps`, to the millisecond",
+            lambda r: _seconds(r.frame / r.export.fps),
+        ),
+        Column(
+            f"{unit}_total",
+            f"{unit} this frame was divided into",
+            lambda r: str(r.elements),
+        ),
+        Column(
+            f"{unit}_in_band",
+            "how many of them fell inside the value band",
+            lambda r: _measured(r.export.update.count[r.offset]),
+        ),
+        Column(
+            f"{unit}_in_band_fraction",
+            f"the same, over `{unit}_total`",
+            lambda r: _fraction(r.export.update.count[r.offset], r.elements),
+        ),
+        Column(
+            f"windowed_mean_{unit}",
+            f"`{unit}_in_band` averaged over the detection window",
+            lambda r: _measured(r.export.update.windowed[r.offset]),
+        ),
+        Column(
+            "windowed_mean_fraction",
+            f"the same, over `{unit}_total` — **the count threshold is compared against this**",
+            lambda r: _fraction(r.export.update.windowed[r.offset], r.elements),
+        ),
+        Column(
+            "detected",
+            "whether the threshold was met; `NA` where the detector is disarmed",
+            lambda r: _detected(r),
+        ),
+    )
+
 
 INTERVAL_COLUMNS: tuple[Column[Interval], ...] = (
     Column(
@@ -255,11 +291,23 @@ INTERVAL_COLUMNS: tuple[Column[Interval], ...] = (
 )
 
 
-def write_tables(directory: Path, exports: Sequence[DetectionExport]) -> tuple[Path, ...]:
+def write_tables(
+    directory: Path, exports: Sequence[DetectionExport], *, element: ElementKind
+) -> tuple[Path, ...]:
     """Write `series.csv`, `README.md`, and `intervals.csv` when armed.
 
     Returns the paths actually written, so a caller can report the absent
     intervals file as absent rather than as empty.
+
+    Args:
+        directory: Where the three files go.
+        exports: One per replicate detected in this run.
+        element: What one value of the series node emits is a value of. A
+            keyword on the call rather than a field on `DetectionExport`
+            because every export in one run is taken over *one* node, so a
+            per-export copy could disagree with itself and the writer would
+            have to pick — and picking silently is what this argument exists
+            to stop.
 
     Raises:
         TableVerificationError: if a table does not read back as what was
@@ -267,7 +315,8 @@ def write_tables(directory: Path, exports: Sequence[DetectionExport]) -> tuple[P
         OSError: if the directory cannot be made or written.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    written = [write_table(directory / "series.csv", SERIES_COLUMNS, _series_rows(exports))]
+    columns = series_columns(element)
+    written = [write_table(directory / "series.csv", columns, _series_rows(exports))]
     # On armed-ness, never on row count. The two collapse for every input a
     # first implementation is tried against and come apart on the one that
     # matters: an armed detector that found nothing owes an empty file, and
@@ -277,7 +326,7 @@ def write_tables(directory: Path, exports: Sequence[DetectionExport]) -> tuple[P
             write_table(directory / "intervals.csv", INTERVAL_COLUMNS, _interval_rows(exports))
         )
     readme = directory / "README.md"
-    readme.write_text(_readme(exports, written), encoding="utf-8")
+    readme.write_text(_readme(exports, written, columns, element), encoding="utf-8")
     return (*written, readme)
 
 
@@ -331,15 +380,16 @@ def _measured(value: Any) -> str:
     return str(np.format_float_positional(scalar, unique=True, trim="0"))
 
 
-def _fraction(value: Any, blocks: int) -> str:
-    """`value / blocks` — the scale `DetectorSettings.count_frac` is stated in.
+def _fraction(value: Any, elements: int) -> str:
+    """`value / elements` — the scale `DetectorSettings.count_frac` is stated in.
 
-    Zero blocks is `NA`, not zero (rule 6): a grid with no blocks measured
-    nothing, and `0/0` rendered as `0.0` would be a fraction nothing computed.
+    Zero elements is `NA`, not zero (rule 6): a frame divided into nothing
+    measured nothing, and `0/0` rendered as `0.0` would be a fraction nothing
+    computed.
     """
-    if blocks == 0:
+    if elements == 0:
         return ABSENT
-    quotient = float(value) / blocks
+    quotient = float(value) / elements
     if not math.isfinite(quotient):
         return _nonfinite(quotient)
     return f"{quotient:.{FRACTION_FIGURES}g}"
@@ -384,22 +434,32 @@ def _dictionary(columns: Sequence[Column[Any]]) -> list[str]:
     ]
 
 
-def _readme(exports: Sequence[DetectionExport], written: Sequence[Path]) -> str:
+def _readme(
+    exports: Sequence[DetectionExport],
+    written: Sequence[Path],
+    columns: Sequence[Column[Frame]],
+    element: ElementKind,
+) -> str:
     """A data dictionary, and the settings the columns cannot carry.
 
     Generated rather than a static file next to the module: the per-replicate
     resolved settings are the half that is not derivable from the tables, and
     a checked-in document could not hold them.
+
+    `columns` is passed in rather than rebuilt from `element` so that the
+    dictionary is a rendering of the list that was actually written, which is
+    the property `test_the_readme_documents_exactly_the_columns_written` pins.
     """
     lines = [
         "# What is in this folder",
         "",
         "Written by `sieve detect --csv`. Every row is one replicate's detection over",
-        "one node's per-frame signal. Frames are absolute source frames.",
+        f"one node's per-frame signal, whose values are {element.value}s. Frames are",
+        "absolute source frames.",
         "",
         "## series.csv — what was measured, one row per frame",
         "",
-        *_dictionary(SERIES_COLUMNS),
+        *_dictionary(columns),
     ]
     if any(path.name == "intervals.csv" for path in written):
         lines += [
@@ -432,7 +492,7 @@ def _readme(exports: Sequence[DetectionExport], written: Sequence[Path]) -> str:
             + (
                 "not placed — the detector is disarmed"
                 if settings.count_frac is None
-                else f"{_band(settings.count_frac)} of `blocks_total`"
+                else f"{_band(settings.count_frac)} of `{element.value}s_total`"
             ),
             "",
         ]

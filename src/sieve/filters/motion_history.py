@@ -93,7 +93,13 @@ from numpy.typing import NDArray
 from pydantic import Field
 
 from sieve.backend.dispatch import Backend, stateful_kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, Mode, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementRelation,
+    Mode,
+    ParamsBase,
+)
 from sieve.core.filter_registry import register_filter
 from sieve.core.types import ChannelSpec, Frame
 
@@ -264,6 +270,10 @@ class Couple(StrEnum):
     summary="Leaky accumulator of per-block activity, with neighbourhood coupling.",
     accepts=ArraySpec(dtypes=SUPPORTED_DTYPES, channels=(ChannelSpec.GRAY,)),
     emits=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
+    # One cell out per cell in. Neighbourhood coupling makes a cell's *value*
+    # depend on its neighbours and leaves the correspondence alone, which is
+    # the question this declaration answers.
+    element=ElementRelation.PRESERVED,
     cost=CostEstimate(
         # Measured on a 34x60 float32 grid (`block_signal`'s output at the
         # default block on 1080p): 0.035 ms/frame at the defaults, which on a

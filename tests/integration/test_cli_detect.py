@@ -21,8 +21,9 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from sieve.cli.app import app
-from sieve.core.pipeline_model import DetectorSettings, Node, Pipeline, Project
-from sieve.detect.tables import SERIES_COLUMNS
+from sieve.core.filter_base import ElementKind
+from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline, Project
+from sieve.detect.tables import series_columns
 
 runner = CliRunner()
 
@@ -35,13 +36,23 @@ SERIES_NODE = Node(
 
 
 def _project(
-    video: Path, directory: Path, *, detector: DetectorSettings | None, two_sinks: bool = False
+    video: Path,
+    directory: Path,
+    *,
+    detector: DetectorSettings | None,
+    two_sinks: bool = False,
+    nodes: tuple[Node, ...] = (SERIES_NODE,),
+    edges: tuple[Edge, ...] = (),
 ) -> Path:
-    """Write a block-signal project beside `video` and return its path."""
-    nodes: tuple[Node, ...] = (SERIES_NODE,)
+    """Write a project beside `video` and return its path.
+
+    Defaults to the one-node block-signal graph every detection test used
+    before the series node had to declare what its values are; `nodes`/`edges`
+    are how the tests about *that* build a chain instead.
+    """
     if two_sinks:
         nodes = (*nodes, SERIES_NODE.model_copy(update={"node_id": "blocks2"}))
-    project = Project.for_video(video, directory).with_pipeline(Pipeline(nodes=nodes))
+    project = Project.for_video(video, directory).with_pipeline(Pipeline(nodes=nodes, edges=edges))
     if detector is not None:
         project = project.model_copy(update={"detector": detector})
     path = directory / "arena.sieve.yaml"
@@ -121,7 +132,7 @@ def _rows(path: Path) -> list[dict[str, str]]:
 #: else — one deliberate diff naming exactly what a downstream script must
 #: change, rather than five tests failing on a `KeyError` that says nothing
 #: about whether the rename was intended.
-DETECTED = SERIES_COLUMNS[-1].name
+DETECTED = series_columns(ElementKind.BLOCK)[-1].name
 
 
 def test_the_header_is_a_published_interface(synthetic_video: Path, tmp_path: Path) -> None:
@@ -233,3 +244,76 @@ def test_csv_against_an_untuned_project_is_refused_before_any_decode(
 
     assert result.exit_code == 1
     assert not out.exists()
+
+
+#: A chain whose sink aggregates a block grid: `block_signal` makes blocks,
+#: `downsample` averages four of them into one, and a mean of blocks is not a
+#: block. The invocation `docs/todo/what-one-element-means.md` opened on.
+_SHRUNK = (
+    SERIES_NODE,
+    Node(node_id="small", filter_id="downsample", version="1.0.0", params={"factor": 2}),
+)
+_SHRUNK_EDGES = (Edge(upstream="blocks", downstream="small"),)
+
+
+def test_a_node_whose_elements_have_no_meaning_is_refused(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """The count is real and the noun would be invented, so there is no count.
+
+    Before the declaration this ran to completion and wrote `blocks_total`
+    over a number that counts neither blocks nor pixels — the numbers real,
+    the label a lie, and the lie on disk after the session ended. Rule 6 at
+    the one boundary where a wrong answer outlives the run.
+
+    Refused *before* any decode, which is the second half: paying for a
+    thirty-second pass and then declining to name it would be a worse version
+    of the same answer.
+    """
+    project = _project(
+        synthetic_video,
+        tmp_path,
+        detector=DetectorSettings(count_frac=(0.0, 1.0)),
+        nodes=_SHRUNK,
+        edges=_SHRUNK_EDGES,
+    )
+    out = tmp_path / "tables"
+
+    result = runner.invoke(app, ["detect", str(project), "--frames", "0:40", "--csv", str(out)])
+
+    assert result.exit_code == 1
+    assert "does not declare what one value" in result.output
+    assert not out.exists()
+
+
+def test_a_pixel_series_names_its_columns_for_pixels(synthetic_video: Path, tmp_path: Path) -> None:
+    """The other half, and the one a refusal-only change would have missed.
+
+    `downsample` straight off the source emits a coarser grid of *pixels*, so
+    the count is honest and the only thing that was ever wrong is the noun.
+    Naming it `pixels_in_band` is what makes this a declaration read from the
+    pipeline rather than a whitelist of nodes `tables.py` approves of — and
+    the alternative, a shape-neutral `units_in_band`, would be honest and
+    unreadable, which is the trade rule 6 exists to refuse.
+    """
+    project = _project(
+        synthetic_video,
+        tmp_path,
+        detector=DetectorSettings(count_frac=(0.0, 1.0)),
+        nodes=(
+            Node(node_id="small", filter_id="downsample", version="1.0.0", params={"factor": 8}),
+        ),
+    )
+    out = tmp_path / "tables"
+
+    result = runner.invoke(app, ["detect", str(project), "--frames", "0:4", "--csv", str(out)])
+
+    assert result.exit_code == 0, result.output
+    with (out / "series.csv").open(encoding="utf-8", newline="") as handle:
+        header = next(csv.reader(handle))
+    assert "pixels_in_band" in header
+    assert "pixels_total" in header
+    assert not any(name.startswith("blocks") for name in header)
+    # And the data dictionary is a rendering of whatever was written, so it
+    # follows the rename without anybody maintaining a second table.
+    assert "| `pixels_in_band` |" in (out / "README.md").read_text(encoding="utf-8")

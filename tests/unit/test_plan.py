@@ -16,7 +16,7 @@ import pytest
 from pydantic import Field, ValidationError
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import ArraySpec, CostEstimate, ParamsBase
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
@@ -38,6 +38,7 @@ def _settling(filter_id: str, warmup: int) -> type[ParamsBase]:
         summary="Frames in, frames out, after a while.",
         accepts=ArraySpec(),
         emits=ArraySpec(),
+        element=ElementRelation.PRESERVED,
         cost=COST,
         warmup_frames=warmup,
         registry=SHELF,
@@ -59,6 +60,7 @@ _settling("settle5", 5)
     summary="Two frames in, one out, after a frame of settling.",
     accepts={"left": ArraySpec(), "right": ArraySpec()},
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     warmup_frames=1,
     registry=SHELF,
@@ -73,6 +75,7 @@ class Join1Params(ParamsBase):
     summary="Keep one frame in `factor`.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     rate_changing=True,
     registry=SHELF,
@@ -90,6 +93,7 @@ class DecimateParams(ParamsBase):
     summary="Never the same twice, so never keyed.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
     cost=COST,
     deterministic=False,
     registry=SHELF,

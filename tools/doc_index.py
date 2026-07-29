@@ -178,12 +178,16 @@ class Entry:
         return PRIORITIES.index(value) if value in PRIORITIES else len(PRIORITIES)
 
 
-def by_priority(entries: Iterable[Entry]) -> list[Entry]:
+def item_order(entries: Iterable[Entry]) -> list[Entry]:
     """Most urgent first, takeable before waiting, then by filename.
+
+    Named for the result rather than for the first key: status is a real part
+    of the ordering, and a name that said only `priority` would leave the
+    tiebreak discoverable solely by reading the body.
 
     Status breaks the tie because the index table interleaves the two — a
     reader scanning a band of equal priority wants the items they can act on
-    at the top of it. The primer splits on status before it gets here, so the
+    at the top of it. The primer splits on status before it renders, so the
     tiebreak only ever moves rows in the table.
     """
     return sorted(
@@ -229,17 +233,30 @@ def parse_frontmatter(path: Path) -> dict[str, Any]:
     return {str(key): value for key, value in mapping.items()}
 
 
-def collect(directory: Path, required: Sequence[str]) -> list[Entry]:
-    """Parse every entry file in `directory`, newest first."""
+def collect(spec: IndexSpec, root: Path = DOCS_ROOT) -> list[Entry]:
+    """Parse every entry file in `spec`'s folder, in that folder's order.
+
+    Ordering happens here rather than at the call sites because the two
+    consumers — the index table and the primer — must agree, and briefly did
+    not: `by_priority` was declared on the spec, read by `build`, and
+    re-applied by hand in `render_state`. Flipping the flag would have moved
+    one and not the other. There is now no way to obtain entries in an order
+    the spec did not declare.
+    """
+    directory = root / spec.directory
+    if not directory.is_dir():
+        raise FrontmatterError(f"{directory}: indexed folder does not exist")
     entries: list[Entry] = []
     for path in sorted(directory.glob("*.md")):
         if path.name.startswith(SKIP_PREFIXES):
             continue
         fields = parse_frontmatter(path)
-        missing = [key for key in required if key not in fields]
+        missing = [key for key in spec.required if key not in fields]
         if missing:
             raise FrontmatterError(f"{path}: frontmatter is missing {', '.join(missing)}")
         entries.append(Entry(path=path, fields=fields))
+    if spec.by_priority:
+        return item_order(entries)
     return sorted(entries, key=lambda entry: entry.sort_key, reverse=True)
 
 
@@ -427,17 +444,21 @@ def build_graph(items: Sequence[Entry], completed: Sequence[Entry]) -> ItemGraph
     )
 
 
-def item_line(entry: Entry) -> str:
-    """One primer bullet: how urgent, which item, and what gates it.
+def item_line(entry: Entry, tail: str = "") -> str:
+    """One primer bullet: how urgent, which item, and optionally why not yet.
 
     Priority leads because the lists are sorted by it — a reader who stops
     after the first bullet has still read the most urgent item, which is the
     property a file-ordered list could not have.
+
+    Every item bullet in the primer comes through here — the open list, the
+    deferred list, and both halves of the frontier. They differ only in the
+    tail, which is why three copies of the format was the wrong shape.
     """
     priority = _cell(entry.fields.get("priority"))
     title = _cell(entry.fields.get("title"))
-    gate = _cell(entry.fields.get("gated_on"))
-    return f"- **{priority}** — [{title}](todo/{entry.path.name}) — {gate}"
+    line = f"- **{priority}** — [{title}](todo/{entry.path.name})"
+    return f"{line} — {tail}" if tail else line
 
 
 def frontier_lines(open_items: Sequence[Entry], graph: ItemGraph) -> list[str]:
@@ -459,17 +480,13 @@ def frontier_lines(open_items: Sequence[Entry], graph: ItemGraph) -> list[str]:
         "no *other item* has to come first:",
         "",
     ]
-    for entry in ready:
-        priority = _cell(entry.fields.get("priority"))
-        title = _cell(entry.fields.get("title"))
-        lines.append(f"- **{priority}** — [{title}](todo/{entry.path.name})")
+    lines += [item_line(entry) for entry in ready]
     if blocked:
         lines += ["", "Blocked on another item, with what blocks them:", ""]
-        for entry, blockers in blocked:
-            names = ", ".join(f"`{slug}`" for slug in blockers)
-            priority = _cell(entry.fields.get("priority"))
-            title = _cell(entry.fields.get("title"))
-            lines.append(f"- **{priority}** — [{title}](todo/{entry.path.name}) — {names}")
+        lines += [
+            item_line(entry, ", ".join(f"`{slug}`" for slug in blockers))
+            for entry, blockers in blocked
+        ]
     return lines
 
 
@@ -657,11 +674,11 @@ def budget_health() -> str:
 def render_state(root: Path = DOCS_ROOT) -> str:
     """Build `docs/.state.md` from the item folder and the indexes."""
     by_dir = {spec.directory: spec for spec in SPECS}
-    items = by_priority(collect(root / "todo", by_dir["todo"].required))
+    items = collect(by_dir["todo"], root)
     open_items = [e for e in items if e.fields.get("status") == "open"]
     deferred = [e for e in items if e.fields.get("status") == "deferred"]
-    completed = collect(root / "completed-todo", by_dir["completed-todo"].required)
-    findings = collect(root / "findings", by_dir["findings"].required)
+    completed = collect(by_dir["completed-todo"], root)
+    findings = collect(by_dir["findings"], root)
 
     lines = [
         GENERATED_NOTICE,
@@ -675,9 +692,9 @@ def render_state(root: Path = DOCS_ROOT) -> str:
         "first. `unassessed` means nobody has ranked it, not that it ranked low:",
         "",
     ]
-    lines += [item_line(entry) for entry in open_items]
+    lines += [item_line(e, _cell(e.fields.get("gated_on"))) for e in open_items]
     lines += ["", f"**Deferred ({len(deferred)})** — the trigger is the whole line:", ""]
-    lines += [item_line(entry) for entry in deferred]
+    lines += [item_line(e, _cell(e.fields.get("gated_on"))) for e in deferred]
 
     graph = build_graph(items, completed)
     lines += ["", *frontier_lines(open_items, graph)]
@@ -703,15 +720,9 @@ def render_state(root: Path = DOCS_ROOT) -> str:
 def build(root: Path = DOCS_ROOT) -> Iterator[tuple[Path, str]]:
     """Yield `(path, desired content)` for every generated doc."""
     for spec in SPECS:
-        directory = root / spec.directory
-        if not directory.is_dir():
-            raise FrontmatterError(f"{directory}: indexed folder does not exist")
-        entries = collect(directory, spec.required)
-        if spec.by_priority:
-            entries = by_priority(entries)
-        yield directory / INDEX_NAME, render(spec, entries)
+        yield root / spec.directory / INDEX_NAME, render(spec, collect(spec, root))
     completed_spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
-    completed = collect(root / "completed-todo", completed_spec.required)
+    completed = collect(completed_spec, root)
     yield root / SETTLED_NAME, render_settled(completed)
     yield root / STATE_NAME, render_state(root)
 

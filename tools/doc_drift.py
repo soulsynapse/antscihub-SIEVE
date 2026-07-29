@@ -122,7 +122,7 @@ def report_doc(name: str) -> list[str]:
 def report_findings() -> list[str]:
     spec = next(spec for spec in SPECS if spec.directory == "findings")
     lines: list[str] = []
-    for entry in collect(DOCS_ROOT / "findings", spec.required):
+    for entry in collect(spec):
         if entry.fields.get("status") == "superseded":
             continue
         commit = str(entry.fields.get("commit", "")).strip()

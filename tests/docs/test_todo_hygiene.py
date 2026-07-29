@@ -32,7 +32,7 @@ def test_every_completed_entry_answers_what_it_settled() -> None:
     # which is the shape that would render as a blank cell in SETTLED.md and
     # read as "nothing to know here" (rule 6).
     spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
-    for entry in collect(DOCS_ROOT / "completed-todo", spec.required):
+    for entry in collect(spec):
         rows = settled_rows(entry)
         for row in rows:
             assert set(row) == set(SETTLED_KEYS), f"{entry.path}: {row}"
@@ -44,7 +44,7 @@ def test_a_settled_row_points_at_something_that_exists() -> None:
     # re-derived.
     spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
     missing: list[str] = []
-    for entry in collect(DOCS_ROOT / "completed-todo", spec.required):
+    for entry in collect(spec):
         for row in settled_rows(entry):
             for token in row["where"].split("`"):
                 looks_like_a_path = "/" in token and token.endswith((".py", ".md", ".toml", "/"))
@@ -59,7 +59,7 @@ def test_every_item_status_is_in_the_vocabulary() -> None:
     spec = next(spec for spec in SPECS if spec.directory == "todo")
     bad = [
         (entry.path.name, entry.fields.get("status"))
-        for entry in collect(DOCS_ROOT / "todo", spec.required)
+        for entry in collect(spec)
         if entry.fields.get("status") not in ("open", "deferred")
     ]
     assert not bad, f"item status must be open or deferred: {bad}"
@@ -72,32 +72,54 @@ def test_every_item_priority_is_in_the_vocabulary() -> None:
     spec = next(spec for spec in SPECS if spec.directory == "todo")
     bad = [
         (entry.path.name, entry.fields.get("priority"))
-        for entry in collect(DOCS_ROOT / "todo", spec.required)
+        for entry in collect(spec)
         if entry.fields.get("priority") not in PRIORITIES
     ]
     assert not bad, f"item priority must be one of {PRIORITIES}: {bad}"
 
 
-def test_the_primer_orders_open_items_by_priority() -> None:
+#: Filenames chosen so that priority order matches neither alphabetical order
+#: nor its reverse. Written against the live folder, the same assertion passed
+#: with the sort deleted: the one ranked item happened to sort last by name,
+#: and `collect` reverses. A fixture that can only pass one way is the whole
+#: point of this test, so it is built rather than borrowed.
+_ORDERING_FIXTURE = (("a-item", "normal"), ("m-item", "high"), ("z-item", "low"))
+
+
+def test_the_primer_orders_open_items_by_priority(tmp_path: Path) -> None:
     # The failure this catches is a field that exists and does nothing: the
     # key required, the column rendered, and the lists still in filename
     # order, so ranking an item changes a cell and moves nothing.
-    state = render_state()
-    section = state.split("**Open items", 1)[1].split("**Deferred", 1)[0]
-    ranks = [
-        PRIORITIES.index(line.split("**")[1])
-        for line in section.splitlines()
-        if line.startswith("- **")
-    ]
-    assert ranks, "the primer's open-item list rendered no priorities"
-    assert ranks == sorted(ranks), f"open items are not in priority order: {ranks}"
+    for directory in ("todo", "completed-todo", "findings"):
+        (tmp_path / directory).mkdir()
+    for name, priority in _ORDERING_FIXTURE:
+        (tmp_path / "todo" / f"{name}.md").write_text(
+            f"---\ntitle: {name}\nstatus: open\npriority: {priority}\ngated_on: nothing\n---\n",
+            encoding="utf-8",
+        )
+
+    section = render_state(tmp_path).split("**Open items", 1)[1].split("**Deferred", 1)[0]
+    listed = [name for name, _ in _ORDERING_FIXTURE if f"todo/{name}.md" in section]
+    assert len(listed) == len(_ORDERING_FIXTURE), f"the primer dropped an item: {listed}"
+
+    # Position, not format: this must keep working when the bullet is restyled.
+    at = [section.index(f"todo/{name}.md") for name in ("m-item", "a-item", "z-item")]
+    assert at == sorted(at), "the primer's open items are not in priority order"
+
+
+def test_the_template_offers_every_priority() -> None:
+    # The template's comment block is prose asserting the vocabulary. Adding a
+    # value to PRIORITIES and not to the form people fill in leaves the form
+    # quietly wrong, which is how the value goes unused.
+    text = (DOCS_ROOT / "todo" / "_TEMPLATE.md").read_text(encoding="utf-8")
+    assert [p for p in PRIORITIES if p not in text] == []
 
 
 def _graph() -> ItemGraph:
     by_dir = {spec.directory: spec for spec in SPECS}
     return build_graph(
-        collect(DOCS_ROOT / "todo", by_dir["todo"].required),
-        collect(DOCS_ROOT / "completed-todo", by_dir["completed-todo"].required),
+        collect(by_dir["todo"]),
+        collect(by_dir["completed-todo"]),
     )
 
 

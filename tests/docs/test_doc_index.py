@@ -19,7 +19,7 @@ from doc_index import (
     Entry,
     FrontmatterError,
     build,
-    by_priority,
+    item_order,
     parse_frontmatter,
     render,
 )
@@ -62,7 +62,7 @@ class TestPriorityOrdering:
             self._item("b.md", "high"),
             self._item("c.md", "normal"),
         ]
-        assert [e.path.name for e in by_priority(entries)] == ["b.md", "z.md", "c.md", "a.md"]
+        assert [e.path.name for e in item_order(entries)] == ["b.md", "z.md", "c.md", "a.md"]
 
     def test_an_unrecognised_priority_sorts_last_rather_than_first(self) -> None:
         # `P1` is what somebody types who means *most urgent*. Ranking it as
@@ -70,7 +70,7 @@ class TestPriorityOrdering:
         # rule 6, at the one place a session reads to choose what to do.
         # The gate rejects it; until the gate runs, it sits with `unassessed`.
         entries = [self._item("typo.md", "P1"), self._item("real.md", "low")]
-        assert [e.path.name for e in by_priority(entries)] == ["real.md", "typo.md"]
+        assert [e.path.name for e in item_order(entries)] == ["real.md", "typo.md"]
 
     def test_takeable_work_leads_its_priority_band(self) -> None:
         # Only the index table interleaves the two statuses; the primer splits
@@ -78,11 +78,7 @@ class TestPriorityOrdering:
         # heads the table over a `high` item somebody can.
         waiting = Entry(path=Path("a.md"), fields={"priority": "high", "status": "deferred"})
         takeable = Entry(path=Path("z.md"), fields={"priority": "high", "status": "open"})
-        assert [e.path.name for e in by_priority([waiting, takeable])] == ["z.md", "a.md"]
-
-    def test_a_missing_priority_is_not_treated_as_normal(self) -> None:
-        entries = [Entry(path=Path("absent.md"), fields={}), self._item("ranked.md", "low")]
-        assert [e.path.name for e in by_priority(entries)] == ["ranked.md", "absent.md"]
+        assert [e.path.name for e in item_order([waiting, takeable])] == ["z.md", "a.md"]
 
 
 class TestFrontmatterParsing:

@@ -1,6 +1,6 @@
 ---
 status: current
-reviewed: 6596d13
+reviewed: 70b5f37
 subjects:
   - src/sieve/core/filter_base.py
   - src/sieve/pipeline/executor.py

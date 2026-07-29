@@ -11,7 +11,7 @@ A `bool` cannot carry more than one answer. Two sources interleaving — a
 `False` from one arriving while the other is still live — either strands the
 keys off for the rest of the session or hands them back while somebody is still
 typing, and which one you get depends on the order Qt happened to deliver the
-signals in. That was the defect in `docs/completed-todo/2026.07.27-spacebar-dies-on-focus.md`.
+signals in.
 
 So the state is a **set keyed by source**, and the aggregate is "is it
 non-empty". Three properties follow, and each of them is why this is a set

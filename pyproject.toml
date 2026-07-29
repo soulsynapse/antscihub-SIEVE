@@ -60,7 +60,6 @@ dev = [
     "pytest-benchmark",
     "hypothesis",
     "nox",
-    "ruff",
     "pyright",
     "viztracer",
     "py-spy",
@@ -80,44 +79,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sieve"]
 
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-src = ["src", "tests", "tools"]
-
-[tool.ruff.lint]
-select = [
-    "E", "W",   # pycodestyle
-    "F",        # pyflakes
-    "I",        # isort
-    "N",        # pep8-naming
-    "UP",       # pyupgrade
-    "B",        # bugbear
-    "A",        # builtin shadowing
-    "C4",       # comprehensions
-    "SIM",      # simplify
-    "TID",      # tidy imports
-    "RUF",
-]
-
-[tool.ruff.lint.per-file-ignores]
-# Qt's virtuals are camelCase. Renaming them would stop them being overrides.
-"src/sieve/gui/*" = ["N802"]
-# Same, for the layout sketches under `mockups/`. They subclass QWidget to show
-# what a panel would look like and override the same virtuals for it.
-"mockups/**" = ["N802"]
-# Budget labels are copied verbatim from docs/ARCHITECTURE.md, en dash and all,
-# because tests/bench/test_budget_table.py compares them character for character.
-"src/sieve/bench/budgets.py" = ["RUF001"]
-
 [tool.pyright]
-include = ["src", "tests", "tools"]
+include = ["src", "tests"]
 # `tools/` is not a package and is not installed; both pyright and pytest need
 # telling where the doc-index generator lives so its test can import it.
 # `src` is listed alongside it because setting `extraPaths` at all replaces
 # pyright's src-layout inference — without it, `sieve` resolves to the editable
 # install in site-packages and every import becomes a missing-stub error.
-extraPaths = ["src", "tools"]
+extraPaths = ["src"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
@@ -125,7 +94,6 @@ typeCheckingMode = "strict"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["tools"]
 addopts = "--strict-markers --strict-config"
 markers = [
     "slow: excluded from the fast feedback loop",

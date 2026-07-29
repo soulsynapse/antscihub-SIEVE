@@ -1,9 +1,7 @@
 """Rule 4's other half: a ceiling nothing publishes is a number, not a budget.
 
-`test_budget_table.py` pins the table against the architecture document, so the
-two cannot disagree about what a limit *is*. Neither of them can say whether
-anything ever measures against it — and four of twelve budgets do not, silently,
-while the table reads as twelve enforced ceilings. A budget with no producer
+The table defines what a limit is, but cannot say whether anything measures
+against it — and four of twelve budgets do not, silently. A budget with no producer
 cannot be missed, which is indistinguishable from compliance.
 
 *Published* and *timed* are two different gaps and the second is wider: nine

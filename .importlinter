@@ -1,11 +1,3 @@
-# Machine-checked layer boundaries (ARCHITECTURE.md).
-#
-# A violation here is a product regression, not a style problem: the moment
-# `pipeline/` imports Qt, headless CLI and HPC parity stops being real.
-# Parenthesised layers are optional — declared before they exist so the
-# contract governs them from their first commit rather than being widened to
-# accommodate them afterwards.
-
 [importlinter]
 root_package = sieve
 include_external_packages = True
@@ -22,7 +14,7 @@ layers =
     sieve.core
 
 [importlinter:contract:core-purity]
-name = core imports no toolkit, no codec, no processes
+name = Core stays independent of toolkits, codecs, and processes
 type = forbidden
 source_modules =
     sieve.core
@@ -34,12 +26,9 @@ forbidden_modules =
     multiprocessing
 
 [importlinter:contract:headless]
-name = the CLI, pipeline, bench, decode, filters, and backend run without a GUI toolkit
+name = Headless packages do not import Qt
 type = forbidden
 source_modules =
-    # The CLI is the front end whose whole point is being usable where Qt is
-    # not installed — a cluster node, a container, a login shell. It sits at the
-    # same layer as `sieve.gui` and so the layers contract cannot say this.
     sieve.cli
     sieve.pipeline
     sieve.bench
@@ -47,31 +36,13 @@ source_modules =
     sieve.storage
     sieve.filters
     sieve.backend
-    # The whole point of the package: `DetectorSettings` is a saved field, so
-    # the composition that turns it into intervals must be reachable from a
-    # cluster node. It lived under `sieve.gui` and this line is what stops it
-    # going back (docs/todo/headless-detection.md).
     sieve.detect
 forbidden_modules =
     PySide6
 
 [importlinter:contract:gui-computes-nothing]
-name = the GUI renders values and emits intents; it computes nothing
+name = The GUI does not directly own scientific computation
 type = forbidden
-# REWORK.md R1's gate. The layers contract governs direction of dependency and
-# so could never say this: `gui` sits above `core`, which makes importing
-# `morlet_power` into a widget legal under all four contracts below while being
-# exactly the second implementation rule 1 forbids.
-#
-# Direct imports only, for `opencv-containment`'s reason and a sharper version
-# of it: once detection is a filter, `gui -> pipeline -> filters ->
-# core.wavelet` is the supported path — the one execution path reached from
-# above. What this forbids is `gui/` *holding* a computation, which is only
-# ever a direct import.
-#
-# `sieve.core.detection` carries no exceptions: nothing in `gui/` imports it
-# today, and the line exists to refuse the sideways move — deleting a wavelet
-# import by reaching for `count_band_to_counts` instead.
 allow_indirect_imports = True
 source_modules =
     sieve.gui
@@ -79,10 +50,6 @@ forbidden_modules =
     sieve.core.wavelet
     sieve.core.detection
     sieve.detect
-# The exception list is the work list (REWORK.md). The `error` alerting below
-# is what makes it shrink-only: an entry whose import is gone fails the
-# contract, so removing the code and removing its exception are one edit, and
-# adding an entry is a reviewed widening of the rework itself.
 unmatched_ignore_imports_alerting = error
 ignore_imports =
     sieve.gui.chain_model -> sieve.core.wavelet
@@ -94,28 +61,13 @@ ignore_imports =
     sieve.gui.scalogram_plot -> sieve.core.wavelet
 
 [importlinter:contract:opencv-containment]
-name = OpenCV stays out of core, bench, and the GUI
+name = OpenCV stays out of core, bench, GUI, and CLI
 type = forbidden
-# Direct imports only: reaching a decoded frame *through* `sieve.decode` is
-# the supported path. What this forbids is a second module learning to drive
-# VideoCapture itself, which is how decoder identity stops being one string
-# and cache keys stop meaning anything.
-#
-# `sieve.filters` is deliberately absent from the sources below. A filter
-# kernel calling `cv2.calcOpticalFlowFarneback` never touches a container, a
-# seek, or decoder identity, so the rationale above does not reach it. What
-# keeps such a kernel honest is the spec it hangs off: a declared version that
-# enters the cache key, and `backend_agnostic = False` so the backend identity
-# does too.
 allow_indirect_imports = True
 source_modules =
     sieve.core
     sieve.bench
     sieve.gui
-    # Both front ends, for one reason: reaching a frame goes through
-    # `sieve.decode`, so a `cv2` import here would be a command that had started
-    # driving `VideoCapture` on its own — a second seek strategy, and a second
-    # decoder identity that no cache key would know about.
     sieve.cli
 forbidden_modules =
     cv2

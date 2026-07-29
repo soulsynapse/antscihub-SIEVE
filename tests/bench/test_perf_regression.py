@@ -1,7 +1,7 @@
 """The budget table enforced against a running player, not against a doc.
 
-`test_budget_table.py` checks that the numbers in code and prose agree. It says
-nothing about whether the software meets them — until this file, `check()` had
+The table alone says nothing about whether the software meets its limits. Until
+this file, `check()` had
 no call site outside its own unit test, so non-negotiable #4 was enforced by a
 measurement someone ran by hand once and wrote down.
 

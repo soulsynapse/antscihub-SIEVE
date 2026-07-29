@@ -3,9 +3,7 @@
 `sieve.bench.budgets` is the table and `check()` is the verdict on one number.
 Neither knows how many numbers a test should take or what to do when the
 machine is busy, and neither should: that is harness policy and it does not
-ship with the application. This module is that policy, in one place, because
-`docs/todo/budget-checks-under-ambient-load.md` is about the adjudication and
-not about any single threshold.
+ship with the application. This module keeps that policy in one place.
 
 **The statistic is the kind of claim, not a house style.** Two kinds live in
 this suite and they take opposite statistics:
@@ -107,5 +105,5 @@ def within_budget(
                 ) from miss
             continue
         if debt is not None:
-            pytest.xfail(f"{key} in declared debt ({debt.why}) — repaid by {debt.item}")
+            pytest.xfail(f"{key} in declared debt: {debt.why}")
         return

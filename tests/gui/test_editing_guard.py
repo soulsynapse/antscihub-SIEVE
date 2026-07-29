@@ -232,7 +232,7 @@ class TestCommitBoundary:
     """A number field's value, and its claim on the keys, move together.
 
     The decision this implements is in
-    `docs/completed-todo/2026.07.27-spacebar-dies-on-focus.md`: an edit begins
+    An edit begins
     at a keystroke and ends at a commit, and there are exactly three commits —
     Enter, Esc, and leaving the field.
     """

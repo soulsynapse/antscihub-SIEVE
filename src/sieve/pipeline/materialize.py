@@ -1,8 +1,6 @@
 """Cut one replicate's crop to a file, and refuse to register one that lies.
 
-This is the first thing SIEVE writes that outlives the process, and the commit
-that lands it is the one where *filesystem is truth at rest* returns to the
-rules table (`docs/ARCHITECTURE.md`, rule 8). What is at rest is a video file
+This is the first thing SIEVE writes that outlives the process. The result is a video file
 FFV1-encoded from exactly the pixels the executor would have cropped, in the
 format the current graph decodes — so it opens in any player, and it opens in
 SIEVE as an ordinary source with an identity of its own.

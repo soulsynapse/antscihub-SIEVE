@@ -1,10 +1,6 @@
 """The latency budget table. Source of truth in code for both speed regimes.
 
-A budget miss is a defect, not a tradeoff (ARCHITECTURE.md rule 4). The labels
-below are copied verbatim from the budget block in `docs/ARCHITECTURE.md`, and
-`tests/bench/test_budget_table.py` parses that document and fails if the two
-ever disagree — so the prose cannot drift away from what the code enforces, in
-either direction.
+A budget miss is a defect, not a tradeoff. This table is authoritative.
 
 **A ceiling nothing publishes is a number, not a budget**, which is the other
 half of rule 4 and the one this table cannot state by itself. It is stated by
@@ -15,16 +11,11 @@ number came from (~100 ms reads as instantaneous, ~1 s holds the flow of
 thought, ~10 s holds attention; Card, Moran & Newell — Nielsen's response-time
 bands are the same numbers). A budget anchored to perception outlives the
 hardware that first met it; one anchored to "what we achieved once" is history
-wearing a rule's costume. The ceilings are promised for the *reference
-workload* — the scope note under the table in ARCHITECTURE.md is the
-authority on what that means and what is owed outside it.
+wearing a rule's costume.
 
-A budget currently missed on purpose — temporary slowness bought for eventual
-speed — is declared in `IN_DEBT` with the `docs/todo/` item that repays it.
-The benchmark gate xfails (visibly) instead of failing for a key in debt;
-`tests/bench/test_budget_debt.py` fails the suite if the item file is gone,
-so debt cannot outlive its repayment plan. The runtime HUD never honors debt:
-a slow session looks slow regardless.
+A budget currently missed on purpose is declared in `IN_DEBT`. The benchmark
+gate xfails visibly for that key. The runtime HUD never honors debt: a slow
+session still looks slow.
 """
 
 from __future__ import annotations
@@ -256,22 +247,14 @@ class Debt:
     by the gate — never by the runtime display."""
 
     key: str
-    #: The `docs/todo/` item that repays it, as a repo-relative path. A debt
-    #: whose item file no longer exists fails `tests/bench/test_budget_debt.py`
-    #: — completing the item without restoring the budget invalidates the debt
-    #: rather than laundering it.
-    item: str
     #: One line: what is temporarily slower and what it is buying.
     why: str
 
 
-#: Budgets currently missed on purpose. Empty is the normal state; an entry is
-#: a loan against a named `docs/todo/` item, and the honest response to a gate
-#: xfail here is to go read that item, not to relax anything.
+#: Budgets currently missed on purpose. Empty is the normal state.
 IN_DEBT: dict[str, Debt] = {
     "density_rebuild": Debt(
         key="density_rebuild",
-        item="docs/todo/budget-checks-under-ambient-load.md",
         why=(
             "the cap half of this debt is repaid — the binning moved to the detector "
             "thread and the block-count refusal is gone, so the number attributes rather "
@@ -288,8 +271,8 @@ def check(key: str, elapsed_ms: float, *, honor_debt: bool = False) -> Debt | No
     """Assert a measured interval is within its budget.
 
     With `honor_debt`, a miss on a key declared in `IN_DEBT` returns the debt
-    instead of raising — the caller (the benchmark gate) is expected to xfail
-    with the debt's item, which keeps the miss visible in the report. Runtime
+    instead of raising — the caller (the benchmark gate) is expected to xfail,
+    which keeps the miss visible in the report. Runtime
     callers must not pass it: a session's slowness is never excused on screen.
 
     Raises:

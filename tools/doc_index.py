@@ -781,6 +781,19 @@ def placement_health(root: Path = DOCS_ROOT) -> str | None:
     )
 
 
+def trigger_health() -> str:
+    """One line: AUTO-GUARDRAILS' armed triggers and how stale the oldest is.
+
+    A trigger nobody re-reads is the §2 failure — it fired at schema v3 and
+    stayed fired for a fortnight — so the count belongs in the file every
+    session opens rather than in the one it opens when it remembers to.
+    Deferred import: `guardrail_refs` reads this module through `doc_refs`.
+    """
+    from guardrail_refs import trigger_health as line
+
+    return line()
+
+
 def render_state(root: Path = DOCS_ROOT) -> str:
     """Build `docs/.state.md` from the item folder and the indexes."""
     by_dir = {spec.directory: spec for spec in SPECS}
@@ -829,6 +842,7 @@ def render_state(root: Path = DOCS_ROOT) -> str:
     placement = placement_health(root)
     if placement:
         lines += ["", placement]
+    lines += ["", trigger_health()]
     lines += [
         "",
         "**Last completed** (full list in `completed-todo/.index.md`):",

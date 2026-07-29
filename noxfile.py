@@ -39,6 +39,7 @@ def docs(session: nox.Session) -> None:
     change a doc chore."""
     session.run("python", "tools/doc_index.py", *session.posargs)
     session.run("python", "tools/doc_refs.py")
+    session.run("python", "tools/guardrail_refs.py")
     session.run("python", "tools/doc_drift.py")
 
 

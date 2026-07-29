@@ -36,6 +36,7 @@ tools/complete_item.py                  # scaffolds a completed-todo entry; git-
 tools/transcript_stats.py               # mines session transcripts: where agent wall-clock went
 tools/doc_drift.py                      # reports stamped prose docs whose subject paths moved
 tools/doc_refs.py                       # every path a live doc names must resolve; symbols reported
+tools/guardrail_refs.py                 # a claimed check must exist; a fired trigger must have an item
 tools/session_hooks.py                  # what the session hooks run; jq-free by necessity
 .claude/settings.json                   # the three session hooks: primer, tree report, subagent return size
 .claude/agents/comment-critic.md        # naive reader; judges a comment against the code it sits on

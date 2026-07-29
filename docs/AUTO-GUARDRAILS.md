@@ -52,10 +52,10 @@ frame, so a second execution path cannot be assembled quietly out of the parts.
 The serialized pipeline contains no GUI-only state (panel layout, zoom, scrub
 position).
 
-**Enforced by:** `tests/unit/test_pipeline_model.py` —
-`test_gui_state_cannot_be_stashed_in_the_artifact`,
-`test_node_carries_identity_and_nothing_else`, plus YAML round-trips there and
-in `tests/gui/test_project_io.py`.
+**Enforced by:**
+`tests/unit/test_pipeline_model.py::test_gui_state_cannot_be_stashed_in_the_artifact`
+and `tests/unit/test_pipeline_model.py::test_node_carries_identity_and_nothing_else`,
+plus YAML round-trips there and in `tests/gui/test_project_io.py`.
 
 **OPEN:** the second half — *a pipeline saved from the GUI loads and executes
 identically in the CLI* — has no check. `tests/integration/test_cli_run.py`
@@ -64,22 +64,22 @@ diffs GUI-run against CLI-run output. This is the one that would catch a real
 divergence rather than a schema slip, and it is the most valuable unwritten
 check in this file — it is the only thing that would make rule 1 a guarantee
 rather than a property of how the code currently happens to be arranged.
-**Trigger: FIRED** (audited 2026.07.28). It read "the next item that touches
-serialization", and schema v3 landed `Edge.port`, `Project.detector`, and the
-pin fields without anyone writing the check. It is now an open item,
-`docs/todo/gui-cli-execution-parity.md` — which is what a fired trigger should
-have become on the day it fired.
+**Trigger: FIRED** (audited 2026.07.28) → `docs/todo/gui-cli-execution-parity.md`
+— it read "the next item that touches serialization", and schema v3 landed
+`Edge.port`, `Project.detector`, and the pin fields without anyone writing the
+check. The item is what a fired trigger should have become on the day it fired.
 
 ## 3. Filter self-registration — ENFORCED, and the strongest of the eight
 
 A filter is one class plus one colocated markdown. Discovery finds it with no
 edit to any registry, manifest, or import list.
 
-**Enforced by:** `tests/unit/test_filter_discovery.py`.
-`test_discovery_imports_no_filter_module` AST-parses `filters/__init__.py` and
-fails if it names any filter module — so the guardrail cannot be defeated by
-adding an import. `test_every_discovered_filter_has_guidance_markdown` enforces
-the `.md`.
+**Enforced by:**
+`tests/unit/test_filter_discovery.py::test_discovery_imports_no_filter_module`,
+which AST-parses `filters/__init__.py` and fails if it names any filter module —
+so the guardrail cannot be defeated by adding an import — and
+`tests/unit/test_filter_discovery.py::test_every_discovered_filter_has_guidance_markdown`,
+which enforces the `.md`.
 
 ## 4. Latency budgets — ENFORCED for the table and the producers, PARTIAL for the timings
 
@@ -105,12 +105,18 @@ covers `density_rebuild`, which is the one in-pipeline budget with a clock on
 it and is also the one currently in `IN_DEBT`. **Eight of the nine remaining
 in-pipeline budgets are published and nothing asserts a limit on any of them in
 CI**, which matters because in-pipeline is the regime the product is sold on.
-**Trigger: FIRED** (audited 2026.07.28) for three of them —
-`filter_to_first_tick`, `knob_to_graphs`, and `knob_to_first_partial` have had
-producers since 2026.07.27 and are takeable now. The remaining gap is a count
-this section states, so the counts above are the thing to correct when it
-moves; before this audit they read "7 of the 11" and "2 of the 11", against a
-table of twelve.
+**Trigger: FIRED** (audited 2026.07.28) →
+`docs/todo/ceilings-in-the-dimension-they-bound.md` — `filter_to_first_tick`,
+`knob_to_graphs`, and `knob_to_first_partial` have had producers since
+2026.07.27. It fired meaning *write those three CI benchmarks*, and REWORK.md
+R6 answers it differently: all three bound user-perceived latency, so they stay
+denominated in wall time, and wall-clock verification moves to a calibration
+job that does not gate. The item named above is where that split is decided,
+and it names this section as the place to state it — so the honest reading of
+the count below is that it will not go to zero by benchmarking these three. The
+remaining gap is a count this section states, so the counts above are the thing
+to correct when it moves; before this audit they read "7 of the 11" and "2 of
+the 11", against a table of twelve.
 
 ## 5. Cache isolation — ENFORCED
 
@@ -118,11 +124,11 @@ Changing a parameter on one DAG branch does not invalidate sibling branches.
 
 **Enforced by:** `tests/unit/test_cache_key.py::TestIsolation` — the described
 mutation test on an a→{b,c} graph, plus
-`test_a_pinned_replicate_ignores_the_default_moving_under_it`.
+`tests/unit/test_cache_key.py::test_a_pinned_replicate_ignores_the_default_moving_under_it`.
 
 ## 6. Documentation that asserts facts about the code — ENFORCED
 
-Seven claims are machine-checked, which is why they stayed true while the prose
+Nine claims are machine-checked, which is why they stayed true while the prose
 around them drifted:
 
 - `docs/*/.index.md` against their folders — `tests/docs/test_doc_index.py`
@@ -143,6 +149,14 @@ around them drifted:
 - every link, backticked file path, and item `reads:` entry across the live
   docs resolving to something that exists — `tests/docs/test_doc_refs.py`,
   which found twelve dangling pointers the first time it ran
+- every check *this file* and ARCHITECTURE name — as `path.py::name`, resolved
+  by AST — and every `.importlinter` contract they cite, resolved by parse —
+  `tests/docs/test_guardrail_refs.py`. The path half was already covered; a
+  renamed test is the half that reads as done forever
+- every **Trigger:** line here parsing, and a FIRED one naming a
+  `docs/todo/` item that exists; every **Gate:** line in REWORK.md naming a
+  live check or saying OPEN — same file. §2's trigger fired at schema v3 with
+  nobody noticing, which is the failure this converts
 
 **The rule this generalizes:** when a doc asserts something about the code,
 prefer a form a test can parse. The audit that produced this file found five

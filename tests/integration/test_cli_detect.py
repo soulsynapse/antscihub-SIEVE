@@ -269,6 +269,13 @@ def test_a_node_whose_elements_have_no_meaning_is_refused(
     Refused *before* any decode, which is the second half: paying for a
     thirty-second pass and then declining to name it would be a worse version
     of the same answer.
+
+    The message has to name `small`, and asserting that is not decoration.
+    `downsample` declares `AGGREGATED` — it is `block_signal` upstream that
+    makes aggregating meaningless — so a refusal phrased as "this filter does
+    not declare" is wrong every time it fires, and sends the reader to a file
+    that is fine. An array emitter cannot be registered without a declaration,
+    so a lost meaning is always the chain's and never the node's own omission.
     """
     project = _project(
         synthetic_video,
@@ -282,7 +289,8 @@ def test_a_node_whose_elements_have_no_meaning_is_refused(
     result = runner.invoke(app, ["detect", str(project), "--frames", "0:40", "--csv", str(out)])
 
     assert result.exit_code == 1
-    assert "does not declare what one value" in result.output
+    assert "lost it at small (downsample" in result.output
+    assert "does not declare" not in result.output
     assert not out.exists()
 
 

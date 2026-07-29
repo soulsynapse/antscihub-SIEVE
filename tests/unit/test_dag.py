@@ -448,3 +448,57 @@ class TestSourceIndexing:
 
     def test_a_graph_with_no_rate_change_is_indexed_throughout(self) -> None:
         assert all(Dag.build(diamond(), SHELF).source_indexed.values())
+
+
+class TestWhereMeaningWasLost:
+    def test_it_names_the_node_that_lost_it_not_the_one_that_asked(self) -> None:
+        # The whole reason this is a graph query. `c` aggregates a block grid
+        # and `d` merely preserves the nothing it was handed, so a message
+        # about `d` would send a reader to a filter that is fine — and `c`'s
+        # own declaration is fine too, which is why the answer is a *node* and
+        # not a filter.
+        graph = Pipeline(
+            nodes=(node("a"), node("b", "gridify"), node("c", "shrink"), node("d")),
+            edges=edges("a>b", "b>c", "c>d"),
+        )
+
+        assert Dag.build(graph, SHELF).element_lost_at("d") == "c"
+
+    def test_the_earliest_loss_wins_when_a_chain_loses_it_twice(self) -> None:
+        # Every `None` after the first is that one propagating, and the
+        # earliest is the only one where detecting upstream still helps.
+        graph = Pipeline(
+            nodes=(
+                node("a"),
+                node("b", "gridify"),
+                node("c", "shrink"),
+                node("d", "shrink"),
+            ),
+            edges=edges("a>b", "b>c", "c>d"),
+        )
+
+        assert Dag.build(graph, SHELF).element_lost_at("d") == "c"
+
+    def test_a_sibling_that_kept_its_meaning_is_not_blamed(self) -> None:
+        # `b` is upstream of nothing that reaches `d` through a loss; the walk
+        # has to collect ancestors rather than scan the whole graph for a
+        # `None`, or the first unrelated undeclarable node anywhere would be
+        # reported as the cause.
+        graph = Pipeline(
+            nodes=(
+                node("a"),
+                node("b", "gridify"),
+                node("lost", "shrink"),
+                node("d", "minus"),
+            ),
+            edges=edges("a>b", "b>lost", "b>d:left", "lost>d:right"),
+        )
+
+        assert Dag.build(graph, SHELF).element_lost_at("d") == "lost"
+
+    def test_asking_about_a_node_that_has_a_meaning_is_refused(self) -> None:
+        # Returning `None` here would make every caller narrow an answer that
+        # is total under its own precondition, and the narrowing is where an
+        # `assert ... is not None` gets written.
+        with pytest.raises(ValueError, match="so nothing was lost"):
+            Dag.build(diamond(), SHELF).element_lost_at("d")

@@ -229,10 +229,17 @@ def _series_node(dag: Dag, node_id: str | None) -> tuple[str, ElementKind]:
         )
     element = dag.elements[node_id]
     if element is None:
+        # Never "this filter did not declare": an array emitter cannot be
+        # registered without a declaration, so the meaning was always lost
+        # along the chain rather than never stated, and a message blaming the
+        # node's own filter sends the reader to a file that is fine.
+        lost = dag.element_lost_at(node_id)
+        culprit = dag.specs[lost]
         raise refuse(
-            f"{node_id} ({spec.filter_id}) does not declare what one value of its output is a "
-            "value of, so a count taken over it has no honest noun. Detect over a node that "
-            "does — a count labelled with an invented unit outlives the session in the CSV."
+            f"{node_id} ({spec.filter_id}) has no element meaning, so a count over it has no "
+            f"honest noun — a count labelled with an invented unit outlives the session in the "
+            f"CSV. The chain lost it at {lost} ({culprit.filter_id}, declares "
+            f"{culprit.element}); nothing downstream restores it. Detect over a node above that."
         )
     return node_id, element
 

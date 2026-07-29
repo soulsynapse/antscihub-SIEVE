@@ -460,6 +460,50 @@ class Dag:
         """Nodes nothing consumes. What a `Sink` names is usually one of these."""
         return tuple(node for node in self.order if not self.downstreams[node.node_id])
 
+    def element_lost_at(self, node_id: str) -> str:
+        """Where on the paths feeding `node_id` the element meaning first went.
+
+        Here rather than in the caller that builds the message, for
+        `source_indexed`'s reason: it is a traversal, and a second traversal
+        somewhere else is a second answer about the same graph. What it buys is
+        the difference between a message a reader can act on and one that sends
+        them to the wrong file — every array emitter *has* a declaration
+        (`FilterSpec.__post_init__` refuses one without), so a node with no
+        meaning never got there by failing to declare, and a message saying so
+        points at a filter that is fine.
+
+        The earliest such node in topological order, which is where the
+        information was actually lost; every `None` after it is that one
+        propagating. Detecting over anything above it still works, and that is
+        the action the message can then name.
+
+        Returns a `str` rather than `str | None` so no caller narrows an answer
+        that is total under its own precondition. A node that *has* a meaning is
+        a caller that has not read `elements` first, which is a mistake worth
+        making loud rather than a `None` to thread through.
+
+        Raises:
+            ValueError: if `node_id` has an element meaning, so nothing was lost.
+            KeyError: if no node in this graph carries that id.
+        """
+        if self.elements[node_id] is not None:
+            raise ValueError(
+                f"{node_id} has element meaning {self.elements[node_id]}, so nothing was lost "
+                "along the paths feeding it — read `elements` before asking this"
+            )
+        # Downstream-first, so membership propagates up: `order` is topological,
+        # so a node is always visited before the upstreams it names.
+        feeding = {node_id}
+        for node in reversed(self.order):
+            if node.node_id in feeding:
+                feeding.update(self.upstreams[node.node_id])
+        # Non-empty: `node_id` is in `feeding` and is `None` by the guard above.
+        return next(
+            node.node_id
+            for node in self.order
+            if node.node_id in feeding and self.elements[node.node_id] is None
+        )
+
     def spec(self, node_id: str) -> FilterSpec:
         """The resolved filter for `node_id`.
 

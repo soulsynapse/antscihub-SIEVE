@@ -1,19 +1,19 @@
-"""Autosave and rollback, driven through the real window.
 
-Three claims, each of which would fail for a different real reason:
 
-* an edit nobody saved is on disk afterwards, beside a video that has no project
-  file yet — the whole point of taking the save prompt away;
-* a rollback returns the document *and* is itself undoable, so the net covers
-  itself and a mistaken restore is one Ctrl+Z;
-* a history that cannot be written turns itself off and says so, rather than
-  leaving a user trusting a net that is not there.
 
-The window is driven rather than the store called, because the load-bearing part
-is the wiring: the store has to be pointed at a directory before the first edit,
-including in the ordinary case where the user has opened a video and saved
-nothing.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ OPEN_TIMEOUT_MS = 15_000
 
 @pytest.fixture
 def video(tmp_path: Path, synthetic_video: Path) -> Path:
-    """The fixture video, copied where this test may write beside it."""
+
     destination = tmp_path / "arena.mp4"
     shutil.copy(synthetic_video, destination)
     return destination
@@ -68,7 +68,7 @@ def _open(qtbot: QtBot, window: MainWindow, video: Path) -> ReplicateDocument:
 
 
 def _history_of(video: Path) -> SnapshotStore:
-    """The store a reader would find, built from the convention alone."""
+
     return SnapshotStore(history_directory(project_path_for(video)))
 
 
@@ -82,7 +82,7 @@ class TestAnEditReachesDiskWithoutBeingSaved:
 
         entries = _history_of(video).entries()
         assert [snapshot.text for snapshot in entries] == ["Add Replicate 1"]
-        # The session's first write, so retention will keep it past the window.
+
         assert entries[0].session_start
 
     def test_a_snapshot_is_a_project_that_opens_on_its_own(
@@ -95,15 +95,15 @@ class TestAnEditReachesDiskWithoutBeingSaved:
         path = _history_of(video).entries()[-1].path
         restored = Project.load(path)
         assert len(restored.replicates) == 1
-        # The anchoring claim: a snapshot names its video relative to the
-        # directory it actually sits in, one level below the project's.
+
+
         assert restored.source_path(path) == video.resolve()
 
     def test_two_edits_in_one_turn_write_one_snapshot(
         self, qtbot: QtBot, window: MainWindow, video: Path
     ) -> None:
-        # The coalescing claim. Autosave is keyed to the undo stack, so a burst
-        # inside one event-loop turn is one write, not one per command.
+
+
         document = _open(qtbot, window, video)
         document.add_roi(ROI(x=1, y=1, width=20, height=20))
         document.add_roi(ROI(x=40, y=40, width=20, height=20))
@@ -124,8 +124,8 @@ class TestAnEditReachesDiskWithoutBeingSaved:
             lambda: HISTORY_FAILED.split("{")[0] in window.statusBar().currentMessage(),
             timeout=OPEN_TIMEOUT_MS,
         )
-        # And it stays off: retrying every keystroke would bury the one message
-        # that matters under a hundred identical ones.
+
+
         document.add_roi(ROI(x=40, y=40, width=20, height=20))
         assert not _history_of(video).entries()
 
@@ -166,9 +166,9 @@ class TestRollback:
     def test_a_snapshot_is_refitted_onto_the_source_actually_bound(
         self, document: ReplicateDocument, tmp_path: Path
     ) -> None:
-        # A history file written before the footage was re-encoded must not come
-        # back as a replicate hanging off the frame. The document fixture binds
-        # 1000x800; the saved ROI runs past it.
+
+
+
         video = tmp_path / "clip.mp4"
         video.write_bytes(b"")
         document.add_roi(ROI(x=1, y=1, width=20, height=20))

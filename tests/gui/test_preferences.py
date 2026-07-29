@@ -1,10 +1,10 @@
-"""Preferences: defaults, coercion of whatever the store hands back, clamping.
 
-Run against a temporary INI file rather than the real store. That is not only
-isolation — an INI backing store returns *strings*, which is exactly the case
-the coercion in `preferences.py` exists for and which a native-format store
-would hide.
-"""
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ class TestRoundTrip:
 
 
 class TestLastVideo:
-    """Session state, not a tunable: silent, unvalidated, and not a default."""
+
 
     def test_an_empty_store_remembers_nothing(self, preferences: Preferences) -> None:
         assert preferences.last_video is None
@@ -82,8 +82,8 @@ class TestLastVideo:
     def test_a_path_that_no_longer_exists_is_still_returned(
         self, preferences: Preferences, tmp_path: Path
     ) -> None:
-        """Existence is the caller's question. Answering it here would leave
-        the window unable to tell "nothing remembered" from "file moved"."""
+
+
         preferences.last_video = tmp_path / "deleted.mp4"
         assert preferences.last_video == tmp_path / "deleted.mp4"
 
@@ -125,16 +125,16 @@ class TestChangeSignal:
     def test_writing_the_same_value_is_silent_over_a_file_qt_did_not_write(
         self, qapp: object, tmp_path: Path, attribute: str, value: object
     ) -> None:
-        """The dedupe has to hold against strings, which is what an INI holds.
 
-        Not reachable through a second `QSettings` over the same path: Qt
-        caches a settings file per process, so an in-session "reopen" is
-        answered from the same in-memory copy and hands back the int it was
-        given. The file below is what the *next launch* parses — plain text,
-        every value a string — and it is also the hand-edited case. Against a
-        raw comparison every one of these writes and emits `changed`, so the
-        pane reapplies settings nobody touched.
-        """
+
+
+
+
+
+
+
+
+
         del qapp
         ini = tmp_path / "prior-session.ini"
         ini.write_text(
@@ -165,7 +165,7 @@ class TestChangeSignal:
 
 
 class TestCoercion:
-    """An INI store returns strings; a hand-edited one can return nonsense."""
+
 
     def test_string_booleans_are_understood(
         self, preferences: Preferences, settings: QSettings
@@ -192,8 +192,8 @@ class TestCoercion:
     def test_out_of_range_values_are_clamped_on_read(
         self, preferences: Preferences, settings: QSettings
     ) -> None:
-        # A value left by an older build, or edited by hand, must not put the
-        # application somewhere its own UI cannot express.
+
+
         settings.setValue(PROXY_WIDTH, 99_999)
         assert preferences.proxy_width == MAX_PROXY_WIDTH
         settings.setValue(PROXY_WIDTH, 1)

@@ -1,4 +1,4 @@
-"""Declared budget debt remains visible and only affects benchmark gates."""
+
 
 import pytest
 

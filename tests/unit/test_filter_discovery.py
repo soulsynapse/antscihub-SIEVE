@@ -1,10 +1,10 @@
-"""Guardrail §3, machine-checked: one class, one markdown, no wiring.
 
-Each test here stands for a distinct way discovery stops being real: a filter
-that only works because someone imported it by name, a filter that ships with no
-guidance, a params model that cannot survive the artifact it is written to, or a
-params model whose canonical form is a memory address in disguise.
-"""
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -19,15 +19,15 @@ from sieve.filters.downsample import DownsampleParams
 
 
 def test_discovery_imports_no_filter_module() -> None:
-    """The scan, not a list, is what finds filters.
 
-    Parses the package's own source rather than checking that the registry
-    ended up populated: a `from sieve.filters import downsample` added here
-    would make every other test in this file pass while the guardrail they exist
-    for was dead. Only the import list can tell the two apart, and it is read as
-    an AST rather than as text so that the prose above it — which has to be
-    allowed to name the mistake it is warning about — does not trip the check.
-    """
+
+
+
+
+
+
+
+
     package = Path(str(sieve.filters.__file__))
     modules = {path.stem for path in package.parent.glob("*.py") if path.stem != "__init__"}
     assert modules, "no filter modules to check discovery against"
@@ -47,15 +47,15 @@ def test_discovery_imports_no_filter_module() -> None:
 
 
 def test_every_discovered_filter_has_guidance_markdown() -> None:
-    """§3's "one class + one colocated markdown", as an assertion."""
+
     missing = [spec.key for spec in discover() if not guidance_path(spec).is_file()]
     assert not missing, f"filters with no guidance markdown: {missing}"
 
 
 def test_params_round_trip_through_json() -> None:
-    """The artifact is JSON, so a params model that cannot survive it is a
-    filter that cannot be saved and reloaded — and the failure would land on
-    open, long after the run it invalidated."""
+
+
+
     original = DownsampleParams(factor=4, anti_alias=False)
     restored = DownsampleParams.model_validate_json(original.model_dump_json())
 
@@ -64,14 +64,14 @@ def test_params_round_trip_through_json() -> None:
 
 
 def test_canonical_params_are_stable_across_processes() -> None:
-    """The cache key input has to mean the same thing tomorrow.
 
-    Run in a subprocess and not merely twice in this one: `hash()` on a str is
-    salted per process and `id()` differs per allocation, so an accidental use
-    of either is invisible to any test that stays inside one interpreter. This
-    is the only check in the suite that would catch it before a cache silently
-    stopped ever hitting.
-    """
+
+
+
+
+
+
+
     script = (
         "from sieve.filters.downsample import DownsampleParams;"
         "print(DownsampleParams(factor=4, anti_alias=False).canonical_json())"

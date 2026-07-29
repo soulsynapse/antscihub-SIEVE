@@ -1,9 +1,9 @@
-"""Pure logic. The bottom of the layer stack.
 
-Nothing here imports from a layer above it, and nothing here imports Qt,
-Zarr, or subprocess. That is machine-checked by the import contracts in
-`.importlinter` rather than by review.
-"""
+
+
+
+
+
 
 from sieve.core.filter_base import (
     UNCHANGED_RATE,

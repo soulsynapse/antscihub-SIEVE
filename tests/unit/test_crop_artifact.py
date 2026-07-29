@@ -1,13 +1,13 @@
-"""The crop record: what it survives, what it refuses, and what it matches.
 
-Three claims worth a test, each failing for a different reason. A record has to
-round-trip through YAML with its geometry intact, or an artifact written today
-is unfindable tomorrow. A version-4 document has to load unchanged, or the
-schema bump orphans every project written before this build. And `backs` has to
-say no to a moved box, a re-exported source, and a flipped format, because each
-of those yes-answers serves pixels that are not what the caller asked for — the
-failure mode the codec finding spent a session characterising.
-"""
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -49,13 +49,13 @@ def _project(tmp_path: Path) -> Project:
 
 class TestTheRecordSurvivesTheDocument:
     def test_a_registered_crop_round_trips_through_yaml(self, tmp_path: Path) -> None:
-        """Geometry, span, and parentage all come back as themselves.
 
-        The ROI is the half that would fail silently: it is a stdlib dataclass
-        inside a pydantic model, so a serializer that flattened it to a list, or
-        a loader that handed back a dict, would leave `backs` comparing an ROI
-        against something that is not one and answering no forever.
-        """
+
+
+
+
+
+
         project = _project(tmp_path).with_crop(_artifact())
 
         restored = Project.from_yaml(project.to_yaml())
@@ -67,12 +67,12 @@ class TestTheRecordSurvivesTheDocument:
         assert crop.cut_from == "/videos/clip.mp4|1234|5678"
 
     def test_a_version_four_document_loads_unchanged(self, tmp_path: Path) -> None:
-        """The bump must not orphan projects written before crops existed.
 
-        A v4 document carries no `crops` key at all, which is exactly what an
-        empty tuple means — nothing was ever written at rest — and it comes back
-        restamped as this build's schema.
-        """
+
+
+
+
+
         document = yaml.safe_load(_project(tmp_path).to_yaml())
         document["schema_version"] = 4
         del document["crops"]
@@ -83,7 +83,7 @@ class TestTheRecordSurvivesTheDocument:
         assert restored.schema_version == SCHEMA_VERSION
 
     def test_two_records_of_one_cut_are_refused(self, tmp_path: Path) -> None:
-        """Nothing downstream could choose between them — `backs` says yes twice."""
+
         project = _project(tmp_path).with_crop(_artifact())
         document = yaml.safe_load(project.to_yaml())
         document["crops"] = [*document["crops"], {**document["crops"][0], "path": "other.mkv"}]
@@ -92,7 +92,7 @@ class TestTheRecordSurvivesTheDocument:
             Project.model_validate(document)
 
     def test_rewriting_one_cut_replaces_its_record_in_place(self, tmp_path: Path) -> None:
-        """Re-cutting an arena must not append the pair the validator refuses."""
+
         first = _artifact(path="clip.crops/a.mkv")
         second = _artifact(path="clip.crops/b.mkv")
         other = _artifact(format="bgr", path="clip.crops/c.mkv")
@@ -102,7 +102,7 @@ class TestTheRecordSurvivesTheDocument:
         assert [crop.path for crop in project.crops] == ["clip.crops/b.mkv", "clip.crops/c.mkv"]
 
     def test_relocating_a_project_rebases_the_artifact_path(self, tmp_path: Path) -> None:
-        """A folder that moved must not leave the record pointing at nothing."""
+
         here = tmp_path / "here"
         there = tmp_path / "there"
         here.mkdir()
@@ -115,7 +115,7 @@ class TestTheRecordSurvivesTheDocument:
 
 
 class TestTheMatchingRule:
-    """`backs` decides whether a record may serve a replicate right now."""
+
 
     @pytest.fixture()
     def on_disk(self, tmp_path: Path) -> CropArtifact:
@@ -140,13 +140,13 @@ class TestTheMatchingRule:
     @pytest.mark.parametrize(
         ("roi", "source", "luma"),
         [
-            # A box the user nudged: the artifact holds different pixels than
-            # the replicate now asks for, and serving it would silently analyse
-            # the old geometry.
+
+
+
             (ROI(x=17, y=8, width=64, height=48), "/videos/clip.mp4|1234|5678", True),
-            # A re-exported or restored source: same path, new identity.
+
             (ARENA, "/videos/clip.mp4|9999|5678", True),
-            # A session that now needs colour. One artifact per format.
+
             (ARENA, "/videos/clip.mp4|1234|5678", False),
         ],
         ids=["moved-roi", "re-exported-source", "flipped-format"],
@@ -159,7 +159,7 @@ class TestTheMatchingRule:
         assert not on_disk.backs(replicate, source=source, luma=luma, project_dir=tmp_path)
 
     def test_a_record_whose_file_is_gone_backs_nothing(self, tmp_path: Path) -> None:
-        """The record is location, and location is checked, never trusted."""
+
         artifact = _artifact(path="clip.crops/deleted.mkv")
         replicate = Replicate(roi=ARENA, name="Arena 1")
 
@@ -171,7 +171,7 @@ class TestTheMatchingRule:
         )
 
     def test_a_rename_does_not_break_the_match(self, on_disk: CropArtifact, tmp_path: Path) -> None:
-        """Nothing is matched by name or by id — geometry and parentage only."""
+
         renamed = Replicate(roi=ARENA, name="Something else entirely")
 
         assert on_disk.backs(

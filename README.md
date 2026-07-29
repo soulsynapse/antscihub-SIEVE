@@ -16,12 +16,14 @@ Run the application and checks without activating the environment:
 
 ```powershell
 uv run sieve-gui
-uv run pytest
-uv run nox -s checks
-uv run nox -s benchmark
+uv run pyright
+uv run lint-imports
+uv run pytest --benchmark-disable
+uv run pytest -m benchmark --benchmark-only
 ```
 
-The `checks` session runs Pyright, architectural import contracts, and pytest.
+The first three checks cover static types, architectural import contracts, and
+behavior. The final command runs the performance budgets separately.
 
 ## Commands
 

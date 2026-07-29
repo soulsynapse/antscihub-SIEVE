@@ -1,21 +1,21 @@
-"""The gray viewport: the format flip, the frames it must not show, the policy.
 
-Three claims, each failing for a distinct real reason:
 
-**The flip changes what the decode thread produces, in place.** Driven through
-the real thread against the synthetic video, like the scrub tests, because the
-reopen is a cross-thread ordering (format change, then re-request) and a fake
-decoder would test the fake's ordering.
 
-**A frame decoded in the old format never lands in the new viewport.** The
-same hazard as a source change — the decode in flight cannot be recalled — and
-the same mechanism answers it, the coalescer's generation stamp. Shown or
-cached, either is a colour frame in a gray pane.
 
-**The toggle's policy is the decided one.** Manual persists; a window render
-engages auto-gray; a click during the render pins colour for that render and
-no longer; the effective answer is announced exactly when it changes.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ BGR = QImage.Format.Format_BGR888
 
 
 class FormatRecorder:
-    """Every displayed frame, as (index, format), in display order."""
+
 
     def __init__(self, player: VideoPlayer) -> None:
         self.frames: list[tuple[int, QImage.Format]] = []
@@ -66,7 +66,7 @@ class TestTheFlip:
     def test_the_frame_on_screen_is_redelivered_in_the_new_format(
         self, qtbot: QtBot, synthetic_video: Path
     ) -> None:
-        """The playhead survives the reopen and the pane never blanks."""
+
         player, recorder = open_player(qtbot, synthetic_video)
         try:
             player.seek(7)
@@ -84,13 +84,13 @@ class TestTheFlip:
     def test_a_frame_decoded_in_colour_is_not_shown_or_cached_after_the_flip(
         self, qtbot: QtBot, synthetic_video: Path
     ) -> None:
-        """The decode in flight answers the format nobody is asking for any more.
 
-        The seek and the flip land in one turn of the event loop, so the
-        colour decode is guaranteed to still be in flight when the generation
-        bumps — precisely the ordering that would paint colour into the gray
-        pane without the stamp.
-        """
+
+
+
+
+
+
         player, recorder = open_player(qtbot, synthetic_video)
         try:
             before = len(recorder.frames)
@@ -106,7 +106,7 @@ class TestTheFlip:
                 "a colour frame was painted after the flip"
             )
 
-            # Nor cached: a hit would repaint synchronously, inside this call.
+
             shown = len(recorder.frames)
             player.scrub(30)
             assert not any(fmt == BGR for _, fmt in recorder.frames[shown:])
@@ -154,7 +154,7 @@ class TestTogglePolicy:
         assert not toggle.effective_luma, "the click did not pin colour"
         assert not preferences.viewport_luma, "a pin is not a preference"
 
-        # The pin dies with the render: the next one engages auto-gray again.
+
         toggle.set_rendering(False)
         toggle.set_rendering(True)
         assert toggle.effective_luma
@@ -179,12 +179,12 @@ class TestTogglePolicy:
     def test_the_label_names_the_format_and_the_multiplier_in_every_state(
         self, qtbot: QtBot, preferences: Preferences
     ) -> None:
-        """Both directions of rule 6: the state and its cost are on the button.
 
-        Colour states its own multiplier too — a button that only spoke when
-        gray would make colour read as the absence of a decision rather than
-        the 1x it is.
-        """
+
+
+
+
+
         toggle = GrayToggle(preferences)
         qtbot.addWidget(toggle)
         assert toggle.text() == LABEL_COLOR
@@ -202,10 +202,10 @@ class TestTogglePolicy:
     def test_unchecking_during_a_render_means_colour_not_a_fallback_to_auto(
         self, qtbot: QtBot, preferences: Preferences
     ) -> None:
-        """A click that visibly did nothing would be the worst reading."""
+
         toggle = GrayToggle(preferences)
         qtbot.addWidget(toggle)
-        toggle.click()  # manual gray
+        toggle.click()
         toggle.set_rendering(True)
 
         toggle.click()

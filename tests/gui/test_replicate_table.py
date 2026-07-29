@@ -1,10 +1,10 @@
-"""The table model as an edit path into the document.
 
-The model is the second way a replicate can be mutated (the first is a drag on
-the video), and the rule is that it owns none of the mutation: every accepted
-edit has to appear on the undo stack, and every rejected edit has to leave the
-document untouched rather than half-applied.
-"""
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ DISPLAY = Qt.ItemDataRole.DisplayRole
 
 @pytest.fixture
 def model(document: ReplicateDocument) -> ReplicateTableModel:
-    """A model over a document holding one replicate."""
+
     document.add_roi(BOX)
     return ReplicateTableModel(document)
 
@@ -83,7 +83,7 @@ class TestReading:
     def test_a_row_past_the_end_reads_as_nothing(
         self, model: ReplicateTableModel, document: ReplicateDocument
     ) -> None:
-        """Views can outlive a removal by one repaint; reading must not raise."""
+
         stale = _cell(model, Column.NAME)
         document.remove(0)
         assert model.data(stale, DISPLAY) is None
@@ -125,7 +125,7 @@ class TestEditing:
     def test_a_numeric_string_is_accepted(
         self, model: ReplicateTableModel, document: ReplicateDocument
     ) -> None:
-        """Qt's default line-edit delegate hands back text, not an int."""
+
         assert model.setData(_cell(model, Column.WIDTH), "25", EDIT)
         assert document.at(0).roi.width == 25
 
@@ -164,11 +164,11 @@ class TestEditing:
     def test_a_rename_the_document_refuses_is_reported_as_no_change(
         self, model: ReplicateTableModel, document: ReplicateDocument, value: str
     ) -> None:
-        """Empty, whitespace, and unchanged are all names the document drops.
 
-        `True` here would tell Qt the model changed, and the user would see a
-        cell repaint as if the rename had been taken.
-        """
+
+
+
+
         before = document.undo_stack.count()
         assert not model.setData(_cell(model, Column.NAME), value, EDIT)
         assert document.at(0).name == "Replicate 1"
@@ -192,7 +192,7 @@ class TestEditing:
 
 class TestEquivalenceGroups:
     def _graphed(self, document: ReplicateDocument) -> None:
-        """Give the document a one-node graph and a second replicate."""
+
         document.add_roi(ROI(x=200, y=200, width=100, height=80))
         node = Node(node_id="n1", filter_id="threshold", version="1.0.0", params={"level": 0.5})
         document.set_pipeline(Pipeline(nodes=(node,)))
@@ -200,8 +200,8 @@ class TestEquivalenceGroups:
     def test_identical_replicates_share_a_group_and_a_deviation_splits_them(
         self, model: ReplicateTableModel, document: ReplicateDocument
     ) -> None:
-        # The column's whole job: twelve arenas configured once read as one
-        # group, and the one that had to differ is visible without opening it.
+
+
         self._graphed(document)
         assert model.data(_cell(model, Column.GROUP, 0), DISPLAY) == 1
         assert model.data(_cell(model, Column.GROUP, 1), DISPLAY) == 1
@@ -213,10 +213,10 @@ class TestEquivalenceGroups:
     def test_the_number_is_derived_rather_than_stored(
         self, model: ReplicateTableModel, document: ReplicateDocument
     ) -> None:
-        # Pinning a parameter to the value it was already inheriting must not
-        # split the group — the number tracks what a replicate *runs with*, not
-        # whether anyone has configured it. A group cached at the moment an
-        # override was written would answer this the other way and stay wrong.
+
+
+
+
         self._graphed(document)
         document.apply_replace(1, document.at(1).with_override("n1", {"level": 0.5}))
 
@@ -225,9 +225,9 @@ class TestEquivalenceGroups:
     def test_a_new_graph_repaints_the_whole_column(
         self, model: ReplicateTableModel, document: ReplicateDocument
     ) -> None:
-        # Not one row: the numbers are positional, so a change that moves any
-        # replicate shifts every number below it. A per-row signal would leave
-        # stale numbers painted above and below the edit.
+
+
+
         document.add_roi(ROI(x=200, y=200, width=100, height=80))
         spans: list[tuple[int, int, int, int]] = []
 
@@ -257,7 +257,7 @@ class TestNotification:
     def test_an_in_place_edit_repaints_the_whole_row(
         self, model: ReplicateTableModel, document: ReplicateDocument
     ) -> None:
-        """The area column is derived, so a width edit dirties more than its cell."""
+
         spans: list[tuple[int, int, int]] = []
 
         def record(top_left: QModelIndex, bottom_right: QModelIndex, roles: object = None) -> None:

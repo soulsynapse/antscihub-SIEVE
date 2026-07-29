@@ -1,4 +1,4 @@
-"""ROI arithmetic and metadata derivation."""
+
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ class TestROI:
         assert roi.clamped_to(100, 100) == roi
 
     def test_clamped_to_never_produces_empty_region(self) -> None:
-        # An ROI entirely outside the frame still has to come back valid,
-        # because the alternative is raising from inside a paint or edit path.
+
+
         clamped = ROI(x=500, y=500, width=10, height=10).clamped_to(100, 100)
         assert clamped.width >= 1 and clamped.height >= 1
 

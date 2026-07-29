@@ -1,11 +1,11 @@
-"""Undo/redo over the replicate document.
 
-The document's whole claim is that no edit path can bypass the undo stack, so
-the tests are written as round trips: perform an edit, undo it, and require the
-document to be indistinguishable from before — including `replicate_id`, which
-is what downstream artifacts key on. A rename that silently minted a new
-identity would look correct in the table and corrupt a cache.
-"""
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -157,7 +157,7 @@ class TestSetROI:
         assert document.undo_stack.count() == before
 
     def test_a_clamped_no_op_records_nothing(self, document: ReplicateDocument) -> None:
-        """An edit that clamps back onto the current value is not an edit."""
+
         document.add_roi(ROI(x=990, y=790, width=10, height=10))
         before = document.undo_stack.count()
         document.set_roi(0, ROI(x=990, y=790, width=100, height=100))
@@ -165,14 +165,14 @@ class TestSetROI:
 
 
 class TestSelection:
-    """The one answer to "which arena am I looking at", kept on a real row.
 
-    The signal discipline is the load-bearing half: `selection_changed` drives
-    a re-render in the filter tab, so an emit for a removal that merely shifts
-    the selected row's number would clear the HUD and re-render the same arena
-    for nothing — while a removal of the selected row itself must emit,
-    because the arena on screen genuinely changed.
-    """
+
+
+
+
+
+
+
 
     def test_removing_above_shifts_silently_removing_selected_emits(
         self, document: ReplicateDocument
@@ -193,8 +193,8 @@ class TestSelection:
         assert len(emitted) == 1
 
     def test_an_insert_selects_the_inserted_row(self, document: ReplicateDocument) -> None:
-        """The box just drawn is the one about to be named or accepted —
-        and undoing a delete restores the deleted arena as the selection."""
+
+
         document.add_roi(BOX)
         document.add_roi(OTHER_BOX)
         assert document.selected_index == 1
@@ -253,7 +253,7 @@ class TestHistory:
         assert document.source_size is None
 
     def test_command_text_names_the_replicate(self, document: ReplicateDocument) -> None:
-        """The Edit menu reads this text back as "Undo Add Replicate 1"."""
+
         document.add_roi(BOX)
         assert document.undo_stack.undoText() == "Add Replicate 1"
         document.rename(0, "Nest A")

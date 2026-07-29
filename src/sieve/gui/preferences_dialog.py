@@ -1,16 +1,16 @@
-"""The Preferences pane.
 
-Applies on change rather than on OK. Every setting here alters how the video
-on screen behaves, so the user needs to see the effect while the pane is open
-— dragging the proxy width and then hunting for a Close button to find out
-what it did is the wrong loop. There is consequently no Cancel; Restore
-Defaults is the way back.
 
-The pane is small because the store is small, and the store is small because
-`preferences.py` only holds settings something reads. Growing this beyond one
-screen is a signal to reconsider whether the new setting is really a decision
-the user should be making.
-"""
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ _PROXY_HELP = (
 
 
 class PreferencesDialog(QDialog):
-    """Edits a `Preferences` store in place."""
+
 
     def __init__(self, preferences: Preferences, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -83,13 +83,13 @@ class PreferencesDialog(QDialog):
         self._restore_button.clicked.connect(self._on_restore_defaults)
         layout.addWidget(buttons)
 
-        # The store can change from elsewhere — a restore, or a future second
-        # window — so the pane follows it rather than assuming it is the only
-        # writer.
+
+
+
         self._preferences.changed.connect(self._load)
         self._load()
 
-    # ---- construction ----------------------------------------------------
+
 
     def _build_scrubbing_group(self) -> QGroupBox:
         group = QGroupBox("Scrubbing")
@@ -142,11 +142,11 @@ class PreferencesDialog(QDialog):
 
         return group
 
-    # ---- store <-> widgets ------------------------------------------------
+
 
     @Slot()
     def _load(self) -> None:
-        """Pull every value from the store without re-emitting changes."""
+
         widgets = (
             self._adaptive_check,
             self._interval_spin,
@@ -164,7 +164,7 @@ class PreferencesDialog(QDialog):
     @Slot(bool)
     def _on_adaptive_toggled(self, enabled: bool) -> None:
         self._preferences.adaptive_scrub = enabled
-        # The grid spacing only means anything when the grid can be used.
+
         self._interval_spin.setEnabled(enabled)
 
     @Slot(bool)
@@ -185,7 +185,7 @@ class PreferencesDialog(QDialog):
 
 
 def _help_label(text: str) -> QLabel:
-    """Wrapped, de-emphasised explanatory text under a control."""
+
     label = QLabel(text)
     label.setWordWrap(True)
     label.setTextFormat(Qt.TextFormat.PlainText)

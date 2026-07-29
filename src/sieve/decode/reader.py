@@ -1,51 +1,51 @@
-"""OpenCV `VideoCapture` wrapper with a seek strategy tuned by measurement.
 
-DECISION: seek accuracy is chosen over source bit-depth preservation. Frames
-come back 8-bit — BGR, or single-channel luma under `luma=True` (below) —
-because that is what `VideoCapture` gives us and what the cache key assumes; a
-high-bit-depth path would be a separate reader.
 
-The seek strategy exists because of a lopsided cost profile, measured on a
-5312x2988 59.94 fps source (mpeg4 Simple Profile at 183 Mbps — this docstring
-said H.264 until `ffprobe` was pointed at the file. Assuming the container's
-label is the codec can send optimization toward hardware decode that never
-engages:
 
-    grab()                     ~1.3 ms   (demux + decode, no colour convert)
-    retrieve()                ~29 ms     (YUV -> BGR convert and copy)
-    CAP_PROP_POS_FRAMES seek  ~50 ms     (before any retrieve)
 
-Almost all the per-frame cost is the colour conversion, and stepping forward
-without converting is nearly free. So a short forward jump is served by
-grabbing through the gap rather than seeking: below `GRAB_FORWARD_LIMIT`
-frames that is strictly cheaper than asking the container to seek, and it also
-avoids the keyframe-rounding errors that make `POS_FRAMES` unreliable on some
-codecs.
 
-**That conversion is single-threaded and OpenCV gives no way to reach it
-separately, which is what `prefetch.py` is for.** ffmpeg performs the identical
-convert at 1.25 ms per frame by spreading it over the machine; nothing here can,
-because `retrieve()` does it on the calling thread before handing back an array.
-So the parallelism is one level up — N of these readers, one per thread — and
-every frame stays byte-identical, which is what lets it be turned on without
-touching `decoder_identity()`.
 
-**`luma=True` declines the conversion instead of parallelising it.** With
-`CAP_PROP_CONVERT_RGB=0` the FFmpeg backend hands back the Y plane alone — one
-channel at `(height, width)`, 15.9 MB against BGR's 47.6 — and the per-frame cost
-drops from 19.4 ms to 7.96 ms on the reference source. The saving is both the
-conversion and its allocation; treating it as decode alone gives the wrong
-worker-scaling model.
 
-This is not the same array as `cvtColor(BGR2GRAY)` of the converted frame — the
-luma plane is limited-range and this footage is BT.709 where `cvtColor` applies
-BT.601 weights — so it is a decode *policy*, hashed through
-`DECODE_POLICY_VERSION` and through the format field in
-`cache_key.source_key`, never a transparent optimisation. What it costs the
-answer was measured before it was turned on: 0.004 sd mean on the block series
-the detector reads, r = 0.99999. Who decides it is `pipeline/`, from whether any
-node in the graph accepts chroma; this module only obeys.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -58,32 +58,32 @@ from numpy.typing import NDArray
 
 from sieve.core.types import ChannelSpec, Frame, VideoMetadata
 
-#: Forward jumps shorter than this are served by grabbing through the gap.
-#: Derived from measurement: seek cost / grab cost on the reference source.
+
+
 GRAB_FORWARD_LIMIT = 40
 
 
 class VideoDecodeError(RuntimeError):
-    """Raised when a video cannot be opened, or a requested frame cannot be read."""
+    pass
 
 
 class VideoReader:
-    """Random-access frame reader over a single video file.
 
-    Not thread-safe: one reader belongs to one thread. The GUI keeps its
-    reader on a dedicated decode thread for exactly this reason.
-    """
+
+
+
+
 
     def __init__(self, path: Path | str, *, luma: bool = False) -> None:
-        """Open `path`.
 
-        Args:
-            path: The video.
-            luma: Decode the luma plane instead of converting to BGR — 2.4x
-                cheaper and one channel. Frames come back `ChannelSpec.GRAY`.
-                Off by default so the colour path stays the one a caller gets
-                without asking, and stays byte-identical to what it always was.
-        """
+
+
+
+
+
+
+
+
         self._path = Path(path)
         if not self._path.is_file():
             raise VideoDecodeError(f"No such video file: {self._path}")
@@ -94,9 +94,9 @@ class VideoReader:
 
         self._luma = luma
         if luma:
-            # Set before the first read and never toggled after: the property
-            # governs what `retrieve()` produces, and a capture that changed
-            # format mid-stream would hand two shapes to one consumer.
+
+
+
             self._capture.set(cv2.CAP_PROP_CONVERT_RGB, 0)
 
         self._metadata = self._read_metadata()
@@ -104,7 +104,7 @@ class VideoReader:
             self._capture.release()
             raise VideoDecodeError(f"Video reports no frames: {self._path}")
 
-        # Index of the frame the capture will return next.
+
         self._cursor = 0
 
     def _read_metadata(self) -> VideoMetadata:
@@ -118,53 +118,53 @@ class VideoReader:
 
     @property
     def metadata(self) -> VideoMetadata:
-        """Container-reported properties of the open file."""
+
         return self._metadata
 
     @property
     def is_open(self) -> bool:
-        """Whether the underlying capture is still usable."""
+
         return self._capture.isOpened()
 
     @property
     def luma(self) -> bool:
-        """Whether this reader decodes the luma plane rather than BGR.
 
-        Exposed because the format is part of what a frame *is*: a caller
-        deriving a cache key, or deciding whether two readers may serve one
-        consumer, is asking this and must not have to remember what it passed.
-        """
+
+
+
+
+
         return self._luma
 
     def read(self, index: int, max_width: int | None = None) -> Frame:
-        """Decode the frame at `index`.
 
-        `max_width` requests a proxy: the frame is downscaled on the way out if
-        it is wider than the limit. This is decode-side proxy media in the
-        video-editor sense — a cheaper representation of the *same* frame for
-        display — not a downsampling filter. Filters that trade resolution for
-        economy are pipeline nodes and record themselves in the DAG; this does
-        not, and must never feed anything but a viewport.
 
-        Channels follow the reader's format, not the call: `ChannelSpec.GRAY`
-        under `luma=True` and `ChannelSpec.BGR` otherwise. A caller that wants
-        both formats wants two readers.
 
-        Raises:
-            VideoDecodeError: if the frame cannot be read, or if `luma=True` and
-                this build did not hand back a luma plane.
-        """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         if not 0 <= index < self._metadata.frame_count:
             raise VideoDecodeError(
                 f"Frame {index} out of range 0..{self._metadata.frame_count - 1}"
             )
 
         self._position_at(index)
-        # A failed read is always `(False, None)` — never a truthy flag with no
-        # array — so the flag alone is the whole check.
+
+
         ok, data = self._capture.read()
         if not ok:
-            self._cursor = -1  # Position is now unknown; force a seek next time.
+            self._cursor = -1
             raise VideoDecodeError(f"Failed to decode frame {index} of {self._path}")
         self._cursor = index + 1
 
@@ -178,22 +178,22 @@ class VideoReader:
         )
 
     def _check_luma_plane(self, data: NDArray[Any], index: int) -> None:
-        """Refuse anything that is not the plane `luma=True` asked for.
 
-        `CAP_PROP_CONVERT_RGB = 0` is a request, not a contract: the FFmpeg
-        backend hands back the Y plane for planar 8-bit YUV and something else
-        for anything it handles differently — a packed layout, a 10-bit source,
-        a build with a different fallback. It says so only in a log line, and one
-        emitted once per frame, which `decode/quiet.py` drops.
 
-        So the check moves here, where it can do more than print. A packed
-        4:2:2 buffer arriving with these dimensions and being *treated* as a
-        luma plane is a wrong answer that renders — plausible pixels, wrong
-        pixels, and a block series nothing downstream can tell is wrong. The
-        two dimensions are the whole test: the plane is exactly one channel at
-        the container's frame size, and every fallback layout differs in at
-        least one of those.
-        """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         expected = (self._metadata.height, self._metadata.width)
         if data.ndim != 2 or data.shape != expected:
             raise VideoDecodeError(
@@ -203,7 +203,7 @@ class VideoReader:
             )
 
     def _position_at(self, index: int) -> None:
-        """Make the capture's next read return frame `index`."""
+
         delta = index - self._cursor
         if delta == 0:
             return
@@ -215,7 +215,7 @@ class VideoReader:
         self._capture.set(cv2.CAP_PROP_POS_FRAMES, index)
 
     def close(self) -> None:
-        """Release the capture. Idempotent."""
+
         self._capture.release()
 
     def __enter__(self) -> Self:
@@ -231,7 +231,7 @@ class VideoReader:
 
 
 def _downscale(data: NDArray[Any], max_width: int | None) -> NDArray[Any]:
-    """Area-resample `data` down to `max_width` if it is wider. Never upscales."""
+
     source_height, source_width = data.shape[:2]
     if max_width is None or source_width <= max_width:
         return data

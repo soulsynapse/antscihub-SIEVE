@@ -1,14 +1,14 @@
-"""`sieve sweep` — decode throughput over core sets and worker counts.
 
-The protocol is fixed so
-the two are comparable: sequential reads over a fixed span, a warm-up pass,
-repeats, and the median reported per configuration. What is added is the
-machine axis — the same measurement under a restricted set of cores, which is
-how one machine answers a question about several.
 
-**It changes process affinity and is therefore a command, not a test.** See
-`bench/sweep.py`; the isolation a sweep needs is a process of its own.
-"""
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ from sieve.bench.sweep import (
 from sieve.cli.common import frame_source, refuse
 from sieve.decode.reader import VideoDecodeError
 
-#: The luma finding's span, so a reading here can be compared with the readings
-#: that produced `LUMA_WORKER_CAP` rather than merely resembling them.
+
+
 DEFAULT_FIRST_FRAME = 210
 DEFAULT_FRAME_COUNT = 150
 
@@ -69,17 +69,17 @@ def sweep_decode(
         False
     ),
 ) -> None:
-    """Measure ms/frame across core sets and worker counts, and report the spread.
 
-    The spread is the point. A core set whose best and worst worker counts are
-    within a few percent has no gradient for a controller to act on, and that
-    result closes a question rather than opening one.
 
-    Raises:
-        typer.Exit: code 1 if the footage cannot be read, or if this platform
-            will not pin a process — a sweep that silently ran unpinned would
-            report the machine axis as noise under the labels of an experiment.
-    """
+
+
+
+
+
+
+
+
+
     try:
         counts = _integers(workers, "--workers")
         core_counts = _integers(sizes, "--core-counts") if sizes else ()
@@ -113,7 +113,7 @@ def sweep_decode(
 
 
 def _integers(raw: str, option: str) -> tuple[int, ...]:
-    """A comma-separated list, refused as a whole rather than partially parsed."""
+
     try:
         values = tuple(int(part) for part in raw.split(",") if part.strip())
     except ValueError as error:
@@ -124,13 +124,13 @@ def _integers(raw: str, option: str) -> tuple[int, ...]:
 
 
 def _report(readings: tuple[Reading, ...], *, luma: bool, as_json: bool) -> str:
-    """The surface, and the one number the controller question turns on.
 
-    Both statistics per cell: `best` is what the configuration can do and
-    `typical` is what a session gets, and the gap between them on a core set is
-    itself a reading — a wide one means the scheduler moved the work around
-    during the measurement, which is the effect the whole sweep exists to see.
-    """
+
+
+
+
+
+
     records = [
         {
             "cores": reading.cell.cores.label,

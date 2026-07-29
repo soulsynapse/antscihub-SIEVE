@@ -1,11 +1,11 @@
-"""What a cache key is required to separate, and what it is required to conflate.
 
-Every test here is a way a key stops meaning "this exact result has been
-produced before". Two of them cover the direction that is silent when it fails:
-a key that conflates two computations serves a wrong frame and the run still
-completes. The rest cover the direction that merely costs time — a key that
-separates two things that are the same recomputes work it had.
-"""
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ COST = CostEstimate(seconds_per_megapixel=0.001)
 
 
 class BlurParams(ParamsBase):
-    """Two fields so a test can move one and leave the other inherited."""
+
 
     radius: int = 3
     sigma: float = 1.0
@@ -41,7 +41,7 @@ def make_spec(**overrides: object) -> FilterSpec:
         "cost": COST,
     }
     fields.update(overrides)
-    return FilterSpec(**fields)  # pyright: ignore[reportArgumentType]
+    return FilterSpec(**fields)
 
 
 SPEC = make_spec()
@@ -54,11 +54,11 @@ def make_node(node_id: str, **params: object) -> Node:
 
 
 def make_project(*replicates: Replicate) -> Project:
-    """One root feeding two siblings — the smallest graph guardrail §5 needs.
 
-    a ─┬─> b
-       └─> c
-    """
+
+
+
+
     return Project(
         source=SourceRef(path="clip.mp4"),
         replicates=replicates,
@@ -70,13 +70,13 @@ def make_project(*replicates: Replicate) -> Project:
 
 
 def keys_for(project: Project, replicate: Replicate | None) -> dict[str, str]:
-    """Every node's key, walked by hand.
 
-    The walk is written out here rather than imported because there is nothing
-    to import yet: ordering a graph is `dag.py`'s, and `cache_key` deliberately
-    does not carry a second traversal. Three nodes in a known shape make the
-    hand-walk shorter than the fixture that would replace it.
-    """
+
+
+
+
+
+
 
     def key(node_id: str, upstream: str) -> str:
         return node_key(
@@ -96,12 +96,12 @@ def keys_for(project: Project, replicate: Replicate | None) -> dict[str, str]:
 
 class TestIsolation:
     def test_editing_one_branch_leaves_its_sibling_valid(self) -> None:
-        # The key must be per node rather than per graph: `b` and `c` share
-        # `a`'s key and nothing else, so a parameter
-        # edit on `b` has no path to `c`. A key that folded in anything
-        # project-wide — the graph's whole parameter set, a document revision —
-        # would pass every other test in this file and fail this one by
-        # invalidating the eleven arenas nobody touched.
+
+
+
+
+
+
         arena = Replicate(roi=ARENA, name="Replicate 1")
         project = make_project(arena)
         before = keys_for(project, arena)
@@ -114,12 +114,12 @@ class TestIsolation:
         assert after["c"] == before["c"]
 
     def test_a_pinned_replicate_ignores_the_default_moving_under_it(self) -> None:
-        # The failure this closes is silent. `with_param_edit` moves
-        # `Node.params` to the last configured value on *every* edit, so a key
-        # built from the node's own dict would change for all twelve arenas
-        # each time one of them was adjusted — including for an arena that pins
-        # the parameter and never reads the default. Hashing `resolved_params`
-        # is what makes the second edit below invisible to the first arena.
+
+
+
+
+
+
         pinned = Replicate(roi=ARENA, name="Replicate 1")
         following = Replicate(roi=ARENA, name="Replicate 2")
         project = make_project(pinned, following).with_param_edit(
@@ -133,10 +133,10 @@ class TestIsolation:
         assert keys_for(moved, moved.replicate(following.replicate_id))["a"] != before["a"]
 
     def test_the_crop_separates_two_otherwise_identical_replicates(self) -> None:
-        # Two arenas with the same parameters are the same computation over
-        # different pixels. Nothing on the node says so — the geometry enters at
-        # the root, through `source_key`, and reaches `a` only because the
-        # source key is its upstream.
+
+
+
+
         left = Replicate(roi=ROI(x=0, y=0, width=64, height=64), name="Replicate 1")
         right = Replicate(roi=ROI(x=64, y=0, width=64, height=64), name="Replicate 2")
         project = make_project(left, right)
@@ -145,13 +145,13 @@ class TestIsolation:
         assert keys_for(project, left)["a"] != keys_for(project, None)["a"]
 
     def test_locking_a_replicate_moves_no_key(self) -> None:
-        # Rule 7's test applied to `Project.visited`: whether the GUI interposes
-        # a dialog in front of a geometry drag changes nothing about what a
-        # result *is*, so recording that an arena has been tuned must not cost
-        # a single cache entry. The failure this closes is not a wrong frame but
-        # a silent one — every arena recomputing from scratch the first time
-        # anybody opened it, which reads as the store being cold rather than as
-        # the lock being hashed.
+
+
+
+
+
+
+
         arena = Replicate(roi=ARENA, name="Replicate 1")
         project = make_project(arena)
         before = keys_for(project, arena)
@@ -166,11 +166,11 @@ class TestInputs:
     def test_backend_identity_leaves_the_key_only_when_the_filter_claims_agreement(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # Patched rather than run on two backends: `backend_identity(GPU)`
-        # raises without a cupy install, so a machine with no CUDA would skip
-        # the assertion that matters. Moving the string under both specs asks
-        # the same question — is it in the digest — and answers it on every
-        # machine.
+
+
+
+
+
         node = make_node("a", radius=3)
         agnostic = make_spec(backend_agnostic=True)
         keyed = node_key(node, spec=SPEC, upstream={}, backend=Backend.CPU)
@@ -185,12 +185,12 @@ class TestInputs:
         assert node_key(node, spec=agnostic, upstream={}, backend=Backend.CPU) == unkeyed
 
     def test_which_port_a_stream_arrives_on_is_part_of_the_computation(self) -> None:
-        # The silent direction again: `a - b` and `b - a` are fed by the same
-        # two upstream keys, and a fold that hashed the keys alone would give
-        # the two wirings one entry — one served as the other, plausible frames,
-        # no symptom. Binding key to port is what separates them; hashing the
-        # pairs *sorted* is what keeps edge-declaration order from mattering,
-        # which is the second assertion.
+
+
+
+
+
+
         node = make_node("a", radius=3)
         forward = node_key(
             node, spec=SPEC, upstream={"left": "k1", "right": "k2"}, backend=Backend.CPU
@@ -206,11 +206,11 @@ class TestInputs:
         assert forward == reordered
 
     def test_an_omitted_parameter_and_its_default_are_one_computation(self) -> None:
-        # Canonical, not merely deterministic. The params are validated before
-        # they are hashed, so the document that spells out every field and the
-        # one that relies on defaults key alike — otherwise a project saved by
-        # a build that gained a field would recompute everything the previous
-        # build had already cached.
+
+
+
+
+
         spelled_out = make_node("a", radius=3, sigma=1.0)
         implied = make_node("a")
 
@@ -220,13 +220,13 @@ class TestInputs:
 
     def test_refuses_a_key_it_cannot_stand_behind(self) -> None:
         node = make_node("a")
-        # No key for a filter that cannot reproduce itself, and the refusal is
-        # what propagates: the downstream gets no upstream hash to fold in, so
-        # the whole subtree is uncacheable without anything computing that.
+
+
+
         with pytest.raises(NotCacheableError, match="not deterministic"):
             node_key(node, spec=make_spec(deterministic=False), upstream={}, backend=Backend.CPU)
-        # A spec for the wrong filter would key this node's output under
-        # another filter's identity, which is the one mistake that produces a
-        # confidently wrong cache hit rather than a miss.
+
+
+
         with pytest.raises(ValueError, match="node names"):
             node_key(node, spec=make_spec(version="2.0.0"), upstream={}, backend=Backend.CPU)

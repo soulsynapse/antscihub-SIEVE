@@ -1,12 +1,12 @@
-"""`RequestCoalescer` decides what is outstanding and what is worth painting.
 
-Fed sequences of calls rather than driven through a decode thread, which is the
-whole reason the object was pulled out of `VideoPlayer`. The ordering hazards
-below — a commitment displaced by a guess, a decode repainting over a newer
-cache hit, a closed source's frame arriving — are all reachable here in three
-lines each, where `tests/gui/test_player_scrub.py` can only reach the ones the
-scheduler happens to produce.
-"""
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
 
 
 class FakeClock:
-    """A clock that only moves when a test says so."""
+
 
     def __init__(self) -> None:
         self.seconds = 0.0
@@ -34,7 +34,7 @@ def coalescer() -> RequestCoalescer:
 
 
 def issued(request: Request | None) -> int:
-    """The index of a request the coalescer said to issue now."""
+
     assert request is not None, "expected this request to be issued immediately"
     return request.index
 
@@ -47,7 +47,7 @@ class TestOneInFlightOnePending:
     def test_a_burst_keeps_only_the_last_and_discards_the_middle(
         self, coalescer: RequestCoalescer
     ) -> None:
-        """The property the 40-seek finding measured: two decodes, not forty."""
+
         coalescer.request(0, RequestKind.SCRUB)
         for index in range(1, 40):
             assert coalescer.request(index, RequestKind.SCRUB) is None
@@ -70,14 +70,14 @@ class TestOneInFlightOnePending:
 
 
 class TestRank:
-    """A commitment is not a guess, and the single pending slot has to say so."""
+
 
     def test_a_guess_does_not_displace_a_pending_commitment(
         self, coalescer: RequestCoalescer
     ) -> None:
-        coalescer.request(0, RequestKind.EXACT)  # in flight
-        coalescer.request(33, RequestKind.EXACT)  # the released slider
-        coalescer.request(12, RequestKind.SCRUB)  # a drag that came after it
+        coalescer.request(0, RequestKind.EXACT)
+        coalescer.request(33, RequestKind.EXACT)
+        coalescer.request(12, RequestKind.SCRUB)
 
         pending = coalescer.pending
         assert pending is not None
@@ -86,7 +86,7 @@ class TestRank:
     def test_a_playback_tick_does_not_displace_a_pending_commitment(
         self, coalescer: RequestCoalescer
     ) -> None:
-        """Seeking during playback must land, not be overwritten 8 ms later."""
+
         coalescer.request(0, RequestKind.PLAYBACK)
         coalescer.request(33, RequestKind.EXACT)
         coalescer.request(1, RequestKind.PLAYBACK)
@@ -118,7 +118,7 @@ class TestDisplayOrdering:
     def test_a_decode_overtaken_by_a_local_display_is_not_painted(
         self, coalescer: RequestCoalescer
     ) -> None:
-        """A cache hit repaints inside the call; the decode behind it is older."""
+
         coalescer.request(5, RequestKind.SCRUB)
         coalescer.served_without_decode(RequestKind.SCRUB)
 
@@ -127,7 +127,7 @@ class TestDisplayOrdering:
         assert not arrival.display
 
     def test_a_commitment_is_painted_even_when_overtaken(self, coalescer: RequestCoalescer) -> None:
-        """Otherwise the user is stranded on a grid point they never asked for."""
+
         coalescer.request(33, RequestKind.EXACT)
         coalescer.served_without_decode(RequestKind.SCRUB)
 
@@ -165,7 +165,7 @@ class TestGeneration:
     def test_the_stale_frame_still_frees_the_slot_for_the_new_source(
         self, coalescer: RequestCoalescer
     ) -> None:
-        """The old decode is not recallable, so its slot is the new source's turn."""
+
         coalescer.request(30, RequestKind.EXACT)
         coalescer.new_generation()
         assert coalescer.request(0, RequestKind.EXACT) is None, "issued behind a live decode"
@@ -184,7 +184,7 @@ class TestGeneration:
     def test_sequence_numbers_do_not_restart_with_the_source(
         self, coalescer: RequestCoalescer
     ) -> None:
-        """A reused sequence number would make an old frame look current."""
+
         coalescer.request(9, RequestKind.SCRUB)
         first = coalescer.in_flight
         assert first is not None
@@ -199,20 +199,20 @@ class TestGeneration:
 
 class TestTiming:
     def test_the_round_trip_is_timed_from_issue_not_from_creation(self) -> None:
-        """A request that waited its turn is not charged for the wait.
 
-        Charging it would degrade the player for being busy, which is the one
-        thing the degradation decision must not react to.
-        """
+
+
+
+
         clock = FakeClock()
         coalescer = RequestCoalescer(clock=clock)
 
         coalescer.request(0, RequestKind.EXACT)
-        coalescer.request(5, RequestKind.SCRUB)  # parked
-        clock.advance(0.500)  # the wait, which is not this request's fault
+        coalescer.request(5, RequestKind.SCRUB)
+        clock.advance(0.500)
 
         coalescer.arrived()
-        coalescer.drain()  # 5 is issued here
-        clock.advance(0.020)  # the decode itself
+        coalescer.drain()
+        clock.advance(0.020)
 
         assert coalescer.round_trip_ms() == pytest.approx(20.0)

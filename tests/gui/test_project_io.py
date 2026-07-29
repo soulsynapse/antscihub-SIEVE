@@ -1,24 +1,24 @@
-"""Reading and writing a project from the window.
 
-Four things can go wrong here and each is tested on its own account.
 
-The round trip can lose a field — either one the user edited, or one the GUI
-cannot edit and would therefore drop silently on every save, which is the worse
-of the two because nothing in the interface would ever show it.
 
-The *ordering* can be wrong. `bind_source` clears replicates, clip, and graph,
-and opening a project opens its video first, so a load written as a sequence of
-ordinary edits would be erased by the very bind that made the source known. The
-async player is what makes this a real hazard rather than a hypothetical, so the
-test drives the real window rather than calling `load_project` directly.
 
-The load can leave history behind, which turns Ctrl+Z into something that undoes
-a file open and leaves a freshly opened project claiming to be unsaved.
 
-And the document can be restored against a source it no longer fits, because a
-project names its video by path and a path promises nothing about dimensions or
-length.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -57,12 +57,12 @@ GRAPH = Pipeline(nodes=(DOWNSAMPLE, THRESHOLD), edges=(Edge(upstream="n1", downs
 
 
 def _replicates() -> tuple[Replicate, ...]:
-    """Two arenas, the second deviating from the graph's defaults.
 
-    The override is the part worth carrying: it is stored against a node id, so
-    it is the field that goes wrong first if the graph and the replicates are
-    restored out of step with each other.
-    """
+
+
+
+
+
     return (
         Replicate(roi=ROI(x=0, y=0, width=40, height=30), name="Left", replicate_id="r1"),
         Replicate(
@@ -76,12 +76,12 @@ def _replicates() -> tuple[Replicate, ...]:
 
 @pytest.fixture
 def video(tmp_path: Path, synthetic_video: Path) -> Path:
-    """The fixture video, copied somewhere this test may write beside it.
 
-    `synthetic_video` is session-scoped: a project written next to it would
-    still be there for the next test, and the neighbour offer would fire in
-    tests that never asked about one.
-    """
+
+
+
+
+
     destination = tmp_path / "arena.mp4"
     shutil.copy(synthetic_video, destination)
     return destination
@@ -93,10 +93,10 @@ def window(qtbot: QtBot, tmp_path: Path) -> Iterator[MainWindow]:
     main = MainWindow(Preferences(settings))
     qtbot.addWidget(main)
     yield main
-    # No declared-clean dance any more: nothing in the window can refuse a
-    # close, so teardown always reaches `_player.shutdown()`. A window that
-    # refused one used to leave the decode thread outliving the QApplication,
-    # which took the interpreter down mid-suite with no traceback naming it.
+
+
+
+
     main.close()
 
 
@@ -112,7 +112,7 @@ def _document(window: MainWindow) -> ReplicateDocument:
 
 
 def _project_file(path: Path, video: Path, **overrides: object) -> Project:
-    """A project on disk naming `video`, with two replicates, a clip, and a graph."""
+
     project = Project.for_video(video, path.parent).model_copy(
         update={
             "replicates": _replicates(),
@@ -126,7 +126,7 @@ def _project_file(path: Path, video: Path, **overrides: object) -> Project:
 
 
 def _choosing(path: str) -> Callable[..., tuple[str, str]]:
-    """A stand-in for `QFileDialog.getSaveFileName`. Empty `path` means Cancel."""
+
 
     def chosen(*_args: object, **_kwargs: object) -> tuple[str, str]:
         return path, ""
@@ -135,12 +135,12 @@ def _choosing(path: str) -> Callable[..., tuple[str, str]]:
 
 
 def _recording(seen: list[object]) -> Callable[..., QMessageBox.StandardButton]:
-    """A message-box stand-in that logs the call instead of answering a question.
 
-    The `no_modal_dialogs` fixture already answers everything, so a leftover
-    prompt would not hang the suite — it would pass silently. Recording the
-    calls is what makes "asks nothing" assertable rather than assumed.
-    """
+
+
+
+
+
 
     def reply(*args: object, **_kwargs: object) -> QMessageBox.StandardButton:
         seen.append(args)
@@ -150,13 +150,13 @@ def _recording(seen: list[object]) -> Callable[..., QMessageBox.StandardButton]:
 
 
 def _history_texts(video: Path) -> list[str]:
-    """What autosave kept for the project conventionally filed beside `video`."""
+
     store = SnapshotStore(history_directory(project_path_for(video)))
     return [snapshot.text for snapshot in store.entries()]
 
 
 def _save_as(monkeypatch: pytest.MonkeyPatch, window: MainWindow, path: Path) -> bool:
-    """Drive Save As with the file dialog answering `path`."""
+
     monkeypatch.setattr(QFileDialog, "getSaveFileName", _choosing(str(path)))
     return window.save_project_as()
 
@@ -165,12 +165,12 @@ class TestRoundTrip:
     def test_a_project_reopens_as_the_document_it_was_saved_from(
         self, qtbot: QtBot, window: MainWindow, video: Path, tmp_path: Path
     ) -> None:
-        """The whole item, through the real asynchronous open.
 
-        This is also the ordering test: `open_project` opens the video, which
-        clears the document from a queued signal, and the project has to be
-        applied on the far side of that clear.
-        """
+
+
+
+
+
         path = tmp_path / "arena.sieve.yaml"
         _project_file(path, video)
 
@@ -182,19 +182,19 @@ class TestRoundTrip:
         assert document.at(1).overrides == {"n2": {"level": 0.75}}
         assert document.clip == ClipRange(start=5, end=25)
         assert document.pipeline == GRAPH
-        # Two arenas running different thresholds are not one group. Restoring
-        # the graph without the overrides, or the reverse, reads as one.
+
+
         assert document.equivalence_groups() == (1, 2)
 
     def test_saving_keeps_the_fields_the_gui_cannot_edit(
         self, qtbot: QtBot, window: MainWindow, video: Path, tmp_path: Path
     ) -> None:
-        """A sink is invisible in this GUI, so dropping one would never show.
 
-        `apply_to` copies the project it was handed rather than assembling a
-        fresh one precisely to stop this; building `Project(source=...)` from
-        the document's three fields would pass every other test in this file.
-        """
+
+
+
+
+
         path = tmp_path / "arena.sieve.yaml"
         _project_file(
             path,
@@ -216,13 +216,13 @@ class TestRoundTrip:
     def test_a_video_opened_on_its_own_can_be_saved_as_a_project(
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The path with no project to copy from, where one is built instead.
 
-        The source reference is what this is really about: it is stored
-        relative to the file being written, so a project that names its video
-        by an absolute path — or by one relative to the wrong directory —
-        passes every in-memory assertion and cannot be opened from anywhere.
-        """
+
+
+
+
+
+
         _open(qtbot, window, video)
         _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
 
@@ -237,7 +237,7 @@ class TestRoundTrip:
     def test_a_name_typed_without_the_suffix_still_lands_beside_the_video(
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """`project_path_for` is a convention other code reads back."""
+
         _open(qtbot, window, video)
         _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
 
@@ -246,12 +246,12 @@ class TestRoundTrip:
 
 
 class TestLoadPath:
-    """`load_project` on its own, without a player in the way."""
+
 
     def test_loading_leaves_no_history_and_nothing_to_save(
         self, document: ReplicateDocument
     ) -> None:
-        """Ctrl+Z must not undo a file open, and an untouched project is clean."""
+
         document.add_roi(ROI(x=0, y=0, width=10, height=10))
         document.load_project(
             Project.for_video(Path("arena.mp4")).model_copy(
@@ -266,17 +266,17 @@ class TestLoadPath:
     @pytest.mark.parametrize(
         ("saved", "expected"),
         [
-            # Straddling the end: the part that exists is kept.
+
             (ClipRange(start=900, end=1200), ClipRange(start=900, end=1000)),
-            # Entirely past it: there is no span to keep, and clamping to the
-            # last frame would invent a one-frame clip nobody marked.
+
+
             (ClipRange(start=1500, end=1600), None),
         ],
     )
     def test_a_clip_is_trimmed_onto_the_source_actually_bound(
         self, document: ReplicateDocument, saved: ClipRange, expected: ClipRange | None
     ) -> None:
-        """A project names its video by path; a path is not a length."""
+
         document.load_project(
             Project.for_video(Path("arena.mp4")).model_copy(update={"clip": saved})
         )
@@ -285,7 +285,7 @@ class TestLoadPath:
     def test_replicates_are_refitted_to_the_source_actually_bound(
         self, document: ReplicateDocument
     ) -> None:
-        """The `document` fixture binds 1000x800; this box hangs off the right."""
+
         document.load_project(
             Project.for_video(Path("arena.mp4")).model_copy(
                 update={
@@ -314,14 +314,14 @@ class TestUnsavedChanges:
     def test_closing_with_unsaved_edits_asks_nothing_and_keeps_the_edit(
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The close proceeds, and the work it dropped is in the history.
 
-        This is the pair of assertions the prompt used to stand in for. Either
-        one alone would pass on a broken build: a close that asks nothing and
-        keeps nothing is the silent loss the prompt existed to prevent, and a
-        history written by a close the user could still refuse is the state
-        before this item.
-        """
+
+
+
+
+
+
+
         asked: list[object] = []
         monkeypatch.setattr(QMessageBox, "warning", _recording(asked))
         _open(qtbot, window, video)
@@ -334,14 +334,14 @@ class TestUnsavedChanges:
     def test_closing_the_video_keeps_the_edit_it_dropped(
         self, qtbot: QtBot, window: MainWindow, video: Path
     ) -> None:
-        """The hole the prompt used to cover on this path, not on `closeEvent`'s.
 
-        `close_video` stopped the pending snapshot rather than flushing it, which
-        was correct while a prompt stood in front of it — the timer would
-        otherwise have fired after the unbind and snapshotted the emptiness. With
-        nothing asking, stopping it is the silent loss, so the flush moved above
-        the close and the stop below it stayed.
-        """
+
+
+
+
+
+
+
         _open(qtbot, window, video)
         _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
 
@@ -353,12 +353,12 @@ class TestUnsavedChanges:
     def test_opening_another_video_over_unsaved_edits_asks_nothing(
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Same rule on the other three paths, of which this is the one with a dialog.
 
-        `open_video_dialog` is where the prompt came *before* the file chooser,
-        so a leftover guard here shows up as a question the user answers before
-        they have even picked a file.
-        """
+
+
+
+
+
         asked: list[object] = []
         monkeypatch.setattr(QMessageBox, "warning", _recording(asked))
         _open(qtbot, window, video)
@@ -372,12 +372,12 @@ class TestUnsavedChanges:
     def test_backing_out_of_the_save_dialog_writes_nothing(
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Save As, then Cancel at the file dialog, is a user who has saved nothing.
 
-        Save and Save As outlive the prompt — a file the user chose the location
-        of is a different artifact from a session history — so the outcome a
-        cancelled chooser reports still has to be the truthful one.
-        """
+
+
+
+
+
         _open(qtbot, window, video)
         _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
         monkeypatch.setattr(QFileDialog, "getSaveFileName", _choosing(""))
@@ -391,7 +391,7 @@ class TestNeighbourOpen:
     def test_opening_a_video_opens_the_project_filed_beside_it_without_asking(
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """It restores, and it does so with no question in front of the video."""
+
         _project_file(project_path_for(video), video)
         asked: list[object] = []
 
@@ -409,13 +409,13 @@ class TestNeighbourOpen:
     def test_the_restore_says_which_project_and_from_where(
         self, qtbot: QtBot, window: MainWindow, video: Path
     ) -> None:
-        """The provenance the question used to carry has to survive somewhere.
 
-        Restoring two replicates the user cannot account for is the surprise the
-        modal existed to prevent; the status bar is where that argument now
-        lands, so a silent restore is a regression even though the state is
-        right.
-        """
+
+
+
+
+
+
         _project_file(project_path_for(video), video)
 
         _open(qtbot, window, video)
@@ -437,7 +437,7 @@ class TestSourceMismatch:
     def test_a_project_whose_video_is_gone_is_refused_before_anything_is_cleared(
         self, qtbot: QtBot, window: MainWindow, video: Path, tmp_path: Path
     ) -> None:
-        """Refusing after the clear would cost the user the document they had."""
+
         _open(qtbot, window, video)
         _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
 

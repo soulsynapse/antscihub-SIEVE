@@ -1,4 +1,4 @@
-"""`ProxyFrameCache` is what makes coarse scrubbing free, so its eviction matters."""
+
 
 from __future__ import annotations
 
@@ -12,17 +12,17 @@ pytestmark = pytest.mark.gui
 
 
 def test_the_default_capacity_is_the_ledger_floor() -> None:
-    """The class default and the declared share are two homes for one number.
 
-    `gui/concurrency.py` cannot import this module (a QImage import would make
-    the ledger's unit test need Qt), so the two literals are pinned equal here
-    instead. If they drift, the ledger describes a cache nobody is running.
-    """
+
+
+
+
+
     assert PROXY_CACHE_SHARE.floor_bytes == DEFAULT_CAPACITY_BYTES
 
 
 def image(width: int = 100, height: int = 100) -> QImage:
-    """A BGR888 image the size a proxy frame would be, at small scale."""
+
     return QImage(width, height, QImage.Format.Format_BGR888)
 
 
@@ -73,7 +73,7 @@ class TestEviction:
         cache = ProxyFrameCache(capacity_bytes=frame_bytes * 2)
         cache.put(1, image())
         cache.put(2, image())
-        cache.get(1)  # 2 is now the oldest
+        cache.get(1)
         cache.put(3, image())
         assert cache.get(1) is not None
         assert cache.get(2) is None

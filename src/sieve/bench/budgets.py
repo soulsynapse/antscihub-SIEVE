@@ -1,22 +1,22 @@
-"""The latency budget table. Source of truth in code for both speed regimes.
 
-A budget miss is a defect, not a tradeoff. This table is authoritative.
 
-**A ceiling nothing publishes is a number, not a budget**, which is the other
-half of rule 4 and the one this table cannot state by itself. It is stated by
-`WITHOUT_PRODUCER` below and checked by `tests/bench/test_budget_producers.py`.
 
-Every limit carries an **anchor** comment saying which perceptual band the
-number came from (~100 ms reads as instantaneous, ~1 s holds the flow of
-thought, ~10 s holds attention; Card, Moran & Newell — Nielsen's response-time
-bands are the same numbers). A budget anchored to perception outlives the
-hardware that first met it; one anchored to "what we achieved once" is history
-wearing a rule's costume.
 
-A budget currently missed on purpose is declared in `IN_DEBT`. The benchmark
-gate xfails visibly for that key. The runtime HUD never honors debt: a slow
-session still looks slow.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from enum import StrEnum
 
 
 class Regime(StrEnum):
-    """The two speed regimes. Improving one at the cost of the other is a defect."""
+
 
     PRE_PIPELINE = "pre-pipeline"
     IN_PIPELINE = "in-pipeline"
@@ -33,7 +33,7 @@ class Regime(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Budget:
-    """One latency ceiling."""
+
 
     key: str
     label: str
@@ -41,173 +41,173 @@ class Budget:
     limit_ms: float
 
     def exceeded_by(self, elapsed_ms: float) -> float:
-        """Milliseconds over budget; zero or negative when within it."""
+
         return elapsed_ms - self.limit_ms
 
 
 class BudgetMissError(AssertionError):
-    """Raised when a measured interval exceeds its budget."""
+    pass
 
 
 def _table(*budgets: Budget) -> dict[str, Budget]:
     return {budget.key: budget for budget in budgets}
 
 
-#: Keyed by a stable identifier that call sites reference; the label is what
-#: humans read and what the architecture document is checked against.
+
+
 BUDGETS: dict[str, Budget] = _table(
     Budget(
         key="open_to_first_frame",
         label="Open file → first frame",
         regime=Regime.PRE_PIPELINE,
-        # A "something is happening" latency: half the ~1 s flow-of-thought
-        # band, because opening is a gesture with a visible consequence, not a
-        # submitted job.
+
+
+
         limit_ms=500.0,
     ),
     Budget(
         key="scrub_to_repaint",
         label="Scrub/seek → frame repaint",
         regime=Regime.PRE_PIPELINE,
-        # 100 ms is the classic threshold for a response reading as
-        # instantaneous rather than as a delay (Miller 1968; Card, Moran &
-        # Newell's ~0.1 s perceptual cycle). It is also the trigger: sustained
-        # scrub latency above this is what flips the player into coarse mode,
-        # so this number is enforced by degradation, not by hope. See
-        # `gui/scrub_policy.py` enforces this through coarse mode.
+
+
+
+
+
+
         limit_ms=100.0,
     ),
     Budget(
         key="scrub_settle",
         label="Scrub release → exact frame",
         regime=Regime.PRE_PIPELINE,
-        # Releasing the slider must land on the exact frame under the cursor,
-        # however coarse the drag was. Worst case is one in-flight decode we
-        # cannot cancel plus the exact one: two seeks on the reference source.
+
+
+
         limit_ms=250.0,
     ),
     Budget(
         key="cut_to_ready",
         label="Cut confirmed → ready",
         regime=Regime.PRE_PIPELINE,
-        # Confirming a cut is a click with a state change, not a render: two
-        # perceptual beats, same band as slider_to_graph.
+
+
         limit_ms=200.0,
     ),
     Budget(
         key="filter_to_first_tick",
         label="First filter → first graph tick",
         regime=Regime.IN_PIPELINE,
-        # First-run cost is real work (decode + warmup + one transform), so
-        # this sits in the flow-of-thought band rather than the instantaneous
-        # one — doubled, because the first tick follows a *decision* (adding a
-        # filter), not a drag, and a decision tolerates a beat of setup.
+
+
+
+
         limit_ms=2000.0,
     ),
     Budget(
         key="slider_to_preview",
         label="Slider drag → preview repaint",
         regime=Regime.IN_PIPELINE,
-        # The 100 ms instantaneous band: a drag is direct manipulation and the
-        # preview is its hand.
+
+
         limit_ms=100.0,
     ),
     Budget(
         key="slider_to_graph",
         label="Slider drag → graph update",
         regime=Regime.IN_PIPELINE,
-        # Two perceptual beats: the graph may trail the preview by one tick
-        # without the pair reading as disconnected.
+
+
         limit_ms=200.0,
     ),
     Budget(
         key="full_preview_render",
         label="Full preview render (5–10s clip)",
         regime=Regime.IN_PIPELINE,
-        # Attention-band latency, met by the store rather than by speed after
-        # the first render (pipeline/preview.py). Not a per-gesture ceiling.
+
+
         limit_ms=3000.0,
     ),
     Budget(
         key="band_drag_repaint",
         label="Band drag → graphs repaint",
         regime=Regime.IN_PIPELINE,
-        # The cheap tier of the two-tier drag discipline: re-derive from the
-        # retained band power, re-count, repaint. Half the 100 ms perceptual
-        # threshold, because a drag emits continuously and two consecutive
-        # ticks must both land inside one perceived beat.
+
+
+
+
         limit_ms=50.0,
     ),
     Budget(
         key="knob_to_graphs",
         label="Knob settle → graphs rebuilt",
         regime=Regime.IN_PIPELINE,
-        # An upstream parameter edit re-runs extraction over the working
-        # window and re-derives the detector. Bounded by the same ceiling as
-        # the full preview render it contains — the store, not speed, is what
-        # meets it after the first render.
+
+
+
+
         limit_ms=3000.0,
     ),
     Budget(
         key="density_rebuild",
         label="Band power arrives → density rebuilt",
         regime=Regime.IN_PIPELINE,
-        # `density_surface` bins the whole `(T, B)` band power. 100 ms is the
-        # instantaneous band: a partial pass lands repeatedly while a window
-        # renders, and each rebuild must fit inside one perceived beat rather
-        # than merely inside the 500 ms `knob_to_first_partial` it sits within.
-        #
-        # **It no longer blocks the repaint it exists to cause.** The binning
-        # moved to the detector thread beside `morlet_power`, so a miss here is
-        # a graph that lags the render, not a frozen window — the producer went
-        # with the work (`DetectorResult.density_ms`) rather than staying on the
-        # GUI thread to time a `QImage` wrap. What survives the move is the
-        # ceiling's meaning as an attribution.
-        #
-        # It is also the only budget in this table a control was ever derived
-        # from: `gui/density_plot.MAX_BLOCKS` refuses a block count implying
-        # more than this. Do not restore that cap: the work no longer blocks
-        # repaint, so exceeding this budget means lag rather than a frozen UI.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         limit_ms=100.0,
     ),
     Budget(
         key="knob_to_first_partial",
         label="Knob settle → graphs start filling",
         regime=Regime.IN_PIPELINE,
-        # `knob_to_graphs` above is the *complete* graph, and once the detector
-        # derives partial passes that is no longer the interval a user waits
-        # through — they are reading a filling graph long before the window is
-        # rendered. Both are real and they answer different questions: this one
-        # is "when could I start reading it", that one is "when is it complete
-        # and trustworthy". Kept as two rows rather than one redefined row,
-        # because redefining it would silently rewrite what the findings
-        # already written against `knob_to_graphs` measured.
-        #
-        # 500 ms rather than the 100 ms perceptual threshold: the first partial
-        # cannot precede the first frames plus one transform over them, and a
-        # ceiling nothing can meet is not a budget. It is the same order as
-        # `open_to_first_frame` and for the same reason — this is a "something
-        # is happening" latency, not a per-gesture one.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         limit_ms=500.0,
     ),
 )
 
 
-#: Budgets that no module under `src/` names, and so that nothing can ever be
-#: measured against at run time. Rule 4 says a miss must be *visible*; a ceiling
-#: with no publisher cannot be missed, which looks like compliance and is its
-#: absence. Writing the gap down as a set makes it a list that only shrinks —
-#: `tests/bench/test_budget_producers.py` fails both on a budget missing from
-#: here that has no producer *and* on one listed here that has since grown one.
-#:
-#: Two of the four are covered a different way and are not equally dark:
-#: `open_to_first_frame` and `scrub_settle` are timed in CI by
-#: `tests/bench/test_perf_regression.py`, so they have a benchmark but no
-#: runtime publisher — a regression is caught on the bench, never in a session.
-#: `cut_to_ready` and `slider_to_graph` have neither. `slider_to_graph` was
-#: waiting on there being a slider at all; there is one, and the gesture is now
-#: timed twice over by `knob_to_first_partial` and `knob_to_graphs` — so the
-#: This row may now duplicate `knob_to_first_partial` and `knob_to_graphs`.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
     {
         "open_to_first_frame",
@@ -218,17 +218,17 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
 )
 
 
-#: Timed and published are independent gaps, and this is the wider one: a
-#: published budget shows a session it was missed, a timed one catches the
-#: miss before it ships.
-#:
-#: Declared, not derived, because `src/` may not read `tests/`.
-#: `tests/bench/test_budget_producers.py` scans every `within_budget("...")`
-#: call site and fails in both directions.
-#:
-#: The composition is worse than the count: `open_to_first_frame` and
-#: `scrub_settle` are pre-pipeline, so of the ten in-pipeline budgets exactly
-#: one (`density_rebuild`) has a CI clock, and that one is the `IN_DEBT` entry.
+
+
+
+
+
+
+
+
+
+
+
 TIMED: frozenset[str] = frozenset(
     {
         "open_to_first_frame",
@@ -240,15 +240,15 @@ TIMED: frozenset[str] = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class Debt:
-    """A budget miss that is declared, scheduled for repayment, and tolerated
-    by the gate — never by the runtime display."""
+
+
 
     key: str
-    #: One line: what is temporarily slower and what it is buying.
+
     why: str
 
 
-#: Budgets currently missed on purpose. Empty is the normal state.
+
 IN_DEBT: dict[str, Debt] = {
     "density_rebuild": Debt(
         key="density_rebuild",
@@ -265,17 +265,17 @@ IN_DEBT: dict[str, Debt] = {
 
 
 def check(key: str, elapsed_ms: float, *, honor_debt: bool = False) -> Debt | None:
-    """Assert a measured interval is within its budget.
 
-    With `honor_debt`, a miss on a key declared in `IN_DEBT` returns the debt
-    instead of raising — the caller (the benchmark gate) is expected to xfail,
-    which keeps the miss visible in the report. Runtime
-    callers must not pass it: a session's slowness is never excused on screen.
 
-    Raises:
-        KeyError: if `key` is not a known budget.
-        BudgetMissError: if the interval exceeds the budget and no debt applies.
-    """
+
+
+
+
+
+
+
+
+
     budget = BUDGETS[key]
     over = budget.exceeded_by(elapsed_ms)
     if over <= 0.0:

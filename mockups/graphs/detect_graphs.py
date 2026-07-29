@@ -1,48 +1,48 @@
-"""The graphs themselves: what each one shows, and what dragging it does.
 
-docs/filter-tab-parity-plan.md names the widgets; this mockup makes them
-drag-able against honest data, so the interaction decisions get made by hand
-and not by argument. The synthetic signal is real math on fake footage: 64
-blocks, three 12 Hz bursts in a 4x4 cluster, one single-frame spike, and a
-true Morlet transform over all of it — so narrowing the frequency band
-genuinely sharpens the density plot, and the spike genuinely dilutes as D
-grows.
 
-Variant `detect` — the detection surface (four linked views):
 
-  scalogram      log-frequency Morlet heatmap, COI faded, two draggable
-                 frequency handles (clamped to the bank's edges).
-  band power     time x value density heatmap of all blocks, log1p value
-                 axis, two draggable value handles (drag off the top = inf),
-                 click a block in the spatial panel to trace it here.
-  blocks in band the green graph: windowed count line, detection spans,
-                 one draggable count threshold.
-  block heat     the frame with the block grid over it, fill = band power at
-                 the playhead, outline = in the value band; click to solo.
 
-  Interaction rules being pinned:
-  - drag anywhere on a plot scrubs the shared playhead; drags that start on
-    a handle move the handle. Handles win within 8 px.
-  - band drags emit continuously (cheap re-derive); release commits (the
-    expensive tier). The footer names each event as it happens.
-  - an unset count threshold means the detector is DISARMED and nothing is
-    green - unset is not "everything is a detection". (Deliberate deviation
-    from v1, where unset meant unbounded.)
-  - gate spans are floored to 1 px so a single-frame detection is visible at
-    any zoom; the green is a status color and never used for data series.
 
-Variant `color` — the stretch goal: configuring a "detected color" channel
-by pointing at the paused frame. Click = this color counts; Shift+click (or
-right-click) = this color must not count. Samples become removable chips, a
-tolerance slider widens the gate, and the mask repaints live on the frame.
 
-Everything visual is fake-palette; the data flow is the real proposal.
 
-Run:
-    uv run python mockups/graphs/detect_graphs.py --variant detect
-    uv run python mockups/graphs/detect_graphs.py --variant color
-    uv run python mockups/graphs/detect_graphs.py --shot tuned --png out.png
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 REPO = Path(__file__).resolve().parents[2]
 
-# ---- palette (not the app's; magnitude ramps sequential, green = status) ----
+
 
 BG = QColor(21, 22, 25)
 PANEL = QColor(31, 33, 38)
@@ -83,15 +83,15 @@ BAND = QColor(240, 110, 100)
 DETECT = QColor(96, 210, 120)
 WARN = QColor(224, 176, 96)
 
-#: Warm sequential ramp for the scalogram (dark -> light, one family).
+
 SCALO_STOPS = ((12, 8, 20), (86, 24, 48), (168, 60, 44), (226, 130, 56), (250, 214, 130))
-#: Cyan sequential ramp for the block-density plot.
+
 DENSITY_STOPS = ((21, 22, 25), (24, 56, 74), (32, 110, 138), (70, 180, 200), (190, 240, 248))
 
-# ---- the fake recording ------------------------------------------------------
+
 
 FPS = 50.0
-T = 1500  # 30 s
+T = 1500
 GRID = (8, 8)
 B = GRID[0] * GRID[1]
 FREQS = np.geomspace(0.5, 22.5, 24)
@@ -102,7 +102,7 @@ CLUSTER = [r * GRID[1] + c for r in range(2, 6) for c in range(2, 6)]
 
 
 def synth_blocks() -> np.ndarray:
-    """(T, B) block series: noise floor, 12 Hz bursts in a cluster, one spike."""
+
     rng = np.random.default_rng(11)
     x = np.exp(rng.normal(0.0, 0.35, (T, B))).astype(np.float32) * 30.0
     tt = np.arange(T) / FPS
@@ -116,7 +116,7 @@ def synth_blocks() -> np.ndarray:
 
 
 def morlet_power(x: np.ndarray) -> np.ndarray:
-    """|CWT|^2 over FREQS. (T,) -> (F, T); (T, B) -> (F, T, B). numpy-only."""
+
     n = 4096
     scales = (W0 + math.sqrt(2.0 + W0 * W0)) / (4.0 * math.pi * FREQS)
     omega = 2.0 * np.pi * np.fft.fftfreq(n, d=1.0 / FPS)
@@ -137,17 +137,17 @@ def morlet_power(x: np.ndarray) -> np.ndarray:
 
 
 def coi_samples(f_hz: float) -> float:
-    """Cone-of-influence e-folding width at f, in samples."""
+
     return 1.369 / f_hz * FPS
 
 
 BLOCKS = synth_blocks()
-CUBE = morlet_power(BLOCKS)  # (F, T, B)
-POOLED = morlet_power(BLOCKS.mean(axis=1))  # (F, T)
+CUBE = morlet_power(BLOCKS)
+POOLED = morlet_power(BLOCKS.mean(axis=1))
 
 
 def sample_frame() -> tuple[QImage, str]:
-    """A real frame if footage exists, else a drawn stand-in with color blobs."""
+
     videos = sorted((REPO / "videos-testing").glob("*.MP4"))
     if videos:
         try:
@@ -179,16 +179,16 @@ def sample_frame() -> tuple[QImage, str]:
     return image.copy(), "generated - no footage in videos-testing/"
 
 
-# ---- detector state (plain data; plots render it, they never own it) --------
+
 
 
 @dataclass
 class Detector:
-    f_lo: float | None = None  # Hz; None = bank edge
+    f_lo: float | None = None
     f_hi: float | None = None
-    v_lo: float | None = None  # band-power value; None = unbounded
+    v_lo: float | None = None
     v_hi: float | None = None
-    c_lo: float | None = None  # blocks; None = detector disarmed
+    c_lo: float | None = None
     c_hi: float | None = None
     d: int = 25
     centered: bool = True
@@ -215,7 +215,7 @@ class Derived:
 
 
 def derive(det: Detector) -> Derived:
-    """The whole chain, pure: cube -> band power -> count -> windowed -> gate."""
+
     i, j = det.freq_indices()
     m = CUBE[i : j + 1].sum(axis=0)
     v_lo = -np.inf if det.v_lo is None else det.v_lo
@@ -237,7 +237,7 @@ def derive(det: Detector) -> Derived:
     return Derived(m, count, windowed, np.asarray(gate, bool), armed)
 
 
-# ---- painting helpers --------------------------------------------------------
+
 
 
 def _font(size: int, *, bold: bool = False, spaced: bool = False) -> QFont:
@@ -250,7 +250,7 @@ def _font(size: int, *, bold: bool = False, spaced: bool = False) -> QFont:
 
 
 def ramp_lut(stops: tuple[tuple[int, int, int], ...], alpha: bool = False) -> np.ndarray:
-    """256-entry ARGB32 lookup table interpolating the given stops."""
+
     positions = np.linspace(0.0, 1.0, len(stops))
     t = np.linspace(0.0, 1.0, 256)
     channels = []
@@ -268,21 +268,21 @@ def to_qimage(argb: np.ndarray) -> QImage:
     return QImage(data.tobytes(), w, h, w * 4, QImage.Format.Format_ARGB32).copy()
 
 
-# ---- the plot family ---------------------------------------------------------
+
 
 MARGIN_L, MARGIN_R, MARGIN_T, MARGIN_B = 48, 66, 24, 8
 GRAB_PX = 8
 
 
 class BasePlot(QWidget):
-    """Shared frame: title row, recessive grid, playhead, two band handles.
 
-    Owns zero detector state. The window sets values in; drags signal out.
-    `band_changed` fires per mouse-move (the cheap tier), `band_committed`
-    on release (the expensive tier). Plain drags scrub the shared playhead.
-    """
 
-    band_changed = Signal(object, object)  # lo, hi (None = unbounded)
+
+
+
+
+
+    band_changed = Signal(object, object)
     band_committed = Signal(object, object)
     scrubbed = Signal(int)
 
@@ -299,9 +299,9 @@ class BasePlot(QWidget):
         self.handles_on = True
         self.readout = ""
         self.hover: QPointF | None = None
-        self._drag: str | None = None  # "lo" | "hi" | "scrub"
+        self._drag: str | None = None
 
-    # value axis - subclasses override for log axes
+
     def _fwd(self, v: float) -> float:
         return v
 
@@ -334,7 +334,7 @@ class BasePlot(QWidget):
         t = (r.bottom() - y) / max(r.height(), 1)
         return self._inv(self._fwd(lo) + t * (self._fwd(hi) - self._fwd(lo)))
 
-    # -- band handles ------------------------------------------------------
+
 
     def _handle_y(self, which: str) -> float:
         value = self.lo if which == "lo" else self.hi
@@ -396,7 +396,7 @@ class BasePlot(QWidget):
             self.band_committed.emit(self.lo, self.hi)
         self._drag = None
 
-    # -- painting ----------------------------------------------------------
+
 
     def fmt(self, value: float | None, which: str) -> str:
         if value is None:
@@ -437,7 +437,7 @@ class BasePlot(QWidget):
         if self.handles_on:
             self._paint_handles(painter, r)
 
-    def paint_content(self, painter: QPainter, r: QRect) -> None:  # override
+    def paint_content(self, painter: QPainter, r: QRect) -> None:
         pass
 
     def _paint_handles(self, painter: QPainter, r: QRect) -> None:
@@ -460,10 +460,10 @@ class BasePlot(QWidget):
 
 
 class ScalogramPlot(BasePlot):
-    """Pooled Morlet power, log-frequency axis, COI faded, freq-band handles."""
+
 
     title = "scalogram - drag the frequency band"
-    unbounded_allowed = False  # frequency handles clamp to the bank's edges
+    unbounded_allowed = False
 
     def __init__(self) -> None:
         super().__init__()
@@ -492,7 +492,7 @@ class ScalogramPlot(BasePlot):
                 cell = argb[row, sl]
                 a = ((cell >> 24) * ramp).astype(np.uint32)
                 argb[row, sl] = (a << 24) | (cell & 0x00FFFFFF)
-        return to_qimage(argb[::-1])  # row 0 = lowest f; flip so top = high f
+        return to_qimage(argb[::-1])
 
     def fmt(self, value: float | None, which: str) -> str:
         lo, hi = self._range()
@@ -514,7 +514,7 @@ class ScalogramPlot(BasePlot):
 
 
 class DensityPlot(BasePlot):
-    """All blocks at once: per-frame value histogram, log1p axis, value band."""
+
 
     title = "band power by block - drag the value band"
     BINS = 96
@@ -562,7 +562,7 @@ class DensityPlot(BasePlot):
 
 
 class CountPlot(BasePlot):
-    """The detection graph: windowed count, gate spans, count threshold."""
+
 
     title = "blocks in band - windowed over D"
 
@@ -593,7 +593,7 @@ class CountPlot(BasePlot):
             edges = np.flatnonzero(np.diff(np.r_[0, self.gate.view(np.int8), 0]))
             for lo, hi in zip(edges[::2], edges[1::2], strict=False):
                 x0, x1 = self.x_of(int(lo)), self.x_of(int(hi))
-                width = max(x1 - x0, 1.0)  # a 1-frame detection stays visible
+                width = max(x1 - x0, 1.0)
                 painter.drawRect(QRectF(x0, r.top(), width, r.height()))
         painter.setPen(QPen(DETECT if self.armed else DIM, 1.6))
         step = max(1, T // max(r.width(), 1))
@@ -605,11 +605,11 @@ class CountPlot(BasePlot):
 
 
 class BlockHeat(QWidget):
-    """The frame with the block grid over it. Fill = band power at playhead,
-    outline = in the value band now, click a block to solo it in the density
-    plot. Hover reads the block out. The frame is context, not data."""
 
-    solo_toggled = Signal(object)  # block index | None
+
+
+
+    solo_toggled = Signal(object)
 
     def __init__(self, frame: QImage, caption: str) -> None:
         super().__init__()
@@ -698,12 +698,12 @@ class BlockHeat(QWidget):
         painter.drawText(QRect(10, self.height() - 18, self.width() - 20, 14), 0, note)
 
 
-# ---- the detect window --------------------------------------------------------
+
 
 
 class DetectWindow(QWidget):
-    """Four linked views over one detector value. All wiring passes through
-    `_apply`, so 'who recomputes what' stays one function you can read."""
+
+
 
     def __init__(self) -> None:
         super().__init__()
@@ -784,7 +784,7 @@ class DetectWindow(QWidget):
 
         self._apply("initial")
 
-    # -- one place where state turns into pixels ---------------------------
+
 
     def _apply(self, why: str) -> None:
         det = self.det
@@ -820,7 +820,7 @@ class DetectWindow(QWidget):
         for widget in (self.scalo, self.density, self.count, self.heat):
             widget.update()
 
-    # -- handlers ------------------------------------------------------------
+
 
     def _on_band(self, which: str, lo, hi, committed: bool) -> None:
         if which == "freq":
@@ -863,7 +863,7 @@ class DetectWindow(QWidget):
         self._apply("reset")
 
 
-# ---- the color variant ---------------------------------------------------------
+
 
 
 @dataclass
@@ -873,9 +873,9 @@ class ColorSample:
 
 
 class ColorFrame(QWidget):
-    """The paused frame. Click = include this color; Shift/right = exclude."""
 
-    sampled = Signal(object)  # ColorSample
+
+    sampled = Signal(object)
 
     def __init__(self, frame: QImage) -> None:
         super().__init__()
@@ -947,7 +947,7 @@ class ColorFrame(QWidget):
 
 
 class ColorWindow(QWidget):
-    """Configure a 'detected color' gate by pointing at the paused frame."""
+
 
     def __init__(self) -> None:
         super().__init__()
@@ -1052,7 +1052,7 @@ class ColorWindow(QWidget):
             self.coverage.setText("no samples yet - click a color that should count")
             self.coverage.setStyleSheet(f"color: {DIM.name()};")
             return
-        pixels = self.view.small  # (h, w, 3) float32
+        pixels = self.view.small
         mask = np.zeros(pixels.shape[:2], bool)
         for rgb in includes:
             dist = np.linalg.norm(pixels - np.array(rgb, np.float32), axis=2)
@@ -1066,7 +1066,7 @@ class ColorWindow(QWidget):
         self.coverage.setStyleSheet(f"color: {ACCENT.name()};")
 
 
-# ---- shots -------------------------------------------------------------------
+
 
 
 def apply_shot(window: QWidget, shot: str) -> None:

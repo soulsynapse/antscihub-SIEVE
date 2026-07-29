@@ -1,21 +1,21 @@
-"""The selected replicate is the one being tuned.
 
-Three claims, each a distinct way the tab could quietly show the wrong arena.
-The render could keep taking row 0 whatever the user selected — the bug this
-item exists for, and one that passes by accident on any single-replicate
-project, which is why every test here holds two replicates with different
-ROIs. A selection change could race the graphs' window render by going out as
-frame requests instead of riding the runner's latest-wins window submission.
-And the accept gesture could select without navigating, leaving the vision's
-sentence — click a box, land on the filter tab with that arena under you —
-half true.
 
-Three more hold the other half of the same question: not *which* arena is on
-screen but *when* what is on screen goes stale. The arena can be rewritten
-under a standing selection — a crop edit, or the undo of one — and that has
-to invalidate the render exactly as selecting a different arena does, while an
-edit to a row nobody is tuning must not.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -41,20 +41,20 @@ pytestmark = pytest.mark.gui
 
 OPEN_TIMEOUT_MS = 15_000
 
-#: Two arenas that fit both fixture geometries — the `document` fixture's
-#: 1000x800 source and the 160x120 synthetic video — so neither test family
-#: has its ROI silently clamped into agreement with the other's.
+
+
+
 FIRST_BOX = ROI(x=5, y=5, width=60, height=50)
 SECOND_BOX = ROI(x=80, y=60, width=40, height=30)
 
 
 class _StubRunner(QObject):
-    """A runner that records what it was handed instead of rendering.
 
-    The tab only reads `revision` and calls the two request methods; what the
-    tests assert is which *replicate* rode each submission and which path —
-    window or single frame — the submission took.
-    """
+
+
+
+
+
 
     frame_cost = Signal(int, float)
     render_started = Signal(int)
@@ -110,31 +110,31 @@ def stub() -> _StubRunner:
 def tab(
     qtbot: QtBot, player: VideoPlayer, document: ReplicateDocument, stub: _StubRunner
 ) -> Iterator[FilterTab]:
-    instance = FilterTab(player, document, stub, metrics=MetricBus())  # type: ignore[arg-type]
+    instance = FilterTab(player, document, stub, metrics=MetricBus())
     qtbot.addWidget(instance)
     yield instance
-    # The tab owns the detector thread, so it carries the same
-    # shutdown obligation the player and the runner do. Without
-    # this every tab built here leaks a QThread and the suite
-    # wedges a few modules later.
+
+
+
+
     instance.shutdown()
 
 
 def test_the_render_carries_the_selected_replicate_not_row_zero(
     tab: FilterTab, stub: _StubRunner, document: ReplicateDocument
 ) -> None:
-    """Selecting row N renders N's crop — the current bug, pinned.
 
-    Two replicates with different ROIs, because on a single-replicate project
-    row 0 and the selection are the same replicate and the old hard-coded read
-    passes by accident.
-    """
+
+
+
+
+
     del tab
     document.add_roi(FIRST_BOX)
     document.add_roi(SECOND_BOX)
 
     document.select(0)
-    stub.opened.emit()  # the tab resubmits as the runner announces itself
+    stub.opened.emit()
     assert stub.window_replicates[-1] is not None
     assert stub.window_replicates[-1].roi == FIRST_BOX
 
@@ -146,20 +146,20 @@ def test_the_render_carries_the_selected_replicate_not_row_zero(
 def test_a_selection_change_rides_the_window_path_and_supersedes(
     tab: FilterTab, stub: _StubRunner, document: ReplicateDocument
 ) -> None:
-    """A replicate change invalidates exactly as a window move does.
 
-    It must go out as a *window* render through the runner's latest-wins slot
-    — never as a single-frame refresh, which would displace the graphs'
-    outstanding render from the one pending slot and leave the series stale
-    until the next edit (the discipline the step composite established).
-    """
+
+
+
+
+
+
     del tab
     document.add_roi(FIRST_BOX)
     document.add_roi(SECOND_BOX)
     stub.opened.emit()
     windows_before = len(stub.window_replicates)
 
-    document.select(0)  # while the first window render is still outstanding
+    document.select(0)
 
     assert stub.frame_replicates == [], "a selection change took the single-frame path"
     assert len(stub.window_replicates) == windows_before + 1
@@ -168,13 +168,13 @@ def test_a_selection_change_rides_the_window_path_and_supersedes(
 def test_undoing_a_crop_edit_resubmits_the_selected_arena(
     tab: FilterTab, stub: _StubRunner, document: ReplicateDocument
 ) -> None:
-    """Ctrl+Z on a crop must put the *pre-edit* geometry back on screen.
 
-    `SetReplicateROI`'s undo writes through `apply_replace`, which emits only
-    `replicate_changed` — no selection change, no tuning change. A tab that
-    does not listen for it renders the geometry the undo just discarded, and
-    the aspect on screen is the old crop's.
-    """
+
+
+
+
+
+
     del tab
     document.add_roi(FIRST_BOX)
     document.select(0)
@@ -193,12 +193,12 @@ def test_undoing_a_crop_edit_resubmits_the_selected_arena(
 def test_an_edit_to_an_unselected_arena_does_not_resubmit(
     tab: FilterTab, stub: _StubRunner, document: ReplicateDocument
 ) -> None:
-    """Only the selected arena is on screen, so only it can invalidate.
 
-    The cheap half of the same wiring: without the index test, every row's
-    geometry edit — and `set_all_to_size` writes every row — would throw a
-    full window render for an arena nobody is looking at.
-    """
+
+
+
+
+
     del tab
     document.add_roi(FIRST_BOX)
     document.add_roi(SECOND_BOX)
@@ -214,16 +214,16 @@ def test_an_edit_to_an_unselected_arena_does_not_resubmit(
 def test_selecting_the_already_selected_row_leaves_the_tab_consistent(
     tab: FilterTab, stub: _StubRunner, document: ReplicateDocument
 ) -> None:
-    """`select` stays a no-op on the current row, and that is now harmless.
 
-    The guard at `ReplicateDocument.select` is deliberate — selection is not a
-    command, and re-emitting would make it a refresh primitive every caller
-    inherits. It was only *load-bearing* while the tab had no other way to hear
-    about a geometry edit: the gesture that papered over the missing
-    subscription was clicking the row you were already on. With
-    `replicate_changed` wired, what the tab last rendered already matches the
-    document before the re-select, and the re-select still costs nothing.
-    """
+
+
+
+
+
+
+
+
+
     del tab
     document.add_roi(FIRST_BOX)
     document.select(0)
@@ -235,14 +235,14 @@ def test_selecting_the_already_selected_row_leaves_the_tab_consistent(
 
     assert len(stub.window_replicates) == windows_before, "a no-op select re-rendered"
     assert stub.window_replicates[-1] is not None
-    assert stub.window_replicates[-1].roi == document.selected_replicate.roi  # type: ignore[union-attr]
+    assert stub.window_replicates[-1].roi == document.selected_replicate.roi
 
 
 @pytest.fixture
 def window_with_replicates(
     qtbot: QtBot, tmp_path: Path, synthetic_video: Path
 ) -> Iterator[tuple[MainWindow, ReplicateDocument]]:
-    """A real window over the synthetic fixture, with two arenas cut."""
+
     preferences = Preferences(QSettings(str(tmp_path / "sieve.ini"), QSettings.Format.IniFormat))
     window = MainWindow(preferences)
     qtbot.addWidget(window)
@@ -259,9 +259,9 @@ def window_with_replicates(
 def test_clicking_a_box_on_the_video_accepts_and_navigates(
     window_with_replicates: tuple[MainWindow, ReplicateDocument],
 ) -> None:
-    """The vision's sentence, end to end: left click on a replicate accepts
-    it and moves the user over to the filter tab with that arena selected —
-    while a plain selection (a table-row click lands as `select`) stays put."""
+
+
+
     window, document = window_with_replicates
     tabs = window.findChild(QTabWidget)
     view = window.findChild(VideoView)

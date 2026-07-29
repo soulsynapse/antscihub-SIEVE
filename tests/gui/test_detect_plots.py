@@ -1,20 +1,20 @@
-"""The detection plots: the gesture boundary, unbounded drags, the 1 px floor.
 
-Each test pins one of item 5's load-bearing claims. The gesture boundary
-(8 px grabs, 9 px scrubs) is what makes one dragless gesture serve two
-meanings; unbounded-vs-clamped is the difference between a band that shapes a
-signal and a frequency band the transform would silently correct; the 1 px
-gate floor is what keeps a single-frame detection visible at any zoom; and
-solo living in the state model is what keeps the composite's grid overlay and
-the density plot from ever disagreeing about which block is soloed.
 
-The count axis's claims are here for the same reason: an axis that ran to the
-region's block count left the only tunable graph unreadable at a realistic
-block count, and the three rules that make autoscaling safe — the band is
-unioned in, a drag freezes the frame, the ceiling in force is written on the
-plot — are each a way the naive version loses something. The first two lose
-the handle; the third loses the reader's ability to tell two tunings apart.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ pytestmark = pytest.mark.gui
 
 
 def _capture(dest: list[tuple[float, float]]) -> Callable[[float, float], None]:
-    """A typed slot for band signals — a bare lambda leaves pyright blind."""
+
 
     def slot(lo: float, hi: float) -> None:
         dest.append((lo, hi))
@@ -133,8 +133,8 @@ class TestTheGestureBoundary:
         assert bands and not presses
 
 
-#: A peak nowhere near the region's block count — the realistic case, and the
-#: one a 0..B axis drew on the bottom pixel row.
+
+
 PEAK = 4.0
 
 
@@ -151,11 +151,11 @@ def _count(qtbot: QtBot, peak: float = PEAK) -> CountPlot:
 
 class TestTheCountAxis:
     def test_the_peak_reaches_the_top_of_the_plot_not_the_floor(self, qtbot: QtBot) -> None:
-        """4 blocks of 64 fills the plot, because the axis is the data.
 
-        On the old 0..B axis this sat 6% up from the bottom, which at a
-        realistic block count is the bottom pixel row.
-        """
+
+
+
+
         plot = _count(qtbot)
         r = plot.plot_rect()
 
@@ -164,25 +164,25 @@ class TestTheCountAxis:
         assert height_used > 0.9
 
     def test_a_threshold_above_the_data_keeps_its_value_reachable(self, qtbot: QtBot) -> None:
-        """The band is unioned into the range, so the handle is at 40, not clamped.
 
-        This is the scrub case: a threshold placed against a loud stretch, then
-        the window moves somewhere quiet. Without the union the handle pins to
-        the frame and reads as the axis top — a value the user never set, and
-        one they could only correct by scrubbing back.
-        """
+
+
+
+
+
+
         plot = _count(qtbot)
         plot.set_band(0.0, 40.0)
 
         assert plot.value_of(plot.handle_y("hi")) == pytest.approx(40.0, rel=1e-3)
 
     def test_a_held_handle_does_not_chase_its_own_rescale(self, qtbot: QtBot) -> None:
-        """Two moves to the same y emit the same count: the axis froze at press.
 
-        Unfrozen, the range widens to hold the handle and the handle is placed
-        through the range — so a stationary mouse walks the value down a
-        geometric series, one step per mouse-move event.
-        """
+
+
+
+
+
         plot = _count(qtbot)
         plot.set_band(0.0, 40.0)
         emitted: list[tuple[float, float]] = []
@@ -201,27 +201,27 @@ class TestTheCountAxis:
 
 
 class TestTheAxisSaysWhichCeiling:
-    """Rule 6: an autoscaled plot must not be readable as a full-scale one."""
+
 
     def test_the_autoscaled_ceiling_is_the_one_reported(self, qtbot: QtBot) -> None:
-        """The label names the data ceiling, not the region — and both numbers."""
+
         plot = _count(qtbot)
 
         assert plot.scale_label() == f"0-{round(PEAK * 1.06)} of {BLOCKS} blocks"
         assert "full" not in plot.scale_label()
 
     def test_a_peak_at_the_region_size_reads_as_full(self, qtbot: QtBot) -> None:
-        """Capped at B, the label says so — the regime the fixed axis always had."""
+
         plot = _count(qtbot, peak=float(BLOCKS))
 
         assert plot.scale_label() == f"0-{BLOCKS} of {BLOCKS} blocks · full"
 
     def test_the_label_follows_the_frozen_axis_through_a_drag(self, qtbot: QtBot) -> None:
-        """One `_range` feeds both the geometry and the reading of it.
 
-        A label re-derived independently would report a ceiling the handles are
-        not actually placed against for the length of every gesture.
-        """
+
+
+
+
         plot = _count(qtbot)
         plot.set_band(0.0, 40.0)
         during = f"0-{round(40.0 * 1.06)} of {BLOCKS} blocks"
@@ -269,13 +269,13 @@ def _grid_view(qtbot: QtBot) -> StepCompositeView:
 
 class TestSoloLivesInTheStateModel:
     def test_a_gesture_emits_and_does_not_apply_itself(self, qtbot: QtBot) -> None:
-        """The pane asks; only `set_block_state` moves the marker it draws.
 
-        Hover is now the gesture, so this is the same claim the click version
-        made and a livelier way to break it: a pane that painted its own hover
-        would disagree with the density plot for a frame on every crossing
-        rather than once per click.
-        """
+
+
+
+
+
+
         view = _grid_view(qtbot)
         emitted: list[object] = []
         view.solo_toggled.connect(emitted.append)
@@ -291,9 +291,9 @@ class TestSoloLivesInTheStateModel:
         assert pane.solo is None, "the pane applied its own gesture"
 
     def test_the_model_holding_a_block_is_never_asked_for_it_again(self, qtbot: QtBot) -> None:
-        """The dedupe is against what the model applied, not against a private
-        record of what was emitted — so hovering onto the block already soloed
-        asks for nothing, and every graph is spared a repaint."""
+
+
+
         view = _grid_view(qtbot)
         pane = view.pane
         g = pane.grid_rect()
@@ -306,6 +306,6 @@ class TestSoloLivesInTheStateModel:
 
         qt_input.move(pane, cell)
         assert emitted == []
-        # Leaving asks for none: nothing is pinned, so the model's block goes.
+
         qt_input.leave(pane)
         assert emitted == [None]

@@ -1,18 +1,18 @@
-"""The trace records the real session, not a plausible one.
 
-The unit tests build events by hand, so they cannot catch the two ways this
-instrument fails silently. Both are here.
 
-**The source column is right.** A request that the ring served and one that
-went to the decode thread have to be distinguishable, because the replay's
-whole question is which of them a different policy would have moved. Recording
-the same source for both, or recording twice for one request as it fell
-through a layer, would give a trace that replays to a confident wrong answer.
 
-**The kind column matches what `bench/` scores on.** `SCRUB_KIND` is a string
-spelled out one layer away from the `RequestKind` it mirrors, so nothing but a
-test that drives a real drag can notice the day they stop agreeing.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def test_a_scrub_a_ring_hit_and_a_decode_are_told_apart(
         (7, FROM_RING),
         (21, FROM_DECODE),
     ], "one event per request, and the layer that served it"
-    # The playhead is where the user *was*: the ring hit moved them to 7, so
-    # the drag to 21 is recorded as departing from there.
+
+
     assert scrubs[1].playhead == 7
     assert scrubs[1].frontier == 7

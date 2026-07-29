@@ -1,9 +1,9 @@
-"""`ScrubPolicy` decides when scrubbing stops being exact. Fed numbers, not a GUI.
 
-The point of the policy being Qt-free is that its whole contract can be
-exercised by handing it latencies, which is why these are unit tests and not
-pytest-qt ones.
-"""
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def policy() -> ScrubPolicy:
 
 
 def degrade(policy: ScrubPolicy, latency_ms: float = 300.0) -> list[bool]:
-    """Feed a full window of `latency_ms`, returning what each call reported."""
+
     return [policy.observe(latency_ms) for _ in range(SAMPLE_WINDOW)]
 
 
@@ -55,8 +55,8 @@ class TestDegradation:
         assert not policy.is_degraded
 
     def test_one_slow_seek_among_fast_ones_is_outvoted(self, policy: ScrubPolicy) -> None:
-        # The measured tail on the reference source: a single 226 ms outlier in
-        # an otherwise healthy window must not change what a drag means.
+
+
         for latency in (40.0, 45.0, 226.0, 38.0, 44.0):
             policy.observe(latency)
         assert not policy.is_degraded
@@ -77,8 +77,8 @@ class TestSnapping:
     def test_coarse_mode_snaps_to_the_nearest_grid_point(self, policy: ScrubPolicy) -> None:
         degrade(policy)
         assert policy.stride == 60
-        assert policy.snap(1210) == 1200  # nearer the grid point below
-        assert policy.snap(1234) == 1260  # nearer the one above
+        assert policy.snap(1210) == 1200
+        assert policy.snap(1234) == 1260
 
     def test_snapping_never_returns_a_negative_index(self, policy: ScrubPolicy) -> None:
         degrade(policy)
@@ -92,7 +92,7 @@ class TestSnapping:
     def test_stride_is_at_least_one_frame(self, policy: ScrubPolicy) -> None:
         policy.set_coarse_interval_seconds(0.0)
         degrade(policy)
-        # A zero-frame grid would make snapping undefined; it collapses to exact.
+
         assert policy.stride == 1
         assert policy.snap(777) == 777
 
@@ -118,7 +118,7 @@ class TestUserOverride:
         policy.set_allow_degrade(False)
         policy.set_allow_degrade(True)
         assert not policy.is_degraded
-        assert policy.observe(300.0) is False  # window was cleared
+        assert policy.observe(300.0) is False
 
 
 class TestReset:

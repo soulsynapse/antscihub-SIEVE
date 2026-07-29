@@ -1,40 +1,40 @@
-"""`sieve run` — execute a saved project through the one executor.
 
-The command SCAFFOLD calls canonical. Everything it does between reading the
-YAML and printing a count is a call into `sieve.pipeline`: `Dag.build` decides
-whether the graph is runnable, `ExecutionPlan.build` decides what the run
-covers, and `execute` is the loop. What is genuinely left here is three
-decisions the document does not make, because they are properties of an
-invocation rather than of a project — which span, which replicates, and which
-backend — and the printing.
 
-**One store across every replicate, deliberately.** Two replicates in one
-equivalence group whose ROIs coincide produce the same keys, so the second
-finds the first's entries and computes nothing; `equivalence_groups` is the
-document-level statement of the same fact. A store per replicate would make
-that saving unreachable while reporting exactly the same results, which is the
-kind of difference nobody notices until a cluster bill arrives. `--no-cache` is
-there for the opposite need — measuring what a cold run costs — and it is a
-`NullFrameStore` rather than a branch, so the loop it feeds is the same loop.
 
-**Declared sinks are refused rather than ignored.** No writer exists yet
-(`pipeline/results.py` in SCAFFOLD is unwritten), and a `run` that computed
-every frame, reported success, and wrote none of the outputs the project
-declares would be a silent wrong answer of exactly the kind `cache_key.py`'s
-asymmetry rule spends effort avoiding. It refuses with the sinks named.
 
-**Which file each replicate reads is resolved, not assumed.**
-`pipeline/resolve_source.py` decides per replicate whether a materialized crop
-can serve this span or the parent is read and the region cut at the root. It is
-one call and the same call the GUI makes; what is left here is opening the
-files it names, which is why the reader is no longer hoisted out of the loop.
 
-**`--dry-run` opens no video.** It stats the footage — a cache key is a fact
-about which file, and a plan that omitted it would be a plan for a different
-run — but nothing decodes, so it answers on a login node with the footage on a
-mount and no codec in the environment. The one thing it therefore cannot do is
-infer a span from the container, so a project with no `clip` needs `--frames`.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -88,14 +88,14 @@ def run_project(
     ] = False,
     workers: Annotated[int | None, WORKERS_OPTION] = None,
 ) -> None:
-    """Run a project's pipeline over its representative clip.
 
-    Raises:
-        typer.Exit: code 1 for anything refused deliberately — an invalid
-            document, a graph that does not resolve or does not chain, a node
-            this executor cannot call, a span the footage cannot supply, or a
-            project declaring outputs nothing can yet write.
-    """
+
+
+
+
+
+
+
     discover()
     project = load_project(project_path)
     _refuse_sinks(project)
@@ -112,10 +112,10 @@ def run_project(
 
     span = span_for(project, frames, video, dry_run=dry_run)
     targets = _targets(project, replicate_ids)
-    # The format the keys in `plans` are derived under — `dag.needs_chroma` is
-    # what `Dag.node_keys` asks, so asking it once here is one derivation read
-    # twice rather than two decisions that could differ. It also decides which
-    # artifacts may serve: a colour crop cannot feed a luma session.
+
+
+
+
     luma = not dag.needs_chroma
     sources = [
         resolve(
@@ -159,16 +159,16 @@ def _execute_all(
     workers: int | None,
     luma: bool,
 ) -> None:
-    """Run every plan against the file its replicate resolved to.
 
-    **One reader open at a time, not one per file.** A backed replicate reads
-    its artifact and an unbacked one reads the parent, so a project part-way
-    through materialization needs both — and a reader is a pool of `workers`
-    captures, which rule 5 makes a declared share rather than something to
-    allocate twelve of because it saved a reopen. Runs are sequential and batch:
-    reopening at each transition costs one pool build, and the alternative costs
-    every pool at once for the length of the run.
-    """
+
+
+
+
+
+
+
+
+
     reader: PrefetchFrameSource | None = None
     opened: Path | None = None
     try:
@@ -185,13 +185,13 @@ def _execute_all(
 
 
 def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) -> None:
-    """Run one replicate's plan and print what it did.
 
-    Counted rather than collected: the executor yields a `FrameResult` per
-    frame holding every node's output, and a list of them is the whole run
-    resident in memory for no reason a count does not serve. What the caller
-    wants written is in `store` already.
-    """
+
+
+
+
+
+
     label = "baseline" if plan.replicate is None else plan.replicate.name
     if not plan.warmed:
         typer.echo(
@@ -215,7 +215,7 @@ def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) ->
 
 
 def _refuse_sinks(project: Project) -> None:
-    """Refuse a project whose declared outputs nothing can write yet."""
+
     if project.outputs:
         listed = ", ".join(f"{sink.format} -> {sink.path}" for sink in project.outputs)
         raise refuse(
@@ -225,18 +225,18 @@ def _refuse_sinks(project: Project) -> None:
 
 
 def _targets(project: Project, replicate_ids: Sequence[str] | None) -> tuple[Replicate | None, ...]:
-    """The replicates to run, in document order, or `(None,)` for the baseline.
 
-    `None` is a target rather than an absence: a project with no fan-out still
-    runs its graph once, over the whole frame, and `ExecutionPlan` already
-    spells that case `replicate=None`. Returning an empty tuple for it would
-    make "nothing to do" and "one thing to do without a crop" the same value.
 
-    Selection preserves `project.replicates` order rather than the order the
-    flags were typed, because replicate order is meaningful — it is the order
-    outputs are written in — and an invocation is not the place that gets to
-    change it.
-    """
+
+
+
+
+
+
+
+
+
+
     if not replicate_ids:
         return tuple(project.replicates) or (None,)
     wanted = set(replicate_ids)
@@ -248,19 +248,19 @@ def _targets(project: Project, replicate_ids: Sequence[str] | None) -> tuple[Rep
 
 
 def _describe(plan: ExecutionPlan, resolved: ResolvedSource) -> str:
-    """What `--dry-run` prints: one plan, one block.
 
-    Every line is something the plan already knows, and the selection is what a
-    user checks before committing a cluster to it — how much gets decoded that
-    is not asked for, which nodes will be looked up rather than computed, and
-    where each one runs.
 
-    Which *file* each replicate reads is printed only when it is not the
-    project's source. A dry run is where a user finds out an artifact they cut
-    is not being used — the fallback is deliberately silent at run time (see
-    `pipeline/resolve_source.py`), and silent everywhere would make a stale
-    record indistinguishable from a live one until somebody timed the run.
-    """
+
+
+
+
+
+
+
+
+
+
+
     label = "baseline" if plan.replicate is None else plan.replicate.name
     lines = [
         f"{label}: frames {plan.span.start}:{plan.span.end}, "

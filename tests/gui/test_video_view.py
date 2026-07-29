@@ -1,11 +1,11 @@
-"""Widget-to-source coordinate handling and drag interpretation.
 
-The viewport letterboxes, so widget pixels are neither the same scale nor the
-same origin as source pixels. Every test here fixes a 800x600 widget over a
-1000x800 source, which pillarboxes to a 750x600 content rect inset 25 px from
-the left — deliberately not a round scale factor, because a 1:1 fixture would
-pass even if the mapping ignored the letterbox entirely.
-"""
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -30,18 +30,18 @@ pytestmark = pytest.mark.gui
 
 WIDGET_SIZE = (800, 600)
 SOURCE_SIZE = (1000, 800)
-#: Left inset and scale of the content rect for the fixture geometry above.
+
 INSET_X = 25.0
 SCALE = 0.75
 
-#: Rounding in `to_source` is to the nearest widget pixel, which at this scale
-#: is 1.33 source pixels — so a round trip is allowed to move by one.
+
+
 ROUND_TRIP_TOLERANCE = 1
 
 
 @pytest.fixture
 def view(qtbot: QtBot) -> VideoView:
-    """A sized viewport bound to a 1000x800 source."""
+
     widget = VideoView()
     qtbot.addWidget(widget)
     widget.resize(*WIDGET_SIZE)
@@ -50,7 +50,7 @@ def view(qtbot: QtBot) -> VideoView:
 
 
 def _widget_point(source_x: float, source_y: float) -> QPointF:
-    """Where a source pixel lands in widget coordinates, by hand."""
+
     return QPointF(INSET_X + source_x * SCALE, source_y * SCALE)
 
 
@@ -90,7 +90,7 @@ class TestToSource:
     def test_the_letterbox_margins_clamp_into_the_frame(
         self, view: VideoView, point: QPointF, expected: tuple[int, int]
     ) -> None:
-        """A drag that overshoots the frame edge yields the edge, not a negative."""
+
         assert view.to_source(point) == expected
 
     def test_without_a_source_everything_is_the_origin(self, view: VideoView) -> None:
@@ -159,7 +159,7 @@ class TestDrawing:
         assert selected == [NO_SELECTION]
 
     def test_a_drag_flat_in_one_axis_is_not_a_box(self, view: VideoView) -> None:
-        """A one-pixel-tall replicate is never what the user meant."""
+
         drawn: list[ROI] = []
         view.roi_drawn.connect(drawn.append)
         start = _widget_point(100, 80)
@@ -248,24 +248,24 @@ class TestSelection:
 
 
 class TestMagnifier:
-    """Scroll to magnify, with a floor at the natural fit."""
+
 
     def test_scrolling_out_never_zooms_past_the_fit(self, view: VideoView) -> None:
-        """The vision's rule, and the one a naive `scale *= 0.9` breaks.
 
-        The literal `1.0` is deliberate, and asserting against `MIN_ZOOM`
-        instead was a bug in an earlier draft of this test: the constant is the
-        *definition* of the floor, so a test that reads it cannot observe the
-        floor moving — lowering `MIN_ZOOM` to 0.1 moved the code and the
-        assertion together and the test went on passing. 1.0 is the fit scale by
-        construction, whatever the widget size, so it is a fact about the
-        widget rather than a restatement of the source.
 
-        The rect is checked for exact equality with `content_rect`, not
-        approximate: a floor implemented by clamping a running product lands a
-        float epsilon under the fit and leaves a hairline of letterbox inside
-        the frame, which is a visible symptom nobody traces back to arithmetic.
-        """
+
+
+
+
+
+
+
+
+
+
+
+
+
         centre = QPointF(400.0, 300.0)
         wheel(view, centre, 3)
         for _ in range(40):
@@ -275,12 +275,12 @@ class TestMagnifier:
         assert view.view_rect() == view.content_rect()
 
     def test_the_rect_covers_the_fit_at_every_step_of_a_scroll_out(self, view: VideoView) -> None:
-        """The floor holds *during* the storm, not merely at the end of it.
 
-        A clamp applied only when the wheel stops would let an intermediate
-        frame paint smaller than the fit — one flickering frame of letterbox
-        inside the picture per detent.
-        """
+
+
+
+
+
         centre = QPointF(400.0, 300.0)
         wheel(view, centre, 6)
 
@@ -296,12 +296,12 @@ class TestMagnifier:
         assert view.zoom == MAX_ZOOM
 
     def test_the_point_under_the_cursor_stays_under_the_cursor(self, view: VideoView) -> None:
-        """Anchoring, which is what makes the magnifier usable for placement.
 
-        The anchor is deliberately off-centre and away from every edge, so a
-        pass would mean the pan actually tracked rather than that the clamp
-        happened to hold the rect still.
-        """
+
+
+
+
+
         anchor = _widget_point(250, 200)
         before = view.source_at(anchor)
 
@@ -321,13 +321,13 @@ class TestMagnifier:
         ],
     )
     def test_a_round_trip_survives_magnification_and_pan(self, view: VideoView, roi: ROI) -> None:
-        """`TestRoundTrip`'s invariant under a scale and an offset at once.
 
-        The mapping had one free parameter — the fit — when the existing round
-        trip was written, and now it has three. A pan without a zoom cannot
-        occur, so the two are tested together; separately, a `to_widget` that
-        applied the zoom but not the pan would still pass.
-        """
+
+
+
+
+
+
         wheel(view, _widget_point(250, 200), 5)
 
         rect = view.to_widget(roi)
@@ -342,14 +342,14 @@ class TestMagnifier:
             assert abs(got - expected) <= ROUND_TRIP_TOLERANCE
 
     def test_a_new_source_returns_to_the_fit(self, view: VideoView) -> None:
-        """Zoom is a view of *this* video and does not carry to the next one."""
+
         wheel(view, QPointF(400.0, 300.0), 4)
         view.set_source_size((640, 480))
         assert view.zoom == MIN_ZOOM
 
 
 class TestStamp:
-    """Place a remembered size, exactly."""
+
 
     STAMP = (137, 91)
 
@@ -366,15 +366,15 @@ class TestStamp:
     def test_a_stamp_places_the_drawn_size_exactly(
         self, stamping: VideoView, centre: tuple[int, int]
     ) -> None:
-        """The invariant the whole stamp exists for.
 
-        A rack is a dozen arenas of identical size. If placement rounded
-        through widget coordinates — where one source pixel is 0.75 of a screen
-        pixel at this fixture's scale — the twelve would differ by a pixel here
-        and there, `equivalence_groups` would report them as one group, and the
-        pixels would disagree. So the assertion is on the extent alone, at four
-        placements chosen to round differently from each other.
-        """
+
+
+
+
+
+
+
+
         drawn: list[ROI] = []
         stamping.roi_drawn.connect(drawn.append)
 
@@ -384,7 +384,7 @@ class TestStamp:
         assert (drawn[0].width, drawn[0].height) == self.STAMP
 
     def test_a_stamp_at_the_edge_slides_rather_than_shrinks(self, stamping: VideoView) -> None:
-        """Against a corner there is nowhere to centre, and the size still wins."""
+
         drawn: list[ROI] = []
         stamping.roi_drawn.connect(drawn.append)
 
@@ -393,7 +393,7 @@ class TestStamp:
         assert drawn == [ROI(x=0, y=0, width=self.STAMP[0], height=self.STAMP[1])]
 
     def test_a_drag_still_draws_and_redefines_the_stamp(self, stamping: VideoView) -> None:
-        """Stamp mode does not disable drawing — drawing is how a size is set."""
+
         drawn: list[ROI] = []
         sizes: list[tuple[int, int]] = []
 
@@ -410,7 +410,7 @@ class TestStamp:
         assert stamping.stamp_size == (400, 320)
 
     def test_without_a_size_a_stamp_click_is_only_a_selection(self, view: VideoView) -> None:
-        """Nothing has been drawn yet, so there is no size to place."""
+
         view.set_mode(CropMode.STAMP)
         drawn: list[ROI] = []
         selected: list[int] = []
@@ -423,7 +423,7 @@ class TestStamp:
         assert selected == [NO_SELECTION]
 
     def test_a_stamp_click_on_a_box_selects_it_instead(self, stamping: VideoView) -> None:
-        """Placing needs empty space; a box under the cursor is still a target."""
+
         stamping.set_replicates(
             [Replicate(roi=ROI(x=400, y=300, width=200, height=200), name="one")]
         )
@@ -439,7 +439,7 @@ class TestStamp:
 
 
 class TestAdjustment:
-    """Moving and resizing the selected box."""
+
 
     BOX = ROI(x=100, y=100, width=200, height=200)
 
@@ -474,7 +474,7 @@ class TestAdjustment:
     def test_a_move_against_the_frame_edge_slides_and_keeps_its_size(
         self, selected: VideoView
     ) -> None:
-        """The counterpart to the stamp's rule, arriving through the other gesture."""
+
         recorded = self._adjustments(selected)
 
         drag(selected, _widget_point(200, 200), _widget_point(20, 20))
@@ -482,13 +482,13 @@ class TestAdjustment:
         assert recorded[-1][1] == ROI(x=0, y=0, width=200, height=200)
 
     def test_a_move_along_one_axis_is_still_a_move(self, selected: VideoView) -> None:
-        """The drawing rule wants extent in both axes; adjusting must not.
 
-        Sliding a box horizontally along a rack is the commonest adjustment
-        there is, and under the both-axes rule it releases as a *click* — which
-        the tab reads as accepting the replicate and navigating away from the
-        tab the user is still working in.
-        """
+
+
+
+
+
+
         recorded = self._adjustments(selected)
         chosen: list[int] = []
         selected.selection_requested.connect(chosen.append)
@@ -514,7 +514,7 @@ class TestAdjustment:
         assert recorded[-1][1] == ROI(x=100, y=100, width=300, height=200)
 
     def test_every_step_of_one_drag_shares_a_token(self, selected: VideoView) -> None:
-        """What lets the undo stack collapse a drag; the tab relies on it."""
+
         recorded = self._adjustments(selected)
 
         press(selected, _widget_point(200, 200))
@@ -536,14 +536,14 @@ class TestAdjustment:
         assert recorded[0][2] != recorded[-1][2]
 
     def test_a_handle_outside_its_box_beats_the_box_behind_it(self, view: VideoView) -> None:
-        """The ordering rule, stated as the bug it prevents.
 
-        The small box is on top and selected; its top-left handle straddles its
-        own corner, so the outer half of that handle lies inside the *large*
-        box behind. Containment-first hands that half to the large box, and the
-        corner of the selected box becomes unreachable — the press starts a new
-        drawn region instead of a resize.
-        """
+
+
+
+
+
+
+
         view.set_replicates(
             [
                 Replicate(roi=ROI(x=0, y=0, width=600, height=600), name="under"),
@@ -564,7 +564,7 @@ class TestAdjustment:
         assert recorded[-1][1].x == 50
 
     def test_a_click_on_the_selected_box_still_accepts_it(self, selected: VideoView) -> None:
-        """Adjust and accept share a press; only travel tells them apart."""
+
         recorded = self._adjustments(selected)
         chosen: list[int] = []
         selected.selection_requested.connect(chosen.append)
@@ -575,7 +575,7 @@ class TestAdjustment:
         assert recorded == []
 
     def test_escape_puts_an_adjusted_box_back(self, selected: VideoView) -> None:
-        """And under the gesture's own token, so the whole drag collapses away."""
+
         recorded = self._adjustments(selected)
 
         press(selected, _widget_point(200, 200))
@@ -588,7 +588,7 @@ class TestAdjustment:
         assert recorded[-1][2] == recorded[0][2]
 
     def test_an_unselected_box_has_no_handles(self, view: VideoView) -> None:
-        """A dozen arenas do not wear ninety-six grab targets between them."""
+
         view.set_replicates([Replicate(roi=self.BOX, name="one")])
         recorded = self._adjustments(view)
         drawn: list[ROI] = []

@@ -1,33 +1,33 @@
-"""What the wizard can offer at a seam, and what each offer would do to the chain.
 
-Qt-free like `gui/chain_model.py`, and one layer over it: the chain model
-grades chains, this module builds the *hypothetical* chains a seam click puts
-on the table and grades those. The wizard widget is a presentation over the
-`Candidate` tuple this returns; nothing here paints and nothing here renders.
 
-**The catalog is a chain-model concept, not registry metadata.** The registry
-knows every filter's spec, but a spec cannot say what travels between steps —
-`ArraySpec` cannot tell an image from a block grid, and it
-knows nothing of the two tab-side steps at all. So each catalog entry carries
-its own kinds and stage, exactly as `parity_chain`'s steps do, and the two
-suffix steps sit in the same list as the five node-backed operations because
-a chain that lost one needs a way to get it back.
 
-**The wizard cannot break the chain.** An entry whose input
-kind does not match the seam is not listed at all; an entry that fits but
-would conflict downstream is listed disabled with "breaks below"; an entry
-already in the chain is listed disabled with "in chain" — learning 8's
-default, blocking duplicates until a real chain needs repetition. Enabled
-means exactly one thing: the hypothetical chain grades conflict-free.
 
-**Guidance is user-facing UI content** (learning 7). The wizard pane is built
-from the filter's own markdown — `summary` becomes the row blurb, "When to
-use it" and "What it does not do" become the pane — so the `.md` beside each
-filter module is read here, through the same `guidance_path` the CLI's
-`sieve inspect` uses. The tab-side steps have no `.md`; their guidance is
-inline, because their parameters are the detector the wizard's center column
-already shows live.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -46,8 +46,8 @@ from sieve.gui.chain_model import (
     grade,
 )
 
-#: Disable reasons, verbatim from the mockup's success criteria. A candidate
-#: with an empty reason is enabled.
+
+
 IN_CHAIN = "in chain"
 BREAKS_BELOW = "breaks below"
 CONFLICT_ABOVE = "conflict above — repair it first"
@@ -55,14 +55,14 @@ CONFLICT_ABOVE = "conflict above — repair it first"
 
 @dataclass(frozen=True, slots=True)
 class CatalogEntry:
-    """One operation the wizard can offer.
 
-    `entry_id` doubles as the step id a commit mints — safe because
-    duplicates are blocked, so no chain holds two steps from one entry.
-    `filter_id` is None for the tab-side suffix steps; `hidden_params` names
-    node params the settings pane must not offer because they mirror chain
-    state rather than user intent (`block_signal`'s scale and fps).
-    """
+
+
+
+
+
+
+
 
     entry_id: str
     title: str
@@ -72,15 +72,15 @@ class CatalogEntry:
     blurb: str
     filter_id: str | None = None
     hidden_params: frozenset[str] = frozenset()
-    #: Learning 8's per-filter judgment. Everything defaults to blocking a
-    #: second copy; a legitimately repeatable operation flips this when one
-    #: exists.
+
+
+
     repeatable: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
-    """One catalog entry judged against one seam: offered, or refused with why."""
+
 
     entry: CatalogEntry
     enabled: bool
@@ -89,7 +89,7 @@ class Candidate:
 
 @dataclass(frozen=True, slots=True)
 class Guidance:
-    """The sections the wizard pane renders, already split out of the markdown."""
+
 
     summary: str
     when_to_use: str
@@ -97,8 +97,8 @@ class Guidance:
     cost: str
 
 
-#: Inline guidance for the steps that have no filter module to keep an `.md`
-#: beside. Written for the same reader: someone deciding in the wizard.
+
+
 _TAB_SIDE_GUIDANCE: dict[str, Guidance] = {
     "morlet_band": Guidance(
         summary="Morlet wavelet band power over every block's signal.",
@@ -131,14 +131,14 @@ _TAB_SIDE_GUIDANCE: dict[str, Guidance] = {
 
 
 def catalog() -> tuple[CatalogEntry, ...]:
-    """Every operation the wizard can offer, in stage order.
 
-    Node-backed entries take their blurb from the registered spec's summary —
-    the same one line `sieve inspect` prints — so the row and the CLI never
-    tell different stories. Calls `discover()` first for the reason
-    `PreviewRunner` does: a caller should not have to know the shelf needed
-    populating.
-    """
+
+
+
+
+
+
+
     discover()
     return (
         CatalogEntry(
@@ -213,16 +213,16 @@ def _summary(filter_id: str) -> str:
         return filter_id
 
 
-# ---- judging entries against a seam -----------------------------------------
+
 
 
 def incoming_kind(steps: tuple[ChainStep, ...], position: int) -> ChainKind | None:
-    """What flows into `position`, or None when a conflict above makes it unknowable.
 
-    The same walk `grade` does, stopped early: past the first mismatch the
-    true kind is whatever the repair produces, and judging candidates against
-    a guess would offer repairs that break the moment the real one lands.
-    """
+
+
+
+
+
     current = ChainKind.IMAGE
     for step in steps[:position]:
         if step.kind_in is not current:
@@ -232,13 +232,13 @@ def incoming_kind(steps: tuple[ChainStep, ...], position: int) -> ChainKind | No
 
 
 def candidates_for_insert(chain: LiveChain, seam: int) -> tuple[Candidate, ...]:
-    """Every offer for inserting at `seam`, suggested stage first.
 
-    Listed: entries whose input kind matches what the seam carries. Enabled:
-    those whose insertion leaves the whole chain conflict-free. When the seam
-    sits below a conflict its kind is unknowable, so everything is listed and
-    everything is disabled with the pointer at the real problem.
-    """
+
+
+
+
+
+
     kind = incoming_kind(chain.steps, seam)
     suggested = _seam_stage(chain.steps, seam)
     offers: list[Candidate] = []
@@ -253,13 +253,13 @@ def candidates_for_insert(chain: LiveChain, seam: int) -> tuple[Candidate, ...]:
 
 
 def candidates_for_swap(chain: LiveChain, step_id: str) -> tuple[Candidate, ...]:
-    """Every offer for replacing `step_id`, its own stage first.
 
-    The replaced step is exempt from the duplicate rule — offering the
-    current operation back is what makes the wizard double as its settings
-    surface — and the incoming kind is read at the step's own position, which
-    is known even when the step itself is the conflict.
-    """
+
+
+
+
+
+
     position = _position(chain.steps, step_id)
     current = chain.steps[position]
     kind = incoming_kind(chain.steps, position)
@@ -282,7 +282,7 @@ def _judge(
     hypothetical: tuple[ChainStep, ...],
     exempt: str | None = None,
 ) -> Candidate:
-    """One entry's verdict: the duplicate rule, then the hypothetical grade."""
+
     if not entry.repeatable:
         for step in chain.steps:
             if step.step_id == entry.entry_id and step.step_id != exempt:
@@ -293,7 +293,7 @@ def _judge(
 
 
 def _stage_ordered(suggested: Stage) -> tuple[CatalogEntry, ...]:
-    """The catalog grouped by stage with `suggested`'s group first."""
+
     entries = catalog()
     lead = tuple(e for e in entries if e.stage is suggested)
     rest = tuple(e for e in entries if e.stage is not suggested)
@@ -301,7 +301,7 @@ def _stage_ordered(suggested: Stage) -> tuple[CatalogEntry, ...]:
 
 
 def _seam_stage(steps: tuple[ChainStep, ...], seam: int) -> Stage:
-    """The stage a seam suggests: the step after it, else before, else the top."""
+
     if seam < len(steps):
         return steps[seam].stage
     if steps:
@@ -316,7 +316,7 @@ def _position(steps: tuple[ChainStep, ...], step_id: str) -> int:
     raise KeyError(step_id)
 
 
-# ---- building the provisional chain ------------------------------------------
+
 
 
 def build_step(
@@ -324,13 +324,13 @@ def build_step(
     chain: LiveChain,
     params: dict[str, object] | None = None,
 ) -> ChainStep:
-    """One fresh step from `entry`, its node minted with defaults plus `params`.
 
-    Defaults come from the registered params model — the one place a filter's
-    defaults are defined — and the chain injects what mirrors its own state:
-    `block_signal` reads the chain's fps and the rescale step's scale, exactly
-    as `parity_chain` wires them.
-    """
+
+
+
+
+
+
     node = None
     if entry.filter_id is not None:
         spec = REGISTRY.latest(entry.filter_id)
@@ -363,7 +363,7 @@ def insert_step(
     entry: CatalogEntry,
     params: dict[str, object] | None = None,
 ) -> tuple[LiveChain, str]:
-    """The chain with `entry` inserted at `seam`, and the minted step id."""
+
     step = build_step(entry, chain, params)
     steps = (*chain.steps[:seam], step, *chain.steps[seam:])
     return replace(chain, steps=steps), step.step_id
@@ -375,12 +375,12 @@ def swap_step(
     entry: CatalogEntry,
     params: dict[str, object] | None = None,
 ) -> tuple[LiveChain, str]:
-    """The chain with `step_id` replaced by `entry`, and the minted step id.
 
-    Swapping a step for its own entry keeps the outgoing node's params (the
-    settings surface case: the user came to reconfigure, not to reset), while
-    an explicit `params` still wins — that is the wizard's own edits landing.
-    """
+
+
+
+
+
     position = _position(chain.steps, step_id)
     outgoing = chain.steps[position]
     carried: dict[str, object] = {}
@@ -397,24 +397,24 @@ def swap_step(
 
 
 def chain_from_pipeline(pipeline: Pipeline, fps: float) -> LiveChain:
-    """The `LiveChain` a saved graph renders as: its nodes, plus the tab-side suffix.
 
-    `runnable_prefix`'s inverse, for the load path — a project carries the
-    node-backed prefix and the tab has to grow its stack back around it. Node
-    *identity* is kept, not reminted: the loaded ids are what replicate
-    overrides pin against and what cache entries are keyed on, and a chain
-    that reminted them would orphan both.
 
-    The suffix is appended from the catalog because the artifact cannot carry
-    it — the temporal filter and detection steps are not nodes — and a chain
-    without them would open with its graphs unreachable.
 
-    Raises:
-        ValueError: if the graph is not the linear chain the tab can host, or
-            names a filter the catalog has no entry for. Refused rather than
-            approximated: a stack silently missing a loaded step would look
-            better-founded than it is.
-    """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     by_filter = {e.filter_id: e for e in catalog() if e.filter_id is not None}
     steps: list[ChainStep] = []
     for node in _linear_order(pipeline):
@@ -442,23 +442,23 @@ def chain_from_pipeline(pipeline: Pipeline, fps: float) -> LiveChain:
                     kind_out=entry.kind_out,
                 )
             )
-    # The default detector, not a resolved one: the caller holds the document
-    # and resolves the selected replicate's values in immediately after —
-    # this function knows graphs, not selections.
+
+
+
     return LiveChain(steps=tuple(steps), detector=DetectorState.default(fps), fps=fps)
 
 
 def _linear_order(pipeline: Pipeline) -> tuple[Node, ...]:
-    """The pipeline's nodes root to sink, refusing anything but one path.
 
-    Deliberately not `dag.py`'s topological order: that one exists for
-    execution and tolerates every DAG, while the stack can only host a chain
-    — one root, one edge out of each node. Accepting a genuine DAG here and
-    flattening it would draw a stack whose seams lie about what feeds what.
 
-    Raises:
-        ValueError: if the graph branches, merges, or is disconnected.
-    """
+
+
+
+
+
+
+
+
     if not pipeline.nodes:
         return ()
     downstream_of = {edge.upstream: edge.downstream for edge in pipeline.edges}
@@ -476,16 +476,16 @@ def _linear_order(pipeline: Pipeline) -> tuple[Node, ...]:
     return tuple(ordered)
 
 
-# ---- guidance -----------------------------------------------------------------
+
 
 
 def parse_guidance(text: str) -> dict[str, str]:
-    """`## ` sections of a guidance file, header → body, reading order.
 
-    The intro before the first `##` lands under `""`. Deliberately dumb — the
-    guidance files are house-written markdown, and a parser that understood
-    more of it would invite prose that renders here and nowhere else.
-    """
+
+
+
+
+
     sections: dict[str, str] = {}
     header = ""
     lines: list[str] = []
@@ -501,13 +501,13 @@ def parse_guidance(text: str) -> dict[str, str]:
 
 
 def guidance_for(entry: CatalogEntry) -> Guidance:
-    """The pane's sections for `entry`: its `.md` split up, or the inline text.
 
-    A node-backed filter whose guidance file is missing degrades to its
-    summary — the same posture as `sieve inspect`, which prints the absence
-    rather than failing, because an out-of-tree filter is allowed to exist
-    before its documentation does.
-    """
+
+
+
+
+
+
     if entry.filter_id is None:
         return _TAB_SIDE_GUIDANCE[entry.entry_id]
     spec = REGISTRY.latest(entry.filter_id)

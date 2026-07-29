@@ -1,19 +1,19 @@
-"""Dragging D is a drag, not sixty committed edits.
 
-D was the one control in the tab that wrote to the document on every step and
-leaned on `EditDetector.mergeWith` to fold the history back up afterwards.
-Merging fixes the undo stack; it does not make the work go away — each step
-still pushed a command, re-pinned the diff on the replicate, re-resolved the
-detector through the pin chain, re-synced the knobs, and rebuilt every card
-caption before reaching the derive the user is actually dragging for. That is
-why D was dead in the filter tab and merely slow in the wizard, whose
-`_cheap_retune` skips every line of it.
 
-Three claims, each failing for a distinct reason: a drag that still reaches the
-document (the round trip is back), a drag whose value never reaches the graphs
-(the drag tier is inert), and a keystroke that never commits (the split ate the
-non-drag path, which has no release coming to commit it).
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def tab(
 
 
 def _slider(tab: FilterTab) -> QSlider:
-    return tab._d_slider  # pyright: ignore[reportPrivateUsage]
+    return tab._d_slider
 
 
 def _arena(document: ReplicateDocument) -> None:
@@ -75,12 +75,12 @@ def _arena(document: ReplicateDocument) -> None:
 def test_a_d_drag_reaches_the_document_once_on_release(
     tab: FilterTab, document: ReplicateDocument
 ) -> None:
-    """Not once per detent, and not zero times.
 
-    The mid-drag count is the load-bearing half: `mergeWith` would make the
-    *final* stack look identical either way, so a test that only counted
-    entries after the release would pass against the behaviour this fixes.
-    """
+
+
+
+
+
     _arena(document)
     slider = _slider(tab)
     start = document.undo_stack.count()
@@ -91,8 +91,8 @@ def test_a_d_drag_reaches_the_document_once_on_release(
     assert document.undo_stack.count() == start, (
         "a mid-drag step reached the document — the per-detent round trip is back"
     )
-    # ...and the graphs are following it anyway, which is the point of a drag
-    # tier that skips the document rather than skipping the work.
+
+
     assert tab.chain.detector.window_frames == 35
 
     slider.sliderReleased.emit()
@@ -103,7 +103,7 @@ def test_a_d_drag_reaches_the_document_once_on_release(
 def test_a_step_outside_a_gesture_still_commits(
     tab: FilterTab, document: ReplicateDocument
 ) -> None:
-    """Keyboard, wheel, and `setValue` have no release coming to commit them."""
+
     _arena(document)
     start = document.undo_stack.count()
 
@@ -116,15 +116,15 @@ def test_a_step_outside_a_gesture_still_commits(
 def test_the_heat_ceiling_is_not_recomputed_while_the_band_power_stands_still(
     tab: FilterTab, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The cheap tier hands back the same `band_power`; the percentile over it
-    must not be paid again.
 
-    It is a percentile across the largest array the tab holds — ~29 ms at
-    (600, 8040) against ~0.01 ms for the prefix-sum a D step actually changes —
-    so paying it per detent is what made both paths lag regardless of the
-    document round trip. Counted rather than timed: a timing assertion here
-    would be a flake, and the claim is that the call does not happen at all.
-    """
+
+
+
+
+
+
+
+
     calls = 0
     real = np.percentile
 
@@ -136,13 +136,13 @@ def test_the_heat_ceiling_is_not_recomputed_while_the_band_power_stands_still(
     monkeypatch.setattr(np, "percentile", counting)
 
     power = np.random.default_rng(0).random((32, 48)).astype(np.float32)
-    first = tab._heat_scale(power)  # pyright: ignore[reportPrivateUsage]
-    again = tab._heat_scale(power)  # pyright: ignore[reportPrivateUsage]
+    first = tab._heat_scale(power)
+    again = tab._heat_scale(power)
     assert calls == 1
     assert first == again
 
-    # A real move still recounts: a frequency commit or a new render builds a
-    # fresh array, and that is exactly when the ceiling is owed one.
+
+
     moved = power * 2.0
-    assert tab._heat_scale(moved) != first  # pyright: ignore[reportPrivateUsage]
+    assert tab._heat_scale(moved) != first
     assert calls == 2

@@ -1,28 +1,28 @@
-"""The source boundary: what the card says, and what a crop at rest does not hold.
 
-Four claims, each failing for its own reason.
 
-**Stale is not absent, on screen and not only in the model.** The reading was
-pinned when `gui/crop_binding.py` landed; what is new here is that the card
-renders the two differently — a user who cannot tell an orphaned artifact from
-one that was never cut re-cuts a file they already have, which is a minute of
-encoding rule 6 exists to prevent.
 
-**Nothing is held still.** An artifact used to freeze the box it was cut at and
-the window it was cut over, and the freeze was removed: an acceleration that
-refuses the tuning it exists to accelerate has inverted its own purpose. Every
-edit those gates refused now goes through, and what the user gets back is a
-`STALE` card rather than a refusal — which is the report, not the gate.
 
-**The cut covers the whole source, not the working window.** Moving the window
-is the most ordinary gesture on the timeline, and a window-shaped cut would put
-a re-encode behind it. This is what makes removing the clip freeze safe rather
-than merely permissive.
 
-**Discard lets go of the file before it deletes it.** The render thread holds a
-pool of captures over an artifact it is serving, and on Windows an open handle
-is an unlink that fails — which is the whole of "discard does nothing".
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -59,21 +59,21 @@ from tests.gui.test_preview_runner import (
 pytestmark = pytest.mark.gui
 
 BOX = ROI(x=10, y=20, width=100, height=80)
-#: A nudge, not a relocation. Attribution of an orphaned record is geometric
-#: (`crop_binding`), so a box that still overlaps its old cut is the case where
-#: the card has something to say — a box moved clear across the frame is
-#: correctly attributed to nobody, which is a claim that module already pins.
+
+
+
+
 NUDGED = ROI(x=30, y=20, width=100, height=80)
 ELSEWHERE = ROI(x=400, y=300, width=100, height=80)
 IDENTITY = "sha256:the-parent-as-it-was-when-the-cut-was-made"
 SPAN = ClipRange(start=100, end=400)
 
-#: A window well inside the 40-frame fixture, for the runner tests below.
+
 WINDOW = ClipRange(start=0, end=6)
 
 
 def _record(path: Path, *, roi: ROI = BOX, span: ClipRange = SPAN) -> CropArtifact:
-    """A record of a cut whose file is really there."""
+
     path.write_bytes(b"not a video, but a file that exists")
     return CropArtifact(
         path=path.name,
@@ -87,13 +87,13 @@ def _record(path: Path, *, roi: ROI = BOX, span: ClipRange = SPAN) -> CropArtifa
 
 @pytest.fixture
 def backed(document: ReplicateDocument, tmp_path: Path) -> CropArtifact:
-    """One replicate at `BOX`, backed by a matching record over `SPAN`."""
+
     document.add_roi(BOX)
     document.set_source_home(
         SourceHome(video=tmp_path / "parent.mp4", project_dir=tmp_path, identity=IDENTITY)
     )
-    # The clip has to sit inside the cut, or the record is stale for the window
-    # rather than at rest — which is a different test, one class down.
+
+
     document.place_window(SPAN.start, SPAN.end)
     artifact = _record(tmp_path / "arena-luma-100-400.mkv")
     document.register_crop(artifact)
@@ -121,12 +121,12 @@ class TestTheFourStates:
     def test_a_moved_box_reads_stale_and_not_absent(
         self, document: ReplicateDocument, backed: CropArtifact
     ) -> None:
-        """The collapse rule 6 forbids, asserted from the state *and* the reason.
 
-        A box that has moved out from under its record leaves a file on disk
-        that nothing serves. Reporting that as `ABSENT` would offer the user a
-        fresh cut of footage they have already cut.
-        """
+
+
+
+
+
         del backed
         document.set_roi(0, NUDGED)
 
@@ -147,7 +147,7 @@ class TestTheFourStates:
         assert f"[{SPAN.start}:{SPAN.end})" in backing.reason
 
     def test_the_card_renders_absent_and_stale_differently(self, qapp: object) -> None:
-        """Assert on state and affordances, never on pixels."""
+
         del qapp
         card = SourceCard()
         materialize, cancel, discard = card.buttons()
@@ -170,14 +170,14 @@ class TestTheFourStates:
 
 
 class TestNothingIsHeldStill:
-    """The removed freeze, asserted edit by edit rather than from one flag.
 
-    Geometry moves three ways — a drag, a typed number, set-all — and the gate
-    that used to refuse them sat at the last of the three. So each is driven
-    here on its own, and each ends with the edit having *happened*: a test that
-    only asked the document whether it was frozen would pass against a document
-    that still refused the drag.
-    """
+
+
+
+
+
+
+
 
     def test_a_backed_box_moves_and_nothing_is_refused(
         self, document: ReplicateDocument, backed: CropArtifact
@@ -190,15 +190,15 @@ class TestNothingIsHeldStill:
 
         assert document.at(0).roi == ELSEWHERE
         assert refusals == []
-        # The record is still on the books and still on disk. What the move
-        # changed is only whether it backs anything — which is what the card
-        # reads, and `test_a_moved_box_reads_stale_and_not_absent` pins.
+
+
+
         assert document.crops != ()
 
     def test_set_all_squares_up_the_backed_row_too(
         self, document: ReplicateDocument, backed: CropArtifact
     ) -> None:
-        """One artifact must not be a hole in a rack."""
+
         del backed
         document.add_roi(ELSEWHERE)
 
@@ -210,12 +210,12 @@ class TestNothingIsHeldStill:
     def test_the_viewport_drags_a_backed_box(
         self, qapp: object, document: ReplicateDocument, backed: CropArtifact
     ) -> None:
-        """Driven as the gesture, because the handles were removed on the widget.
 
-        A press inside the selection and a press on its corner both have to
-        emit an adjustment. Reading a flag off the document would not notice a
-        viewport that still refused to grow handles.
-        """
+
+
+
+
+
         del qapp, backed
         view = VideoView()
         view.resize(400, 320)
@@ -240,7 +240,7 @@ class TestNothingIsHeldStill:
     def test_the_window_moves_outside_the_span_the_cut_covers(
         self, document: ReplicateDocument, backed: CropArtifact
     ) -> None:
-        """The gesture this whole change is about, and it is not refused."""
+
         del backed
         refusals: list[str] = []
         document.edit_refused.connect(refusals.append)
@@ -254,13 +254,13 @@ class TestNothingIsHeldStill:
 def test_materialize_cuts_the_whole_source_not_the_window(
     tab: tuple[FilterTab, PreviewRunner], document: ReplicateDocument, tmp_path: Path
 ) -> None:
-    """The span on the request, taken off the request rather than off the file.
 
-    Intercepted at the runner rather than run: what is under test is which span
-    the tab asks for, and letting the encoder answer would pin the same claim
-    behind a minute of decode. The window is deliberately narrow and nowhere
-    near the source's ends, so a request that carried it would be unmistakable.
-    """
+
+
+
+
+
+
     filter_tab, _ = tab
     document.add_roi(BOX)
     document.set_source_home(
@@ -273,7 +273,7 @@ def test_materialize_cuts_the_whole_source_not_the_window(
         asked.append(request)
         return False
 
-    filter_tab.materializer.start = refuse  # type: ignore[method-assign]
+    filter_tab.materializer.start = refuse
     filter_tab.stack.source_card.buttons()[0].click()
 
     assert len(asked) == 1
@@ -281,23 +281,23 @@ def test_materialize_cuts_the_whole_source_not_the_window(
 
 
 class TestDiscardLetsGoOfTheFile:
-    """The delete, and the handle that used to stop it.
 
-    Driven through the real runner over real footage, because the failure lives
-    entirely in the file handles: every model-level test of discard passed
-    while the gesture did nothing in the application.
-    """
+
+
+
+
+
 
     def test_a_file_the_preview_is_reading_can_still_be_deleted(
         self, qtbot: QtBot, qapp: object, synthetic_video: Path, tmp_path: Path
     ) -> None:
-        """On Windows this is the bug; elsewhere it passes for free.
 
-        POSIX unlinks an open file happily, so what this pins on Linux is only
-        that `release_files` is harmless. The claim it is here for is the
-        Windows one — an open capture is a refusal to unlink, and the discard
-        reported that it could not delete and left the record standing.
-        """
+
+
+
+
+
+
         del qapp
         copy = tmp_path / "footage.mp4"
         shutil.copy(synthetic_video, copy)
@@ -318,13 +318,13 @@ class TestDiscardLetsGoOfTheFile:
     def test_the_footage_stays_open_and_the_next_render_rebuilds(
         self, qtbot: QtBot, qapp: object, synthetic_video: Path
     ) -> None:
-        """`release_files` is not `close`.
 
-        The session and the reader go; the source does not. A release that
-        unloaded the footage would leave the tab with nothing to resubmit
-        against after a discard, which is a black viewport until the user
-        reopens the project.
-        """
+
+
+
+
+
+
         del qapp
         runner = opened_runner(qtbot, synthetic_video)
         landings = Landings(runner)
@@ -352,13 +352,13 @@ class TestDiscardLetsGoOfTheFile:
         backed: CropArtifact,
         tmp_path: Path,
     ) -> None:
-        """A delete that fails is reported, not treated as a veto.
 
-        The record is what makes the file serve, and dropping it is the whole of
-        what was asked for — leaving it standing because a lock outlived the
-        release would put the user back where the bug had them. The surviving
-        file is named in the message; it is in a folder they can open.
-        """
+
+
+
+
+
+
         del backed
         filter_tab, _ = tab
         document.select(0)
@@ -382,7 +382,7 @@ class TestDiscardLetsGoOfTheFile:
 def tab(
     qtbot: QtBot, tmp_path: Path, document: ReplicateDocument
 ) -> Iterator[tuple[FilterTab, PreviewRunner]]:
-    """A filter tab over its own player and runner, for the write-pass arc."""
+
     player = VideoPlayer()
     runner = PreviewRunner(metrics=MetricBus())
     preferences = Preferences(QSettings(str(tmp_path / "sieve.ini"), QSettings.Format.IniFormat))
@@ -400,17 +400,17 @@ def test_a_write_pauses_the_preview_and_a_failure_gives_it_back(
     document: ReplicateDocument,
     tmp_path: Path,
 ) -> None:
-    """Rule 5's borrowing, from both ends.
 
-    The pause is taken *before* the worker is handed the request — a render
-    still in flight when a sequential decode of the same footage begins is the
-    bandwidth wall the artifact exists to remove — and it is given back on every
-    exit, failure included. A write that failed with the preview still paused
-    would leave a tab that renders nothing and says nothing about why.
 
-    The parent is deliberately missing, so the failure is real, immediate, and
-    needs no footage: what is under test is the arc, not the encoder.
-    """
+
+
+
+
+
+
+
+
+
     filter_tab, runner = tab
     document.add_roi(BOX)
     document.set_source_home(

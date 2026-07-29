@@ -1,4 +1,4 @@
-"""The pure replicate model."""
+
 
 from __future__ import annotations
 
@@ -29,10 +29,10 @@ class TestReplicate:
         assert _replicate("a").replicate_id != _replicate("a").replicate_id
 
     def test_an_override_read_out_cannot_be_written_back_in(self) -> None:
-        # `frozen=True` stops the field being reassigned and says nothing about
-        # the dict inside it. Handing out the live mapping would make an edit
-        # through a stale read reach a replicate nobody thought they were
-        # touching — and would do it after the document had been hashed.
+
+
+
+
         original = _replicate("a").with_override("n1", {"level": 0.5})
 
         original.override_for("n1")["level"] = 0.9
@@ -40,9 +40,9 @@ class TestReplicate:
         assert original.overrides == {"n1": {"level": 0.5}}
 
     def test_pinning_one_parameter_leaves_the_others_pinned(self) -> None:
-        # An edit names only what it touched, so overrides merge. Replacing
-        # would un-pin every parameter the replicate had been configured with
-        # on the next single-field edit.
+
+
+
         once = _replicate("a").with_override("n1", {"level": 0.5})
         pinned = once.with_override("n1", {"blur": 7})
 

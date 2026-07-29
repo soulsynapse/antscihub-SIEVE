@@ -1,10 +1,10 @@
-"""What the dispatcher answers so that no filter has to.
 
-The claim under test is that "a filter with no GPU kernel is complete": absence
-is resolved here, once, rather than by an `if cupy` in every filter module. The
-first two tests are the two halves of that — falling back when a preferred
-backend has nothing, and refusing when an explicitly named one does.
-"""
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from sieve.core.types import Frame
 
 
 class Registered(NamedTuple):
-    """A filter in scratch registries, plus the kernel that was bound to it."""
+
 
     spec: FilterSpec
     kernels: KernelRegistry
@@ -35,7 +35,7 @@ class Registered(NamedTuple):
 
 @pytest.fixture
 def cpu_only() -> Registered:
-    """A filter with a CPU kernel and no GPU kernel — the ordinary case."""
+
     specs = FilterRegistry()
     kernels = KernelRegistry()
 
@@ -55,9 +55,9 @@ def cpu_only() -> Registered:
     def run(frame: Frame, params: ParamsBase) -> Frame:
         return frame
 
-    # Called rather than written as `@kernel`, so the test below can assert
-    # which function came back out of `select` — a decorator would leave the
-    # binding's identity unnameable.
+
+
+
     kernel(PassthroughParams, Backend.CPU, registry=kernels)(run)
 
     spec = PassthroughParams.__filter_spec__
@@ -66,10 +66,10 @@ def cpu_only() -> Registered:
 
 
 def test_missing_gpu_kernel_falls_back_to_cpu(cpu_only: Registered) -> None:
-    # The default preference asks for GPU first. A filter that only wrote a CPU
-    # kernel must still run, and must report `cpu` — the backend is what enters
-    # the cache key, so a binding that misreported it would file two machines'
-    # entries under one hash.
+
+
+
+
     binding = cpu_only.kernels.select(cpu_only.spec)
 
     assert binding.backend is Backend.CPU
@@ -78,17 +78,17 @@ def test_missing_gpu_kernel_falls_back_to_cpu(cpu_only: Registered) -> None:
 
 
 def test_pinning_a_backend_with_no_kernel_refuses(cpu_only: Registered) -> None:
-    # Fallback is the policy for an unexpressed preference, not for an expressed
-    # one. A cross-backend equivalence test pins GPU precisely to compare it
-    # against CPU, and silently handing it the CPU kernel would make that test
-    # pass by comparing a result with itself.
+
+
+
+
     with pytest.raises(NoKernelError, match=r"registered \['cpu'\]"):
         cpu_only.kernels.select(cpu_only.spec, preference=(Backend.GPU,))
 
 
 def test_duplicate_kernel_is_refused(cpu_only: Registered) -> None:
-    # A module copy-pasted without changing its id would otherwise replace
-    # another filter's kernel while leaving that filter's cache entries valid.
+
+
     bind = kernel(cpu_only.spec.params_model, Backend.CPU, registry=cpu_only.kernels)
 
     with pytest.raises(DuplicateKernelError, match="already has a cpu kernel"):
@@ -96,9 +96,9 @@ def test_duplicate_kernel_is_refused(cpu_only: Registered) -> None:
 
 
 def test_kernel_without_a_spec_is_refused() -> None:
-    # `@kernel` names a filter by its params class, so a class that never went
-    # through `@register_filter` has no id, version, or declared I/O for the
-    # kernel to be the implementation of.
+
+
+
     class Unregistered(ParamsBase):
         pass
 

@@ -1,11 +1,11 @@
-"""Replicates remember their settings — the round trip the feature is.
 
-Three claims, each a distinct lie the tab could tell. A knob that did not
-follow the selection would show one arena's tuning over another's footage; an
-undo that restored the baseline but not the pin (or vice versa) would leave a
-state no sequence of edits can produce; a save that did not come back as the
-same resolved values per arena would make "remember" mean "until you close".
-"""
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -48,9 +48,9 @@ def tab(
 ) -> Iterator[FilterTab]:
     instance = FilterTab(player, document, runner, metrics=MetricBus())
     qtbot.addWidget(instance)
-    # The conftest document was bound before the tab existed, so re-bind with
-    # the tab listening — the app's own order — which seeds the fresh chain
-    # into the document and gives the first knob edit a baseline to move.
+
+
+
     document.bind_source(1000, 800, 1000, 30.0)
     yield instance
     instance.shutdown()
@@ -65,21 +65,21 @@ def _two_arenas(document: ReplicateDocument) -> None:
 def test_knobs_follow_until_touched_and_return_with_the_arena(
     tab: FilterTab, document: ReplicateDocument
 ) -> None:
-    """Tune arena 1, and arena 2 follows; deviate arena 2, and each recalls its own.
 
-    The undo at the end is the two-write claim: one Ctrl+Z after deviating
-    must restore the moved baseline *and* drop the pin, or the document holds
-    a state no sequence of edits can produce.
-    """
+
+
+
+
+
     _two_arenas(document)
 
     tab.downsample_knob.setValue(0.5)
     document.select(1)
-    assert tab.downsample_knob.value() == 0.5  # followed the moved baseline
+    assert tab.downsample_knob.value() == 0.5
 
-    tab.downsample_knob.setValue(0.25)  # deviate arena 2
+    tab.downsample_knob.setValue(0.25)
     document.select(0)
-    assert tab.downsample_knob.value() == 0.5  # arena 1 recalls its own
+    assert tab.downsample_knob.value() == 0.5
     document.select(1)
     assert tab.downsample_knob.value() == 0.25
     assert document.equivalence_groups() == (1, 2)
@@ -93,24 +93,24 @@ def test_knobs_follow_until_touched_and_return_with_the_arena(
 def test_detector_settings_pin_and_follow_per_arena(
     tab: FilterTab, document: ReplicateDocument
 ) -> None:
-    """The detection window is remembered per arena exactly as a knob is.
 
-    Driven through the document because that is the tab's own commit path —
-    the assertion is that the chain the graphs derive from re-resolves on
-    every selection change, detector included.
-    """
+
+
+
+
+
     _two_arenas(document)
 
     document.edit_detector({"window_frames": 45}, "Set Detection Window")
     document.select(1)
-    assert tab.chain.detector.window_frames == 45  # followed
+    assert tab.chain.detector.window_frames == 45
 
     document.edit_detector({"window_frames": 90}, "Set Detection Window")
     document.select(0)
     assert tab.chain.detector.window_frames == 45
     document.select(1)
     assert tab.chain.detector.window_frames == 90
-    # Groups split on detector pins too: same graph, different claims.
+
     assert document.equivalence_groups() == (1, 2)
 
 
@@ -121,12 +121,12 @@ def test_saved_tuning_comes_back_per_arena_through_yaml(
     player: VideoPlayer,
     runner: PreviewRunner,
 ) -> None:
-    """Save, reopen in a fresh document and tab, and each arena resolves as tuned.
 
-    The whole feature in one path: two-write edits, the artifact carrying
-    graph + detector + pins through YAML, and the tab regrowing its chain
-    around the loaded node ids rather than reminting them.
-    """
+
+
+
+
+
     _two_arenas(document)
     tab.downsample_knob.setValue(0.5)
     document.select(1)
@@ -145,7 +145,7 @@ def test_saved_tuning_comes_back_per_arena_through_yaml(
         assert [n.node_id for n in reopened.pipeline.nodes] == [
             n.node_id for n in project.pipeline.nodes
         ]
-        # Selection opens on the first arena: its pinned scale, no pin noise.
+
         assert second.downsample_knob.value() == 0.5
         reopened.select(1)
         assert second.downsample_knob.value() == 0.25

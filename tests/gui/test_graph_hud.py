@@ -1,12 +1,12 @@
-"""The graph HUD: replaced series, index-keyed points, one trailing repaint.
 
-Each test pins a claim the TODO item stated rather than an accessor. The
-series being *replaced* on `begin` is what lets the runner own staleness; the
-points being keyed by source index is the axis choice that makes the playhead
-the graph's cursor; the throttle is what keeps a six-hundred-frame burst from
-spending the GUI thread on paint; and the drag falling through to a scrub is
-what keeps a cost spike a *place* rather than a handle to fight with.
-"""
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.gui
 
 
 def _capture(dest: list[tuple[float, float]]) -> Callable[[float, float], None]:
-    """A typed slot for band signals — a bare lambda leaves pyright blind."""
+
 
     def slot(lo: float, hi: float) -> None:
         dest.append((lo, hi))
@@ -42,7 +42,7 @@ def _hud(qtbot: QtBot) -> GraphHud:
 
 
 def test_begin_replaces_the_series_instead_of_appending(qtbot: QtBot) -> None:
-    """`render_started` means one window's worth of points, never two renders'."""
+
     hud = _hud(qtbot)
     hud.add_cost(3, 40.0)
     hud.add_cost(4, 55.0)
@@ -57,8 +57,8 @@ def test_begin_replaces_the_series_instead_of_appending(qtbot: QtBot) -> None:
 
 
 def test_points_are_keyed_by_source_index_not_arrival_order(qtbot: QtBot) -> None:
-    """Out-of-order arrival still yields an index-ordered series, and a
-    re-delivered index replaces its point rather than growing the series."""
+
+
     hud = _hud(qtbot)
     hud.add_cost(7, 12.0)
     hud.add_cost(3, 8.0)
@@ -69,10 +69,10 @@ def test_points_are_keyed_by_source_index_not_arrival_order(qtbot: QtBot) -> Non
 
 
 def test_a_burst_of_points_coalesces_to_one_trailing_repaint(qtbot: QtBot) -> None:
-    """A cold render's burst must not repaint per point — and must not drop one."""
+
     hud = _hud(qtbot)
     repaints: list[int] = []
-    hud.update = lambda *args: repaints.append(1)  # type: ignore[method-assign]
+    hud.update = lambda *args: repaints.append(1)
 
     for index in range(100):
         hud.add_cost(index, 5.0)
@@ -96,20 +96,20 @@ def test_the_budget_line_carries_the_watched_verdicts_and_their_misses(qtbot: Qt
     line, missed = hud.budget_line()
     assert "render 812/3000 ms" in line and not missed
 
-    # An unwatched key changes nothing: the HUD is not a bus browser.
+
     hud.show_sample(Sample(budget=BUDGETS["scrub_to_repaint"], elapsed_ms=1.0))
     assert hud.budget_line() == (line, False)
 
 
 def test_the_attribution_names_the_span_worst_against_its_own_ceiling(qtbot: QtBot) -> None:
-    """Ranked by ratio, not by milliseconds — the whole point of the field.
 
-    The render below is four times the wall clock of the density rebuild and
-    still is not the dominant cost: it is inside a 3000 ms ceiling while the
-    rebuild is at three times a 100 ms one. Ranking by elapsed would name the
-    render every session and attribute nothing, which is what a user asking
-    for a larger block grid needs the field *not* to do.
-    """
+
+
+
+
+
+
+
     hud = _hud(qtbot)
     assert hud.attribution_line() == ("", False)
 
@@ -124,12 +124,12 @@ def test_the_attribution_names_the_span_worst_against_its_own_ceiling(qtbot: QtB
 
 
 def test_the_attribution_persists_when_nothing_is_over(qtbot: QtBot) -> None:
-    """Not a warning: a field that appeared only on a miss is a modal.
 
-    The dominant cost is a fact about the session whether or not it breaches
-    anything, and the HUD is where a user looks to find out what the tuning
-    loop is currently spending itself on.
-    """
+
+
+
+
+
     hud = _hud(qtbot)
     hud.show_sample(Sample(budget=BUDGETS["density_rebuild"], elapsed_ms=12.0, detail="B = 1,024"))
     line, over = hud.attribution_line()
@@ -138,11 +138,11 @@ def test_the_attribution_persists_when_nothing_is_over(qtbot: QtBot) -> None:
 
 
 def test_every_drag_scrubs_because_there_is_no_handle_to_grab(qtbot: QtBot) -> None:
-    """Where the base class parks a grabbable handle, the HUD scrubs.
 
-    The press lands exactly on the top range edge — the spot an unset band's
-    "hi" handle sits, which the base would grab and arm.
-    """
+
+
+
+
     hud = _hud(qtbot)
     presses: list[int] = []
     hud.pressed.connect(presses.append)

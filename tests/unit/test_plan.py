@@ -1,12 +1,12 @@
-"""What a plan has to get right before anything is decoded.
 
-Three claims, each failing for its own reason. Lead-in is the maximum over a
-node's paths rather than a sum over its nodes, and the two differ the moment a
-graph forks. Lead-in is counted in *source* frames, so a rate-changing node
-between the source and a warmup multiplies it rather than passing it through.
-And every node's parameters are validated, including the ones `Dag.node_keys`
-never hashes and therefore never checked.
-"""
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ SHELF = FilterRegistry()
 
 
 def _settling(filter_id: str, warmup: int) -> type[ParamsBase]:
-    """A streaming filter that needs `warmup` frames before it is trustworthy."""
+
 
     @register_filter(
         filter_id=filter_id,
@@ -107,7 +107,7 @@ def node(node_id: str, filter_id: str, **params: object) -> Node:
 
 
 def edges(*pairs: str) -> tuple[Edge, ...]:
-    """`"a>b"` for each edge, or `"a>b:left"` to name the port it feeds."""
+
     built: list[Edge] = []
     for pair in pairs:
         upstream, target = pair.split(">")
@@ -120,10 +120,10 @@ def edges(*pairs: str) -> tuple[Edge, ...]:
     return tuple(built)
 
 
-#: The span these tests run over unless they are about the span. A module-level
-#: constant rather than a default argument because a `ClipRange` built in a
-#: signature is built once at import and shared, which ruff's B008 is right to
-#: flag even where the object is frozen.
+
+
+
+
 DEFAULT_SPAN = ClipRange(start=100, end=110)
 
 
@@ -148,18 +148,18 @@ def plan_for(
 
 
 def test_lead_in_is_the_longest_path_not_the_whole_graph() -> None:
-    """A fork's two branches do not both charge for their warmup.
 
-    ``a ─┬─> b ─┬─> d`` with warmups 1, 5, 3, 1. The path through `b` wants
-    ``    └─> c ─┘``   1+5+1 = 7 source frames and the path through `c` wants
-    1+3+1 = 5, so the graph wants 7 — decoding once feeds both branches. Summing
-    every node's declaration instead gives 10, which is the mistake this pins:
-    it is not a crash, it is three frames of extra decode per request, forever.
 
-    `d` is a two-port join because it has to be — a node with two upstreams
-    declares two ports now — and its warmup is denominated at its own input
-    exactly as a single-input filter's is, so the arithmetic is unchanged.
-    """
+
+
+
+
+
+
+
+
+
+
     pipeline = Pipeline(
         nodes=(
             node("a", "settle1"),
@@ -170,16 +170,16 @@ def test_lead_in_is_the_longest_path_not_the_whole_graph() -> None:
         edges=edges("a>b", "a>c", "b>d:left", "c>d:right"),
     )
     assert plan_for(pipeline).lead_in == 7
-    # And the walk agrees with the definition it is an optimization of.
+
     assert len(root_paths(Dag.build(pipeline, SHELF), "d")) == 2
 
 
 def test_lead_in_crosses_a_rate_change_in_source_frames() -> None:
-    """Five frames of warmup behind a 10:1 decimator is fifty source frames.
 
-    The failure this closes is silent: a plain sum asks for 5, the preview
-    renders, and the filter it was meant to warm has settled a tenth of the way.
-    """
+
+
+
+
     pipeline = Pipeline(
         nodes=(node("d", "decimate", factor=10), node("s", "settle5")),
         edges=edges("d>s"),
@@ -188,12 +188,12 @@ def test_lead_in_crosses_a_rate_change_in_source_frames() -> None:
 
 
 def test_params_are_validated_even_where_no_key_is_derived() -> None:
-    """A non-deterministic node is never hashed, so nothing else checks it.
 
-    `Dag.node_keys` validates as a side effect of building a key and skips the
-    nodes it cannot key. Before the plan, a misspelled parameter on a filter
-    declaring `deterministic=False` reached its kernel unchallenged.
-    """
+
+
+
+
+
     pipeline = Pipeline(nodes=(node("j", "jitter", amonut=4),))
     assert "j" not in Dag.build(pipeline, SHELF).node_keys(source=SOURCE, backend=Backend.CPU)
     with pytest.raises(ValidationError):
@@ -201,12 +201,12 @@ def test_params_are_validated_even_where_no_key_is_derived() -> None:
 
 
 def test_a_clip_near_the_start_runs_under_warmed_rather_than_failing() -> None:
-    """Frame 0 cannot be warmed, and refusing would make it untunable.
 
-    The shortfall is reported rather than raised, because no footage would fix
-    it and a preview scrubbed to the opening of a video is an ordinary thing to
-    want.
-    """
+
+
+
+
+
     pipeline = Pipeline(nodes=(node("s", "settle5"),))
     plan = plan_for(pipeline, span=ClipRange(start=2, end=6))
     assert plan.lead_in == 5
@@ -217,7 +217,7 @@ def test_a_clip_near_the_start_runs_under_warmed_rather_than_failing() -> None:
 
 
 def test_the_replicates_overrides_reach_the_resolved_params() -> None:
-    """Per-replicate deviation is what the plan runs with, not `Node.params`."""
+
     pipeline = Pipeline(nodes=(node("j", "jitter", amount=1),))
     replicate = Replicate(name="arena 2", roi=ROI(x=0, y=0, width=8, height=8)).with_override(
         "j", {"amount": 9}
@@ -227,23 +227,23 @@ def test_the_replicates_overrides_reach_the_resolved_params() -> None:
 
 
 class TestPlanningAgainstACropThatAlreadyExists:
-    """`pre_cropped` and `source_start`: what a run over an artifact changes.
 
-    Three separable claims, because the child-source model splits one fact into
-    three and the parts fail independently. The ROI stops applying (the crop
-    happened on disk). The overrides do *not* stop applying (they are about
-    parameters, not pixels). And the footage begins partway into the source's
-    numbering, which is a shortfall to report rather than a frame to demand.
-    """
+
+
+
+
+
+
+
 
     def test_the_replicates_region_leaves_both_the_crop_and_the_key(self) -> None:
-        """A crop of a crop is the one wrong answer available here.
 
-        `plan.roi` is what the executor cuts with and what the root key names,
-        and over an artifact both must be nothing. If only one of them dropped
-        the region, the run would either cut twice or key the correct pixels
-        under a claim of a region nobody applied.
-        """
+
+
+
+
+
+
         pipeline = Pipeline(nodes=(node("s", "settle1"),))
         arena = Replicate(name="arena 1", roi=ROI(x=4, y=4, width=8, height=8))
 
@@ -253,20 +253,20 @@ class TestPlanningAgainstACropThatAlreadyExists:
 
         assert over_parent.roi == arena.roi
         assert over_artifact.roi is None
-        # And the key follows the ROI rather than the `replicate` argument:
-        # with no overrides in play, an uncropped run over this source is keyed
-        # identically however the arena reached it.
+
+
+
         assert over_artifact.keys == whole_frame.keys
         assert over_artifact.keys != over_parent.keys
 
     def test_the_overrides_survive_the_crop_leaving(self) -> None:
-        """`pre_cropped` is not `replicate=None`, and this is the difference.
 
-        The cheap way to say "no ROI" would have been to plan the artifact with
-        no replicate at all. That silently reverts every per-arena parameter pin
-        to the node's baseline — a wrong answer with no symptom, since the run
-        completes and reports the same frame count.
-        """
+
+
+
+
+
+
         pipeline = Pipeline(nodes=(node("j", "jitter", amount=1),))
         arena = Replicate(name="arena 2", roi=ROI(x=0, y=0, width=8, height=8)).with_override(
             "j", {"amount": 9}
@@ -278,13 +278,13 @@ class TestPlanningAgainstACropThatAlreadyExists:
         assert plan.replicate is arena
 
     def test_lead_in_before_the_artifact_begins_is_a_shortfall_not_a_request(self) -> None:
-        """The clamp at frame 0, applied once more at the artifact's own start.
 
-        A crop covering exactly the clip can never supply a warmup reaching
-        before it, from any file. Without the floor the plan would ask the
-        reader for frames the artifact does not hold, and a run over footage
-        that is entirely correct would fail.
-        """
+
+
+
+
+
+
         pipeline = Pipeline(nodes=(node("s", "settle5"),))
 
         plan = plan_for(pipeline, span=ClipRange(start=40, end=46), source_start=40)

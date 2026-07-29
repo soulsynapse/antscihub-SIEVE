@@ -1,37 +1,37 @@
-"""The operation stack: the live chain as cards under fixed stage headers.
 
-One presentation over `gui/chain_model.py` — the view draws what the model
-grades and emits what the user asked for; it holds no chain state of its own.
-`rebuild` takes the steps, their grades, their captions, and the body widgets
-the tab owns, and reconstructs the column; everything else is signals out
-(`remove_requested`, `swap_requested`, `insert_requested`, `reset_clicked`)
-for the tab to apply to the model and echo back through the next `rebuild`.
 
-**Body widgets are borrowed, never owned.** The knobs and the embedded graphs
-are the tab's long-lived widgets (the graphs are expensive and the knobs hold
-focus); a rebuild detaches every borrowed widget *before* tearing its host
-card down, because a parentless PySide widget dies with its Python reference
-and takes its children with it. Parenting cards to a temporary host can
-therefore destroy them during a rebuild.
 
-**Conflict is permit-then-repair** (plan § 2). A conflicted card gets the red
-edge, the expects/receiving message the grade carries, and inline Swap/Remove
-— the chain is allowed to be broken and the repair is offered where the break
-is. Everything after the first conflict paints dimmed as unreached.
 
-**Seams are visible affordances and deliberate no-ops.** A hovered seam grows
-a hairline and a plus, and clicking one emits `insert_requested` — which the
-tab answers with a status line until item 7 builds the wizard that opens
-here. The affordance ships first so the gesture is discoverable the day the
-wizard lands.
 
-**The source card stands above the stack and does not scroll with it.** It is
-not a step: it is what the chain *consumes* — this replicate's crop of the
-source — and it is where that boundary's state at rest lives. It sits outside
-the scrolling column because a `rebuild` tears that column down on every
-structural edit, and the one thing on this tab that can be mid-write must not
-be rebuilt underneath a running write pass.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -53,13 +53,13 @@ from sieve.gui.band_plot import ACCENT, DIM, LINE, PANEL, TEXT, plot_font
 from sieve.gui.chain_model import STAGE_CHIPS, ChainStep, Stage, Status, StepGrade
 from sieve.gui.crop_binding import CropState
 
-#: Conflict red — the card edge, the message, and the repair buttons.
+
 CONFLICT = QColor(235, 110, 100)
 
-#: A hovered card's fill, one step lighter than the panel.
+
 _PANEL_HOT = QColor(38, 41, 47)
 
-#: Painted header height; the conflict row extends it.
+
 _HEADER_H = 40
 _CONFLICT_EXTRA = 30
 
@@ -76,7 +76,7 @@ _REPAIR_CSS = (
 
 
 class SeamStrip(QWidget):
-    """One seam between cards: invisible until hovered, then hairline + plus."""
+
 
     clicked = Signal(int)
 
@@ -118,7 +118,7 @@ class SeamStrip(QWidget):
 
 
 class StageHeader(QWidget):
-    """A fixed stage title with its `in → out` type chip."""
+
 
     def __init__(self, stage: Stage, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -137,12 +137,12 @@ class StageHeader(QWidget):
 
 
 class StepCard(QWidget):
-    """One step: painted header (title, caption, status) over borrowed bodies.
 
-    Emits and never applies: `swap_clicked` / `remove_clicked` carry the
-    step id, and the card's own appearance changes only when the next
-    `rebuild` hands it new inputs.
-    """
+
+
+
+
+
 
     swap_clicked = Signal(str)
     remove_clicked = Signal(str)
@@ -181,7 +181,7 @@ class StepCard(QWidget):
         self._swap_hover.setToolTip("Replace this step")
         self._remove_hover.setToolTip("Remove this step")
 
-        # The permit-then-repair pair: always visible on a conflicted card.
+
         self._swap_repair = QPushButton("Swap…", self)
         self._remove_repair = QPushButton("Remove", self)
         for button in (self._swap_repair, self._remove_repair):
@@ -195,7 +195,7 @@ class StepCard(QWidget):
             button.clicked.connect(lambda _=False: self.remove_clicked.emit(self.step.step_id))
 
     def removal_buttons(self) -> tuple[QPushButton, ...]:
-        """The remove affordances, for tests that drive the gesture."""
+
         return (self._remove_hover, self._remove_repair)
 
     def resizeEvent(self, event: object) -> None:
@@ -214,8 +214,8 @@ class StepCard(QWidget):
         del event
         self._hot = True
         if self.grade.status is not Status.CONFLICT:
-            # Removal is always visible on hover (plan § 2); the conflicted
-            # card already shows the louder repair pair instead.
+
+
             self._swap_hover.setVisible(True)
             self._remove_hover.setVisible(True)
         self.update()
@@ -228,13 +228,13 @@ class StepCard(QWidget):
         self.update()
 
     def mousePressEvent(self, event: object) -> None:
-        """A click anywhere a child did not take selects this step.
 
-        Emits and never applies, like every other card gesture: the tab sets
-        the selection on the model and the next `set_selected` (or `rebuild`)
-        is what moves the marker — a card that painted its own click would
-        disagree with the composite for a frame every time.
-        """
+
+
+
+
+
+
         del event
         self.select_clicked.emit(self.step.step_id)
 
@@ -249,15 +249,15 @@ class StepCard(QWidget):
         painter.setBrush(_PANEL_HOT if (self._hot and not unreached) else PANEL)
         edge = QPen(CONFLICT if conflicted else LINE, 1.0)
         if self.provisional:
-            # The dashed card: in the chain for real — rendered, graded,
-            # graphed — but not yet committed. The wizard's Add solidifies it.
+
+
             edge = QPen(DIM, 1.0, Qt.PenStyle.DashLine)
         painter.setPen(edge)
         painter.drawRoundedRect(rect, 6, 6)
         if self.selected and not conflicted:
-            # The selection marker: the composite is showing this step. The
-            # conflict bar wins the same spot — a broken step's problem
-            # outranks its being watched.
+
+
+
             painter.setBrush(ACCENT)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(QRectF(rect.left(), rect.top(), 3.5, rect.height()), 2, 2)
@@ -293,17 +293,17 @@ class StepCard(QWidget):
         painter.end()
 
 
-#: What the offer costs, stated on the affordance itself rather than in a
-#: tooltip or a preferences page. The numbers are the reference clip's: 46 s of luma
-#: decode to write 77 seconds, and 0.09 ms/frame to read it back against the
-#: parent's 9.93. A control whose price is a surprise is a control the user
-#: presses once.
-#:
-#: The cut is over the whole source rather than the working window, so the
-#: write scales with the *video*, not with what is on the timeline — and the
-#: sentence says so, because "one render" would now understate it on any
-#: footage longer than a window. What it buys is that moving the window is free
-#: afterwards; a window-shaped cut re-encodes every time the user scrolls.
+
+
+
+
+
+
+
+
+
+
+
 MATERIALIZE_PRICE = (
     "one decode of the whole video to write · roughly 100x cheaper to read at any window after"
 )
@@ -321,21 +321,21 @@ _QUIET_CSS = (
 
 
 class SourceCard(QWidget):
-    """What the chain consumes, and whether it is at rest.
 
-    Four states, one input: `set_state` takes the `CropState` and the sentences
-    that go with it, and the widget decides nothing. That is deliberate — the
-    reading of which state a replicate is in is `gui/crop_binding.py`'s and the
-    document's, and a card that re-derived any clause of it would be the second
-    answer rule 6's absent-versus-unexamined distinction exists to prevent.
 
-    **At rest is quieter than an offer, and stale is not absent.** The goal
-    state paints flat with a dim stamp and one recessive discard; the offer
-    carries the accent and the price; staleness names the clause that missed and
-    offers both ways out. An artifact that was cut and then orphaned is a
-    different claim from one that was never cut, and the two must not render
-    alike — the user who cannot tell them apart re-cuts a file they already have.
-    """
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     materialize_requested = Signal()
     cancel_requested = Signal()
@@ -398,25 +398,25 @@ class SourceCard(QWidget):
 
     @property
     def state(self) -> CropState:
-        """Which of the four states is on screen. A test's observable."""
+
         return self._state
 
     def buttons(self) -> tuple[QPushButton, QPushButton, QPushButton]:
-        """Materialize, Cancel, Discard — for the tests that drive the gestures."""
+
         return (self._materialize, self._cancel, self._discard)
 
     @property
     def detail(self) -> str:
-        """The sentence under the title, verbatim. What a stale card must not hide."""
+
         return self._detail.text()
 
     def set_state(self, state: CropState, *, subject: str, detail: str) -> None:
-        """Render `state` for `subject`, with `detail` as its one sentence.
 
-        `detail` is passed through unaltered — for `STALE` it is the clause that
-        missed, which `crop_binding` phrased and which nothing here may
-        summarise away.
-        """
+
+
+
+
+
         self._state = state
         self._subject.setText(subject)
         self._detail.setText(detail)
@@ -430,20 +430,20 @@ class SourceCard(QWidget):
         self.update()
 
     def set_progress(self, written: int, total: int) -> None:
-        """Advance the write. Ignored unless a write is what is on screen."""
+
         if self._state is not CropState.WRITING:
             return
         self._progress.setMaximum(max(total, 1))
         self._progress.setValue(written)
 
     def paintEvent(self, event: QPaintEvent) -> None:
-        """The card's edge, which is the whole of its loudness.
 
-        Accent while there is a decision to take, flat while there is not. The
-        at-rest card is the only one that draws no coloured edge at all: it is
-        the goal state, and a goal state that keeps announcing itself is an
-        alert.
-        """
+
+
+
+
+
+
         del event
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -459,7 +459,7 @@ class SourceCard(QWidget):
 
 
 class ChainStackView(QWidget):
-    """The right column: Reset above the scrolling column of seams and cards."""
+
 
     reset_clicked = Signal()
     remove_requested = Signal(str)
@@ -503,15 +503,15 @@ class ChainStackView(QWidget):
 
     @property
     def source_card(self) -> SourceCard:
-        """The boundary card above the stages. The tab drives it and it alone."""
+
         return self._source
 
     def cards(self) -> list[StepCard]:
-        """The current cards, in chain order."""
+
         return list(self._cards)
 
     def card_for(self, step_id: str) -> StepCard | None:
-        """The card presenting `step_id`, or None after its removal."""
+
         return next((card for card in self._cards if card.step.step_id == step_id), None)
 
     def rebuild(
@@ -523,23 +523,23 @@ class ChainStackView(QWidget):
         provisional: str | None = None,
         selected: str | None = None,
     ) -> None:
-        """Reconstruct the column for `steps`, borrowing `bodies` into cards.
 
-        `provisional` names the one step the wizard is still configuring; its
-        card draws dashed and says so. Everything else about it is ordinary —
-        it grades, it renders, its body embeds — because the provisional step
-        being *really in the chain* is what makes the preview honest.
 
-        `selected` names the step whose composite the video pane is showing;
-        its card carries the accent marker.
 
-        `bodies` maps step ids to the tab's persistent widgets, embedded in
-        chain order into each card's body. Widgets borrowed by the previous
-        rebuild are detached first — before any card is deleted — so they
-        survive their old host (see the module docstring). A body for an
-        unreached or conflicted step is left detached and hidden: no reachable
-        step, no graph.
-        """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         for widget in self._borrowed:
             widget.setParent(None)
             widget.hide()
@@ -584,7 +584,7 @@ class ChainStackView(QWidget):
         self._column.addStretch(1)
 
     def set_selected(self, step_id: str | None) -> None:
-        """Move the selection marker in place — a click is not a rebuild."""
+
         for card in self._cards:
             wanted = card.step.step_id == step_id
             if card.selected != wanted:
@@ -592,7 +592,7 @@ class ChainStackView(QWidget):
                 card.update()
 
     def update_captions(self, captions: Mapping[str, str]) -> None:
-        """Refresh caption text in place — a knob wiggle is not a rebuild."""
+
         for card in self._cards:
             text = captions.get(card.step.step_id)
             if text is not None and text != card.caption:

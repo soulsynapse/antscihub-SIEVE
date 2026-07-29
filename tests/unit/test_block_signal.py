@@ -1,10 +1,10 @@
-"""Item 3's kernel: the three claims that make the signals trustworthy.
 
-Each failure is a distinct lie the tab could tell: a static scene that
-scores nonzero invents motion, a translation whose speed is wrong miscales
-every threshold, and an aperture-degenerate block that reports noise
-instead of zero turns "unmeasurable" into "event".
-"""
+
+
+
+
+
+
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ FPS = 30.0
 def run_frames(
     frames: list[NDArray[np.float32]], params: BlockSignalParams
 ) -> list[NDArray[np.float32]]:
-    """Feed a sequence through one state, the way one execute would."""
+
     state = BlockSignalState()
     out: list[NDArray[np.float32]] = []
     for i, data in enumerate(frames):
@@ -42,16 +42,16 @@ def run_frames(
 
 
 def textured() -> NDArray[np.float32]:
-    """A smooth random field: enough 2-D texture that LK is well-posed."""
+
     gen = np.random.default_rng(3)
     rough = gen.uniform(0, 255, (96, 96)).astype(np.float32)
     return cast(NDArray[np.float32], cv2.GaussianBlur(rough, (0, 0), 3.0))
 
 
 def test_static_input_is_exactly_zero_for_every_signal() -> None:
-    # Coherence is the interesting case: with zero temporal change the t-axis
-    # is a null direction of the tensor and the raw scalar would read a
-    # vacuous 1. The zero-change gate is what this pins.
+
+
+
     still = textured()
     for signal in Signal:
         params = BlockSignalParams(signal=signal, block=16, fps=FPS)
@@ -62,9 +62,9 @@ def test_static_input_is_exactly_zero_for_every_signal() -> None:
 
 
 def test_uniform_translation_measures_its_own_speed() -> None:
-    # One pixel per frame of coherent translation should read ~1 * fps px/s,
-    # and change_energy must see it too. Judged on interior blocks — the roll
-    # wraps at the edges and np.gradient one-sides there.
+
+
+
     field = textured()
     frames = [np.roll(field, shift=i, axis=1) for i in range(3)]
 
@@ -79,9 +79,9 @@ def test_uniform_translation_measures_its_own_speed() -> None:
 
 
 def test_aperture_degenerate_input_reports_exactly_zero_not_noise() -> None:
-    # Stripes varying only along x, translated along y: the motion is real
-    # but no local measurement can see it. The determinant guard must return
-    # exactly zero — a near-zero divide would return enormous noise instead.
+
+
+
     x = np.arange(96, dtype=np.float32)
     stripes = np.tile(128.0 + 64.0 * np.sin(x / 4.0), (96, 1)).astype(np.float32)
     frames = [np.roll(stripes, shift=i, axis=0) for i in range(3)]
@@ -91,10 +91,10 @@ def test_aperture_degenerate_input_reports_exactly_zero_not_noise() -> None:
 
 
 def test_coherence_separates_translation_from_change_in_place() -> None:
-    # The two poles of the discriminant: a texture translating as a piece has
-    # a rank-deficient block tensor (one (u, v) explains everything) and must
-    # score near 1; the same texture with an independent pattern added in
-    # place has no translation that explains its change and must score near 0.
+
+
+
+
     field = textured()
     params = BlockSignalParams(signal=Signal.COHERENCE, block=16, fps=FPS)
 
@@ -109,12 +109,12 @@ def test_coherence_separates_translation_from_change_in_place() -> None:
 
 
 def test_opposing_motions_in_one_block_read_incoherent() -> None:
-    # Two halves of a single 96 px block translating in opposite directions:
-    # each pixel is locally coherent, the block is not. This is the test that
-    # fails if the eigendecomposition is moved before the block reduction —
-    # per-pixel tensors are near rank-one, every pixel votes "coherent", and
-    # averaging those votes scores this block high (measured 0.50 against the
-    # correct order's 0.01).
+
+
+
+
+
+
     field = textured()
     moved = np.vstack([np.roll(field[:48], 2, axis=1), np.roll(field[48:], -2, axis=1)])
     params = BlockSignalParams(signal=Signal.COHERENCE, block=96, fps=FPS)
@@ -124,11 +124,11 @@ def test_opposing_motions_in_one_block_read_incoherent() -> None:
 
 
 def test_flow_agreement_spans_its_two_poles() -> None:
-    # The scale's ends. A texture translating as a piece has every measurable
-    # pixel pointing the same way and must read ~1; two halves of one block
-    # translating in opposite directions cancel and must read ~0. A mean of
-    # `atan2` instead of a mean of unit vectors fails the second — opposite
-    # angles average to a direction nobody moved in, at full resultant length.
+
+
+
+
+
     field = textured()
     params = BlockSignalParams(signal=Signal.FLOW_AGREEMENT, block=16, fps=FPS)
     walking = run_frames([np.roll(field, i, axis=1) for i in range(3)], params)[2]
@@ -142,12 +142,12 @@ def test_flow_agreement_spans_its_two_poles() -> None:
 
 
 def test_flow_agreement_is_zero_where_nothing_resolved_not_one() -> None:
-    # Stripes varying only along x, translated along y: real motion, no local
-    # measurement can see it. Every pixel is excluded, so the block has no
-    # unit vectors to average. Zero is the honest report; the failure this
-    # guards against is the opposite one — an unmeasured block whose empty
-    # circular mean is treated as perfect agreement and renders as a
-    # confident 1, which is rule 6 exactly.
+
+
+
+
+
+
     x = np.arange(96, dtype=np.float32)
     stripes = np.tile(128.0 + 64.0 * np.sin(x / 4.0), (96, 1)).astype(np.float32)
     frames = [np.roll(stripes, shift=i, axis=0) for i in range(3)]
@@ -156,11 +156,11 @@ def test_flow_agreement_is_zero_where_nothing_resolved_not_one() -> None:
 
 
 def test_flow_agreement_reads_only_the_pixels_that_moved() -> None:
-    # Half the block is featureless floor, half is texture translating as a
-    # piece. Agreement is the resultant over the *measured* pixels, so it must
-    # still read high — normalising by the block's pixel count instead would
-    # halve it, and the block would report "half the pixels disagreed" about a
-    # scene in which nothing disagreed with anything.
+
+
+
+
+
     field = textured()
     half = field.copy()
     half[48:] = 128.0
@@ -173,19 +173,19 @@ def test_flow_agreement_reads_only_the_pixels_that_moved() -> None:
 
 
 def test_every_signal_has_a_label_on_the_quick_switch() -> None:
-    # The enum is discovered; the labels are hand-written. A signal the kernel
-    # computes but the switcher cannot name is reachable only by editing a
-    # saved file, which is the failure mode rule 3's discovery rule exists to
-    # prevent one layer down.
+
+
+
+
     from sieve.gui.chain_model import SIGNAL_LABELS
 
     assert set(SIGNAL_LABELS) == {s.value for s in Signal}
 
 
 def test_block_resolution_is_the_one_source_of_grid_truth() -> None:
-    # auto = 64 source px at scale; explicit block wins; the grid ceils so
-    # ragged edges are real blocks. These three numbers denominate the count
-    # threshold, so they are pinned as arithmetic.
+
+
+
     assert auto_block(0.25) == 16
     assert resolve_block(0, 0.25) == 16
     assert resolve_block(24, 0.25) == 24

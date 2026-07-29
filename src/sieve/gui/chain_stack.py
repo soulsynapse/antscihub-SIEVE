@@ -11,8 +11,8 @@ for the tab to apply to the model and echo back through the next `rebuild`.
 are the tab's long-lived widgets (the graphs are expensive and the knobs hold
 focus); a rebuild detaches every borrowed widget *before* tearing its host
 card down, because a parentless PySide widget dies with its Python reference
-and takes its children with it — the parent-death trap the mockup cycle hit
-(parity plan learning 6, applied inside one host).
+and takes its children with it. Parenting cards to a temporary host can
+therefore destroy them during a rebuild.
 
 **Conflict is permit-then-repair** (plan § 2). A conflicted card gets the red
 edge, the expects/receiving message the grade carries, and inline Swap/Remove
@@ -294,8 +294,7 @@ class StepCard(QWidget):
 
 
 #: What the offer costs, stated on the affordance itself rather than in a
-#: tooltip or a preferences page. The numbers are the reference clip's
-#: (`docs/findings/2026.07.28-the-crop-artifact-is-ffv1.md`): 46 s of luma
+#: tooltip or a preferences page. The numbers are the reference clip's: 46 s of luma
 #: decode to write 77 seconds, and 0.09 ms/frame to read it back against the
 #: parent's 9.93. A control whose price is a surprise is a control the user
 #: presses once.

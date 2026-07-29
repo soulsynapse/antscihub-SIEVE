@@ -27,8 +27,8 @@ from sieve.decode.reader import VideoReader
 #: The `--workers` option, shared by every command that decodes a span.
 #:
 #: One definition because it is one decision: how much of this machine the run
-#: may use. VISION step 6 puts machine capability on the command line rather than
-#: in the project document, so this is where it lives and there is no
+#: may use. It belongs on the command line rather than in the project document,
+#: so there is no
 #: corresponding field on `Project` — a `threads:` key in the artifact would make
 #: one machine's allocation part of another machine's reproducible run.
 #:
@@ -117,7 +117,7 @@ def span_for(
 
     The last of those is the only one that needs the container open, which is why
     it is last and why `--dry-run` refuses instead of reaching it. A clip is what
-    a project is normally run over — it is VISION step 4's tuning span — so the
+    a project is normally run over, so the
     fallback is the uncommon path rather than the default.
 
     Raises:

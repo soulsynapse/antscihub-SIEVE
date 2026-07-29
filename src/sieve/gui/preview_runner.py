@@ -12,8 +12,7 @@ nowhere.
 `slider_to_preview` for the first frame and `full_preview_render` for all of
 them, both published by `pipeline/preview.py` through the `measure` this hands
 it. Those are the ceilings, and they are not a graph — two numbers per render
-cannot show a user *where* in their representative clip the expensive frames
-are, which is the question VISION step 4's live graph is asked. So this times
+cannot show *where* in the clip the expensive frames are. This therefore times
 each frame as it is delivered and emits `(revision, source index, ms)`,
 which is a series over the working window with the playhead as its cursor. The
 bus is not the vehicle for it: a budget key is a named ceiling, and six hundred
@@ -159,8 +158,8 @@ class RenderRequest:
     #: per render, two methods apart, because there was nowhere to put the
     #: answer between them. The `Dag` build moves off the render thread and out
     #: of the `full_preview_render` span as a side effect, which is worth
-    #: 18 microseconds and was never the reason
-    #: (`docs/findings/2026.07.28-the-decode-format-is-free-to-derive.md`).
+    #: Deriving the format costs about 18 microseconds; caching it would add
+    #: invalidation machinery without removing meaningful work.
     luma: bool
     #: Called with every `FrameResult` **on the render thread**, inside the
     #: timed spans and after the staleness check — so a superseded render's

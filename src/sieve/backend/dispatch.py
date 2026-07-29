@@ -81,10 +81,8 @@ class Kernel(Protocol[ParamsT_contra]):
 class MergingKernel(Protocol[ParamsT_contra]):
     """One frame per input port in, one frame out, on one backend.
 
-    The second signature `Kernel`'s docstring declined to invent early, arrived
-    with the filter class that needs it: every discriminant in REFINED-VISION's
-    temporal chain combines two streams at one node, and a combination cannot
-    be expressed one frame at a time. The frames arrive as a mapping keyed by
+    A temporal combination cannot be expressed one frame at a time. The frames
+    arrive as a mapping keyed by
     the port names the spec declared on `accepts`, because position would make
     edge-declaration order semantic — `a - b` versus `b - a` decided by which
     line of YAML came first.

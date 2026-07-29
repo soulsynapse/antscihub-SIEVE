@@ -1,6 +1,6 @@
 """The representative-clip preview: one window, one arena, many revisions.
 
-A `PreviewSession` is what the tuning loop of VISION step 4 runs on. It holds
+A `PreviewSession` holds
 everything about a preview that does not change while a user drags a slider —
 the footage, the working window, the replicate, the backend, and the store — and
 takes the graph fresh on every render, because the graph is the only thing an
@@ -65,9 +65,8 @@ a full-resolution window is `materialize.py`'s problem.
 
 **A stateful node makes the anchor render cost the lead-in.** `render_frame` is
 the 100 ms path, and it is 100 ms because the frames above the anchor come from
-the store. A stateful node has no key at all
-(`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`), so a
-graph containing one decodes and runs its whole `lead_in` on every single render
+the store. A stateful node has no key, so a graph containing one decodes and
+runs its whole `lead_in` on every single render
 — 90 frames for `background_ema`. Nothing here can fix that, and it is not a
 defect in this module: it is the price of the category, and the thing that will
 pay it down is a materialized checkpoint upstream of the stateful node.

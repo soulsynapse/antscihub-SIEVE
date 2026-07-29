@@ -27,9 +27,8 @@ the parent: a moved box, a re-exported source, a deleted file, a colour artifact
 in a luma session, a window reaching outside what was cut. The fallback is the
 status quo — same paths, same keys, same pixels as before the record existed —
 not an error, because a stale artifact is a storage fact and the run it would
-have accelerated is still perfectly runnable. Surfacing staleness to the user
-belongs to the GUI (`docs/todo/crop-boundary-gesture.md`); the pipeline declines
-quietly and correctly.
+have accelerated is still perfectly runnable. Treating staleness as fatal
+would incorrectly prevent recomputation from the source.
 
 **The span clause is this module's, not `backs`'s.** `CropArtifact.backs`
 deliberately stops short of the span, because a record covering `[10, 20)` asked

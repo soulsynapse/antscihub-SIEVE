@@ -74,7 +74,7 @@ BUDGETS: dict[str, Budget] = _table(
         # Newell's ~0.1 s perceptual cycle). It is also the trigger: sustained
         # scrub latency above this is what flips the player into coarse mode,
         # so this number is enforced by degradation, not by hope. See
-        # `gui/scrub_policy.py` and the note under the table in ARCHITECTURE.md.
+        # `gui/scrub_policy.py` enforces this through coarse mode.
         limit_ms=100.0,
     ),
     Budget(
@@ -166,10 +166,8 @@ BUDGETS: dict[str, Budget] = _table(
         #
         # It is also the only budget in this table a control was ever derived
         # from: `gui/density_plot.MAX_BLOCKS` refuses a block count implying
-        # more than this. That derivation is what
-        # `docs/todo/budgets-attribute-cost-they-do-not-cap-it.md` removes, and
-        # the move above is its precondition — a cap justified by "the window
-        # freezes" has no justification once the window does not freeze.
+        # more than this. Do not restore that cap: the work no longer blocks
+        # repaint, so exceeding this budget means lag rather than a frozen UI.
         limit_ms=100.0,
     ),
     Budget(
@@ -209,8 +207,7 @@ BUDGETS: dict[str, Budget] = _table(
 #: `cut_to_ready` and `slider_to_graph` have neither. `slider_to_graph` was
 #: waiting on there being a slider at all; there is one, and the gesture is now
 #: timed twice over by `knob_to_first_partial` and `knob_to_graphs` — so the
-#: open question is whether this row still names anything they do not, which is
-#: `docs/todo/slider-to-graph.md`.
+#: This row may now duplicate `knob_to_first_partial` and `knob_to_graphs`.
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
     {
         "open_to_first_frame",

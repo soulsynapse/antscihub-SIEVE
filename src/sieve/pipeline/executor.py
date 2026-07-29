@@ -15,17 +15,13 @@ somewhere that can be tested without a codec.
 **Decode is lazy, per frame.** The source frame is fetched on the first root
 that misses the cache and not at all when every root hits, which is what makes
 re-running a tuned clip cost nothing rather than cost a seek per frame. The
-reader is a `FrameSource` rather than a `VideoReader` for the same reason the
-store is a protocol: a run over materialized frames (VISION step 4) is the same
-executor with a different source, not a mode.
+reader is a `FrameSource` rather than a `VideoReader` so a run over materialized
+frames uses the same executor with a different source, not a mode.
 
 **A stateful node keeps its state in its binding, and is never served a cache
 entry.** The second half is not enforced here — `FilterSpec.cacheable` excludes
 `stateful`, so the plan carries no key for such a node and the `key is None`
-branch below already computes it and stores nothing. Why the category is
-excluded is
-`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`; what
-matters to this loop is the consequence, which is that a stateful node sees
+branch below already computes it and stores nothing. A stateful node must see
 every frame of `decode_range` in order and never a gap. A store that could serve
 frame `i-1` and miss frame `i` would leave the kernel running on a state that
 had seen nothing, and there is no branch here defending against that because
@@ -47,9 +43,8 @@ replicate's ROI is what the graph consumes, and `plan.roi` is where "which
 pixels" is decided: it is the replicate's region over the parent, and `None`
 over a materialized crop of that same replicate, whose file holds those pixels
 already (`pipeline/resolve_source.py`). Nothing here knows which it was handed;
-the plan resolved it, and the loop below crops or does not. See
-`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` for why the crop is
-in the graph at all, and `CropArtifact` for why an artifact is a source with an
+the plan resolved it, and the loop below crops or does not. `CropArtifact`
+explains why an artifact is a source with an
 identity of its own rather than a proxy for the parent.
 """
 
@@ -263,9 +258,7 @@ def _check_format(decoded: Frame, plan: ExecutionPlan) -> None:
     hashes `plan.luma`, so a reader opened in the other format produces
     correctly-shaped frames computed from the wrong pixels, stored under keys
     that say otherwise — and the symptom is a preview that looks plausible and
-    a cache that stays poisoned for the rest of the session. Six sites derived
-    this format independently (docs/todo/the-decode-format-has-six-derivations.md)
-    and each was correct in isolation; this is the check that makes a
+    a cache that stays poisoned for the rest of the session. This check makes a
     disagreement between any two of them loud.
 
     Costs one enum comparison per decoded frame, which is nothing beside the

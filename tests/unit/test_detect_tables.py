@@ -1,9 +1,7 @@
 """What the written table is worth as a fixture: does it hold what it was given.
 
 `tests/integration/test_cli_detect.py` owns the command and the two absences.
-This owns the one property that makes the file usable for the comparison
-`docs/todo/parity-comparison-finding.md` wants — a run diffed against a
-recorded one — which is that the numbers survive the trip. A table that agrees
+This checks that the numbers survive a write/read round trip. A table that agrees
 to six decimal places is a comparison that can never fail.
 """
 

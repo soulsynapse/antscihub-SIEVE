@@ -38,12 +38,10 @@ The headless `sieve` command uses the base dependencies. The desktop
 
 ## Dependencies
 
-Use uv so `pyproject.toml` and `uv.lock` stay synchronized:
+Manage dependencies with uv:
 
 ```powershell
 uv add scipy
 uv add --group dev pytest-cov
 uv remove scipy
 ```
-
-Current design notes and work in flight live under `docs/`.

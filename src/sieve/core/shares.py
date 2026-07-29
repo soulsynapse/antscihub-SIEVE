@@ -1,7 +1,6 @@
 """How a session divides the machine. One table, reachable from every consumer.
 
-ARCHITECTURE.md rule 5 says no consumer improves its latency at another's
-expense, and the enforcement is arithmetic rather than argument: every path
+No consumer may improve its latency at another's expense. Every path
 that can take more than one core — **or a bounded slab of memory** — declares
 its share here, and a test checks the sum against what the machine actually
 allocates. A fourth consumer, or a raised constant, fails a test rather than
@@ -30,9 +29,8 @@ feeling. What has a producer and what still does not is stated by `SENSED` /
 applied to this file's own tables.
 
 **The honest gap:** `pipeline/cache.py`'s `MemoryFrameStore` is unbounded and
-holds no row here — see `UNBOUNDED`. It gets its bound when
-`docs/todo/materialization.md` lands; naming the gap is what keeps the sum
-below from reading as complete while it is not (rule 6).
+holds no row here — see `UNBOUNDED`. Omitting it would make the sum below look
+complete when it is not.
 
 **Why this is in `core/` when it declares a GUI session's pools.** It was in
 `gui/concurrency.py`, on the argument that policy about sharing a machine
@@ -79,9 +77,7 @@ PLAYER_WORKERS = 1
 #:
 #: That was a concession when it was written and is no longer one on the path
 #: the preview actually takes: the preview opens luma whenever no node needs
-#: chroma (`gui/preview_runner.py`), and two is the *measured optimum* there —
-#: `prefetch.py`'s `LUMA_WORKER_CAP`, from
-#: `docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
+#: chroma (`gui/preview_runner.py`), and two is the measured optimum there.
 #: On a colour graph it remains the concession it always was.
 PREVIEW_WORKERS = 2
 
@@ -112,8 +108,7 @@ class WorkerSplit:
 # ---- the byte column ------------------------------------------------------
 
 #: One decoded BGR24 frame of the reference source, the unit the in-flight
-#: rows below are denominated in. From the threading finding
-#: (`docs/findings/2026.07.26-threading-the-reads-buys-1.6x-and-stops.md`);
+#: rows below are denominated in.
 #: the luma path holds 15.9 MB instead, so declaring against colour is the
 #: ceiling, not the average.
 REFERENCE_FRAME_BYTES = 47_600_000
@@ -160,9 +155,7 @@ PLAYER_INFLIGHT_SHARE = MemoryShare("player in-flight decode", floor_bytes=REFER
 #: fixed up front — ~280 gray 1280-wide proxies, ~4.7 s at 59.94 fps, enough
 #: that a playhead a few seconds behind the frontier never misses.
 #:
-#: The fraction is the retention finding's one portable consequence
-#: (`docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md`):
-#: capacity beat eviction policy 60:1 at the operating point, so the ring
+#: Capacity beat eviction policy 60:1 at the operating point, so the ring
 #: deserves to grow with the allocation. One percent lands the 68 GB machine
 #: measured there on ~700 proxies, which is the ~720 its working set saturated
 #: at — sized to reach a large machine's own knee, not to hardcode 720. The
@@ -183,10 +176,8 @@ MEMORY_SHARES: tuple[MemoryShare, ...] = (
     RENDER_RING_SHARE,
 )
 
-#: Consumers that hold real memory and no row above — the ledger's honest gap,
-#: the same construction as `bench/budgets.py`'s `WITHOUT_PRODUCER`. This list
-#: only shrinks: `MemoryFrameStore` gets its bound when cache eviction lands
-#: (`docs/todo/materialization.md`).
+#: Consumers that hold real memory and no row above. Omitting one from this
+#: list would make the declared total look complete.
 UNBOUNDED: tuple[str, ...] = ("pipeline/cache.py MemoryFrameStore",)
 
 
@@ -227,10 +218,8 @@ def memory_reserve(total_bytes: int) -> int:
     """Bytes the ledger refuses to allocate: Python, Qt, the decoder's own
     buffers — everything the table above cannot see.
 
-    Provisional until measured — `min(4 GB, max(2 GB, 25%))` is a formula to
-    argue about, and the measurement that replaces it is the session's RSS
-    floor on the reference workstation (H3 in the ledger item; queued in
-    `docs/todo/ledger-measurements.md`).
+    This is a provisional formula, not a measurement. Treating it as observed
+    usage would make the estimate look more precise than it is.
     """
     gib = 1024**3
     return min(4 * gib, max(2 * gib, total_bytes // 4))
@@ -262,9 +251,7 @@ def ledger_ceiling(total_bytes: int | None = None) -> int:
     """What a session's measured RSS is judged against: every declared share
     as resolved for this machine, plus the reserve.
 
-    The standing comparison `docs/todo/ledger-measurements.md` wanted run once
-    on the reference workstation, computed instead on whatever machine the
-    session is on — which is the point: the reserve's formula models total RAM
+    Compute this on the current machine: the reserve's formula models total RAM
     while the session-floor finding showed memory tracks the working window,
     and per-machine readings against this ceiling are how that mismatch stops
     being one finding and starts being every session's evidence.

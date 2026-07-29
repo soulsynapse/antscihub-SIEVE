@@ -28,8 +28,7 @@ claimed `backend_agnostic`.
 the replicate's display name. A clip changes which frames are computed, never
 what a frame is. A checkpoint changes where a result lives, never what it is —
 `Project` keeps both off `Node` for this reason, and hashing them here would
-undo that: an HPC handoff empties `checkpoints` (VISION step 6) and must not
-invalidate a single entry. A sink path is where output is written, and two
+make disabling materialization invalidate every entry. A sink path is where output is written, and two
 projects writing the same computation to different folders share entries. A
 replicate is identified by `replicate_id` precisely so renaming one costs
 nothing, and even `replicate_id` is absent — what separates two replicates is
@@ -161,9 +160,7 @@ def source_key(source: str, roi: ROI | None = None, *, luma: bool = False) -> st
     The `roi` argument is where that lands: a run over the parent names the
     replicate's region, a run over that replicate's artifact names none, because
     the region was cut before the file existed. `ExecutionPlan.roi` is the one
-    place those two are told apart. See
-    `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` for why the crop
-    is in the graph at all, and `CropArtifact` for what re-keying onto a child
+    place those two are told apart. `CropArtifact` explains what re-keying onto a child
     source buys and costs.
 
     Args:

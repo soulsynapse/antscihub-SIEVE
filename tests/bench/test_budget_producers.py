@@ -6,17 +6,16 @@ cannot be missed, which is indistinguishable from compliance.
 
 *Published* and *timed* are two different gaps and the second is wider: nine
 of the twelve have no CI benchmark asserting a limit, so `TIMED` is pinned here
-the same way. The prose that used to hold these counts got both of them wrong
-(AUTO-GUARDRAILS §4 said "7 of the 11" and "2 of the 11"), which is the whole
-argument for a set a test can read.
+the same way. Keeping these counts only in prose lets them drift from the
+table.
 
 Checks, one per direction a key can go wrong:
 
 - a budget in `BUDGETS` that no module under `src/` names, and is not declared
   in `WITHOUT_PRODUCER`;
 - a module-level `*_BUDGET` constant whose value is not a budget key. Those
-  constants exist because `pipeline/` sits below `bench/` and may not import it
-  (ARCHITECTURE.md, layer diagram), so `preview.py` names its keys as string
+  constants exist because `pipeline/` sits below `bench/` and may not import it,
+  so `preview.py` names its keys as string
   literals — reintroducing exactly the unchecked-key typo that `metrics.py`'s
   key registry exists to prevent. This closes it from the other end.
 
@@ -107,9 +106,8 @@ def asserted() -> set[str]:
 
 
 def test_timed_says_exactly_which_budgets_have_a_clock_on_them(asserted: set[str]) -> None:
-    # Both directions, because both have been wrong. AUTO-GUARDRAILS §4 claimed
-    # two timed budgets out of eleven while the table held twelve and three were
-    # timed — a prose count nobody could check, which is what this replaces.
+    # Check both directions: a one-way subset check can silently leave a timed
+    # budget undeclared or a declared budget untimed.
     assert asserted == set(TIMED), (
         "`budgets.TIMED` must name exactly the keys passed to `within_budget` in "
         f"tests/bench/; missing: {sorted(asserted - TIMED)}, "

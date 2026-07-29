@@ -39,8 +39,8 @@ from dataclasses import dataclass
 
 from sieve.core.pipeline_model import ClipRange
 
-#: How long a window is when nobody has chosen one. VISION step 4 asks the user
-#: to tune against five to ten seconds; ten is the generous end, because a
+#: How long a window is when nobody has chosen one. Ten seconds avoids
+#: accidentally selecting too little context because a
 #: window that is too long is trimmed by watching it and one that is too short
 #: hides the behaviour the user opened the file to find.
 DEFAULT_WINDOW_SECONDS = 10.0

@@ -8,7 +8,6 @@ model, declared I/O, streaming mode, a params-derived output size, and a kernel
 registered per backend — without any of the correctness questions a detector
 would drag in.
 
-It is also the filter VISION step 4's storage readout most wants to exist:
 `frame_bytes_ratio` is `1 / factor**2`, so putting a 4x downsample in front of a
 checkpoint is the difference between storing a run and not being able to.
 """

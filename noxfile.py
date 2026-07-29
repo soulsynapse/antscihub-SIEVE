@@ -26,7 +26,7 @@ def tests(session: nox.Session) -> None:
 
 @nox.session
 def checks(session: nox.Session) -> None:
-    """The CI quality gate."""
+    """Run the project checks."""
     typecheck(session)
     imports(session)
     tests(session)

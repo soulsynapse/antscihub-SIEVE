@@ -7,7 +7,7 @@ clip reproduce when its window was re-opened. That sharing is the best part of
 v1 and is kept: the live tab, a future whole-video pass, and the parity check
 all call these, and none of them re-implements a comparison.
 
-Two deliberate deviations from v1, both settled in the parity plan:
+Two details are easy to implement incorrectly:
 
 * **The count threshold is denominated as a fraction of the region's blocks**,
   converted to counts in exactly one place (`count_band_to_counts`). v1 stored

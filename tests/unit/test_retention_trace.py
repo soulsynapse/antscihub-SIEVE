@@ -7,8 +7,7 @@ file is written from two threads and read back by an experiment that runs
 later; a `frontier` of None that came back as zero, or a truncated last line
 that lost the whole session, would each make the replay quietly wrong.
 
-**The policies disagree where the item said they would.** The observation that
-opened `docs/todo/proxy-retention-policy.md` is that a render walking forward
+**The policies disagree in the dangerous case.** A render walking forward
 evicts exactly the frames a backward scrub wants. A harness that cannot show
 that difference on a trace built to contain it cannot show it on a real one
 either — this is the calibration that makes a null result on a real trace mean

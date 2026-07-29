@@ -10,12 +10,10 @@ writes a record that claims the parent's identity, and no key derivation
 changes: a run against the artifact roots off `source_identity(<the file>)`
 with `roi=None`. See `CropArtifact` for what that buys and what it costs.
 
-**Verification is a corruption guard, and it is not optional.** The measurement
-that chose the codec also found a *lossless* encoding whose pixels came back
-wrong on every frame through the same reader that reads everything else
-(`docs/findings/2026.07.28-the-crop-artifact-is-ffv1.md`): right shape, right
-size, right frame count, wrong content, and no check anywhere in the decode path
-that could tell. So the write pass holds a digest and two cheap statistics per
+**Verification is a corruption guard, and it is not optional.** The writer can
+produce an encoding with the right shape, size, and frame count but wrong pixel
+content through the normal reader. Without this verification there is no
+visible symptom. The write pass therefore holds a digest and two cheap statistics per
 fed frame, reads its own output back through `VideoReader`, and compares. A file
 that fails is deleted and the failure raised — never registered, never returned
 (rule 6: refuse rather than hand back a plausible artifact).

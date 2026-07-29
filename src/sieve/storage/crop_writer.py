@@ -1,15 +1,9 @@
 """FFV1 in Matroska, written frame by frame from arrays.
 
-The codec is not a preference. `docs/findings/2026.07.28-the-crop-artifact-is-ffv1.md`
-swept FFV1, lossless H.264 at three GOP settings, and a Zarr frame array against
-the access pattern a tuning session actually has — sequential playback plus
-scrubbing — and FFV1 took size, sequential decode, and correctness at once:
-0.09 ms/frame sequential, 3.9 ms median seek, the smallest files, and
-byte-identical back through the unchanged `VideoReader` in both gray and colour.
-The pre-stated favourite, `-qp 0`, lost seek at default GOP and its *gray*
-variant came back wrong on every frame — a lossless file serving pixels that
-match no input frame. FFV1 is also intra-only by construction, so there is no
-GOP setting here to get wrong.
+Substituting a nominally lossless codec is unsafe: the file can be lossless
+while the application's normal reader returns different pixels. FFV1
+round-trips byte-identically through `VideoReader` in gray and colour and is
+intra-only, so there is no GOP setting to get wrong.
 
 **This module owns no identity.** It takes arrays and an fps and writes a file;
 it does not know what a replicate is, what the crop was cut from, or how the

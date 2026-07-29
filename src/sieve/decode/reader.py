@@ -7,9 +7,9 @@ high-bit-depth path would be a separate reader.
 
 The seek strategy exists because of a lopsided cost profile, measured on a
 5312x2988 59.94 fps source (mpeg4 Simple Profile at 183 Mbps — this docstring
-said H.264 until `ffprobe` was pointed at the file, and the correction matters
-because it is why hardware decode never engaged; see
-`docs/findings/2026.07.26-the-convert-is-single-threaded-not-expensive.md`):
+said H.264 until `ffprobe` was pointed at the file. Assuming the container's
+label is the codec can send optimization toward hardware decode that never
+engages:
 
     grab()                     ~1.3 ms   (demux + decode, no colour convert)
     retrieve()                ~29 ms     (YUV -> BGR convert and copy)
@@ -33,10 +33,9 @@ touching `decoder_identity()`.
 **`luma=True` declines the conversion instead of parallelising it.** With
 `CAP_PROP_CONVERT_RGB=0` the FFmpeg backend hands back the Y plane alone — one
 channel at `(height, width)`, 15.9 MB against BGR's 47.6 — and the per-frame cost
-drops from 19.4 ms to 7.96 ms on the reference source. The saving is the convert
-*and* the allocation that carries it, which is the wall
-`docs/findings/2026.07.26-threading-the-reads-buys-1.6x-and-stops.md` found at
-four workers rather than at any core count.
+drops from 19.4 ms to 7.96 ms on the reference source. The saving is both the
+conversion and its allocation; treating it as decode alone gives the wrong
+worker-scaling model.
 
 This is not the same array as `cvtColor(BGR2GRAY)` of the converted frame — the
 luma plane is limited-range and this footage is BT.709 where `cvtColor` applies

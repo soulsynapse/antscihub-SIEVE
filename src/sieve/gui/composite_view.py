@@ -1,7 +1,6 @@
 """The step composite: the selected step's output over that step's input.
 
-This is VISION step 4's three-way overlay after REFINED-VISION collapsed it
-to one view (TODO 2026.07.26). *Raw video* is not a mode — within a level the
+*Raw video* is not a mode — within a level the
 source is what the first step's composite shows at full opacity. *Full
 current state* is not a mode — with a stack that always has a selected step,
 full state is the composite with the tail selected. What remains is the
@@ -10,9 +9,8 @@ invented, which is spatial information no per-frame scalar plot can carry.
 
 The widget is two images and one opacity control. `base` paints aspect-fit at
 full opacity; `over` paints into the same rectangle at the slider's opacity.
-It never renders anything itself: the tab hands it frames a render already
-produced (`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` — the
-display path never feeds the graph).
+It never renders anything itself: the tab hands it frames already produced.
+Feeding display output back into the graph would create a second computation path.
 
 **The block grid lives here too, not in a second frame panel.** When the
 composed step's output is a block grid, the pane draws the grid itself

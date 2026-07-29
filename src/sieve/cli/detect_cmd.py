@@ -2,9 +2,7 @@
 
 `sieve run` proves the graph executes. This proves the *document* — a project
 carries a `DetectorSettings`, resolved per replicate and hashed into what the
-run is, and until `sieve.detect` existed there was no path from a saved
-project to detected intervals that did not start a Qt application
-(docs/todo/headless-detection.md).
+run is. Detection must not require starting a Qt application.
 
 **The series is the sink's output, and the sink is the graph's.** The detector
 runs over a `(T, B)` stack of one node's grids, and the node that produces
@@ -28,9 +26,8 @@ record, and the intervals printed here are the ones that will not move. That
 is the difference between this and the tab, where the record is still filling.
 
 **`--csv` is the measurement leaving the process, and stdout is not.** The
-printed report is a summary — a count of intervals and their bounds — and
-`docs/todo/parity-comparison-finding.md` needs the count/gate series itself to
-compare a run against. `detect/tables.py` holds the two tables and the reason
+printed report is a summary — a count of intervals and their bounds. Comparing
+two runs requires the count/gate series itself. `detect/tables.py` holds the two tables and the reason
 they are two; this command's part is refusing the export up front when the
 project has no detector, since there is then no series either and a directory
 of empty files would say the opposite.

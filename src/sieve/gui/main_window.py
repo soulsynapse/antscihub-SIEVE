@@ -412,9 +412,8 @@ class MainWindow(QMainWindow):
 
         The selection has already reached the document — the filter tab's
         re-render is on its way through the runner — so all that is left is
-        the navigation the vision's sentence ends with. See
-        `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md` for why
-        there is no progress bar here.
+        the navigation. Adding a progress bar here would duplicate the
+        background worker's status.
         """
         self._tabs.setCurrentWidget(self._filter_tab)
         self.statusBar().showMessage(f"Tuning {self._document.at(row).name}")
@@ -643,8 +642,8 @@ class MainWindow(QMainWindow):
     def _open_neighbour_project(self, video: Path) -> None:
         """Open the project filed beside a video the user opened directly.
 
-        VISION step 1 puts the project at the root of the source's own folder,
-        so this file existing is the normal case for footage that has been
+        This file normally sits at the root of the source's own folder, so its
+        existence is the normal case for footage that has been
         worked on before. This used to ask, on the argument that silently
         restoring twelve replicates the user cannot see the provenance of is a
         worse surprise than one question. The argument survives in the

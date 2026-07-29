@@ -4,10 +4,8 @@ Given this document and the source video it names, any executor — CLI, GUI, or
 a batch job on a cluster — performs the same run and writes the same files.
 That is the whole contract, and it is why nothing here may depend on anything
 that exists in only one of those three: no widget geometry, no zoom, no scrub
-position, no cache directory, no thread count. `extra="forbid"` throughout is
-the machine-checked form of that rule (AUTO-GUARDRAILS §2) — stashing GUI state
-in the artifact requires editing this file, which is the review the rule exists
-to force.
+position, no cache directory, no thread count. `extra="forbid"` prevents such
+state from being silently accepted and then ignored by another runner.
 
 **Deliberately not registry-aware.** Nothing here asks whether a filter named
 by a node exists, what parameters it takes, or whether an edge's types chain.
@@ -29,17 +27,14 @@ a result lives, never what it is, and a `materialize` field sitting next to
 the node makes that mistake unavailable rather than merely documented.
 `tests/unit/test_pipeline_model.py` pins `Node`'s field set for the same reason.
 
-**No measurements live here.** VISION steps 4, 5, and 7 want cost feedback per
-operation, compaction suggestions driven by it, and a processing report at the
-end. None of that belongs in this document: a timing is a fact about one
+**No measurements live here.** A timing is a fact about one
 machine, and this is the one artifact two machines are required to agree about.
 What the artifact owes benchmarking is addressability — `node_id` and `sink_id`
 are stable, so a run report can key against them from outside — and that is all
 it owes. A `measured_ms` on `Node` would break the identity line above.
 
-**The HPC handoff is a derived document, not a config section.** VISION step 6
-splits it correctly: machine capability (threads, memory, GPU) reaches the run
-as command-line options, while what the wizard *tidies* is this document with
+Machine capability (threads, memory, GPU) reaches the run as command-line
+options, while what a configuration tool edits is this document with
 `checkpoints` emptied and `clip` dropped — a cluster with the memory to skip
 compaction runs the same graph without it, and over the whole video rather than
 the tuning span. Both are one field, which is the shape that split argues for.
@@ -131,8 +126,7 @@ from sieve.core.types import ROI
 SCHEMA_VERSION = 5
 
 #: Project files are named `<video stem>.sieve.yaml` and live *beside* the
-#: video they describe. VISION step 1 fixes the layout — a source in a folder,
-#: its derivatives in child folders — and the project file is what names those
+#: video they describe. The project file names derivative folders, so it
 #: children, so it belongs at the root of that tree rather than in a
 #: user-global application directory. The practical consequence is that copying
 #: the folder copies the project, which is how footage reaches a cluster.
@@ -240,9 +234,8 @@ class SourceRef(_Artifact):
 class ClipRange(_Artifact):
     """The representative five to ten seconds the user tunes against.
 
-    VISION step 4's tuning span. Frame indices, not timestamps: `Frame.index`
-    is the authoritative position for the same reason cache keys are built from
-    it — container timestamps drift, and a clip that means a different span on
+    Frame indices, not timestamps: `Frame.index` is authoritative because
+    container timestamps drift, and a clip that means a different span on
     reload is a clip that invalidates the tuning done against it.
 
     Half-open, `[start, end)`, matching `ROI.right` being one past the last
@@ -492,7 +485,7 @@ class Edge(_Artifact):
 
 
 class Sink(_Artifact):
-    """A declared output: VISION step 6's "select a specific stage to output".
+    """A declared output.
 
     Sinks are what make the artifact a runnable thing rather than a description
     of one — a graph with no sinks computes nothing anyone can look at, and
@@ -502,13 +495,12 @@ class Sink(_Artifact):
     must share cache entries.
 
     `path` names a *directory* relative to the project file, because a sink
-    under replicate fan-out produces one output per replicate. VISION step 1's
-    "the result of that lives in the child folder" is the default: a relative
+    under replicate fan-out produces one output per replicate. A relative
     path with no `..` in it puts derivatives under the source's own folder.
     """
 
-    #: Addressable so an HPC handoff can toggle one output without rewriting
-    #: the list positionally (VISION step 6).
+    #: Addressable so callers can toggle one output without rewriting the list
+    #: positionally.
     sink_id: str = Field(default_factory=_new_id)
     #: The node whose output is written. Checked against the graph by `Project`.
     node_id: str
@@ -562,10 +554,7 @@ class CropArtifact(_Artifact):
     byte-parity claim nobody depends on. What it costs is that descending onto
     the artifact re-keys: downstream entries from source-side tuning are
     recomputed once, and two replicates with identical ROIs stop sharing
-    entries once each is backed by its own file. Both were accepted knowingly
-    (2026-07-28); `docs/todo/crop-artifact-writer.md` holds the reversal this
-    revised, and `docs/findings/2026.07.28-the-crop-artifact-is-ffv1.md` the
-    measurements.
+    entries once each is backed by its own file.
 
     Rule 7 therefore stays clean, and it is worth being precise about which
     side each field falls on: every field here is *location* — where an
@@ -666,8 +655,7 @@ class Pipeline(_Artifact):
     has already happened by the time the graph starts, so there is no position
     in the graph from which an uncropped frame is observable. That is what makes
     a materialized crop a checkpoint rather than a mode: it is a faster source
-    for the same pixels, and by the rule above it cannot change what is
-    computed. See `docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`.
+    for the same pixels, and it must not change what is computed.
     """
 
     nodes: tuple[Node, ...] = ()
@@ -821,11 +809,10 @@ class Project(_Artifact):
     #: from the frame rate (`DetectorSettings.default_for`), which only the
     #: bound source knows.
     detector: DetectorSettings | None = None
-    #: Node ids whose output is materialized to disk — VISION step 4's "save
-    #: that representative few seconds to the child layer". A run without them
+    #: Node ids whose output is materialized to disk. A run without them
     #: produces identical results and merely recomputes more, which is why they
-    #: are recorded here and never hashed: the HPC wizard turns them off for a
-    #: cluster with the memory to skip them (VISION step 6), and that must not
+    #: are recorded here and never hashed: a runner may turn them off, and that
+    #: must not
     #: change a single cache key.
     checkpoints: tuple[str, ...] = ()
     outputs: tuple[Sink, ...] = ()

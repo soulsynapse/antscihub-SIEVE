@@ -1,11 +1,7 @@
 """A detection written where R can read it, and a person can too.
 
-VISION step 1 asks for the measured thing "as a csv and enough information to
-stick it into R". `sieve.detect` already computes it; until this module there
-was no way out of the process except stdout, which is a summary and not a
-measurement — `docs/todo/parity-comparison-finding.md` wants a count/gate
-series a harness compares against forever, and a printed interval count cannot
-be that.
+Stdout is only a summary. Treating it as the measurement loses the count/gate
+series required to compare runs.
 
 **One declaration per column, and the header, the cells, and the data
 dictionary are three readings of it.** `Column` carries the name, the clause

@@ -1,6 +1,6 @@
 """The filter tab: the live chain on the right, where the signal is on the left.
 
-Item 6's assembly (parity plan § 2). The left column is the step composite —
+The left column is the step composite —
 which also carries the block grid overlay, since the composite absorbed the
 block-heat panel — the green windowed-count graph, and the detection
 window D row; the right column is `ChainStackView` over one `LiveChain`
@@ -127,7 +127,7 @@ from sieve.gui.series_collector import SeriesCollector
 from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
 from sieve.gui.wizard_model import catalog, chain_from_pipeline
 
-#: The two interaction budgets this tab produces (ARCHITECTURE.md rows).
+#: The two interaction budgets this tab publishes.
 BAND_DRAG_BUDGET = "band_drag_repaint"
 KNOB_BUDGET = "knob_to_graphs"
 #: The other end of the same arm: when the graphs *started* filling, which
@@ -1474,8 +1474,7 @@ class FilterTab(QWidget):
 
         The wizard grabber's twin: it runs on the render thread inside a
         render that was happening anyway, indexes the `FrameResult` for two
-        nodes, and never feeds anything back into the graph
-        (`docs/findings/2026.07.25-the-crop-belongs-in-the-graph.md`).
+        nodes, and must never feed anything back into the graph.
         """
         window = self._document.window
         target = self._composite_target()

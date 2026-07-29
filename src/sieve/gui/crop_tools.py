@@ -1,7 +1,7 @@
 """The replicate tab's right half: what a box is, and what it was cut from.
 
-`REFINED-VISION.md` asks this pane for two unrelated things, and they are
-unrelated on purpose. It is where the **cropping tools** live — the draw/stamp
+Two unrelated controls share this pane but must not share state. It is where
+the **cropping tools** live — the draw/stamp
 toggle, the stamp's dimensions, the magnifier's reset — and it is where
 information "points to the parent", the source video every replicate here is a
 region of. One is a control surface and the other is a read-only claim about

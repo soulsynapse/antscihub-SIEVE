@@ -12,9 +12,8 @@ over `(T, B)` — `morlet_band_power` plus a pooled `morlet_power` for the
 scalogram — and neither existing thread can host it. On the GUI thread it
 blocks the repaint it exists to cause, which is the one thing this application
 sells. On the render thread it is worse: `RenderRequest.consumer` runs inside
-the timed spans, so every partial derive would inflate `full_preview_render`
-and steal decode throughput to buy graph liveness — which ARCHITECTURE.md
-non-negotiable #5 calls a defect rather than a tuning choice, in as many words.
+the timed spans. Running every partial derive there would inflate
+`full_preview_render` and steal decode throughput to buy graph liveness.
 So the derivation gets a thread, and the two budgets either side of it keep
 measuring what they already measured.
 

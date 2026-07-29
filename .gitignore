@@ -1,5 +1,6 @@
 .venv/
 .nox/
+uv.lock
 dist/
 build/
 __pycache__/

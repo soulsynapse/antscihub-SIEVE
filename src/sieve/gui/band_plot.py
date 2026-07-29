@@ -82,7 +82,7 @@ DIM = QColor(139, 142, 152)
 ACCENT = QColor(94, 200, 180)
 #: Band handles, all three plots. One color for "this is a threshold".
 BAND = QColor(240, 110, 100)
-#: Detection. Never a data series (parity plan § 2: green is a status color).
+#: Detection. Never a data series: green is reserved for status.
 DETECT = QColor(96, 210, 120)
 
 

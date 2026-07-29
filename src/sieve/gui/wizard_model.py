@@ -7,14 +7,13 @@ on the table and grades those. The wizard widget is a presentation over the
 
 **The catalog is a chain-model concept, not registry metadata.** The registry
 knows every filter's spec, but a spec cannot say what travels between steps —
-`ArraySpec` cannot tell an image from a block grid (see
-`docs/findings/2026.07.25-the-filter-contract-cannot-type-vision.md`) — and it
+`ArraySpec` cannot tell an image from a block grid, and it
 knows nothing of the two tab-side steps at all. So each catalog entry carries
 its own kinds and stage, exactly as `parity_chain`'s steps do, and the two
 suffix steps sit in the same list as the five node-backed operations because
 a chain that lost one needs a way to get it back.
 
-**The wizard cannot break the chain** (parity plan § 2). An entry whose input
+**The wizard cannot break the chain.** An entry whose input
 kind does not match the seam is not listed at all; an entry that fits but
 would conflict downstream is listed disabled with "breaks below"; an entry
 already in the chain is listed disabled with "in chain" — learning 8's

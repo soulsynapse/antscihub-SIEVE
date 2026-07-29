@@ -1,6 +1,6 @@
 """The graph HUD: what each frame of the working window cost, as a plot.
 
-VISION step 4's benchmark feedback, drawn. `gui/preview_runner.py` emits
+`gui/preview_runner.py` emits
 `frame_cost(source index, ms)` per delivered frame of the newest render, and
 this is the view that turns six hundred of those into an answer to the question
 the two whole-render numbers on the bus cannot carry: *where* in the
@@ -43,8 +43,7 @@ place.
 **The whole-render verdicts land here too.** `gui/executor_adapter.py` carries
 the bus's samples to the GUI thread and until now nothing drew them.
 `show_sample` keeps the newest sample per watched key and paints one line —
-elapsed against ceiling, in the band color when missed — because a budget miss
-is a defect (ARCHITECTURE.md non-negotiable #4) and a defect reported only to a
+elapsed against ceiling, in the band color when missed. Reporting a miss only to a
 status bar the user has scrolled past is one nobody sees.
 
 **And one span is named as the dominant cost.** `WATCHED` above is a fixed
@@ -54,8 +53,7 @@ ceiling rather than by raw milliseconds, and the leader is printed with
 whatever `Sample.detail` its publisher attached. Raw milliseconds would name
 the render every time, since a 3000 ms ceiling dwarfs a 100 ms one; the ratio
 is what makes a density rebuild at B = 65,536 outrank a render that is merely
-large. This is what stands in for the block-count cap that was removed
-(`docs/todo/budgets-attribute-cost-they-do-not-cap-it.md`): the user may ask
+large. This stands in for the removed block-count cap: the user may ask
 for any grain, and the obligation the budget creates is that the application
 *say what is costing the time* rather than refuse. Persistent, not a warning —
 it is drawn whether or not anything is over, because a field that appeared only

@@ -7,9 +7,8 @@ half deserves the pixels changes within a single session.
 
 The top half is split again, left and right. The right half is
 `gui/crop_tools.py`: the draw/stamp toggle, the magnifier's reset, the selected
-box's dimensions, and what the source video is. That pane is a control surface
-and a provenance claim in one, which is what `REFINED-VISION.md` asks for when
-it says the settings should "point to the parent".
+box's dimensions, and what the source video is. Omitting the parent information
+would make a derived crop look like an independent source.
 
 **The left half is the picture and nothing else.** There is no seeker here and
 no clip editor: both are `gui/timeline_bar.py`, one band across the bottom of
@@ -62,7 +61,7 @@ class ReplicateTab(QWidget):
     `selection_changed` — it has to, because the model resets wholesale on
     every structure change and a reset clears the view's own selection.
 
-    Two gestures, two meanings (REFINED-VISION, Replicates): a click on a
+    Two gestures have different meanings: a click on a
     table *row* selects, which is what the user wants while drawing the next
     twelve boxes; a click on a box in the *video* accepts it — selects and
     asks the window to move over to the filter tab with that arena under it.

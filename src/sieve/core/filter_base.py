@@ -96,8 +96,7 @@ class StreamKind(StrEnum):
 
     #: Frames: an `ArraySpec` describes it.
     ARRAY = "array"
-    #: Rows: a `TableSpec` describes it. VISION step 1's "coordinates of that
-    #: specific color as a csv and enough information to stick it into R".
+    #: Rows: a `TableSpec` describes it.
     TABLE = "table"
 
 
@@ -313,10 +312,9 @@ class ParamsBase(BaseModel):
         `FilterSpec.stored_bytes_ratio` multiplies them.
 
         Unlike `output_rate` this is a `float` and is deliberately not
-        cross-checked against anything on the spec. It feeds VISION step 4's
-        storage HUD and step 5's compaction suggestion and never a correctness
-        decision, so an undeclared override is a wrong prediction rather than a
-        wrong result — the asymmetry with rate is the point.
+        cross-checked against anything on the spec. It must never drive a
+        correctness decision: an inaccurate value is a wrong prediction, not a
+        wrong result.
         """
         return 1.0
 
@@ -370,11 +368,6 @@ class ArraySpec:
 @dataclass(frozen=True, slots=True)
 class TableSpec:
     """Rows rather than frames: detections, coordinates, per-frame summaries.
-
-    VISION step 1 asks for "the coordinates of that specific color as a csv and
-    enough information to stick it into R" as a first-class output, and duckdb
-    and pyarrow are already dependencies, so this is a stream the graph carries
-    rather than only a thing a sink writes.
 
     `columns` is conjunctive where `ArraySpec`'s sets are disjunctive, and the
     difference is not an oversight. A filter listing `("uint8", "float32")`
@@ -434,8 +427,8 @@ class CostEstimate:
     downsample scale, which are parameters and not properties of the kernel.
     That prediction is `FilterSpec.stored_bytes_ratio`, which reads the two
     params methods. `peak_bytes_per_input_byte` below is a working set — what
-    the kernel needs held at once — and the two differ by an order of magnitude
-    for exactly the filters VISION step 4 puts in front of everything else.
+    the kernel needs held at once. Confusing the two can understate memory by
+    an order of magnitude.
     """
 
     #: Wall-clock seconds to process one megapixel on the reference CPU.
@@ -509,9 +502,8 @@ class FilterSpec:
     #: declarations, and a filter declaring `warmup_frames=0` over a running sum
     #: is indistinguishable here from one declaring 90 over a settled EMA. So a
     #: served entry would rest on an unverified number in a decorator, and the
-    #: failure lands exactly where `cache_key.py`'s asymmetry rule says it must
-    #: not: well-formed key, plausible frame, no symptom. See
-    #: `docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`.
+    #: failure lands exactly where it must not: well-formed key, plausible
+    #: frame, no symptom.
     stateful: bool = False
     #: CPU and GPU kernels agree bit for bit. Gates whether backend identity
     #: leaves the cache key. False for essentially every float kernel — cuFFT
@@ -662,9 +654,8 @@ class FilterSpec:
         front of a 2x downsampler stores a fortieth of what it was handed, and
         neither filter had to know about the other to say so.
 
-        A prediction for VISION step 4's storage readout and step 5's
-        compaction suggestion, never an input to a cache key or a decision
-        about what to compute. `static` because it reads nothing off the spec —
+        A prediction only, never an input to a cache key or a decision about
+        what to compute. `static` because it reads nothing off the spec —
         it is here rather than beside the two methods it calls so that the
         composition is defined once, where a caller holding a spec will find it.
         """

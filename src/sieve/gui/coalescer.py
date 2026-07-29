@@ -2,8 +2,7 @@
 
 This is the ordering discipline that makes a scrub feel bounded. Measured, a
 burst of 40 seeks settles on the final target in ~172 ms — two decodes — where
-queueing the same burst takes ~3.2 s and paints 38 frames nobody asked for
-(`docs/findings/2026.07.25-coalescing-bounds-scrub-lag.md`). The player holds
+queueing the same burst takes ~3.2 s and paints 38 frames nobody asked for. The player holds
 the scrub budget by discarding work, not by decoding faster.
 
 `pipeline/preview.py` needs the identical discipline against filtered frames

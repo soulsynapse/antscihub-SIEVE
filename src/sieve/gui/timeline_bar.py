@@ -61,9 +61,7 @@ from sieve.gui.player import VideoPlayer
 from sieve.gui.timeline_model import Geometry, ended_at_handle, moved_to, started_at
 
 #: Height of the band. Tall enough to be a target for a mouse rather than a
-#: hairline to be aimed at, and sized now for the coverage and detection lanes
-#: that land in it later (`docs/todo/coverage-and-detection-lanes.md`) rather
-#: than grown when they arrive.
+#: hairline to be aimed at.
 STRIP_HEIGHT = 44
 
 #: Vertical inset of the painted track inside that height.
@@ -77,8 +75,8 @@ _EDGE_GRAB = 6.0
 #: Depth of the darker band along the window's top that moves it whole.
 _HEADER_HEIGHT = 9.0
 
-#: Shortest window a drag may produce. A window under a second is a misclick —
-#: nothing in VISION step 4 is tuned against less — and the floor is in seconds
+#: Shortest window a drag may produce. A window under a second is a misclick,
+#: and the floor is in seconds
 #: rather than frames so it means the same thing at 30 fps and at 240.
 MIN_WINDOW_SECONDS = 1.0
 

@@ -17,8 +17,8 @@ a 10 ms interval, which would be a tenth of the `scrub_settle` budget of
 invented latency. The timestamps below are taken inside `frame_changed`, so
 what is measured is the player's round trip and not the harness's.
 
-The fixture is 160x120 and the reference footage is 5312x2988, so these numbers
-are not comparable to the ones in `docs/findings/`. That is fine and deliberate:
+The fixture is 160x120, so treating these measurements as representative-source
+performance would be wrong:
 the job here is to catch a regression that blows past a ceiling by an order of
 magnitude, not to certify the reference hardware.
 """

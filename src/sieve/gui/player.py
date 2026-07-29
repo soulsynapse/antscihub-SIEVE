@@ -23,8 +23,8 @@ frame regardless of mode.
 
 **A bounded transport.** Every position the player can reach is inside the
 working window, and playback loops within it rather than running to the end of
-the asset. That is what makes the window the unit of work VISION step 4 asks
-for: the user picks the ten seconds that matter and the transport stops being
+the asset. Letting playback escape the selected window would make tuning act on
+different footage than the user selected.
 able to leave them. The window arrives from the document through `set_window`,
 and the arithmetic — which frame is shown last before the loop, and where a
 playhead the window has moved out from under goes — is in `timeline_model.py`,
@@ -42,9 +42,9 @@ be the wrong tradeoff.
 
 One instrument hangs off all of this and is off unless a session asks for it:
 `bench/retention_trace.py` records which frame was requested, from where the
-playhead was, and which of the three layers served it. That is the query half
-of the retention experiment `docs/todo/proxy-retention-policy.md` is waiting
-on; the render ring writes the production half to the same file.
+playhead was, and which of the three layers served it. The render ring writes
+the production half to the same file; using different traces would make hit
+analysis compare unrelated sessions.
 """
 
 from __future__ import annotations

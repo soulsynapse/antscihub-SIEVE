@@ -128,8 +128,7 @@ pipeline:
 
 class TestPurity:
     def test_gui_state_cannot_be_stashed_in_the_artifact(self) -> None:
-        # AUTO-GUARDRAILS §2, machine-checked. `extra="forbid"` is what makes
-        # the rule cost something to break: a GUI wanting to persist zoom or
+        # `extra="forbid"` prevents a GUI from silently persisting zoom or
         # panel layout has to edit `core/pipeline_model.py` to do it, which is
         # the review the guardrail exists to force. Without this, an unknown key
         # would round-trip out and the artifact would quietly stop being the
@@ -397,8 +396,8 @@ class TestEquivalenceGroups:
 
 class TestConventions:
     def test_the_project_file_sits_beside_its_video(self) -> None:
-        # VISION step 1's folder layout: the project names the child folders its
-        # derivatives live in, so it belongs at the root of that tree rather
+        # The project names the child folders its derivatives live in, so it
+        # belongs at the root of that tree rather
         # than in a user-global application directory. Copying the folder is
         # then how a project reaches another machine.
         video = Path("/data/arena/stab_GX010050.MP4")

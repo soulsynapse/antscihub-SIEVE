@@ -2,9 +2,8 @@
 
 Render-fed playback's buffer. While a window render fills, the preview thread
 decodes every frame of the window — the very frames the player would decode
-again to show them, and the two readers contend on the bandwidth that is
-actually scarce (`docs/findings/2026.07.27-decode-is-a-bandwidth-wall-shared-
-by-two-consumers.md`). The frames are discarded, not unavailable: `execute`
+again to show them, and the two readers contend for decode bandwidth. The frames
+are discarded, not unavailable: `execute`
 drops its decoded source after the graph consumes it. This ring is where they
 go instead — written once per frame on the render thread, read by the player
 on the GUI thread, so the pane can show what the render already paid for and
@@ -29,9 +28,8 @@ conversion pass nobody measured.
 
 The bound is `RENDER_RING_SHARE` in `core/shares.py` — declared there so
 the ledger's sum stays the whole session. It is a 256 MB floor with a 1%
-fraction: capacity, not eviction order, is what its hit rate turned out to be
-made of (`docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md`),
-so a bigger machine gets a bigger ring rather than a cleverer one.
+fraction. Substituting a more elaborate eviction policy does not fix an
+undersized ring.
 
 Every accepted `put` is offered to `bench/retention_trace.py`, which is off
 unless a session declares a path — the render's production sequence is half of

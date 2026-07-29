@@ -8,8 +8,8 @@ other half and the larger one: the cheap tier hands the same `band_power` object
 back on every mouse-move, so re-binning it is an O(T x B) pass inside a 50 ms
 budget for a picture that cannot have changed.
 
-`docs/findings/2026.07.27-the-density-histogram-was-a-scatter.md` has the
-measurements; the speed itself is a finding, not a gate.
+The speed itself is not asserted here; doing so would turn a correctness test
+into a machine-dependent benchmark.
 """
 
 from __future__ import annotations

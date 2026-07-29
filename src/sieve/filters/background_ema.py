@@ -1,10 +1,8 @@
 """An exponential moving-average background model, and the difference from it.
 
 The second filter, and the first one that has to remember anything. `downsample`
-is stateless, rate-preserving, single-upstream and pure arithmetic — which made
-it the right first filter and means it exercises none of the contract's
-temporal half. This does: it is VISION step 3's category C, VISION step 1 names
-background subtraction first, and it is the only thing in the repo that gives
+is stateless, rate-preserving, single-upstream and pure arithmetic, so it
+exercises none of the contract's temporal half. This filter does, and gives
 `warmup_frames` a consumer.
 
 The model is `bg <- bg + alpha * (frame - bg)`, seeded with the first frame it
@@ -47,8 +45,7 @@ for the node. This filter would in fact be safe to cache — the 90 above is the
 claim that its output stops depending on where the run started, and that claim
 is true and tested. What cannot be cached is the *category*: nothing that
 derives a key can tell this declaration from a false one, so the exclusion is on
-statefulness rather than on a number. See
-`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`.
+statefulness rather than on a number.
 """
 
 from __future__ import annotations

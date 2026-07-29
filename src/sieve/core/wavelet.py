@@ -19,13 +19,11 @@ while `core/shares.py` carefully budgeted threads for it. The block-chunk
 loop is now run on a `ThreadPoolExecutor` and the inner FFTs are told
 ``workers=1``, which measures 4.9x at eight threads on the reference stress
 workload and cannot silently become 1x again — the pool is ours.
-`docs/findings/2026.07.27-scipy-fft-workers-does-nothing-here.md` has the table.
-
 Lives in `core/` because it is numpy/scipy math with no Qt, no cv2, and no
 frame contract — the tab-side detector calls it over series the pipeline
 extracted, and a headless parity check calls the same functions. The CWT is
-deliberately *not* a pipeline kernel this milestone: it needs the whole series
-and the kernel contract is per-frame (see the parity plan, § 2, hybrid chain).
+deliberately *not* a pipeline kernel: it needs the whole series and the kernel
+contract is per-frame.
 """
 
 from __future__ import annotations
@@ -160,7 +158,6 @@ PAD_EFOLDINGS = 3.0
 #: the worst index *moves into the interior*, where it is FFT-length
 #: discretization rather than the cut. Three buys nothing further. Two is
 #: therefore where the frontier stops being the limiting factor.
-#: `docs/findings/` carries the table.
 #:
 #: The cost is trailing graph: ~5.5 s at 0.5 Hz against ~2.7 s. It is charged
 #: against the *band's* lowest frequency, so a detector tuned to a real

@@ -1,6 +1,6 @@
 """The live tab's chain and detector, as Qt-free state the stack renders.
 
-The chain is a hybrid (parity plan § 2): the spatial-prep and extraction
+The chain is a hybrid: the spatial-prep and extraction
 steps are real pipeline nodes — `runnable_prefix` turns them into the
 `Pipeline` value the tab hands `PreviewRunner` — while the temporal filter
 and detection are tab-side derivation over the collected series
@@ -9,8 +9,7 @@ wizard's provisional chain is another instance of the same types.
 
 **Kinds are a chain-model concept, not `FilterSpec` metadata.** `ArraySpec`
 cannot distinguish an image frame from a `(ny, nx)` block-series frame —
-both are GRAY float32 arrays (see
-`docs/findings/2026.07.25-the-filter-contract-cannot-type-vision.md`) — so
+both are GRAY float32 arrays, so relying on `ArraySpec` alone confuses them;
 each step carries its own `kind_in`/`kind_out` and `grade` walks them. The
 type-system version of this question comes due when the temporal filter
 becomes a real windowed node (plan § 7), not before.
@@ -265,8 +264,8 @@ def recompute(
     """`sieve.detect.detect` with the live state converted at the boundary.
 
     The derivation itself is not here and must not come back: it is what a
-    saved `DetectorSettings` names, and a document that declares a value only
-    the GUI can compute is `docs/todo/headless-detection.md`'s defect. This is
+    saved `DetectorSettings` names. Do not put a GUI-only value in the saved
+    document. This is
     the two-line adapter that keeps `DetectorState` — mutable, carrying a
     soloed block nothing downstream reads — on this side of the line.
     """
@@ -284,8 +283,7 @@ def snapped_band_label(freq_band: tuple[float, float], fps: float) -> str:
     """The *snapped* frequency band, as the scalogram title and caption render it.
 
     Snapped, not the handle positions: `band_indices` is what the transform
-    actually uses, and the title tells the truth the transform uses (plot
-    contracts, parity plan § 2). `[i, j)` is half-open, so the upper edge is
+    actually uses. `[i, j)` is half-open, so the upper edge is
     row `j - 1`.
     """
     freqs = default_freqs(fps)

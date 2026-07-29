@@ -1,7 +1,7 @@
 """Reduce spatial resolution by a float linear scale factor.
 
-**Why a new filter rather than a params-v2 of `downsample`** (the parity plan's
-item 2 open decision): the two do not share a parameter space or an output
+Do not treat this as a parameter variant of `downsample`: the two do not share
+a parameter space or an output
 geometry. `downsample` divides both extents by an integer and truncates —
 composable, exact, the right tool for making a checkpoint fit. `rescale`
 multiplies by a float and rounds — v1's semantic, the one the live tab's

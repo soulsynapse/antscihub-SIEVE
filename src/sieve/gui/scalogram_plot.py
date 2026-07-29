@@ -1,6 +1,6 @@
 """The scalogram: pooled Morlet power on a log-frequency axis, band on top.
 
-Three of its rules come straight from the plot contracts (parity plan § 2):
+Three details are easy to get wrong:
 
 **Per-column max reduction, not averaging.** A working window is hundreds to
 thousands of frames wide and the plot a few hundred pixels; letting

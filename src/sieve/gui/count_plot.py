@@ -1,7 +1,7 @@
 """Blocks in band, windowed over D: the graph where detection becomes visible.
 
 This is the only plot that paints green, and only when the detector is armed
-— green is a status color, never a data series (parity plan § 2). The gate
+— green is a status color, never a data series. The gate
 underpaint comes from the base (`set_gate`), spans floored to 1 px so a
 single-frame detection survives any zoom.
 

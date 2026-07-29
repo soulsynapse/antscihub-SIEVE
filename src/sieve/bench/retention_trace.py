@@ -1,6 +1,6 @@
 """What the viewport asked for, what it got, and what the render kept.
 
-`docs/todo/proxy-retention-policy.md` proposes replacing the render ring's LRU
+This measures whether replacing the render ring's LRU
 with a distance-from-playhead rule, and then refuses to adopt it on the
 strength of the argument: the rule is a reasoned guess, and the stated check is
 to record a real tuning session and replay it through candidate policies. This

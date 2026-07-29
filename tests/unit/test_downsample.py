@@ -59,8 +59,8 @@ def test_a_factor_that_leaves_nothing_is_refused() -> None:
 
 
 def test_stored_bytes_prediction_matches_what_the_kernel_produced() -> None:
-    # `frame_bytes_ratio` feeds VISION step 4's storage readout, and nothing
-    # else checks it against a real frame. Loose because the declaration is
+    # Nothing else checks `frame_bytes_ratio` against a real frame. Keep this
+    # loose because the declaration is
     # exact only when the factor divides both extents, which is the
     # approximation the docstring permits.
     frame = gradient_frame(width=640, height=480)

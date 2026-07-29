@@ -1,8 +1,6 @@
 """`sieve sweep` — decode throughput over core sets and worker counts.
 
-The instrument for `docs/todo/adaptive-worker-allocation.md`. The luma finding
-(`docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`)
-ran this sweep by hand, on one core set, and its protocol is reproduced here so
+The protocol is fixed so
 the two are comparable: sequential reads over a fixed span, a warm-up pass,
 repeats, and the median reported per configuration. What is added is the
 machine axis — the same measurement under a restricted set of cores, which is

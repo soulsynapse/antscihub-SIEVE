@@ -1,6 +1,7 @@
 """Band power by block: the population the count comes from, as a density.
 
-**A histogram, not a mean line** (parity plan § 2). The detector counts
+**A histogram, not a mean line.** Plotting only the mean hides the distribution
+the detector thresholds. The detector counts
 blocks whose band-power value sits inside the value band, so the graph the
 user tunes that band against must show the whole population per frame — a
 mean line would hide exactly the spread the count is made of. Each pixel
@@ -18,8 +19,7 @@ The value band handles are the base's: dragging past the top reads as
 unbounded (``inf``), which for a band that *shapes a signal* is the correct
 default resting state.
 
-**There is no `MAX_BLOCKS`, deliberately** (2026-07-28,
-`docs/todo/budgets-attribute-cost-they-do-not-cap-it.md`). It was 16,384 —
+**There is no `MAX_BLOCKS`, deliberately.** It was 16,384 —
 where the 100 ms `density_rebuild` ceiling landed *on one workstation* — and
 `gui/block_spin.py` refused every block size implying more. Block count is a
 scientific choice about the grain of the analysis; the HPC target has neither
@@ -82,7 +82,6 @@ def bin_counts(band_power: FloatArray, value_max: float, bins: int = _BINS) -> N
     row *is* the column, and measures **263 ms** for the same histogram. The
     loop is over frames — a few hundred — not over the hundred million values,
     so the per-iteration Python cost is noise.
-    `docs/findings/2026.07.27-the-density-histogram-was-a-scatter.md`.
 
     Indices are clipped at *both* ends, where the `add.at` version clipped only
     the top. A NaN or a negative reaching `astype` lands somewhere

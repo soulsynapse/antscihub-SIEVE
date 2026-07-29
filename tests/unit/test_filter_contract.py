@@ -254,8 +254,8 @@ class TestStoredBytes:
     def test_stored_size_multiplies_rate_by_frame_size(self) -> None:
         # Two filters that know nothing about each other: one drops nine frames
         # in ten, the other quarters what is left. Applying either alone is off
-        # by the other's factor, which is the shape of the storage prediction
-        # VISION step 4 asks for and step 5 drives a suggestion off.
+        # by the other's factor. Adding instead would understate chained
+        # reduction.
         chained = DECIMATOR.stored_bytes_ratio(DecimateParams()) * DOWNSAMPLER.stored_bytes_ratio(
             DownsampleParams()
         )

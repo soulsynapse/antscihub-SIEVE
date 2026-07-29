@@ -61,9 +61,8 @@ class SeriesCollector:
     """Rows in on the render thread, one array out on the GUI thread.
 
     One collector watches one node. The stack builds one per graph-producing
-    step; a wizard's provisional render gets its own instance rather than a
-    shared one, per the parity plan's no-shared-widgets learning applied to
-    state.
+    step. A wizard's provisional render gets its own instance; sharing one
+    would mix revisions from two owners.
     """
 
     def __init__(self, node_id: str) -> None:

@@ -1,7 +1,7 @@
 """Sweep a cost over core sets and worker counts, so a constant can be judged.
 
 `bench/budgets.py` holds ceilings and `tests/bench/` asks whether one commit
-met them. Neither can answer the question `docs/todo/adaptive-worker-allocation.md`
+met them. Neither can answer whether worker allocation
 is actually about, which is not "what is the optimum here" but **how sharp is
 it** — a flat optimum makes a controller a failure mode with no upside, and a
 sharp one makes a per-machine constant wrong everywhere it was not measured.

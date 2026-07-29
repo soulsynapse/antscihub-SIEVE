@@ -33,9 +33,8 @@ semantics-intact:
   new product, no new blur, no new state. It asks coherence's question of
   different evidence (the above-determinant flow field, not the
   eigenspectrum) and measurably gets a different answer — rank correlation
-  0.09-0.17 against coherence over the reference clip, which falsified the
-  prediction that it would be redundant. See
-  `docs/findings/2026.07.28-four-free-block-measures-two-survive.md`.
+  0.09-0.17 against coherence over the reference clip, so substituting one for
+  the other loses information.
 
 One filter with a `signal` parameter rather than two filters: the two share
 the state, the gradient, and the reduction, and the tab's quick-switch swaps
@@ -341,9 +340,8 @@ def _coherence(
     translation `(u, v)` explains all change in a block iff every space-time
     gradient is orthogonal to `(u, v, 1)`, i.e. iff the tensor has a null
     direction — `lam3 ~ 0` against a nonzero `lam2`. Opposing or in-place
-    motion fills the spectrum and drives it to 0. (The spec's draft formula
-    `((lam1 - lam2) / (lam1 + lam2))^2` fails its own translation test — see
-    `docs/findings/` on the coherence formula.)
+    motion fills the spectrum and drives it to 0. Do not use
+    `((lam1 - lam2) / (lam1 + lam2))^2`; it fails the translation test.
 
     Blocks with exactly zero temporal change would score a vacuous 1 (the
     t-axis itself is the null direction); they report 0 instead — the same

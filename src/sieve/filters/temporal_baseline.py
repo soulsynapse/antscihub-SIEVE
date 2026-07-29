@@ -60,8 +60,7 @@ see `core/filter_base.py`.
 
 Stateful (the ring is the state) and therefore uncacheable, for
 `background_ema`'s reason verbatim: nothing that derives a key can tell an honest
-`warmup_frames` from a false one, so the exclusion is on the category. See
-`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`.
+`warmup_frames` from a false one, so the exclusion is on the category.
 """
 
 from __future__ import annotations

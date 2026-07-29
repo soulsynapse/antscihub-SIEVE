@@ -96,8 +96,8 @@ def keys_for(project: Project, replicate: Replicate | None) -> dict[str, str]:
 
 class TestIsolation:
     def test_editing_one_branch_leaves_its_sibling_valid(self) -> None:
-        # AUTO-GUARDRAILS §5, and the reason the key is per node rather than per
-        # graph: `b` and `c` share `a`'s key and nothing else, so a parameter
+        # The key must be per node rather than per graph: `b` and `c` share
+        # `a`'s key and nothing else, so a parameter
         # edit on `b` has no path to `c`. A key that folded in anything
         # project-wide — the graph's whole parameter set, a document revision —
         # would pass every other test in this file and fail this one by

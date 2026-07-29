@@ -8,8 +8,7 @@ downstream of the count is linear in it.
 **This control used to refuse the small end.** `density_plot.MAX_BLOCKS` was
 the largest B the density surface would bin and `block_signal.min_block_for`
 turned it into a per-replicate floor, so a range of sizes did not exist and the
-spin box stepped over them. That is gone (2026-07-28,
-`docs/todo/budgets-attribute-cost-they-do-not-cap-it.md`): block count is a
+spin box stepped over them. Do not restore that cap: block count is a
 scientific choice about the grain of the analysis, and the ceiling that
 justified the refusal was one workstation's timing. The stall it was protecting
 against is gone too — the binning left the GUI thread — so what a large B now

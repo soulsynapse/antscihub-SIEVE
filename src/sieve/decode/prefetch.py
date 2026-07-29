@@ -19,9 +19,8 @@ to the allocator every frame.
 
 The consequence worth carrying: the remaining 6x is in *not materialising a
 full-resolution BGR frame per frame* — cropping before the convert, or taking the
-luma plane alone — and none of that is reachable from here. Numbers and the four
-routes are in
-`docs/findings/2026.07.26-threading-the-reads-buys-1.6x-and-stops.md`.
+luma plane alone — and none of that is reachable from here. Raising the worker
+count as though this were unconstrained CPU work slows the path down.
 
 **`luma=True` takes one of those routes, and it is passed through rather than
 implemented here.** Each worker's `VideoReader` is opened with the flag and this
@@ -33,9 +32,8 @@ is 15.9 MB instead of 47.6, and there is no convert left to overlap.
 workers, 6.4 ms/frame against a sequential 8.5 — 1.30x where the colour path
 gets 1.44x on the same machine — and four workers is 7.8 ms, 21% *worse* than
 two. `INFERRED_WORKER_CAP` was wrong here in the harmful direction, so
-`LUMA_WORKER_CAP` is a second constant rather than a shared one; the curve and
-what it refutes are in
-`docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
+`LUMA_WORKER_CAP` is separate because applying the colour-path cap to luma
+mistakes two different scaling curves for one.
 
 **Every frame is byte-identical to what `VideoReader` returns in the same
 format, and that is the constraint the design is shaped around.**
@@ -82,8 +80,7 @@ to `workers` abandoned reads on every drag, while `pipeline/executor.py` walks
 `decode_range` strictly forward and pays it once.
 
 **The worker count is machine capability and never project state.** It reaches a
-run as an invocation option, exactly as VISION step 6 splits it — the artifact
-describes what is computed, and a `threads:` field in it would make one machine's
+run as an invocation option. A `threads:` field in the artifact would make one machine's
 allocation part of another machine's reproducible document. `resolve_workers` is
 the one place that decides a count when the caller did not, and that plus a
 `--workers` flag is the whole of what this owes a cluster: no scheduler-specific
@@ -126,9 +123,7 @@ INFERRED_WORKER_CAP = 4
 #:
 #: A second constant rather than a scaled one on purpose. The colour cap's
 #: reason is a 47.6 MB buffer and this one's is that there is barely any
-#: parallel work, so a formula relating them would assert a mechanism the
-#: measurement refutes — see
-#: `docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
+#: parallel work, so a formula relating them would assert the wrong mechanism.
 LUMA_WORKER_CAP = 2
 
 
@@ -157,8 +152,7 @@ def resolve_workers(requested: int | None = None, *, luma: bool = False) -> int:
     coverage while doing nothing for PBS, LSF, or SGE, and an override is a
     second way to say what `--workers` says. A batch script passing
     `--workers $SLURM_CPUS_PER_TASK` puts the number where a person debugging a
-    slow job will look for it, which is also what VISION step 6 asks for —
-    machine capability reaches a run as a command-line option.
+    slow job will look for it.
 
     Returns:
         A count of at least 1. One worker is the sequential path — a single

@@ -954,8 +954,8 @@ class ReplicateDocument(QObject):
     def set_all_to_size(self, width: int, height: int) -> None:
         """Give every replicate this extent, each held about its own centre.
 
-        `REFINED-VISION.md`'s "set all", and the gesture it serves is a rack: a
-        dozen arenas that are physically identical, cut by hand into a dozen
+        Applying this only to the selected replicate is an easy mistake. The
+        gesture serves a rack: a dozen arenas that are physically identical, cut by hand into a dozen
         boxes that are not quite. That difference is not cosmetic. Section **D**
         of the same document is the reason — the expected number of false
         positives scales with blocks times frames, so two boxes of different

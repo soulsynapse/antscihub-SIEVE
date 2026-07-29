@@ -1,10 +1,7 @@
 """A leaky accumulator of activity, with the neighbours holding each other up.
 
-VISION step 3 category C names MEI and MHI; this is them. Bobick & Davis's
-Motion History Image ("The recognition of human movement using temporal
-templates", PAMI 2001) is the same operator with a linear rather than
-exponential decay law, so the filter is named for the literature a user should
-go read. `REFINED-VISION.md` **C** writes the continuous form:
+Bobick & Davis's Motion History Image uses a linear rather than exponential
+decay law. Confusing the two changes the operator. This implementation uses:
 
     da/dt = -a/tau + D nabla^2 a + s(x, t)
 
@@ -66,8 +63,8 @@ event, and mixing it with `core/detection.py`'s `centered` windowed mean means
 the two latencies do not cancel and reported onsets are biased late by an
 amount nothing wrote down. The zero-phase repair — run the accumulator forward
 and backward, the `filtfilt` trick, legitimate offline — needs the whole record
-in hand, which is `Mode.WINDOWED` and a kernel protocol that does not exist
-(`docs/todo/kernel-protocol-beyond-one-frame.md`). So this filter runs causally
+in hand, which is `Mode.WINDOWED` and a kernel protocol that does not exist.
+This filter therefore runs causally
 and *declares*: `group_delay` below is the impulse response's centroid in
 frames, exactly `lambda / (1 - lambda)`, and `MotionHistoryParams` exposes it in
 frames and in seconds. It is declared as a function with a test rather than as a
@@ -78,7 +75,6 @@ onsets is the day it becomes one.
 Stateful (the accumulator is the state) and therefore uncacheable, for
 `background_ema`'s reason verbatim: nothing that derives a key can tell an
 honest `warmup_frames` from a false one, so the exclusion is on the category.
-See `docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`.
 """
 
 from __future__ import annotations

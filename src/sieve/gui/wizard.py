@@ -1,6 +1,6 @@
 """The insert/swap wizard: the configuration surface for a provisional step.
 
-Not a picker with a description (parity plan § 2). The left column holds what
+Do not implement this as a picker that merely shows a description. The left column holds what
 fits the seam — hover or click swaps the provisional step in place, so
 comparing candidates and choosing one are the same gesture. The center column
 is the judgment surface: the video as the provisional chain edits it, the

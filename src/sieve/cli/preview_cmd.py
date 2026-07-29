@@ -8,8 +8,7 @@ again. Existing for two reasons, one of which is not obvious.
 terminal.** `slider_to_preview` and `full_preview_render` are the two ceilings
 that say whether tuning feels direct, and until this command they could only be
 observed by a human watching a window. `--check` turns the observation into an
-exit code, which is what a budget being a defect rather than a tradeoff
-(ARCHITECTURE.md non-negotiable #4) requires of something.
+exit code; without it automation could report a slow preview as successful.
 
 **The load-bearing one: it keeps the GUI from becoming a second execution
 path.** Everything the preview panel will do is here first, on a machine with no
@@ -318,9 +317,8 @@ def _timings(recorder: Recorder, key: str) -> str:
     that is usually fast and occasionally 400 ms is a preview a user calls janky
     and a median calls fine.
 
-    Keyed by `Budget.key` rather than by the human `label`, which reads like the
-    lesser choice and is not: the labels are copied from ARCHITECTURE.md and
-    contain an arrow and an en dash, and a Windows console on a cp1252 codepage
+    Keyed by `Budget.key` rather than by the human `label`. Labels contain an
+    arrow and an en dash, and a Windows console on a cp1252 codepage
     raises `UnicodeEncodeError` on them — so the command that reports the
     budgets would crash on the machines this is developed on. The key is ASCII,
     is what a call site references, and is what a user greps for.

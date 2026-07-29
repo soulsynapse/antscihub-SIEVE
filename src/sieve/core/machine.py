@@ -326,11 +326,8 @@ def _parse_slurm_megabytes(raw: str | None) -> int | None:
 class MemoryUnreadableError(OSError):
     """A session memory reading that could not be taken honestly.
 
-    Raised instead of returning a partial sum, because an undercounting
-    memory readout is precisely the "looks better-founded than it is" failure
-    ARCHITECTURE.md rule 6 names — it would be believed, and a reading that
-    silently omitted a worker's memory would clear the ledger's ceiling while
-    the machine swaps.
+    Raised instead of returning a partial sum. A reading that silently omits a
+    worker can report safe memory use while the machine swaps.
     """
 
 

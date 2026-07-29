@@ -1,6 +1,6 @@
 """`sieve detect` from a YAML file on disk to intervals, with no Qt in the room.
 
-The claim `docs/todo/headless-detection.md` made is not "detection is correct" —
+This does not prove detection is scientifically correct —
 `tests/unit/test_detection.py` and `tests/unit/test_partial_detector.py` own
 that — it is that a *document* can be detected against without a GUI. So these
 tests type the command a cluster job would type, and what they can catch is the
@@ -183,8 +183,7 @@ def test_csv_carries_the_series_the_summary_only_counts(
 ) -> None:
     """One row per frame, in absolute frames, readable by stdlib csv alone.
 
-    The claim is the one `docs/todo/parity-comparison-finding.md` needs and
-    stdout cannot make: not that intervals were found, but that the per-frame
+    Stdout cannot prove that the per-frame
     count and gate a later run is diffed against actually left the process.
     Fails if the export summarises rather than emits — a file of intervals
     only would still print "wrote" and satisfy the armed test above.
@@ -248,7 +247,7 @@ def test_csv_against_an_untuned_project_is_refused_before_any_decode(
 
 #: A chain whose sink aggregates a block grid: `block_signal` makes blocks,
 #: `downsample` averages four of them into one, and a mean of blocks is not a
-#: block. The invocation `docs/todo/what-one-element-means.md` opened on.
+#: block.
 _SHRUNK = (
     SERIES_NODE,
     Node(node_id="small", filter_id="downsample", version="1.0.0", params={"factor": 2}),

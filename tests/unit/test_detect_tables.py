@@ -13,9 +13,16 @@ import csv
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from sieve.core.pipeline_model import DetectorSettings
 from sieve.detect.detector import DetectorUpdate
-from sieve.detect.tables import DetectionExport, write_tables
+from sieve.detect.tables import (
+    DetectionExport,
+    TableVerificationError,
+    write_table,
+    write_tables,
+)
 
 
 def _update(count: np.ndarray, *, armed: bool) -> DetectorUpdate:
@@ -31,19 +38,41 @@ def _update(count: np.ndarray, *, armed: bool) -> DetectorUpdate:
     )
 
 
-def test_every_written_value_reads_back_bit_identical(tmp_path: Path) -> None:
-    """`float32` widened to `float64` and printed must parse back to itself.
+def _export(name: str, count: np.ndarray, *, start: int, armed: bool) -> DetectionExport:
+    return DetectionExport(
+        replicate=name,
+        node_id="n1",
+        filter_id="block_signal",
+        fps=20.0,
+        start=start,
+        update=_update(count, armed=armed),
+        settings=DetectorSettings(count_frac=(0.5, 1.0) if armed else None),
+    )
 
-    Values chosen to be the ones a fixed-width format loses: a long mantissa,
-    a subnormal-adjacent small, and a value whose decimal expansion does not
-    terminate. Fails the moment `_number` becomes an f-string with a precision.
+
+def test_every_measured_value_reads_back_bit_identical_and_stays_short(
+    tmp_path: Path,
+) -> None:
+    """Lossless at the array's own precision, and legible — both, not a trade.
+
+    The two halves fail for different reasons and both are load-bearing.
+    Round-tripping fails the moment `_measured` becomes an f-string with a
+    precision, which is what makes a parity diff silently pass. Shortness
+    fails the moment it widens to `float64` before printing, which is the
+    obvious implementation and turns a stored `0.1` into
+    `0.10000000149011612` across every row of a 2000-frame clip.
+
+    Values chosen as the ones each failure shows up on: a decimal a `float32`
+    cannot hold exactly, a long mantissa, a small magnitude, and a fraction
+    whose expansion does not terminate.
     """
     count = np.array([0.1, 1234.56789, 1e-7, 1 / 3], dtype=np.float32)
-    write_tables(tmp_path, [DetectionExport("a", "blocks", 20.0, 0, _update(count, armed=True))])
+    write_tables(tmp_path, [_export("a", count, start=0, armed=True)])
 
     with (tmp_path / "series.csv").open(encoding="utf-8", newline="") as handle:
-        read = [float(row["count"]) for row in csv.DictReader(handle)]
-    assert read == [float(value) for value in count]
+        written = [row["blocks_in_band"] for row in csv.DictReader(handle)]
+    assert np.array(written, dtype=np.float32).tolist() == count.tolist()
+    assert written[0] == "0.1"
 
 
 def test_an_armed_run_that_found_nothing_still_writes_the_file(tmp_path: Path) -> None:
@@ -54,7 +83,7 @@ def test_an_armed_run_that_found_nothing_still_writes_the_file(tmp_path: Path) -
     no rows — would make "found nothing" and "never looked" the same artifact.
     """
     count = np.zeros(8, dtype=np.float32)
-    write_tables(tmp_path, [DetectionExport("a", "blocks", 20.0, 0, _update(count, armed=True))])
+    write_tables(tmp_path, [_export("a", count, start=0, armed=True)])
 
     with (tmp_path / "intervals.csv").open(encoding="utf-8", newline="") as handle:
         assert list(csv.DictReader(handle)) == []
@@ -70,8 +99,8 @@ def test_replicates_share_one_file_in_long_form(tmp_path: Path) -> None:
     write_tables(
         tmp_path,
         [
-            DetectionExport("left", "blocks", 20.0, 0, _update(count, armed=True)),
-            DetectionExport("right", "blocks", 20.0, 100, _update(count, armed=True)),
+            _export("left", count, start=0, armed=True),
+            _export("right", count, start=100, armed=True),
         ],
     )
 
@@ -79,3 +108,22 @@ def test_replicates_share_one_file_in_long_form(tmp_path: Path) -> None:
         rows = list(csv.DictReader(handle))
     assert [row["replicate"] for row in rows] == ["left"] * 4 + ["right"] * 4
     assert [int(row["frame"]) for row in rows] == [0, 1, 2, 3, 100, 101, 102, 103]
+
+
+def test_a_declared_column_that_nothing_builds_refuses_to_write(tmp_path: Path) -> None:
+    """The column tuple is the contract, and an unfilled one is not a blank cell.
+
+    This is the failure the previous positional-tuple shape could not see: a
+    column added to the header and forgotten in the row builder wrote a file
+    one cell short on every row, and the readback compared that file against
+    the equally short rows it had been handed and passed. Both halves are
+    checked here — nothing is left on disk, so a half-written table cannot be
+    picked up as if it were the export.
+    """
+    path = tmp_path / "series.csv"
+
+    with pytest.raises(TableVerificationError, match="never built"):
+        write_table(path, ("frame", "detected"), [{"frame": "0"}])
+
+    assert not path.exists()
+    assert not path.with_name("series.csv.part").exists()

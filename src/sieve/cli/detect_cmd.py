@@ -119,6 +119,7 @@ def detect_project(
         raise refuse(f"source video is not where the project says: {video}") from error
 
     series_node = _series_node(dag, node_id)
+    series_filter = next(node.filter_id for node in dag.order if node.node_id == series_node)
     span = span_for(project, frames, video)
     targets = tuple(project.replicates) or (None,)
     luma = not dag.needs_chroma
@@ -151,14 +152,16 @@ def detect_project(
             rows = _collect(plan, resolved.wrap(reader), store, series_node)
         update = _detect_one(project.detector, target, rows, fps=fps, start=span.start)
         typer.echo(_report(_label(target), rows, update, fps=fps))
-        if csv_dir is not None and update is not None:
+        if csv_dir is not None and update is not None and project.detector is not None:
             exports.append(
                 DetectionExport(
                     replicate=_label(target),
-                    node=series_node,
+                    node_id=series_node,
+                    filter_id=series_filter,
                     fps=fps,
                     start=span.start,
                     update=update,
+                    settings=resolved_detector(project.detector, target),
                 )
             )
 

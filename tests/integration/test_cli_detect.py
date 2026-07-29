@@ -22,6 +22,7 @@ from typer.testing import CliRunner
 
 from sieve.cli.app import app
 from sieve.core.pipeline_model import DetectorSettings, Node, Pipeline, Project
+from sieve.detect.tables import SERIES_COLUMNS
 
 runner = CliRunner()
 
@@ -115,6 +116,57 @@ def _rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+#: Referenced through the module constant, not spelled, in the tests below.
+#: A rename then breaks `test_the_header_is_a_published_interface` and nothing
+#: else — one deliberate diff naming exactly what a downstream script must
+#: change, rather than five tests failing on a `KeyError` that says nothing
+#: about whether the rename was intended.
+DETECTED = SERIES_COLUMNS[-1]
+
+
+def test_the_header_is_a_published_interface(synthetic_video: Path, tmp_path: Path) -> None:
+    """The written header is these names in this order, spelled out once.
+
+    The one test that is *supposed* to fail on a rename, because the header is
+    not an internal detail: an R script reading `windowed_mean_fraction` breaks
+    on the same change, and it has no test suite here to say so. Spelled as
+    literals rather than compared to the constants they came from — asserting
+    `SERIES_COLUMNS == SERIES_COLUMNS` would pass through any rename at all.
+    """
+    project = _project(synthetic_video, tmp_path, detector=DetectorSettings(count_frac=(0.0, 1.0)))
+    out = tmp_path / "tables"
+
+    result = runner.invoke(app, ["detect", str(project), "--frames", "0:40", "--csv", str(out)])
+
+    assert result.exit_code == 0, result.output
+    with (out / "series.csv").open(encoding="utf-8", newline="") as handle:
+        assert next(csv.reader(handle)) == [
+            "replicate",
+            "node_id",
+            "filter",
+            "frame",
+            "time_seconds",
+            "blocks_total",
+            "blocks_in_band",
+            "blocks_in_band_fraction",
+            "windowed_mean_blocks",
+            "windowed_mean_fraction",
+            "detected",
+        ]
+    with (out / "intervals.csv").open(encoding="utf-8", newline="") as handle:
+        assert next(csv.reader(handle)) == [
+            "replicate",
+            "node_id",
+            "filter",
+            "start_frame",
+            "end_frame_exclusive",
+            "start_seconds",
+            "end_seconds",
+            "duration_frames",
+            "duration_seconds",
+        ]
+
+
 def test_csv_carries_the_series_the_summary_only_counts(
     synthetic_video: Path, tmp_path: Path
 ) -> None:
@@ -139,10 +191,10 @@ def test_csv_carries_the_series_the_summary_only_counts(
     series = _rows(out / "series.csv")
     assert len(series) == 30
     assert [int(row["frame"]) for row in series] == list(range(10, 40))
-    assert {row["node"] for row in series} == {"blocks"}
-    assert {row["gated"] for row in series} <= {"TRUE", "FALSE"}
+    assert {row["node_id"] for row in series} == {"blocks"}
+    assert {row[DETECTED] for row in series} <= {"TRUE", "FALSE"}
     intervals = _rows(out / "intervals.csv")
-    assert all(int(row["start_frame"]) < int(row["end_frame"]) for row in intervals)
+    assert all(int(row["start_frame"]) < int(row["end_frame_exclusive"]) for row in intervals)
 
 
 def test_a_disarmed_detector_writes_no_intervals_file(
@@ -152,7 +204,7 @@ def test_a_disarmed_detector_writes_no_intervals_file(
 
     A header-only `intervals.csv` is indistinguishable from an armed run that
     found nothing, and a reader in R would not know to ask. The series is
-    still real and is still written, with `gated` as `NA` — the value R and
+    still real and is still written, with `detected` as `NA` — the value R and
     pandas both already read as absent, rather than `FALSE`.
     """
     project = _project(synthetic_video, tmp_path, detector=DetectorSettings(window_frames=5))
@@ -162,7 +214,7 @@ def test_a_disarmed_detector_writes_no_intervals_file(
 
     assert result.exit_code == 0, result.output
     assert not (out / "intervals.csv").exists()
-    assert {row["gated"] for row in _rows(out / "series.csv")} == {"NA"}
+    assert {row[DETECTED] for row in _rows(out / "series.csv")} == {"NA"}
 
 
 def test_csv_against_an_untuned_project_is_refused_before_any_decode(
@@ -171,8 +223,8 @@ def test_csv_against_an_untuned_project_is_refused_before_any_decode(
     """No detector means no series either, so there is nothing to write.
 
     Refused up front rather than after the run: the alternative that looks
-    reasonable is writing `series.csv` anyway, and `count` is derived through
-    the value band, so those columns do not exist to be written.
+    reasonable is writing `series.csv` anyway, and the counts are taken
+    inside the value band, so those columns do not exist to be written.
     """
     project = _project(synthetic_video, tmp_path, detector=None)
     out = tmp_path / "tables"

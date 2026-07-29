@@ -1,6 +1,7 @@
 ---
 title: "`slider_to_graph` names a gesture two other budgets now time"
 status: open
+priority: unassessed
 opened: 2026-07-25
 gated_on: >
   nothing — the trigger this item was written against ("a parameter control

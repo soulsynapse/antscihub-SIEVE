@@ -1,6 +1,7 @@
 ---
 title: Downsample or rescale
 status: deferred
+priority: unassessed
 after: [parity-comparison-finding]
 opened: 2026-07-27
 gated_on: >

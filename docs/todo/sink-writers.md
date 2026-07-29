@@ -1,6 +1,7 @@
 ---
 title: Sink writers, and the replicate status that reads them
 status: deferred
+priority: unassessed
 after: [materialization]
 opened: 2026-07-25
 gated_on: >

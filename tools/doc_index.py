@@ -30,7 +30,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -77,6 +77,10 @@ class IndexSpec:
     #: rather than an empty cell — a blank `verdict` is a finding nobody can
     #: triage from the table, which defeats the table.
     required: tuple[str, ...]
+    #: Order rows by `priority` instead of by date. Only `todo/` sets it:
+    #: its entries carry no `date`, so the default sort is filename order,
+    #: which is the one ordering that means nothing to a reader choosing work.
+    by_priority: bool = False
 
 
 SPECS: tuple[IndexSpec, ...] = (
@@ -118,19 +122,35 @@ SPECS: tuple[IndexSpec, ...] = (
         directory="todo",
         heading="Open and deferred work",
         blurb=(
-            "One file per item. `status: open` is takeable now; `status: deferred` "
-            "waits on the trigger in `gated_on`. Completion is a move to "
+            "One file per item, most urgent first. `status: open` is takeable now; "
+            "`status: deferred` waits on the trigger in `gated_on`. `priority` is "
+            "how much it matters, independent of when it can be taken — "
+            "`unassessed` means nobody has ranked it. Completion is a move to "
             "`completed-todo/` via `tools/complete_item.py`; promotion is a "
             "one-line `status:` edit."
         ),
         columns=(
+            ColumnSpec("Priority", "priority"),
             ColumnSpec("Status", "status"),
             ColumnSpec("Item", "title", link=True),
             ColumnSpec("Gated on", "gated_on"),
         ),
-        required=("title", "status", "gated_on"),
+        required=("title", "status", "gated_on", "priority"),
+        by_priority=True,
     ),
 )
+
+#: Item priority, most urgent first — the order rows sort in, so the tuple is
+#: the ranking and not merely the vocabulary.
+#:
+#: `unassessed` is a real value, and it is why the key is *required* rather
+#: than optional. An absent key is invisible: the reader of the table cannot
+#: tell an item nobody has ranked from one that is genuinely ordinary, and the
+#: author editing the file never sees the question. Spelled out, it sorts last
+#: and says what it is — the same trade `bench/budgets.py` makes with
+#: `WITHOUT_PRODUCER` and `doc_drift` makes by listing an unstamped doc as
+#: unassessable.
+PRIORITIES: tuple[str, ...] = ("high", "normal", "low", "unassessed")
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +164,36 @@ class Entry:
     def sort_key(self) -> tuple[str, str]:
         """Newest first, then by filename so equal dates stay stable."""
         return (str(self.fields.get("date", "")), self.path.name)
+
+    @property
+    def priority_rank(self) -> int:
+        """Position in `PRIORITIES`; anything unrecognised sorts last.
+
+        Unrecognised cannot reach the generated docs — `test_todo_hygiene`
+        fails the gate on a value outside the vocabulary — so the fallback is
+        for the window between writing a typo and running the suite, where
+        sorting it beside `high` would be the worse guess.
+        """
+        value = str(self.fields.get("priority", "")).strip()
+        return PRIORITIES.index(value) if value in PRIORITIES else len(PRIORITIES)
+
+
+def by_priority(entries: Iterable[Entry]) -> list[Entry]:
+    """Most urgent first, takeable before waiting, then by filename.
+
+    Status breaks the tie because the index table interleaves the two — a
+    reader scanning a band of equal priority wants the items they can act on
+    at the top of it. The primer splits on status before it gets here, so the
+    tiebreak only ever moves rows in the table.
+    """
+    return sorted(
+        entries,
+        key=lambda entry: (
+            entry.priority_rank,
+            entry.fields.get("status") != "open",
+            entry.path.name,
+        ),
+    )
 
 
 def parse_frontmatter(path: Path) -> dict[str, Any]:
@@ -377,13 +427,27 @@ def build_graph(items: Sequence[Entry], completed: Sequence[Entry]) -> ItemGraph
     )
 
 
+def item_line(entry: Entry) -> str:
+    """One primer bullet: how urgent, which item, and what gates it.
+
+    Priority leads because the lists are sorted by it — a reader who stops
+    after the first bullet has still read the most urgent item, which is the
+    property a file-ordered list could not have.
+    """
+    priority = _cell(entry.fields.get("priority"))
+    title = _cell(entry.fields.get("title"))
+    gate = _cell(entry.fields.get("gated_on"))
+    return f"- **{priority}** — [{title}](todo/{entry.path.name}) — {gate}"
+
+
 def frontier_lines(open_items: Sequence[Entry], graph: ItemGraph) -> list[str]:
     """The primer's frontier: open items with no incomplete prerequisite.
 
-    This is the one derived answer to *what can I take right now*, and it is
-    what the file-ordered list above cannot say. Blocked items are shown with
-    what blocks them rather than hidden, so the frontier is readable as a
-    partition of the open list and not as a second, shorter list.
+    This is the one derived answer to *what can I take right now* — priority
+    says what deserves taking, and this says what nothing else has to precede.
+    Blocked items are shown with what blocks them rather than hidden, so the
+    frontier is readable as a partition of the open list and not as a second,
+    shorter list.
     """
     ranked = [(entry, graph.blockers(item_slug(entry))) for entry in open_items]
     ready = [entry for entry, blocked in ranked if not blocked]
@@ -396,13 +460,16 @@ def frontier_lines(open_items: Sequence[Entry], graph: ItemGraph) -> list[str]:
         "",
     ]
     for entry in ready:
-        lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name})")
+        priority = _cell(entry.fields.get("priority"))
+        title = _cell(entry.fields.get("title"))
+        lines.append(f"- **{priority}** — [{title}](todo/{entry.path.name})")
     if blocked:
         lines += ["", "Blocked on another item, with what blocks them:", ""]
         for entry, blockers in blocked:
             names = ", ".join(f"`{slug}`" for slug in blockers)
+            priority = _cell(entry.fields.get("priority"))
             title = _cell(entry.fields.get("title"))
-            lines.append(f"- [{title}](todo/{entry.path.name}) — {names}")
+            lines.append(f"- **{priority}** — [{title}](todo/{entry.path.name}) — {names}")
     return lines
 
 
@@ -473,8 +540,15 @@ def aspiration_lines(items: Sequence[Entry]) -> list[str]:
     for key, title in ASPIRATIONS:
         serving = [entry for entry in items if key in served_ids(entry)]
         # Open items first: a session picking work should see takeable items
-        # before it sees the deferred ones it cannot act on.
-        serving.sort(key=lambda entry: (entry.fields.get("status") != "open", entry.path.name))
+        # before it sees the deferred ones it cannot act on. Priority orders
+        # within each half, for the same reason it orders the lists above.
+        serving.sort(
+            key=lambda entry: (
+                entry.fields.get("status") != "open",
+                entry.priority_rank,
+                entry.path.name,
+            )
+        )
         lines.append(f"- **{key} — {title}**")
         if not serving:
             lines.append("  - *nothing is serving this*")
@@ -583,7 +657,7 @@ def budget_health() -> str:
 def render_state(root: Path = DOCS_ROOT) -> str:
     """Build `docs/.state.md` from the item folder and the indexes."""
     by_dir = {spec.directory: spec for spec in SPECS}
-    items = collect(root / "todo", by_dir["todo"].required)
+    items = by_priority(collect(root / "todo", by_dir["todo"].required))
     open_items = [e for e in items if e.fields.get("status") == "open"]
     deferred = [e for e in items if e.fields.get("status") == "deferred"]
     completed = collect(root / "completed-todo", by_dir["completed-todo"].required)
@@ -597,16 +671,13 @@ def render_state(root: Path = DOCS_ROOT) -> str:
         "Every line here is derived; nothing is unique to this file. It exists",
         "so a session orients in one read instead of four.",
         "",
-        f"**Open items ({len(open_items)})** — one file each in `todo/`:",
+        f"**Open items ({len(open_items)})** — one file each in `todo/`, most urgent",
+        "first. `unassessed` means nobody has ranked it, not that it ranked low:",
         "",
     ]
-    for entry in open_items:
-        gate = _cell(entry.fields.get("gated_on"))
-        lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name}) — {gate}")
+    lines += [item_line(entry) for entry in open_items]
     lines += ["", f"**Deferred ({len(deferred)})** — the trigger is the whole line:", ""]
-    for entry in deferred:
-        gate = _cell(entry.fields.get("gated_on"))
-        lines.append(f"- [{_cell(entry.fields.get('title'))}](todo/{entry.path.name}) — {gate}")
+    lines += [item_line(entry) for entry in deferred]
 
     graph = build_graph(items, completed)
     lines += ["", *frontier_lines(open_items, graph)]
@@ -635,7 +706,10 @@ def build(root: Path = DOCS_ROOT) -> Iterator[tuple[Path, str]]:
         directory = root / spec.directory
         if not directory.is_dir():
             raise FrontmatterError(f"{directory}: indexed folder does not exist")
-        yield directory / INDEX_NAME, render(spec, collect(directory, spec.required))
+        entries = collect(directory, spec.required)
+        if spec.by_priority:
+            entries = by_priority(entries)
+        yield directory / INDEX_NAME, render(spec, entries)
     completed_spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
     completed = collect(root / "completed-todo", completed_spec.required)
     yield root / SETTLED_NAME, render_settled(completed)

@@ -1,6 +1,7 @@
 ---
 title: Sessions log how the app was used, and changes are scored against a moving baseline
 status: open
+priority: unassessed
 serves: [A1]
 opened: 2026-07-28
 gated_on: >

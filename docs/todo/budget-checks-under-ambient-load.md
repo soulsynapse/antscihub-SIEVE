@@ -1,6 +1,7 @@
 ---
 title: A budget check gets slower the more of the suite pytest imported
 status: open
+priority: unassessed
 serves: [A2]
 opened: 2026-07-28
 gated_on: >

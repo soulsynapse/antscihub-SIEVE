@@ -1,6 +1,7 @@
 ---
 title: Qt-free logic is stranded under gui/
 status: open
+priority: unassessed
 after: [headless-detection]
 opened: 2026-07-28
 

@@ -1,6 +1,7 @@
 ---
 title: "Tuning files: export and import the baseline"
 status: deferred
+priority: unassessed
 gated_on: >
   the first tuning somebody wants to apply to a second video — likely the
   parity-comparison finding, or the first multi-source experiment

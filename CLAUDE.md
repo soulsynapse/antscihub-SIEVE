@@ -19,7 +19,7 @@ Read the file that answers your question, not all of them.
 | What is this ultimately for, and is my item walking toward it? | `docs/ASPIRATIONS.md` — A1–A3 and the invariants; derivation in `docs/WORKING-BACKWARDS.md` |
 | What are the invariants, layers, and latency budgets? | `docs/ARCHITECTURE.md` |
 | Where does this module go? | `docs/SCAFFOLD.md` (machine-checked; see below) |
-| What should I work on? | `docs/todo/` — one file per item, `status: open` |
+| What should I work on? | `docs/todo/` — one file per item, `status: open`, ranked by `priority` |
 | Why isn't X being done yet? | `docs/todo/` — `status: deferred`, trigger in `gated_on` |
 | Was this already built, and how? | `docs/completed-todo/.index.md` |
 | What must my item not re-decide? | `docs/SETTLED.md` — generated from `settled:` on completed entries |
@@ -77,8 +77,10 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 ## The work loop
 
 1. **Take one `status: open` item from `docs/todo/`** (`docs/.state.md` lists
-   them). Items are scoped to fit one context window and are written so you
-   can start without reading the whole tree.
+   them, most urgent first). Items are scoped to fit one context window and
+   are written so you can start without reading the whole tree. Take from the
+   top unless you have a reason not to — but `unassessed` is most of the list
+   and means *nobody has ranked this*, so it is not a ranking below `low`.
 2. **Build the checklist first**, one entry per file or gate, before the first
    edit. An item whose steps cannot be listed up front has not been read yet.
 3. **Build it.** Prefer taking what exists over reinventing it —
@@ -107,7 +109,9 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 
 Work that is real but not yet timely is a `docs/todo/` file with
 `status: deferred` and its trigger in `gated_on` — promotion is a one-line
-`status:` flip when the trigger fires, not a rewrite.
+`status:` flip when the trigger fires, not a rewrite. `priority` is the other
+axis and moves independently: how much an item matters is not how soon it can
+be started, so a deferred item can be `high` and an open one `low`.
 
 ---
 

@@ -1,6 +1,7 @@
 ---
 title: flow_direction, and whether a signal is a plane or a parameter
 status: deferred
+priority: unassessed
 opened: 2026-07-27
 gated_on: >
   two decisions, both Kendrick's. (1) How a *circular* signal bands and

@@ -1,6 +1,7 @@
 ---
 title: Application config, and where the boundary with Preferences falls
 status: deferred
+priority: unassessed
 gated_on: >
   the first setting the CLI and the GUI both need to read — backend selection
   policy is the only live candidate, since cache bounds withdrew 2026-07-27

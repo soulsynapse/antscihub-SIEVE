@@ -1,6 +1,7 @@
 ---
 title: A filter never says what one element of its output means
 status: open
+priority: high
 opened: 2026-07-28
 gated_on: >
   nothing — `sieve detect --node` already mislabels today, and the CSV export

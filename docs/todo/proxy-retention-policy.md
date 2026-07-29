@@ -1,6 +1,7 @@
 ---
 title: What the viewport keeps of a render, and what it drops
 status: deferred
+priority: unassessed
 after: [slow-path-surfacing]
 opened: 2026-07-27
 gated_on: >

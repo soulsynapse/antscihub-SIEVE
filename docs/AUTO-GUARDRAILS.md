@@ -121,7 +121,7 @@ mutation test on an a→{b,c} graph, plus
 
 ## 6. Documentation that asserts facts about the code — ENFORCED
 
-Six claims are machine-checked, which is why they stayed true while the prose
+Seven claims are machine-checked, which is why they stayed true while the prose
 around them drifted:
 
 - `docs/*/.index.md` against their folders — `tests/docs/test_doc_index.py`
@@ -131,6 +131,11 @@ around them drifted:
   `tests/bench/test_budget_table.py`
 - `docs/SETTLED.md` against the `settled:` blocks it is generated from, and
   every `where:` in one against the tree — `tests/docs/test_todo_hygiene.py`
+- every item's `status:` and `priority:` inside their vocabularies, *and the
+  primer's open list actually sorted by the latter* —
+  `tests/docs/test_todo_hygiene.py`. The second half is the one worth having:
+  a required field that nothing orders on is a cell somebody fills and no
+  reader is served by
 - every `docs/*.md` declaring `status: current | record | working`, so a
   reader can tell whether a file even claims to be true now —
   `tests/docs/test_doc_status.py`

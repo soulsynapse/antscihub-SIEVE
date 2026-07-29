@@ -1,6 +1,7 @@
 ---
 title: One edit is three regions in two files
 status: open
+priority: unassessed
 opened: 2026-07-28
 
 gated_on: >

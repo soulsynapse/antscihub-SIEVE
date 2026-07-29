@@ -58,7 +58,9 @@ Work in flight is `docs/todo/` — one file per item, `status: open` for the
 scoped and startable ones. Work that is real and deliberately not being done
 yet is `status: deferred` in the same folder, where each item's `gated_on` line
 carries the trigger that would make it takeable; promotion is a one-line
-`status:` flip, not a copy.
+`status:` flip, not a copy. Every item also carries a `priority`, which is what
+the generated tables sort on — `unassessed` says nobody has ranked it rather
+than that it ranked low, so it is a visible triage queue instead of a blank.
 
 `docs/completed-todo/` and `docs/findings/` hold one file per item, each with
 YAML frontmatter and a `YYYY.MM.DD-` prefix. Their `.index.md` tables are

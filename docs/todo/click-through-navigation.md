@@ -1,6 +1,7 @@
 ---
 title: "Click-through navigation: the output boundary lives in the chain-stack"
 status: deferred
+priority: unassessed
 after: [materialization]
 gated_on: >
   general materialization promoting (docs/todo/materialization.md) — the

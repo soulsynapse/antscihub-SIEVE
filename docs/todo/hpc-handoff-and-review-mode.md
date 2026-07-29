@@ -1,6 +1,7 @@
 ---
 title: HPC handoff, and review mode
 status: deferred
+priority: unassessed
 after: [sink-writers]
 gated_on: >
   for HPC, a dataset that does not fit in a local session plus at least one

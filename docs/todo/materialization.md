@@ -1,6 +1,7 @@
 ---
 title: Materialization, and the rule that is waiting on it
 status: deferred
+priority: unassessed
 gated_on: >
   a workload that can say what the general store's chunking is for — the
   replicate-crop half was split out 2026-07-28 (crop-artifact-writer /

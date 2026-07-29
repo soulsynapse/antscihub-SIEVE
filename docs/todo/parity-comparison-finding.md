@@ -1,6 +1,7 @@
 ---
 title: Parity comparison finding
 status: deferred
+priority: unassessed
 opened: 2026-07-27
 gated_on: >
   a seated session with the v1 checkout — v1 is a sibling repo no agent can

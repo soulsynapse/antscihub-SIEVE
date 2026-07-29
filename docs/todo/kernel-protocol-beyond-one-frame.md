@@ -1,6 +1,7 @@
 ---
 title: A kernel protocol that is not one frame in, one frame out
 status: deferred
+priority: unassessed
 gated_on: >
   a filter that actually needs one — for `Mode.WINDOWED`, a filter needing a
   span before it can emit; for `rate_changing`, a decimator

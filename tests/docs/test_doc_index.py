@@ -13,7 +13,16 @@ from pathlib import Path
 
 import pytest
 
-from doc_index import DOCS_ROOT, SPECS, Entry, FrontmatterError, build, parse_frontmatter, render
+from doc_index import (
+    DOCS_ROOT,
+    SPECS,
+    Entry,
+    FrontmatterError,
+    build,
+    by_priority,
+    parse_frontmatter,
+    render,
+)
 
 
 class TestGeneratedIndexesAreCurrent:
@@ -38,6 +47,42 @@ class TestGeneratedIndexesAreCurrent:
         # is for a *link* to it — that is what would mean it got indexed.
         for path, content in build():
             assert "(_TEMPLATE.md)" not in content, f"{path} indexed its own template"
+
+
+class TestPriorityOrdering:
+    """`priority` ranks items, and an unrecognised value does not jump the queue."""
+
+    def _item(self, name: str, priority: object) -> Entry:
+        return Entry(path=Path(name), fields={"title": name, "priority": priority})
+
+    def test_items_sort_in_vocabulary_order_then_by_filename(self) -> None:
+        entries = [
+            self._item("z.md", "high"),
+            self._item("a.md", "low"),
+            self._item("b.md", "high"),
+            self._item("c.md", "normal"),
+        ]
+        assert [e.path.name for e in by_priority(entries)] == ["b.md", "z.md", "c.md", "a.md"]
+
+    def test_an_unrecognised_priority_sorts_last_rather_than_first(self) -> None:
+        # `P1` is what somebody types who means *most urgent*. Ranking it as
+        # written would put an untriaged typo at the top of the frontier —
+        # rule 6, at the one place a session reads to choose what to do.
+        # The gate rejects it; until the gate runs, it sits with `unassessed`.
+        entries = [self._item("typo.md", "P1"), self._item("real.md", "low")]
+        assert [e.path.name for e in by_priority(entries)] == ["real.md", "typo.md"]
+
+    def test_takeable_work_leads_its_priority_band(self) -> None:
+        # Only the index table interleaves the two statuses; the primer splits
+        # on status first. Without this, a `high` item nobody can start yet
+        # heads the table over a `high` item somebody can.
+        waiting = Entry(path=Path("a.md"), fields={"priority": "high", "status": "deferred"})
+        takeable = Entry(path=Path("z.md"), fields={"priority": "high", "status": "open"})
+        assert [e.path.name for e in by_priority([waiting, takeable])] == ["z.md", "a.md"]
+
+    def test_a_missing_priority_is_not_treated_as_normal(self) -> None:
+        entries = [Entry(path=Path("absent.md"), fields={}), self._item("ranked.md", "low")]
+        assert [e.path.name for e in by_priority(entries)] == ["ranked.md", "absent.md"]
 
 
 class TestFrontmatterParsing:

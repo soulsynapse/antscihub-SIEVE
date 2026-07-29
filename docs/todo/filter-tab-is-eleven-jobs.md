@@ -1,6 +1,7 @@
 ---
 title: filter_tab.py is eleven jobs in one widget
 status: open
+priority: unassessed
 opened: 2026-07-28
 
 gated_on: >

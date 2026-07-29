@@ -1,6 +1,7 @@
 ---
 title: GPU execution
 status: deferred
+priority: unassessed
 gated_on: >
   a filter whose CPU kernel is measurably the bottleneck of a tuning session —
   not merely slow, but one where `bench/budgets.py` is being missed because of

@@ -1,6 +1,7 @@
 ---
 title: A GUI-saved pipeline must run identically in the CLI
 status: open
+priority: unassessed
 opened: 2026-07-28
 
 gated_on: >

@@ -1,6 +1,7 @@
 ---
 title: The GUI holds the enumeration rule 3 forbids
 status: deferred
+priority: unassessed
 
 gated_on: >
   the temporal chain becoming real nodes — two of the five enumerated steps

@@ -1,6 +1,7 @@
 ---
 title: Surrogate calibration for the detection threshold
 status: deferred
+priority: unassessed
 serves: [A3]
 gated_on: >
   the temporal chain settling — concretely, the first parameter set somebody

@@ -1,6 +1,7 @@
 ---
 title: Process isolation for filter execution
 status: deferred
+priority: unassessed
 gated_on: >
   a kernel that can take the process down rather than raise — most likely the
   first OpenCV-heavy filter or GPU work. Cooperative cancellation is the other

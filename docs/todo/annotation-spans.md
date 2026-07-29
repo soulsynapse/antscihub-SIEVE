@@ -1,6 +1,7 @@
 ---
 title: Annotation spans, and the accuracy feedback they unlock
 status: deferred
+priority: unassessed
 serves: [A3]
 gated_on: >
   a detector whose output is worth correcting by hand, or a labelling task that

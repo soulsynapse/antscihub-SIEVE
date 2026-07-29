@@ -15,12 +15,14 @@ from pathlib import Path
 
 from doc_index import (
     DOCS_ROOT,
+    PRIORITIES,
     SETTLED_KEYS,
     SKIP_PREFIXES,
     SPECS,
     ItemGraph,
     build_graph,
     collect,
+    render_state,
     settled_rows,
 )
 
@@ -61,6 +63,34 @@ def test_every_item_status_is_in_the_vocabulary() -> None:
         if entry.fields.get("status") not in ("open", "deferred")
     ]
     assert not bad, f"item status must be open or deferred: {bad}"
+
+
+def test_every_item_priority_is_in_the_vocabulary() -> None:
+    # An off-vocabulary value ("urgent", "High", "P1") sorts to the bottom
+    # beside the unranked, which is the opposite of what whoever typed it
+    # meant — a high-priority item made invisible by a spelling.
+    spec = next(spec for spec in SPECS if spec.directory == "todo")
+    bad = [
+        (entry.path.name, entry.fields.get("priority"))
+        for entry in collect(DOCS_ROOT / "todo", spec.required)
+        if entry.fields.get("priority") not in PRIORITIES
+    ]
+    assert not bad, f"item priority must be one of {PRIORITIES}: {bad}"
+
+
+def test_the_primer_orders_open_items_by_priority() -> None:
+    # The failure this catches is a field that exists and does nothing: the
+    # key required, the column rendered, and the lists still in filename
+    # order, so ranking an item changes a cell and moves nothing.
+    state = render_state()
+    section = state.split("**Open items", 1)[1].split("**Deferred", 1)[0]
+    ranks = [
+        PRIORITIES.index(line.split("**")[1])
+        for line in section.splitlines()
+        if line.startswith("- **")
+    ]
+    assert ranks, "the primer's open-item list rendered no priorities"
+    assert ranks == sorted(ranks), f"open items are not in priority order: {ranks}"
 
 
 def _graph() -> ItemGraph:

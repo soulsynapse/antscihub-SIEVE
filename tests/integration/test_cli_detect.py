@@ -121,7 +121,7 @@ def _rows(path: Path) -> list[dict[str, str]]:
 #: else — one deliberate diff naming exactly what a downstream script must
 #: change, rather than five tests failing on a `KeyError` that says nothing
 #: about whether the rename was intended.
-DETECTED = SERIES_COLUMNS[-1]
+DETECTED = SERIES_COLUMNS[-1].name
 
 
 def test_the_header_is_a_published_interface(synthetic_video: Path, tmp_path: Path) -> None:

@@ -13,16 +13,10 @@ import csv
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from sieve.core.pipeline_model import DetectorSettings
 from sieve.detect.detector import DetectorUpdate
-from sieve.detect.tables import (
-    DetectionExport,
-    TableVerificationError,
-    write_table,
-    write_tables,
-)
+from sieve.detect.tables import DetectionExport, write_tables
 
 
 def _update(count: np.ndarray, *, armed: bool) -> DetectorUpdate:
@@ -110,20 +104,20 @@ def test_replicates_share_one_file_in_long_form(tmp_path: Path) -> None:
     assert [int(row["frame"]) for row in rows] == [0, 1, 2, 3, 100, 101, 102, 103]
 
 
-def test_a_declared_column_that_nothing_builds_refuses_to_write(tmp_path: Path) -> None:
-    """The column tuple is the contract, and an unfilled one is not a blank cell.
+def test_the_readme_documents_exactly_the_columns_written(tmp_path: Path) -> None:
+    """The data dictionary is a rendering of the column list, not prose beside it.
 
-    This is the failure the previous positional-tuple shape could not see: a
-    column added to the header and forgotten in the row builder wrote a file
-    one cell short on every row, and the readback compared that file against
-    the equally short rows it had been handed and passed. Both halves are
-    checked here — nothing is left on disk, so a half-written table cannot be
-    picked up as if it were the export.
+    The failure this replaces a test for: a column added to the header and
+    forgotten in the README documented itself as not existing, and nothing
+    could see it. Asserting over the *written* header rather than over
+    `SERIES_COLUMNS` keeps the check honest — comparing the list to itself
+    would pass through any drift at all.
     """
-    path = tmp_path / "series.csv"
+    count = np.arange(4, dtype=np.float32)
+    write_tables(tmp_path, [_export("a", count, start=0, armed=True)])
 
-    with pytest.raises(TableVerificationError, match="never built"):
-        write_table(path, ("frame", "detected"), [{"frame": "0"}])
-
-    assert not path.exists()
-    assert not path.with_name("series.csv.part").exists()
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+    for path in ("series.csv", "intervals.csv"):
+        with (tmp_path / path).open(encoding="utf-8", newline="") as handle:
+            for name in next(csv.reader(handle)):
+                assert f"| `{name}` |" in readme, f"{path}: {name} is written and undocumented"

@@ -90,13 +90,13 @@ def _bounds(metadata: list[Any], *, integer: bool) -> tuple[float, float]:
     nudge = 1.0 if integer else 1e-6
     for constraint in metadata:
         if isinstance(constraint, annotated_types.Ge):
-            low = float(constraint.ge)
+            low = float(constraint.ge)  # type: ignore[arg-type]
         elif isinstance(constraint, annotated_types.Gt):
-            low = float(constraint.gt) + nudge
+            low = float(constraint.gt) + nudge  # type: ignore[arg-type]
         elif isinstance(constraint, annotated_types.Le):
-            high = float(constraint.le)
+            high = float(constraint.le)  # type: ignore[arg-type]
         elif isinstance(constraint, annotated_types.Lt):
-            high = float(constraint.lt) - nudge
+            high = float(constraint.lt) - nudge  # type: ignore[arg-type]
     return low, high
 
 

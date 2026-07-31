@@ -27,9 +27,16 @@ gui = [
 ]
 [dependency-groups]
 dev = [
+    "pytest",
+    "pytest-benchmark",
+    "pytest-xdist",
+    "hypothesis",
     "pyright",
     "import-linter>=2.13",
     "types-psutil",
+]
+dev-gui = [
+    "pytest-qt",
 ]
 [build-system]
 requires = ["hatchling"]
@@ -39,9 +46,18 @@ build-backend = "hatchling.build"
 packages = ["src/sieve"]
 
 [tool.pyright]
-include = ["src"]
+include = ["src", "tests"]
 extraPaths = ["src"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config -n 6 --dist loadscope"
+markers = [
+    "slow: excluded from the fast feedback loop",
+    "gui: requires the gui extra and a Qt runtime",
+    "cuda: requires a CUDA device and the gpu extra",
+]

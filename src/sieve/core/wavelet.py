@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy import fft as _fft
+from scipy import fft as _fft  # pyright: ignore[reportMissingTypeStubs]
 
 
 W0 = 6.0
@@ -22,20 +22,22 @@ def _pool_size(workers: int) -> int | None:
 
 
 def _fast_len(n: int) -> int:
-    return int(cast(int, _fft.next_fast_len(n)))
+    return int(
+        cast(int, _fft.next_fast_len(n))  # pyright: ignore[reportUnknownMemberType]
+    )
 
 
 def _fft_time_axis(x: FloatArray, n: int, workers: int) -> ComplexArray:
     return cast(
         ComplexArray,
-        _fft.fft(x, n=n, axis=0, workers=workers),
+        _fft.fft(x, n=n, axis=0, workers=workers),  # pyright: ignore[reportUnknownMemberType]
     )
 
 
 def _ifft_time_axis(buf: ComplexArray, workers: int) -> ComplexArray:
     return cast(
         ComplexArray,
-        _fft.ifft(buf, axis=0, workers=workers, overwrite_x=True),
+        _fft.ifft(buf, axis=0, workers=workers, overwrite_x=True),  # pyright: ignore[reportUnknownMemberType]
     )
 
 

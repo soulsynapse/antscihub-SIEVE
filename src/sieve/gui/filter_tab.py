@@ -538,7 +538,7 @@ class FilterTab(QWidget):
         grabber = self._grabber(self._chain) if self._wizard is not None else None
         composite = self._composite_grabber()
         def feed(result: object) -> None:
-            collector.add(expected, result)
+            collector.add(expected, result)  # type: ignore[arg-type]
             if grabber is not None:
                 grabber(result)
             if composite is not None:
@@ -1554,7 +1554,7 @@ class FilterTab(QWidget):
         self.resubmit()
 
     def resizeEvent(self, event: object) -> None:
-        super().resizeEvent(event)
+        super().resizeEvent(event)  # type: ignore[arg-type]
         if self._wizard is not None:
             self._wizard.setGeometry(self.rect())
 

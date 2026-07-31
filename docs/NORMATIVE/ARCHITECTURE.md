@@ -15,6 +15,13 @@ where §7 needs an estimate for a machine we are not running on, it is analytica
 performance modeling. Named here so a cost discussion does not go looking in the
 wrong book.
 
+Two more names. §5 is event sourcing with read models (Fowler; Kleppmann ch. 11),
+whose vocabulary this document already borrows without having named the pattern,
+and naming it is what puts projection rebuild and event schema evolution within
+reach of someone who would otherwise derive them. §2.7 is the uniform interface
+constraint in REST's sense — one invariant call shape, with variation carried in
+the message rather than in the method set — implemented as a context object.
+
 This document is normative: each section states a rule, the mechanism that
 enforces it, and the failure mode it forbids. It covers runtime data only. How
 the codebase is organized — toolbags, contracts, package surfaces — is a
@@ -34,7 +41,15 @@ derived: recomputable, disposable, and keyed by the derivation that produced it.
 1. A key is the transitive closure of what the output depends on: operator
    identity and version, its resolved parameters, the geometry it was asked
    for, and the keys of its inputs. Two runs with the same key must agree to the
-   operator's declared determinism class (§1.5), or it is not admissible.
+   operator's declared determinism class (§1.5), or it is not admissible. And
+   nothing else: a key names what an artifact *is*, never how it was obtained.
+   The route of derivation is provenance (§5.1), and a term describing the route —
+   which optimization ran first, where the bytes were staged, what path the source
+   sat at — discards the reuse keying exists to buy. The two halves fail in
+   opposite directions and both fail silently. A missing term makes different
+   results collide under one name; a surplus term makes identical results miss
+   each other, so a cheaper route to the same bytes invalidates everything it was
+   meant to help.
 2. Membership in the DAG *is* deterministic keyability. This is the admission
    test for pipe sections, and it is checked at registration, not by review.
    An operator that reads wall-clock time, machine state, or an RNG it does not
@@ -45,26 +60,46 @@ derived: recomputable, disposable, and keyed by the derivation that produced it.
 4. The source assets being video today is a property of the operators we have,
    not of the system of record. Nothing outside an operator's own input
    declaration may assume a decodable video exists.
-5. Determinism is declared, in one of two classes, and the class is part of the
-   key. *Bitwise* operators reproduce byte-identically and may be freely
-   recomputed, compared, and discarded. *Tolerant* operators — threaded
-   reductions, GPU kernels with float atomics, any library whose summation order
-   varies by build — reproduce only within a declared numeric tolerance, so
-   their artifacts are materialized once per key and reused rather than
-   recomputed and compared. An operator that declares no class is bitwise, and
-   failing to reproduce is then a failure rather than a discovery. Two things are
-   deliberately unsettled here, because both become concrete the moment the key
-   algebra exists and neither should be decided on paper: whether the class
-   propagates — whether an artifact computed from a tolerant input can itself be
-   bitwise, which interacts with §1.3's claim that anything derived is freely
-   deletable — and what discipline governs a declared tolerance, since a bound
-   chosen to make its own test pass is not a check. Phase 1 settles both against a
-   test.
+5. Determinism is declared and the class is part of the key. The classes are an
+   open registry closed by policy at two: a class is a declared name with a
+   declared equivalence predicate, and a third is refused without an explicit
+   decision rather than being unrepresentable. *Bitwise* operators reproduce
+   byte-identically and may be freely recomputed, compared, and discarded.
+   *Tolerant* operators — threaded reductions, GPU kernels with float atomics,
+   any library whose summation order varies by build — reproduce only within a
+   declared numeric tolerance, so their artifacts are materialized once per key
+   and reused rather than recomputed and compared. An operator that declares no
+   class is bitwise, and failing to reproduce is then a failure rather than a
+   discovery. The registry is open because the first operator fitting neither
+   class would otherwise be forced into tolerant with a meaningless bound, which
+   is this section's own named failure arriving through the taxonomy instead of
+   through the tolerance.
 6. An artifact is whatever a key names, and for an operator carrying state
    across frames that is a frame range together with the state it began from —
    not a frame. The starting offset is part of the key. Without this, output
    that depends on where a run happened to start keys as though it does not, and
    nothing can detect the difference.
+7. The determinism class propagates infectiously: an artifact computed from a
+   tolerant input is tolerant, and cannot claim byte-identity its inputs do not
+   have. Tolerant artifacts are therefore pinned — still deletable, since §1.3
+   admits no exceptions, but the deletion is recorded as invalidating the
+   byte-identity claim of everything downstream rather than only as a
+   recomputation cost. This is what lets a wipe-and-recompute check and a
+   preview-divergence check compare bytes at all; under boundary-stopping
+   propagation both compare nothing.
+8. A declared tolerance is a bound derived from a stated numerical argument that
+   names the source of non-determinism — threaded reduction, float atomics,
+   library build — and is tested against that argument's prediction rather than
+   against the author's number. A bound chosen to make its own test pass is not a
+   check, and a source is verifiable by inspection where a number is not. This is
+   the same complaint as inferring determinism from a version string: a version is
+   not a guarantee.
+9. Measurements are derived artifacts and carry keys like anything else. A fitted
+   cost shape is keyed by what it was fitted from, including the machine profile
+   (§7.4), so refitting is invalidation rather than an update in place, and a
+   measurement taken under one allocation cannot silently answer a question about
+   another machine. Without this there are two derived-data disciplines and every
+   argument about invalidating a fit is had twice.
 
 Forbids: artifacts that cannot be reproduced, and therefore cannot be
 invalidated with confidence or thrown away without fear — and equally, an escape
@@ -74,11 +109,12 @@ hatch bolted on the first time a threaded kernel fails to reproduce bitwise.
 
 An operator declares a pure transform, its I/O shape, and its cost model. The
 engine decides fusion, materialization, parallelism, placement, and
-scheduling.
+scheduling. All of it travels through one invocation signature (§2.7), which is
+the constraint the rest of this section is written inside.
 
 1. Declared I/O shape covers input arity and dtype, output arity and dtype,
-   geometry transform (does it change frame extent), and temporal extent (how
-   many frames of history it needs — see §3). Parameters are declared with a
+   geometry transform (does it change frame extent), and temporal extent on both
+   sides — history and lookahead (§3.1). Parameters are declared with a
    semantic type — region of interest, curve, threshold-over-histogram, bounded
    scalar — not merely a primitive shape. §6 generates controls from these, and
    nothing can recover "this is a crop rectangle" from `tuple[int, int, int,
@@ -109,6 +145,45 @@ scheduling.
    rates and geometries (Ch. 11). Reconciling them is the engine's job, and both
    are part of the key. Multi-input keying is cheap to allow now and expensive
    at the moment the first two-input node needs it.
+7. Every capability axis is a *field* of one invocation signature, never a second
+   signature. Arity, statefulness, rate change, window extent, declared tolerance:
+   an operator implements one call shape and varies within it. Counting is the
+   argument — two axes give four combinations, and a set of per-combination
+   protocols will be missing one of them, found by whoever first needs it rather
+   than by whoever wrote them; four axes give sixteen. Admission therefore rejects
+   any operator the engine cannot actually run, which is a stronger test than
+   rejecting one that declares incorrectly. A declaration the protocol cannot
+   honour is a lie that stays hidden until something important needs it, and what
+   needs it gets built beside the pipeline rather than in it — unkeyed,
+   unschedulable, carrying its own threading, and invisible to every rule in this
+   document. Widening the signature later rewrites every implementer: adding a
+   field is compatible and adding a signature is not, which is §8's
+   schema-evolution argument applied to the call rather than to the output.
+   Interface Segregation pulls the other way and is answering a different
+   question: it is about *clients* not depending on methods they do not use, and
+   this is about one *role* having one shape, which is the implementer's side and
+   a different axis.
+8. There is one entry point into the engine and every surface uses it. A request
+   states what is wanted, at what priority, by when if it has a deadline, and
+   whether it should be shed or waited on under pressure (§3.3). The engine
+   arbitrates across all outstanding requests because it is the only thing that
+   can see them all. A surface passes requests; it never assembles stages. What
+   this prevents is not duplicated code but arbitration that cannot happen — N
+   surfaces each holding a private queue and a private coalescer compete for one
+   machine with nothing deciding between them, and each surface that re-derives
+   the orchestration gets it subtly different. Adding a surface, whether a batch
+   mode or an off-box submit, is then a new caller rather than a fourth variant
+   of the same assembly. This is §2.2 from the other side: an operator does not
+   choose its own execution, and neither does a surface.
+9. An operator version declares its relationship to the version before it —
+   whether it supersedes that version, and how parameters convert. Keys carry the
+   operator version (§1.1), so versions churn precisely because keying works, and
+   a saved pipeline naming a version nobody kept cannot be opened. Without a
+   declared conversion there are exactly two options and both are bad: retain
+   every version's code and parameter class forever, or break saved work on every
+   change. Migration is what lets retired code actually be deleted, which is the
+   only thing that makes a version number worth carrying rather than merely
+   worth incrementing.
 
 This is the one place the architecture adds a requirement the product did not
 ask for: declaring a cost shape is real work per filter. It is accepted because
@@ -122,13 +197,32 @@ and no comparable numbers.
 
 Filters that carry state across frames are stateful windowed operators.
 
-1. History requirement is declared as a bound plus a function of resolved
-   parameters: the bound is what admits the operator, the resolved value sizes
-   the actual lead-in, and a resolved value exceeding its own bound is a
-   registration error. Lead-in is window warmup and the engine supplies it. An
-   operator never reaches backwards for frames it did not declare, and a warmup
-   shortfall is an error — never a sentinel value standing in for history that
-   was not there, which is indistinguishable from a real result downstream.
+1. Windows are declared on both sides. History and lookahead are separate fields,
+   each a bound plus a function of resolved parameters: the bound is what admits
+   the operator, the resolved value sizes the actual lead-in or read-ahead, and a
+   resolved value exceeding its own bound is a registration error. The engine
+   supplies both. An operator never reaches past what it declared in either
+   direction. Lookahead is declared because it exists: a centered window reads
+   frames after the one it is emitting for, and an operator that needs one and
+   cannot say so is built outside the graph instead — unkeyed, unschedulable, and
+   carrying its own execution. That is not a hypothetical shape, it is where the
+   detection work went last time, and a one-sided declaration is what put it
+   there.
+
+   A warmup shortfall is legal at a source boundary and is a key term. The
+   lead-in actually supplied is part of the key, so a frame computed with a full
+   window and the same frame computed cold do not collide under one name. This is
+   §1.1 applied to its own case: the hazard is keyed, not forbidden. Refusing
+   instead would make every windowed operator unusable across the first *w*
+   frames of every source, so a user who crops the start would get a refusal
+   rather than a result and a disclosure. What remains forbidden is the sentinel —
+   a value standing in for history that was not there, which reads downstream as a
+   real result and is indistinguishable from one. Keying the shortfall is what
+   makes the sentinel unnecessary rather than merely prohibited. The rule is
+   symmetric now that the declaration is: a lookahead shortfall at the end of a
+   source is the same disclosure at the other boundary, keyed the same way, and
+   an operator whose window is two-sided has two ends at which a source can run
+   out.
 2. Retuning is reprocessing, not mutation. A parameter change replays the
    affected window; it never patches state in place.
 3. Every producer/consumer edge names its policy: backpressure, bounded
@@ -160,10 +254,22 @@ triggers once on complete input.
 3. Sampling, downsampling, and proxy resolution are legitimate preview
    differences precisely because they are *keyed* differences (§1) — the
    preview is a different key, not different logic.
+4. Completeness is a property of the artifact, not of the view showing it. An
+   operator's declared window (§3.1) determines the point up to which its output
+   can no longer change, and that settled boundary is computed from the
+   declaration and carried on the artifact. A consumer therefore reads how far
+   the result is final rather than inferring it, and no view has to work it out
+   for itself — which is what stops the boundary from ending up as a private
+   attribute of whichever widget first needed it, alongside the other state §5.5
+   forbids living there.
 
 Forbids: the Lambda failure mode — the same logic maintained twice, drifting.
-No event-time machinery is implied here: SIEVE has no watermarks, no late
-arrivals, no accumulation modes. Only the trigger.
+Also forbidden is event-time machinery, which is a distinct thing and stays
+refused: no watermarks, no late arrivals, no accumulation modes. §4.4's
+boundary is derived from a declared window over an ordered source, so it needs
+none of them — a source that arrived out of order would, and that is the
+condition under which this refusal expires rather than a permanent property of
+the domain.
 
 ## 5. Edits are a log; everything else is a view over it
 
@@ -179,7 +285,18 @@ provenance record, and the GUI are materialized views maintained over it.
    the same requirement as §1.
 4. Views may lag, and must say so. A stale view announces staleness rather
    than blocking the UI to stay current. "Working" and "stale" are display
-   states, not exceptions.
+   states, not exceptions. A view also reports the settled boundary of what it
+   shows (§4.4), which is a different question from freshness: freshness is
+   whether the view has caught up with the log, settledness is whether the
+   artifact itself can still change.
+
+   Whether a view must also report the *identity* of what it shows — which feed
+   filled this viewport, pipeline output or raw proxy decode — is deliberately
+   unsettled. The naive fix puts a key on the most-copied object in the system
+   and may cost more than the capability is worth, so it is not adopted by
+   default. STRATEGY §9 holds it with its trigger: the first surface that
+   displays two feeds into one viewport. Until then the obligation is that the
+   artifact carries its key, not that every frame does.
 5. No state that determines a result lives outside the log. Two categories sit
    outside it legitimately and are named rather than tolerated: view-local state
    (zoom, scroll, hover), which changes nothing computed, and machine-local
@@ -189,11 +306,22 @@ provenance record, and the GUI are materialized views maintained over it.
 
 Forbids: a god-object tab that is the sole owner of the current pipeline state.
 
-## 6. The GUI is a contract, and it is generated
+## 6. The user surface is a contract, and it is generated
 
-SIEVE's usefulness equals the user's knowledge of it: functionality not
-reachable from the GUI does not exist. That is a product invariant, and it has
-an architectural consequence.
+SIEVE's usefulness equals the user's knowledge of it. The obligation this places
+is disclosure rather than parity: no capability is *silently* unreachable, and
+the gap between what the engine can do and what a user can reach is enumerable
+and loud. A capability with no surface carries a debt naming the surface that
+would pay it, so the gap is a query rather than a thing someone has to notice.
+
+The surface is any generated authoring surface, not the graphical one
+specifically. Scoping the obligation to a GUI makes it unsatisfiable for the
+entire period during which the system that would satisfy it is being built,
+which is how a rule becomes decorative; and a command-line surface generated
+from the same declarations discharges the disclosure half in full. What it does
+not discharge is legibility — a capability reachable only from a flag is
+disclosed and is not thereby *findable*, which is a real and separate weakness
+and is treated as one rather than folded in here.
 
 1. Parameter controls are generated from the operator's declared I/O shape and
    parameter declarations (§2.1). They are not hand-written per filter.
@@ -212,9 +340,11 @@ an architectural consequence.
    operator-specific panel, because that is how one panel becomes the only place
    some state lives.
 
-Forbids: capability that exists in the pipeline and is invisible in the
-product, and the reverse — a control whose behavior the engine does not know
-about.
+Forbids: capability that exists in the pipeline and is silently unreachable in
+the product, and the reverse — a control whose behavior the engine does not know
+about. Both directions are failures and the second is the one that gets missed:
+a surface able to express something the engine cannot run is as broken as one
+unable to express something it can.
 
 ## 7. Performance is stated against a load parameter
 
@@ -263,9 +393,20 @@ or another tool — can read them without reading our source.
    because the symptom of guessing wrong is a correct-looking number read under
    the wrong noun by whatever consumes it next. This is not in Kleppmann; it is
    closer to dimensional analysis.
+5. How an element addresses back into its source is declared, not assumed. The
+   declaration states how to map an element index to a source region and back,
+   and how to test whether a point falls inside one. Rectangles and uniform grids
+   are the common case of that facility, never the assumption underneath it. Bake
+   them in and the source crop, the logic matching an artifact against a request,
+   and every surface mapping a click to an element each encode the same
+   assumption independently — so the first irregular region or irregular element
+   breaks three things at once, and none of the three can be fixed on its own.
+   The declaration originates with the operator that produces the elements
+   (§2.1); it travels with the schema because the readers are what need it.
 
 Forbids: outputs that are only interpretable by the version of SIEVE that
-wrote them.
+wrote them, and an element whose provenance in the source is inferred from its
+index.
 
 ## 9. Verification happens where the consumer reads
 
@@ -279,6 +420,15 @@ not promised at the point of writing.
    thing §1 already guarantees is stable.
 3. Golden fixtures are keyed like anything else (§1); a fixture that cannot be
    regenerated from its key is a liability.
+4. One facility owns writing an artifact, and everything that writes one goes
+   through it: staging to a temporary location, reading back through the consumer
+   path, comparing what was read against what was intended, handling
+   cancellation, and committing atomically. The rule is worth stating because the
+   alternative is not that the work gets skipped — it is that the work gets
+   reinvented per writer, at differing strength and with differing error quality,
+   which is exactly what happened last time and happened twice independently.
+   Nobody notices, because a writer that half-implements this is indistinguishable
+   from one that implements it fully until the disk fills or a run is cancelled.
 
 Forbids: a test suite that has to be rewritten every time the internals move,
 and artifacts trusted because the writer said so.

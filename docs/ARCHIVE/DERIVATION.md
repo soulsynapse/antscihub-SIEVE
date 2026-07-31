@@ -1,4 +1,27 @@
-# Inputs for the principles document
+# DERIVATION
+
+The derivation and evidence behind `principles_inputs_distilled.md`: a full
+reading of the corpus, a verification of every FINDINGS citation against the
+frozen tree, the adjudication queue, and the second pass that corrected this
+file's own method. The distilled file is what survived it and is what should be
+read first; this is where its claims come from.
+
+Archive, in STRATEGY §6.4's sense. Its citations point at the frozen tree at
+commit `9ed3b40` and at document sections as they stood when it was written,
+which is why they cannot go stale. Nothing here is updated to match the current
+corpus, and several positions it treats as live have since been amended.
+
+Three documents it refers to no longer exist: `principles.md`, which it was
+written to produce and which was deleted once its unique content was moved into
+ARCHITECTURE; `CONSTITUTION/_TEMPLATE.md`, the per-invariant form, superseded by
+STRATEGY §6's four document kinds and §3's in-code ledger; and `SCRATCH/HANDOFF.md`,
+the build order for the constitution the template implied. All three are
+recoverable from git history at `9152b38`. The "read order for drafting" below is
+therefore historical — the drafting it directs no longer has a target.
+
+Original preamble follows.
+
+---
 
 Working note. Produced by reading CHARTER, ARCHITECTURE, ORGANIZATION, PLAN, FINDINGS,
 `CONSTITUTION/_TEMPLATE.md`, and the three scratch derivations, and by checking FINDINGS'

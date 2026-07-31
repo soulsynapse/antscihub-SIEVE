@@ -1,5 +1,27 @@
 # Invariants, derived from the charter alone
 
+*Superseded. The first of two independent attempts to derive invariants from
+CHARTER without reading the rest of the corpus, and archive-safe only because
+CHARTER is now frozen too.*
+
+*What survived. The checkability criterion, added to CHARTER's own two tests, is
+STRATEGY §2.3's enforcement ladder in a stronger form. Its refusal to promote an
+uncheckable claim — on the grounds that doing so teaches agents that these
+documents are decorative — is quoted almost verbatim there. Its diagnosis that
+CHARTER's fourth sub-item swallows two of its own invariants is STRATEGY §2's
+closing paragraph and §0. Its clause that attribution is satisfied by a slow
+operator with an honest cost model and violated by a fast one with none is now
+ARCHITECTURE §7's preamble, which is the last thing extracted from this file.*
+
+*What did not. Both blockers it closes on are decided — responsiveness by
+ARCHITECTURE §3.3–3.4, video generalization by §1.4. Its invariant V proposes a
+gate on new folders that ORGANIZATION §6 deliberately declines, and STRATEGY §5
+moves the check to the dissolve side instead. Its Closure property, in the
+strongest "cannot be built wrong" reading, forbids the invalid intermediate graph
+that STRATEGY §1.6 makes a legal state.*
+
+---
+
 Working note. Derived only from `docs/CHARTER.md` — not checked against the code, and
 deliberately so. What the code does may show one of these is already false; that is a
 finding about the code, not a reason to weaken the invariant here.

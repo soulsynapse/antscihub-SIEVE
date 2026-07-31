@@ -1,4 +1,33 @@
-# Charter
+# CHARTER
+
+The founding document, written first and about the second implementation as a
+live system to be refactored rather than replaced. Superseded. Every claim in it
+that survived scrutiny has been lifted into the normative set and it is no longer
+cited by any of them.
+
+Where its substance went. The product statement, the three-speeds argument, the
+existential claim for measurement, the disclosure obligation, the scope
+exclusion, and the mirror thesis are STRATEGY §0, with the mirror's operational
+form at §1.6. The DAG invariant's admission half is ARCHITECTURE §1.2 and §2.7;
+its save-and-reload half is §5.2; its outputs half is §8. The visibility
+invariant is ARCHITECTURE §6, rescoped from the GUI to any generated surface
+because the original scoping made the entire build plan unsatisfiable. The
+"shape of the solutions" sections are ORGANIZATION §1–2 (toolbags), §4
+(surfaces), §7 (runbooks and reference members), ARCHITECTURE §2.8
+(orchestration), and §9.2 (durable tests). The two user limitations are
+ARCHITECTURE §3's Forbids and STRATEGY §2's closing paragraph.
+
+Three things in it are wrong and were not carried. The claim that the remaining
+work is relatively trivial is what FINDINGS spends twenty-one entries refuting.
+The invariant decomposition is structurally broken: its fourth sub-item contains
+the other two invariants entire, and its first — that the pipeline executes and
+produces outputs — discriminates against nothing, since only total breakage
+violates it. And its visibility invariant, read literally, forbids building any
+of the system before the interface that would expose it.
+
+Read for how the project understood itself at the start. Not read for what to do.
+
+---
 
 ## Overview of what SIEVE is:
 

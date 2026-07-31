@@ -1,14 +1,13 @@
 # STRATEGY
 
-CHARTER says what SIEVE is for. ARCHITECTURE says what the running system owes.
-ORGANIZATION says where code lives. This document says how the work gets done:
-what one unit of work is, what makes it finished, where unfinished work is
-recorded so that it comes due instead of being forgotten, which tools exist and
-why there are so few, and what keeps these documents from quietly becoming
-false.
+ARCHITECTURE says what the running system owes. ORGANIZATION says where code
+lives. This document says what SIEVE is for and how the work gets done: what one
+unit of work is, what makes it finished, where unfinished work is recorded so
+that it comes due instead of being forgotten, which tools exist and why there
+are so few, and what keeps these documents from quietly becoming false.
 
 It is normative and it outlives PLAN. PLAN is an ordering derived from this
-document and the three above it; it is meant to be finished and deleted, and
+document and the two above it; it is meant to be finished and deleted, and
 where PLAN and STRATEGY disagree, PLAN is wrong.
 
 This is a rewrite. The third implementation is built by the phases and by
@@ -17,6 +16,51 @@ through its source (§7). A strategy for a refactor would be a different documen
 and would not work, because the properties being installed — keys, declarations,
 one engine entry point — are the ones that cannot be added to code written
 without them.
+
+## 0. What SIEVE is, and what would end it
+
+SIEVE executes a pipeline DAG over a set of sources and produces outputs that are
+reingested or built upon, and it lets a user tune that pipeline by hand. That is
+the product, and as a claim it discriminates against nothing: only total breakage
+violates it, so no change can be evaluated against it. What follows are the
+properties whose loss takes away something the user could otherwise do.
+
+That is also the test for anything proposed for this list later. Name what the
+user can no longer do when the property stops holding; if the honest answer is
+that the codebase gets harder to work in, it is a means and belongs in §1 through
+§7 rather than here. Every section of every document in this corpus is a means by
+that test, which is the point — means are how the three below are held, and
+promoting one of them to this level would make the distinction useless.
+
+**It must be faster in three ways, and only one of them is measurable.** SIEVE
+does what other programs can already do; the claim is that a pipeline can be
+*built* faster, *validated* faster, and *computed* faster than by the
+alternatives. A benchmark measures the third and is the only instrument for any
+of them. Without it there is no reason to prefer SIEVE to anything else: a
+version that runs on some machines and not others is ignored by every user who
+cannot run it, and one that cannot say how long a pipeline will take on the
+machine someone actually has answers nothing about whether a detection project is
+feasible — which is the question the tool exists to answer. §5 makes the bench
+the one tool that cannot be deferred, and this is why.
+
+**Capability the user cannot reach does not exist**, and the obligation is
+disclosure rather than parity: the gap between what the engine can do and what a
+user can reach is enumerable and loud (ARCHITECTURE §6). Silence is the failure,
+not incompleteness.
+
+**Anything that does not enable something for the pipeline is out of scope.**
+This is the only claim in the corpus that can reject work rather than shape it.
+§1.2 is its worked form, with two refusals that have referents.
+
+Underneath the three: **the codebase and the product are the same shape.**
+Working in the repository is close to how a user works with SIEVE — a good
+codebase shows the tools available so it stays extensible, and SIEVE shows the
+tools available so the user's own capability extends. This was carried for years
+as an aesthetic and repeatedly declined as uncheckable, on the correct reasoning
+that an uncheckable rule at this level teaches agents that rules at this level
+are decorative. That reasoning was right about uncheckable claims and wrong about
+this one: §1.6 is its operational form and a query answers it. It sits here as
+the reason the three above are the three, not as a fourth.
 
 ## 1. SIEVE discloses; it does not judge
 
@@ -158,7 +202,7 @@ constructible from what SIEVE provides. Which control sits where, and in what
 order a new user meets them, is authored by hand. This is why generation is
 load-bearing rather than a convenience: generation is what makes the raw material
 complete, and completeness of the raw material is the entire architectural
-obligation. The sequencing problem CHARTER names — a naive user not knowing where
+obligation. The sequencing problem — a naive user not knowing where
 to begin — is answered by §1.6 only for the user who can state a target, since
 enumerating what satisfies a target's precursors requires a target. The residue
 is the user who cannot name one, and nothing in this corpus answers that;
@@ -206,8 +250,8 @@ that property.
    kind of unpaid obligation, and it is the one mechanism in v2 that already did
    this job correctly.
 5. **Five kinds**, because they have different triggers and different payers.
-   *Capability* — something registered with no user surface, which is CHARTER
-   invariant 3 restated as a query rather than an aspiration. *Contract* — a
+   *Capability* — something registered with no user surface, which is §0's
+   disclosure obligation restated as a query rather than an aspiration. *Contract* — a
    declared field with no enforcement behind it yet. *Budget* — an accepted
    performance miss against a named interaction, with its ceiling re-expressed as
    a percentile against the load parameter per machine profile. *Structural* — a
@@ -290,9 +334,8 @@ be made unrepresentable or generated.
 
 **The bench** — machine profiles, cost-shape fitting, the named-interaction
 budget table, percentiles and intervals rather than means, and the per-unit
-regression gate. It serves validation speed and compute speed at once, and
-CHARTER invariant 2 makes it the one tool whose absence removes SIEVE's reason
-to exist. Its substance is largely carried forward: v2's factorial sweep over
+regression gate. It serves validation speed and compute speed at once, and §0
+makes it the one tool whose absence removes SIEVE's reason to exist. Its substance is largely carried forward: v2's factorial sweep over
 core sets and worker counts, its named budgets with an accepted-miss register,
 and its heterogeneous machine descriptor were right and are ported rather than
 reinvented.
@@ -320,7 +363,7 @@ two programs.
 Documents rot in one specific way: they describe a tree that then moves. Every
 mechanism below is a way of removing the conditions for that.
 
-1. **Normative** — CHARTER, ARCHITECTURE, ORGANIZATION, STRATEGY. These state
+1. **Normative** — STRATEGY, ARCHITECTURE, ORGANIZATION. These state
    rules and cite no file, no line number, and no folder inventory. They change
    only by amendment, and an amendment states which rule it replaces. A normative
    document that begins citing the tree is mechanically detectable and is the 
@@ -336,10 +379,18 @@ mechanism below is a way of removing the conditions for that.
    Clements' rational design process, faked deliberately and documented as such,
    and it is why a plan that has been overtaken gets rewritten rather than
    annotated.
-4. **Archive** — FINDINGS. It cites a frozen tree, which is exactly why its
-   citations cannot go stale. An archive is corrected for fact and never updated
-   for the current tree; when the tree it describes is deleted it stays, because
-   the lesson is the artifact and the code was only the evidence.
+4. **Archive** — the lessons drawn from the second implementation, the record of
+   the decisions that settled this corpus's contradictions, and the evidence
+   behind both. The defining property is that everything an archive cites is
+   frozen: a tree that no longer changes, or a document that has been superseded
+   and will not be edited again. That is why its citations cannot go stale, and
+   it is the test for whether something belongs here — not whether it is old, but
+   whether what it points at can still move. An archive is corrected for fact and
+   never updated for the current tree; when what it describes is deleted it
+   stays, because the lesson is the artifact and the code was only the evidence.
+   A superseded normative document becomes an archive entry once the claims worth
+   keeping have been lifted out of it, and not before, because until then it is
+   the only copy of something load-bearing.
 
 The general form of the anti-rot mechanism, which every one of the four is an
 instance of: nothing is maintained in parallel with something else that can

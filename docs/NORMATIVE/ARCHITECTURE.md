@@ -351,6 +351,13 @@ unable to express something it can.
 "Frame" is not a fixed unit once cropping and downsampling exist. The load
 parameter is megapixels per second through *n* stages.
 
+What this section requires is honesty about cost, not low cost. It is satisfied
+by a slow operator with a truthful cost model and violated by a fast one with
+none. Stating that plainly is what stops the whole section reading as a
+performance mandate, which would have agents optimizing inside it before anything
+has been measured — and an unmeasured optimization is a guess that has been made
+expensive to remove.
+
 1. Two distinct questions get two distinct statistics, never one number:
    *responsiveness* is percentile latency on interactive paths; *feasibility*
    is a throughput estimate with an uncertainty interval, which is what "how

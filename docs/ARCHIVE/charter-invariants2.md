@@ -1,5 +1,29 @@
 # Charter invariants — derivation
 
+*Superseded. The second of two independent derivations from CHARTER alone, and
+archive-safe only because CHARTER is now frozen too.*
+
+*What survived, and it is the most useful single sentence either file produced:
+an invariant is a property whose loss takes away something the **user** can no
+longer do, and anything whose loss is "the codebase gets harder to work in" is a
+means rather than an invariant. That is now STRATEGY §0's admission test, and it
+is why that section has three entries and not thirty. Its routing of CHARTER's
+first six sections to crosscutting follows from the same test and was correct.
+Its treatment of CHARTER's sixth section — that durable tests are the enforcement
+substrate rather than a peer concern — was right, and the mechanism it looked for
+is ARCHITECTURE §9.2: tests survive refactoring because keying already holds
+stable the thing they assert on.*
+
+*What did not. Its measurement invariant requires cost measured "on the machine
+it is actually running on," which inverts the differentiator — the claim SIEVE
+exists to make is about a machine it is **not** running on. Its count of three is
+short by at least four once the same test is applied to ARCHITECTURE rather than
+to CHARTER: reproducibility under keying, the log as system of record,
+preview/run equivalence, and the generation biconditional each name a concrete
+user loss.*
+
+---
+
 Scope of this pass: name the invariants the charter actually asserts, state each as a
 property of the running system, and name the loss when it breaks. Rules are not
 written here. IDs are permanent once minted, so this file mints none — the obligations

@@ -366,9 +366,17 @@ mechanism below is a way of removing the conditions for that.
 1. **Normative** — STRATEGY, ARCHITECTURE, ORGANIZATION. These state
    rules and cite no file, no line number, and no folder inventory. They change
    only by amendment, and an amendment states which rule it replaces. A normative
-   document that begins citing the tree is mechanically detectable and is the 
+   document that begins citing the tree is mechanically detectable and is the
    sharpest anti-staleness check available, because it removes the only thing in
-   a normative document that *can* go stale.
+   a normative document that *can* go stale. Section and rule numbers are
+   permanent once written, because they are how one document cites another and
+   how a commit cites the decision it implements: an amendment appends a new
+   number or rewrites an existing rule in place, and never inserts, since
+   inserting renumbers every rule below it and breaks every citation from outside
+   the file without touching a line anyone will read. A withdrawn rule keeps its
+   number and says it was withdrawn. Where a new rule belongs beside an existing
+   one rather than at the end, it is folded into that rule rather than given a
+   number between.
 2. **Generated** — the module guide, the ledger, the capability coverage table,
    output schemas, and the parameter documentation for every operator. Produced
    by a walk, never edited. If the generated guide reads as incoherent, the

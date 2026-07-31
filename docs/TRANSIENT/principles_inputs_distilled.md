@@ -40,14 +40,10 @@ enumeration is unordered or ordered only by a declared cost.
 - *Legibility.* C35–C43 landed (§6.1, §6.2, §6 with STRATEGY §6, §6.6, §6.5,
   §6's Forbids, §6 with STRATEGY §0, STRATEGY §3 and §1.6, §4.4 and §5.4 with
   identity held open at STRATEGY §9).
-- *Measurement.* C44–C46 and C49–C53 landed (§7.1, §7.2, §7.4, §7.3, §7.5, §7's
-  preamble, §1.9, STRATEGY §0). **C47 outstanding and it is the sharpest gap in
-  this list** — §7.4 requires a measurement to name its machine and stops there.
-  That the profile is a *portable descriptor*, and that the estimator must accept
-  a profile it did not measure, is the differentiator itself; PLAN names its
-  absence as one of five reversions and `charter-invariants2` got it backwards.
-  **C48 outstanding** — an interval must be narrow enough to discriminate, not
-  merely correct.
+- *Measurement.* C44–C53 landed (§7.1, §7.2, §7.4, §7.4, §7.6, §7.3, §7.5, §7's
+  preamble, §1.9, STRATEGY §0). C47 and C48 were the two the normative set was
+  missing while PLAN Phase 4 already stated both in full — PLAN carrying a
+  requirement it had nothing to derive from, which inverts STRATEGY §6.3.
 - *Verification.* C54–C57 and C59–C60 landed (§9.1, §9.2, §9.2, §9.3, §8.1,
   §8.2). **C58 outstanding** — fixtures are synthetic, never committed or
   downloaded media.

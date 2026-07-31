@@ -477,12 +477,41 @@ expensive to remove.
    over one source, wall-clock is set by the largest, and per-task progress
    looks healthy right up until it doesn't. Straggler skew is the normal case,
    not an anomaly.
-4. Every measurement is attributed to a machine profile. A number without the
-   machine it was taken on is not a number.
+4. Every measurement is attributed to a machine profile, and the profile is a
+   portable descriptor rather than a label on local results. A number without the
+   machine it was taken on is not a number; a machine identifier only the machine
+   that wrote it can interpret is not a profile. What the descriptor states is the
+   terms a cost shape can be evaluated against — core counts by class, memory and
+   its ceiling, the ceiling being an allocation and not necessarily the hardware —
+   so the constants §2.3 has fitted on one machine are evaluable at another's
+   profile, and the estimator accepts a profile it did not measure and returns an
+   estimate for that machine. This is not a refinement of the measurement rule; it
+   is the differentiator. Fitting locally and reporting locally answers a question
+   nobody asked, because the question is whether a project is feasible on the
+   machine the user has or the cluster they can apply for, and neither is the
+   machine the fit was taken on. It is also the rule most easily reverted without
+   anyone noticing: under a label-only profile every local number still looks
+   correct, every local check still passes, and the one capability that justifies
+   doing the measurement work at all is quietly unimplementable.
 5. Memory is a declared and measured dimension, not a footnote to time. Peak
    working set relative to input size belongs in the cost declaration, because
    exceeding it is what freezes an interface or ends a run on a smaller machine,
    and a time-only model reports health while that happens.
+6. An interval must be narrow enough to discriminate, not merely wide enough to
+   be correct. Coverage on its own is satisfiable by widening — "somewhere
+   between two seconds and two hundred" contains the truth and answers nothing —
+   so the check on an estimate has two clauses: a re-run falls inside the stated
+   interval, *and* the interval separates the ends of the range the user is
+   choosing between. Without the second clause the check rewards the least
+   informative estimator, and the discipline decays toward one, because widening
+   is always the cheapest way to stop failing. How narrow is narrow enough is set
+   by the decision the interval serves and not by a constant: an interval that
+   cannot separate a cheap parameter setting from an expensive one on a single
+   machine cannot support tuning, and one that cannot separate a laptop from a
+   cluster cannot support the feasibility question at all. §2.3's two-pass
+   estimation exists to satisfy this rule on content-dependent work, where the
+   only alternative is an interval wide enough to cover every input the operator
+   might see.
 
 Forbids: performance claims that only hold on the author's machine, and
 progress bars that lie by averaging.

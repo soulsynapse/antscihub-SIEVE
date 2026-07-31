@@ -25,12 +25,12 @@ enumeration is unordered or ordered only by a declared cost.
 
 **Part C, by group.** Sections are ARCHITECTURE unless marked.
 
-- *Derived data.* C1–C6 landed (§1.1, §1.1, §1.2, §1.3, §1.1, §1.5).
-  **C7 outstanding** — nothing anywhere says source identity is content-derived
-  or at minimum path-independent, which is the failure that made v2's specs
-  portable and its artifacts not. **C8 partial** — frame-exactness is a row in
-  STRATEGY §8's table and has no ARCHITECTURE rule, though it is a source-layer
-  obligation.
+- *Derived data.* C1–C8 landed (§1.1, §1.1, §1.2, §1.3, §1.1, §1.5, §1.10,
+  §1.11). C8 landed in its adjudicated form and not the one stated below:
+  ADJUDICATION Q9 refused the gate, and STRATEGY §8's table already carried the
+  ruling — measured and keyed as a source-layer property rather than verified
+  before the key schema is committed. The entry below is pre-adjudication and is
+  superseded by §1.11.
 - *The operator contract.* C9–C18 and C20–C24 landed (§2.7, §2.7, §3.5, §3.5,
   §3.1, §2.1, §2.1, §2.2, §2.3, §2.3, §2.5, §2.6, §8.5, §2.9, §8.4).
   **C19 outstanding** — cost is computed per task from that task's resolved

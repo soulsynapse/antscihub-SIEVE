@@ -100,6 +100,35 @@ derived: recomputable, disposable, and keyed by the derivation that produced it.
    measurement taken under one allocation cannot silently answer a question about
    another machine. Without this there are two derived-data disciplines and every
    argument about invalidating a fit is had twice.
+10. Source identity is content-derived, or at minimum path-independent. The
+    closure in §1.1 terminates at sources, so whatever names a source is what
+    every derived key ultimately rests on, and a name encoding where the asset
+    currently sits makes the artifacts non-portable while leaving the spec
+    perfectly portable — the spec resolves on the second machine, every artifact
+    keyed under the first machine's paths misses, and the recomputation looks
+    like a cold cache rather than like a defect. That is §1.1's surplus term
+    arriving at the base case, where there is no upstream key to inherit the
+    fault from. Path-independence is the floor and is what buys reuse across
+    machines and across a reorganized library; deriving the identity from content
+    additionally makes the asset changing under a stable name detectable, since a
+    re-encoded file at the same name is a different source and must key as one.
+    The weaker form is admitted rather than the stronger one required because the
+    difference is a read over every asset at admission, and at a hundred thousand
+    files that cost is real.
+11. Frame-exactness is a measured and keyed property of a source, never an
+    assumption about a decoder and not a gate. Whether a seek lands on the frame
+    it asked for is a question about a particular library, build, and container,
+    and it is answerable only by measurement — read a range sequentially, read
+    the same indices after seeking, compare — never by reading a version string,
+    which is §1.8's complaint arriving at the source layer. What the measurement
+    produces is a term in the source's key, so two runs reaching a frame by
+    different paths do not collide under one name. It is not a gate because
+    refusing an inexact decoder refuses the footage users have, and §1.1's rule
+    is to key the hazard rather than forbid the capability it endangers. The
+    reason it is worth measuring at all is that this particular hazard is
+    invisible to every downstream check: two runs that seek the same way agree,
+    so an inexact seek makes every key silently wrong and no comparison
+    downstream can find it.
 
 Forbids: artifacts that cannot be reproduced, and therefore cannot be
 invalidated with confidence or thrown away without fear — and equally, an escape

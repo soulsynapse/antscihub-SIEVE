@@ -10,13 +10,17 @@ is a first pass: phrase-matching across wrapped lines has false negatives, so
 confirm an item is absent before adding it rather than trusting a row marked
 outstanding.
 
-**Part A.** A2 is landed as STRATEGY §2.3, with *generated* restored as level 1
-after the move dropped it. *Default path* was deliberately not restored — it is
-not a place where anything is refused, and the mechanism it named lives in
-ORGANIZATION §7. **A1 (the durability test) and A3 (contracts are a graph) are
-outstanding.** A3 is the second loss of the same idea: it was also the deleted
-`_TEMPLATE.md`'s `Depends on` field. A4 is superseded by STRATEGY §6's four
-document kinds and §3's in-code ledger.
+**Part A.** All landed except A4, which is superseded by STRATEGY §6's four
+document kinds and §3's in-code ledger. A1 is STRATEGY §6.5, with clause 3
+stated over the accumulated class and pointing at §2.3 for why. A2 is §2.3,
+with *generated* restored as level 1 after the move dropped it; *default path*
+was deliberately not restored — it is not a place where anything is refused, and
+the mechanism it named lives in ORGANIZATION §7. A3 is §4's closing paragraph:
+the coupling relation is a graph over contracts, its edges are not the import
+edges, and the edge is recorded as a citation in the rule that depends on it.
+Half of that reaches rung 3 and half is read, which is stated rather than
+smoothed. A3 had been dropped twice — it was also the deleted `_TEMPLATE.md`'s
+`Depends on` field.
 
 **Part B.** All three landed. B1 is STRATEGY §1.4, B2 is §1.2 with both worked
 refusals, B3 is §1.6 with two guards the distilled did not state: the precursor
@@ -46,10 +50,11 @@ enumeration is unordered or ordered only by a declared cost.
   requirement it had nothing to derive from, which inverts STRATEGY §6.3.
 - *Verification.* C54–C60 landed (§9.1, §9.2, §9.2, §9.3, §9.3, §8.1, §8.2).
 - *Structure.* C61–C68 and C71 landed in ORGANIZATION (§1, §2, §2.1, §5, §4,
-  §7.2, §7.4, §8, §3.2). **C69 outstanding** — a rule whose violations are
-  individually cheap and unbounded in count is enforced automatically or not at
-  all, the aggregate being the unit, which is the actual justification for
-  §2.3's ladder and is not stated in it. C70 landed as ARCHITECTURE §2.9's
+  §7.2, §7.4, §8, §3.2). C69 landed as the second paragraph of STRATEGY §2.3 —
+  a rule whose violations are individually cheap and unbounded in count is
+  enforced automatically or not at all, the aggregate being the unit, which is
+  the justification for the ladder and was missing from it. C70 landed as
+  ARCHITECTURE §2.9's
   closing paragraph — an optimization is a new operator version with identical
   declared semantics and a different cost shape.
 - *Scope.* C72–C74 landed (STRATEGY §1.2 and §0, ARCHITECTURE §10, §1.4).

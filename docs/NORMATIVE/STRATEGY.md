@@ -172,6 +172,18 @@ a check that would have failed before it.
    everything from 2 down is a refusal an agent meets after writing the wrong
    thing, which is why the distance between 1 and 2 is larger than the numbering
    suggests.
+
+   What makes pushing down the instruction rather than merely the preference is a
+   fact about how these particular rules fail. **A rule whose violations are
+   individually cheap and unbounded in count is enforced automatically or it is
+   not enforced at all: the aggregate is the unit.** No single hand-written
+   control, no single privately owned thread, no single duplicated helper is
+   expensive enough to reject at review, and a reviewer pricing them one at a time
+   is right every time and wrong in sum. That is how the last implementation
+   reached a hundred and fifty-four owned attributes on one tab and five
+   components each creating threads, with no individual decision anyone would
+   name as the mistake. Level 5 prices one instance because a reader sees one
+   instance; only 0 through 3 can price the class.
 4. **Land on trunk with the check green.** Chunks are not batched into branches
    that integrate later. A chunk too large to land is too large to have been cut.
 5. **Declare what was not done** (§3), at the site that owes it, with a trigger
@@ -306,7 +318,27 @@ catalog against itself. "Add a user surface must not touch the engine's
 internals" is FINDINGS 17: v2 had three independent assemblies of the same
 orchestration, so a fourth surface would have been a fourth variant.
 
-Forbids: any change kind whose blast radius nobody has stated.
+The table states the blast radius for the changes anyone can predict. The
+relation it approximates is a graph over contracts, and its edges are not the
+import edges: two contracts can import nothing of each other and still be unable
+to change independently, because one is only valid in the presence of the other.
+Staleness as a display state is required by shedding and is optional without it.
+Materializing tolerant artifacts once is required by engine-owned placement and
+means nothing without it. A start offset in the key is required by
+checkpointing. None of those pairs appears in a dependency graph, so
+levelization — the one organizational property ORGANIZATION §5.3 can verify
+exactly — does not catch them, and an unwritten edge is a rewrite nobody
+predicted. The edge is recorded where the dependent rule states what it depends
+on, which is what makes "what does amending this touch" a query over citations
+rather than an act of memory. Half of that reaches level 3 and half does not:
+that an amendment names the rule it replaces (§6.1) makes the citing rules
+findable, while whether the edge was written down at all is read. The half that
+is only read is the reason the edges are named in the rules rather than
+collected in a list, since a list of couplings is a second account of the
+corpus and drifts from it.
+
+Forbids: any change kind whose blast radius nobody has stated, and a coupling
+between two contracts that is real and unwritten because no import shows it.
 
 ## 5. Three tools
 
@@ -399,9 +431,41 @@ mechanism below is a way of removing the conditions for that.
    A superseded normative document becomes an archive entry once the claims worth
    keeping have been lifted out of it, and not before, because until then it is
    the only copy of something load-bearing.
+5. **Not a fifth kind, but the test a claim passes before it earns a number in
+   the first.** Three clauses, applied before it is written rather than after it
+   is disputed. *Discrimination* — describe in one sentence the system in which
+   the claim is false, as something a competent person would build on purpose. If
+   you cannot, the claim describes the product instead of constraining it, and §0's
+   admission test is this clause applied to §0's own list. *Bearer* — name the noun
+   the claim constrains and say why that noun exists under any implementation. The
+   durable bearers in this corpus are the derived value, the call, the contended
+   resource, the declaration, the artifact, the consumer, the edit, the unit of
+   work, the version, the module, the contract, and the hazard. A claim whose
+   bearer is a noun of today — a frame, a video, a widget, a thread, a filter, a
+   rectangle, a file name — is contingent rather than wrong, and is written with
+   the condition that expires it. *Cost asymmetry* — state what adopting the claim
+   costs now against what it costs after the system is built, measured over the
+   accumulated class and never over one instance (§2.3). A claim that is cheap to
+   fix once, with no bound on how many times it will need fixing, has a large
+   ratio and is a rule. Measured per instance the clause demotes every claim about
+   the repository and keeps every claim about the contract, which is a defect in
+   the test rather than a fact about the material.
 
-The general form of the anti-rot mechanism, which every one of the four is an
-instance of: nothing is maintained in parallel with something else that can
+   An expiry condition is a trigger in §3.1's vocabulary and the claim carrying
+   one is a Decision debt in §3.5's, so a contingent rule states its expiry in its
+   own text now and acquires a declaration in the register once there is a module
+   that owes it. The text is the weaker half — it is read when someone opens the
+   document, and the register is read when the trigger fires — which is why the
+   condition is written as an observable event and not as a hedge. "Expires when a
+   third path class exists" is a condition. "May need revisiting" is a way of
+   writing nothing down.
+
+   What the test rests on is that durability is a decision rather than a
+   prediction. The question is not which of these will still be true later; it is
+   which of them a change would be rejected for.
+
+The general form of the anti-rot mechanism, which every one of the four kinds is
+an instance of: nothing is maintained in parallel with something else that can
 change independently. Where two representations of one fact are genuinely
 needed — a machine-readable schema and a human-readable README, an engine's
 admission rule and an interface's affordance — one is generated from the other,

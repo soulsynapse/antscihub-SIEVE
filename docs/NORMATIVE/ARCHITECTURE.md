@@ -159,10 +159,19 @@ the constraint the rest of this section is written inside.
    document. Widening the signature later rewrites every implementer: adding a
    field is compatible and adding a signature is not, which is §8's
    schema-evolution argument applied to the call rather than to the output.
-   Interface Segregation pulls the other way and is answering a different
-   question: it is about *clients* not depending on methods they do not use, and
-   this is about one *role* having one shape, which is the implementer's side and
-   a different axis.
+   What makes this affordable is that the variation is carried in the message and
+   not in the method set. A capability axis is a field an operator may ignore,
+   never a method it must implement, so a pointwise operator receiving a call
+   whose state and lookahead are empty implements nothing it cannot support and
+   stubs nothing out. That distinction is the whole answer to the Interface
+   Segregation objection this rule will attract, and the objection is worth
+   taking seriously rather than deflecting: a wide interface really does cost
+   something when it forces an implementer to supply what it has no meaning for,
+   and the working use of that principle is more often about implementers than
+   about the clients its original statement names. The cost simply does not arise
+   here, because an ignored field is free and a stubbed method is a lie. Splitting
+   the signature to avoid a cost that is not being paid is how the missing cell
+   gets built.
 8. There is one entry point into the engine and every surface uses it. A request
    states what is wanted, at what priority, by when if it has a deadline, and
    whether it should be shed or waited on under pressure (§3.3). The engine

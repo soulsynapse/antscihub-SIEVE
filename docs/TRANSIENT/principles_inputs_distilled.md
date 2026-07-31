@@ -44,14 +44,9 @@ enumeration is unordered or ordered only by a declared cost.
   preamble, §1.9, STRATEGY §0). C47 and C48 were the two the normative set was
   missing while PLAN Phase 4 already stated both in full — PLAN carrying a
   requirement it had nothing to derive from, which inverts STRATEGY §6.3.
-- *Verification.* C54–C57 and C59–C60 landed (§9.1, §9.2, §9.2, §9.3, §8.1,
-  §8.2). **C58 outstanding** — fixtures are synthetic, never committed or
-  downloaded media.
-- *Structure.* C61–C65, C67, C68 landed in ORGANIZATION (§1, §2, §2.1, §5, §4,
-  §7.4, §8). **C66 partial** — §7.2's hard shapes are stateful, multi-input and
-  rate-changing; two-sided window is the fourth and is not there. **C71
-  partial** — STRATEGY §3.5 and §5 carry the dissolve trigger, ORGANIZATION §3
-  does not reference it. **C69 outstanding** — a rule whose violations are
+- *Verification.* C54–C60 landed (§9.1, §9.2, §9.2, §9.3, §9.3, §8.1, §8.2).
+- *Structure.* C61–C68 and C71 landed in ORGANIZATION (§1, §2, §2.1, §5, §4,
+  §7.2, §7.4, §8, §3.2). **C69 outstanding** — a rule whose violations are
   individually cheap and unbounded in count is enforced automatically or not at
   all, the aggregate being the unit, which is the actual justification for
   §2.3's ladder and is not stated in it. C70 landed as ARCHITECTURE §2.9's

@@ -562,7 +562,15 @@ not promised at the point of writing.
    This is what makes them survive refactoring — the thing they check is the
    thing §1 already guarantees is stable.
 3. Golden fixtures are keyed like anything else (§1); a fixture that cannot be
-   regenerated from its key is a liability.
+   regenerated from its key is a liability. They are therefore synthetic and
+   generated, never downloaded and never committed media — a fixture that has to
+   be fetched is a fixture that gets skipped, and a test that skips is
+   indistinguishable from one that passes, so the suite stays green while the
+   thing it was written to check has not run since it was written. Synthesis buys
+   the second thing a downloaded asset cannot: a fixture constructed to answer the
+   question being asked. A source whose frame *n* is a known function of *n* lets
+   a test assert which frame a seek landed on, which is the instrument §1.11
+   requires and which no amount of real footage supplies.
 4. One facility owns writing an artifact, and everything that writes one goes
    through it: staging to a temporary location, reading back through the consumer
    path, comparing what was read against what was intended, handling

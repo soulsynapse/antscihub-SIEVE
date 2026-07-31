@@ -67,7 +67,15 @@ not get the same remedy.
    expensive one, because the name reads as legitimate while the contents
    accumulate. Remedy: dissolve. Each member moves to the folder whose secret
    it actually belongs to, or becomes its own module if it turns out to hide
-   something.
+   something. The remedy needs a trigger or it is one nobody schedules: a folder
+   carrying a bin warning (§3.3) across some number of commits incurs a
+   structural debt, and when that debt comes due the folder is defended in a line
+   or dissolved (STRATEGY §3.5). That is what keeps creation free under §6
+   without free creation becoming a target — the check sits on the folder's
+   subsequent behaviour rather than on the act of making one, and a folder that
+   never acquired a second importer is exactly what the computable signals
+   detect. The number of commits is a guess and is held open with its own trigger
+   (STRATEGY §9) rather than asserted here.
 3. Signals a folder is a bin: members with no importers in common; a member
    whose only caller is one specific call site; a docstring that lists contents
    rather than stating a secret; a name from §2.1's second list; growth without
@@ -154,9 +162,13 @@ thing, then propose a home (§6).
    filter drift silently; a reference filter breaks the build.
 2. Minimal is not the same as trivial. The set must cover the hard shapes — one
    member carrying state across frames, one taking more than one input, one
-   changing rate — because a single easy member demonstrates only the easy
-   contract, and the hard contracts are exactly where someone reinvents rather
-   than reuses.
+   changing rate, one declaring a two-sided window — because a single easy member
+   demonstrates only the easy contract, and the hard contracts are exactly where
+   someone reinvents rather than reuses. The two-sided window is the shape whose
+   absence had the highest price last time: an operator needing lookahead and
+   unable to declare it gets built outside the graph (ARCHITECTURE §3.1), and a
+   reference set that cannot demonstrate the declaration is how the next author
+   concludes the same thing.
 3. Reference members are the answer to "how do I do this correctly," and their
    completeness is measured by ARCHITECTURE §2 — declarations, cost shape,
    benchmarked through the engine.

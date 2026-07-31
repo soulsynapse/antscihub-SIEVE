@@ -31,14 +31,11 @@ enumeration is unordered or ordered only by a declared cost.
   ruling — measured and keyed as a source-layer property rather than verified
   before the key schema is committed. The entry below is pre-adjudication and is
   superseded by §1.11.
-- *The operator contract.* C9–C18 and C20–C24 landed (§2.7, §2.7, §3.5, §3.5,
-  §3.1, §2.1, §2.1, §2.2, §2.3, §2.3, §2.5, §2.6, §8.5, §2.9, §8.4).
-  **C19 outstanding** — cost is computed per task from that task's resolved
-  parameters, never one estimate scaled by task count, which matters because
-  replicates carry their own overlays.
-- *Ownership.* C26 is §2.8 and C27 is §9.4, both added this session.
-  **C25 outstanding** — the general form, one owner per contended resource and
-  one entry point per capability. §2.8 states the engine instance of it only.
+- *The operator contract.* C9–C24 landed (§2.7, §2.7, §3.5, §3.5, §3.1, §2.1,
+  §2.1, §2.2, §2.3, §2.3, §2.3, §2.5, §2.6, §8.5, §2.9, §8.4).
+- *Ownership.* C25–C27 landed. C26 is §2.8 and C27 is §9.4; C25's general form
+  is now §2.8's closing paragraph, with §9.4 and §2.2 named as its other two
+  instances.
 - *The log.* C28–C32 and C34 landed (§5, §5.1, §5.2, §5.3, §5.5, STRATEGY §1.6).
   **C33 partial** — §5.5 forbids result-determining state in a widget and §4.4
   puts the settled boundary on the artifact, but the general rule that every
@@ -67,9 +64,9 @@ enumeration is unordered or ordered only by a declared cost.
   does not reference it. **C69 outstanding** — a rule whose violations are
   individually cheap and unbounded in count is enforced automatically or not at
   all, the aggregate being the unit, which is the actual justification for
-  §2.3's ladder and is not stated in it. **C70 outstanding** — an optimization is
-  a new operator version with identical declared semantics and a different cost
-  shape.
+  §2.3's ladder and is not stated in it. C70 landed as ARCHITECTURE §2.9's
+  closing paragraph — an optimization is a new operator version with identical
+  declared semantics and a different cost shape.
 - *Scope.* C72–C74 landed (STRATEGY §1.2 and §0, ARCHITECTURE §10, §1.4).
 
 **Part D** is wholly outstanding and is the largest single piece of work here:

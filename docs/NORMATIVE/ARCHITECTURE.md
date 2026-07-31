@@ -159,7 +159,15 @@ the constraint the rest of this section is written inside.
    measured properties of the data as terms — blob count, scene activity — when
    the work is content-dependent. That makes estimation two-pass, sampling the
    source before estimating, which is strictly better than an honest interval so
-   wide it answers nothing.
+   wide it answers nothing (§7.6). The shape is then evaluated once per task,
+   against the parameters that task resolved to, and never once against a
+   representative task and multiplied by how many there are. Replicates are what
+   makes this concrete rather than pedantic: they are parallel tasks over one
+   source carrying their own parameter overlays, so a per-replicate window length
+   or crop changes that task's cost and no other's, and a scaled single estimate
+   is wrong by whatever the overlays do — invisibly, because it is wrong in the
+   direction of confidence. §7.3 is the same heterogeneity showing up in the wait
+   rather than in the estimate.
 4. A new filter is benchmarked through the engine. There is no per-filter,
    per-machine stress ritual, and a filter that can only be validated by
    running the GUI and watching for lag is not finished.
@@ -213,6 +221,19 @@ the constraint the rest of this section is written inside.
    mode or an off-box submit, is then a new caller rather than a fourth variant
    of the same assembly. This is §2.2 from the other side: an operator does not
    choose its own execution, and neither does a surface.
+
+   The general rule this is one instance of: **one owner per contended resource,
+   one entry point per capability.** A contended resource is anything whose users
+   have to be arbitrated against one another rather than served independently —
+   cores, memory, the disk, the decode path — and the diagnostic count is the
+   number of components that believe they own one. Two owners of a resource never
+   conflict visibly. Each is correct in isolation, each stays inside the budget it
+   believes it has, and the machine is oversubscribed by their sum, so the symptom
+   is a machine slower than any owner's model predicts with no owner that is
+   wrong. §9.4 is this rule over artifact writing and §2.2 is what leaves the
+   resources ownable at all: an operator picking its own thread has made itself a
+   second owner of the cores, and it did not have to be a bad decision to do the
+   damage.
 9. An operator version declares its relationship to the version before it —
    whether it supersedes that version, and how parameters convert. Keys carry the
    operator version (§1.1), so versions churn precisely because keying works, and
@@ -222,6 +243,18 @@ the constraint the rest of this section is written inside.
    change. Migration is what lets retired code actually be deleted, which is the
    only thing that makes a version number worth carrying rather than merely
    worth incrementing.
+
+   An optimization is therefore a new version and not an edit: identical declared
+   semantics, a different cost shape. Each piece of the machinery does one part of
+   making that safe — keying keeps the two versions' artifacts distinguishable
+   instead of silently mixed, the declared determinism class (§1.5) makes "the
+   same answer" a precise claim rather than an intention, the cost shape makes the
+   improvement a measured difference rather than an assertion, and the declared
+   conversion is what eventually lets the slow version be deleted. Editing a
+   version in place to make it faster is the same act with all four removed:
+   artifacts computed before and after the edit collide under one key, and the
+   claim that nothing but the speed changed becomes untestable at exactly the
+   moment it most needs testing.
 
 This is the one place the architecture adds a requirement the product did not
 ask for: declaring a cost shape is real work per filter. It is accepted because

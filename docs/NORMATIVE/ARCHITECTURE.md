@@ -78,7 +78,13 @@ derived: recomputable, disposable, and keyed by the derivation that produced it.
    across frames that is a frame range together with the state it began from —
    not a frame. The starting offset is part of the key. Without this, output
    that depends on where a run happened to start keys as though it does not, and
-   nothing can detect the difference.
+   nothing can detect the difference. *Frame range* is the noun of today. The
+   durable claim is that an artifact is the span plus the state it began from,
+   and it is stated over frames and offsets because the addressing axis is a
+   totally ordered index; when that stops being true the rule is restated over
+   whatever the span is, since a source addressed by something other than a total
+   order still has an entry state and stops having a starting offset
+   (STRATEGY §6.5).
 7. The determinism class propagates infectiously: an artifact computed from a
    tolerant input is tolerant, and cannot claim byte-identity its inputs do not
    have. Tolerant artifacts are therefore pinned — still deletable, since §1.3
@@ -177,6 +183,11 @@ the constraint the rest of this section is written inside.
    parameter that duplicates a source property can disagree with it, and the
    disagreement is silent, because the declared parameters remain perfectly
    consistent with each other while every quantity derived from them is wrong.
+   The split is drawn where it is because the tuner is a human choosing values by
+   hand, and that is what expires it: a swept or searched parameter is still the
+   user's choice and still not SIEVE's opinion (STRATEGY §1.2), but "what the user
+   tunes" stops being what separates the two, and the rule is then restated over
+   who supplies a value rather than over who chooses it (STRATEGY §6.5).
 6. Operators may take more than one input, and the interesting ones do — a node
    joining a full-resolution stream to a reduced one is a join across differing
    rates and geometries (Ch. 11). Reconciling them is the engine's job, and both
@@ -301,7 +312,13 @@ Filters that carry state across frames are stateful windowed operators.
    never "whatever the queue does when it fills."
 4. Interactive paths shed; export paths backpressure. Dropping a preview frame
    is correct behavior and must be reported as such (§5.4). Dropping a frame
-   from a run is a failure.
+   from a run is a failure. Two path classes is an inventory of what the current
+   paths are, not a claim that there are two: a long-running background
+   derivation the user watches but does not interact with has no assignment under
+   either, and the first one of those expires this rule as stated (STRATEGY §6.5).
+   What does not expire is §3.3 — every edge names a policy, so an edge whose
+   class is unclear is one that has not been assigned a policy rather than one
+   entitled to go without.
 5. State is checkpointable: serializable at a frame offset and restorable from
    one. Random access into a stateful stream — scrubbing across a long window —
    is restore the nearest snapshot and replay forward (Ch. 11). Never recompute
@@ -316,7 +333,11 @@ doing it, because some unnamed edge grew without bound.
 
 Preview and run are the same operator graph under different completeness
 policies. Preview triggers early on partial input and may be superseded; run
-triggers once on complete input.
+triggers once on complete input. Two policies is an inventory of what the work
+needs and not a closed set, so a third completeness policy expires the count and
+nothing else (STRATEGY §6.5). What survives it is §4.1 and §4.2: the policy is
+engine configuration rather than a branch inside an operator, and divergence
+between any two policies over the same graph is a bug of the highest class.
 
 1. Trigger policy is engine configuration, not a branch inside an operator. An
    operator that asks "am I in preview?" is misfactored.
@@ -458,6 +479,14 @@ unable to express something it can.
 "Frame" is not a fixed unit once cropping and downsampling exist. The load
 parameter is megapixels per second through *n* stages.
 
+That parameter is contingent and its expiry is already visible in §8.4: an
+operator redefining its element — emitting a per-region value where its input was
+per-pixel — does work that megapixels do not measure, and the load parameter for
+it is stated over its declared element instead. What is durable is that
+performance is stated against a declared load parameter at all, per path
+(STRATEGY §6.5); megapixels per second through *n* stages is the parameter for
+the operators that exist.
+
 What this section requires is honesty about cost, not low cost. It is satisfied
 by a slow operator with a truthful cost model and violated by a fast one with
 none. Stating that plainly is what stops the whole section reading as a
@@ -496,7 +525,10 @@ expensive to remove.
 5. Memory is a declared and measured dimension, not a footnote to time. Peak
    working set relative to input size belongs in the cost declaration, because
    exceeding it is what freezes an interface or ends a run on a smaller machine,
-   and a time-only model reports health while that happens.
+   and a time-only model reports health while that happens. The ceiling being
+   exceeded is the one the run is allocated, which on a scheduler-managed machine
+   is not the machine's — stated that way because the mechanisms that impose an
+   allocation are today's and the ceiling being an allocation is not.
 6. An interval must be narrow enough to discriminate, not merely wide enough to
    be correct. Coverage on its own is satisfiable by widening — "somewhere
    between two seconds and two hundred" contains the truth and answers nothing —
@@ -528,7 +560,10 @@ or another tool — can read them without reading our source.
    sections ingest them.
 3. The requirement is schema and interop. Column orientation is an
    implementation detail with little to offer narrow fact tables; if a columnar
-   container is chosen, it is chosen for its schema, not its compression.
+   container is chosen, it is chosen for its schema, not its compression. The
+   dismissal is conditioned on the tables being narrow and expires with that —
+   wide tables read a column at a time change the trade-off, and the requirement
+   above them does not.
 4. A schema says what one value *is*, not only how wide it is: what it counts
    and per what unit. An operator that redefines its element — emitting a
    per-region value where its input was per-pixel — declares that; one that

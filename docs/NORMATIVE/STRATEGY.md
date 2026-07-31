@@ -367,7 +367,10 @@ be made unrepresentable or generated.
 **The bench** — machine profiles, cost-shape fitting, the named-interaction
 budget table, percentiles and intervals rather than means, and the per-unit
 regression gate. It serves validation speed and compute speed at once, and §0
-makes it the one tool whose absence removes SIEVE's reason to exist. Its substance is largely carried forward: v2's factorial sweep over
+makes it the one tool whose absence removes SIEVE's reason to exist. The
+interactions its budget table names are an inventory rather than a set — they
+change with every surface — so what is durable is the table and its accepted-miss
+register and not the names in it (§6.5). Its substance is largely carried forward: v2's factorial sweep over
 core sets and worker counts, its named budgets with an accepted-miss register,
 and its heterogeneous machine descriptor were right and are ported rather than
 reinvented.

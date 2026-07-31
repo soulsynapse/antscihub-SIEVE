@@ -91,7 +91,11 @@ Forbids: a folder surviving on the strength of its name.
 ## 4. The surface is `__init__.py`
 
 A package's `__init__.py` is its public API and its advertisement. This is the
-mechanism that makes §2 real rather than aspirational.
+mechanism that makes §2 real rather than aspirational. The filename is Python's
+and expires with it; the durable bearer is the package surface — one declared
+place stating the secret and the exports, whatever a language calls it (STRATEGY
+§6.5). What follows is stated over the file because the file is what a reader
+opens.
 
 1. `__init__.py` states, in one line, the secret the package hides, then
    exports the names callers are meant to use. It is the first thing read and
@@ -168,7 +172,12 @@ thing, then propose a home (§6).
    absence had the highest price last time: an operator needing lookahead and
    unable to declare it gets built outside the graph (ARCHITECTURE §3.1), and a
    reference set that cannot demonstrate the declaration is how the next author
-   concludes the same thing.
+   concludes the same thing. The four are an inventory of the hard shapes that
+   exist today, and the set expires by addition rather than by replacement
+   (STRATEGY §6.5). What stops it growing as the product of the shapes is
+   ARCHITECTURE §2.7: the axes are fields of one signature, so one member can
+   carry two of them at once and what has to be covered is the axes rather than
+   their combinations.
 3. Reference members are the answer to "how do I do this correctly," and their
    completeness is measured by ARCHITECTURE §2 — declarations, cost shape,
    benchmarked through the engine.

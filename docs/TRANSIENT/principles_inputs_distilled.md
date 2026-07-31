@@ -59,11 +59,25 @@ enumeration is unordered or ordered only by a declared cost.
   declared semantics and a different cost shape.
 - *Scope.* C72–C74 landed (STRATEGY §1.2 and §0, ARCHITECTURE §10, §1.4).
 
-**Part D** is wholly outstanding and is the largest single piece of work here:
-twelve contingent claims stated flatly in ARCHITECTURE as though permanent, each
-needing its expiry condition attached. Two are partly handled — determinism's two
-classes are now an open registry (§1.5), and `__init__.py` is flagged in this
-file. The natural form is a Decision debt per claim under STRATEGY §3.5.
+**Part D** is landed. All twelve carry an expiry; the third column of its table
+says where. The treatment was decided once for the batch rather than per claim,
+because the twelve differ only in their bearer:
+
+- The expiry is written **inline, in the rule's own text**, in the form of an
+  observable event. The rule that requires this is STRATEGY §6.5's bearer clause,
+  which is why A1 had to land first — without it the twelve annotations are a
+  tidiness pass that the next amendment undoes.
+- A **Decision debt under §3.5 is the stronger half and cannot be declared yet**:
+  the ledger is in code, collected by import, and there is no code. §6.5 states
+  the sequence — the expiry lives in the text now and acquires a declaration in
+  the register once a module owes it — so this is deferred by a stated mechanism
+  rather than dropped.
+- Two rows were already handled (determinism §1.5, event time §4's Forbids), and
+  two had **no contingent claim in the normative set to annotate**: nothing
+  asserts cgroup or SLURM as the mechanism of a ceiling, and nothing asserts a
+  fixed set of named interactions. Both were closed by stating the durable core
+  where it belongs and leaving the today-nouns unnamed, which is the outcome the
+  row wanted rather than a row that could not be done.
 
 **Part E** is fully discharged. Ten items landed in the normative set or the
 archive headers during this session's amendment pass; the two FINDINGS errata
@@ -591,20 +605,22 @@ video exists.
 These are true and belong in the document. An unmarked contingent claim in a document meant to
 be permanent is the failure mode, so each is listed with the condition that expires it.
 
-| Claim | Expires when |
-|---|---|
-| Determinism has exactly two classes, bitwise and tolerant | a third exists. **Decided as an open registry closed by policy** — register two, refuse a third without an explicit decision. |
-| An artifact is a frame *range* plus its entry state, with the start offset in the key | the addressing axis stops being a totally ordered index. Durable core: *the artifact is the span plus its entry state*; "frame" is the today-noun. |
-| Interactive paths shed; export paths backpressure | a third path class exists — a long-running background derivation the user watches but does not interact with has no assignment. |
-| Preview and run are the two trigger policies | a third completeness policy appears. Durable core: trigger policy is engine configuration, never a branch inside an operator, and any divergence is a bug of the highest class. |
-| No event-time machinery: no watermarks, no late arrivals, no accumulation modes | a source arrives out of order. Provisional-versus-settled is **restored** (decided) and does not require event time. |
-| Parameters are what the user tunes; source properties are execution context | the tuner stops being a human choosing by hand. |
-| The load parameter is megapixels per second through *n* stages | an element stops being a pixel in a frame. |
-| Per-core-class capacity and cgroup/SLURM memory budgets | those stop being how ceilings are imposed. Durable core: *the ceiling is an allocation, not the hardware*. |
-| Responsiveness as a table of named interactions with deadlines | the interaction set changes, which it does with every surface. The debt register is durable; the twelve names are an inventory. |
-| A package's surface is `__init__.py` | Python. Bearer *package surface* is durable; the filename is not. |
-| The reference set's hard shapes are stateful, multi-input, rate-changing, two-sided | by addition, not replacement. The list grows combinatorially — that is C9's argument. |
-| Column orientation is an implementation detail | already conditioned on narrow fact tables. A note, not a principle. |
+Sections are ARCHITECTURE unless marked.
+
+| Claim | Expires when | Carried at |
+|---|---|---|
+| Determinism has exactly two classes, bitwise and tolerant | a third exists. **Decided as an open registry closed by policy** — register two, refuse a third without an explicit decision. | §1.5, before this pass |
+| An artifact is a frame *range* plus its entry state, with the start offset in the key | the addressing axis stops being a totally ordered index. Durable core: *the artifact is the span plus its entry state*; "frame" is the today-noun. | §1.6 |
+| Interactive paths shed; export paths backpressure | a third path class exists — a long-running background derivation the user watches but does not interact with has no assignment. | §3.4 |
+| Preview and run are the two trigger policies | a third completeness policy appears. Durable core: trigger policy is engine configuration, never a branch inside an operator, and any divergence is a bug of the highest class. | §4's preamble |
+| No event-time machinery: no watermarks, no late arrivals, no accumulation modes | a source arrives out of order. Provisional-versus-settled is **restored** (decided) and does not require event time. | §4's Forbids, before this pass |
+| Parameters are what the user tunes; source properties are execution context | the tuner stops being a human choosing by hand. | §2.5 |
+| The load parameter is megapixels per second through *n* stages | an element stops being a pixel in a frame. | §7's preamble, which notes the condition is already visible in §8.4 |
+| Per-core-class capacity and cgroup/SLURM memory budgets | those stop being how ceilings are imposed. Durable core: *the ceiling is an allocation, not the hardware*. | §7.4 and §7.5 carry the durable core; no rule names cgroup or SLURM, so there was no contingent claim to annotate |
+| Responsiveness as a table of named interactions with deadlines | the interaction set changes, which it does with every surface. The debt register is durable; the twelve names are an inventory. | STRATEGY §5; no rule ever asserted a fixed set of names |
+| A package's surface is `__init__.py` | Python. Bearer *package surface* is durable; the filename is not. | ORGANIZATION §4's preamble |
+| The reference set's hard shapes are stateful, multi-input, rate-changing, two-sided | by addition, not replacement. The list grows combinatorially — that is C9's argument. | ORGANIZATION §7.2, which also states what stops the growth being the product of the axes: §2.7 |
+| Column orientation is an implementation detail | already conditioned on narrow fact tables. A note, not a principle. | §8.3 |
 
 ---
 

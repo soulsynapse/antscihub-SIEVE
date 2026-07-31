@@ -209,9 +209,35 @@ is wrong and that is the defect to fix.
 
 ## 5. Performance
 
-There is no cross-machine estimation and no machine-profile apparatus. A user who
-wants to know how long a job takes runs it on a sample of their footage and
-measures, which is how they would do it without SIEVE and what they expect.
+What is cut is **prediction for a machine you are not running on**: portable
+machine descriptors, per-operation declared cost shapes with fitted constants,
+factorial sweeps over core sets and worker counts. A user who wants to know how
+long a job takes runs it on a sample of their footage and measures, which is how
+they would do it without SIEVE and what they expect.
+
+Two things survive that cut, and both are small.
+
+**Time remaining, from the sample the user already ran.** The tuning loop is a
+run over a subset, so it has already produced an observed rate on this machine,
+this footage and these parameters. Elapsed time over frames processed, scaled by
+the frames remaining, refined as the full run proceeds. No cost model, no
+declaration per operation, nothing fitted — the measurement is a by-product of
+work the user was doing anyway, and it is more honest than a model because it
+carries the actual machine and the actual content. One caveat, from the numbers
+below: this extrapolates cleanly when the pass is math-bound, because tensor cost
+is content-independent, and it is **confounded at low scale where decode
+dominates**, since decode cost does vary with content. Say which regime the
+estimate came from rather than hiding it.
+
+**A latency number on the interactive path, kept and checked.** Preview
+responsiveness is the one place where slow is a correctness problem rather than a
+cost, so time it, keep the number, and fail when it regresses. Report it as a
+**percentile, never a mean** — an average frame time looks healthy while the
+worst tenth is what the user actually feels, and averaging is how a progress
+indicator lies. This is a regression check on one path, not a benchmark harness.
+
+Throughput and latency are two questions and get two statistics; do not collapse
+them into one number.
 
 What follows was measured on real footage during the first implementation. **Do not
 re-derive these and do not optimise against intuition — two of them refute what a

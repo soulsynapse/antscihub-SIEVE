@@ -52,7 +52,14 @@ derived: recomputable, disposable, and keyed by the derivation that produced it.
    varies by build — reproduce only within a declared numeric tolerance, so
    their artifacts are materialized once per key and reused rather than
    recomputed and compared. An operator that declares no class is bitwise, and
-   failing to reproduce is then a failure rather than a discovery.
+   failing to reproduce is then a failure rather than a discovery. Two things are
+   deliberately unsettled here, because both become concrete the moment the key
+   algebra exists and neither should be decided on paper: whether the class
+   propagates — whether an artifact computed from a tolerant input can itself be
+   bitwise, which interacts with §1.3's claim that anything derived is freely
+   deletable — and what discipline governs a declared tolerance, since a bound
+   chosen to make its own test pass is not a check. Phase 1 settles both against a
+   test.
 6. An artifact is whatever a key names, and for an operator carrying state
    across frames that is a frame range together with the state it began from —
    not a frame. The starting offset is part of the key. Without this, output
@@ -173,9 +180,12 @@ provenance record, and the GUI are materialized views maintained over it.
 4. Views may lag, and must say so. A stale view announces staleness rather
    than blocking the UI to stay current. "Working" and "stale" are display
    states, not exceptions.
-5. The GUI holds no state that is not in the log. Widget state that has no log
-   representation cannot be saved, undone, or reproduced, and is therefore not
-   a feature.
+5. No state that determines a result lives outside the log. Two categories sit
+   outside it legitimately and are named rather than tolerated: view-local state
+   (zoom, scroll, hover), which changes nothing computed, and machine-local
+   preferences, which change what is *requested* but never what an artifact *is*.
+   Anything else held only in a widget cannot be saved, undone, or reproduced,
+   and is therefore not a feature.
 
 Forbids: a god-object tab that is the sole owner of the current pipeline state.
 
@@ -216,7 +226,9 @@ parameter is megapixels per second through *n* stages.
    is a throughput estimate with an uncertainty interval, which is what "how
    long will this take on my laptop" actually asks for.
 2. Percentile targets are stated against the named load parameter, per path.
-   Means are not reported.
+   Latency is reported as percentiles, never as a mean. Throughput is a rate with
+   an interval — a rate is a mean, and it is the right statistic for the question
+   §7.1 calls feasibility.
 3. Fan-out waits take the maximum, not the mean. Replicates are parallel tasks
    over one source, wall-clock is set by the largest, and per-task progress
    looks healthy right up until it doesn't. Straggler skew is the normal case,

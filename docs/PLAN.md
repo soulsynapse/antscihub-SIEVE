@@ -93,6 +93,20 @@ as tunables (§2.5) — a signature-level split. And keys accommodate multi-inpu
 nodes with differing rates and geometries (§2.6), which is nearly free now and a
 rekey later.
 
+Two fields land here for the same reason and buy nothing immediately, which is why
+they will be skipped if they are not written down: a declared addressing descriptor
+for regions and elements, so that mapping an element to a source region is a
+declaration rather than an assumed rectangle or uniform grid (FINDINGS 20); and a
+declared migration between operator versions, stating whether a version supersedes
+an earlier one and how parameters convert, so that saved work can be upgraded and
+retired code can actually be removed (FINDINGS 19). Both are contract-shaped, so
+both are Phase 1 by the ordering principle.
+
+Phase 1 also settles the two questions ARCHITECTURE §1.5 leaves open — whether
+determinism class propagates to artifacts computed from tolerant inputs, and what
+makes a declared tolerance falsifiable — because writing the key algebra is what
+makes them concrete.
+
 Also lands here: the test-authoring discipline, because it depends on keys and
 on nothing else. Tests assert on keyed artifacts and observable outputs rather
 than internals (ARCHITECTURE §9.2), and golden fixtures are keyed like anything
@@ -187,10 +201,13 @@ the profile's shape is decided in this phase rather than after Phase 5 starts
 consuming it.
 
 Verified by: no reported number lacks a machine profile; the fitted cost shape
-predicts a re-run within its stated interval; and the estimator accepts a
-profile it did not measure and returns an estimate for it. That third check is
-satisfiable on one machine with a recorded profile, and it is the phase's exit
-condition.
+predicts a re-run within its stated interval, *and* that interval is narrow enough
+to separate the cheap and expensive ends of a parameter's range on one machine —
+without the second clause the check buys its way to a pass by widening, and
+"somewhere between 2 and 200 seconds" counts as a correct prediction; and the
+estimator accepts a profile it did not measure and returns an estimate for it. That
+third check is satisfiable on one machine with a recorded profile, and it is the
+phase's exit condition.
 
 Validating an estimate against the machine it describes needs a second real
 machine, and is a gate before shipping rather than before Phase 5 — otherwise the
@@ -288,8 +305,11 @@ region of interest is unusable. Each is a widget class registered against a
 semantic type, so a rich control is a new member of a bag rather than a panel
 belonging to one operator — which is the precise move that failed twice before.
 
-Verified by: no hand-written parameter widget exists; adding a declaration to
-the reference operator produces a control with no edit to interface code.
+Verified by: no parameter *state* lives in a widget — bespoke rendering and
+interaction are fine, and some controls are genuinely singular (a plot that is also
+a control), but every one of them binds to declared parameters and owns none of
+them; and adding a declaration to the reference operator produces a control with no
+edit to interface code.
 
 The weak point of this phase: CHARTER's second user limitation — a naive user
 does not know where to begin, and functionality not on screen might as well not

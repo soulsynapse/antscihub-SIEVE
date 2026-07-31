@@ -1,5 +1,34 @@
 # What the two invariant derivations missed
 
+*Discharged. This file's job was to hold open a set of contradictions until the
+documents carrying them were amended, and they now have been. It is kept because
+the reasoning is the record of why several rules read the way they do, and it is
+archive-safe because everything it cites — CHARTER, the two derivations, and the
+pre-amendment text of ARCHITECTURE and PLAN — is now frozen or superseded.*
+
+*Its §6 was the sharpest thing in it: ARCHITECTURE §3.1 said a warmup shortfall
+was an error, FINDINGS 3 said it was legal and keyed and explicitly corrected
+§3.1, and PLAN Phase 6 still verified that it raised — "three documents, two
+positions, nothing propagated." ARCHITECTURE §3.1 now keys it and PLAN Phase 6
+now checks that a cold frame and a warm frame resolve to different keys. The
+other two amendments it identified as unpropagated are also in: the settled
+boundary is ARCHITECTURE §4.4, and §5.4 now separates settledness from freshness
+while holding frame identity open with a trigger.*
+
+*Its §2 named four invariant-grade properties neither derivation had — keying and
+therefore reproducibility, the log as system of record, preview/run equivalence,
+and the generation biconditional — and its §5 named five contract-shaped items
+with no invariant home. Of those five, the invocation protocol is now
+ARCHITECTURE §2.7, migration is §2.9, addressing is §8.5, verification at the
+point of consumption gained the one-facility rule at §9.4, and element meaning
+was already §8.4. Its §3 corrections to both derivations' proposed checks —
+projection, threading, memory, statistics — hold and are why ARCHITECTURE §7 says
+what it says.*
+
+*Nothing in it is outstanding.*
+
+---
+
 Both `charter-invariants.md` and `charter-invariants2.md` state up front that they
 read only CHARTER, and deliberately so. This file is the other half: what ARCHITECTURE,
 ORGANIZATION, PLAN, and FINDINGS already say that changes their conclusions. It is not a

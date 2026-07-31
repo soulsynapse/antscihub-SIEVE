@@ -1,9 +1,19 @@
 # PLAN
 
-Ordered work. CHARTER, ARCHITECTURE, and ORGANIZATION are meant to stay true;
+Ordered work. STRATEGY, ARCHITECTURE, and ORGANIZATION are meant to stay true;
 this document is meant to be finished and deleted. It is derived from those
 three and from nothing else — no part of it is shaped by what the current
 implementation happens to contain.
+
+**This document has not been rewritten against STRATEGY and is known to be behind
+it.** What follows is a correctness pass, not the rewrite: the places where PLAN
+stated something the normative set has since decided against are fixed, and the
+places where it is merely incomplete are not. Its phase numbering is still its
+own, and STRATEGY §8 now states ordering constraints in its own terms — over the
+first operator, the first key, the first key trusted, the first engine decision,
+the first generated surface — which this document is responsible for mapping onto
+an order. That mapping has not been redone. Where STRATEGY and PLAN disagree,
+STRATEGY is right.
 
 ## Ordering principle
 
@@ -36,14 +46,17 @@ lives, and the tab that owns them becomes the de facto system of record. That is
 ARCHITECTURE §5.5 and §6.1 being violated at the earliest possible moment, and
 no later discipline recovers from it.
 
-CHARTER invariant 3 — functionality not reachable from the GUI does not exist —
-is a completeness condition on shipped features, not a claim about build order.
-It is satisfied by Phase 8 generating controls from declarations, and it is
+STRATEGY §0's disclosure obligation — no capability is silently unreachable — is a
+completeness condition on shipped features, not a claim about build order. It is
+satisfied by Phase 8 generating controls from declarations, and it is
 *unsatisfiable* if the controls are written before the declarations they are
-supposed to be generated from.
+supposed to be generated from. Note that the obligation is no longer scoped to a
+graphical interface: ARCHITECTURE §6 makes the surface any generated authoring
+surface, precisely because a GUI-scoped reading makes every phase before the last
+one unconstitutional.
 
-The sanctioned outlet for the intervening phases is the CLI, which CHARTER
-treats as a user contract in its own right. It is not throwaway: its argument
+The sanctioned outlet for the intervening phases is the CLI, which is a user
+contract in its own right and discharges the disclosure half in full. It is not throwaway: its argument
 surface generates from the same declarations Phase 8 consumes, so building it
 at Phase 3 is building part of Phase 8.
 
@@ -100,19 +113,38 @@ declaration rather than an assumed rectangle or uniform grid (FINDINGS 20); and 
 declared migration between operator versions, stating whether a version supersedes
 an earlier one and how parameters convert, so that saved work can be upgraded and
 retired code can actually be removed (FINDINGS 19). Both are contract-shaped, so
-both are Phase 1 by the ordering principle.
+both are Phase 1 by the ordering principle. Both are now stated as rules —
+ARCHITECTURE §8.5 and §2.9 — rather than only as findings.
 
-Phase 1 also settles the two questions ARCHITECTURE §1.5 leaves open — whether
-determinism class propagates to artifacts computed from tolerant inputs, and what
-makes a declared tolerance falsifiable — because writing the key algebra is what
-makes them concrete.
+Four more land here because STRATEGY §8 constrains them to the first operator or
+the first key, and this is the phase that has both. Windows are declared on both
+sides, history and lookahead as separate fields (ARCHITECTURE §3.1), which is the
+one contract field FINDINGS nominates as the most likely way this implementation
+repeats the last. Every capability axis is a field of one invocation signature
+rather than a new signature (§2.7), so an operator cannot declare what the engine
+cannot run. Determinism is an open registry closed by policy at two, propagating
+infectiously with tolerant artifacts pinned, and a declared tolerance derives from
+a stated numerical argument naming its source of non-determinism (§1.5, §1.7,
+§1.8). And measurements are keyed derived artifacts, so refitting a cost shape is
+invalidation and the machine profile is a key term (§1.9) — which is a Phase 1
+field even though Phase 4 is the first phase to produce one.
+
+This phase was once also where the two questions ARCHITECTURE §1.5 left open would
+be settled — whether determinism class propagates, and what makes a declared
+tolerance falsifiable — on the reasoning that writing the key algebra is what
+makes them concrete. Both were settled on paper instead, and §1.5's argument that
+neither should be was wrong in one specific way: both had already been decided by
+what the checks downstream needed, and deferring them meant Phase 5 and Phase 7
+would have been written against an answer nobody had stated. What remains here is
+implementing them, not choosing.
 
 Also lands here: the test-authoring discipline, because it depends on keys and
 on nothing else. Tests assert on keyed artifacts and observable outputs rather
 than internals (ARCHITECTURE §9.2), and golden fixtures are keyed like anything
-else and regenerable from their keys (§9.3). This is CHARTER §6 — a suite that
-survives refactoring — and it is a property of how the first test is written,
-not something achievable later by rewriting all of them.
+else and regenerable from their keys (§9.3). A suite that survives refactoring is
+a consequence of keying rather than a separate discipline — the thing the tests
+assert on is the thing §1 already holds stable — and it is a property of how the
+first test is written, not something achievable later by rewriting all of them.
 
 Verified by: an operator that reads wall-clock time, machine state, or an
 unseeded RNG is refused at registration; two runs sharing a key produce
@@ -125,7 +157,8 @@ Not yet: operators worth running, or an engine to run them.
 
 Lands: ordered edits, deterministic replay, key-diffing across log positions,
 and spec serialization — which is what makes a tuned pipeline redeployable
-(ARCHITECTURE §5.2, CHARTER 7.1b).
+(ARCHITECTURE §5.2) — a pipeline built to be reused being worth exactly the rate
+at which it is redeployed.
 
 Verified by: replay of a log is deterministic; a save/load round-trip changes no
 key; an edit invalidates exactly the predicted set of keys and no others; any
@@ -144,9 +177,10 @@ Lands: a synthetic source operator and a single reference transform operator,
 both with complete declarations, executed once, output written with a declared
 versioned schema (ARCHITECTURE §8) and verified by reading it back through a
 consumer path (§9). The read-back is performed *by a source operator* consuming
-that artifact, which makes reingestion — CHARTER 7.1a's "outputs that are
-reingested or built upon" — a property of the first slice rather than a later
-feature (ARCHITECTURE §8.2). Element meaning is declared and enforced at
+that artifact, which makes reingestion — outputs that are reingested or built
+upon, which STRATEGY §1.5 calls the normal shape of use rather than an
+extensibility nicety — a property of the first slice rather than a later feature
+(ARCHITECTURE §8.2). Element meaning is declared and enforced at
 registration from the first operator (§8.4); there is no default, because a value
 inheriting a meaning it should have redefined produces a correct-looking number
 under the wrong noun. These are ORGANIZATION §7's reference members, in CI from
@@ -160,8 +194,8 @@ standing deferral is easier to hold when something is watchable.
 
 The source is synthetic arrays, not video decode. ARCHITECTURE §1.4 forbids
 anything outside an operator's input declaration from assuming a decodable video
-exists, and CHARTER 61 names video-as-required-input as a known limitation to
-design out. Proving the non-video path with the first slice costs nothing;
+exists, and video-as-required-input was named as a known limitation to design out
+from the beginning. Proving the non-video path with the first slice costs nothing;
 introducing video first lets its assumptions leak into every phase after, which
 is how the present limitation arose. Video decode is one more source operator,
 added once the synthetic one passes.
@@ -194,9 +228,9 @@ not being run on is analytical performance modeling.
 
 The machine profile is a portable descriptor, not a label on local results. A
 fitted cost shape plus another machine's profile must yield a runtime estimate
-for a machine SIEVE is not running on. CHARTER 63 calls laptop-versus-HPC
-feasibility one of the most important objectives of SIEVE, and it is the one
-capability here that cannot be approximated by measuring locally — which is why
+for a machine SIEVE is not running on. STRATEGY §0 makes laptop-versus-HPC
+feasibility the question the tool exists to answer, and it is the one capability
+here that cannot be approximated by measuring locally — which is why
 the profile's shape is decided in this phase rather than after Phase 5 starts
 consuming it.
 
@@ -220,7 +254,8 @@ Phase 5.
 Rationale for preceding the engine: ARCHITECTURE §2.3 has the harness fitting
 the constants the engine's placement decisions consume. Built in the other
 order, the engine's decisions are guesses with no instrument to evaluate them,
-and CHARTER invariant 2 stops being an invariant and becomes a later feature.
+and the measurement claim of STRATEGY §0 stops being a property of the system and
+becomes a later feature.
 
 ## Phase 5 — The engine
 
@@ -264,8 +299,10 @@ made real, since Phase 1 declared the contract and this is the phase that uses i
 Verified by: a saturated interactive edge sheds and reports shedding; an export
 edge drops nothing under the same load; no edge grows without bound; entering a
 stream at an arbitrary offset by restoring the nearest snapshot and replaying
-produces the same bytes as running from the beginning; and a warmup shortfall
-raises rather than emitting a sentinel that reads downstream as a real value.
+produces the same bytes as running from the beginning; and a warmup shortfall at
+either boundary is keyed rather than raised — the frame computed with a full
+window and the same frame computed cold resolve to different keys, and neither
+is a sentinel that reads downstream as a real value (ARCHITECTURE §3.1).
 
 Not yet: two code paths for the two behaviors. One graph, differing edge
 policies.
@@ -311,14 +348,14 @@ a control), but every one of them binds to declared parameters and owns none of
 them; and adding a declaration to the reference operator produces a control with no
 edit to interface code.
 
-The weak point of this phase: CHARTER's second user limitation — a naive user
-does not know where to begin, and functionality not on screen might as well not
-exist — is only half answered by generation. Generated controls make every
-capability *visible*; they do not make the load → measure → tune → load loop
-(CHARTER 7.1d) *sequenced*, and nothing in ARCHITECTURE or ORGANIZATION supplies
-a mechanism for that. It is the one weakness CHARTER names that has no
-architectural answer yet. Treat it as unresolved design rather than as work this
-phase is known to close.
+The weak point of this phase: a naive user not knowing where to begin is only
+partly answered by generation. Generated controls make every capability
+*visible*; they do not make the load → measure → tune → load loop *sequenced*.
+STRATEGY §1.6 supplies the part that is answerable — given a target, what can
+satisfy its precursors is a query over declarations — and STRATEGY §2 records the
+residue plainly: that answers the user who can state a target, and nothing in the
+corpus answers the user who cannot. Treat the residue as unresolved design rather
+than as work this phase is known to close.
 
 Not yet — and this is the last place it can still go wrong: a bespoke panel for
 the one operator whose declaration is awkward. That operator's declaration is
@@ -354,14 +391,21 @@ out. Anything touching scheduling, caching, materialization, or interface state
 is what these documents rewrite, and porting it would reintroduce the coupling
 the phases are ordered to prevent.
 
-One decision this plan requires and does not make: whether the existing
-implementation is frozen or deleted. Left running and patchable, it removes all
-urgency from reaching Phase 8, and the rewrite becomes a permanent parallel
-branch — the same stall as building the interface early, arriving through a side
-door. Frozen means no further changes land in it, including fixes. Deleted means
-the phases are the only path. Either is workable; leaving it merely *available*
-is the option that quietly ends the rewrite, and it is the default if nobody
-chooses.
+This plan once required a decision it did not make — whether the existing
+implementation is frozen or deleted — on the reasoning that leaving it running
+and patchable removes all urgency from reaching Phase 8 and turns the rewrite
+into a permanent parallel branch. STRATEGY §7 decided it: frozen, and frozen
+*mechanically* rather than by intention, moved to a path CI refuses to run and
+packaging refuses to ship, so "just patch it quickly" stops being available
+without anyone having to decline it. The warning above was correct about freezing
+that leaves the tree patchable, which is a property of the mechanism rather than
+of freezing.
+
+Consulting it is bounded to three uses (§7.2): porting a named carry-forward
+module, adding an archive entry, and reading a pure numeric kernel whose whole
+contract is array in, array out. Reading it to decide how something should be
+shaped is forbidden, because its shape propagates most effectively where its code
+is good.
 
 ## Amending this plan
 
@@ -371,7 +415,7 @@ Phase 8; deferring the benchmark harness past Phase 5; making video the first
 source operator; treating the machine profile as a label on local measurements
 rather than a portable descriptor; and deferring any contract-or-key decision out
 of Phase 1. Each is cheap now and unreachable later — video-first cost SIEVE its
-input generality once already, a local-only profile makes CHARTER 63's central
+input generality once already, a local-only profile makes STRATEGY §0's central
 objective unimplementable while every local number still looks correct, and a
 contract decision deferred is paid for by rewriting every operator that was
 written before it.

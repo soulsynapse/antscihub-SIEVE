@@ -9,8 +9,17 @@ shape of the fix, not the fix.
 
 Entries are grouped by solution class, so one lesson often carries several
 observations that turned out to want the same remedy. References are to the
-pre-rewrite tree. Where v2 was right, that is recorded too; several of its
-mechanisms should be carried forward rather than reinvented.
+pre-rewrite tree, which is frozen, which is why they cannot go stale. Where v2 was
+right, that is recorded too; several of its mechanisms should be carried forward
+rather than reinvented.
+
+Every citation in this file was checked against that tree and six counts were
+found wrong: the number of stateful filters, the `self._` reference count in the
+filter tab, the number of interface threads and which module creates them, the
+number of undo subclasses, the coupling strength of the density-plot helpers, and
+the proposition finding 15 attaches to its test citation. All six are corrected in
+place, which is what an archive is for — the facts are fixed, the lessons stand,
+and nothing here is updated to match a tree that has moved on.
 
 ---
 
@@ -127,8 +136,10 @@ computed cold share a key and differ in bytes.
 `core/filter_base.py:250` `cacheable = deterministic and not stateful`;
 `pipeline/cache_key.py:61` raises `NotCacheableError` for the rest;
 `pipeline/dag.py:311` skips those nodes and `:293` skips any node whose parent was
-skipped — so one stateful node leaves the **entire downstream graph unkeyed**. Five
-of seven filters are stateful, so the cache is inert past the first one.
+skipped — so one stateful node leaves the **entire downstream graph unkeyed**. Four
+of seven filters are stateful (`filters/background_ema.py:58`, `block_signal.py:72`,
+`motion_history.py:105`, `temporal_baseline.py:76`), three of them mid-chain, so the
+cache is inert past the first one.
 
 `backend/dispatch.py:90-95` shows the hazard was diagnosed exactly: a stateful
 kernel whose spec omits `stateful=True` would let "dag.py give the node a cache key
@@ -223,9 +234,11 @@ no referent here — and extends §5.4 from freshness to identity.
 
 *Observed, in cores and in memory.*
 
-Cores: four independent interface threads, one per concern
-(`gui/preview_runner.py:304`, `gui/detector_worker.py:140`, `gui/decode_worker.py`,
-`gui/materialize_worker.py`). Inside them the detector takes all cores
+Cores: five independent interface threads, one per concern
+(`gui/preview_runner.py:304`, `gui/detector_worker.py:140`,
+`gui/materialize_worker.py:72`, `gui/player.py:77`, `gui/resource_probe.py:98`).
+`gui/decode_worker.py` creates none of them — it is moved onto the thread
+`player.py:77` names `"sieve-decode"`. Inside them the detector takes all cores
 (`core/wavelet.py:127`, `ThreadPoolExecutor` at `:162`), decode opens 2–4 readers and
 threads them (`decode/prefetch.py:21` `resolve_workers`, reading `core/machine.py:27`
 `available_cpus`), and filter execution is single-threaded per frame
@@ -258,10 +271,10 @@ rather than separate pools.
 *Observed, four mechanisms for one question.*
 
 `gui/history.py:14` writes whole `Project` snapshots per step, `SNAPSHOT_LIMIT = 50`.
-`gui/commands.py` is one `QUndoCommand` subclass per editable thing —
+`gui/commands.py` is one `QUndoCommand` subclass per editable thing, ten of them —
 `AddReplicate`, `RemoveReplicate`, `RenameReplicate`, `SetReplicateROI`,
-`SetReplicateROIs`, `EditTuningParams`, `EditDetector`, `ResetTuning`, `SetClip` —
-each with a hand-written `redo`/`undo` pair and several with `id()`/`mergeWith()`
+`SetReplicateROIs`, `EditTuningParams`, `EditDetector`, `ResetTuning`, `SetClip`,
+and `RestoreSnapshot` at `:285` — each with a hand-written `redo`/`undo` pair and several with `id()`/`mergeWith()`
 coalescing. `gui/document.py:65` `_Gesture` and `:424` `finish_roi_gesture` exist so
 one drag is one undo step, with `:343` `_would_change` suppressing no-ops. And
 `gui/document.py:71` `ReplicateDocument` broadcasts twelve distinct change signals —
@@ -420,6 +433,16 @@ And `tests/unit/test_chain_model.py:173-174` asserts the hand-written kinds
 interface's own catalog — pinning the duplicate rather than tying it to `ArraySpec` or
 `ElementKind`.
 
+The sharper lesson is four lines above it. `:167-170` is the test's own rationale,
+stating that the kinds are not derivable from `FilterSpec`. That was true when it
+was written and stopped being true at commit `48635fc`, when element meaning became
+a registration requirement with no default (`core/filter_base.py:199-211`) and every
+filter complied. So the justification for maintaining a duplicate outlived the
+condition that justified it, and the comment asserting the justification is what
+kept anyone from noticing. No import check, type check, or coverage number catches a
+stale rationale — it is not a property of the code, it is a claim about the code,
+and nothing in the build reads it.
+
 *Lesson.* Two validators for one property, with nothing forcing agreement, produce
 either a false conflict shown to the user or a chain the interface permits and the
 engine rejects — and a test that asserts the duplicate against itself makes drift
@@ -494,7 +517,9 @@ generation semantics, and clock-anchored playback into it.
 
 ## 18. Whatever the interface computes, the interface ends up owning
 
-*Observed.* `gui/filter_tab.py` has 691 `self._` references; its `__init__` owns the
+*Observed.* `gui/filter_tab.py` is 1,629 lines carrying 817 `self._` references
+across 154 distinct attribute names — 691 is the count of *lines containing*
+`self._`, and 154 is the figure the lesson actually wants. Its `__init__` owns the
 player, document, runner, metrics, preferences, chain, defaults, series collector,
 playhead, detector runner, materializer — and `_filled`, `_settled`, `_series_final`,
 `_partial_published`. The settled boundary from finding 6 is a property of the
@@ -502,7 +527,11 @@ computation living in a widget. `filter_tab.py:119` `parity_chain(30.0)` bakes a
 source frame rate into interface defaults.
 
 Views compute as well as own: `gui/density_plot.py:32` and `:54` build a histogram
-surface from raw band power inside the widget, with its own bin count. The plots
+surface from raw band power, with its own bin count at `:28`. These are
+module-level functions in the widget's module rather than methods on the widget,
+so the coupling is weaker than "inside the widget" suggests and rests on the
+widget being their only caller — which does not change the lesson, since an
+uncalled-from-anywhere-else derivation is still one the engine cannot key. The plots
 themselves take plain arrays and scalars rather than detector types
 (`set_series(band_power, ...)`, `set_power(power, freqs, fps)`), which is the right
 decoupling — but a quantity derived inside a view cannot be keyed, cached, or reused,
@@ -599,6 +628,15 @@ reachable while events are only ever a CSV.
 ---
 
 ## Mechanisms worth carrying forward
+
+One caution about the form of this list, added after it was written and after the
+first implementation's lessons were watched failing to reach the second. What
+crosses a rewrite boundary reliably is a *check*, not a module. The last entry
+below travels because any implementation that fails it fails visibly; the others
+are described as modules, which is the same form in which v1's good properties
+were left for v2 and did not arrive. Read each of them as a behaviour owing a test
+that fails until the behaviour exists, and treat the module as evidence that the
+behaviour is achievable rather than as the thing to move.
 
 `bench/sweep.py` builds a factorial design over core sets and worker counts:
 `class_core_sets` derives sets *per CPU efficiency class*, `design(cores, workers)`

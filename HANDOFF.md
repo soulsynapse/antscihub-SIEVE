@@ -349,8 +349,9 @@ because then the first irregular case breaks all three and none can be fixed alo
 counter-intuitive ones marked as having been reached wrongly at least once. Read
 that document.
 
-**v2** is at `antscihub-SIEVE/src/sieve`. Its `docs/ARCHIVE/FINDINGS.md` is the
-record of why it is being replaced.
+**v2** is at `antscihub-SIEVE-v2/src/sieve`. Its
+`antscihub-SIEVE-v2/docs/ARCHIVE/FINDINGS.md` is the record of why it is being
+replaced.
 
 **Read either one for lessons and measurements. Do not read either one to decide
 how something should be shaped.** Both contain genuinely well-built components —

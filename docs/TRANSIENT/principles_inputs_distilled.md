@@ -3,12 +3,22 @@
 ## Status against the normative set
 
 `principles.md` no longer exists; its unique content is in ARCHITECTURE and the
-rest was already here. This file is now the work queue for what remains, and the
-section below is the map. It was built by reading the current text of STRATEGY,
-ARCHITECTURE and ORGANIZATION rather than from memory of what was written, but it
-is a first pass: phrase-matching across wrapped lines has false negatives, so
-confirm an item is absent before adding it rather than trusting a row marked
-outstanding.
+rest was already here. This file was the work queue for the fold-in, and the
+section below is the map of where each claim went.
+
+**Parts A through E are closed.** What remains is Part F: F2, which gates
+ARCHITECTURE §10 and is a design decision rather than a transcription; F3, the
+unnamed tune-on-a-sample operation; and F1's residue, which has no source and
+cannot be reconstructed. Everything below this section is the derivation and the
+evidence, and two entries are now superseded by what landed rather than by
+anything they say — C8 by ARCHITECTURE §1.11 and Part D's table by its own third
+column.
+
+The map was built by reading the current text of the three normative documents
+rather than from memory, but phrase-matching across wrapped lines has false
+negatives, and the fold-in found two: C48's argument was already half-stated in
+ARCHITECTURE §2.3, and C8's framing had been overruled by ADJUDICATION Q9. Both
+are recorded where they landed.
 
 **Part A.** All landed except A4, which is superseded by STRATEGY §6's four
 document kinds and §3's in-code ledger. A1 is STRATEGY §6.5, with clause 3
@@ -54,9 +64,8 @@ enumeration is unordered or ordered only by a declared cost.
   a rule whose violations are individually cheap and unbounded in count is
   enforced automatically or not at all, the aggregate being the unit, which is
   the justification for the ladder and was missing from it. C70 landed as
-  ARCHITECTURE §2.9's
-  closing paragraph — an optimization is a new operator version with identical
-  declared semantics and a different cost shape.
+  ARCHITECTURE §2.9's closing paragraph — an optimization is a new operator
+  version with identical declared semantics and a different cost shape.
 - *Scope.* C72–C74 landed (STRATEGY §1.2 and §0, ARCHITECTURE §10, §1.4).
 
 **Part D** is landed. All twelve carry an expiry; the third column of its table

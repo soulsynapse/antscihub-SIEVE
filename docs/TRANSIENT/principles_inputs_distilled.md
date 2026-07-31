@@ -36,16 +36,10 @@ enumeration is unordered or ordered only by a declared cost.
 - *Ownership.* C25–C27 landed. C26 is §2.8 and C27 is §9.4; C25's general form
   is now §2.8's closing paragraph, with §9.4 and §2.2 named as its other two
   instances.
-- *The log.* C28–C32 and C34 landed (§5, §5.1, §5.2, §5.3, §5.5, STRATEGY §1.6).
-  **C33 partial** — §5.5 forbids result-determining state in a widget and §4.4
-  puts the settled boundary on the artifact, but the general rule that every
-  derived quantity is an engine-owned keyed artifact is not stated.
-- *Legibility.* C35–C37, C39, C41–C43 landed (§6.1, §6.2, §6 with STRATEGY §6,
+- *The log.* C28–C34 landed (§5, §5.1, §5.2, §5.3, §5.5, §5.6, STRATEGY §1.6).
+- *Legibility.* C35–C43 landed (§6.1, §6.2, §6 with STRATEGY §6, §6.6, §6.5,
   §6's Forbids, §6 with STRATEGY §0, STRATEGY §3 and §1.6, §4.4 and §5.4 with
-  identity held open at STRATEGY §9). **C38 partial** — generation covers
-  parameter controls; connectivity kind, placement, guidance and the
-  reason-it-cannot-go-here message are not stated as generated. **C40 partial** —
-  graph-shaped authoring is settled in STRATEGY §8 and has no ARCHITECTURE rule.
+  identity held open at STRATEGY §9).
 - *Measurement.* C44–C46 and C49–C53 landed (§7.1, §7.2, §7.4, §7.3, §7.5, §7's
   preamble, §1.9, STRATEGY §0). **C47 outstanding and it is the sharpest gap in
   this list** — §7.4 requires a measurement to name its machine and stops there.

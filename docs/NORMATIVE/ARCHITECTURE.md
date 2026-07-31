@@ -374,6 +374,19 @@ provenance record, and the GUI are materialized views maintained over it.
    preferences, which change what is *requested* but never what an artifact *is*.
    Anything else held only in a widget cannot be saved, undone, or reproduced,
    and is therefore not a feature.
+6. Every derived quantity is an engine-owned keyed artifact that views read —
+   settled boundaries, histograms, aggregates, counts, anything computed *from*
+   results rather than displayed *from* them. This is §5.5 stated over quantities
+   instead of over state, and it is a separate rule because a quantity computed
+   inside a view does not resemble state living outside the log: nothing is
+   stored, the computation is pure, and it derives only from what the view was
+   already given. What it cannot be is keyed — so it cannot be cached,
+   invalidated by a key diff, reused by a second view, or compared against the
+   same quantity computed anywhere else. The second consumer that needs it
+   computes it again, and now one number has two definitions and nothing that
+   would notice them diverging. The dividing line is not whether the computation
+   is expensive; it is whether the result is a fact about the data, which the
+   engine owns, or a fact about the display, which it does not.
 
 Forbids: a god-object tab that is the sole owner of the current pipeline state.
 
@@ -410,6 +423,29 @@ and is treated as one rather than folded in here.
    generation. A rich control is a new member of that bag; it is never an
    operator-specific panel, because that is how one panel becomes the only place
    some state lives.
+5. Authoring is graph-shaped from the start, and affordance rules are defined
+   over a graph rather than over a sequence. The engine admits branching,
+   fan-out, merges, and multi-input nodes (§2.6), so a surface modelling a
+   pipeline as a list expresses a proper subset of what the engine runs — this
+   section's second failure direction, and the one that goes unnoticed because
+   everything the surface does offer works correctly. Nor is a sequence a simpler
+   special case to be widened later: what may be placed here, what may connect to
+   what, and why a connection was refused are all answered against adjacency in a
+   list, and none of those answers survives the change of relation. Building the
+   path first and generalizing afterwards is what happened last time, and the
+   record of its cost is that the engine's branching was never reachable from the
+   surface at all.
+6. Generation covers more than parameter controls. Connectivity kind, where a
+   node may be placed, the guidance shown for it, and the message explaining why
+   it cannot go where it was dropped all derive from declared I/O and declared
+   metadata (§2.1), because each is a statement about what the engine will accept
+   and the declarations are where that is written down. Any of them authored by
+   hand is a second account of admission maintained beside the first, and it
+   drifts in the direction that costs most: a surface refusing what the engine
+   would have run is indistinguishable, to the user, from a capability that does
+   not exist. That asymmetry is why generation extends past the widget rather
+   than stopping at it — a wrong control is visibly wrong the first time someone
+   uses it, and a wrong refusal is never seen by the person it refuses.
 
 Forbids: capability that exists in the pipeline and is silently unreachable in
 the product, and the reverse — a control whose behavior the engine does not know

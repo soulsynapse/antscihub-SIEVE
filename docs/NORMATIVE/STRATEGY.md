@@ -491,12 +491,23 @@ that is a property of the freezing mechanism, not of freezing.
 1. **Extraction precedes freezing.** A tree is not frozen until the document that
    carries its lessons forward exists, because the code is not the channel and
    memory is not either. FINDINGS is v2's extraction, and its "mechanisms worth
-   carrying forward" section is the part that does the actual work. The first
-   implementation was frozen without one, and the things it did better did not
-   survive; that loss is permanent and is recorded as permanent rather than as a
-   pending task. The only remaining channel for it is retail — when someone
-   notices a specific thing v1 did better, it becomes a ledger entry at that
-   moment, which is the one place it will not evaporate.
+   carrying forward" section is the part that does the actual work.
+
+   This rule previously recorded that the first implementation was frozen without
+   an extraction and that the loss was permanent. **That is false, and correcting
+   it strengthens the rule rather than weakening it.** v1 carries an extraction of
+   its own, written before v2's, which states in its opening line that it holds
+   the measurements that must not be re-derived and marks which of its conclusions
+   had been reached wrongly at least once. What actually happened is worse than
+   the loss recorded here and is the more useful lesson: the document existed,
+   nothing pointed at it, and v2's extraction was written as though it did not.
+   Extraction is therefore necessary and not sufficient. A document nothing cites
+   is not a channel either — the same anti-rot argument §6 makes about the tree,
+   turned on the corpus itself — and it is why the carry-forward list is stated as
+   behaviours owing checks rather than as modules: a check fails when it is
+   ignored and a document does not. Retail remains a channel and is no longer the
+   only one. When someone notices a specific thing an earlier tree did better it
+   becomes a ledger entry at that moment, which is where it will not evaporate.
 2. **The frozen tree is consulted through FINDINGS, not through its source.**
    Reading v2's code to answer a design question is how v2's shape propagates
    into v3, and it propagates most effectively where the code is *good* — the

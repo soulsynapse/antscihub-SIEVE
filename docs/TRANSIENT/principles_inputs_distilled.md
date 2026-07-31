@@ -112,12 +112,27 @@ is what one machine per run forbids. §10 keeps the permanent exclusions and the
 durable half — nothing in §§1–9 may assume the executing machine holds the
 interface.
 
-**F1 is open and its premise was wrong.** This file says the v1 list cannot be
-reconstructed from the repository; v1 exists on disk at `optical-flow-detector`
-in the parent folder. The one thing recorded so far is the author's: v1 is more
-performant and does things v2 is slow to do, cause unknown. Per F1's own
-argument, the transferable form is a check that fails until the behaviour exists,
-not a module and not a note.
+**F1's premise was wrong twice over, and the second one is a factual error in a
+normative document.** This file says the v1 list has never been written and
+cannot be reconstructed from the repository. v1 is on disk at
+`antscihub-optical-flow-detector`, and it carries its own extraction: a findings
+document of twenty sections whose opening line is that it holds the measurements
+which must not be re-derived, marking which conclusions had been reached wrongly
+at least once. It predates v2's extraction. STRATEGY §7.1 recorded the opposite
+as permanent and is now corrected — the document existed, nothing pointed at it,
+and v2's extraction was written as though it did not, which is a sharper lesson
+than the loss it replaced.
+
+What remains of F1 is two things and neither is the list. **The extraction of v1
+has not been done** — its findings are v1's own, written for v1, and the job v2's
+FINDINGS did for v2 has no counterpart here. **And "v1 is more performant" is
+unmeasured.** v1 states absolute throughput for its own workload; nothing states
+v2's on the same footage, so there is no comparison, only two unrelated numbers
+and a recollection. That is STRATEGY §0's argument arriving at the corpus's own
+expense: the claim is exactly the kind the bench exists to settle and there is no
+instrument, so it stays a claim. Per F1's own argument the transferable form is a
+check that fails until the behaviour exists — which means the first thing owed is
+a measurement, not a port.
 
 F4 is answered: the superseded documents survive as ARCHIVE.
 

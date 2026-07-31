@@ -135,6 +135,29 @@ derived: recomputable, disposable, and keyed by the derivation that produced it.
     invisible to every downstream check: two runs that seek the same way agree,
     so an inexact seek makes every key silently wrong and no comparison
     downstream can find it.
+12. The unit above a single source is a **collection**: a declared set of
+    members, each member a source together with the parameter overlay that
+    applies to it. Replicates are what motivate it, and they are also why a member
+    is not simply a source — two members can name the same asset and differ in a
+    threshold, so what distinguishes them is the overlay and not the file. The
+    working scale is what makes it a declared thing rather than a way of speaking
+    about several runs: a hundred members over a hundred thousand files has to be
+    addressable, keyable, and estimable, and none of those is available for a set
+    that exists only in the user's head. Membership is a key term, which follows
+    from §1.1 rather than being added here — an artifact derived across a
+    collection has the member artifacts as its inputs, so a collection that gained
+    or lost a member is a different input set and yields a different key, and a
+    reduction over ninety-nine members cannot be mistaken for one over a hundred.
+    Per-member artifacts key exactly as they did before: a member's overlay
+    resolves to that member's parameters (§1.1) and nothing about the collection
+    enters them, which is what lets a member's work be reused when the same member
+    appears in a second collection.
+
+    The sample a user tunes on is a subset of the members and not a separate kind
+    of thing. Tuning selects a few members, the full run selects all of them, and
+    the spec is the same spec across both (§5.2) — which is the whole of the
+    operation STRATEGY §1.5 describes as the user's loop, and the reason it needed
+    a unit before it could be named.
 
 Forbids: artifacts that cannot be reproduced, and therefore cannot be
 invalidated with confidence or thrown away without fear — and equally, an escape
@@ -266,6 +289,17 @@ the constraint the rest of this section is written inside.
    artifacts computed before and after the edit collide under one key, and the
    claim that nothing but the speed changed becomes untestable at exactly the
    moment it most needs testing.
+10. An operator may declare that its input is a collection (§1.12) rather than a
+    stream. This is the kind that puts cross-member work inside the graph instead
+    of in a script someone runs afterwards, and it is the arity axis of §2.7 taken
+    to its end: §2.6's multi-input operator declares a fixed number of inputs at
+    differing rates, while a reduction declares the collection axis and has its
+    member count resolved at execution. It is a field of the same signature and
+    never a second one, so an operator that reduces across members is an operator
+    and is scheduled, keyed, and placed like one. What forces the rule is that the
+    alternative is not the absence of cross-source aggregation — the working cases
+    need it — but cross-source aggregation assembled beside the pipeline, which is
+    §2.7's named failure arriving through the one axis nobody declared.
 
 This is the one place the architecture adds a requirement the product did not
 ask for: declaring a cost shape is real work per filter. It is accepted because
@@ -503,9 +537,9 @@ expensive to remove.
    an interval — a rate is a mean, and it is the right statistic for the question
    §7.1 calls feasibility.
 3. Fan-out waits take the maximum, not the mean. Replicates are parallel tasks
-   over one source, wall-clock is set by the largest, and per-task progress
-   looks healthy right up until it doesn't. Straggler skew is the normal case,
-   not an anomaly.
+   over one source — the general case is the members of a collection (§1.12) —
+   wall-clock is set by the largest, and per-task progress looks healthy right up
+   until it doesn't. Straggler skew is the normal case, not an anomaly.
 4. Every measurement is attributed to a machine profile, and the profile is a
    portable descriptor rather than a label on local results. A number without the
    machine it was taken on is not a number; a machine identifier only the machine
@@ -544,6 +578,13 @@ expensive to remove.
    estimation exists to satisfy this rule on content-dependent work, where the
    only alternative is an interval wide enough to cover every input the operator
    might see.
+7. A collection's cost is the sum over its members of each member's own estimate;
+   its wall-clock is the fan-out maximum (§7.3). Those are two numbers answering
+   two questions — total work, and time until the last member finishes — and
+   neither is one member's estimate multiplied by the count (§2.3). Extrapolating
+   across member count is therefore not a new dimension in any operator's cost
+   shape: it is a sum, and the thing that still has to extrapolate is the
+   per-member estimate across the machine profile (§7.4), which it already did.
 
 Forbids: performance claims that only hold on the author's machine, and
 progress bars that lie by averaging.
@@ -580,7 +621,13 @@ or another tool — can read them without reading our source.
    assumption independently — so the first irregular region or irregular element
    breaks three things at once, and none of the three can be fixed on its own.
    The declaration originates with the operator that produces the elements
-   (§2.1); it travels with the schema because the readers are what need it.
+   (§2.1); it travels with the schema because the readers are what need it. The
+   same declaration carries a member axis wherever a collection is involved
+   (§1.12): an element in an artifact derived across members addresses back to a
+   member as well as to a region inside it, and that is one declaration rather
+   than a spatial descriptor with a source label set beside it. A reader able to
+   say which pixel a value came from but not which member it came from can do
+   nothing with the value.
 
 Forbids: outputs that are only interpretable by the version of SIEVE that
 wrote them, and an element whose provenance in the source is inferred from its
@@ -624,9 +671,20 @@ and artifacts trusted because the writer said so.
 Out of scope, permanently: replication, consensus, distributed transactions
 (Ch. 5–9). A design discussion reaching for these has gone wrong.
 
-In scope only if SIEVE submits work off-box: partitioning and straggler
-handling across nodes. The boundary is **one machine per run**, not one machine
-ever — invariant 2 requires comparing a laptop against an HPC, and an
-architecture that forbids running elsewhere cannot estimate running elsewhere.
 Nothing in §§1–9 may assume the executing machine is the machine holding the
-GUI.
+interface. That is the durable half of this section, and it is a constraint on
+the other nine rather than a boundary drawn around them: comparing a laptop
+against a cluster is the question §7.4 exists to answer, and an architecture
+that forbids running elsewhere cannot estimate running elsewhere.
+
+The boundary this section used to draw — **one machine per run** — is withdrawn,
+and what it was for is stated in its place: planning for distribution must not
+shape the design before distribution exists. Written as a boundary it was read as
+a constraint and could not survive being one, because a collection of a hundred
+members (§1.12) is the ordinary case and is precisely what one machine per run
+forbids. Either it forbade the normal case or *run* meant something narrow enough
+to forbid nothing, and neither is what it was for. Partitioning and straggler
+handling across nodes stay unbuilt until work is submitted off-box; what §1.12
+buys is that they are unbuilt rather than precluded, since a collection of
+independent members partitions at the member and needs no concept that does not
+already exist.

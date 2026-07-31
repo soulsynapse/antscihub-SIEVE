@@ -166,13 +166,14 @@ thing, then propose a home (§6).
    filter drift silently; a reference filter breaks the build.
 2. Minimal is not the same as trivial. The set must cover the hard shapes — one
    member carrying state across frames, one taking more than one input, one
-   changing rate, one declaring a two-sided window — because a single easy member
+   changing rate, one declaring a two-sided window, one reducing across a
+   collection (ARCHITECTURE §1.12) — because a single easy member
    demonstrates only the easy contract, and the hard contracts are exactly where
    someone reinvents rather than reuses. The two-sided window is the shape whose
    absence had the highest price last time: an operator needing lookahead and
    unable to declare it gets built outside the graph (ARCHITECTURE §3.1), and a
    reference set that cannot demonstrate the declaration is how the next author
-   concludes the same thing. The four are an inventory of the hard shapes that
+   concludes the same thing. The five are an inventory of the hard shapes that
    exist today, and the set expires by addition rather than by replacement
    (STRATEGY §6.5). What stops it growing as the product of the shapes is
    ARCHITECTURE §2.7: the axes are fields of one signature, so one member can

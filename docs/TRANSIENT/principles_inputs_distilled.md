@@ -92,15 +92,34 @@ because the twelve differ only in their bearer:
 archive headers during this session's amendment pass; the two FINDINGS errata
 were applied to FINDINGS directly.
 
-**Part F.** F1 is partly discharged — STRATEGY §7.1 records the v1 loss as
-permanent, and FINDINGS' carry-forward list now carries the caution that a check
-crosses a rewrite boundary where a module does not. **F2 is outstanding and gates
-ARCHITECTURE §10**, whose "one machine per run" is not stale so much as stated
-over a unit the corpus never defines: resolve the unit above a source one way and
-the constraint is trivially true, the other way and it forbids the normal case.
-**F3 is outstanding** — tune-on-a-sample then run-on-the-set is named as the
-user's loop in STRATEGY §1.5 but is not a named operation anywhere. F4 is
-answered: the superseded documents survive as ARCHIVE.
+**Part F.** F2 is decided: the unit above a source is a declared **collection**
+whose members are a source plus that source's parameter overlay. Two members can
+name one asset and differ in a threshold, so the member is the overlay and not
+the file. It landed as ARCHITECTURE §1.12, with the reduction axis at §2.10, cost
+as a sum over members at §7.7, the member axis on the addressing descriptor at
+§8.5, a fifth hard shape at ORGANIZATION §7.2, and a row in STRATEGY §8.
+Membership is a key term by inheritance from §1.1 rather than by a new rule.
+
+F3 is answered by F2 and needed nothing else. The sample is a subset of the
+members, the full run is all of them, and the spec does not change between them —
+what the operation was missing was never machinery but a unit to be a subset of.
+
+ARCHITECTURE §10's boundary is **withdrawn**, on the author's account of what it
+was for: planning for eventualities was not meant to dictate the design, and it
+was never meant as a constraint. Written as a boundary it read as one and could
+not survive being one, since a hundred-member collection is the ordinary case and
+is what one machine per run forbids. §10 keeps the permanent exclusions and the
+durable half — nothing in §§1–9 may assume the executing machine holds the
+interface.
+
+**F1 is open and its premise was wrong.** This file says the v1 list cannot be
+reconstructed from the repository; v1 exists on disk at `optical-flow-detector`
+in the parent folder. The one thing recorded so far is the author's: v1 is more
+performant and does things v2 is slow to do, cause unknown. Per F1's own
+argument, the transferable form is a check that fails until the behaviour exists,
+not a module and not a note.
+
+F4 is answered: the superseded documents survive as ARCHIVE.
 
 **Part G** is closed. Both defects are fixed.
 

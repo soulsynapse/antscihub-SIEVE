@@ -553,6 +553,7 @@ every increment and is finished by nothing.
 | Settled boundary | Computed from the declared window and carried on the artifact, not in a view | the first operator (field), the first stateful operator (use) |
 | Frame-exactness | Measured and keyed as a source-layer property rather than gated on | the first key is trusted |
 | Interface completeness | Every registered capability carries an interface debt triggered by the interface phase | continuous |
+| The unit above a source | A declared collection whose members are a source plus its parameter overlay; membership is a key term by inheritance, and reduction across members is an axis of the invocation signature | the first key (the unit), the first operator (the axis) |
 
 Two notes on that table. **Frame-exactness** is entered as a disclosure rather
 than a gate, per §1.1, and its constraint is the narrow one for a reason that is
@@ -567,14 +568,19 @@ wipe-and-recompute check and a preview-divergence check compare bytes at all;
 without it both compare nothing, which is why it is a key constraint and not a
 scheduling one.
 
-Three things the plan must place that no current document places. The unit above
-a single source has no name anywhere, and the working cases run to a hundred
-replicates over a hundred thousand files, so cross-source addressing is a
-first-class concern rather than a downstream script. Tune-on-a-sample then
-run-on-the-set is an unnamed operation that every user performs. And events are
+One thing the plan must place that no current document places: events are
 terminal in v2 — computed, exported, never held — while the loop in §1.5 requires
 one run's output to scope the next run's input, so intervals are input as well as
 output.
+
+Two others stood here and are now decided, in the row above and in ARCHITECTURE
+§1.12. The unit above a single source is a collection of members, each a source
+with its own parameter overlay, which is what makes cross-source addressing a
+first-class concern rather than a downstream script at a hundred replicates over
+a hundred thousand files. And tune-on-a-sample then run-on-the-set is a member
+selection over that collection rather than an operation of its own: the sample is
+a subset, the full run is all of them, the spec does not change between them, and
+what it was missing was never machinery but a unit to be a subset of.
 
 ## 9. Open, with triggers
 

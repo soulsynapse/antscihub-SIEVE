@@ -30,66 +30,19 @@ trading it away for convenience, you have made the wrong trade.
 
 ### What it must never do
 
-SIEVE is a signal detection tool, and its filters are opinionated by
-construction. Computing flow magnitude rather than colour variance is a modelling
-commitment; a feature vector is nothing but a stack of such commitments. **That is
-not SIEVE holding an opinion — it is SIEVE making an opinion available for the
-user to hold.** The whole product is the difference between those two.
+SIEVE holds no opinion about the biology. It does not know what an event is, does
+not need to, and any feature requiring it to know is refused however reasonable
+the request. Two worked refusals, so the rule has referents: **no statistics or
+analysis over the detections SIEVE produces**, and **no recommendations about how
+to record better footage**. A pipeline works with what it receives. Also refused:
+any parameter default presented as *recommended* rather than merely *preset*,
+quality scores, did-this-work verdicts, automatic threshold selection, and
+ranking of results.
 
-**The test is who would have been wrong.** Name the decision, then ask: if this
-turns out badly, who erred? If the answer is "the user chose badly and SIEVE did
-exactly what it was told," it is in scope. If the answer is "SIEVE chose badly,"
-it is out. Do not test on subject matter — a wavelet band is a claim about how
-fast an animal moves, and it is in scope, because the user picked it.
-
-Out of scope, all of them things users will ask for:
-
-- **Statistics or analysis over the detections.** Counts per hour, rates,
-  comparisons between replicates. The moment SIEVE aggregates detections it is
-  asserting they are the right unit to aggregate.
-- **Recommendations about how to record better footage.** A pipeline works with
-  what it receives.
-- **Automatic threshold selection**, and any parameter default presented as
-  *recommended* rather than merely *preset*.
-- **A confidence or quality score on a detection.** Band power is a number SIEVE
-  computed and may report. Relabelling it "confidence" claims it measures the
-  probability that a real behaviour occurred, which is a claim about the biology.
-- **A preset named for a behaviour.** `ant-foraging-detector` is out;
-  `flow-magnitude-over-16px-blocks` is fine. The name is the assertion — one
-  describes what is computed, the other claims what it finds.
-- **Fitting parameters to labelled data and returning the best one.** Reporting
-  the whole sweep surface is in scope; taking the argmax and calling it correct is
-  SIEVE deciding what counts as an event, because the loss function encodes that.
-- **Any claim that a behaviour did not occur.** SIEVE may say a range was examined
-  and the signal stayed under the user's threshold. It may never say nothing
-  happened, and it must never let unexamined frames read as examined-and-clear.
-- **Identifying species, individuals, caste, sex, or age.**
-- **Suggesting which filter or channel suits a given animal or setup.**
-
-In scope, including the cases that look like they should not be:
-
-- **Any filter, channel, band, or region the user selected.** Opinionated by
-  construction, and the opinion is theirs.
-- **Showing the distribution a threshold sits in** — a band-power histogram with
-  the current threshold drawn on it. Displaying where the knee is is disclosure;
-  choosing it is judgement.
-- **A parameter sweep that reports the surface.** Reporting is not choosing.
-- **Merging nearby detections**, but only as a declared operation with the gap as
-  a user-set parameter. Interval coalescing is arithmetic; a default gap running
-  invisibly is an assertion about what constitutes one episode.
-- **Intervals as input as well as output.** Feeding a run's detections back in to
-  scope the next run is the normal loop, not an extension.
-- **Ordering candidate operations by declared cost.** Cost is computation.
-  Ordering by quality is a recommendation.
-- **Cost, scheduling, and numerical tolerance**, which are decisions about
-  computation rather than interpretation.
-
-**Availability is not advocacy, but only under two conditions**: the list of
-operations is complete and visible, and adding one is cheap. Fail either and
-curation becomes recommendation by omission — the operator you did not ship is a
-modelling choice you made on everyone's behalf, silently. That is why §3's
-generation and §4's reference members are not conveniences. They are what keeps
-this rule honest.
+The test is mechanical. Name the decision, then name what would make it wrong. If
+the answer involves the user's animals, it is out of scope. Cost, scheduling and
+numerical tolerance are decisions about computation, not interpretation, and are
+in scope.
 
 SIEVE owes **integrity** — an artifact is what it claims to be, an output matches
 its declared schema, a written file reads back as what was written. It owes the

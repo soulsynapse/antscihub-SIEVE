@@ -1,3 +1,12 @@
+# SIEVE rewrite — design brief
+
+Kendrick's prompts from the pre-rewrite architecture session, 2026-07-31, verbatim
+and in order. These are the requirements and constraints in the author's own words;
+they are the source document, not a summary of one. The reasoning and conclusions
+that came out of the exchange are in [DESIGN-SESSION.md](DESIGN-SESSION.md).
+
+---
+
 ## 1 — Contracts that can change
 
 This folder is for a rewrite of SIEVE from scratch. For now, you don't really need more information than what I'm going to be telling you (don't read the git history) and I mostly want to just be talking about how to write it so that it works well, it's extensible, and has beautifully maintained code. Everything should be clear where it belongs, with well defined interfaces, boundary rules, and ratchet thresholds, ledger diffs, among other things, but we'll get there. I have most of the answers here but when you're able to derive the correct answer from my hints, I'll know that the architecture will be clear enough that I can trust much of the construction to agents. The end deliberable of this session is an architecture.md file that is no longer than 2 or 3 pages.
@@ -7,7 +16,6 @@ SIEVE operates as a pipeline of steps and a GUI, and it's primary deliverable is
 The pipeline is the run order. Its so the program has the information it needs to serve things up to the executor. The pipeline file owns the complete or incomplete steps the user chose. That is, the user can fill in any point of the pipeline, and the requirements to actually execute on that step will be obvious to the user. For the pipeline, this means that an incomplete pipeline is a valid file state.
 
 The pipeline itself has a contract because all the parts of SIEVE depend on everything else being able to play nice with each other. I think the contracts need to be able to be updated without everything breaking, or we will be hand writing everything until the end of time as new functionality lands. I'd like you to tell me how to define the pipeline contract so that as we add things to the pipeline contract, things don't break, and old features don't cause the required context for agents working in the repo to anchor them as plausible paths or distractions. Again, the goal is elegant, extensible design that is clear enough that agents can work in the repo and produce correct results. As a hint, for agents without infinite context, a correct result could be one that announces how it's not correct so problems don't go unnoticed, ideally mostly correct from the start, or chunked with debts of what is owed and when, and in-place ledgers that aren't essays reexplaining what is already obvious in the code.
-
 
 ---
 
@@ -73,10 +81,14 @@ Haha, okay, let's add that last question to the list too. I think your answers m
 
 The second solution might be easier to understand and implement in practice: the executor checks the joins for every possible joins that exist in the pipeline, and matches them in a clever way against fast paths that exist. Basically, the interpreter or handshake approach. So the fast path or potential path self validates and is preferred because it already exists. This was one of my answers but it is only nice in the short term, I fear, and I was pattern matching to plugin architecture, where features can be written in isolation.
 
+--------EDIT: Written in a separate section with Claude 5 Opus Max
+The second solution is easier to understand and implement in practice and just frontloads the responsibility and leverages correctness and availability of agentic problem solving being nearly free, but expands scope to include unknowns. A registry of characterized equivalents is good and all but it pretty strictly defines the scope, and this alternative allows for effort into optimization to scale with demand, allowing a responsive architecture at the cost of long term maintainability. It basically states that there will be a rewrite (or a targeted branching off, if one function comes into particularly high demand), but gains agility and freedom on top of a standardized interface. SIEVE transitions to a bunch of scripts ductaped together. This bets on the pipeline type usage being absurdly lopsided, and rejects investment into infrastructure that isn't proven to be needed.
 
 ---
 
-## 9 — Addressing concerns
+## 9 — Disarming the objections
+
+Disarming your concerns:
 
 1. Tolerance doesn't compose in *every* scenario, but it isn't a problem. Dynamic systems become chaos only by sensitivity and folding. Sufficient damping can create the well behaved system, and history dependent sensitivity are going to be known when the feature is added. That's one flag in the contract and the problem is gone.
 
@@ -97,3 +109,15 @@ Agreed. And at the risk of getting a little too cute here, they're tests, so if 
 So this more-or-less settles what the program looks like in the end. For an agent or engineer with perfect knowledge, if SIEVE were written as described, it would come out perfectly.
 
 We haven't decided on the shape of the repo yet, just the fairly abstract major components, and it is pretty simple how they all interact and what they do. Let's write that up, keeping it clear and easy to understand. I'm very clear on where we landed and I want you to write the < 2pg explanation.
+
+---
+
+## Housekeeping messages
+
+Kept for completeness; no design content.
+
+> You can author the commit.
+
+> You can make the commit for the rewrite branch.
+
+> Oh, update the transcript and my messages file and commit again

@@ -200,4 +200,3 @@ decode/IO backend and whether ROI-aware decode is actually available — which d
 whether the first fast path is real or hypothetical — the initial contents of the
 intermediate type vocabulary, and the reference set. These are tracked in the open-decisions
 section of [ARCHITECTURE.md](ARCHITECTURE.md) and should be moved out of it as they settle.
-

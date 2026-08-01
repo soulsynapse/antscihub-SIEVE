@@ -77,4 +77,3 @@ is a design error; find the intent that both sides should have been speaking thr
 `kind` strings for steps and `name` strings for providers appear in saved files and in
 signature keys, so renaming either is a contract change with a migration. Pick them
 carefully once. Internal class and module names are free.
-

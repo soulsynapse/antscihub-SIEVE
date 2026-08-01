@@ -124,4 +124,3 @@ Defined in full in [EQUIVALENCE.md](EQUIVALENCE.md). The contract-level rule: th
 may substitute one provider for another **only** when a record covers that substitution
 under a probe compatible with the plan's terminal output. Absent a record, the executor
 uses the provider the plan named. Missing records make things slow, never wrong.
-

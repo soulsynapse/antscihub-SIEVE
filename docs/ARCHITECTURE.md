@@ -200,4 +200,3 @@ Deliberately unsettled, and to be recorded here when they are settled:
 - The initial contents of the intermediate type vocabulary. Start minimal; every addition is
   a deliberate act, because this vocabulary is what makes composition total.
 - Reference set composition and where the media lives.
-

@@ -8,4 +8,3 @@ Code for retired items is removed from the tree, not commented out or left behin
 The migration that handles the retirement is the explanation; this file is only the index.
 
 <!-- entries below, newest first -->
-

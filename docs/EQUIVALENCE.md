@@ -133,4 +133,3 @@ Failure mode to watch: missing or failed equivalence records must make SIEVE *sl
 *wrong*. If a record is absent, the executor uses the provider the plan named. Any design
 change that would let an unverified substitution through is a defect regardless of how much
 faster it is.
-

@@ -9,9 +9,9 @@ that came out of the exchange are in [DESIGN-SESSION.md](DESIGN-SESSION.md).
 
 ## 1 — Contracts that can change
 
-This folder is for a rewrite of SIEVE from scratch. I'm starting the rewrite tomorrow. You really don't need any information than what I'm going to be telling you right now and I mostly want to just be talking about how to write it.
+This folder is for a rewrite of SIEVE from scratch. For now, you don't really need more information than what I'm going to be telling you and I mostly want to just be talking about how to write it so that it works well, and it's extensible and has beautifully maintained code. Everything should be clear where it belongs, with well defined interfaces, boundary rules, and ratchet thresholds, ledger diffs, among other things, but we'll get there. I have most of the answers here but when you're able to derive the correct answer from my hints, I'll know that the architecture will be clear enough that I can trust much of the construction to agents. The end deliberable of this session is an architecture.md file that is no longer than 
 
-SIEVE operates as a pipeline of steps and a GUI.
+SIEVE operates as a pipeline of steps and a GUI, and it's primary deliberable is Signal Isolation of Ethological Video Events. Don't worry too much about the ethology component right now, that's what the user knows about and SIEVE itself makes no opinionated design choices for it, at least for the rewrite.
 
 The pipeline is the run order. Its so the program has the information it needs to serve things up to the executor. The pipeline file owns the complete or incomplete steps the user chose.
 
@@ -80,6 +80,9 @@ There are a few software architecture approaches that allow the fast path to be 
 Haha, okay, let's add that last question to the list too. I think your answers might be better than mine, but I'm not sure. My first answer is that the answer equivalence, or signature of the solution that was made, requires that the inputs are tested against a reference object, maybe two or three, and any signature has a statistical test for how different any one solve is from another. Then for any method written, they have to declare what it is doing and eligible types. This is the natural bridge between each; it gives the executor the ability to pick, it gives a clean test for how much the fast path is actually useful, it provides the building blocks agents can use when making anything. These can be mathematically clustered too. So now you have the signature of everything that gives you the output you want, and when two things are identical, now you know to evaluate them for merging, or separately, flag them for why they should stay separate. When a fast path declares equivalence to multiple other paths, that's checkable. Then the executor just picks the result working backwards based on its speed ranking.
 
 The second solution might be easier to understand and implement in practice: the executor checks the joins for every possible joins that exist in the pipeline, and matches them in a clever way against fast paths that exist. Basically, the interpreter or handshake approach. So the fast path or potential path self validates and is preferred because it already exists. This was one of my answers but it is only nice in the short term, I fear, and I was pattern matching to plugin architecture, where features can be written in isolation.
+
+--------EDIT: Written in a separate section with Claude 5 Opus Max
+The second solution is easier to understand and implement in practice and just frontloads the responsibility and leverages correctness and availability of agentic problem solving being nearly free, but expands scope to include unknowns. A registry of characterized equivalents is good and all but it pretty strictly defines the scope, and this alternative allows for effort into optimization to scale with demand, allowing a responsive architecture at the cost of long term maintainability. It basically states that there will be a rewrite (or a targeted branching off, if one function comes into particularly high demand), but gains agility and freedom on top of a standardized interface. SIEVE transitions to a bunch of scripts ductaped together. This bets on the pipeline type usage being absurdly lopsided, and rejects investment into infrastructure that isn't proven to be needed.
 
 ---
 

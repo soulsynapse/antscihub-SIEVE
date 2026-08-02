@@ -19,8 +19,8 @@ authority order — deeper governs, the synthesis reports and rolls up — are
    components, the authoring and execution flows, five invariants with
    their failure modes. The one-stop shop; read this first, usually last.
 2. [docs/par/](docs/par/) — project architecture rationale (`PAR-NNNN`): the
-   dated long-form reasoning, one decision per file, coarse enough that a
-   record reads whole. These are living documents, not ADRs — edited in
+   dated long-form reasoning, one named system per file, coarse enough that
+   a record reads whole. These are living documents, not ADRs — edited in
    place whenever a reread finds them wanting, because the frozen record
    is one tier down. Each carries the doubts it has survived. A record no
    longer part of the architecture retires to `docs/par/retired/`.

@@ -125,14 +125,36 @@ Accepted while still owing its hardening session, and it is the single
 case where the status line does not carry that debt; `DEFERRED.md` names
 it explicitly instead.
 
-**Granularity: the smallest chunk that carries everything relevant with
-it.** Not the smallest chunk — the smallest *self-sufficient* one. A
+**Granularity: one PAR is one named system.** The boundary is drawn by
+near-decomposability, in Simon's sense: dense interactions inside the
+unit, sparse across it — what the system touches and what needs to know
+about it (2026-08-02; primary: `SESSION-2026-08-02-par-scope.md`). This
+is what makes the apparatus's trigger operational for the author and an
+agent alike: a decision gets a record when it settles the shape of a
+named system, and the scoped purpose is what stops a record ballooning —
+load it was never scoped to bear goes to the record, or the new record,
+whose system it belongs to. Within that boundary the unit is still the
+smallest *self-sufficient* chunk rather than the smallest one: a
 rationale has to read whole, because the reader is assembling an
 understanding and a decision split across three cross-citing files makes
 them do the assembly; but a record that has swallowed a neighbouring
-decision it does not need is harder to reread and harder to rewrite. The
-test is whether a reader finishes the file convinced without opening
-another.
+system it does not need is harder to reread and harder to rewrite. The
+reader-side test is unchanged — a reader finishes the file convinced
+without opening another.
+
+A boundary is a hypothesis, and it is falsifiable from the tree. The
+revision test is Parnas's criterion applied to reasoning — records are
+modules of it, decomposed by what can be revised independently: simulate
+the decision reversing, and if rewriting this record forces
+substantially rewriting another, the boundary leaked — merge, or make
+the dependency a citation, which is the interface between records. The
+evidence accumulates in the Challenges sections: doubts that repeatedly
+straddle two records are one system cut in half; entries clustering into
+separable concerns inside one record are two systems sharing a file. A
+boundary drawn wrong is repaired by re-individuating the living records,
+losslessly, numbers never reused. The same boundary is what keeps each
+tradeoff log assessable: the accumulated cons in a record all weigh
+against the worth of one system.
 
 The nearest familiar shape is a Wikipedia article: a summary that stands
 on its own, can be wrong, and cites its sources for exactly that reason.

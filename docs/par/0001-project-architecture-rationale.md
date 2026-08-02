@@ -145,20 +145,39 @@ coherent, which is cheap and is also an occasion to reread it. The one
 cost is silent drift in the parts meant to carry forward, so a
 substantial rewrite is reviewed as a diff.
 
-**Challenges.** A record carries a final `## Challenges` section holding
-doubts raised against the decision that did not survive: the date, the
-occasion, the doubt in a sentence or two, and why it held. This is the
-section that repays the apparatus. A doubt that recurs — and they do
-recur, the same objection arriving three times over a year — is
-re-litigated from scratch every time it lands nowhere, and the reasoning
-that answered it the first time is gone. Entries report; they never
-govern. A doubt that *succeeds* is not an entry: it changes the decision,
-so the record is rewritten.
+**Challenges.** A record carries a final `## Challenges` section: the
+decision's tradeoff log — literally pros and cons. Every architectural
+decision has tradeoffs, and a decision needs a way of pointing at what
+they are without having to change in response to them; this section is
+that pointer. An entry is a doubt or a friction deliberately stated
+against the decision, together with its resolution or the lack of one:
+the date, the occasion, the doubt or the cost in a sentence or two, and
+either why the decision held or that the doubt stands — real,
+unresolved, and not rising to change. Each entry is assessed as breaking
+or not breaking; a doubt that *breaks* is not an entry, because it
+changes the decision and the record is rewritten. Entries report; they
+never govern. This is the section that repays the apparatus: a doubt
+that recurs — and they do recur, the same objection arriving three times
+over a year — is re-litigated from scratch every time it lands nowhere,
+and the reasoning that answered it the first time is gone.
 
-Confirming evidence arriving without a challenge is not recorded. It has
-no natural trigger and no terminal form; a curated scrapbook of
-vindications is exactly the hand-maintained state the anti-bureaucracy
-invariant forbids.
+Friction is stated, never inferred. An agent may point friction out, but
+a human confirms it before it lands — every entry in these sections has
+arrived that way. The log is breadcrumbs for the human more than the
+agent: an agent follows the architecture by default, precisely because
+it is architecture, so the tipping point where accumulated entries mean
+a rationale *needs* improving is a human read of this section, never a
+computable threshold. Bare friction — un-argued evidence that something
+rubbed — is not an entry either: it lands with the reason it is
+friction, a doubt that exists but is not changing the decision, or it is
+dismissed and enters as the record withstanding it.
+
+Confirming evidence arriving without a challenge is still not recorded:
+a pro enters only paired with the con it answers. Free-floating
+vindication has no natural trigger and no terminal form; a curated
+scrapbook of it is exactly the hand-maintained state the
+anti-bureaucracy invariant forbids. This section creeps toward a log,
+and that is its design; it must never creep toward a scrapbook.
 
 **The walking path.** Three tiers, read downward only until convinced:
 
@@ -320,6 +339,10 @@ architecture decisions and stay in their plans.
 - A doubt against a founding decision lands on a normal rationale and
   either falls (a Challenges entry) or succeeds (the record is rewritten)
   — without either path touching the archive.
+- A doubt that matters but changes nothing has a landing place. The
+  tradeoff stays visible without the decision moving, and when a
+  rationale does need improving, the accumulated entries are the
+  evidence — read by the human, who alone calls the tipping point.
 
 ## Challenges
 
@@ -337,3 +360,17 @@ architecture decisions and stay in their plans.
   `docs/PLAN-DISTILL.md`: front-load while session memory is fresh, order
   by doubt traffic, quote decisive source sentences verbatim. Fuller
   record: none filed (2026-08-01 session).
+- **2026-08-02 — "Admitting friction evidence would creep the section
+  toward the curated scrapbook the exclusion paragraph forbids."**
+  Raised by the agent during the PAR-rename session, against the rewrite
+  that made this section a tradeoff log. The occasion was itself an
+  incident: the prior wording gave doubts that matter but change nothing
+  no place to land, which was breaking and forced the rewrite — the PAR
+  system tuned through its own living-record mechanism, landing here
+  because a tradeoff log for decisions lands with nothing else.
+  Dismissed by Kendrick: the section creeps toward a log, which is its
+  design, not a scrapbook — friction is deliberately stated and
+  human-confirmed, never inferred, and every entry carries its doubt
+  with its resolution or the lack of one, so the trigger-less, unbounded
+  character of a scrapbook never arrives. Fuller record:
+  `SESSION-2026-08-02-par-rename.md`, Exchange 4.

@@ -278,6 +278,26 @@ five-shape algebra is one design unit (one settled closed contract whose
 vocabulary arrives together) or it's `Resample` now and four not-yet-due
 entries. Not decided here; decided visibly there.
 
+**Layout (settled 2026-08-01, from the reviewed layout proposal):** flat
+modules except `tools/`, which invariant 1 requires as a package. The
+calls: the five-shape algebra is one design unit — one file
+(`kernel.py`), one marker, all five IR classes landing in the change
+that first needs `Resample`; the Tool contract and crop are two files
+(`tools/base.py` quoting `lower`/`view`, `tools/crop.py` behavior-only),
+so the ledger's grain matches the build grain; the view vocabulary is
+its own module (`views.py`) as the tool↔GUI boundary language, mirroring
+how the shapes sit outside the executor; `executor.py` places `render`
+only — `sweep` is not milestone-reached and moves to `DEFERRED.md`.
+Closed vocabularies (shapes, view layers) are v1 under additive
+framework-level revision: closed to per-tool extension points, not to
+change. A derivation audit (this plan and the placeholders against the
+session record) surfaced requirements riding on components that
+component-grained reach analysis cannot see (instrumentation, the frame
+cache, the multiple-comparisons safeguard, seed recording, the
+consumes-declaration question); they are recorded as DEFERRED entries
+and riders and in marker reasons, and `ARCHITECTURE.md` gains its
+authority line — on silence or conflict, the session record governs.
+
 Process: one repo-layout proposal first — every module path, in one document,
 discussed once — because placing a placeholder is itself a decision that gets
 talked about, and doing that per-file would be thirty conversations about
@@ -298,7 +318,9 @@ placeholder-skips exactly matching the ledger's test-tree entries.
 ## Phase 4 — README as map, and the conformance check
 
 - README grows into the map: what each location is, which of the four docs
-  governs it, where the debt files are and what each is for, how to read the
+  governs it, where contracts live and why there is no central contracts
+  location (pointers into Exchanges 1, 5, and 6 — synthesis, not
+  restatement), where the debt files are and what each is for, how to read the
   automatic ledger — including the mismatch runbook: expected change, run the
   regen command; unexpected change, investigate before regenerating.
 - Final pass against the definition of done below. Anything failing it is

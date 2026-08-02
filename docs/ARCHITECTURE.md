@@ -5,6 +5,10 @@ signal-processing filters. The user builds a pipeline; SIEVE runs it. Everything
 below exists so that stays true as filters are added, without the codebase
 becoming something nobody wants to extend.
 
+This document is a synthesis of the session record. Where it is silent or the
+two conflict, [DESIGN-SESSION.md](DESIGN-SESSION.md) governs — the direction
+`docs/PLAN.md` already reads it.
+
 ## The components
 
 **The kernel** is the set of primitive operations — resample, threshold, wavelet

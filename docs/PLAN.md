@@ -123,6 +123,34 @@ file with that trigger.
 The machinery that makes a placeholder count as a debt entry. This must exist
 *before* any placeholder is placed, otherwise Phase 3 is just stubs.
 
+**Build sequence (settled 2026-08-01).** Phase 2 is built as reviewed steps,
+not one-shot — it is large, and each step below still gets its concrete
+proposal (signatures, format, test cases) confirmed before code lands:
+
+- [ ] 1. `sieve.debt` with `Owed` — the exception class alone, real code;
+      adds the exception module to the closed machinery list.
+- [ ] 2. The enumerator — a library function taking a root path, walking
+      `.py` files, AST-matching rule v1, returning canonical entries;
+      unparseable files and form violations are enumeration errors. The
+      single roots-and-exclusions definition lives here. Fixture-tree tests.
+- [ ] 3. Ledger format and regen command — the versioned serializer to
+      canonical bytes, the one-command write mode, `.gitattributes` with
+      `DEBT-AUTO.txt -text`. The published-interface review of the phase.
+- [ ] 4. Mismatch test and sentinel — fresh enumeration diffed against the
+      checked-in bytes with entry-level failure output; the sentinel fixture
+      the enumerator must always find.
+- [ ] 5. Conftest adapter — `Owed` caught in the test tree becomes a skip
+      carrying the reason; membership checked against a fresh per-session
+      enumeration; a caught marker absent from it fails.
+- [ ] 6. Seed `DEBT.md` and `DEFERRED.md` — present debt near-empty;
+      deferred items migrated from the session's durable record and
+      `DESIGN-SESSION.md`'s Open list, each with its trigger.
+- [ ] 7. Exit — regen against the live tree: zero entries, sentinel found,
+      suite green; the commit carries `DEBT-AUTO.txt` at its zero state.
+
+Steps 3–5 are mutually independent; that order is by blast radius (the
+format is the retrofit-expensive artifact).
+
 - The two hand-authored debt files, created and seeded: the not-yet-due file
   receives the open items from the session's durable record — which dissolves
   into the file it seeds, completing the migration it exists to hold — and the

@@ -13,6 +13,13 @@ from pathlib import Path
 
 ROOTS = ("src/sieve", "tests")
 
+SENTINEL_ROOT = "tests/_sentinel"
+
+# The one deliberate skip: the sentinel is a liveness proof, not debt, and
+# must not be enumerated into the ledger. Its own test enumerates it
+# explicitly and fails the suite if it is not found.
+EXCLUDED = (SENTINEL_ROOT,)
+
 MODULE_QUALNAME = "<module>"
 
 LEDGER_NAME = "DEBT-AUTO.txt"
@@ -53,7 +60,11 @@ class Entry:
     reason: str
 
 
-def enumerate_markers(repo_root: Path, roots: Sequence[str] = ROOTS) -> list[Entry]:
+def enumerate_markers(
+    repo_root: Path,
+    roots: Sequence[str] = ROOTS,
+    excluded: Sequence[str] = EXCLUDED,
+) -> list[Entry]:
     """Walk .py files under roots and return every rule-v1 marker, sorted.
 
     Static only: nothing under the roots is imported or executed.
@@ -65,6 +76,9 @@ def enumerate_markers(repo_root: Path, roots: Sequence[str] = ROOTS) -> list[Ent
         if not root_dir.is_dir():
             raise EnumerationError(f"enumerated root does not exist: {root}")
         for file in sorted(root_dir.rglob("*.py")):
+            rel = file.relative_to(repo_root).as_posix()
+            if any(rel == p or rel.startswith(p + "/") for p in excluded):
+                continue
             entries.extend(_scan_file(file, repo_root))
     seen: set[tuple[str, str]] = set()
     for entry in entries:
@@ -92,6 +106,45 @@ def serialize(entries: Sequence[Entry]) -> bytes:
             for line in entry.reason.split("\n"):
                 parts.append(f"    {line}\n")
     return "".join(parts).encode("utf-8")
+
+
+def parse(data: bytes) -> list[Entry]:
+    """Inverse of serialize, for entry-level diff reporting on mismatch."""
+    entries: list[Entry] = []
+    key: "tuple[str, str] | None" = None
+    reason_lines: list[str] = []
+    for line in data.decode("utf-8").splitlines():
+        if line.startswith("    "):
+            reason_lines.append(line[4:])
+        elif " :: " in line:
+            if key is not None:
+                entries.append(Entry(key[0], key[1], "\n".join(reason_lines)))
+            path, _, qualname = line.partition(" :: ")
+            key = (path, qualname)
+            reason_lines = []
+    if key is not None:
+        entries.append(Entry(key[0], key[1], "\n".join(reason_lines)))
+    return entries
+
+
+def entry_diff(old: Sequence[Entry], new: Sequence[Entry]) -> str:
+    """Entry-level added/removed/changed lines, sorted by key.
+
+    This is the mismatch test's failure output: it keeps "stale ledger"
+    and "unintended debt change" distinguishable at the point of failure.
+    """
+    old_by = {(e.path, e.qualname): e for e in old}
+    new_by = {(e.path, e.qualname): e for e in new}
+    lines = []
+    for key in sorted(old_by.keys() | new_by.keys()):
+        label = f"{key[0]} :: {key[1]}"
+        if key not in old_by:
+            lines.append(f"added:   {label}")
+        elif key not in new_by:
+            lines.append(f"removed: {label}")
+        elif old_by[key].reason != new_by[key].reason:
+            lines.append(f"changed: {label}")
+    return "\n".join(lines)
 
 
 def main(argv: Sequence[str]) -> int:

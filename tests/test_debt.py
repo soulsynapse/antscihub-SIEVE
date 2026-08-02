@@ -8,8 +8,10 @@ from sieve.debt import (
     Entry,
     EnumerationError,
     Owed,
+    entry_diff,
     enumerate_markers,
     main,
+    parse,
     serialize,
 )
 
@@ -195,3 +197,34 @@ def test_write_mode_requires_the_subcommand(capsys):
     assert main([]) == 2
     assert main(["frobnicate"]) == 2
     assert "usage" in capsys.readouterr().err
+
+
+def test_parse_round_trips_serialize():
+    entries = [
+        Entry("pkg/a.py", MODULE_QUALNAME, "one"),
+        Entry("pkg/b.py", "C.m", "first\n\nsecond"),
+    ]
+    assert parse(serialize(entries)) == entries
+    assert parse(serialize([])) == []
+
+
+def test_excluded_prefix_is_not_walked(tmp_path):
+    make_tree(
+        tmp_path,
+        {
+            "pkg/real.py": "x = 1\n",
+            "pkg/skip/marker.py": STORE,
+            "pkg/skip/broken.py": "def f(:\n",
+        },
+    )
+    assert enumerate_markers(tmp_path, roots=("pkg",), excluded=("pkg/skip",)) == []
+
+
+def test_entry_diff_reports_all_three_kinds():
+    old = [Entry("a.py", "f", "same"), Entry("b.py", "g", "old"), Entry("c.py", "h", "gone")]
+    new = [Entry("a.py", "f", "same"), Entry("b.py", "g", "new"), Entry("d.py", "i", "fresh")]
+    assert entry_diff(old, new) == (
+        "changed: b.py :: g\n"
+        "removed: c.py :: h\n"
+        "added:   d.py :: i"
+    )

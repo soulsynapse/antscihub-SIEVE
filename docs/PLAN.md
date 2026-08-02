@@ -136,17 +136,21 @@ proposal (signatures, format, test cases) confirmed before code lands:
 - [x] 3. Ledger format and regen command — the versioned serializer to
       canonical bytes, the one-command write mode, `.gitattributes` with
       `DEBT-AUTO.txt -text`. The published-interface review of the phase.
-- [ ] 4. Mismatch test and sentinel — fresh enumeration diffed against the
+- [x] 4. Mismatch test and sentinel — fresh enumeration diffed against the
       checked-in bytes with entry-level failure output; the sentinel fixture
-      the enumerator must always find.
+      the enumerator must always find. Carries the first generated
+      zero-state ledger: the mismatch test reds without it, so this is the
+      first green moment it can exist (amended 2026-08-01; step 7 becomes
+      pure verification).
 - [ ] 5. Conftest adapter — `Owed` caught in the test tree becomes a skip
       carrying the reason; membership checked against a fresh per-session
       enumeration; a caught marker absent from it fails.
 - [ ] 6. Seed `DEBT.md` and `DEFERRED.md` — present debt near-empty;
       deferred items migrated from the session's durable record and
       `DESIGN-SESSION.md`'s Open list, each with its trigger.
-- [ ] 7. Exit — regen against the live tree: zero entries, sentinel found,
-      suite green; the commit carries `DEBT-AUTO.txt` at its zero state.
+- [ ] 7. Exit — pure verification (amended 2026-08-01): a fresh regen is a
+      no-op at zero entries, the sentinel is found, the suite is green;
+      `DEBT-AUTO.txt` already landed at its zero state with step 4.
 
 Steps 3–5 are mutually independent; that order is by blast radius (the
 format is the retrofit-expensive artifact).

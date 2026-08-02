@@ -58,3 +58,28 @@ deliberately out of scope; no record here anticipates it, because a
 record written for an imagined future consumer stops being evidence of a
 working system and starts being a demo. Both rulings — terminal name,
 SIEVE-only scope — are folded into PAR-0001.
+
+## Exchange 3 — rationale completed: the name sells the system
+
+Kendrick, verbatim, on the reasoning the ARCH name never had:
+
+> "the name itself is important for general adoption. The whole purpose
+> of PAR and PADding points to exactly the goal of the what the system
+> is and is just cute enough that it's consistent with the delivery to
+> sell it."
+
+So the name is not only mnemonic but delivery: it states the system's
+goal in the system's own vocabulary, at a register matched to how the
+system would be pitched. Exchange 2's collision cases are accepted as
+non-breaking in practice — "PAR is not anchored to anything too far
+from what PAR actually does" — with the ruling that if a collision ever
+does produce real friction, it is logged in the record it concerns, not
+anywhere central.
+
+The n=1 expiry from Exchange 2 is accepted as roadmap rather than
+objection, verbatim:
+
+> "the PAR repo is just me making shelf space so I don't forget about
+> it, I'm going to roll it out in other projects to refine it, distill
+> what works and what doesn't, so as a framework it serves as a real
+> example."

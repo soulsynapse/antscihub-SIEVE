@@ -14,5 +14,14 @@ presently owed.
   same commit. Done when those three documents cite no record deeper than
   `docs/par/`. Sequence and working rules: `docs/PLAN-DISTILL.md`.
 
+- **The runbook layer is named but not designed** (2026-08-02,
+  PAR-0003). The how-to guides — derived-and-tested runbooks for the
+  systems the rationales govern — have no form, home, or verification
+  discipline; how execution should respect the rationale is left to the
+  reader, with the orphaned fragments (README's mismatch runbook,
+  AGENTS.md's Procedures) as the leak's evidence. Retired when a design
+  session settles the system and PAR-0003 is rewritten to govern it.
+  Primary: `SESSION-2026-08-02-runbook-gap.md`.
+
 (The adapter naming asymmetry recorded here on 2026-08-01 was resolved
 the same day by the step 6.5 collection-time rework.)

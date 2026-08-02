@@ -1,4 +1,4 @@
-# ARCH-0002 — Debt is derived from the tree
+# PAR-0002 — Debt is derived from the tree
 
 Status: Proposed
 Date: 2026-08-01
@@ -241,7 +241,7 @@ adjudicate" the invariant names as bureaucracy arriving.
 - Debt movement is legible in git history at entry granularity, which is
   what makes the ledger a published interface rather than a report.
 - A reworded marker reason is a ledger change. Later distillations that
-  repoint marker reasons from `DESIGN-SESSION.md` exchanges to `ARCH-NNNN`
+  repoint marker reasons from `DESIGN-SESSION.md` exchanges to `PAR-NNNN`
   will therefore render as `changed` entries and travel with a regenerated
   ledger — the anticipated case, not a defect.
 - Known accepted gap: `--doctest-modules` imports module-form placeholders

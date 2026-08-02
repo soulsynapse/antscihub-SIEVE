@@ -1,4 +1,4 @@
-# ARCH-0001 — Architecture rationale records
+# PAR-0001 — Project architecture rationale records
 
 Status: Accepted
 Date: 2026-08-02
@@ -20,7 +20,7 @@ decision and leaves a trail; a challenge that is raised and *fails*
 produces nothing, so the reasoning that fended it off dies with the session
 and the next doubter re-litigates from scratch. And a decision recorded
 only in a frozen plan or a monolithic transcript gives either kind of
-challenge nowhere to land, which makes absence from `docs/arch/`
+challenge nowhere to land, which makes absence from `docs/par/`
 ambiguous: it stops meaning "not an architecture decision" and starts
 meaning "possibly founding — go read a transcript."
 
@@ -53,11 +53,23 @@ were never filed.
 
 ## Decision
 
-**Form and name.** An architecture rationale lives in `docs/arch/`, one
-file per decision, named `NNNN-short-title.md`, cited as `ARCH-NNNN`. It
-carries a status line, a date, context, the decision, and consequences.
-Every record-to-record citation names its target as `ARCH-NNNN` at least
-once, in that form; paths and links are optional alongside it.
+**Form and name.** A project architecture rationale (PAR) lives in
+`docs/par/`, one file per decision, named `NNNN-short-title.md`, cited as
+`PAR-NNNN`. It carries a status line, a date, context, the decision, and
+consequences. Every record-to-record citation names its target as
+`PAR-NNNN` at least once, in that form; paths and links are optional
+alongside it.
+
+The name does double duty, and the pun is the mnemonic. PAR is how the
+ability to work in this project is kept *up to par* — the defense against
+the degradation agentic workflows otherwise impose, which is the failure
+mode the Context above describes. And the PAR system exists to keep the
+project agile and documented — PAD — under the heuristic of minimal
+PADding, which is the anti-bureaucracy invariant (PAR-0002) wearing its
+nickname. The class was cited as `ARCH-NNNN` until 2026-08-02, when it was
+renamed (primary: `SESSION-2026-08-02-par-rename.md`); frozen records
+still use that form, and the numbers are unchanged, so an archival
+`ARCH-NNNN` citation resolves as `PAR-NNNN`.
 
 **Scope: architecture only.** A rationale records a decision about the
 architecture — the component decomposition, where a responsibility lives,
@@ -66,7 +78,7 @@ does something the way it does. Cycle-sequencing calls stay in their
 plan's gates; tool-level design lives in the code and its cycle's records;
 process rules live in `AGENTS.md`. The name carries this rule less than
 "architecture decision record" did, so it is stated here and held by
-judgment: general reasoning does not belong in `docs/arch/`, because
+judgment: general reasoning does not belong in `docs/par/`, because
 absence from the directory is only meaningful if presence is disciplined.
 Once the architecture is settled the directory goes quiet — records are
 written rarely and retired more rarely.
@@ -102,7 +114,7 @@ owed.
 
 This record is the one exception, and it is named rather than finessed.
 "Proposed does not govern, the prior source still does" presupposes a
-prior source, and ARCH-0001 has none — marking it Proposed would leave
+prior source, and PAR-0001 has none — marking it Proposed would leave
 the tier ungoverned, which is worse than the imprecision. It is therefore
 Accepted while still owing its hardening session, and it is the single
 case where the status line does not carry that debt; `DEFERRED.md` names
@@ -147,7 +159,7 @@ invariant forbids.
 
 1. `docs/ARCHITECTURE.md` — the synthesis, always current, the one-stop
    shop. Read first; usually sufficient.
-2. `docs/arch/` — the reasoning, per decision, dated. Read when the
+2. `docs/par/` — the reasoning, per decision, dated. Read when the
    synthesis doesn't explain or doesn't convince.
 3. `docs/archive/` — the primary records: session transcripts, briefs,
    exhausted plans, the reasoning verbatim. Frozen. Read when the
@@ -173,13 +185,13 @@ but never authoritatively wrong.
 
 **Cross-citation is derived.** A record cites the records it was decided
 against; the reverse link is never stored, because it is already in the
-tree. `grep -rl "ARCH-0002" docs/ README.md AGENTS.md` is the list of
-records leaning on ARCH-0002, and it is where a substantial rewrite of
-ARCH-0002 starts. A stored back-link would be hand-maintained derivable
+tree. `grep -rl "PAR-0002" docs/ README.md AGENTS.md` is the list of
+records leaning on PAR-0002, and it is where a substantial rewrite of
+PAR-0002 starts. A stored back-link would be hand-maintained derivable
 state.
 
 **Retirement.** A rationale no longer part of the architecture moves to
-`docs/arch/retired/` and stops governing entirely; whatever replaces it
+`docs/par/retired/` and stops governing entirely; whatever replaces it
 carries forward everything of the old decision it keeps, which is what
 makes retirement lossless. It keeps its number, which is never reused, so
 citations still resolve. `docs/archive/` is not its home: the archive is
@@ -191,7 +203,7 @@ founding decisions — the ones `docs/ARCHITECTURE.md` cites by exchange
 number — and the architecture decisions recorded in plan gates before this
 tier existed are distilled into retrospective rationales, numbered
 normally from the next free number. There is no separate class, prefix, or
-numbering range; uniformity is what lets absence from `docs/arch/` mean
+numbering range; uniformity is what lets absence from `docs/par/` mean
 something. Each distillation obeys three rules:
 
 - **Provenance in Context.** It opens by naming the source record and
@@ -203,7 +215,7 @@ something. Each distillation obeys three rules:
   acceptance — never silently resolved. Improving on a founding decision
   is a genuine new decision and takes its own record.
 - **Roll-up per decision.** Each distillation amends the corresponding
-  tier-1 citation — exchange number or plan gate to `ARCH-NNNN` — in the
+  tier-1 citation — exchange number or plan gate to `PAR-NNNN` — in the
   same commit.
 
 **A rationale argued out in a session files its primary.** A distillation
@@ -257,7 +269,7 @@ decision is truly load-bearing — when enough depends on it that being
 wrong is expensive — and until then the rationale sits `Proposed`. So
 the status line is the debt marker: a proposed rationale is its own
 un-hardened entry, the way a placeholder is its own debt entry, and
-`grep -l "^Status: Proposed" docs/arch/*.md` is the list — anchored,
+`grep -l "^Status: Proposed" docs/par/*.md` is the list — anchored,
 because an unanchored match also finds records that merely quote the
 query, this one included. Nothing is
 maintained per record; the trigger is stated once in `DEFERRED.md`.

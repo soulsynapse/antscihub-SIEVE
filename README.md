@@ -13,17 +13,17 @@ records; when it seems to disagree with one of them, the other is right.
 
 Three tiers, read downward only until convinced. The walking path and the
 authority order — deeper governs, the synthesis reports and rolls up — are
-[ARCH-0001](docs/arch/0001-architecture-rationale.md).
+[PAR-0001](docs/par/0001-project-architecture-rationale.md).
 
 1. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the synthesis: seven
    components, the authoring and execution flows, five invariants with
    their failure modes. The one-stop shop; read this first, usually last.
-2. [docs/arch/](docs/arch/) — architecture rationale (`ARCH-NNNN`): the
+2. [docs/par/](docs/par/) — project architecture rationale (`PAR-NNNN`): the
    dated long-form reasoning, one decision per file, coarse enough that a
    record reads whole. These are living documents, not ADRs — edited in
    place whenever a reread finds them wanting, because the frozen record
    is one tier down. Each carries the doubts it has survived. A record no
-   longer part of the architecture retires to `docs/arch/retired/`.
+   longer part of the architecture retires to `docs/par/retired/`.
 3. `docs/archive/` — the frozen primary records:
    [DESIGN-BRIEF.md](docs/archive/DESIGN-BRIEF.md) (the design prompts,
    verbatim, including the rejected §8 EDIT kept as a recorded

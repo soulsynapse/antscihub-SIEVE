@@ -8,13 +8,13 @@ what a governing record holds — follow the pointers.
 1. `README.md` — the map: locations, the record tiers and their walking
    path, the debt files, the mismatch runbook.
 2. `docs/ARCHITECTURE.md` — before writing code. The one-stop shop: it
-   reports, it does not govern. Read deeper — `docs/arch/`, then
+   reports, it does not govern. Read deeper — `docs/par/`, then
    `docs/archive/` — only until convinced; the walking path and authority
-   order are ARCH-0001.
+   order are PAR-0001.
 3. `DEBT-AUTO.txt` — what is presently owed in-tree; `DEFERRED.md` — what is
    not yet due. Building from DEFERRED.md goes poorly, by design.
 4. The live planning cycles: `docs/PLAN-TOOL-CONTRACT.md` (code) and
-   `docs/PLAN-DISTILL.md` (record distillation, ARCH-0001). Exhausted plans
+   `docs/PLAN-DISTILL.md` (record distillation, PAR-0001). Exhausted plans
    sit in `docs/archive/` — `PLAN.md` there holds marker form rule v1, the
    layout settlement, and the classification rule, all still load-bearing.
 
@@ -33,8 +33,8 @@ what a governing record holds — follow the pointers.
 ## Where records go
 
 - A settled decision → the active planning document's gate; when it is an
-  architecture decision (scope: ARCH-0001), it is recorded as an
-  architecture rationale in `docs/arch/` — with `docs/ARCHITECTURE.md`
+  architecture decision (scope: PAR-0001), it is recorded as a project
+  architecture rationale in `docs/par/` — with `docs/ARCHITECTURE.md`
   amended in the same commit —
   and the gate cites it. An exhausted plan freezes under its name and moves
   to `docs/archive/`; a successor cycle takes a new name.
@@ -48,7 +48,7 @@ what a governing record holds — follow the pointers.
   died with their reasons; never the route taken to reach them.
 - A rationale drafted but not yet attacked → `Status: Proposed`, which is
   itself the entry for the hardening session it still owes (`DEFERRED.md`,
-  ARCH-0001). Formulating and hardening are separate sessions and each
+  PAR-0001). Formulating and hardening are separate sessions and each
   files its own record; more than one per decision is expected.
 - A not-yet-due intention → `DEFERRED.md`, always with the trigger that
   makes it due.
@@ -79,7 +79,7 @@ what a governing record holds — follow the pointers.
 - Catch `Owed` outside the debt machinery.
 - Reuse a retired name — file-format fields, documents, or module paths.
 - Commit raw session transcripts. The curated session record is the
-  primary; a transcript is a worse one (ARCH-0001).
+  primary; a transcript is a worse one (PAR-0001).
 
 ## Session boundaries
 

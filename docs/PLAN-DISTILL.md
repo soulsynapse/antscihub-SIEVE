@@ -1,8 +1,8 @@
 # Distillation plan
 
-Scope: retire the `DEBT.md` entry filed under ARCH-0001 — every record
+Scope: retire the `DEBT.md` entry filed under PAR-0001 — every record
 citation pointing below tier 2 in `docs/ARCHITECTURE.md`, `README.md`, or
-`AGENTS.md` becomes an `ARCH-NNNN` citation — including the debt-and-records
+`AGENTS.md` becomes a `PAR-NNNN` citation — including the debt-and-records
 machinery, whose absence from the rationale tier is where the doubt traffic
 actually lands. No code. No marker is touched anywhere in this plan;
 regen stays a no-op throughout.
@@ -20,7 +20,7 @@ is the operative reason not to let this plan idle behind the code cycle.
 
 ## Working rules
 
-Every distillation in this plan obeys ARCH-0001's three distillation rules
+Every distillation in this plan obeys PAR-0001's three distillation rules
 (provenance in Context, fidelity at acceptance, roll-up per decision) plus
 four rules this plan adds:
 
@@ -33,7 +33,7 @@ four rules this plan adds:
    decisions and the prose carries the argument, which has to stand up if
    only the prose is read.
 2. **Each proposal names its decision boundary** — which decisions it
-   contains, which neighbours it touches. Boundaries follow ARCH-0001's
+   contains, which neighbours it touches. Boundaries follow PAR-0001's
    test — the smallest chunk that carries everything relevant with it —
    so a record needing a sibling read alongside it is one record cut in
    two, and one that has swallowed a decision it doesn't need is two
@@ -58,12 +58,12 @@ system — is settled in `docs/archive/PLAN.md`: marker form rule v1, the
 classification rule, the layout settlement. A frozen plan can hold
 neither a Challenges entry nor a supersession, so each doubt against it
 re-litigates from scratch and leaves nothing behind, which is the
-failure ARCH-0001 exists to remove. Leaving those decisions in tier 3
+failure PAR-0001 exists to remove. Leaving those decisions in tier 3
 also made the `DEBT.md` done condition unreachable: invariant 1 cites
 `archive/PLAN.md` Phase 1 decision 2, so a below-tier-2 citation sat in
 the synthesis with no way to retire.
 
-Resolution as recorded in ARCH-0001: the work list derives from the
+Resolution as recorded in PAR-0001: the work list derives from the
 below-tier-2 citations in `docs/ARCHITECTURE.md`, `README.md`, and
 `AGENTS.md`, and plan-gate architecture decisions are on it. Sequencing
 calls genuinely a plan's own — scope, order, build sequence, definition
@@ -79,7 +79,7 @@ Distills, from `docs/archive/PLAN.md` and the practices AGENTS.md points
 at: the anti-bureaucracy invariant, the placeholder doctrine (the
 placeholder *is* the debt entry, which is what makes `DEBT-AUTO.txt`
 derivable), the classification rule, the three-file taxonomy, marker form
-rule v1, and the instruments. **One record — `ARCH-0002` — drafted
+rule v1, and the instruments. **One record — `PAR-0002` — drafted
 2026-08-02 and sitting Proposed.** The layout settlement, named alongside
 these in `AGENTS.md`, is component decomposition rather than debt
 machinery and moves to Phase 5.
@@ -95,7 +95,7 @@ contemporaneous entry, which is what the section is for. Reconstruction
 would have bought entries of the weakest available kind, to fill a
 section that fills itself.
 
-Consequence: ARCH-0002 lands with no Challenges section, and that is
+Consequence: PAR-0002 lands with no Challenges section, and that is
 correct rather than an omission. The challenge surface is the record
 existing at tier 2 — somewhere for doubt #4 to land — not entries in it.
 
@@ -166,7 +166,7 @@ or entered as present debt.
 reading):
 
 - [ ] `docs/ARCHITECTURE.md`, `README.md`, and `AGENTS.md` cite nothing
-      deeper than `docs/arch/`; the distillation entry in `DEBT.md` is
+      deeper than `docs/par/`; the distillation entry in `DEBT.md` is
       retired.
 - [ ] Every distillation quotes its decisive source sentences verbatim
       and names its provenance (source passages, original date) in
@@ -184,7 +184,7 @@ reading):
 
 ## After this plan
 
-The directory goes quiet, now for the ARCH-0001 reason and truly:
+The directory goes quiet, now for the PAR-0001 reason and truly:
 distillation is complete, records are written rarely, and challenge
 entries accumulate organically wherever the read loop lands. This plan
 freezes under its name and moves to `docs/archive/` when exhausted.

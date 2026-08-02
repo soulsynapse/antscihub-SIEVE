@@ -1,4 +1,4 @@
-"""Conftest adapter: part of the closed debt-machinery class (docs/PLAN.md).
+"""Conftest adapter: part of the closed debt-machinery class (PAR-0002).
 
 A caught Owed marker becomes a pytest skip carrying the debt as its reason,
 so the suite stays green while the debt shows in the skip summary.

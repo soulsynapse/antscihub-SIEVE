@@ -1,4 +1,4 @@
-"""Crop: the milestone tool (docs/PLAN.md, Phase 3).
+"""Crop: the milestone tool (docs/archive/PLAN.md, Phase 3).
 
 A Tool whose Params hold the drawn ROI regions, lowering to a Resample,
 viewed as Image with the ROI overlay bound to the param field

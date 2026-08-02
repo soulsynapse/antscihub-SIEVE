@@ -1,7 +1,7 @@
 # Tool contract plan
 
 Scope: the Tool base's first real code, together with the two closed
-vocabularies its signatures name. `docs/PLAN.md`'s Phase 3 layout settlement
+vocabularies its signatures name. `docs/archive/PLAN.md`'s Phase 3 layout settlement
 already made this a single unit — "the five-shape algebra is one design unit
 … all five IR classes landing in the change that first needs `Resample`" —
 and the change that first needs `Resample` is the one that gives `lower()` a
@@ -10,7 +10,7 @@ and `src/sieve/tools/base.py`, and removes exactly four markers from the
 automatic ledger.
 
 Crop is out of scope and keeps its marker; it gets its own cycle, per
-`docs/PLAN.md` "After this plan." The executor, the store, the pipeline file
+`docs/archive/PLAN.md` "After this plan." The executor, the store, the pipeline file
 and the GUI keep theirs.
 
 This plan is a map, not a build authorization. Per the working loop each item
@@ -23,7 +23,7 @@ phase and not before. A phase does not start until its gate is cleared.
 
 ## Why the Tool contract and not the pipeline file
 
-`docs/PLAN.md` left the fork open ("likely the pipeline file format or the
+`docs/archive/PLAN.md` left the fork open ("likely the pipeline file format or the
 Tool base"). It resolves against the pipeline file for one reason: Exchange 1
 defines the format's load path as read-dict → migrate → *then validate*, and
 defines its conformance test as "one parametrized test over the step
@@ -203,7 +203,7 @@ conformed; one that silently misses a criterion is not.
 - [ ] Both closed vocabularies are complete at v1, with the additive-revision
       discipline stated where the code is, not only in a doc.
 - [ ] Every gate decision above is recorded in this document at the phase
-      that made it, in the form `docs/PLAN.md` used — the decision, the
+      that made it, in the form `docs/archive/PLAN.md` used — the decision, the
       reasoning, the date.
 - [ ] Every question that came due and was *not* settled has a `DEFERRED.md`
       entry with a trigger, or a `DEBT.md` entry if it is presently owed.
@@ -222,7 +222,7 @@ Crop's cycle, under its own name. It is where the port-binding UI question
 where the Params fields `tools/crop.py` calls undesigned surface get designed.
 
 This plan freezes under its name when exhausted, per the doctrine
-`docs/PLAN.md` recorded about itself: a successor cycle takes a new name, and
+`docs/archive/PLAN.md` recorded about itself: a successor cycle takes a new name, and
 a live contract recorded here migrates out only when it first needs to evolve,
 additively, with the v1 record staying put.
 
@@ -242,9 +242,9 @@ additively, with the v1 record staying put.
   enforcement depends on whether `Params` is a Pydantic model or a schema. The
   one-decision-at-a-time loop is the mitigation, but the ordering within the
   gate is itself a call, and if it fragments this phase is the plan's
-  serialization point the way Phase 3 was for `docs/PLAN.md`.
+  serialization point the way Phase 3 was for `docs/archive/PLAN.md`.
 - **The empty registry.** Phase 4's answer is worked examples in the test tree.
   If that is judged to be the throwaway-second-caller pattern Exchange 6 warns
   about, the alternative is folding crop into this cycle — which contradicts
-  `docs/PLAN.md`'s scope statement and should be decided as an amendment, not
+  `docs/archive/PLAN.md`'s scope statement and should be decided as an amendment, not
   drifted into.

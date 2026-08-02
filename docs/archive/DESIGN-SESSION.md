@@ -728,7 +728,7 @@ to a corpus version — `(method version, corpus version, tolerance)` or the dif
 says nothing.
 
 That closes the design. The architecture was then written up as
-[ARCHITECTURE.md](ARCHITECTURE.md): seven components, the authoring flow, the
+[ARCHITECTURE.md](../ARCHITECTURE.md): seven components, the authoring flow, the
 execution flow, and five invariants stated as imperatives with the failure mode
 attached to each, so it reads as something an agent consults before writing code
 rather than as an explanation after the fact.

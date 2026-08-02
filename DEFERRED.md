@@ -38,7 +38,7 @@ the automatic ledger.
   crop lands; named there as the next real UI question.
 - **Trigger conditions as tests** — several triggers above are mechanically
   queryable against the tree; the prose-to-test move is named in
-  docs/PLAN.md "After this plan" so it is not later invented as novel. Due
+  docs/archive/PLAN.md "After this plan" so it is not later invented as novel. Due
   when: a trigger is missed in practice, or queryable triggers accumulate
   enough that prose checking is error-prone.
 - **`sweep(node, range)`** — the executor's sequential entry point
@@ -81,7 +81,7 @@ the automatic ledger.
   "Building a pipeline") — whichever fires first.
 - **A field-type vocabulary home, mirroring `views.py`** — Exchange 1 makes
   field types a first-class reusable asset (the renderer learns one once;
-  every future tool uses it), and the docs/PLAN.md Phase 3 layout
+  every future tool uses it), and the docs/archive/PLAN.md Phase 3 layout
   settlement gave the view vocabulary its own module as the tool↔GUI
   boundary language. Field types are the identical argument on the right
   pane — a tool's `Params` names them, the GUI walks them — but their only
@@ -91,21 +91,3 @@ the automatic ledger.
   derive from Pydantic primitives — the ROI Rect, i.e. crop's cycle
   (docs/PLAN-TOOL-CONTRACT.md "After this plan" already assigns those
   fields' design there; this entry adds the placement question).
-- **Within-record authority for `DESIGN-SESSION.md`** — the authority line
-  makes the session record govern other documents, but nothing states what
-  governs within it when exchanges disagree (Exchange 1's `consumes`
-  example vs. Exchange 5's rebuilt `lower()` — an ambiguity that already
-  cost the eligibility-bridge entry above). De facto rule to be recorded:
-  later exchanges supersede earlier ones, and "Where things stand" is the
-  session's own settlement. Due when: `DESIGN-SESSION.md` is next amended
-  for any other reason — the rule lands as one preamble sentence in that
-  same change, rather than amending the authoritative record solely for
-  this.
-- **How frozen planning documents remain discoverable** — plans currently
-  freeze under stable names, preserving their load-bearing pointers. Moving
-  them into `docs/frozen/` would encode lifecycle status as a manually
-  maintained location and break existing pointers; adding an index naming
-  the live plan would duplicate status already declared by the plans
-  themselves. Keep the flat named layout until this question becomes due.
-  Due when: `docs/PLAN-TOOL-CONTRACT.md` freezes as the second frozen planning
-  document, when the current layout first needs reassessment.

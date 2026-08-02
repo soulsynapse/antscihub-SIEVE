@@ -4,7 +4,10 @@ A caught Owed marker becomes a pytest skip carrying the debt as its reason,
 so the suite stays green while the debt shows in the skip summary.
 Membership is checked against a fresh once-per-session enumeration: a caught
 marker the enumerator cannot see fails instead, so the static and dynamic
-instruments cross-verify.
+instruments cross-verify. Import-time markers are handled at collection by
+a Module subclass; run-time markers by the makereport hook (setup and call
+phases only -- a marker reached during teardown stays red, honestly, since
+its finalizers never ran).
 """
 
 from functools import cache
@@ -12,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from sieve.debt import MODULE_QUALNAME, Owed, enumerate_markers
+from sieve.debt import EnumerationError, Owed, enumerate_markers
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -22,9 +25,17 @@ def _reasons() -> "dict[tuple[str, str], str]":
     return {(e.path, e.qualname): e.reason for e in enumerate_markers(REPO_ROOT)}
 
 
-def _raise_site(excinfo):
+def pytest_configure(config):
+    # Eager: an enumeration failure surfaces once, pointedly, at session
+    # start -- not as a plugin crash mid-collection.
+    try:
+        _reasons()
+    except EnumerationError as err:
+        pytest.exit(f"debt enumeration failed: {err}", returncode=4)
+
+
+def _raise_site(tb):
     """(repo-relative path, qualname, lineno) of the frame that raised."""
-    tb = excinfo.tb
     while tb.tb_next is not None:
         tb = tb.tb_next
     code = tb.tb_frame.f_code
@@ -35,48 +46,60 @@ def _raise_site(excinfo):
     return rel, code.co_qualname.replace(".<locals>.", "."), tb.tb_lineno
 
 
-@pytest.hookimpl(hookwrapper=True)
+def _unseen_message(site, exc):
+    if site is None:
+        return (
+            f"Owed({exc.args[0]!r}) raised outside the repo tree: only "
+            "markers under the repo root are enumerable"
+            if exc.args
+            else "Owed raised outside the repo tree"
+        )
+    return (
+        f"Owed raised at {site[0]}::{site[1]} (line {site[2]}): a marker "
+        "the enumerator cannot see (outside marker form rule v1)"
+    )
+
+
+@pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item, call):
-    outcome = yield
-    if call.excinfo is None or not call.excinfo.errisinstance(Owed):
-        return
-    report = outcome.get_result()
-    site = _raise_site(call.excinfo)
+    report = yield
+    if (
+        call.when not in ("setup", "call")
+        or call.excinfo is None
+        or not call.excinfo.errisinstance(Owed)
+    ):
+        return report
+    site = _raise_site(call.excinfo.tb)
     reason = _reasons().get(site[:2]) if site else None
     if reason is None:
         report.outcome = "failed"
-        report.longrepr = (
-            f"Owed raised at {site}: a marker the enumerator cannot see "
-            "(outside marker form rule v1)"
-        )
+        report.longrepr = _unseen_message(site, call.excinfo.value)
     else:
         report.outcome = "skipped"
-        report.longrepr = (str(item.path), site[2], f"owed: {reason}")
+        report.longrepr = (site[0], site[2], f"owed: {reason}")
+    return report
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_collect_file(file_path, parent):
-    """Module-form placeholder test files skip instead of dying at import.
+def pytest_pycollect_makemodule(module_path, parent):
+    return _AdaptedModule.from_parent(parent, path=module_path)
 
-    A wrapper because this hook aggregates results: returning our collector
-    alongside the default module collector would import the file anyway.
+
+class _AdaptedModule(pytest.Module):
+    """Import-time Owed: a skip item for a member, a pointed error otherwise.
+
+    Covers both a module-form placeholder collected as a test module and a
+    test module that imports a placeholder at top level.
     """
-    outcome = yield
-    if not file_path.name.startswith("test_"):
-        return
-    try:
-        rel = file_path.resolve().relative_to(REPO_ROOT).as_posix()
-    except ValueError:
-        return
-    if (rel, MODULE_QUALNAME) in _reasons():
-        outcome.force_result([_OwedFile.from_parent(parent, path=file_path)])
 
-
-class _OwedFile(pytest.File):
     def collect(self):
-        rel = self.path.resolve().relative_to(REPO_ROOT).as_posix()
-        reason = _reasons()[(rel, MODULE_QUALNAME)]
-        yield _OwedItem.from_parent(self, name="owed", reason=reason)
+        try:
+            return list(super().collect())
+        except Owed as exc:
+            site = _raise_site(exc.__traceback__)
+            reason = _reasons().get(site[:2]) if site else None
+            if reason is None:
+                raise pytest.Collector.CollectError(_unseen_message(site, exc)) from exc
+            return [_OwedItem.from_parent(self, name="owed", reason=f"owed: {reason}")]
 
 
 class _OwedItem(pytest.Item):
@@ -85,7 +108,7 @@ class _OwedItem(pytest.Item):
         self._reason = reason
 
     def runtest(self):
-        pytest.skip(f"owed: {self._reason}")
+        pytest.skip(self._reason)
 
     def reportinfo(self):
-        return self.path, 0, f"owed: {self._reason}"
+        return self.path, 0, self._reason

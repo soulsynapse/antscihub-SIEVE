@@ -74,6 +74,97 @@ def test_unseen_marker_fails(pytester):
     result.stdout.fnmatch_lines(["*cannot see*"])
 
 
+def test_marker_reached_through_top_level_import_skips(pytester):
+    make_repo(
+        pytester,
+        {
+            "store_placeholder.py": (
+                '"""Store placeholder."""\n'
+                "from sieve.debt import Owed\n"
+                "\n"
+                'raise Owed("store: not built")\n'
+            ),
+            "test_store.py": (
+                "import store_placeholder  # noqa: F401\n"
+                "\n"
+                "\n"
+                "def test_store():\n"
+                "    assert True\n"
+            ),
+        },
+    )
+    result = pytester.runpytest_subprocess("tests", "-ra")
+    result.assert_outcomes(skipped=1)
+    result.stdout.fnmatch_lines(["*owed: store: not built*"])
+
+
+def test_module_form_file_matching_the_other_default_glob_skips(pytester):
+    make_repo(
+        pytester,
+        {
+            "conformance_test.py": (
+                '"""Conformance suite placeholder."""\n'
+                "from sieve.debt import Owed\n"
+                "\n"
+                'raise Owed("conformance suite: not built")\n'
+            )
+        },
+    )
+    result = pytester.runpytest_subprocess("tests", "-ra")
+    result.assert_outcomes(skipped=1)
+
+
+def test_unseen_marker_at_collection_fails_with_naming(pytester):
+    make_repo(
+        pytester,
+        {
+            "test_sneaky_import.py": (
+                "from sieve.debt import Owed\n"
+                "\n"
+                "exc = Owed\n"
+                'raise exc("sneaky at import")\n'
+            )
+        },
+    )
+    result = pytester.runpytest_subprocess("tests")
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*cannot see*"])
+
+
+def test_teardown_marker_stays_red(pytester):
+    make_repo(
+        pytester,
+        {
+            "test_teardown.py": (
+                "import pytest\n"
+                "from sieve.debt import Owed\n"
+                "\n"
+                "\n"
+                "@pytest.fixture\n"
+                "def fx():\n"
+                "    yield\n"
+                "    exc = Owed\n"
+                '    raise exc("cleanup reaches unbuilt code")\n'
+                "\n"
+                "\n"
+                "def test_uses_fx(fx):\n"
+                "    assert True\n"
+            )
+        },
+    )
+    result = pytester.runpytest_subprocess("tests")
+    result.assert_outcomes(passed=1, errors=1)
+
+
+def test_enumeration_failure_exits_pointedly(pytester):
+    make_repo(pytester, {"test_ok.py": "def test_ok():\n    assert True\n"})
+    bad = pytester.path / "src" / "sieve" / "broken.py"
+    bad.write_text("def f(:\n", encoding="utf-8")
+    result = pytester.runpytest_subprocess("tests")
+    assert result.ret == 4
+    result.stderr.fnmatch_lines(["*debt enumeration failed*"])
+
+
 def test_marker_reached_through_import_skips(pytester):
     make_repo(
         pytester,

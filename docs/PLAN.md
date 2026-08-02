@@ -145,7 +145,7 @@ proposal (signatures, format, test cases) confirmed before code lands:
 - [x] 5. Conftest adapter — `Owed` caught in the test tree becomes a skip
       carrying the reason; membership checked against a fresh per-session
       enumeration; a caught marker absent from it fails.
-- [ ] 6. Seed `DEBT.md` and `DEFERRED.md` — present debt near-empty;
+- [x] 6. Seed `DEBT.md` and `DEFERRED.md` — present debt near-empty;
       deferred items migrated from the session's durable record and
       `DESIGN-SESSION.md`'s Open list, each with its trigger.
 - [ ] 7. Exit — pure verification (amended 2026-08-01): a fresh regen is a

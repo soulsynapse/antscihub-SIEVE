@@ -220,6 +220,15 @@ def test_parse_round_trips_serialize():
     assert parse(serialize([])) == []
 
 
+def test_parse_never_reads_header_lines_as_entries():
+    doctored = HEADER + b"# future field :: looks like an entry\n" + (
+        b"\n"
+        b"pkg/m.py :: f\n"
+        b"    reason\n"
+    )
+    assert parse(doctored) == [Entry("pkg/m.py", "f", "reason")]
+
+
 def test_excluded_prefix_is_not_walked(tmp_path):
     make_tree(
         tmp_path,

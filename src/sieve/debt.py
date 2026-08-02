@@ -115,10 +115,19 @@ def serialize(entries: Sequence[Entry]) -> bytes:
 
 def parse(data: bytes) -> list[Entry]:
     """Inverse of serialize, for entry-level diff reporting on mismatch."""
+    lines = data.decode("utf-8").splitlines()
+    # Entries begin after the blank line that ends the header; a header-only
+    # ledger has no blank line. Header lines can never parse as entries,
+    # whatever future (additive) header fields contain.
+    body: list[str] = []
+    for i, line in enumerate(lines):
+        if line == "":
+            body = lines[i + 1 :]
+            break
     entries: list[Entry] = []
     key: "tuple[str, str] | None" = None
     reason_lines: list[str] = []
-    for line in data.decode("utf-8").splitlines():
+    for line in body:
         if line.startswith("    "):
             reason_lines.append(line[4:])
         elif " :: " in line:

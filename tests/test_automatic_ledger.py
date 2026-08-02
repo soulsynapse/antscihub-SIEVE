@@ -28,9 +28,13 @@ def test_automatic_ledger_matches_a_fresh_enumeration():
     checked_in = ledger_path.read_bytes()
     fresh = serialize(entries)
     if fresh != checked_in:
+        diff = entry_diff(parse(checked_in), entries) or (
+            "no entry-level difference: the divergence is in the header or "
+            "formatting (version pin changed without a regen? hand edit?)"
+        )
         pytest.fail(
             f"{LEDGER_NAME} does not match a fresh enumeration.\n"
-            + entry_diff(parse(checked_in), entries)
+            + diff
             + "\nExpected change: run `python -m sieve.debt write`."
             " Unexpected change: investigate before regenerating."
         )

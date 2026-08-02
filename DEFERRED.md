@@ -70,6 +70,37 @@ the automatic ledger.
   the settled unary-looking shape signatures do not say how the second input
   enters. Due when: the five-shape vocabulary's first real code
   (`src/sieve/kernel.py`), when those signatures become executable.
+- **The dispatch table's home** — DESIGN-SESSION.md Exchange 7 settles the
+  mechanism (multiple dispatch over the reified op description, with the
+  table doubling as the eligibility check) and Exchange 8 amends selection
+  to measured cost, but no record places the generic-function table itself
+  as executable machinery or names what first makes it real. Due when:
+  the first second implementation of any op (selection first has a choice
+  to make — the harness's trigger), or the GUI's step-insertion flow
+  (eligibility is a query against the dispatch table, ARCHITECTURE.md
+  "Building a pipeline") — whichever fires first.
+- **A field-type vocabulary home, mirroring `views.py`** — Exchange 1 makes
+  field types a first-class reusable asset (the renderer learns one once;
+  every future tool uses it), and the docs/PLAN.md Phase 3 layout
+  settlement gave the view vocabulary its own module as the tool↔GUI
+  boundary language. Field types are the identical argument on the right
+  pane — a tool's `Params` names them, the GUI walks them — but their only
+  current home is inside `gui.py`'s marker scope, and a tool importing its
+  field type from the GUI module would couple in the forbidden direction.
+  Due when: the first `Params` field type the generic renderer cannot
+  derive from Pydantic primitives — the ROI Rect, i.e. crop's cycle
+  (docs/PLAN-TOOL-CONTRACT.md "After this plan" already assigns those
+  fields' design there; this entry adds the placement question).
+- **Within-record authority for `DESIGN-SESSION.md`** — the authority line
+  makes the session record govern other documents, but nothing states what
+  governs within it when exchanges disagree (Exchange 1's `consumes`
+  example vs. Exchange 5's rebuilt `lower()` — an ambiguity that already
+  cost the eligibility-bridge entry above). De facto rule to be recorded:
+  later exchanges supersede earlier ones, and "Where things stand" is the
+  session's own settlement. Due when: `DESIGN-SESSION.md` is next amended
+  for any other reason — the rule lands as one preamble sentence in that
+  same change, rather than amending the authoritative record solely for
+  this.
 - **How frozen planning documents remain discoverable** — plans currently
   freeze under stable names, preserving their load-bearing pointers. Moving
   them into `docs/frozen/` would encode lifecycle status as a manually

@@ -6,6 +6,20 @@ poorly, which is why it is kept apart from DEBT.md. When a trigger fires,
 the item moves: a decision gets made, or a placeholder enters the tree and
 the automatic ledger.
 
+- **Hardening sessions for rationales still marked `Proposed`** (ARCH-0001).
+  A rationale is formulated in a messy session and hardened in a later
+  deliberate one, where Kendrick already holds the answer and attacks the
+  draft; acceptance is that session's output. Due when: the decision
+  becomes truly load-bearing — enough depends on it that being wrong is
+  expensive. The list is not maintained here: `grep -l "Status: Proposed"
+  docs/arch/*.md` derives it, the status line being the marker the way a
+  placeholder is its own debt entry. A distillation is exempt — its
+  question is fidelity to a source that can be checked, not correctness.
+  **ARCH-0001 is the one record the derivation misses**: it is Accepted
+  despite owing its hardening, because it is the founding record and
+  marking it Proposed would leave the rationale tier with nothing
+  governing it. Formulated 2026-08-02 (SESSION-2026-08-02-record-class.md)
+  and never yet attacked.
 - **The measured-equivalence harness** (ARCHITECTURE.md invariant 4; the §8
   EDIT in DESIGN-BRIEF.md stays recorded as the steelman alternative). Due
   when: the first second implementation of any op — also the moment the

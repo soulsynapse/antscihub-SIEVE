@@ -44,7 +44,12 @@ what a governing record holds — follow the pointers.
   argument, keep the positions that lost, number the exchanges so they can
   be cited. Start it when the first decision lands, append as the session
   runs, freeze it at session close. A distillation files none — it is
-  already reading its primary.
+  already reading its primary. Keep decisions and the alternatives that
+  died with their reasons; never the route taken to reach them.
+- A rationale drafted but not yet attacked → `Status: Proposed`, which is
+  itself the entry for the hardening session it still owes (`DEFERRED.md`,
+  ARCH-0001). Formulating and hardening are separate sessions and each
+  files its own record; more than one per decision is expected.
 - A not-yet-due intention → `DEFERRED.md`, always with the trigger that
   makes it due.
 - A present gap no marker can carry → `DEBT.md`.

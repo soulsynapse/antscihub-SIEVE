@@ -368,6 +368,56 @@ survived two rewrites and are not session memory. What does depreciate is
 the argument shape — which alternative was rejected and why — so the
 front-loading case narrows rather than disappears.
 
+## Exchange 14 — Formulation and hardening as separate sessions
+
+Proposed by Kendrick, in response to Exchange 13's problem that a
+discovery session leaves the curator's judgment unchecked: draft the
+rationale in the messy session, then harden it in a later deliberate one
+run like the design sessions — he arrives holding the answer and attacks
+the draft, which is fast and produces a clean, dense record.
+
+The proposal fixes Exchange 13 structurally rather than mitigating it. By
+the time the record that matters is written, the author *can* check it
+instantly, which is the property the design sessions had by accident of
+history and this reproduces on purpose.
+
+Objection raised: a hardening session will attack what is in the draft,
+not re-derive what already died in formulation, so the reversals that
+made this session valuable would go unrecorded if only the hardening
+session filed a record.
+
+> "because these aren't adrs I'm fine with having at least two if not
+> more transcripts for this. just make sure that it's not all the messy
+> fluff. having the hardening session can be debt and that's fine, and
+> come due when the architectural decision is truly load-bearing"
+
+Settled three ways. Multiple records per decision, since the one-per-
+decision habit is an ADR habit and does not bind here. Formulation
+records keep decisions and dead alternatives, never the route taken.
+And the hardening session is **type-2 debt with a trigger** — due when
+the decision is truly load-bearing — rather than a step every rationale
+must pass through before it counts.
+
+That last point resolved a scoping worry without a rule, and it landed on
+machinery already present: the status line is the debt marker. A proposed
+rationale is its own un-hardened entry the way a placeholder is its own
+debt entry, so `grep -l "Status: Proposed" docs/arch/*.md` derives the
+list and nothing is maintained per record. Only the general trigger is
+hand-authored, once, in `DEFERRED.md`. It also gave `Proposed` real
+content: drafted but not yet attacked, where it had previously meant only
+"the author is still chewing."
+
+Distillations are exempt: their question is fidelity to a checkable
+source, not correctness.
+
+One blind spot surfaced immediately on writing it down. ARCH-0001 cannot
+be marked Proposed, because "Proposed does not govern, the prior source
+still does" presupposes a prior source and the founding record has none —
+marking it Proposed would leave the tier ungoverned. So it is Accepted
+while still owing its hardening, the single case where the status line
+does not carry the debt, and `DEFERRED.md` names it explicitly. The
+derivation is otherwise exact.
+
 ---
 
 ## Where things stand
@@ -384,10 +434,13 @@ front-loading case narrows rather than disappears.
   record is live for its session and freezes at close. Raw transcripts
   are never retained. Operationalized in `AGENTS.md` ("Where records go",
   and the never-do list).
-- ARCH-0002 sits **Proposed**. `archive/PLAN.md` still governs the debt
-  machinery. Accepting it moves `README.md` lines 41 and 98 and
+- ARCH-0002 sits **Proposed**, so `archive/PLAN.md` still governs the
+  debt machinery; accepting it moves `README.md` lines 41 and 98 and
   `AGENTS.md` line 18, and retires three citations from the `DEBT.md`
   distillation entry.
+- ARCH-0001 is Accepted and governs, but was formulated here and never
+  attacked. Its hardening session is owed, not yet due, named in
+  `DEFERRED.md`, and will file its own record.
 - Open, carried out of this session: the three reconstructed doubts
   against the debt system and whether they belong in Challenges or
   Context (`PLAN-DISTILL.md` Phase 2 gate); the four fidelity flags in

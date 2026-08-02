@@ -94,9 +94,19 @@ maintains.
 part of the architecture. A proposed record does not govern: until it is
 accepted, whatever governed before it still does, and `ARCHITECTURE.md`
 keeps citing that. This is what makes a proposed record free — it can sit
-as long as its author is still chewing on it, and nothing in the repo is
-inconsistent while it does. Acceptance is the moment it starts governing
-and the moment the roll-up is owed.
+until its hardening session comes due, and nothing in the repo is
+inconsistent while it does. *Proposed* means drafted but not yet
+hardened; *Accepted* means it survived a session that attacked it, which
+is also the moment it starts governing and the moment the roll-up is
+owed.
+
+This record is the one exception, and it is named rather than finessed.
+"Proposed does not govern, the prior source still does" presupposes a
+prior source, and ARCH-0001 has none — marking it Proposed would leave
+the tier ungoverned, which is worse than the imprecision. It is therefore
+Accepted while still owing its hardening session, and it is the single
+case where the status line does not carry that debt; `DEFERRED.md` names
+it explicitly instead.
 
 **Granularity: the smallest chunk that carries everything relevant with
 it.** Not the smallest chunk — the smallest *self-sufficient* one. A
@@ -231,6 +241,24 @@ record matters more, not less — nobody holds the answer in advance to
 check it against, so whatever the curator judged unimportant is gone.
 That is the real reason it is written while the session is live rather
 than reconstructed afterwards.
+
+**Two kinds of session; more than one record per decision.** A decision
+is usually *formulated* in a messy session, where the reasoning is being
+discovered and several positions die, and *hardened* later in a
+deliberate one, where the author already holds the answer and attacks the
+draft. Both file records, and a decision may carry several — these are
+not ADRs and nothing here wants one record per decision. What a record
+must not carry is the *process*: it keeps the decisions and the
+alternatives that died with their reasons, never the route taken to reach
+them.
+
+The hardening session is not owed on demand. It comes due when the
+decision is truly load-bearing — when enough depends on it that being
+wrong is expensive — and until then the rationale sits `Proposed`. So
+the status line is the debt marker: a proposed rationale is its own
+un-hardened entry, the way a placeholder is its own debt entry, and
+`grep -l "Status: Proposed" docs/arch/*.md` is the list. Nothing is
+maintained per record; the trigger is stated once in `DEFERRED.md`.
 
 **Raw transcripts are not retained.** The tooling writes one per session
 and expires it on its own timer; the curated record is what survives, and

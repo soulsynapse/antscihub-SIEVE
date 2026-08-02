@@ -129,7 +129,7 @@ proposal (signatures, format, test cases) confirmed before code lands:
 
 - [x] 1. `sieve.debt` with `Owed` — the exception class alone, real code;
       adds the exception module to the closed machinery list.
-- [ ] 2. The enumerator — a library function taking a root path, walking
+- [x] 2. The enumerator — a library function taking a root path, walking
       `.py` files, AST-matching rule v1, returning canonical entries;
       unparseable files and form violations are enumeration errors. The
       single roots-and-exclusions definition lives here. Fixture-tree tests.

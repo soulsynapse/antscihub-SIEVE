@@ -39,8 +39,9 @@ the archive when exhausted.
 
 ## The tree
 
-Real code (the debt machinery, PLAN.md Phase 2 — the closed class that gives
-every placeholder its meaning):
+Real code (the debt machinery,
+[PAR-0002](docs/par/0002-debt-is-derived-from-the-tree.md) — the closed
+class that gives every placeholder its meaning):
 
 - `src/sieve/debt.py` — the `Owed` marker exception, the rule-v1 enumerator,
   the ledger serializer, and the regen command.
@@ -96,9 +97,8 @@ Three files with three meanings; never "the ledger" unqualified:
   every in-tree marker, keyed (path, qualname), rule version pinned.
 
 A placeholder *is* its debt entry: a real module at its real import path
-raising `Owed("<reason>")` in marker form rule v1 (PLAN.md, Phase 2, decision
-4). Presence in the tree is the authorization — there are no status fields
-anywhere. Test-tree markers appear in the suite as skips carrying their
+raising `Owed("<reason>")` in marker form rule v1 (PAR-0002). Presence in
+the tree is the authorization — there are no status fields anywhere. Test-tree markers appear in the suite as skips carrying their
 reason.
 
 ### Mismatch runbook

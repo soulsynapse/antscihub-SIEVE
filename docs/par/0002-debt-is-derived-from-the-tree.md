@@ -1,6 +1,6 @@
 # PAR-0002 — Debt is derived from the tree
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-01
 
 ## Context
@@ -16,6 +16,12 @@ Phase 2" and "marker form rule v1 (PLAN.md, Phase 2, decision 4)", and
 also names the layout settlement; the layout is component decomposition
 rather than debt machinery, is distilled separately, and this record does
 not carry it.
+
+Accepted 2026-08-02 after the fidelity review: every quoted passage
+machine-verified verbatim against the source, and the four
+implicit-reasoning flags (`SESSION-2026-08-02-record-class.md`, Exchange
+10) upheld as written. Review record:
+`SESSION-2026-08-02-par-0002-acceptance.md`.
 
 **The problem.** This is a rewrite whose skeleton was placed before its
 code, so most of the tree is components that do not exist yet. A repo in
@@ -171,9 +177,10 @@ an additive v2, which is why the rule version is pinned inside the ledger.
 
 The enumerator is the static instrument: a library function taking a root
 path, walking `.py` files, AST-matching rule v1, returning canonical
-entries. It holds the single definition of roots and exclusions, consumed
-by both the tests and the regen command, so tests run against fixture trees
-rather than the live repo.
+entries. Because the root path is a parameter, its own tests run against
+fixture trees rather than assuming the live repo; the default roots and
+exclusions are one definition, consumed by both the tests and the regen
+command.
 
 The conftest adapter is the dynamic instrument. A test-tree marker raises
 the same exception as everything else — "one syntax, one enumerator key" —

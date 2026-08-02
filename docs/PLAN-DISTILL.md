@@ -102,23 +102,30 @@ Exit: settled. Phase 2 proceeds.
 
 ## Phase 2 — The debt and records machinery
 
-**PAR-0002 is drafted (2026-08-02) and sits `Proposed`, so
-`archive/PLAN.md` still governs the debt machinery** — correct under
-rule 4, not a stall. It distills the anti-bureaucracy invariant, the
-placeholder doctrine, the classification rule, the three-file taxonomy,
-marker form rule v1, and the instruments. The layout settlement, named
-alongside these in `AGENTS.md`, is component decomposition rather than
-debt machinery and lands in Phase 5.
+**PAR-0002 is Accepted (2026-08-02) and governs the debt machinery.**
+It distills the anti-bureaucracy invariant, the placeholder doctrine,
+the classification rule, the three-file taxonomy, marker form rule v1,
+and the instruments. The layout settlement, named alongside these in
+`AGENTS.md`, is component decomposition rather than debt machinery and
+lands in Phase 5.
 
-Remaining work is the acceptance review. It must settle the four
-daylight flags named in the primary (Exchange 10): the reason a
-placeholder never invents a signature; the reason the mismatch test must
-not self-heal; the every-leniency generalization; the closed-class
-connection to "exemption to adjudicate." The accepting commit then
-carries the roll-up: `README.md`'s "the debt machinery, PLAN.md Phase 2"
-and "marker form rule v1 (PLAN.md, Phase 2, decision 4)" citations and
-`AGENTS.md`'s pointer at what `PLAN.md` holds become `PAR-0002`, and
-those citations retire from the `DEBT.md` distillation entry.
+The acceptance review (2026-08-02, primary:
+`SESSION-2026-08-02-par-0002-acceptance.md`) machine-verified every
+quoted passage against `archive/PLAN.md` and against the code, upheld
+the four daylight flags named in the record-class primary (Exchange 10)
+as written, and fixed one paraphrase that misattributed a causal link
+(fixture-tree testing follows from the enumerator's root-path
+parameter, not from the single roots definition). The accepting commit
+carried the roll-up: `README.md`'s two citations and `AGENTS.md`'s
+pointer became `PAR-0002`, with `PLAN.md` still holding the layout
+settlement until Phase 5. In-code docstring citations (`debt.py`,
+`conftest.py`) repointed in a separate code-chunk commit — they were
+outside the enumerated roll-up, decided at review. Deliberately not
+tightened, per the governing-pending-improvement stance recorded in the
+primary: `README.md`'s "Real code" heading folding the machinery's own
+tests into the closed class, and two review narrowings (teardown
+gating, non-empty reasons) carried by the code and `archive/PLAN.md`
+step 6.5 rather than the record.
 
 **Gate (one decision): seeding reconstructed challenges — settled
 2026-08-02: no.** Neither offered option was taken. The doubts Kendrick
@@ -135,8 +142,9 @@ Consequence: PAR-0002 lands with no Challenges section, and that is
 correct rather than an omission. The challenge surface is the record
 existing at tier 2 — somewhere for doubt #4 to land — not entries in it.
 
-Exit: PAR-0002 Accepted with its roll-up landed; the debt machinery
-governed from tier 2 and its challenge surface in place.
+Exit: reached 2026-08-02. PAR-0002 Accepted with its roll-up landed;
+the debt machinery governed from tier 2 and its challenge surface in
+place.
 
 ---
 

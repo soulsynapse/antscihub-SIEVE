@@ -13,3 +13,8 @@ dev = ["pytest"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sieve"]
+
+[tool.pytest.ini_options]
+# pytester runs the conftest adapter against disposable fixture repos;
+# pytest_plugins may not be declared in a non-root conftest.
+addopts = "-p pytester"

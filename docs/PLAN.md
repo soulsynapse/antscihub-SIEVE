@@ -142,7 +142,7 @@ proposal (signatures, format, test cases) confirmed before code lands:
       zero-state ledger: the mismatch test reds without it, so this is the
       first green moment it can exist (amended 2026-08-01; step 7 becomes
       pure verification).
-- [ ] 5. Conftest adapter — `Owed` caught in the test tree becomes a skip
+- [x] 5. Conftest adapter — `Owed` caught in the test tree becomes a skip
       carrying the reason; membership checked against a fresh per-session
       enumeration; a caught marker absent from it fails.
 - [ ] 6. Seed `DEBT.md` and `DEFERRED.md` — present debt near-empty;

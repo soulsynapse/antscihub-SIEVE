@@ -90,7 +90,8 @@ docstring points at the section that holds it.
 
 Three files with three meanings; never "the ledger" unqualified:
 
-- `DEBT.md` — hand-authored. Present debt no in-tree marker can carry.
+- `DEBT.md` — hand-authored. Present debt no in-tree marker — and no
+  derivation — can carry.
 - `DEFERRED.md` — hand-authored. Not-yet-due intentions, each with the
   trigger that makes it due. Building from this file goes poorly.
 - `DEBT-AUTO.txt` — generated, never hand-edited. The automatic ledger of

@@ -380,18 +380,15 @@ curated record's fidelity is that it is written while the session is live
 and the reasoning is still in hand — not a raw copy sitting behind it,
 which would only move the reconstruction later.
 
-The work list is stated debt, not derived. Deriving it from the
-below-tier-2 citations in `docs/ARCHITECTURE.md`, `README.md`, and
-`AGENTS.md` proved incomplete (2026-08-02): a system settled in a session
-but never cited from tier 1 escapes that derivation entirely, and two
-had. The enumerated systems live in the distillation entry in `DEBT.md` —
-hand-stating them is that file's charter, since no marker and no
-derivation can carry this gap — and the citation set remains the roll-up
-checklist each acceptance amends. Sequencing calls that are genuinely a
-plan's own — scope, order, build sequence, definition of done — are not
-architecture decisions and stay in their plans. (Primary:
-`SESSION-2026-08-02-distill-worklist.md`, which also holds the rejected
-alternative — `Proposed` stubs as tier-2 placeholders.)
+The retrospective work list cannot be derived, which is why it is stated
+debt: a sweep of the below-tier-2 citations in tier 1 misses any settled
+system tier 1 never cited, and two escaped it before this was caught
+(2026-08-02; primary: `SESSION-2026-08-02-distill-worklist.md`, with the
+rejected alternative — `Proposed` stubs as tier-2 placeholders — and why
+todo-list pressure argues for a sharper debt system instead, now
+PAR-0002's doctrine). Sequencing calls that are genuinely a plan's own —
+scope, order, build sequence, definition of done — are not architecture
+decisions and stay in their plans.
 
 ## Consequences
 

@@ -107,8 +107,16 @@ not actually owe.
 `DEBT.md` and `DEFERRED.md` are hand-authored and live at the repo root:
 "they sort adjacent in a root listing, and an agent lists the root first."
 `DEBT.md` holds present debt no in-tree marker can carry — a last resort by
-the invariant, not a general-purpose list. `DEFERRED.md` holds not-yet-due
-intentions, each with the trigger that makes it due.
+the invariant, not a general-purpose list. The last resort reaches exactly
+as far as derivation cannot (2026-08-02): a real gap the tree can neither
+carry as a marker nor compute is hand-stated here, because every
+alternative — a work list, a roadmap, a record filed as its own todo — is
+hand-maintained state describing a tree that moves independently of it,
+the drift this record exists to kill. Felt necessity for any such list is
+therefore an argument for a more exacting debt system, never for a
+parallel mechanism (primary: `SESSION-2026-08-02-distill-worklist.md`).
+`DEFERRED.md` holds not-yet-due intentions, each with the trigger that
+makes it due.
 
 The automatic ledger is its own file, `DEBT-AUTO.txt`, marked `-text` in
 `.gitattributes`: "Whole-file byte compare, no delimited-region integrity
@@ -260,3 +268,21 @@ adjudicate" the invariant names as bureaucracy arriving.
 - The instruments constrain each other, so neither can be relaxed alone:
   loosening the enumerator's form checking silently widens what the
   adapter's membership check will fail on.
+
+## Challenges
+
+- **2026-08-02 — "The distillation work list can't be derived and the
+  debt files weren't carrying it — land every system as a `Proposed`
+  stub so `grep -l "^Status: Proposed" docs/par/` derives the list."**
+  Raised by the agent after the citation-derived work list proved
+  incomplete: two settled systems had no tier-1 citation to enter it
+  by. Dismissed by Kendrick — "drafts are a new mechanism btw, and
+  aren't necessary, stated debt should be picked up, and the argued
+  necessity for any kind of todo list is argument for a more exacting
+  debt system." The gap went to `DEBT.md` as an ordinary hand-stated
+  entry, the last resort doing precisely its job, and the Decision
+  above now states the rule the dismissal articulated. First entry in
+  this section, arriving contemporaneously rather than reconstructed —
+  the surface working as the no-reconstructed-challenges gate
+  anticipated (`docs/archive/PLAN-DISTILL.md`, Phase 2). Fuller record:
+  `SESSION-2026-08-02-distill-worklist.md`.

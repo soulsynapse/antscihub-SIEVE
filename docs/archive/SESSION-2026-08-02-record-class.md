@@ -1,15 +1,17 @@
 # Session record — 2026-08-02 — the record class
 
-A frozen primary record (tier 3). It holds the argument that produced
-ARCH-0001's rewrite from the ADR class to architecture rationale, and the
-first record written under it. Never edited.
+A primary record (tier 3), live until this session closes and frozen
+after. It holds the argument that produced ARCH-0001's rewrite from the
+ADR class to architecture rationale.
 
-Form, per ARCH-0001: Kendrick's positions are verbatim; the surrounding
-argument is compressed, including the positions that lost. Exchanges are
-numbered so passages are citable — "SESSION-2026-08-02-record-class.md
-Exchange 5". The session opened on the distillation plan (`PLAN-DISTILL.md`
-Phase 2) and never reached it; what it reached instead was the apparatus
-that plan runs on.
+It deliberately does **not** restate what ARCH-0001 now says. Tier 3's job
+is what tier 2 drops: the alternatives that died, and the route by which a
+position was overturned. Where a conclusion is fully carried in ARCH-0001
+this record points at it rather than repeating it. Kendrick's positions
+are verbatim; exchanges are numbered so passages are citable.
+
+The session opened on `PLAN-DISTILL.md` Phase 2 and never reached it; what
+it reached instead was the apparatus that plan runs on.
 
 State at the start: `docs/adr/` held one record, ADR-0001, adopting
 architecture decision records on the Nygard model — immutable once
@@ -24,70 +26,54 @@ edited. Nothing had ever been superseded or retired.
 > please. just keeps it easy to browse the standing records without having
 > to dig through adrs that are no longer active"
 
-Answered that ADR-0001 already moved superseded records out of `docs/adr/`,
-so the stated motivation was met — but that a different defect justified
-the same change: `docs/archive/` was defined as *primary records*
-(transcripts, briefs, exhausted plans), and a dead ADR is a tier-2
-distillation, so filing it there put a tier-2 record in tier 3 where the
-walk-down lands in something itself walked down from.
+ADR-0001 already moved superseded records out of `docs/adr/`, so the
+stated motivation was met. A different defect justified the same change:
+`docs/archive/` was defined as *primary records*, and a dead ADR is a
+tier-2 distillation, so filing it there put a tier-2 record in tier 3
+where the walk-down lands in something itself walked down from.
 
-Two homes considered. `docs/archive/adr/` preserves one rule — terminal
-records live in the archive — which plans also obey. `docs/adr/retired/`
-keeps the archive meaning strictly *primary*. Kendrick took the second:
+Rejected: `docs/archive/adr/`, which would have preserved the single rule
+that terminal records live in the archive — the rule plans also obey. Lost
+to `docs/adr/retired/` on Kendrick's ground that the archive should mean
+one kind of thing.
 
-> "yeah, i agree on the 2nd. you don't have to add the adr/retired this
-> session since there's nothing to retire so yes it gets a revision
-> section"
-
-One sentence had to be added either way, because "the archive governs only
-where no ADR speaks" would otherwise hand a retired record governing power
-on any point its successor dropped. Settled: a superseded record governs
-nothing. Landed as commit `629d7bc`, then superseded wholesale by
-Exchange 9.
+The whole outcome was superseded by Exchange 9. Only the tier-mismatch
+reasoning survives into ARCH-0001.
 
 ## Exchange 2 — Cross-citation
 
 > "we can also update the adr-0001 for a potential cross-citing mechanism.
 > any ideas?"
 
-Proposed: **back-cites are derived, never stored.** A forward citation is
-authored; the reverse link is grepped. The argument is not convenience but
-the anti-bureaucracy invariant — a stored back-link is hand-maintained
-state already present in the tree — and ADR-0001 had already done this
-once in the same shape ("Neither stores a commit hash: `git log -- <file>`
-derives the diffs"). Requires a canonical citation token, which the corpus
-already used universally.
+Produced the derive-don't-store mechanism now in ARCH-0001. Rejected: an
+append-only `## Cited by` section — hand-maintained state already present
+in the tree, and a fourth change class where ADR-0001 permitted three.
 
-Rejected: an append-only `## Cited by` section (hand-maintained derivable
-state, and a fourth change class where ADR-0001 permitted three).
-
-Then a long adjudication of which change class the edit fell into,
-concluding it was a new ADR rather than a supersession because ADR-0001
-was silent on cross-citation. That adjudication is what Exchange 3
-attacked. It produced nothing and is recorded here only because its
-failure is the finding.
+Then three paragraphs adjudicating which change class the edit fell into.
+It produced nothing and is recorded only because its failure is what
+Exchange 3 attacked.
 
 ## Exchange 3 — The apparatus outgrowing the content
 
 > "Genuinely if the system for the ADRs undermines the ability for the ADRs
 > to be clear then there's a problem with the ADR system itself"
 
-Conceded, with the evidence: two turns spent on the rules of the record
-system, zero architecture decisions distilled; `docs/adr/` holding one
-file governed by ~200 lines of constitution; nothing ever superseded or
+Conceded, with the evidence: two turns on the rules of the record system
+and zero architecture decisions distilled; `docs/adr/` holding one file
+governed by ~200 lines of constitution; nothing ever superseded or
 retired. The repo already names this shape — the anti-bureaucracy
 invariant, and "ceremony ahead of need" in `archive/PLAN.md`.
 
-Split named at the time: part was mishandling (a one-paragraph mechanism
-followed by three paragraphs of unasked-for constitutional adjudication),
-part was genuine over-specification — rules written against imagined cases
-failing at the rate such rules fail.
+Split named at the time: part mishandling (a one-paragraph mechanism
+followed by unasked-for constitutional adjudication), part genuine
+over-specification — rules written against imagined cases, failing at the
+rate such rules fail.
 
-Two claims from this exchange were later withdrawn. The suggestion to
-"drop the closure" (permit a fourth change class) died in Exchange 4 when
-supersession turned out to be cheap. The claim that supersession
-granularity equalling record granularity was a *defect* was withdrawn as
-wrong — it is true of every versioned-document system.
+Two claims from this exchange were withdrawn later. "Drop the closure"
+(permit a fourth change class) died in Exchange 4 once supersession turned
+out to be cheap. And the claim that supersession granularity equalling
+record granularity was a *defect* was simply wrong — it is true of every
+versioned-document system.
 
 ## Exchange 4 — Granularity, and what supersession costs
 
@@ -99,22 +85,16 @@ wrong — it is true of every versioned-document system.
 
 The decisive move is "it costs nothing." The case for fine granularity
 rested entirely on wholesale supersession being expensive; it is a copy,
-an edit, a redate, a move. Two consequences followed immediately:
+an edit, a redate, a move. The position it overturned was mine and it had
+been argued twice: three separate records for the debt machinery —
+doctrine, form, enforcement — individuated by what could be superseded
+independently. Wrong premise, so the split collapsed to one record, and
+coarse beat fine because a wholesale rewrite yields a record that reads
+whole.
 
-1. Coarse beats fine, because a wholesale rewrite yields a record that
-   **reads whole**, where fine records with cross-cites make the reader
-   assemble the decision from fragments.
-2. The proposal standing at the time — three records for the debt
-   machinery (doctrine / form / enforcement, individuated by what could be
-   superseded independently) — was wrong and collapsed to one.
-
-Also correct and conceded: ADR-0001's mechanical revision test said
-"another file," not "another record," which is why a *plan* amendment had
-been read as disqualifying a revision. Noted as over-broad.
-
-One caveat kept: the cost of a wholesale rewrite is silent drift in the
-parts meant to carry forward, so a substantial rewrite is reviewed as a
-diff.
+Also conceded: ADR-0001's mechanical revision test said "another file,"
+not "another record," which is why a *plan* amendment had been read as
+disqualifying a revision. Over-broad as written.
 
 ## Exchange 5 — What these records are for
 
@@ -122,13 +102,11 @@ diff.
 > or less) the long-form reasoning that rolls up to the short form that
 > exists in ARCHITECTURE.md."
 
-The drafting consequence: this cuts against `PLAN-DISTILL.md` working rule
-1 ("quote, don't paraphrase, at the load-bearing points") if that rule is
-applied hard — a quilt of verbatim quotations is fragment-assembly by
-another route. Resolved: the quotes carry the decisions, the prose carries
-the argument, and the argument must stand if only the prose is read.
-
-ARCH-0002 was drafted against this constraint (Exchange 10).
+Surfaced a live tension: `PLAN-DISTILL.md` working rule 1 ("quote, don't
+paraphrase, at the load-bearing points") defeats itself if pushed, since a
+quilt of verbatim quotations is fragment-assembly by another route.
+Resolved in the plan — quotes carry the decisions, prose carries the
+argument, and the argument must stand if only the prose is read.
 
 ## Exchange 6 — Not ADRs at all
 
@@ -140,28 +118,22 @@ ARCH-0002 was drafted against this constraint (Exchange 10).
 
 > "so maybe R-0001 actually, with R standing for reasoning"
 
-Two findings here, and the first is the correction. Framing the day's
-edits as four *defects found in ADR-0001* was itself the immutability lens
-leaking back in — under a living-record model, refining a record is the
-normal operation, not a defect report.
+The correction first: framing the day's edits as four *defects found in
+ADR-0001* was the immutability lens leaking back in. Under a living-record
+model, refining a record is the normal operation, not a defect report.
 
-The second is the structural argument that settled the whole question.
-Nygard's immutability is **archaeological**: a future reader needs to know
-what was believed at the time, and editing retrofits present knowledge
-into a past decision. But an ADR is the bottom of its own stack — nothing
-underneath carries the historical record. Here `docs/archive/` does. The
-archaeological function is already discharged one tier down, so importing
-immutability buys a guarantee the repo already has, at the price of an
-apparatus around every edit.
+The structural argument that settled it — archaeological immutability
+being redundant when a tier 3 exists — is carried in full by ARCH-0001's
+Context and not repeated here.
 
-Therefore: keep the ADR form (one decision per file, status, context /
-decision / consequences), drop the doctrine. What is lost is diff
-legibility — a wording tweak and a reversal are no longer distinguishable
-by status line — judged small, with one author.
+What the decision cost, recorded because ARCH-0001 does not dwell on it:
+diff legibility. With free editing, a wording tweak and a reversal are no
+longer distinguishable by status line; you have to read the diff. Judged
+small with one author, and that judgment is the exposed one.
 
-Precedent noted: the repo already argues this way about names. `Owed` was
-named as it was "because a marker is not a fault and should not
-pattern-match visually to real exceptions."
+Precedent noted at the time: `Owed` was named as it was "because a marker
+is not a fault and should not pattern-match visually to real exceptions" —
+the same argument about names, one level down.
 
 ## Exchange 7 — Naming
 
@@ -172,22 +144,27 @@ pattern-match visually to real exceptions."
 Constraint identified: a three-letter, A-initial acronym ending in R is the
 ADR silhouette and gets misread before it gets read.
 
-Four offered. `ARCH-0001` — "Architecture Reasoning", scope carried in the
-token, four letters, no trailing R. `AR-0001` — "Architecture Rationale",
-technically the most correct name, since *rationale* is the term of art in
-the design rationale literature (QOC; MacLean and colleagues) for exactly
-this distinction, but two letters and A-initial. `R-0001` with scope
-carried by the directory. `GROUNDS-0001` — no baggage at all, in the repo's
-habit of plain precise words, but loses architecture entirely.
+The three that lost, none of which appears anywhere else:
 
-Recommended `ARCH-`; flagged that `docs/architecture/` beside
-`docs/ARCHITECTURE.md` differs only by extension and would confuse
-listings, so `docs/arch/`.
+- **`AR-0001`, "Architecture Rationale"** — technically the most correct
+  name, since *rationale* is the term of art in the design rationale
+  literature (QOC; MacLean and colleagues) for exactly this distinction:
+  recorded reasoning behind a choice, as against a decision log. Lost on
+  shape — two letters, A-initial, readable as a typo for ADR.
+- **`R-0001`, "Reasoning"** — Kendrick's own first proposal, scope carried
+  by the directory instead of the token. Maximum distance from ADR; lost
+  because the token then says nothing about scope, leaving the
+  architecture-only rule resting entirely on the record's text.
+- **`GROUNDS-0001`** — no baggage at all and in the repo's habit of plain
+  precise words. Lost by dropping architecture entirely.
+
+Also flagged: `docs/architecture/` beside `docs/ARCHITECTURE.md` differs
+only by extension and would confuse listings and tab-completion, hence
+`docs/arch/`.
 
 > "I think ARCH-0001 with Rationale works nicely. Lets do that."
 
-Token and word taken from different candidates: `ARCH-NNNN`, "architecture
-rationale."
+Token and word taken from different candidates.
 
 ## Exchange 8 — The granularity heuristic
 
@@ -195,16 +172,12 @@ rationale."
 > all the relevant things with it. They're almost wikipedia pages -
 > summaries, they can be wrong, so they cite the source."
 
-Replaced the weaker "granularity: coarse" wording. The heuristic is
-two-sided where "coarse" was one-sided: a record needing a sibling read
-alongside it is one record cut in two; a record that swallowed a
-neighbouring decision it did not need is two fused. The test is whether a
-reader finishes the file convinced without opening another.
-
-The Wikipedia framing generalized past its occasion: every tier is a
-fallible summary of the tier below that cites it for exactly that reason.
-That is the authority rule the repo already had — deeper record wins, the
-summary is repaired — restated once instead of separately per tier.
+Replaced "granularity: coarse," which was one-sided where this is
+two-sided — it bounds a record from above as well as below. The Wikipedia
+framing then generalized past its occasion, into the statement now in
+ARCH-0001 that every tier is a fallible summary of the tier below and
+cites it for that reason. That was already the repo's authority rule;
+what changed is that it is stated once instead of per tier.
 
 ## Exchange 9 — Convergence
 
@@ -212,41 +185,34 @@ summary is repaired — restated once instead of separately per tier.
 > that once a rationale is pretty bulletproof it will stop being edited get
 > carried into the 0001?"
 
-It had not. ARCH-0001 said the *directory* goes quiet — records written
-rarely, retired more rarely — which is a write rate, not a claim about
-edits to an existing record converging. Without it, "edited whenever a
-reread finds it wanting" reads as a standing licence.
-
-Added: editing asymptotes, and that is the point rather than a hope. The
-edit rate is a *measurement* of how settled the reasoning is. A record
-still being reworked is one not yet internalized; a record gone quiet
-while collecting Challenges entries is bulletproof — and nothing declares
-it so, because `git log -- <file>` already says it, which is the only
-place such a claim can live without becoming a maturity field somebody
-maintains.
-
-Landed with the rename as commit `fcfbf6f`.
+It had not. ARCH-0001 claimed only that the *directory* goes quiet — a
+write rate — which left "edited whenever a reread finds it wanting"
+reading as a standing licence. The asymptote property was added in
+response and is now in ARCH-0001. Worth noting as a near-miss: nothing in
+the draft flagged its own absence, and it was caught by being asked for.
 
 ## Exchange 10 — ARCH-0002, the first record under the new class
 
-Drafted from `archive/PLAN.md` — the anti-bureaucracy invariant, the
-placeholder doctrine, the classification rule, the three-file taxonomy,
-marker form rule v1 with its narrowings, the two instruments, enforcement,
-the closed machinery class. One record, per Exchange 4. Commit `a6de72f`,
-**Proposed**, so `archive/PLAN.md` still governs and no tier-1 citation
-has moved.
+Distilled from `archive/PLAN.md`, one record per Exchange 4, **Proposed**,
+so `archive/PLAN.md` still governs. Twenty-six quoted passages
+machine-verified verbatim against the source.
 
-Twenty-six quoted passages machine-verified verbatim against the source.
-Four places where the record supplies reasoning the source left implicit
-were named rather than resolved silently, per the fidelity rule: why a
-placeholder never invents a signature; why the mismatch test must not
-self-heal; the generalization that every leniency in an enumerator is a
-way for debt to vanish; and the connection of the closed machinery class
-to the invariant's "exemption to adjudicate."
+Four places where the record supplies reasoning its source left implicit,
+named rather than resolved silently, per the fidelity rule — recorded here
+because they exist nowhere else and are what its acceptance review must
+settle:
 
-Two deliberate omissions: no Challenges section (pending reconstructed
-doubts), and the layout settlement excluded as component decomposition
-rather than debt machinery — moved to `PLAN-DISTILL.md` Phase 5.
+1. Why a placeholder never invents a signature (source says only "never
+   inventing one").
+2. Why the mismatch test must not self-heal (source gives the rule
+   parenthetically, without a reason).
+3. The generalization that every leniency in an enumerator is a way for
+   debt to vanish quietly (source gives one specific instance).
+4. The connection of the closed machinery class to the invariant's
+   "exemption to adjudicate" (source leaves these as separate passages).
+
+Also deliberate: the layout settlement excluded as component decomposition
+rather than debt machinery, moved to `PLAN-DISTILL.md` Phase 5.
 
 ## Exchange 11 — This record's own convention
 
@@ -260,18 +226,14 @@ rather than debt machinery — moved to `PLAN-DISTILL.md` Phase 5.
 
 The gap is load-bearing rather than procedural: Exchange 6's argument for
 living records is that the archaeological function is discharged one tier
-down, so a rationale with no primary underneath it is a rationale the
-argument does not cover. ARCH-0001 was in that state at the moment it was
-rewritten.
+down, so a rationale with no primary underneath it is one that argument
+does not cover. ARCH-0001 was in that state at the moment it was rewritten.
 
-Form decided as delegated. Not a transcript (an agentic session is mostly
-tool calls and drafting) and not a summary (a summary bakes in one
-interpretation and discards the material a different reading would need).
-Instead: **quote the person, compress the argument, keep what lost.** The
-human positions are short and did the steering, so they are verbatim; the
-machine's prose was revised in flight and its conclusions are now in the
-rationale, so it is compressed; and the positions that lost are kept,
-because a record showing only the winner cannot be re-examined.
+Form decided as delegated, and both alternatives were rejected explicitly.
+A raw transcript: an agentic session is mostly tool calls and drafting. A
+summary: it bakes in one reading and discards the material a different one
+would need. What survived is the rule now in ARCH-0001 — quote the person,
+compress the argument, keep what lost.
 
 ## Exchange 12 — Curated record versus raw transcript
 
@@ -279,51 +241,32 @@ because a record showing only the winner cannot be re-examined.
 > revisited in order to really harden the architecture as is, it might be
 > worthwhile. but I'm not sure."
 
-The counter-consideration, offered at the time: `DESIGN-SESSION.md` is
-itself curated — nine exchanges, not a transcript — and it is what
-supported all those revisits. So the revisit history is evidence that the
-curated form worked, unless those revisits involved reconstruction pain a
-raw record would have spared, which only Kendrick can say.
+Settled by checking rather than asserting, and the checking produced two
+findings that no other record holds.
 
-What settled the practical question was checking rather than asserting.
-Claude Code already writes a raw JSONL transcript per session to
-`~/.claude/projects/<slug>/`, so no capture work exists. Two findings
-followed. First, the three 2026-08-01 sessions that produced the record
-class survive — `d289f467`, `14545adb`, `78389c66` — so the claim made
-earlier in this same record, that the record class's own origin was
-unreconstructable, was wrong and is corrected below. Second,
-`cleanupPeriodDays` is unset, so default retention applies and every one
-of them expires on a timer measured in weeks. "It exists on disk" is not
-durability.
+First, the three 2026-08-01 sessions that produced the record class
+survive on disk — `d289f467`, `14545adb`, `78389c66` — which falsified a
+claim made earlier in this very record, that the class's own origin was
+unreconstructable. Second, `cleanupPeriodDays` is unset, so default
+retention applies and all of them expire on a timer measured in weeks.
+"It exists on disk" is not durability.
 
-That asymmetry is the argument: retention costs about a megabyte per
-session of a file nobody reads, and loss is irreversible and already
-scheduled. Against it, a raw transcript holds everything said, unedited,
-permanently, in a repo that may later be shared.
-
-Proposed: retain them outside the tier structure, not citable and not
-governing, as fidelity evidence for the curated record beside them.
-
-Ruled against:
+Proposed on that asymmetry — about a megabyte per session against
+irreversible and already-scheduled loss — that transcripts be retained
+outside the tier structure, not citable and not governing, as fidelity
+evidence. Ruled against:
 
 > "yeah we don't want to have the wholesale transcripts lol"
 
-So the curated record is the only primary — and the reason holds
-independently of repo hygiene or the sharing concern. A transcript is not
-a cheaper primary but a worse one: unreadable at length, and usable only
-by reconstructing the argument out of it, which is exactly the cost this
-tier exists to remove. What guarantees the curated record's fidelity is
-that it is written while the session is live and the reasoning is still
-in hand, not a raw copy behind it, which would only move the
-reconstruction later. An appeal to the design-session precedent was also
-made here — nine curated exchanges carried every revisit — and it does
-not hold as stated; corrected in Exchange 13.
+The supporting reason holds independently of repo hygiene and is in
+ARCH-0001. An appeal to the design-session precedent was also made here —
+nine curated exchanges carried every revisit — and does not hold as
+stated; corrected in Exchange 13.
 
-One contradiction surfaced here and was repaired rather than fudged: this
+One contradiction surfaced and was repaired rather than fudged: this
 record was committed mid-session while ARCH-0001 called archived records
-frozen and never edited. Settled — a session record is live for the
-duration of its session and freezes at close, the way a plan freezes when
-exhausted.
+frozen and never edited. Settled — a session record is live for its
+session and freezes at close.
 
 ## Exchange 13 — The design session is not the template
 
@@ -335,54 +278,39 @@ exhausted.
 > already knew the answers and knew where you would mess up and also had
 > a good idea of how to get you to understand it in like 10 messages."
 
-Corrects an appeal made twice in this record and once in a commit
-message: that `DESIGN-SESSION.md`'s nine curated exchanges prove the
-curated form sufficient in general. They prove it sufficient for a
-session of that kind. Those sessions were the deliberate outcome of two
-prior rewrites — the reasoning had already happened, and the session was
-transmitting conclusions Kendrick already held, with a working model of
-where the machine would go wrong and roughly how many messages it would
-take. The record reads like a verbatim transcript and is not one.
+Corrects an appeal made twice in this record and once in a commit message:
+that `DESIGN-SESSION.md`'s nine curated exchanges prove the curated form
+sufficient in general. They prove it sufficient for a session of that
+kind — one transmitting conclusions already reached across two prior
+rewrites, with a working model of where the machine would go wrong. The
+record reads like a verbatim transcript and is not one.
 
-Two consequences, pulling in opposite directions.
+Two consequences, pulling opposite ways. The proportionality rule is now
+in ARCH-0001. The other is not, and is the uncomfortable half: in the
+design session Kendrick could check any distillation instantly against an
+answer he already held, whereas in a session where reasoning is discovered
+live neither party has the answer in advance, so whatever the record
+judged unimportant is simply gone. Not an argument for transcripts, which
+failed on their own merits — an argument for writing the record live,
+which was already the rule but had rested only on memory decay.
 
-A session record's weight is proportional to what its session actually
-decided, not to the design session's example. Most sessions settle less
-and get less; producing a twelve-exchange document per session would be
-the apparatus outgrowing the content again — the Exchange 3 failure in a
-new costume.
-
-But the curator's judgment carries more weight here than it did there,
-which is the opposite of reassuring. In the design session Kendrick could
-check any distillation instantly against an answer he already held. In a
-session where the reasoning is discovered live — this one, which produced
-several reversals — neither party has the answer in advance, so whatever
-the record judged unimportant is simply gone. That is not an argument for
-transcripts, which failed on their own merits in Exchange 12. It is the
-argument for writing the record while the session is live, which was
-already the rule but had been justified only by memory decay.
-
-Noted against `PLAN-DISTILL.md`'s risk register: "the oracle depreciates"
-is weaker than stated for the founding decisions, whose answers have
-survived two rewrites and are not session memory. What does depreciate is
-the argument shape — which alternative was rejected and why — so the
-front-loading case narrows rather than disappears.
+Noted against `PLAN-DISTILL.md`'s risk register and not yet acted on: "the
+oracle depreciates" is weaker than stated for the founding decisions,
+whose answers have survived two rewrites and are not session memory. What
+depreciates is the argument shape — which alternative was rejected and
+why — so the front-loading case narrows rather than disappears.
 
 ## Exchange 14 — Formulation and hardening as separate sessions
 
-Proposed by Kendrick, in response to Exchange 13's problem that a
-discovery session leaves the curator's judgment unchecked: draft the
+Kendrick's proposal, answering Exchange 13's problem directly: draft the
 rationale in the messy session, then harden it in a later deliberate one
-run like the design sessions — he arrives holding the answer and attacks
-the draft, which is fast and produces a clean, dense record.
+run like the design sessions — arriving holding the answer and attacking
+the draft. This fixes the unchecked-curator problem structurally rather
+than mitigating it, by ensuring the record that matters is written when it
+can be checked instantly.
 
-The proposal fixes Exchange 13 structurally rather than mitigating it. By
-the time the record that matters is written, the author *can* check it
-instantly, which is the property the design sessions had by accident of
-history and this reproduces on purpose.
-
-Objection raised: a hardening session will attack what is in the draft,
-not re-derive what already died in formulation, so the reversals that
+Objection raised: a hardening session attacks what is in the draft rather
+than re-deriving what already died in formulation, so the reversals that
 made this session valuable would go unrecorded if only the hardening
 session filed a record.
 
@@ -391,39 +319,25 @@ session filed a record.
 > fluff. having the hardening session can be debt and that's fine, and
 > come due when the architectural decision is truly load-bearing"
 
-Settled three ways. Multiple records per decision, since the one-per-
-decision habit is an ADR habit and does not bind here. Formulation
-records keep decisions and dead alternatives, never the route taken.
-And the hardening session is **type-2 debt with a trigger** — due when
-the decision is truly load-bearing — rather than a step every rationale
-must pass through before it counts.
+Making the hardening session *debt with a trigger*, rather than a gate
+every rationale must pass, resolved a scoping worry without adding a rule
+— and landed on machinery already present, the status line as its own
+marker. The rest is in ARCH-0001.
 
-That last point resolved a scoping worry without a rule, and it landed on
-machinery already present: the status line is the debt marker. A proposed
-rationale is its own un-hardened entry the way a placeholder is its own
-debt entry, so `grep -l "Status: Proposed" docs/arch/*.md` derives the
-list and nothing is maintained per record. Only the general trigger is
-hand-authored, once, in `DEFERRED.md`. It also gave `Proposed` real
-content: drafted but not yet attacked, where it had previously meant only
-"the author is still chewing."
+Two things went wrong immediately, both worth keeping.
 
-Distillations are exempt: their question is fidelity to a checkable
-source, not correctness.
+The derivation was defective on first run: unanchored, `grep -l "Status:
+Proposed"` matched ARCH-0001, because ARCH-0001 quotes the query in its
+own text. Anchoring fixed it. The rule had been correct in the abstract
+for ten minutes and wrong the first time it executed — Exchange 3's lesson
+arriving on schedule.
 
-The derivation had a defect on first run, found by running it rather than
-reasoning about it: unanchored, `grep -l "Status: Proposed"` matched
-ARCH-0001, because ARCH-0001 quotes the query. Anchored to line start it
-is exact. Small, but it is the Exchange 3 lesson arriving on schedule —
-the rule had been correct in the abstract for ten minutes and wrong the
-first time it was executed.
-
-One blind spot surfaced immediately on writing it down. ARCH-0001 cannot
-be marked Proposed, because "Proposed does not govern, the prior source
-still does" presupposes a prior source and the founding record has none —
-marking it Proposed would leave the tier ungoverned. So it is Accepted
-while still owing its hardening, the single case where the status line
-does not carry the debt, and `DEFERRED.md` names it explicitly. The
-derivation is otherwise exact.
+And ARCH-0001 cannot be marked Proposed at all, because "Proposed does not
+govern, the prior source still does" presupposes a prior source and the
+founding record has none; marking it so would leave the tier ungoverned.
+It is therefore Accepted while still owing its hardening — the one record
+the derivation misses, named explicitly in `DEFERRED.md` rather than
+finessed.
 
 ## Exchange 15 — The reconstructed-challenges gate, closed
 
@@ -433,53 +347,40 @@ derivation is otherwise exact.
 `PLAN-DISTILL.md` Phase 2 had offered two homes for the three doubts
 Kendrick has raised against the debt system: seeded into ARCH-0002's
 Challenges section marked *reconstructed*, or folded into Context as
-objections considered. Neither was taken, and the reason is better than
-either option.
+objections considered. Neither taken, and the reason beats both.
 
-A doubt that genuinely recurs does not need reconstructing — it will
-arrive on its own and land as an ordinary contemporaneous entry, which is
-precisely what the section is for. Reconstruction would have produced
-entries of the weakest available kind (the plan's own risk register:
-memory of an argument, formatted as a record) to pre-fill a section that
-fills itself. The gate is closed rather than left pending, because a
-pending gate depends on recall and the mechanism does not.
+A doubt that genuinely recurs does not need reconstructing — it arrives on
+its own and lands as an ordinary contemporaneous entry, which is what the
+section is for. Reconstruction would have pre-filled a section that fills
+itself, using the weakest material available (the plan's own risk
+register: memory of an argument, formatted as a record). Closed rather
+than left pending, because a pending gate depends on recall and the
+mechanism does not.
 
-Consequence: ARCH-0002 lands with no Challenges section, and that is
-correct rather than an omission. The challenge surface is the record
-existing at tier 2 — somewhere for doubt #4 to land — not entries in it.
-The plan's reconstructed-challenges risk retires with the gate.
+ARCH-0002 therefore lands with no Challenges section, which is correct
+rather than an omission: the challenge surface is the record existing at
+tier 2, not entries in it.
 
 ---
 
 ## Where things stand
 
-- The record class is architecture rationale, `docs/arch/`, cited
-  `ARCH-NNNN`. Living documents, not ADRs. ARCH-0001 governs.
-- Granularity is the smallest chunk that carries everything relevant with
-  it. Records read whole. Rewriting wholesale is cheap and normal.
-- Every tier is a fallible summary of the tier below and cites it; on
-  conflict the deeper record wins and the summary is repaired.
-- Editing asymptotes; the edit rate measures how settled the reasoning is.
-- A rationale written from a session files its session record here and
-  cites it; a distillation does not, already having its primary. The
-  record is live for its session and freezes at close. Raw transcripts
-  are never retained. Operationalized in `AGENTS.md` ("Where records go",
-  and the never-do list).
-- ARCH-0002 sits **Proposed**, so `archive/PLAN.md` still governs the
-  debt machinery; accepting it moves `README.md` lines 41 and 98 and
+Doctrine is in ARCH-0001 and not repeated. What this session leaves
+behind:
+
+- ARCH-0002 sits **Proposed**, so `archive/PLAN.md` still governs the debt
+  machinery. Accepting it moves `README.md` lines 41 and 98 and
   `AGENTS.md` line 18, and retires three citations from the `DEBT.md`
-  distillation entry.
+  distillation entry. Its acceptance review must settle the four fidelity
+  flags in Exchange 10.
 - ARCH-0001 is Accepted and governs, but was formulated here and never
-  attacked. Its hardening session is owed, not yet due, named in
-  `DEFERRED.md`, and will file its own record.
-- The reconstructed-challenges gate is closed: nothing is reconstructed;
-  Challenges accumulate only as doubts recur. ARCH-0002 correctly has no
-  Challenges section.
-- Open, carried out of this session: ARCH-0002's four fidelity flags and
-  its acceptance; the layout settlement's new home in Phase 5.
+  attacked. Its hardening session is owed, not yet due, and named in
+  `DEFERRED.md`.
+- The reconstructed-challenges gate is closed; nothing is reconstructed.
+- Still open: the layout settlement's new home in `PLAN-DISTILL.md`
+  Phase 5, and the overstated "oracle depreciates" risk in that plan.
 - The 2026-08-01 sessions that adopted the record class have no curated
-  primary, and their raw transcripts will expire on the default retention
-  timer unread. That reasoning survives only as ARCH-0001's own text and
-  git history. Accepted, not filed as debt: the convention exists so it
-  does not recur, and curating them now would be reconstruction from
-  transcript — the thing this tier removes.
+  primary, and their raw transcripts will expire unread. That reasoning
+  survives only as ARCH-0001's text and git history. Accepted rather than
+  filed as debt: the convention exists so it does not recur, and curating
+  them now would be reconstruction from transcript.

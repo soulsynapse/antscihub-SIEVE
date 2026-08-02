@@ -58,6 +58,10 @@ layer (PAR-0003) — is open; the second doubt below holds that question.
   Context); because PAR-0003 is itself undesigned, so the boundary
   cannot be tested against it yet; and because merging living records
   later is the cheap, lossless direction — an active PAR rolling up
-  into another as that system's expansion is within doctrine. Resolves
-  at PAR-0003's design session, when the reversal test has something to
-  run against.
+  into another as that system's expansion is within doctrine.
+  Kendrick's acceptability rationale (primary, Exchange 2): templates
+  *are in service to* the runbook system with zero ambiguity about
+  where they live or how they are pointed to, so subset status is no
+  problem — the pointer criterion now in PAR-0001's Granularity.
+  Resolves at PAR-0003's design session, when the reversal test has
+  something to run against.

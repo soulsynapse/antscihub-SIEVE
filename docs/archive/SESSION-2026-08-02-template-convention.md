@@ -59,3 +59,43 @@ Executed this sitting: PAR-0004 drafted Proposed with both of
 Kendrick's doubts as standing-unresolved Challenges entries; the first
 two template instances (`docs/par/`, `docs/archive/` session records)
 named in Consequences as judged owed, due when the record governs.
+
+## Exchange 2 — the acceptability rationale, and a doubt against hardening
+
+Kendrick, verbatim, written while Exchange 1's assessment was being
+composed — the convergence again independent:
+
+> "Writing this as you're responding: the reason it's acceptable is
+> directly supported by the fact theres no ambiguity about where
+> something should go or how it should be pointed to. Something being a
+> runbook having a pointer to the PAR for templates has zero ambiguity
+> about where templates can live, so it being a subset is absolutely no
+> problem. Then consider what points to PARs: an architecture reference
+> to a giant PAR is useful if the PAR can't be understood without each
+> of it's parts. Once it can be understood without each of it's parts,
+> or when one part can be split out because the reasoning doesn't touch
+> anything else, that becomes a clarity gain: templates *are in service
+> to* the runbook system, and what they are is clear enough for it to
+> have a clear boundary. Reading your message; we landed on the same
+> result. I'm not totally sure the hardening is necessary btw, we can
+> mark the hardening process as doubt, since the hardening was just one
+> way to deliberately improve a PAR and fell out as procedure before
+> being reasoned as necessary. For example, runbook layer and templates
+> landed without hardening, and hardening is useful to artificially
+> accelerate or bypass the evidence accumulation, but it's just another
+> way of saying 'the PAR stands the test of time and multiple
+> challenges' (what hardening literally is), and the PAR system now has
+> two different ways to do that."
+
+Two things land. The acceptability rationale adds the pointer criterion
+to the boundary machinery — a sub-system in service to a larger one
+splits cleanly when every pointer to it is unambiguous, and a large
+record earns its size only while it cannot be understood without each
+of its parts — folded into PAR-0001's Granularity and PAR-0004's
+merge-doubt entry. The hardening doubt lands as a standing-unresolved
+entry in PAR-0001's Challenges with the agent's counterweight recorded:
+hardening is timing insurance rather than mere acceleration — organic
+challenges probe what usage happens to touch, the attack front-runs the
+load — and the 0003/0004 examples bear on drafting, not the Accepted
+gate, since both sit Proposed and govern nothing. Semantics and the
+`DEFERRED.md` trigger stand while the doubt does.

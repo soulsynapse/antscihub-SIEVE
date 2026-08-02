@@ -156,6 +156,15 @@ losslessly, numbers never reused. The same boundary is what keeps each
 tradeoff log assessable: the accumulated cons in a record all weigh
 against the worth of one system.
 
+Sub-systems split cleanly, and the split is a clarity gain rather than
+proliferation (2026-08-02). A large record earns its size only while it
+cannot be understood without each of its parts; once one part's
+reasoning touches nothing else, splitting it out is the gain. A system
+in service to a larger one may hold its own record — templates in
+service to the runbook layer (PAR-0004, PAR-0003) — provided every
+pointer stays unambiguous: exactly one place the sub-system lives,
+exactly one way to cite it, so subset status costs nothing.
+
 The nearest familiar shape is a Wikipedia article: a summary that stands
 on its own, can be wrong, and cites its sources for exactly that reason.
 When a rationale and the record it distils disagree, the deeper record
@@ -427,6 +436,26 @@ architecture decisions and stay in their plans.
   with its resolution or the lack of one, so the trigger-less, unbounded
   character of a scrapbook never arrives. Fuller record:
   `SESSION-2026-08-02-par-rename.md`, Exchange 4.
+- **2026-08-02 — "I'm not totally sure the hardening is necessary —
+  hardening was just one way to deliberately improve a PAR and fell out
+  as procedure before being reasoned as necessary."** Kendrick's doubt,
+  standing unresolved. The claim: hardening is one route to what it
+  literally means — a PAR standing the test of time and multiple
+  challenges — and the tradeoff log now supplies the organic route,
+  evidence accumulating entry by entry until the record is visibly
+  bulletproof, a deliberate hardening session serving only to
+  accelerate or bypass that accumulation. The counterweight, recorded
+  at logging: hardening is timing insurance rather than mere
+  acceleration — organic challenges probe what usage happens to touch,
+  while the hardening trigger front-runs the moment where being wrong
+  is expensive, and the test of time only works if time supplies the
+  tests before load does. Also noted: PAR-0003 and PAR-0004 landing
+  without hardening shows drafting needs none, but both sit Proposed
+  and govern nothing, so they do not yet bear on the Accepted gate —
+  which is what the doubt is actually about, including what would flip
+  Proposed to Accepted under the organic route. Semantics and the
+  `DEFERRED.md` trigger stand while the doubt does. Fuller record:
+  `SESSION-2026-08-02-template-convention.md`, Exchange 2.
 - **2026-08-02 — "One primary per decision might be bad practice —
   shouldn't a session's argument land in one session record?"** Raised
   by Kendrick against the per-argument practice the PAR-rename and

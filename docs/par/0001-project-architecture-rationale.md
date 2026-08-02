@@ -380,18 +380,25 @@ curated record's fidelity is that it is written while the session is live
 and the reasoning is still in hand — not a raw copy sitting behind it,
 which would only move the reconstruction later.
 
-The work list is derived, not hand-maintained: it is exactly the set of
-record citations pointing below tier 2 in `docs/ARCHITECTURE.md`,
-`README.md`, and `AGENTS.md`. Sequencing calls that are genuinely a plan's
-own — scope, order, build sequence, definition of done — are not
-architecture decisions and stay in their plans.
+The work list is stated debt, not derived. Deriving it from the
+below-tier-2 citations in `docs/ARCHITECTURE.md`, `README.md`, and
+`AGENTS.md` proved incomplete (2026-08-02): a system settled in a session
+but never cited from tier 1 escapes that derivation entirely, and two
+had. The enumerated systems live in the distillation entry in `DEBT.md` —
+hand-stating them is that file's charter, since no marker and no
+derivation can carry this gap — and the citation set remains the roll-up
+checklist each acceptance amends. Sequencing calls that are genuinely a
+plan's own — scope, order, build sequence, definition of done — are not
+architecture decisions and stay in their plans. (Primary:
+`SESSION-2026-08-02-distill-worklist.md`, which also holds the rejected
+alternative — `Proposed` stubs as tier-2 placeholders.)
 
 ## Consequences
 
 - `DESIGN-SESSION.md`, `DESIGN-BRIEF.md`, and the exhausted `PLAN.md` live
-  in `docs/archive/`. `PLAN-TOOL-CONTRACT.md` and `PLAN-DISTILL.md` move
-  there when they freeze. They are never edited; distillation reads them,
-  it does not touch them.
+  in `docs/archive/`. `PLAN-TOOL-CONTRACT.md` moves there when it
+  freezes; `PLAN-DISTILL.md` froze, superseded, on 2026-08-02. They are
+  never edited; distillation reads them, it does not touch them.
 - Resolves two `DEFERRED.md` entries, which move out: *within-record
   authority for the design session* (the rule is stated above, without
   ever amending the frozen record) and *how frozen planning documents
@@ -403,8 +410,9 @@ architecture decisions and stay in their plans.
 - The gap between decided and distilled is present debt: filed in
   `DEBT.md`, retired one entry of work at a time as distillations land.
   Until a decision's rationale exists, its exchange or gate citation
-  remains the governing pointer. Sequence and working rules:
-  `docs/PLAN-DISTILL.md`.
+  remains the governing pointer. The enumerated systems and their order
+  live in that entry; `docs/archive/PLAN-DISTILL.md` sequenced this
+  before it was superseded (2026-08-02).
 - The debt and records machinery settled in archived `PLAN.md` is on that
   work list rather than waiting on an evolution trigger. It is the
   most-doubted mechanism in the repo and has been fended off three times
@@ -430,8 +438,9 @@ architecture decisions and stay in their plans.
   carries a challenge surface, and undistilled decisions leave recurring
   doubts (the debt system, three times over) re-litigated and unrecorded.
   What survived of the challenge became working rules and sequencing in
-  `docs/PLAN-DISTILL.md`: front-load while session memory is fresh, order
-  by doubt traffic, quote decisive source sentences verbatim. Fuller
+  `docs/archive/PLAN-DISTILL.md`: front-load while session memory is
+  fresh, order by doubt traffic, quote decisive source sentences
+  verbatim. Fuller
   record: none filed (2026-08-01 session).
 - **2026-08-02 — "Admitting friction evidence would creep the section
   toward the curated scrapbook the exclusion paragraph forbids."**

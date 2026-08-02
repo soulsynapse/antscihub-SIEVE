@@ -13,11 +13,12 @@ what a governing record holds — follow the pointers.
    order are PAR-0001.
 3. `DEBT-AUTO.txt` — what is presently owed in-tree; `DEFERRED.md` — what is
    not yet due. Building from DEFERRED.md goes poorly, by design.
-4. The live planning cycles: `docs/PLAN-TOOL-CONTRACT.md` (code) and
-   `docs/PLAN-DISTILL.md` (record distillation, PAR-0001). Exhausted plans
-   sit in `docs/archive/` — `PLAN.md` there still holds the layout
-   settlement, load-bearing until its distillation lands; marker form
-   rule v1 and the classification rule are PAR-0002.
+4. The live planning cycle: `docs/PLAN-TOOL-CONTRACT.md` (code).
+   Distillation runs system by system from its `DEBT.md` entry
+   (PAR-0001) — no live plan. Exhausted plans sit in `docs/archive/` —
+   `PLAN.md` there still holds the layout settlement, load-bearing until
+   its distillation lands; marker form rule v1 and the classification
+   rule are PAR-0002.
 
 ## The working loop
 

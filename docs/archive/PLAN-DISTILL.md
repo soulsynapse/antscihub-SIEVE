@@ -1,5 +1,13 @@
 # Distillation plan
 
+**Superseded and frozen, 2026-08-02.** Phases 3–6 never ran. The
+citation-derived work list this plan sequenced proved incomplete —
+settled systems never cited from tier 1 escaped it — and the work list
+is now stated debt: the enumerated systems in `DEBT.md`, each drafted
+and accepted in its own session. Primary:
+`SESSION-2026-08-02-distill-worklist.md`. Nothing below this note is
+edited again.
+
 Scope: retire the distillation entry in `DEBT.md` — every record
 citation pointing below tier 2 in `docs/ARCHITECTURE.md`, `README.md`,
 or `AGENTS.md` becomes a `PAR-NNNN` citation. The debt-and-records

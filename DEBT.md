@@ -5,14 +5,41 @@ one category of this type, tracked automatically in DEBT-AUTO.txt; entries
 here are the gaps no marker can carry. Nothing goes here that is not
 presently owed.
 
-- **Founding decisions not yet distilled** (2026-08-01, PAR-0001).
-  Every record citation that points below tier 2 in
-  `docs/ARCHITECTURE.md`, `README.md`, or `AGENTS.md` — the
-  exchange-number and plan-gate citations — names a settled architecture
-  decision still owed its retrospective rationale. Retired citation by
-  citation as distillations land, each amending its tier-1 citation in the
-  same commit. Done when those three documents cite no record deeper than
-  `docs/par/`. Sequence and working rules: `docs/PLAN-DISTILL.md`.
+- **Founding decisions not yet distilled** (2026-08-01, PAR-0001; work
+  list restated as this enumeration 2026-08-02, primary:
+  `SESSION-2026-08-02-distill-worklist.md` — the citation-derived list
+  proved incomplete, two settled systems having no tier-1 citation at
+  all). Each system below is owed its rationale, drafted and assessed in
+  its own session; the exchange or gate citation governs until then.
+  Retired system by system, each acceptance amending the tier-1
+  citations in the same commit. Done when every system here is governed
+  from `docs/par/` and the three tier-1 documents cite nothing deeper.
+  Priority: PAR-0003's design session first; then dependency order,
+  roots first, overriding intuition about importance. The systems:
+  - shape algebra and classification-by-form (Ex 3, 5) — root
+  - param vs. preference (Ex 2) — root; discussion owed
+  - the tool contract (Ex 5 rebuilt, Ex 2; claims invariant 1's
+    `archive/PLAN.md` Phase 1 decision 2 citation) — first after the roots
+  - the executor (Ex 3, 4, 6) — second
+  - intent/progress split and the store (Ex 1, 5) — discussion owed
+  - handles and materialization (Ex 2) — merge-into-store question open
+  - the selection mechanism (Ex 7 as rebuilt by Ex 8) — needs refinement;
+    merge-into-executor question open
+  - the harness (Ex 8, 9) — whether it genuinely exists as a system,
+    unbuilt and possibly argued against elsewhere, is its first question
+  - GUI type-dispatch and the closed vocabularies (Ex 1, 2) — owed
+    elaboration to be perfectly clear
+  - pipeline construction (Ex 2, 6, 7)
+  - run semantics (Ex 3, 4) — boundary against shape algebra open
+  - SIEVE format versioning and migration (Ex 1, 9) — SIEVE-facing
+    formats only, likely stricter; repo-machinery formats are PAR-0002's
+  - enforcement lives in tests, never convention (Ex 1, 5, 6) — gated on
+    PAR-0003's design settling what the explicit enforcement is
+  - the layout settlement (`archive/PLAN.md` Phase 3) — last; cites the
+    component records
+  Unclaimed tier-1 citations to assign at the owning distillation:
+  README's Exchange 1 (contracts derive from `Params`) and Exchange 6
+  (enforcement in tests).
 
 - **The runbook layer is named but not designed** (2026-08-02,
   PAR-0003). The how-to guides — derived-and-tested runbooks for the

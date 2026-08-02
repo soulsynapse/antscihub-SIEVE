@@ -127,7 +127,7 @@ The machinery that makes a placeholder count as a debt entry. This must exist
 not one-shot — it is large, and each step below still gets its concrete
 proposal (signatures, format, test cases) confirmed before code lands:
 
-- [ ] 1. `sieve.debt` with `Owed` — the exception class alone, real code;
+- [x] 1. `sieve.debt` with `Owed` — the exception class alone, real code;
       adds the exception module to the closed machinery list.
 - [ ] 2. The enumerator — a library function taking a root path, walking
       `.py` files, AST-matching rule v1, returning canonical entries;
@@ -212,9 +212,9 @@ format is the retrofit-expensive artifact).
   the enumerator must always find, failing the suite if it finds zero there.
   Without it, a dead enumerator regenerates an empty ledger and passes
   vacuously — "no debt" and "monitor broken" must be distinguishable.
-- **The machinery class is closed and enumerated:** the enumerator + mismatch
-  test, the regen command, the conftest adapter, and the sentinel fixture are
-  real code from this phase — the debt machinery is never itself a
+- **The machinery class is closed and enumerated:** the `Owed` exception
+  module, the enumerator + mismatch test, the regen command, the conftest
+  adapter, and the sentinel fixture are real code from this phase — the debt machinery is never itself a
   placeholder, because it is what gives every placeholder its meaning.
   Membership is this list, not anyone's judgment that their code "is
   machinery"; extending the list is a placement decision that goes through the

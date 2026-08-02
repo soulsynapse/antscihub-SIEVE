@@ -5,15 +5,18 @@ what a governing record holds — follow the pointers.
 
 ## Orientation order
 
-1. `README.md` — the map: locations, the four governing documents and their
-   authority order, the debt files, the mismatch runbook.
-2. `docs/ARCHITECTURE.md` — before writing code. Its authority line: on
-   silence or conflict, `docs/DESIGN-SESSION.md` governs.
+1. `README.md` — the map: locations, the record tiers and their walking
+   path, the debt files, the mismatch runbook.
+2. `docs/ARCHITECTURE.md` — before writing code. The one-stop shop: it
+   reports, it does not govern. Read deeper — `docs/adr/`, then
+   `docs/archive/` — only until convinced; the walking path and authority
+   order are ADR-0001.
 3. `DEBT-AUTO.txt` — what is presently owed in-tree; `DEFERRED.md` — what is
    not yet due. Building from DEFERRED.md goes poorly, by design.
-4. `docs/PLAN.md` — frozen record of the conformance cycle: marker form rule
-   v1 (Phase 2), the layout settlement (Phase 3), the definition of done.
-   "After this plan" names what comes next.
+4. The live planning cycles: `docs/PLAN-TOOL-CONTRACT.md` (code) and
+   `docs/PLAN-DISTILL.md` (record distillation, ADR-0001). Exhausted plans
+   sit in `docs/archive/` — `PLAN.md` there holds marker form rule v1, the
+   layout settlement, and the classification rule, all still load-bearing.
 
 ## The working loop
 
@@ -21,15 +24,19 @@ what a governing record holds — follow the pointers.
   until the proposal is confirmed. A plan settles sequence and definition of
   done, never build authorization.
 - Proposals arrive complete enough to be judged whole; lead with the
-  concrete.
+  concrete. A proposal names the records that govern it; one that can cite
+  none says so — that absence is signal, not license.
 - A contradiction — between records, or between a record and the tree — is
   named out loud before anything is built on top of it, never silently
   resolved toward the easiest reading.
 
 ## Where records go
 
-- A settled decision → the active planning document's gate. `docs/PLAN.md`
-  is frozen under its name; a successor cycle takes a new name.
+- A settled decision → the active planning document's gate; when it is an
+  architecture decision (scope: ADR-0001), it is recorded as an ADR in
+  `docs/adr/` — with `docs/ARCHITECTURE.md` amended in the same commit —
+  and the gate cites it. An exhausted plan freezes under its name and moves
+  to `docs/archive/`; a successor cycle takes a new name.
 - A not-yet-due intention → `DEFERRED.md`, always with the trigger that
   makes it due.
 - A present gap no marker can carry → `DEBT.md`.

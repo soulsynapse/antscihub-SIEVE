@@ -9,18 +9,32 @@ and real code lands next. This README is the map — where things are and which
 record governs them. It restates nothing a governing doc or the tree already
 records; when it seems to disagree with one of them, the other is right.
 
-## The four documents
+## The records
 
-- [docs/DESIGN-BRIEF.md](docs/DESIGN-BRIEF.md) — the design prompts, verbatim,
-  including the rejected §8 EDIT kept as a recorded alternative.
-- [docs/DESIGN-SESSION.md](docs/DESIGN-SESSION.md) — the argument that
-  determines the code, in nine exchanges. **The authoritative record**: where
-  any other document is silent or conflicts, this one governs.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the synthesis: seven
-  components, the authoring and execution flows, five invariants with their
-  failure modes. Read this first when writing code.
-- [docs/PLAN.md](docs/PLAN.md) — the conformance plan: phase gates, the
-  settled layout, marker form rule v1, and the definition of done.
+Three tiers, read downward only until convinced. The walking path and the
+authority order — deeper governs, the synthesis reports and rolls up — are
+[ADR-0001](docs/adr/0001-adopt-adrs.md).
+
+1. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the synthesis: seven
+   components, the authoring and execution flows, five invariants with
+   their failure modes. The one-stop shop; read this first, usually last.
+2. [docs/adr/](docs/adr/) — architecture decision records: the dated
+   reasoning, one decision per file, live decisions only. An accepted ADR
+   changes three ways and no others — revised in place when nothing else
+   in the repo changes, appended to when a challenge is raised and held
+   off, or superseded by a later ADR.
+3. `docs/archive/` — the frozen primary records:
+   [DESIGN-BRIEF.md](docs/archive/DESIGN-BRIEF.md) (the design prompts,
+   verbatim, including the rejected §8 EDIT kept as a recorded
+   alternative), [DESIGN-SESSION.md](docs/archive/DESIGN-SESSION.md) (the
+   argument that determines the code, in nine exchanges), and
+   [PLAN.md](docs/archive/PLAN.md) (the exhausted conformance plan:
+   phase gates, the settled layout, marker form rule v1, the definition
+   of done).
+
+The live planning cycle is
+[docs/PLAN-TOOL-CONTRACT.md](docs/PLAN-TOOL-CONTRACT.md); a plan moves to
+the archive when exhausted.
 
 ## The tree
 

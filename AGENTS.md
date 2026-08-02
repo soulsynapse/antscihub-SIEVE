@@ -42,8 +42,10 @@ what a governing record holds — follow the pointers.
   `docs/archive/SESSION-<date>-<slug>.md` in the same commit, cited from
   the rationale's Context. Quote the person verbatim, compress the
   argument, keep the positions that lost, number the exchanges so they can
-  be cited. Start it when the first decision lands, append as the session
-  runs, freeze it at session close. A distillation files none — it is
+  be cited. Start it when the first decision lands, append as the argument
+  runs, freeze it when the argument closes — one primary per argued
+  decision-cluster; a sitting that settles separable arguments files
+  separate primaries (PAR-0001). A distillation files none — it is
   already reading its primary. Keep decisions and the alternatives that
   died with their reasons; never the route taken to reach them.
 - A rationale drafted but not yet attacked → `Status: Proposed`, which is

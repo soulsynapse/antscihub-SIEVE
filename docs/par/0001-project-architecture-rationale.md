@@ -285,10 +285,22 @@ is compressed; and the positions that were rejected are kept with their
 reasons, because a record showing only the winner cannot be re-examined at
 all. Numbered exchanges make passages citable, as in the design session.
 
-A session record is live for the duration of its session — written as the
-argument lands and appended to as it continues — and freezes when the
-session closes, the way a plan freezes when exhausted. After that it is
-never edited.
+Its unit is the argument, not the sitting (2026-08-02). One working
+session that settles two separable arguments files two primaries, and a
+record freezes when its argument closes even if the conversation
+continues — `SESSION-2026-08-02-par-rename.md` froze while the same
+conversation went on to produce `SESSION-2026-08-02-par-scope.md`. This
+is the granularity rule reaching tier 3: a frozen primary is loaded to
+re-examine one decision, so the file should be that argument and nothing
+else. A monolithic session log charges every future re-examination the
+context cost of the whole session; per-argument primaries keep the
+frozen log clean and addressable in decision-sized pieces. Decisions
+argued inseparably share one primary — near-decomposability again.
+
+A session record is live for the duration of its argument — written as
+the argument lands and appended to as it continues — and freezes when
+the argument closes, the way a plan freezes when exhausted. After that
+it is never edited.
 
 Its weight is proportional to what the session decided, and
 `DESIGN-SESSION.md` is not the template. That record is unusually dense
@@ -396,3 +408,14 @@ architecture decisions and stay in their plans.
   with its resolution or the lack of one, so the trigger-less, unbounded
   character of a scrapbook never arrives. Fuller record:
   `SESSION-2026-08-02-par-rename.md`, Exchange 4.
+- **2026-08-02 — "One primary per decision might be bad practice —
+  shouldn't a session's argument land in one session record?"** Raised
+  by Kendrick against the per-argument practice the PAR-rename and
+  PAR-scope records had just established apropos, and resolved by him
+  in its favor: a single record of a long session, "for long sessions,
+  makes massive files that have to load into context" to assess any one
+  decision — bloating exactly the resource the tier exists to spare —
+  where per-argument primaries keep the frozen log clean and granularly
+  addressable. Held, and the practice formalized above: the unit is the
+  argument, not the sitting. Fuller record: none filed; the two
+  per-argument records of 2026-08-02 are the demonstration.

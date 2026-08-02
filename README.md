@@ -36,7 +36,8 @@ every placeholder its meaning):
 - `tests/test_debt.py`, `test_automatic_ledger.py`, `test_adapter.py`,
   `test_import.py` — the machinery's own tests, including the mismatch test.
 
-Placeholders (each a module raising `Owed`; the docstring and reason point at
+The components (which of these are still placeholders is `DEBT-AUTO.txt`'s
+job to say, not this list's; a placeholder's docstring and reason point at
 the governing sections — follow the pointer before building):
 
 - `src/sieve/kernel.py` — the five-shape op algebra, one design unit.

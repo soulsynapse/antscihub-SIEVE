@@ -330,18 +330,27 @@ placeholder-skips exactly matching the ledger's test-tree entries.
 **Definition of done** (this is the scope reading of "conform the entire repo";
 approving this plan confirms it):
 
-- [ ] Every component the crop milestone reaches has a location holding real
+- [x] Every component the crop milestone reaches has a location holding real
       code or a placeholder; every component it doesn't reach has a
       not-yet-due entry with a trigger and no file in the tree.
-- [ ] Both hand-authored debt files exist and are populated from this pass.
-- [ ] The automatic ledger exists, is generated, is checked in, and matches a
-      fresh enumeration.
-- [ ] `pyproject.toml`, real `.gitignore`, all design docs committed.
-- [ ] README is the map.
-- [ ] A tests location exists holding the (real) debt machinery and the
+- [x] Both hand-authored debt files exist and are populated from this pass.
+      (The pass produced no unfixed findings, so DEBT.md's population is
+      its truthful near-emptiness.)
+- [x] The automatic ledger exists, is generated, is checked in, and matches a
+      fresh enumeration. (Regen verified a no-op at 10 entries.)
+- [x] `pyproject.toml`, real `.gitignore`, all design docs committed.
+- [x] README is the map.
+- [x] A tests location exists holding the (real) debt machinery and the
       (placeholder) conformance suite.
-- [ ] The anti-bureaucracy invariant holds: no hand-maintained record
-      duplicates anything derivable from the tree.
+- [x] The anti-bureaucracy invariant holds: no hand-maintained record
+      duplicates anything derivable from the tree. (The pass caught one:
+      the README's first draft grouped locations as real-vs-placeholder,
+      a derivable status in disguise — reworded the same day to a
+      decision-based grouping, with placeholder status left to
+      `DEBT-AUTO.txt`.)
+
+All seven checked 2026-08-01. The plan's endpoint is reached; crop gets its
+own planning cycle, per "After this plan."
 
 ---
 

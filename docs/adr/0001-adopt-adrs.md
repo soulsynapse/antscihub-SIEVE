@@ -47,13 +47,13 @@ otherwise immutable.
 1. **Revision** — the text is improved and nothing else in the repo
    changes: a clarification, tightened wording, an internal contradiction
    repaired, a consequence made explicit that was already implied. Edited
-   in place, with a line appended to a final `## Revisions` section. The
+   in place, with a line appended to the `## Revisions` section. The
    test is mechanical and the commit proves it: a revision commit touches
    this file and nothing else. If the edit requires another file to
    change, it was never a revision.
 2. **Challenge** — a doubt was raised against the decision and did not
-   survive. The decision text is untouched; an entry is appended to a
-   final `## Challenges` section.
+   survive. The decision text is untouched; an entry is appended to the
+   `## Challenges` section.
 3. **Supersession** — anything that changes what gets built or how a
    decision is adjudicated. A new ADR, dated later, cites this one; this
    record's status line is updated and its text is left alone.
@@ -108,14 +108,21 @@ the synthesis may be momentarily wrong but never authoritatively wrong,
 and when a decision is superseded everything rolls back up so that only
 the tier-1 document needs to be read.
 
-**The archive.** `docs/archive/` holds terminal records: a record moves
-there once, never transitions again, and is never edited (mechanical link
-repairs at the moment of moving excepted). A superseded ADR moves there
-when its successor lands — it is terminal by then, and `docs/adr/` is kept
-to live decisions only. Citable names are bare filenames — "DESIGN-SESSION.md
-Exchange 5" — which survive the move, and a retired name is never reused. Location-as-status was previously rejected for records with
-live status (see Consequences); it is sound here because frozen is
-terminal — there is no status left to maintain.
+**Terminal records.** `docs/archive/` holds the primary records — session
+transcripts, briefs, exhausted plans: a record moves there once, never
+transitions again, and is never edited (mechanical link repairs at the
+moment of moving excepted). A superseded ADR is terminal too, but it is
+not a primary record — it is a distillation that died — so it retires to
+`docs/adr/retired/` instead, and `docs/adr/` is kept to live decisions
+only. It governs nothing once retired: a successor carries forward
+everything of the old decision it keeps, which is what makes the roll-up
+lossless, so "the archive governs only where no ADR speaks" never reaches
+a retired ADR. What retirement preserves is the reasoning trail. Citable
+names are bare filenames — "DESIGN-SESSION.md Exchange 5" — which survive
+either move, and a retired name is never reused. Location-as-status was
+previously rejected for records with live status (see Consequences); it is
+sound in both places because frozen is terminal — there is no status left
+to maintain.
 
 **Every architecture decision gets an ADR, retrospectively too.** The
 founding decisions — the ones `docs/ARCHITECTURE.md` cites by exchange
@@ -200,3 +207,15 @@ architecture decisions and stay in their plans.
   `docs/PLAN-DISTILL.md`: front-load while session memory is fresh, order
   by doubt traffic, quote decisive source sentences verbatim. Fuller
   record: none filed (2026-08-01 session).
+
+## Revisions
+
+- **2026-08-01 — A superseded ADR retires to `docs/adr/retired/` rather
+  than `docs/archive/`.** The archive is defined as the primary records —
+  transcripts, briefs, exhausted plans — and a dead distillation is not
+  one of those; filing it there put a tier-2 record in tier 3, where the
+  walk down lands in something that is itself walked down from. Made
+  explicit alongside it, because the move would otherwise leave it
+  ambiguous: a retired ADR governs nothing, which holds only because a
+  successor carries forward everything of the old decision it keeps.
+  Repaired at the same time: two sections could not both be "final."

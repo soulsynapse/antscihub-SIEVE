@@ -410,6 +410,13 @@ content: drafted but not yet attacked, where it had previously meant only
 Distillations are exempt: their question is fidelity to a checkable
 source, not correctness.
 
+The derivation had a defect on first run, found by running it rather than
+reasoning about it: unanchored, `grep -l "Status: Proposed"` matched
+ARCH-0001, because ARCH-0001 quotes the query. Anchored to line start it
+is exact. Small, but it is the Exchange 3 lesson arriving on schedule —
+the rule had been correct in the abstract for ten minutes and wrong the
+first time it was executed.
+
 One blind spot surfaced immediately on writing it down. ARCH-0001 cannot
 be marked Proposed, because "Proposed does not govern, the prior source
 still does" presupposes a prior source and the founding record has none —

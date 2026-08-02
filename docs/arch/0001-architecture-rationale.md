@@ -257,7 +257,9 @@ decision is truly load-bearing — when enough depends on it that being
 wrong is expensive — and until then the rationale sits `Proposed`. So
 the status line is the debt marker: a proposed rationale is its own
 un-hardened entry, the way a placeholder is its own debt entry, and
-`grep -l "Status: Proposed" docs/arch/*.md` is the list. Nothing is
+`grep -l "^Status: Proposed" docs/arch/*.md` is the list — anchored,
+because an unanchored match also finds records that merely quote the
+query, this one included. Nothing is
 maintained per record; the trigger is stated once in `DEFERRED.md`.
 
 **Raw transcripts are not retained.** The tooling writes one per session

@@ -11,8 +11,8 @@ the automatic ledger.
   deliberate one, where Kendrick already holds the answer and attacks the
   draft; acceptance is that session's output. Due when: the decision
   becomes truly load-bearing — enough depends on it that being wrong is
-  expensive. The list is not maintained here: `grep -l "Status: Proposed"
-  docs/arch/*.md` derives it, the status line being the marker the way a
+  expensive. The list is not maintained here: `grep -l "^Status: Proposed"
+  docs/arch/*.md` derives it (anchored — unanchored matches prose), the status line being the marker the way a
   placeholder is its own debt entry. A distillation is exempt — its
   question is fidelity to a source that can be checked, not correctness.
   **ARCH-0001 is the one record the derivation misses**: it is Accepted

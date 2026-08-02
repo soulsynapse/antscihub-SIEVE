@@ -121,8 +121,11 @@ choice never touches configuration.
 Five rules. Each is load-bearing, and breaking any one is how this becomes
 unmaintainable.
 
-1. **Adding a feature touches one file.** If it needs two, stop and fix the
-   architecture rather than proceeding.
+1. **Adding a tool writes one file.** Anything the tool needs that doesn't
+   exist — a field type, a view, an executor offering — is declared, not
+   reached for; building the missing capability is a separate change under its
+   own contract. A tool that can't be written in one file means a declaration
+   point is missing — stop and fix that, don't spread the tool.
 2. **The GUI dispatches on types, never on tool identity.** The first
    `if tool == "crop"` is the beginning of the end.
 3. **Classification comes from the shape of what you wrote, never from a flag you

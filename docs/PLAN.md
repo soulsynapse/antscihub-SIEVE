@@ -29,23 +29,29 @@ criterion and claims to be nothing more.
 
 ## Phase 1 — Repo mechanics
 
-**Gate (three decisions):**
+**Gate (three decisions; all settled 2026-08-01):**
 
-1. **Is the §8 EDIT in `DESIGN-BRIEF.md` live?** It argues for the
-   scripts-on-a-standard-interface approach that Exchange 8 rejects and
-   `ARCHITECTURE.md` encodes as rejected. Under the milestone-reachability
-   rule (Phase 3) this gates no file placement — the harness gets no
-   placeholder either way. It decides whether the uncommitted
-   `DESIGN-BRIEF.md` modification is committed as-is, and the wording of the
-   harness's not-yet-due entry: deferred-with-trigger, or
-   rejected-with-rationale.
-2. **Invariant 1 wording.** "Adding a feature touches one file" is false as
-   written for new field types, new view layers, and schema migrations.
-   Candidate rewording is on record (adding a *tool* writes one file; anything
-   it needs that doesn't exist is declared rather than reached for). Settled
-   before `ARCHITECTURE.md` is committed, or the false wording is enshrined in
-   the file agents consult first.
-3. **Package name, and whether `src/` layout.**
+1. **Is the §8 EDIT in `DESIGN-BRIEF.md` live? — settled: no.** Form 1
+   (verified statistical equivalence, the measured-equivalence registry) is
+   the adopted architecture, as `ARCHITECTURE.md` and invariant 4 encode. The
+   EDIT stays in the brief as a recorded alternative — a steelman of the
+   interpreter/handshake approach, not a reversal. The harness's not-yet-due
+   entry is worded **deferred-with-trigger** (trigger: the first second
+   implementation of any op — which is also the moment the EDIT's
+   lopsided-usage bet becomes testable against evidence).
+2. **Invariant 1 wording — settled.** "Adding a feature touches one file" was
+   false as written for new field types, new view layers, and schema
+   migrations. Settled wording: **"Adding a tool writes one file.** Anything
+   the tool needs that doesn't exist — a field type, a view, an executor
+   offering — is declared, not reached for; building the missing capability
+   is a separate change under its own contract. A tool that can't be written
+   in one file means a declaration point is missing — stop and fix that,
+   don't spread the tool." `ARCHITECTURE.md` was committed with the old
+   wording ahead of this gate, so the reword lands as an amendment commit.
+3. **Package name and layout — settled.** Import name `sieve`, distribution
+   name `antscihub-sieve`, `src/` layout (`src/sieve/`). The `src/` split
+   also fixes the Phase 2 enumeration domain physically: `src/sieve` and
+   `tests/` are the roots, with no exclusion list to maintain.
 
 The repo becomes a real Python project with nothing SIEVE-specific in it.
 
@@ -53,8 +59,8 @@ The repo becomes a real Python project with nothing SIEVE-specific in it.
   existing `.python-version`.
 - A real `.gitignore`.
 - The package importable; a `tests/` directory with an empty suite that runs.
-- Commit `ARCHITECTURE.md` (with invariant 1 reworded per decision 2) and
-  resolve the uncommitted `DESIGN-BRIEF.md` state (per decision 1).
+- Amend `ARCHITECTURE.md` invariant 1 to the settled wording (both design-doc
+  commits already happened in 5428fc9; only the reword remains).
 
 Exit: editable install succeeds, `pytest` runs green on an empty suite, `git
 status` clean, all four design docs tracked.
@@ -190,7 +196,7 @@ cannot be evaluated without the suite any more than crop can run without the
 executor. Those get placeholders. The **harness** is not reached — crop has one
 implementation of everything and no equivalence question — so it gets a
 not-yet-due entry (trigger: the first second implementation of any op) and no
-file, regardless of how decision 1 lands.
+file; decision 1 settled its wording as deferred-with-trigger.
 
 Granularity call the layout proposal must make explicitly: crop reaches
 `Resample` but not `Fold`, `Window`, `PixelMap`, or `Opaque`. Either the

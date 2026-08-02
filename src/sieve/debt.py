@@ -6,6 +6,7 @@ class are defined in docs/PLAN.md, Phase 2.
 """
 
 import ast
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,17 @@ from pathlib import Path
 ROOTS = ("src/sieve", "tests")
 
 MODULE_QUALNAME = "<module>"
+
+LEDGER_NAME = "DEBT-AUTO.txt"
+FORMAT_VERSION = 1
+MARKER_RULE = "v1"
+
+_HEADER = (
+    "# SIEVE automatic ledger. Generated; never hand-edit.\n"
+    "# Regenerate: python -m sieve.debt write\n"
+    f"format-version: {FORMAT_VERSION}\n"
+    f"marker-rule: {MARKER_RULE}\n"
+)
 
 
 class Owed(Exception):
@@ -63,6 +75,36 @@ def enumerate_markers(repo_root: Path, roots: Sequence[str] = ROOTS) -> list[Ent
             )
         seen.add(key)
     return sorted(entries, key=lambda e: (e.path, e.qualname))
+
+
+def serialize(entries: Sequence[Entry]) -> bytes:
+    """The automatic ledger's canonical bytes: format-version 1.
+
+    Column 0 is a key line (`path :: qualname`); four-space indentation is
+    reason content, so a multiline reason needs no escaping. Additive-only
+    evolution; nothing derivable beyond the entries themselves.
+    """
+    parts = [_HEADER]
+    if entries:
+        parts.append("\n")
+        for entry in sorted(entries, key=lambda e: (e.path, e.qualname)):
+            parts.append(f"{entry.path} :: {entry.qualname}\n")
+            for line in entry.reason.split("\n"):
+                parts.append(f"    {line}\n")
+    return "".join(parts).encode("utf-8")
+
+
+def main(argv: Sequence[str]) -> int:
+    """The one-command write mode; the mismatch test is the only check."""
+    if len(argv) not in (1, 2) or argv[0] != "write":
+        print("usage: python -m sieve.debt write [repo_root]", file=sys.stderr)
+        return 2
+    repo_root = Path(argv[1]) if len(argv) == 2 else Path.cwd()
+    entries = enumerate_markers(repo_root)
+    ledger = repo_root / LEDGER_NAME
+    ledger.write_bytes(serialize(entries))
+    print(f"{ledger}: {len(entries)} entries (marker rule {MARKER_RULE})")
+    return 0
 
 
 def _scan_file(file: Path, repo_root: Path) -> list[Entry]:
@@ -189,3 +231,7 @@ def _reason(node: ast.Raise, has_canonical: bool, rel: str, qualname: str) -> st
     if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value):
         raise EnumerationError(f"{where}: marker reason must be one non-empty static string literal")
     return arg.value
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

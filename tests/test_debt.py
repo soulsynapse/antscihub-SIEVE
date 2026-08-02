@@ -3,11 +3,14 @@ from pathlib import Path
 import pytest
 
 from sieve.debt import (
+    LEDGER_NAME,
     MODULE_QUALNAME,
     Entry,
     EnumerationError,
     Owed,
     enumerate_markers,
+    main,
+    serialize,
 )
 
 
@@ -132,3 +135,63 @@ def test_duplicate_key_is_an_enumeration_error(tmp_path):
 def test_missing_root_is_an_enumeration_error(tmp_path):
     with pytest.raises(EnumerationError):
         enumerate_markers(tmp_path, roots=("nowhere",))
+
+
+HEADER = (
+    b"# SIEVE automatic ledger. Generated; never hand-edit.\n"
+    b"# Regenerate: python -m sieve.debt write\n"
+    b"format-version: 1\n"
+    b"marker-rule: v1\n"
+)
+
+
+def test_serialize_golden_bytes():
+    entries = [
+        Entry("src/sieve/store.py", MODULE_QUALNAME, "store: content-addressed blob store"),
+        Entry("src/sieve/kernel.py", "lower", "kernel: lower() producing a Resample"),
+    ]
+    assert serialize(entries) == HEADER + (
+        b"\n"
+        b"src/sieve/kernel.py :: lower\n"
+        b"    kernel: lower() producing a Resample\n"
+        b"src/sieve/store.py :: <module>\n"
+        b"    store: content-addressed blob store\n"
+    )
+
+
+def test_serialize_zero_entries_is_header_only():
+    assert serialize([]) == HEADER
+
+
+def test_serialize_multiline_reason():
+    entries = [Entry("pkg/m.py", "f", "first\n\nsecond")]
+    assert serialize(entries) == HEADER + (
+        b"\n"
+        b"pkg/m.py :: f\n"
+        b"    first\n"
+        b"    \n"
+        b"    second\n"
+    )
+
+
+def test_serialize_is_byte_deterministic():
+    entries = [Entry("pkg/m.py", "f", "reason")]
+    out = serialize(entries)
+    assert out == serialize(list(entries))
+    assert b"\r" not in out
+
+
+def test_write_mode_writes_the_ledger(tmp_path, capsys):
+    make_tree(tmp_path, {"src/sieve/store.py": STORE})
+    (tmp_path / "tests").mkdir()
+    assert main(["write", str(tmp_path)]) == 0
+    ledger = tmp_path / LEDGER_NAME
+    assert ledger.read_bytes() == serialize(enumerate_markers(tmp_path))
+    assert b"src/sieve/store.py :: <module>" in ledger.read_bytes()
+    assert "1 entries" in capsys.readouterr().out
+
+
+def test_write_mode_requires_the_subcommand(capsys):
+    assert main([]) == 2
+    assert main(["frobnicate"]) == 2
+    assert "usage" in capsys.readouterr().err

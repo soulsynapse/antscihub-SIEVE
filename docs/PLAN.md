@@ -133,7 +133,7 @@ proposal (signatures, format, test cases) confirmed before code lands:
       `.py` files, AST-matching rule v1, returning canonical entries;
       unparseable files and form violations are enumeration errors. The
       single roots-and-exclusions definition lives here. Fixture-tree tests.
-- [ ] 3. Ledger format and regen command — the versioned serializer to
+- [x] 3. Ledger format and regen command — the versioned serializer to
       canonical bytes, the one-command write mode, `.gitattributes` with
       `DEBT-AUTO.txt -text`. The published-interface review of the phase.
 - [ ] 4. Mismatch test and sentinel — fresh enumeration diffed against the

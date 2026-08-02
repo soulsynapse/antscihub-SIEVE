@@ -45,6 +45,12 @@ current statement of the reasoning, not the historically faithful one.
 Keeping the ADR name would have every reader import immutability, brevity,
 and one-page skimmability before opening a file that honors none of them.
 
+Primary record for this rewrite: `SESSION-2026-08-02-record-class.md`,
+which holds the argument above in full, including the positions that
+lost. The original 2026-08-01 adoption predates the rule below requiring
+one and has no curated primary; its raw session transcripts survive but
+were never filed.
+
 ## Decision
 
 **Form and name.** An architecture rationale lives in `docs/arch/`, one
@@ -189,6 +195,27 @@ something. Each distillation obeys three rules:
 - **Roll-up per decision.** Each distillation amends the corresponding
   tier-1 citation — exchange number or plan gate to `ARCH-NNNN` — in the
   same commit.
+
+**A rationale argued out in a session files its primary.** A distillation
+already has one — it is reading it. A rationale reasoned out live does
+not, and writing one without filing the session record leaves that
+decision with nothing underneath it. This is not a courtesy: the case for
+living records above is that the archaeological function is discharged
+one tier down, so a rationale with no primary is a rationale that argument
+does not cover. The session record is written into `docs/archive/` as
+`SESSION-<date>-<slug>.md`, in the same commit as the rationale it
+produced, and cited from that rationale's Context.
+
+Its form follows from what it has to survive — re-examination by a reader
+who may reach a different conclusion than the rationale did. So it is
+neither a transcript nor a summary: a transcript of a working session is
+mostly tool calls and drafting, and a summary bakes in one reading and
+discards the material a different one would need. **Quote the person,
+compress the argument, keep what lost.** Human positions appear verbatim,
+because they are short and they do the steering; the surrounding argument
+is compressed; and the positions that were rejected are kept with their
+reasons, because a record showing only the winner cannot be re-examined at
+all. Numbered exchanges make passages citable, as in the design session.
 
 The work list is derived, not hand-maintained: it is exactly the set of
 record citations pointing below tier 2 in `docs/ARCHITECTURE.md`,

@@ -24,8 +24,9 @@ the automatic ledger.
   says "build in the safeguard or it won't happen."
 - **GUI in-process with the executor, or separate** — if separate, the step
   declaration is also a wire format, pushing toward JSON Schema as canonical
-  with Pydantic as one consumer. Due when: the first real contract code (the
-  pipeline file format or the Tool base, per docs/PLAN.md "After this plan").
+  with Pydantic as one consumer. Due when: the Tool base's first real code
+  (`src/sieve/tools/base.py`), where the canonical form of the `Params`
+  declaration first becomes executable.
 - **Eligible-step picker: a mode, or its own keys** — left/right already
   means siblings (DESIGN-SESSION.md, Open). Due when: the GUI's
   step-insertion flow is built.
@@ -55,11 +56,25 @@ the automatic ledger.
   advice at bottleneck nodes — hangs off this; whether SIEVE volunteers the
   advice or answers when asked is undesigned and is decided when this comes
   due. Due when: the executor's first real code.
-- **How a tool declares what it consumes** — Exchange 1's example declares
-  `consumes`/`produces`; Exchange 5's rebuilt one-file example drops them;
-  Exchange 7 makes eligibility a dispatch-table query. Three partial
-  answers, no settlement, and ARCHITECTURE.md cannot arbitrate. Also
-  unpinned: how a second input enters the shape signatures (background
-  subtraction consumes frame + plate; Exchange 4 treats it as `Fold`). Due
-  when: the Tool base's first real code (`src/sieve/tools/base.py`), where
-  both first bite.
+- **How a tool participates in dispatch-derived eligibility** — Exchange 7
+  settles the rule: a tool is eligible when an applicable method exists for
+  the argument value types, so the dispatch table is the eligibility check.
+  What it does not settle is the bridge from a Tool to that table: Exchange
+  5's rebuilt `lower(self, p)` exposes neither the consumed input types nor
+  the requested generic function, while Exchange 1's earlier example had
+  explicit `consumes`/`produces` declarations. Due when: the Tool base's
+  first real code (`src/sieve/tools/base.py`), where that bridge must become
+  executable.
+- **How multiple inputs enter the shape signatures** — background
+  subtraction consumes frame + plate, while Exchange 4 treats it as `Fold`;
+  the settled unary-looking shape signatures do not say how the second input
+  enters. Due when: the five-shape vocabulary's first real code
+  (`src/sieve/kernel.py`), when those signatures become executable.
+- **How frozen planning documents remain discoverable** — plans currently
+  freeze under stable names, preserving their load-bearing pointers. Moving
+  them into `docs/frozen/` would encode lifecycle status as a manually
+  maintained location and break existing pointers; adding an index naming
+  the live plan would duplicate status already declared by the plans
+  themselves. Keep the flat named layout until this question becomes due.
+  Due when: `docs/PLAN-TOOL-CONTRACT.md` freezes as the second frozen planning
+  document, when the current layout first needs reassessment.

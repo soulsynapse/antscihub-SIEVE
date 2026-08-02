@@ -84,18 +84,23 @@ rule v1, and the instruments. **One record — `ARCH-0002` — drafted
 these in `AGENTS.md`, is component decomposition rather than debt
 machinery and moves to Phase 5.
 
-**Gate (one decision): seeding reconstructed challenges.** Kendrick has
-doubted the debt system roughly three times; those fend-offs predate the
-machinery and exist only in his memory. The proposal is to seed the
-record's Challenges section with the doubts he can still reconstruct —
-elicited from him in that session, dated approximately, and marked
-*reconstructed* so they are never mistaken for contemporaneous entries.
-ARCH-0001 neither provides for nor forbids this; the alternative is
-folding them into Context as objections considered, at the cost of not
-being formatted where doubt #4 will look.
+**Gate (one decision): seeding reconstructed challenges — settled
+2026-08-02: no.** Neither option was taken. The doubts Kendrick has
+raised against the debt system (roughly three, predating the machinery
+and existing only in memory) are not reconstructed into a Challenges
+section, nor folded into Context as objections considered. His reason
+decided it: he may not recall them reliably, but they recur on their own
+— three times already — and a recurrence lands as an ordinary
+contemporaneous entry, which is what the section is for. Reconstruction
+would have bought entries of the weakest available kind, to fill a
+section that fills itself.
 
-Exit: the debt machinery is governed from tier 2; its challenge surface
-exists; the reconstructed entries are in whichever home the gate chose.
+Consequence: ARCH-0002 lands with no Challenges section, and that is
+correct rather than an omission. The challenge surface is the record
+existing at tier 2 — somewhere for doubt #4 to land — not entries in it.
+
+Exit: the debt machinery is governed from tier 2 and its challenge
+surface exists.
 
 ---
 
@@ -203,8 +208,7 @@ freezes under its name and moves to `docs/archive/` when exhausted.
   supersede earlier ones") goes flat. Mitigation: any genuine tension
   between founding decisions is resolved explicitly at distillation
   time, on the record — never left to the date rule.
-- **Reconstructed challenges are the paraphrase risk in its purest
-  form** — memory of an argument, formatted as a record. Mitigation:
-  elicited from Kendrick directly, marked reconstructed, and carrying
-  approximate dates; if his reconstruction is too dim to state a doubt
-  crisply, the entry is not written.
+- ~~**Reconstructed challenges are the paraphrase risk in its purest
+  form**~~ — retired 2026-08-02 by the Phase 2 gate: nothing is
+  reconstructed, so the risk has no surface. Challenges accumulate only
+  as doubts actually recur.

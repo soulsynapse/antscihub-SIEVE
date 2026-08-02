@@ -425,6 +425,30 @@ while still owing its hardening, the single case where the status line
 does not carry the debt, and `DEFERRED.md` names it explicitly. The
 derivation is otherwise exact.
 
+## Exchange 15 — The reconstructed-challenges gate, closed
+
+> "I'll fill out the doubts against the debt system whenever, don't leave
+> it open because I might not remember, but I'm sure it'll come up again."
+
+`PLAN-DISTILL.md` Phase 2 had offered two homes for the three doubts
+Kendrick has raised against the debt system: seeded into ARCH-0002's
+Challenges section marked *reconstructed*, or folded into Context as
+objections considered. Neither was taken, and the reason is better than
+either option.
+
+A doubt that genuinely recurs does not need reconstructing — it will
+arrive on its own and land as an ordinary contemporaneous entry, which is
+precisely what the section is for. Reconstruction would have produced
+entries of the weakest available kind (the plan's own risk register:
+memory of an argument, formatted as a record) to pre-fill a section that
+fills itself. The gate is closed rather than left pending, because a
+pending gate depends on recall and the mechanism does not.
+
+Consequence: ARCH-0002 lands with no Challenges section, and that is
+correct rather than an omission. The challenge surface is the record
+existing at tier 2 — somewhere for doubt #4 to land — not entries in it.
+The plan's reconstructed-challenges risk retires with the gate.
+
 ---
 
 ## Where things stand
@@ -448,10 +472,11 @@ derivation is otherwise exact.
 - ARCH-0001 is Accepted and governs, but was formulated here and never
   attacked. Its hardening session is owed, not yet due, named in
   `DEFERRED.md`, and will file its own record.
-- Open, carried out of this session: the three reconstructed doubts
-  against the debt system and whether they belong in Challenges or
-  Context (`PLAN-DISTILL.md` Phase 2 gate); the four fidelity flags in
-  ARCH-0002; the layout settlement's new home in Phase 5.
+- The reconstructed-challenges gate is closed: nothing is reconstructed;
+  Challenges accumulate only as doubts recur. ARCH-0002 correctly has no
+  Challenges section.
+- Open, carried out of this session: ARCH-0002's four fidelity flags and
+  its acceptance; the layout settlement's new home in Phase 5.
 - The 2026-08-01 sessions that adopted the record class have no curated
   primary, and their raw transcripts will expire on the default retention
   timer unread. That reasoning survives only as ARCH-0001's own text and

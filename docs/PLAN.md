@@ -74,25 +74,51 @@ file with that trigger.
 
 ## Phase 2 — Debt infrastructure
 
-**Gate (three decisions):**
+**Gate (three decisions; all settled 2026-08-01):**
 
-4. **Placeholder marker form.** Narrowed (2026-08-01): a real module at its
-   real import path raising a SIEVE-specific exception (not
-   `NotImplementedError`), carrying **only signatures that are quotations from
-   the settled record** — `lower`, `view`, `render`/`sweep`, the five shape
-   signatures — and never inventing one. Where only behavior is settled (the
-   store, GUI internals, the pipeline loader), the docstring points at the
-   governing doc section instead of presenting an API surface. The form must
-   be **statically decidable**: the canonical form is what the enumerator
-   matches, and raising the exception outside it (aliased imports, indirect
-   raises) is out of contract. Remaining call is the exception's name and the
-   exact marker form the enumerator matches on.
-5. **Names and location of the two hand-authored debt files.** On record:
-   suggestion of repo root over `docs/`, since an agent lists the root first.
-6. **Automatic ledger: own file, or generated section inside the present-debt
-   file.** A thumb on the scale, not a verdict: the mismatch check compares
-   bytes, which is trivial for an own-file ledger and requires delimited-region
-   comparison inside a hand-edited file.
+4. **Placeholder marker form — settled.** As narrowed earlier the same day: a
+   real module at its real import path raising a SIEVE-specific exception,
+   carrying **only signatures that are quotations from the settled record** —
+   `lower`, `view`, `render`/`sweep`, the five shape signatures — never
+   inventing one; where only behavior is settled (the store, GUI internals,
+   the pipeline loader), the docstring points at the governing doc section
+   instead of presenting an API surface. The remaining calls are now made.
+   The exception is **`sieve.debt.Owed`** — the plan's own vocabulary,
+   grep-distinctive, and deliberately not an `-Error` name because a marker
+   is not a fault and should not pattern-match visually to real exceptions.
+   **Marker form rule v1**, statically decidable:
+   - Canonical import: `from sieve.debt import Owed`, module top level, no
+     alias.
+   - Canonical statement: `raise Owed("<reason>")` where the argument is
+     exactly one static string literal (adjacent-literal concatenation folds
+     at parse and is fine; f-strings are not literals and are out of form).
+   - Exactly two canonical positions: (a) the sole statement of a function or
+     method body after its optional docstring — the signature-quoting form;
+     (b) the final statement of a module whose only executable top-level
+     statements are the docstring, the canonical import, and the raise — the
+     behavior-only form, which raises on import. A module is never both: a
+     module-level raise would make quoted signatures unreachable. Class-body
+     markers are not in v1; if the Phase 3 layout proposal needs them, that
+     is an additive v2, recorded by the rule-version pin.
+   - Ledger key per the canonical form below: (repo-relative POSIX path,
+     qualified name — dotted qualname for callables, `<module>` for
+     module-level), reason text as compared content.
+   - Any raise of a name bound by the canonical import that fails the form —
+     non-literal reason, non-canonical position, aliased binding — is an
+     **enumeration error, never a skip**. Markers the AST cannot see fall to
+     the adapter's membership check.
+   - The reason string's internal shape (what is owed, pointer to the
+     governing doc section) is a convention, not a grammar — the compared
+     content is bytes either way, and a grammar here would be the
+     anti-bureaucracy invariant tripping on itself.
+5. **Debt files — settled.** `DEBT.md` (present, correct debt) and
+   `DEFERRED.md` (not-yet-due intentions, each with its trigger), both at
+   repo root — they sort adjacent in a root listing, and an agent lists the
+   root first.
+6. **Automatic ledger — settled: own file**, `DEBT-AUTO.txt` at repo root,
+   `-text` in `.gitattributes`. Whole-file byte compare, no delimited-region
+   integrity question, no mixed hand/machine authority in one file. Its
+   internal format is a build item within this phase, not part of the gate.
 
 The machinery that makes a placeholder count as a debt entry. This must exist
 *before* any placeholder is placed, otherwise Phase 3 is just stubs.

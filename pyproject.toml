@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "antscihub-sieve"
+version = "0.0.0"
+description = "SIEVE turns video into behavioral measurements using interpretable signal-processing filters."
+requires-python = ">=3.11"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sieve"]

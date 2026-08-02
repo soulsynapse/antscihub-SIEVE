@@ -158,13 +158,13 @@ proposal (signatures, format, test cases) confirmed before code lands:
 - [x] 6. Seed `DEBT.md` and `DEFERRED.md` — present debt near-empty;
       deferred items migrated from the session's durable record and
       `DESIGN-SESSION.md`'s Open list, each with its trigger.
-- [ ] 6.5. Review fixes (inserted 2026-08-01 after a two-reviewer code
+- [x] 6.5. Review fixes (inserted 2026-08-01 after a two-reviewer code
       review of the phase): collection-time marker handling via a Module
       subclass, LF-only reason validation, teardown gating, byte-level
       parseability, parse/diff hardening, and three missing test pins
       (sentinel default exclusion, mismatch label orientation, composed
       end-to-end path). Rule-v1 narrowings recorded in the gate.
-- [ ] 7. Exit — pure verification (amended 2026-08-01): a fresh regen is a
+- [x] 7. Exit — pure verification (amended 2026-08-01): a fresh regen is a
       no-op at zero entries, the sentinel is found, the suite is green;
       `DEBT-AUTO.txt` already landed at its zero state with step 4.
 

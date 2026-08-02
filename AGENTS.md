@@ -38,6 +38,13 @@ what a governing record holds — follow the pointers.
   amended in the same commit —
   and the gate cites it. An exhausted plan freezes under its name and moves
   to `docs/archive/`; a successor cycle takes a new name.
+- A rationale argued out in the session → its primary goes to
+  `docs/archive/SESSION-<date>-<slug>.md` in the same commit, cited from
+  the rationale's Context. Quote the person verbatim, compress the
+  argument, keep the positions that lost, number the exchanges so they can
+  be cited. Start it when the first decision lands, append as the session
+  runs, freeze it at session close. A distillation files none — it is
+  already reading its primary.
 - A not-yet-due intention → `DEFERRED.md`, always with the trigger that
   makes it due.
 - A present gap no marker can carry → `DEBT.md`.
@@ -66,6 +73,8 @@ what a governing record holds — follow the pointers.
 - Build from `DEFERRED.md`.
 - Catch `Owed` outside the debt machinery.
 - Reuse a retired name — file-format fields, documents, or module paths.
+- Commit raw session transcripts. The curated session record is the
+  primary; a transcript is a worse one (ARCH-0001).
 
 ## Session boundaries
 

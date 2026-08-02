@@ -301,12 +301,28 @@ session of a file nobody reads, and loss is irreversible and already
 scheduled. Against it, a raw transcript holds everything said, unedited,
 permanently, in a repo that may later be shared.
 
-Decided in principle, pending Kendrick's call on the sharing question: if
-retained, transcripts live outside the tier structure — **not citable and
-not governing**, evidence for the curated record beside them, read only
-when that record is challenged on fidelity. Making them citable would
-restore reconstruction-from-transcript, which is the cost ARCH-0001 exists
-to remove.
+Proposed: retain them outside the tier structure, not citable and not
+governing, as fidelity evidence for the curated record beside them.
+
+Ruled against:
+
+> "yeah we don't want to have the wholesale transcripts lol"
+
+So the curated record is the only primary — and the reason holds
+independently of repo hygiene or the sharing concern. A transcript is not
+a cheaper primary but a worse one: unreadable at length, and usable only
+by reconstructing the argument out of it, which is exactly the cost this
+tier exists to remove. What guarantees the curated record's fidelity is
+that it is written while the session is live and the reasoning is still
+in hand, not a raw copy behind it, which would only move the
+reconstruction later. The design-session precedent points the same way —
+nine curated exchanges carried every revisit.
+
+One contradiction surfaced here and was repaired rather than fudged: this
+record was committed mid-session while ARCH-0001 called archived records
+frozen and never edited. Settled — a session record is live for the
+duration of its session and freezes at close, the way a plan freezes when
+exhausted.
 
 ---
 
@@ -320,7 +336,10 @@ to remove.
   conflict the deeper record wins and the summary is repaired.
 - Editing asymptotes; the edit rate measures how settled the reasoning is.
 - A rationale written from a session files its session record here and
-  cites it. A distillation does not — it already has its primary.
+  cites it; a distillation does not, already having its primary. The
+  record is live for its session and freezes at close. Raw transcripts
+  are never retained. Operationalized in `AGENTS.md` ("Where records go",
+  and the never-do list).
 - ARCH-0002 sits **Proposed**. `archive/PLAN.md` still governs the debt
   machinery. Accepting it moves `README.md` lines 41 and 98 and
   `AGENTS.md` line 18, and retires three citations from the `DEBT.md`
@@ -330,6 +349,8 @@ to remove.
   Context (`PLAN-DISTILL.md` Phase 2 gate); the four fidelity flags in
   ARCH-0002; the layout settlement's new home in Phase 5.
 - The 2026-08-01 sessions that adopted the record class have no curated
-  primary. Their raw transcripts survive but expire on the default
-  retention timer. Whether they are retained, and whether they are ever
-  curated, is open — Exchange 12.
+  primary, and their raw transcripts will expire on the default retention
+  timer unread. That reasoning survives only as ARCH-0001's own text and
+  git history. Accepted, not filed as debt: the convention exists so it
+  does not recur, and curating them now would be reconstruction from
+  transcript — the thing this tier removes.

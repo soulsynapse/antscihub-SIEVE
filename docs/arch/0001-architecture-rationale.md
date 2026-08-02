@@ -217,6 +217,20 @@ is compressed; and the positions that were rejected are kept with their
 reasons, because a record showing only the winner cannot be re-examined at
 all. Numbered exchanges make passages citable, as in the design session.
 
+A session record is live for the duration of its session — written as the
+argument lands and appended to as it continues — and freezes when the
+session closes, the way a plan freezes when exhausted. After that it is
+never edited.
+
+**Raw transcripts are not retained.** The tooling writes one per session
+and expires it on its own timer; the curated record is what survives, and
+that is deliberate. A transcript is not a cheaper primary but a worse one:
+unreadable at length, and usable only by reconstructing the argument out
+of it, which is the cost this tier exists to remove. What guarantees the
+curated record's fidelity is that it is written while the session is live
+and the reasoning is still in hand — not a raw copy sitting behind it,
+which would only move the reconstruction later.
+
 The work list is derived, not hand-maintained: it is exactly the set of
 record citations pointing below tier 2 in `docs/ARCHITECTURE.md`,
 `README.md`, and `AGENTS.md`. Sequencing calls that are genuinely a plan's

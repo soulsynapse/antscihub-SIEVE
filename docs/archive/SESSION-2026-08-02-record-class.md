@@ -1,8 +1,8 @@
 # Session record — 2026-08-02 — the record class
 
-A primary record (tier 3), live until this session closes and frozen
-after. It holds the argument that produced ARCH-0001's rewrite from the
-ADR class to architecture rationale.
+A primary record (tier 3). Frozen at session close, 2026-08-02; never
+edited after. It holds the argument that produced ARCH-0001's rewrite
+from the ADR class to architecture rationale.
 
 It deliberately does **not** restate what ARCH-0001 now says. Tier 3's job
 is what tier 2 drops: the alternatives that died, and the route by which a
@@ -361,6 +361,34 @@ ARCH-0002 therefore lands with no Challenges section, which is correct
 rather than an omission: the challenge surface is the record existing at
 tier 2, not entries in it.
 
+## Exchange 16 — What a primary is allowed to contain
+
+The first draft of this record ran 485 lines and restated most of what
+ARCH-0001 already said. The rule that fixed it was not stated anywhere and
+falls straight out of the tier structure: **a primary holds what the
+rationale drops** — the alternatives that died and the route by which a
+position was overturned. Restating settled conclusions duplicates the tier
+above, which is backwards for a tier that exists to carry what the summary
+cannot.
+
+Applied, it cut the Nygard argument, the granularity heuristic, the
+asymptote property, the form rule, and the doctrine bullets from the
+standing list — and *added* the three losing name candidates and
+ARCH-0002's four fidelity flags, which exist nowhere else. Net 485 → 386,
+with the material only a primary can hold given more room rather than
+less. Commit hashes went as derivable.
+
+One verbatim position was dropped: Kendrick's acceptance of the
+retirement-folder decision in Exchange 1, whose outcome Exchange 9
+superseded wholesale and whose content concerns a folder that no longer
+exists. It is the one place the rule cut something he actually said, and
+it is flagged rather than silently taken.
+
+Whether the rule is promoted into ARCH-0001 is open. It was discovered by
+writing a record that violated it, which is an argument for recording it;
+against, ARCH-0001 already says "compress the argument," and this may be
+what that meant all along.
+
 ---
 
 ## Where things stand
@@ -378,7 +406,9 @@ behind:
   `DEFERRED.md`.
 - The reconstructed-challenges gate is closed; nothing is reconstructed.
 - Still open: the layout settlement's new home in `PLAN-DISTILL.md`
-  Phase 5, and the overstated "oracle depreciates" risk in that plan.
+  Phase 5; the overstated "oracle depreciates" risk in that plan; and
+  whether Exchange 16's rule about what a primary may contain is promoted
+  into ARCH-0001.
 - The 2026-08-01 sessions that adopted the record class have no curated
   primary, and their raw transcripts will expire unread. That reasoning
   survives only as ARCH-0001's text and git history. Accepted rather than

@@ -45,7 +45,9 @@ what a governing record holds — follow the pointers.
   be cited. Start it when the first decision lands, append as the argument
   runs, freeze it when the argument closes — one primary per argued
   decision-cluster; a sitting that settles separable arguments files
-  separate primaries (PAR-0001). A distillation files none — it is
+  separate primaries (PAR-0001). It opens with `Status: Open`; freezing
+  is a deliberate wrap that flips it to `Status: Frozen` — never freeze
+  just because a decision landed. A distillation files none — it is
   already reading its primary. Keep decisions and the alternatives that
   died with their reasons; never the route taken to reach them.
 - A rationale drafted but not yet attacked → `Status: Proposed`, which is
@@ -90,4 +92,7 @@ green, regen a no-op, and nothing valuable left unfiled — a decision,
 intention, or gap that surfaced along the way gets its record (see "Where
 records go") before the session closes. Durable context has homes; if
 something fits none of them, that is a missing home to name, not a reason
-to park prose somewhere unowned.
+to park prose somewhere unowned. A session record left `Status: Open` is
+derivable debt announcing an unwrapped argument (`grep -l "^Status:
+Open" docs/archive/SESSION-*.md`); wrap it at close, or leave it
+announcing deliberately when the argument genuinely spans sittings.

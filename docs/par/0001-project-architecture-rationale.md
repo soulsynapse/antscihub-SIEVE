@@ -302,6 +302,25 @@ the argument lands and appended to as it continues — and freezes when
 the argument closes, the way a plan freezes when exhausted. After that
 it is never edited.
 
+Freezing is deliberate, and the record announces its own state
+(2026-08-02). A session record opens with `Status: Open` and stays
+editable at will for as long as the argument runs — the temptation is
+to freeze as soon as a decision lands, but the back-and-forth dictates
+closure, not the first decision. Closing is a wrap: a deliberate pass
+confirming the logic all landed, which flips the line to
+`Status: Frozen` and starts the never-edited rule. The marker is the
+debt entry, placeholder doctrine again: `grep -l "^Status: Open"
+docs/archive/SESSION-*.md` derives the arguments never wrapped, each
+announcing that its logic may not have landed. The derivation cannot
+tell an argument deliberately spanning sittings from an abandoned one —
+an old date on an Open record is the alarm, a young one is a session in
+progress, and the read is the human's. Records predating the convention
+carry no status line and were all deliberately closed; they are
+grandfathered rather than retro-edited, because frozen records are
+never edited, even for metadata. The residual leniency is named: a
+record created without a status line escapes the derivation, and the
+form rule here and in `AGENTS.md` is the only guard.
+
 Its weight is proportional to what the session decided, and
 `DESIGN-SESSION.md` is not the template. That record is unusually dense
 because its sessions were transmitting conclusions already reached across

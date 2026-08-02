@@ -315,14 +315,58 @@ by reconstructing the argument out of it, which is exactly the cost this
 tier exists to remove. What guarantees the curated record's fidelity is
 that it is written while the session is live and the reasoning is still
 in hand, not a raw copy behind it, which would only move the
-reconstruction later. The design-session precedent points the same way —
-nine curated exchanges carried every revisit.
+reconstruction later. An appeal to the design-session precedent was also
+made here — nine curated exchanges carried every revisit — and it does
+not hold as stated; corrected in Exchange 13.
 
 One contradiction surfaced here and was repaired rather than fudged: this
 record was committed mid-session while ARCH-0001 called archived records
 frozen and never edited. Settled — a session record is live for the
 duration of its session and freezes at close, the way a plan freezes when
 exhausted.
+
+## Exchange 13 — The design session is not the template
+
+> "the original decision sessions that are documented in the design
+> documents are not wholesale verbatim either, they just look like it.
+> those sessions were the deliberate decision outcomes from the entirety
+> of version 1 and version 2 so the heavy distilled reasoning isn't
+> necessarily going to really be the norm. it works for those because I
+> already knew the answers and knew where you would mess up and also had
+> a good idea of how to get you to understand it in like 10 messages."
+
+Corrects an appeal made twice in this record and once in a commit
+message: that `DESIGN-SESSION.md`'s nine curated exchanges prove the
+curated form sufficient in general. They prove it sufficient for a
+session of that kind. Those sessions were the deliberate outcome of two
+prior rewrites — the reasoning had already happened, and the session was
+transmitting conclusions Kendrick already held, with a working model of
+where the machine would go wrong and roughly how many messages it would
+take. The record reads like a verbatim transcript and is not one.
+
+Two consequences, pulling in opposite directions.
+
+A session record's weight is proportional to what its session actually
+decided, not to the design session's example. Most sessions settle less
+and get less; producing a twelve-exchange document per session would be
+the apparatus outgrowing the content again — the Exchange 3 failure in a
+new costume.
+
+But the curator's judgment carries more weight here than it did there,
+which is the opposite of reassuring. In the design session Kendrick could
+check any distillation instantly against an answer he already held. In a
+session where the reasoning is discovered live — this one, which produced
+several reversals — neither party has the answer in advance, so whatever
+the record judged unimportant is simply gone. That is not an argument for
+transcripts, which failed on their own merits in Exchange 12. It is the
+argument for writing the record while the session is live, which was
+already the rule but had been justified only by memory decay.
+
+Noted against `PLAN-DISTILL.md`'s risk register: "the oracle depreciates"
+is weaker than stated for the founding decisions, whose answers have
+survived two rewrites and are not session memory. What does depreciate is
+the argument shape — which alternative was rejected and why — so the
+front-loading case narrows rather than disappears.
 
 ---
 

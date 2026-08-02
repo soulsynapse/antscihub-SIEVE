@@ -222,6 +222,16 @@ argument lands and appended to as it continues — and freezes when the
 session closes, the way a plan freezes when exhausted. After that it is
 never edited.
 
+Its weight is proportional to what the session decided, and
+`DESIGN-SESSION.md` is not the template. That record is unusually dense
+because its sessions were transmitting conclusions already reached across
+two prior rewrites, not discovering them; most sessions settle far less
+and get a far shorter record. Where reasoning *is* discovered live the
+record matters more, not less — nobody holds the answer in advance to
+check it against, so whatever the curator judged unimportant is gone.
+That is the real reason it is written while the session is live rather
+than reconstructed afterwards.
+
 **Raw transcripts are not retained.** The tooling writes one per session
 and expires it on its own timer; the curated record is what survives, and
 that is deliberate. A transcript is not a cheaper primary but a worse one:

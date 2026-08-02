@@ -6,14 +6,14 @@ below exists so that stays true as filters are added, without the codebase
 becoming something nobody wants to extend.
 
 This document is the synthesis and the first stop: it reports the settled
-architecture, it does not govern it. The reasoning lives in `docs/adr/`, the
-primary records in `docs/archive/`; the walking path, the authority order, and
-how a record changes are [ADR-0001](adr/0001-adopt-adrs.md). On conflict the
-deeper record wins and this synthesis gets fixed. Each section below names the
+architecture, it does not govern it. The reasoning lives in `docs/arch/`, the
+primary records in `docs/archive/`; the walking path and the authority order
+are [ARCH-0001](arch/0001-architecture-rationale.md). On conflict the deeper
+record wins and this synthesis gets fixed. Each section below names the
 records that govern it — exchange numbers cite
 [DESIGN-SESSION.md](archive/DESIGN-SESSION.md). The founding decisions are
-being distilled into retrospective ADRs; until a decision's ADR lands, its
-exchange citation remains the governing pointer.
+being distilled into retrospective rationales; until a decision's rationale
+lands, its exchange citation remains the governing pointer.
 
 ## The components
 

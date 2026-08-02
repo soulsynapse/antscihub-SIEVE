@@ -1,0 +1,241 @@
+# ARCH-0001 — Architecture rationale records
+
+Status: Accepted
+Date: 2026-08-02
+
+## Context
+
+The founding architecture was argued in one recorded session (the design
+session, archived) and synthesized into `ARCHITECTURE.md`. Decisions made
+after that session lived in plan gate decisions and in conversation — the
+reasoning compressed to a few sentences inside a frozen sequencing
+document, or lost when the session ended. A 2026-08-01 audit reconstructed
+the full decision chain from citations and found it intact but scattered
+across four documents; the reconstruction cost is what this record class
+removes. This is the third rewrite; this apparatus is part of the defense
+against a fourth.
+
+Two failure modes shape the rest. A challenge that succeeds produces a new
+decision and leaves a trail; a challenge that is raised and *fails*
+produces nothing, so the reasoning that fended it off dies with the session
+and the next doubter re-litigates from scratch. And a decision recorded
+only in a frozen plan or a monolithic transcript gives either kind of
+challenge nowhere to land, which makes absence from `docs/arch/`
+ambiguous: it stops meaning "not an architecture decision" and starts
+meaning "possibly founding — go read a transcript."
+
+**These are not ADRs, and the name is deliberate.** This class was
+originally adopted as architecture decision records (2026-08-01), and the
+convention's central rule came with it: an accepted record is immutable,
+superseded rather than edited. That rule exists for a reason that does not
+hold here. Nygard's immutability is archaeological — a future reader needs
+to know what was believed *at the time*, which constraints were live and
+what was unknown, and editing retrofits present knowledge into a past
+decision and destroys exactly that. But an ADR is the bottom of its own
+stack; nothing underneath it carries the historical record. Here something
+does. `docs/archive/` holds the design session verbatim and frozen
+forever, so the archaeological function is discharged one tier down, and
+importing immutability into this tier buys a guarantee the repo already
+has at the price of an apparatus around every edit.
+
+What these records actually are is long-form reasoning, reread repeatedly
+as working memory until the architecture is internalized, rolling up to
+the short form in `ARCHITECTURE.md`. That reader is served by the clearest
+current statement of the reasoning, not the historically faithful one.
+Keeping the ADR name would have every reader import immutability, brevity,
+and one-page skimmability before opening a file that honors none of them.
+
+## Decision
+
+**Form and name.** An architecture rationale lives in `docs/arch/`, one
+file per decision, named `NNNN-short-title.md`, cited as `ARCH-NNNN`. It
+carries a status line, a date, context, the decision, and consequences.
+Every record-to-record citation names its target as `ARCH-NNNN` at least
+once, in that form; paths and links are optional alongside it.
+
+**Scope: architecture only.** A rationale records a decision about the
+architecture — the component decomposition, where a responsibility lives,
+a mechanism the repo runs on (authority, debt, records), or why the repo
+does something the way it does. Cycle-sequencing calls stay in their
+plan's gates; tool-level design lives in the code and its cycle's records;
+process rules live in `AGENTS.md`. The name carries this rule less than
+"architecture decision record" did, so it is stated here and held by
+judgment: general reasoning does not belong in `docs/arch/`, because
+absence from the directory is only meaningful if presence is disciplined.
+Once the architecture is settled the directory goes quiet — records are
+written rarely and retired more rarely.
+
+**Records are living.** A rationale is edited in place whenever a reread
+finds it unclear, incomplete, or wrong, and that is the normal operation
+rather than evidence of a defect. There is no change taxonomy, no revision
+log, and no ceremony around an edit: git holds the history, and a
+hand-maintained log of changes would be derivable state maintained by hand
+— the anti-bureaucracy invariant tripping on itself. A decision that
+genuinely reverses is rewritten to say what is now true, with the date
+updated. The one discipline an edit owes is the roll-up, below.
+
+Editing is expected to asymptote, and that is the point rather than a
+hope. A rationale that has survived enough rereads and enough doubts
+stops changing; the edit rate is therefore a measurement of how settled
+the reasoning is, not a standing licence. A record still being reworked
+is one not yet internalized. A record that has gone quiet while
+collecting Challenges entries is bulletproof — and nothing declares it
+so, because `git log -- <file>` already says it, which is the only place
+such a claim can live without becoming a maturity field somebody
+maintains.
+
+**Status.** *Proposed* or *Accepted*, and *Retired* for a record no longer
+part of the architecture. A proposed record does not govern: until it is
+accepted, whatever governed before it still does, and `ARCHITECTURE.md`
+keeps citing that. This is what makes a proposed record free — it can sit
+as long as its author is still chewing on it, and nothing in the repo is
+inconsistent while it does. Acceptance is the moment it starts governing
+and the moment the roll-up is owed.
+
+**Granularity: the smallest chunk that carries everything relevant with
+it.** Not the smallest chunk — the smallest *self-sufficient* one. A
+rationale has to read whole, because the reader is assembling an
+understanding and a decision split across three cross-citing files makes
+them do the assembly; but a record that has swallowed a neighbouring
+decision it does not need is harder to reread and harder to rewrite. The
+test is whether a reader finishes the file convinced without opening
+another.
+
+The nearest familiar shape is a Wikipedia article: a summary that stands
+on its own, can be wrong, and cites its sources for exactly that reason.
+When a rationale and the record it distils disagree, the deeper record
+wins and the rationale is repaired — the same relation the synthesis has
+to the rationale, one tier up.
+
+When part of a record changes, the whole record is rewritten to stay
+coherent, which is cheap and is also an occasion to reread it. The one
+cost is silent drift in the parts meant to carry forward, so a
+substantial rewrite is reviewed as a diff.
+
+**Challenges.** A record carries a final `## Challenges` section holding
+doubts raised against the decision that did not survive: the date, the
+occasion, the doubt in a sentence or two, and why it held. This is the
+section that repays the apparatus. A doubt that recurs — and they do
+recur, the same objection arriving three times over a year — is
+re-litigated from scratch every time it lands nowhere, and the reasoning
+that answered it the first time is gone. Entries report; they never
+govern. A doubt that *succeeds* is not an entry: it changes the decision,
+so the record is rewritten.
+
+Confirming evidence arriving without a challenge is not recorded. It has
+no natural trigger and no terminal form; a curated scrapbook of
+vindications is exactly the hand-maintained state the anti-bureaucracy
+invariant forbids.
+
+**The walking path.** Three tiers, read downward only until convinced:
+
+1. `docs/ARCHITECTURE.md` — the synthesis, always current, the one-stop
+   shop. Read first; usually sufficient.
+2. `docs/arch/` — the reasoning, per decision, dated. Read when the
+   synthesis doesn't explain or doesn't convince.
+3. `docs/archive/` — the primary records: session transcripts, briefs,
+   exhausted plans, the reasoning verbatim. Frozen. Read when the
+   rationale doesn't settle it.
+
+**Authority runs down; readability rolls up.** `ARCHITECTURE.md` reports,
+it never governs: on any conflict the deeper record wins, and the conflict
+is a defect repaired at the synthesis — mismatch-runbook logic — never
+adjudicated in the synthesis's favor. Among dated records the later
+decision supersedes the earlier: an accepted rationale supersedes the
+passage of any record it cites, including the design session. The archive
+governs only where no rationale speaks, and never reaches a retired one.
+Within the design session itself, later exchanges supersede earlier ones,
+and its "Where things stand" list is the session's own settlement.
+
+**The roll-up discipline.** Accepting a rationale, or editing one in a way
+that changes what it says, amends the tier-1 document that cites it in the
+same commit — the way the regenerated ledger travels with the marker
+change it reflects. That is `ARCHITECTURE.md` for the architecture itself,
+and `README.md` or `AGENTS.md` for the mechanisms the repo runs on. This
+is what keeps tier 1 sufficient: the synthesis may be momentarily wrong
+but never authoritatively wrong.
+
+**Cross-citation is derived.** A record cites the records it was decided
+against; the reverse link is never stored, because it is already in the
+tree. `grep -rl "ARCH-0002" docs/ README.md AGENTS.md` is the list of
+records leaning on ARCH-0002, and it is where a substantial rewrite of
+ARCH-0002 starts. A stored back-link would be hand-maintained derivable
+state.
+
+**Retirement.** A rationale no longer part of the architecture moves to
+`docs/arch/retired/` and stops governing entirely; whatever replaces it
+carries forward everything of the old decision it keeps, which is what
+makes retirement lossless. It keeps its number, which is never reused, so
+citations still resolve. `docs/archive/` is not its home: the archive is
+the primary records — transcripts, briefs, exhausted plans — and a retired
+rationale is none of those.
+
+**Every architecture decision gets a record, retrospectively too.** The
+founding decisions — the ones `docs/ARCHITECTURE.md` cites by exchange
+number — and the architecture decisions recorded in plan gates before this
+tier existed are distilled into retrospective rationales, numbered
+normally from the next free number. There is no separate class, prefix, or
+numbering range; uniformity is what lets absence from `docs/arch/` mean
+something. Each distillation obeys three rules:
+
+- **Provenance in Context.** It opens by naming the source record and
+  passages (e.g. "DESIGN-SESSION.md, Exchanges 3 and 5", "archive/PLAN.md
+  Phase 2 decision 4") and the decision's original date.
+- **Fidelity at acceptance.** A distillation reports the decision as made;
+  it does not revise it. Any daylight between the distillation and its
+  source, or between it and an existing rationale, is named before
+  acceptance — never silently resolved. Improving on a founding decision
+  is a genuine new decision and takes its own record.
+- **Roll-up per decision.** Each distillation amends the corresponding
+  tier-1 citation — exchange number or plan gate to `ARCH-NNNN` — in the
+  same commit.
+
+The work list is derived, not hand-maintained: it is exactly the set of
+record citations pointing below tier 2 in `docs/ARCHITECTURE.md`,
+`README.md`, and `AGENTS.md`. Sequencing calls that are genuinely a plan's
+own — scope, order, build sequence, definition of done — are not
+architecture decisions and stay in their plans.
+
+## Consequences
+
+- `DESIGN-SESSION.md`, `DESIGN-BRIEF.md`, and the exhausted `PLAN.md` live
+  in `docs/archive/`. `PLAN-TOOL-CONTRACT.md` and `PLAN-DISTILL.md` move
+  there when they freeze. They are never edited; distillation reads them,
+  it does not touch them.
+- Resolves two `DEFERRED.md` entries, which move out: *within-record
+  authority for the design session* (the rule is stated above, without
+  ever amending the frozen record) and *how frozen planning documents
+  remain discoverable* (citable names are bare filenames —
+  "DESIGN-SESSION.md Exchange 5" — which survive the move, and archive
+  status is terminal rather than maintained).
+- A plan gate that makes an architecture-touching decision records it as a
+  rationale and cites it; the plan keeps what is genuinely its own.
+- The gap between decided and distilled is present debt: filed in
+  `DEBT.md`, retired one entry of work at a time as distillations land.
+  Until a decision's rationale exists, its exchange or gate citation
+  remains the governing pointer. Sequence and working rules:
+  `docs/PLAN-DISTILL.md`.
+- The debt and records machinery settled in archived `PLAN.md` is on that
+  work list rather than waiting on an evolution trigger. It is the
+  most-doubted mechanism in the repo and has been fended off three times
+  with nothing recorded; distilled, it gains a challenge surface.
+- A doubt against a founding decision lands on a normal rationale and
+  either falls (a Challenges entry) or succeeds (the record is rewritten)
+  — without either path touching the archive.
+
+## Challenges
+
+- **2026-08-01 — "The costs are real: accepted distillations govern, so a
+  reinterpretation error legislates instead of misreporting;
+  individuation is lossy even at perfect sentence fidelity; and the
+  fidelity gate is a single acceptance review."** Raised in session the
+  day retrospective distillation was accepted. Held: these records are
+  working memory — reread carefully and repeatedly until internalized —
+  so review is continuous rather than a one-time gate; and the payoff is
+  immediate even short-term, because only a governing tier-2 record
+  carries a challenge surface, and undistilled decisions leave recurring
+  doubts (the debt system, three times over) re-litigated and unrecorded.
+  What survived of the challenge became working rules and sequencing in
+  `docs/PLAN-DISTILL.md`: front-load while session memory is fresh, order
+  by doubt traffic, quote decisive source sentences verbatim. Fuller
+  record: none filed (2026-08-01 session).

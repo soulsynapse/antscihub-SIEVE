@@ -13,16 +13,17 @@ records; when it seems to disagree with one of them, the other is right.
 
 Three tiers, read downward only until convinced. The walking path and the
 authority order — deeper governs, the synthesis reports and rolls up — are
-[ADR-0001](docs/adr/0001-adopt-adrs.md).
+[ARCH-0001](docs/arch/0001-architecture-rationale.md).
 
 1. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the synthesis: seven
    components, the authoring and execution flows, five invariants with
    their failure modes. The one-stop shop; read this first, usually last.
-2. [docs/adr/](docs/adr/) — architecture decision records: the dated
-   reasoning, one decision per file, live decisions only. An accepted ADR
-   changes three ways and no others — revised in place when nothing else
-   in the repo changes, appended to when a challenge is raised and held
-   off, or superseded by a later ADR.
+2. [docs/arch/](docs/arch/) — architecture rationale (`ARCH-NNNN`): the
+   dated long-form reasoning, one decision per file, coarse enough that a
+   record reads whole. These are living documents, not ADRs — edited in
+   place whenever a reread finds them wanting, because the frozen record
+   is one tier down. Each carries the doubts it has survived. A record no
+   longer part of the architecture retires to `docs/arch/retired/`.
 3. `docs/archive/` — the frozen primary records:
    [DESIGN-BRIEF.md](docs/archive/DESIGN-BRIEF.md) (the design prompts,
    verbatim, including the rejected §8 EDIT kept as a recorded

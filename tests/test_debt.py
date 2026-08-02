@@ -121,6 +121,16 @@ def test_rule_violations_are_enumeration_errors(tmp_path, source):
         enumerate_markers(tmp_path, roots=("pkg",))
 
 
+def test_bom_and_coding_cookie_files_are_parseable(tmp_path):
+    bom = tmp_path / "pkg" / "bom.py"
+    bom.parent.mkdir(parents=True)
+    bom.write_bytes(b"\xef\xbb\xbf" + STORE.encode("utf-8"))
+    latin = tmp_path / "pkg" / "latin.py"
+    latin.write_bytes(b"# -*- coding: latin-1 -*-\n# caf\xe9\nx = 1\n")
+    (entry,) = enumerate_markers(tmp_path, roots=("pkg",))
+    assert entry.path == "pkg/bom.py"
+
+
 def test_undecodable_file_is_an_enumeration_error(tmp_path):
     bad = tmp_path / "pkg" / "bad.py"
     bad.parent.mkdir(parents=True)

@@ -168,12 +168,15 @@ def main(argv: Sequence[str]) -> int:
 def _scan_file(file: Path, repo_root: Path) -> list[Entry]:
     rel = file.relative_to(repo_root).as_posix()
     try:
-        source = file.read_bytes().decode("utf-8")
-    except (OSError, UnicodeDecodeError) as err:
+        source = file.read_bytes()
+    except OSError as err:
         raise EnumerationError(f"{rel}: unreadable, which is an error, not a skip: {err}") from err
     try:
+        # Bytes, not str: ast.parse then applies the interpreter's own
+        # BOM and PEP 263 encoding rules, so "parseable" means exactly
+        # "the pinned interpreter can import it".
         tree = ast.parse(source, filename=rel)
-    except SyntaxError as err:
+    except (SyntaxError, ValueError) as err:
         raise EnumerationError(f"{rel}: unparseable, which is an error, not a skip: {err}") from err
 
     has_canonical, aliased = _owed_bindings(tree)

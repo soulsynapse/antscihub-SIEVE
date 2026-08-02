@@ -40,6 +40,14 @@ def test_automatic_ledger_matches_a_fresh_enumeration():
         )
 
 
+def test_sentinel_is_excluded_from_the_default_enumeration():
+    leaked = [e for e in enumerate_markers(REPO_ROOT) if e.path.startswith(SENTINEL_ROOT)]
+    assert not leaked, (
+        "the sentinel leaked into the default enumeration; it is a liveness "
+        "proof, not debt -- do not regenerate it into the ledger"
+    )
+
+
 def test_sentinel_marker_is_found():
     found = enumerate_markers(REPO_ROOT, roots=(SENTINEL_ROOT,), excluded=())
     assert [(e.path, e.qualname) for e in found] == [

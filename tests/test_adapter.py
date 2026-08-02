@@ -5,10 +5,14 @@ repo carrying a byte-identical copy of the real tests/conftest.py at the
 same relative location, exercising its root-relative logic unchanged.
 """
 
+import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ADAPTER = (REPO_ROOT / "tests" / "conftest.py").read_text(encoding="utf-8")
+LEDGER_TESTS = (REPO_ROOT / "tests" / "test_automatic_ledger.py").read_text(encoding="utf-8")
+SENTINEL = (REPO_ROOT / "tests" / "_sentinel" / "marker.py").read_text(encoding="utf-8")
 
 
 def make_repo(pytester, test_files: dict[str, str]) -> None:
@@ -17,7 +21,9 @@ def make_repo(pytester, test_files: dict[str, str]) -> None:
     tests_dir.mkdir()
     (tests_dir / "conftest.py").write_text(ADAPTER, encoding="utf-8")
     for name, source in test_files.items():
-        (tests_dir / name).write_text(source, encoding="utf-8")
+        path = tests_dir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
 
 
 def test_member_marker_in_test_function_skips(pytester):
@@ -154,6 +160,56 @@ def test_teardown_marker_stays_red(pytester):
     )
     result = pytester.runpytest_subprocess("tests")
     result.assert_outcomes(passed=1, errors=1)
+
+
+def test_composed_end_to_end_and_mismatch_labels(pytester):
+    """The Phase 3 path: placeholder under src/sieve, regenerated ledger,
+    composed suite green with skips matching the ledger's test-tree entries;
+    then a stale ledger fails with the added/removed orientation pinned."""
+    make_repo(
+        pytester,
+        {
+            "test_automatic_ledger.py": LEDGER_TESTS,
+            "_sentinel/marker.py": SENTINEL,
+            "test_units.py": (
+                "from sieve.debt import Owed\n"
+                "\n"
+                "\n"
+                "def test_roundtrip():\n"
+                '    raise Owed("conformance: round-trip not built")\n'
+            ),
+        },
+    )
+    store = pytester.path / "src" / "sieve" / "store.py"
+    store.write_text(
+        '"""Store placeholder."""\n'
+        "from sieve.debt import Owed\n"
+        "\n"
+        'raise Owed("store: not built")\n',
+        encoding="utf-8",
+    )
+    regen = subprocess.run(
+        [sys.executable, "-m", "sieve.debt", "write", str(pytester.path)],
+        capture_output=True,
+        text=True,
+    )
+    assert regen.returncode == 0, regen.stderr
+
+    result = pytester.runpytest_subprocess("tests", "-ra")
+    result.assert_outcomes(passed=3, skipped=1)
+    result.stdout.fnmatch_lines(["*owed: conformance: round-trip not built*"])
+
+    kernel = pytester.path / "src" / "sieve" / "kernel.py"
+    kernel.write_text(
+        '"""Kernel placeholder."""\n'
+        "from sieve.debt import Owed\n"
+        "\n"
+        'raise Owed("kernel: not built")\n',
+        encoding="utf-8",
+    )
+    stale = pytester.runpytest_subprocess("tests/test_automatic_ledger.py")
+    stale.assert_outcomes(passed=2, failed=1)
+    stale.stdout.fnmatch_lines(["*added:   src/sieve/kernel.py :: <module>*"])
 
 
 def test_enumeration_failure_exits_pointedly(pytester):

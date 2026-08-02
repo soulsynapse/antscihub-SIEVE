@@ -95,7 +95,13 @@ log, and no ceremony around an edit: git holds the history, and a
 hand-maintained log of changes would be derivable state maintained by hand
 — the anti-bureaucracy invariant tripping on itself. A decision that
 genuinely reverses is rewritten to say what is now true, with the date
-updated. The one discipline an edit owes is the roll-up, below.
+updated. An edit that changes what the record says owes the roll-up,
+below; one that changes what the record *decides* also carries its
+argument — a decision never moves for free: the session that argued
+the change files its primary and the rewrite cites it, the same rule a
+fresh rationale obeys (2026-08-02,
+`SESSION-2026-08-02-hardening-dissolved.md`). Reread clarity owes
+nothing.
 
 Editing is expected to asymptote, and that is the point rather than a
 hope. A rationale that has survived enough rereads and enough doubts
@@ -110,20 +116,26 @@ maintains.
 **Status.** *Proposed* or *Accepted*, and *Retired* for a record no longer
 part of the architecture. A proposed record does not govern: until it is
 accepted, whatever governed before it still does, and `ARCHITECTURE.md`
-keeps citing that. This is what makes a proposed record free — it can sit
-until its hardening session comes due, and nothing in the repo is
-inconsistent while it does. *Proposed* means drafted but not yet
-hardened; *Accepted* means it survived a session that attacked it, which
-is also the moment it starts governing and the moment the roll-up is
-owed.
+keeps citing that. This is what makes a proposed record free — it can
+sit, and nothing in the repo is inconsistent while it does. *Proposed*
+means not yet ready to govern: drafted and unchecked, or naming a system
+not yet designed (PAR-0003). *Accepted* means the record governs — the
+moment the roll-up is owed — and it is the ordinary living state:
+effectively implemented, open to argued improvement, which is every
+accepted record, because they are living documents.
 
-This record is the one exception, and it is named rather than finessed.
-"Proposed does not govern, the prior source still does" presupposes a
-prior source, and PAR-0001 has none — marking it Proposed would leave
-the tier ungoverned, which is worse than the imprecision. It is therefore
-Accepted while still owing its hardening session, and it is the single
-case where the status line does not carry that debt; `DEFERRED.md` names
-it explicitly instead.
+Acceptance is a judgment that the record is ready to govern. For a
+distillation that judgment is the fidelity review against its source;
+for a rationale argued fresh it is the author's call. A deliberate
+attack session — arriving holding the answer and trying to break the
+draft — is one route to it, convened at judgment when a record must
+govern before organic challenge could accumulate, and it is never
+owed: nothing carries a hardening debt, no trigger makes one due, and
+a record's bulletproofness is otherwise earned the organic way, entry
+by entry in its tradeoff log (2026-08-02; primary:
+`SESSION-2026-08-02-hardening-dissolved.md`, which also records the
+accepted exposure — a judgment can be late where a trigger would have
+fired).
 
 **Granularity: one PAR is one named system.** The boundary is drawn by
 near-decomposability, in Simon's sense: dense interactions inside the
@@ -270,8 +282,9 @@ something. Each distillation obeys three rules:
   acceptance — never silently resolved. Improving on a founding decision
   is a genuine new decision and takes its own record.
 - **Roll-up per decision.** Each distillation amends the corresponding
-  tier-1 citation — exchange number or plan gate to `PAR-NNNN` — in the
-  same commit.
+  tier-1 citation — exchange number or plan gate to `PAR-NNNN` — in
+  the same commit as its acceptance, the moment it starts governing; a
+  draft sitting `Proposed` amends nothing.
 
 **A rationale argued out in a session files its primary.** A distillation
 already has one — it is reading it. A rationale reasoned out live does
@@ -342,23 +355,21 @@ than reconstructed afterwards.
 
 **Two kinds of session; more than one record per decision.** A decision
 is usually *formulated* in a messy session, where the reasoning is being
-discovered and several positions die, and *hardened* later in a
-deliberate one, where the author already holds the answer and attacks the
-draft. Both file records, and a decision may carry several — these are
+discovered and several positions die, and may later be *attacked* in a
+deliberate one, where the author already holds the answer and tries to
+break the draft — convened at judgment, never owed (see Status). Both
+kinds file records, and a decision may carry several — these are
 not ADRs and nothing here wants one record per decision. What a record
 must not carry is the *process*: it keeps the decisions and the
 alternatives that died with their reasons, never the route taken to reach
 them.
 
-The hardening session is not owed on demand. It comes due when the
-decision is truly load-bearing — when enough depends on it that being
-wrong is expensive — and until then the rationale sits `Proposed`. So
-the status line is the debt marker: a proposed rationale is its own
-un-hardened entry, the way a placeholder is its own debt entry, and
-`grep -l "^Status: Proposed" docs/par/*.md` is the list — anchored,
-because an unanchored match also finds records that merely quote the
-query, this one included. Nothing is
-maintained per record; the trigger is stated once in `DEFERRED.md`.
+`grep -l "^Status: Proposed" docs/par/*.md` derives the records not
+yet governing — anchored, because an unanchored match also finds
+records that merely quote the query, this one included. It is state,
+not a debt list: what a Proposed record awaits is named in its own
+text or its `DEBT.md` entry (PAR-0003's design session), and no
+trigger elsewhere makes anything due.
 
 **Raw transcripts are not retained.** The tooling writes one per session
 and expires it on its own timer; the curated record is what survives, and
@@ -436,26 +447,6 @@ architecture decisions and stay in their plans.
   with its resolution or the lack of one, so the trigger-less, unbounded
   character of a scrapbook never arrives. Fuller record:
   `SESSION-2026-08-02-par-rename.md`, Exchange 4.
-- **2026-08-02 — "I'm not totally sure the hardening is necessary —
-  hardening was just one way to deliberately improve a PAR and fell out
-  as procedure before being reasoned as necessary."** Kendrick's doubt,
-  standing unresolved. The claim: hardening is one route to what it
-  literally means — a PAR standing the test of time and multiple
-  challenges — and the tradeoff log now supplies the organic route,
-  evidence accumulating entry by entry until the record is visibly
-  bulletproof, a deliberate hardening session serving only to
-  accelerate or bypass that accumulation. The counterweight, recorded
-  at logging: hardening is timing insurance rather than mere
-  acceleration — organic challenges probe what usage happens to touch,
-  while the hardening trigger front-runs the moment where being wrong
-  is expensive, and the test of time only works if time supplies the
-  tests before load does. Also noted: PAR-0003 and PAR-0004 landing
-  without hardening shows drafting needs none, but both sit Proposed
-  and govern nothing, so they do not yet bear on the Accepted gate —
-  which is what the doubt is actually about, including what would flip
-  Proposed to Accepted under the organic route. Semantics and the
-  `DEFERRED.md` trigger stand while the doubt does. Fuller record:
-  `SESSION-2026-08-02-template-convention.md`, Exchange 2.
 - **2026-08-02 — "One primary per decision might be bad practice —
   shouldn't a session's argument land in one session record?"** Raised
   by Kendrick against the per-argument practice the PAR-rename and

@@ -50,10 +50,11 @@ what a governing record holds — follow the pointers.
   just because a decision landed. A distillation files none — it is
   already reading its primary. Keep decisions and the alternatives that
   died with their reasons; never the route taken to reach them.
-- A rationale drafted but not yet attacked → `Status: Proposed`, which is
-  itself the entry for the hardening session it still owes (`DEFERRED.md`,
-  PAR-0001). Formulating and hardening are separate sessions and each
-  files its own record; more than one per decision is expected.
+- A rationale not yet ready to govern → `Status: Proposed`; whatever
+  governed before keeps governing, and the tier-1 citation stays put
+  until acceptance. Hardening sessions are never owed — a deliberate
+  attack on a draft is convened at judgment (PAR-0001). More than one
+  record per decision is expected.
 - A not-yet-due intention → `DEFERRED.md`, always with the trigger that
   makes it due.
 - A present gap no marker can carry → `DEBT.md`.

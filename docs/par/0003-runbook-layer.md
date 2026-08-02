@@ -48,8 +48,8 @@ Three things are decided; everything else is deliberately open.
 
 - The design work is present debt: a `DEBT.md` entry, retired when the
   design session lands and this record is rewritten to govern the
-  settled system. The status line above carries the ordinary hardening
-  debt; the `DEBT.md` entry carries the design debt, which `Proposed`
+  settled system. The status line above says this record does not yet
+  govern; the `DEBT.md` entry carries the design debt, which `Proposed`
   alone does not name.
 - Until the design lands, nothing moves: the existing how-to fragments
   stay where they are as inventory for the design session, not as

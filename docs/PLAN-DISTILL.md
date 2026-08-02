@@ -1,11 +1,15 @@
 # Distillation plan
 
-Scope: retire the `DEBT.md` entry filed under PAR-0001 — every record
-citation pointing below tier 2 in `docs/ARCHITECTURE.md`, `README.md`, or
-`AGENTS.md` becomes a `PAR-NNNN` citation — including the debt-and-records
-machinery, whose absence from the rationale tier is where the doubt traffic
-actually lands. No code. No marker is touched anywhere in this plan;
-regen stays a no-op throughout.
+Scope: retire the distillation entry in `DEBT.md` — every record
+citation pointing below tier 2 in `docs/ARCHITECTURE.md`, `README.md`,
+or `AGENTS.md` becomes a `PAR-NNNN` citation. The debt-and-records
+machinery led the queue because its absence from the rationale tier was
+where the doubt traffic landed; it now has a drafted record awaiting
+acceptance (Phase 2). The runbook entry in `DEBT.md` (PAR-0003) is a
+different debt and not this plan's scope. No code. No marker is touched
+anywhere in this plan; regen stays a no-op throughout — the marker
+reasons that cite exchanges are the anticipated `changed`-entry case in
+PAR-0002's Consequences, and repointing them waits past this plan.
 
 This plan is a map, not a build authorization. Per the working loop each
 distillation is proposed and confirmed individually before it lands.
@@ -14,37 +18,60 @@ definition of done, nothing else.
 
 This cycle runs concurrently with `docs/PLAN-TOOL-CONTRACT.md`: record
 work and code work, separable under the chunking rule, neither blocking
-the other. Distillation is front-loaded deliberately — the fidelity
-check at acceptance leans on session memory that is depreciating, which
-is the operative reason not to let this plan idle behind the code cycle.
+the other. Distillation stays front-loaded, but on the narrowed ground
+recorded in `SESSION-2026-08-02-record-class.md` Exchange 13: the
+founding *answers* have survived two rewrites and are not session
+memory; what depreciates is the argument shape — which alternatives
+died, and why. Front-loading protects that, and only that.
+
+Rewritten 2026-08-02 against PAR-0001 as it now stands (the record-class
+and PAR sessions); git holds the prior version.
 
 ## Working rules
 
-Every distillation in this plan obeys PAR-0001's three distillation rules
-(provenance in Context, fidelity at acceptance, roll-up per decision) plus
-four rules this plan adds:
+Every distillation obeys PAR-0001's three distillation rules —
+provenance in Context, fidelity at acceptance, roll-up per decision —
+plus four rules this plan adds:
 
 1. **Quote, don't paraphrase, at the load-bearing points.** The decisive
-   source sentences appear verbatim; the record's own prose is connective
-   tissue. Drift then surfaces as a diffable misquote, and the quotes
-   double as rereading anchors. Pushed to its limit this rule defeats
-   itself — a quilt of quotations is exactly the fragment-assembly a
-   rationale exists to spare the reader — so the quotes carry the
-   decisions and the prose carries the argument, which has to stand up if
-   only the prose is read.
-2. **Each proposal names its decision boundary** — which decisions it
-   contains, which neighbours it touches. Boundaries follow PAR-0001's
-   test — the smallest chunk that carries everything relevant with it —
-   so a record needing a sibling read alongside it is one record cut in
-   two, and one that has swallowed a decision it doesn't need is two
-   fused. Forward citations are authored; back-links are grepped, never
-   stored.
+   source sentences appear verbatim; the record's own prose is
+   connective tissue. Drift then surfaces as a diffable misquote, and
+   the quotes double as rereading anchors. Pushed to its limit this rule
+   defeats itself — a quilt of quotations is exactly the
+   fragment-assembly a rationale exists to spare the reader — so the
+   quotes carry the decisions and the prose carries the argument, which
+   has to stand up if only the prose is read.
+2. **Each proposal names its decision boundary in PAR-0001's terms: one
+   PAR is one named system.** Near-decomposability draws it — dense
+   interactions inside the unit, sparse across it — and within the
+   boundary the unit is the smallest *self-sufficient* chunk, so the
+   record reads whole without a sibling open beside it. A proposal
+   defends its boundary with the revision test: simulate the decision
+   reversing, and if rewriting this record would force substantially
+   rewriting another, merge or make the dependency a citation. A
+   sub-system in service to a larger one may take its own record where
+   the pointer criterion holds — exactly one place it lives, exactly one
+   way to cite it. Forward citations are authored; back-links are
+   grepped, never stored.
 3. **Doubt traffic outranks the listed order.** The sequence below is a
    default. A decision Kendrick is currently doubting jumps the queue —
    that is the read loop working, not the plan failing.
-4. **One distillation, one commit**: the record and its `ARCHITECTURE.md`
-   citation amendment land together; the `DEBT.md` entry retires citation
-   by citation as they land.
+4. **The roll-up travels with acceptance** (PAR-0001's rule, restated
+   for the sequence here). A distillation drafts `Proposed` and does
+   not govern; the exchange or gate citation stays the governing
+   pointer, which is what makes drafting free — a draft can sit, and
+   nothing in the repo is inconsistent while it does. Acceptance of a
+   distillation is the fidelity review against its source, nothing
+   else, and the accepting commit is the unit: it flips the status
+   line, amends the tier-1 citations, and retires the corresponding
+   `DEBT.md` citations together. Where a draft supplies reasoning its
+   source leaves implicit, those places are enumerated when the draft
+   lands — in the session primary when a session produced it,
+   otherwise at the owning phase of this plan — and the review settles
+   each one; PAR-0002's four flags
+   (`SESSION-2026-08-02-record-class.md`, Exchange 10) are the live
+   instance. Draft and acceptance landing in one sitting collapse to
+   one commit — the expected common case.
 
 ---
 
@@ -75,38 +102,49 @@ Exit: settled. Phase 2 proceeds.
 
 ## Phase 2 — The debt and records machinery
 
-Distills, from `docs/archive/PLAN.md` and the practices AGENTS.md points
-at: the anti-bureaucracy invariant, the placeholder doctrine (the
-placeholder *is* the debt entry, which is what makes `DEBT-AUTO.txt`
-derivable), the classification rule, the three-file taxonomy, marker form
-rule v1, and the instruments. **One record — `PAR-0002` — drafted
-2026-08-02 and sitting Proposed.** The layout settlement, named alongside
-these in `AGENTS.md`, is component decomposition rather than debt
-machinery and moves to Phase 5.
+**PAR-0002 is drafted (2026-08-02) and sits `Proposed`, so
+`archive/PLAN.md` still governs the debt machinery** — correct under
+rule 4, not a stall. It distills the anti-bureaucracy invariant, the
+placeholder doctrine, the classification rule, the three-file taxonomy,
+marker form rule v1, and the instruments. The layout settlement, named
+alongside these in `AGENTS.md`, is component decomposition rather than
+debt machinery and lands in Phase 5.
+
+Remaining work is the acceptance review. It must settle the four
+daylight flags named in the primary (Exchange 10): the reason a
+placeholder never invents a signature; the reason the mismatch test must
+not self-heal; the every-leniency generalization; the closed-class
+connection to "exemption to adjudicate." The accepting commit then
+carries the roll-up: `README.md`'s "the debt machinery, PLAN.md Phase 2"
+and "marker form rule v1 (PLAN.md, Phase 2, decision 4)" citations and
+`AGENTS.md`'s pointer at what `PLAN.md` holds become `PAR-0002`, and
+those citations retire from the `DEBT.md` distillation entry.
 
 **Gate (one decision): seeding reconstructed challenges — settled
-2026-08-02: no.** Neither option was taken. The doubts Kendrick has
-raised against the debt system (roughly three, predating the machinery
-and existing only in memory) are not reconstructed into a Challenges
-section, nor folded into Context as objections considered. His reason
-decided it: he may not recall them reliably, but they recur on their own
-— three times already — and a recurrence lands as an ordinary
-contemporaneous entry, which is what the section is for. Reconstruction
-would have bought entries of the weakest available kind, to fill a
-section that fills itself.
+2026-08-02: no.** Neither offered option was taken. The doubts Kendrick
+has raised against the debt system (roughly three, predating the
+machinery and existing only in memory) are not reconstructed into a
+Challenges section, nor folded into Context as objections considered.
+His reason decided it: he may not recall them reliably, but they recur
+on their own — three times already — and a recurrence lands as an
+ordinary contemporaneous entry, which is what the section is for.
+Reconstruction would have bought entries of the weakest available kind,
+to fill a section that fills itself.
 
 Consequence: PAR-0002 lands with no Challenges section, and that is
 correct rather than an omission. The challenge surface is the record
 existing at tier 2 — somewhere for doubt #4 to land — not entries in it.
 
-Exit: the debt machinery is governed from tier 2 and its challenge
-surface exists.
+Exit: PAR-0002 Accepted with its roll-up landed; the debt machinery
+governed from tier 2 and its challenge surface in place.
 
 ---
 
 ## Phase 3 — Core semantics
 
-The decisions everything else leans on. Three units:
+The decisions everything else leans on. Numbering continues from 0005 —
+PAR-0003 and PAR-0004 went to live decisions mid-plan, which is the
+uniform numbering doing its job, not a collision. Three units:
 
 1. **Shape taxonomy and classification-by-form** (Exchanges 3 and 5;
    invariant 3): the five shapes, `Opaque` as the escape hatch,
@@ -118,7 +156,7 @@ The decisions everything else leans on. Three units:
 3. **Param versus preference** (Exchange 2; invariant 5), including
    "anything ambiguous is a param."
 
-Exit: the units above are recorded, each with its citation amendment.
+Exit: the units above are Accepted, each with its roll-up landed.
 
 ---
 
@@ -133,7 +171,7 @@ Exit: the units above are recorded, each with its citation amendment.
    measurement, rankings measured, sensitivity bounds; the user-exposed
    equivalence question stays in `DEFERRED.md` with its trigger.
 
-Exit: the units above are recorded, each with its citation amendment.
+Exit: the units above are Accepted, each with its roll-up landed.
 
 ---
 
@@ -147,13 +185,13 @@ Exit: the units above are recorded, each with its citation amendment.
 3. **Run semantics** (Exchanges 3 and 4): fusion, decimation hoisting,
    fold-sweep persistence, invertible geometry and the free-floating
    base layer.
-4. **The layout settlement** (`archive/PLAN.md` Phase 3), moved here from
-   Phase 2: flat modules except `tools/`, the five-shape algebra as one
-   design unit, `views.py` as the tool↔GUI boundary language, `render`
-   without `sweep`. It lands last because it cites the component records
-   above and reads better once they exist.
+4. **The layout settlement** (`archive/PLAN.md` Phase 3), moved here
+   from Phase 2: flat modules except `tools/`, the five-shape algebra as
+   one design unit, `views.py` as the tool↔GUI boundary language,
+   `render` without `sweep`. It lands last because it cites the
+   component records above and reads better once they exist.
 
-Exit: the units above are recorded, each with its citation amendment.
+Exit: the units above are Accepted, each with its roll-up landed.
 
 ---
 
@@ -167,15 +205,18 @@ reading):
 
 - [ ] `docs/ARCHITECTURE.md`, `README.md`, and `AGENTS.md` cite nothing
       deeper than `docs/par/`; the distillation entry in `DEBT.md` is
-      retired.
+      retired. (The runbook entry is PAR-0003's debt, not this plan's.)
+- [ ] No distillation is left `Proposed`: every record this plan
+      produced is Accepted, its daylight flags settled at review, its
+      roll-up landed in the accepting commit.
 - [ ] Every distillation quotes its decisive source sentences verbatim
       and names its provenance (source passages, original date) in
       Context.
-- [ ] No decision boundary was drawn silently: each record names what
-      it was decided against, and reads whole.
+- [ ] No decision boundary was drawn silently: each record names its
+      system and what it was decided against, and reads whole.
 - [x] The Phase 1 gate is resolved on the record (2026-08-01, above).
-- [ ] The debt machinery is governed from tier 2, with its challenge
-      surface in place.
+- [x] The Phase 2 reconstructed-challenges gate is resolved on the
+      record (2026-08-02, above).
 - [ ] Every gate decision above is recorded in this document at the
       phase that made it — the decision, the reasoning, the date.
 - [ ] Suite green, regen a no-op, working tree clean.
@@ -184,26 +225,38 @@ reading):
 
 ## After this plan
 
-The directory goes quiet, now for the PAR-0001 reason and truly:
-distillation is complete, records are written rarely, and challenge
-entries accumulate organically wherever the read loop lands. This plan
-freezes under its name and moves to `docs/archive/` when exhausted.
+The distillation debt is gone: the founding reasoning governs from
+tier 2, doubts have somewhere to land, and no reader is sent below
+`docs/par/` by a tier-1 document. The directory does not yet go quiet,
+and this plan no longer claims it will — PAR-0003 owes its design
+session (`DEBT.md`) and PAR-0004 its first templates once it governs.
+That traffic belongs to those systems; what ends here is distillation. This
+plan freezes under its name and moves to `docs/archive/` when exhausted.
 
 ## Known risks
 
-- **Individuation drift.** The session's decisions are entangled;
-  one-file-per-decision imposes boundaries the source doesn't have.
-  Coarse boundaries and living records make this far cheaper than it
-  was under the immutable reading — a wrong boundary is repaired by
-  rewriting the records, not by superseding several at once — but the
-  unit lists in Phases 3–5 predate the coarse-granularity call and are
-  re-judged at each phase's proposal rather than taken as settled.
-- **The oracle depreciates.** Fidelity at acceptance leans on session
-  memory that fades; this is the front-loading argument, and it means
-  the risk grows with every session this plan idles. A stalled Phase 5
-  is reviewed by a weaker oracle than a prompt one.
-- **Date flattening.** All distillations will carry near-identical
-  dates, so the later-supersedes-earlier rule loses its tiebreaker
+- **Individuation drift.** The session's decisions are entangled, and
+  record boundaries impose structure the source doesn't have. The unit
+  lists in Phases 3–5 predate the named-system criterion and are
+  re-judged at each phase's proposal rather than taken as settled. The
+  residual risk is bounded from two sides: the revision test catches a
+  leaked boundary at proposal time, and a boundary that ships wrong is
+  falsifiable from the tree afterwards — Challenges entries straddling
+  two records, or clustering into separable concerns inside one — and
+  is repaired by re-individuating living records, losslessly, numbers
+  never reused.
+- **The curator is unchecked where reasoning was discovered live.** For
+  the founding decisions the oracle-depreciation worry was overstated,
+  and this rewrite acts on the correction flagged in
+  `SESSION-2026-08-02-record-class.md` Exchange 13: the answers survived
+  two rewrites and are not session memory. What does depreciate is the
+  argument shape — which alternatives died, and why — and for decisions
+  settled in plan gates rather than the design session, that shape has
+  no dense primary underneath it. Front-loading protects a narrower
+  thing than the original plan claimed, but still a real one.
+- **Date flattening.** Distillations carry their decisions' original
+  dates, which cluster tightly (the design session; 2026-08-01 for the
+  plan gates), so the later-supersedes-earlier rule loses its tiebreaker
   among them, and the session's internal ordering ("later exchanges
   supersede earlier ones") goes flat. Mitigation: any genuine tension
   between founding decisions is resolved explicitly at distillation

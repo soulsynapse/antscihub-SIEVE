@@ -30,3 +30,31 @@ numbers are unchanged, so the mapping is 1:1 and is stated once in
 PAR-0001's "Form and name." "Minimal PADding" lands as the recorded
 nickname of the anti-bureaucracy invariant, not a rename of it: PAR-0002
 is a distillation and reports its source's vocabulary.
+
+## Exchange 2 — the name is terminal; the system is SIEVE's alone
+
+Kendrick, correcting Exchange 1's weighting of the reversal, verbatim:
+
+> "yeah i mean it wasn't rejected with any rationale, it was just 'oh i
+> like that one better'. Naming matters but shouldn't move around too
+> much after this, but feel free to argue against PAR. I think it's
+> pretty benign and cute at the moment."
+
+So the AR-to-ARCH choice this rename overturns was preference, not
+argument — there was no rationale for a reversal to defeat, and the
+re-examination weight Exchange 1 assigned it drops accordingly.
+
+The invited counterargument produced nothing disqualifying. Noted and
+accepted as livable: PAR collides with photosynthetically active
+radiation, a term a repo about organism video could someday use in prose
+about recording illumination — the `PAR-NNNN` citation form is
+unambiguous, so the exposure is bare-word prose only. The PAD backronym
+exists to license "minimal PADding" and must not become a third
+free-standing term; it stays one paragraph in PAR-0001.
+
+Also settled, verbatim: PAR is "something that exists to serve SIEVE
+alone." A generalization goal exists outside this repo and is
+deliberately out of scope; no record here anticipates it, because a
+record written for an imagined future consumer stops being evidence of a
+working system and starts being a demo. Both rulings — terminal name,
+SIEVE-only scope — are folded into PAR-0001.

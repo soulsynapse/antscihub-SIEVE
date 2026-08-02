@@ -69,7 +69,9 @@ PADding, which is the anti-bureaucracy invariant (PAR-0002) wearing its
 nickname. The class was cited as `ARCH-NNNN` until 2026-08-02, when it was
 renamed (primary: `SESSION-2026-08-02-par-rename.md`); frozen records
 still use that form, and the numbers are unchanged, so an archival
-`ARCH-NNNN` citation resolves as `PAR-NNNN`.
+`ARCH-NNNN` citation resolves as `PAR-NNNN`. The name is intended
+terminal: every rename taxes the frozen tier with another citation
+mapping, so a successor would have to beat PAR by more than that costs.
 
 **Scope: architecture only.** A rationale records a decision about the
 architecture — the component decomposition, where a responsibility lives,
@@ -81,7 +83,10 @@ process rules live in `AGENTS.md`. The name carries this rule less than
 judgment: general reasoning does not belong in `docs/par/`, because
 absence from the directory is only meaningful if presence is disciplined.
 Once the architecture is settled the directory goes quiet — records are
-written rarely and retired more rarely.
+written rarely and retired more rarely. The system also serves SIEVE
+alone: a record written with one eye on reuse beyond this repo is
+carrying generality nobody here needs, which is PADding of the purest
+kind.
 
 **Records are living.** A rationale is edited in place whenever a reread
 finds it unclear, incomplete, or wrong, and that is the normal operation

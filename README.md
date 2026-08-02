@@ -1,95 +1,103 @@
 # SIEVE
 
 Signal Isolation for Ethological Video Events (SIEVE) isolates behavior from
-video using interpretable signal-processing filters rather than a trained
-model.
+video using interpretable signal-processing filters. The user builds a
+pipeline; SIEVE runs it.
 
-## Setup
+The repo is mid-rewrite: the architecture is settled, the skeleton is placed,
+and real code lands next. This README is the map — where things are and which
+record governs them. It restates nothing a governing doc or the tree already
+records; when it seems to disagree with one of them, the other is right.
 
-The project uses [uv](https://docs.astral.sh/uv/):
+## The four documents
 
-```powershell
-uv sync --extra gui --group dev --group dev-gui
-```
+- [docs/DESIGN-BRIEF.md](docs/DESIGN-BRIEF.md) — the design prompts, verbatim,
+  including the rejected §8 EDIT kept as a recorded alternative.
+- [docs/DESIGN-SESSION.md](docs/DESIGN-SESSION.md) — the argument that
+  determines the code, in nine exchanges. **The authoritative record**: where
+  any other document is silent or conflicts, this one governs.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the synthesis: seven
+  components, the authoring and execution flows, five invariants with their
+  failure modes. Read this first when writing code.
+- [docs/PLAN.md](docs/PLAN.md) — the conformance plan: phase gates, the
+  settled layout, marker form rule v1, and the definition of done.
 
-Run the application, the tests, and the static checks without activating the
-environment:
+## The tree
 
-```powershell
-uv run sieve-gui
-uv run pytest
-uv run pyright
-uv run lint-imports
-```
+Real code (the debt machinery, PLAN.md Phase 2 — the closed class that gives
+every placeholder its meaning):
 
-The three checks cover behaviour, static types, and architectural import
-contracts.
+- `src/sieve/debt.py` — the `Owed` marker exception, the rule-v1 enumerator,
+  the ledger serializer, and the regen command.
+- `tests/conftest.py` — the adapter: a caught marker becomes a skip carrying
+  its reason; one the enumerator can't see fails.
+- `tests/_sentinel/` — the marker the enumerator must always find, so "no
+  debt" and "enumerator dead" stay distinguishable.
+- `tests/test_debt.py`, `test_automatic_ledger.py`, `test_adapter.py`,
+  `test_import.py` — the machinery's own tests, including the mismatch test.
 
-## Tests
+The components (which of these are still placeholders is `DEBT-AUTO.txt`'s
+job to say, not this list's; a placeholder's docstring and reason point at
+the governing sections — follow the pointer before building):
 
-`tests/` is laid out by what a test needs rather than by what it covers, because
-what it needs is what decides whether it can run:
+- `src/sieve/kernel.py` — the five-shape op algebra, one design unit.
+- `src/sieve/tools/` — one file per tool (invariant 1): `base.py` the Tool
+  contract, `crop.py` the milestone tool.
+- `src/sieve/views.py` — the closed view vocabulary: the language between
+  tools and the GUI, owned by neither.
+- `src/sieve/executor.py` — `render` only; `sweep` is not yet due.
+- `src/sieve/store.py` — the content-addressed store.
+- `src/sieve/pipeline.py` — the pipeline file format and loader.
+- `src/sieve/gui.py` — the two panes and the ROI overlay.
+- `tests/test_conformance.py` — the conformance suite, skipping whole at
+  collection until real.
 
-| Directory | What lives there |
-| --- | --- |
-| `tests/unit` | Pure functions and models; no Qt, no decode, no disk |
-| `tests/integration` | The CLI and the pipeline end to end, over synthetic video |
-| `tests/gui` | Qt widgets and gestures; needs the `gui` extra and `pytest-qt` |
-| `tests/property` | Hypothesis properties over the pure layer |
-| `tests/bench` | `pytest-benchmark` budgets; timing-sensitive |
+The harness has deliberately no file: not reached by the crop milestone, it is
+a not-yet-due entry in `DEFERRED.md` with its trigger.
 
-Fixtures are synthesized rather than committed — `tests/conftest.py` writes a
-short video whose frame *n* is identifiable by its intensity, so a decode test
-can assert which frame a seek landed on. Qt tests run under
-`QT_QPA_PLATFORM=offscreen` unless a platform is already chosen, so
-`$env:QT_QPA_PLATFORM = "windows"; uv run pytest tests/gui` is how you watch a
-gesture test do what it says.
+## Where contracts live
 
-`--strict-markers` is on, so a marker has to be declared in `pyproject.toml`
-before it can be used. `gui` carries the Qt requirement and is what
-`uv run pytest -m "not gui"` skips to get the headless suite; `slow` is on a
-single subprocess test; `cuda` is declared but unused, since no GPU kernel is
-under test yet. `benchmark` comes from `pytest-benchmark` rather than from the
-declaration list.
+There is no contracts directory and no interfaces module, deliberately. Each
+contract exists once, in code, at the boundary it governs, and everything else
+derives from it — the GUI form, the validator, and the task hash are all
+computed from a tool's `Params`, never restated (Exchange 1). Several
+contracts aren't interfaces at all but *shapes*: to be a `Resample` you must
+write a function with nowhere to put state, so misclassification is
+inexpressible rather than tested for (Exchange 5). Enforcement lives in
+tests, never convention (Exchange 6). The three formats consumed by git
+history — the pipeline file, the automatic ledger, equivalence signatures —
+carry their version inside the bytes and evolve additive-only. Until a
+contract's code exists, it lives in the session record, and its placeholder's
+docstring points at the section that holds it.
 
-The suite runs on six `pytest-xdist` workers by default, grouped by module
-(`--dist loadscope`), which takes it from ~20 s to ~8 s. Six rather than one per
-core: the tests are individually short, so past six the per-worker cost of
-importing Qt, numpy, and OpenCV outweighs the parallelism, and 32 workers is
-slower than 6. `loadscope` rather than the default `load` because keeping a
-module on one worker imports it once and builds the session video fixture once.
+## Debt
 
-**The timing budgets do not run in parallel.** `tests/bench` asserts what a
-machine can do, and five sibling workers make that a claim about the harness
-instead, so `gate.py` skips a budget when it sees `PYTEST_XDIST_WORKER`. Take
-them serially:
+Three files with three meanings; never "the ledger" unqualified:
 
-```powershell
-uv run pytest tests/bench -n0
-```
+- `DEBT.md` — hand-authored. Present debt no in-tree marker can carry.
+- `DEFERRED.md` — hand-authored. Not-yet-due intentions, each with the
+  trigger that makes it due. Building from this file goes poorly.
+- `DEBT-AUTO.txt` — generated, never hand-edited. The automatic ledger of
+  every in-tree marker, keyed (path, qualname), rule version pinned.
 
-`-n0` is also the way to run anything serially without editing `addopts` — it
-keeps the plugin loaded and asks it for zero workers.
+A placeholder *is* its debt entry: a real module at its real import path
+raising `Owed("<reason>")` in marker form rule v1 (PLAN.md, Phase 2, decision
+4). Presence in the tree is the authorization — there are no status fields
+anywhere. Test-tree markers appear in the suite as skips carrying their
+reason.
 
-## Commands
+### Mismatch runbook
 
-```powershell
-uv run sieve inspect
-uv run sieve inspect downsample
-uv run sieve run arena.sieve.yaml --dry-run
-uv run sieve run arena.sieve.yaml
-uv run sieve-gui
-```
+The suite goes red when `DEBT-AUTO.txt` disagrees with a fresh enumeration,
+and the failure output is the entry-level diff — added, removed, changed.
+If the change is one you made on purpose: `python -m sieve.debt write`, then
+commit the regenerated ledger with the change it reflects. If it isn't:
+investigate before regenerating — a reflexive regen launders real signal
+("unintended debt change") into noise ("stale ledger").
 
-The headless `sieve` command uses the base dependencies. The desktop
-`sieve-gui` command requires the `gui` extra.
+## Working here
 
-## Dependencies
-
-Manage dependencies with uv:
-
-```powershell
-uv add scipy
-uv add --group dev pyright
-uv remove scipy
-```
+`pip install -e .` (Python 3.11, `src/` layout), then `pytest`. Green
+includes placeholder skips exactly matching the automatic ledger's test-tree
+entries. The working instructions — the loop, where records go, the
+never-do list, session boundaries — are in [AGENTS.md](AGENTS.md).

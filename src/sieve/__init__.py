@@ -1,1 +1,1 @@
-__version__ = "0.1.0"
+"""SIEVE: video into behavioral measurements via interpretable signal-processing filters."""

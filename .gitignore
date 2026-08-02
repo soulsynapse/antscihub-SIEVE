@@ -1,14 +1,14 @@
-.venv/
-.nox/
-uv.lock
-dist/
-build/
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+build/
+dist/
+
+# Environments
+.venv/
+
+# Tooling caches
+.pytest_cache/
 .ruff_cache/
-videos-testing/
-retention-session.jsonl
-rss-session.csv
-retention-tuning.jsonl
-rss-tuning.csv
+.mypy_cache/

@@ -360,6 +360,14 @@ First real code — likely the pipeline file format or the Tool base — is a
 separate planning cycle, and it is where the GUI in-process decision and the
 Pydantic-vs-JSON-Schema canonicalization come due. Not before.
 
+This plan, exhausted, freezes under its name. Its pointers are load-bearing —
+marker form rule v1, the machinery class, the classification rule, and the
+layout settlement are recorded here and pointed at from code docstrings,
+README, and DEFERRED.md — so `docs/PLAN.md` is never reused: a successor
+planning cycle takes a new name, and a live contract recorded here migrates
+out only when it first needs to evolve, additively, the v1 record staying
+put. (Recorded 2026-08-01, on noticing the plan was silent about itself.)
+
 A seam noted and deliberately not built: several type-2 trigger conditions
 ("first second implementation of any op") are mechanically queryable against
 the tree, so triggers could someday graduate from prose to test — the same

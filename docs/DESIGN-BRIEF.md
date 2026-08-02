@@ -87,9 +87,7 @@ The second solution is easier to understand and implement in practice and just f
 
 ---
 
-## 9 — Disarming the objections
-
-Disarming your concerns:
+## 9 — Disarming the concerns
 
 1. Tolerance doesn't compose in *every* scenario, but it isn't a problem. Dynamic systems become chaos only by sensitivity and folding. Sufficient damping can create the well behaved system, and history dependent sensitivity are going to be known when the feature is added. That's one flag in the contract and the problem is gone.
 

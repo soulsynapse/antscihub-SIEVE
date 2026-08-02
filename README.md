@@ -99,5 +99,5 @@ investigate before regenerating — a reflexive regen launders real signal
 
 `pip install -e .` (Python 3.11, `src/` layout), then `pytest`. Green
 includes placeholder skips exactly matching the automatic ledger's test-tree
-entries. One decision at a time; a proposal is the deliverable — see the
-working loop the plan encodes.
+entries. The working instructions — the loop, where records go, the
+never-do list, session boundaries — are in [AGENTS.md](AGENTS.md).

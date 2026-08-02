@@ -111,6 +111,16 @@ file with that trigger.
      governing doc section) is a convention, not a grammar — the compared
      content is bytes either way, and a grammar here would be the
      anti-bureaucracy invariant tripping on itself.
+   - Recorded narrowings (2026-08-01, from the Phase 2 code review): any
+     statically visible reference to the name `Owed`, bound by the
+     canonical import or not, is held to the rule — the name is vocabulary,
+     reserved repo-wide under the enumerated roots. Qualnames flatten
+     `<locals>`, and shadow collisions surface as loud duplicate-key
+     errors. Canonical positions are reached through def/class nesting
+     only; a marker def under `if`/`try` is out of form. Reasons are
+     LF-only: any other line boundary is an enumeration error. Known
+     accepted gap: `--doctest-modules` imports module-form placeholders
+     outside the adapter's collection path and reds the suite loudly.
 5. **Debt files — settled.** `DEBT.md` (present, correct debt) and
    `DEFERRED.md` (not-yet-due intentions, each with its trigger), both at
    repo root — they sort adjacent in a root listing, and an agent lists the
@@ -148,6 +158,12 @@ proposal (signatures, format, test cases) confirmed before code lands:
 - [x] 6. Seed `DEBT.md` and `DEFERRED.md` — present debt near-empty;
       deferred items migrated from the session's durable record and
       `DESIGN-SESSION.md`'s Open list, each with its trigger.
+- [ ] 6.5. Review fixes (inserted 2026-08-01 after a two-reviewer code
+      review of the phase): collection-time marker handling via a Module
+      subclass, LF-only reason validation, teardown gating, byte-level
+      parseability, parse/diff hardening, and three missing test pins
+      (sentinel default exclusion, mismatch label orientation, composed
+      end-to-end path). Rule-v1 narrowings recorded in the gate.
 - [ ] 7. Exit — pure verification (amended 2026-08-01): a fresh regen is a
       no-op at zero entries, the sentinel is found, the suite is green;
       `DEBT-AUTO.txt` already landed at its zero state with step 4.

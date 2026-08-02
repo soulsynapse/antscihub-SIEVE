@@ -17,15 +17,6 @@ The pipeline is the run order. Its so the program has the information it needs t
 
 The pipeline itself has a contract because all the parts of SIEVE depend on everything else being able to play nice with each other. I think the contracts need to be able to be updated without everything breaking, or we will be hand writing everything until the end of time as new functionality lands. I'd like you to tell me how to define the pipeline contract so that as we add things to the pipeline contract, things don't break, and old features don't cause the required context for agents working in the repo to anchor them as plausible paths or distractions. Again, the goal is elegant, extensible design that is clear enough that agents can work in the repo and produce correct results. As a hint, for agents without infinite context, a correct result could be one that announces how it's not correct so problems don't go unnoticed, ideally mostly correct from the start, or chunked with debts of what is owed and when, and in-place ledgers that aren't essays reexplaining what is already obvious in the code.
 
----
-## 1.5 - Instructions I gave fable to keep things (triggered fable switch)
-
-You can write to the docs file for open questions, decided answers, whatever documentation you need to keep a running list as we derive the plan together. So far you've done well and constructed pretty clear answers. You may want to also make a rough draft of a scaffold file for the eventual repo design. You might also want to write down the more abstract goals as well, in some capacity, but the final form of the docs should be brief and clear, and should be as true now as it is in a year. So separate the unsettled parts from the settled parts, and get my confirmation before you add anything to the settled parts. That might mean adjusting things as we go, proposing safe, settled anchors to help guide your reasoning. I'll tell you now: whether something is settled or not will not be clear from me saying something 'sounds good'. You should reason through why it would be settled and propose it to me to confirm. And again, you can either do that as we go, or at the end. The safest option would probably be to have a tentatively settled or some kind of ranking. For example, the flags at the end of your message will be resolved as we go. Those are questions you have that demand an answer, and that is a debt of some kind that will come due once you have enough context to resolve it, and not before.
-
-Here's something to know: the project is inherently split the same way as the instructions I just told you. There is a solid, dependable base program that all of the functionality of SIEVE is attached to. This puts the base functionality never at fault of what any one pipeline step does, because if the pipeline step is responsible for it's integration with the base SIEVE program, then SIEVE only needs to enable the pipeline step to do what it needs.
-
-This mirror principle will be coming up again and again, and that's by design.
-
 
 ---
 

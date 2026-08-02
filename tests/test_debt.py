@@ -109,6 +109,8 @@ VIOLATIONS = {
     "raise_not_sole_statement": CANON + 'def f():\n    x = 1\n    raise Owed("x")\n',
     "module_raise_with_extra_statements": CANON + 'x = 1\nraise Owed("x")\n',
     "unparseable": "def f(:\n",
+    "cr_in_reason": CANON + 'def f():\n    raise Owed("a\\rb")\n',
+    "unicode_line_separator_in_reason": CANON + 'def f():\n    raise Owed("a\\u2028b")\n',
 }
 
 

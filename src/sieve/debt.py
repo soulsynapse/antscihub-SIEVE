@@ -22,6 +22,11 @@ EXCLUDED = (SENTINEL_ROOT,)
 
 MODULE_QUALNAME = "<module>"
 
+# Every line boundary str.splitlines() honors, except LF. A reason containing
+# any of these would put non-LF bytes in the ledger and break parse as
+# serialize's inverse.
+_NON_LF_BOUNDARIES = '\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029'
+
 LEDGER_NAME = "DEBT-AUTO.txt"
 FORMAT_VERSION = 1
 MARKER_RULE = "v1"
@@ -283,6 +288,8 @@ def _reason(node: ast.Raise, has_canonical: bool, rel: str, qualname: str) -> st
     arg = exc.args[0]
     if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value):
         raise EnumerationError(f"{where}: marker reason must be one non-empty static string literal")
+    if any(ch in arg.value for ch in _NON_LF_BOUNDARIES):
+        raise EnumerationError(f"{where}: marker reason may contain no line boundary other than LF")
     return arg.value
 
 

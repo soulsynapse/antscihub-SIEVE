@@ -224,6 +224,20 @@ docstring, the canonical import, and the raise — the behavior-only form,
 which raises on import. "A module is never both: a module-level raise would
 make quoted signatures unreachable."
 
+Which of the two a placeholder takes is not a style choice. It follows
+from whether anything must import a *name* out of the module. Vocabulary
+that is reached for — an op constructor a tool emits, a view layer, a
+field type — takes form (a), because form (b) raises before the name can
+be bound, so every importer dies at import rather than at use: a tool
+naming an unbuilt op would never be scanned into the derived registry,
+never appear in the picker, and never reach the backend error the debt
+system exists to produce. Behavior that is only called into — an
+evaluator, a store, the GUI — takes form (b). The tell is whether a
+`from <module> import <name>` against the placeholder appears anywhere
+the milestone reaches. This is a placement rule, not a third form; both
+positions are v1's and the enumerator already keys them apart by
+qualname.
+
 **The universal surface.** The file universe is the git index — tracked
 files plus untracked-not-ignored, so a marker is visible to regen before
 its first commit — which makes universality definitional rather than

@@ -3,6 +3,8 @@
 Status: Proposed
 Date: 2026-08-03
 
+Owed: 20260803T072355Z: two amendments from the tool-contract scoping session (primary `SESSION-2026-08-03-tool-contract-scope.md`) — the Consequences' "hash over effective params" rule exists only because every field lives in one model, and becomes unnecessary rather than obeyed once a method's params live on the method, since no inert field survives to be excluded; and the record classifies by effect while measurement-versus-method is a question of ownership it cannot express, which is why `dis_preset` is correctly a param under its rule and still does not belong beside the fields that survive a method swap
+
 ## Outcomes
 
 What this system looks like working as intended: a pipeline file

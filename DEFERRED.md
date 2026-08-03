@@ -136,6 +136,20 @@ the automatic ledger.
   and is an `Opaque` until measurement says it is worth a form of its
   own. Due when: an op of that kind is written, or instrumentation
   shows an `Opaque` on a hot path.
+- **Where non-trivial primitives live** — an op is a value, but a `Fold`
+  tracker or an adaptive background model needs code that evaluates it,
+  and PAR-0007 settles only the negative: not the tool module, because
+  the operation is different debt and co-location entangles its identity
+  with a module path. The positive is deferred on PAR-0007's own
+  admission test — a module path is in no recipe hash, so moving an
+  implementation later costs a file move and some imports, never a store
+  migration. Loose preference when due: `kernel/` becomes a package with
+  the op values at the top and implementations underneath, so a second
+  implementation lands beside the first where a contributor looks for it
+  and the scanned dispatch table finds them together. Due when: the
+  first op needing an implementation module — the same trigger as
+  "Further forms enter the kernel" (docs/PLAN-TOOL-CONTRACT.md Phase 2
+  gate 2 anticipates exactly this entry).
 - **The dispatch table's home** — DESIGN-SESSION.md Exchange 7 settles the
   mechanism (multiple dispatch over the reified op description, with the
   table doubling as the eligibility check) and Exchange 8 amends selection

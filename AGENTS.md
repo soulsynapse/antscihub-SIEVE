@@ -37,6 +37,10 @@ what a governing record holds — follow the pointers.
 
 ## Where records go
 
+*Record* is the genus: a rationale, a primary, a stub. **PAR is Project
+Architecture Rationale** — living, amended in place, and
+still taking markers once accepted (PAR-0001).
+
 - A settled decision → the active planning document's gate; when it is an
   architecture decision (scope: PAR-0001), it is recorded as a project
   architecture rationale in `docs/par/` — with `docs/ARCHITECTURE.md`

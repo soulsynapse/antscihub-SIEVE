@@ -3,6 +3,8 @@
 Status: Accepted
 Date: 2026-08-03
 
+Owed: 20260803T072354Z: the voiding declaration handed back — this record's Consequences route to PAR-0007 a convention that a tool declares the guarantees it voids, and its own first instance disproves it, since `Opaque`'s lost reprojection is derivable from the form and a tool asserting it is a second unchecked copy of what the value already carries; what is genuinely not derivable is the user-facing consequence, which is computed at selection (PAR-0011) and displayed by PAR-0013; the Consequences bullet needs amending or the refusal falls; stated in the tool-contract scoping session, primary `SESSION-2026-08-03-tool-contract-scope.md`
+
 ## Outcomes
 
 What this system looks like working as intended: a rewrite that made

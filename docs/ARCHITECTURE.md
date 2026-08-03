@@ -18,21 +18,27 @@ lands, its exchange citation remains the governing pointer.
 ## The components
 
 **The kernel** is the set of primitive operations — resample, threshold, wavelet
-transform, optical flow, background model, tracker. Every primitive is written in
-one of five shapes, and the shape it is written in *is* its classification. There
-are no metadata flags to set wrong.
+transform, optical flow, background model, tracker. Every primitive is an op
+*value* — a closed, serializable constructor with typed fields, never a callable —
+and the form it is written in is an authorization: it states which substitutions
+the executor may make *without telling anyone*, proved under the answer defined
+at the logical level (the composed map from the nearest barrier, applied once).
+The vocabulary is what has been proved, and no more:
 
-| Shape | Signature | What the shape forces |
+| Form | What it is | What it authorizes silently |
 | --- | --- | --- |
-| `Resample` | coordinate map over (t, y, x) | stateless and random-access; any chain composes into one |
-| `PixelMap` | value → value | stateless, no neighborhood access |
-| `Window` | frame N from [N−a, N+b] | random-access at bounded cost |
-| `Fold` | (state, frame) → (state, output) | sequential; an execution barrier |
-| `Opaque` | frames in, frames out | always correct, never fused |
+| affine coordinate map | exact map over (t, y, x) | composition with neighbours, random access, reordering with spatial work |
+| the sequential bit | structural: state carried frame to frame | nothing — a sweep barrier |
+| `Opaque` | no structure exposed | nothing at all — always correct, never fused |
 
 `Opaque` is what you write when you don't want to think about any of this. It is
-correct and slow. Reshaping it into a `Resample` later makes it fast and changes
-nothing else — same params, same view, same output. (Record: Exchanges 3 and 5.)
+correct and slow, and it is the resting state, not debt. Reshaping it into a
+proved form later makes it fast with no change to the tool's public surface —
+same params, same view, the answer preserved under the defined semantics. A
+further form is admitted when a substitution it would license is both wanted and
+provable — never because an op feels like it deserves a category. Everything
+proof cannot back is user-initiated, shown, and recorded — the measured world of
+invariant 4. (Record: PAR-0005.)
 
 **The harness** decides which implementations may exist and which is preferred. A
 new implementation does not *declare* that it computes change energy; it earns
@@ -81,7 +87,7 @@ intent/progress split.)
 **The executor** is the only component that knows about the others. It lowers
 steps to ops, fuses adjacent ops, asks the harness for the fastest verified
 implementation of each, and evaluates — `render(node, frame)` for a single frame,
-`sweep(node, range)` for `Fold` ops that must run in order. Results go to the
+`sweep(node, range)` for sequential ops that must run in order. Results go to the
 store. It is not a planner: it has a naive evaluator that always works, plus a
 handful of peephole rules added when profiling shows a path is hot. (Record:
 Exchanges 4 and 6.)
@@ -123,14 +129,15 @@ eligibility as a dispatch query — Exchange 7.)
 Steps are lowered to ops and fused: crop ∘ downsample becomes a single coordinate
 map — one correctly-filtered resample rather than two — and temporal decimation
 hoists above spatial work, so frames that will be discarded are never decoded.
-`Fold` ops sweep once and persist their small results; a track table is a few MB
-for a hundred thousand frames, which returns everything downstream to
+Sequential ops sweep once and persist their small results; a track table is a few
+MB for a hundred thousand frames, which returns everything downstream to
 random-access. Scrubbing is then one decode plus one array lookup.
 
 Because geometric ops are invertible, an annotation computed in downsampled space
 can be drawn over the full-resolution source. The user swaps the base layer freely
 — tracks over the mask, over the source, over the background plate — and that
-choice never touches configuration. (Record: Exchanges 3 and 4.)
+choice never touches configuration. (Record: PAR-0005 for fusion and its
+semantics; Exchange 4 for reprojection and the sweep-then-index composite.)
 
 ## The invariants
 
@@ -145,9 +152,11 @@ unmaintainable.
    settled rewording, archive/PLAN.md Phase 1 decision 2.)
 2. **The GUI dispatches on types, never on tool identity.** The first
    `if tool == "crop"` is the beginning of the end. (Record: Exchange 1.)
-3. **Classification comes from the shape of what you wrote, never from a flag you
-   set.** Anything a contributor can assert, a contributor can assert wrongly.
-   (Record: Exchange 5.)
+3. **The executor substitutes silently only what an op's form proves, under the
+   answer defined at the logical level.** Classification still never comes from
+   a flag: the form you wrote is the authorization you granted, and anything a
+   contributor can assert, a contributor can assert wrongly. Everything unproved
+   is user-initiated, shown, and recorded. (Record: PAR-0005.)
 4. **Equivalence is earned by measurement, never declared; rankings are measured,
    never estimated.** The harness runs verification at registration — contributors
    never write their own equivalence tests, because people write tests that pass.

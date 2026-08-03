@@ -57,7 +57,8 @@ The components (which of these are still placeholders is `DEBT-AUTO.md`'s
 job to say, not this list's; a placeholder's docstring and reason point at
 the governing sections — follow the pointer before building):
 
-- `src/sieve/kernel.py` — the five-shape op algebra, one design unit.
+- `src/sieve/kernel.py` — ops as values and the proved forms, one design
+  unit (PAR-0005).
 - `src/sieve/tools/` — one file per tool (invariant 1): `base.py` the Tool
   contract, `crop.py` the milestone tool.
 - `src/sieve/views.py` — the closed view vocabulary: the language between
@@ -78,9 +79,9 @@ There is no contracts directory and no interfaces module, deliberately. Each
 contract exists once, in code, at the boundary it governs, and everything else
 derives from it — the GUI form, the validator, and the task hash are all
 computed from a tool's `Params`, never restated (Exchange 1). Several
-contracts aren't interfaces at all but *shapes*: to be a `Resample` you must
-write a function with nowhere to put state, so misclassification is
-inexpressible rather than tested for (Exchange 5). Enforcement lives in
+contracts aren't interfaces at all but *forms*: to be the affine coordinate
+map you must write an op with nowhere to put state, so misclassification is
+inexpressible rather than tested for (PAR-0005). Enforcement lives in
 tests, never convention (Exchange 6). The three formats consumed by git
 history — the pipeline file, the automatic ledger, equivalence signatures —
 carry their version inside the bytes and evolve additive-only. Until a

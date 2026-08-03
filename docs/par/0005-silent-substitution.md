@@ -1,6 +1,6 @@
-# PAR-0005 — Ops as values, and what the executor may rewrite
+# PAR-0005 — Silent substitution: ops as values, and what the form proves
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-03
 
 ## Outcomes
@@ -24,6 +24,20 @@ PAR-0008: this record owns what a form *authorizes* — the property
 carried by the value; when and whether the executor exercises an
 authorization — the peephole discipline, the naive evaluator, the
 evidence threshold for adding a rule — is the executor's own record.
+
+The name is the seam stated. Every rewrite, fusion, and offload is a
+substitution of one computation for another, and the full substitution
+system deliberately spans four records: this one grants the *silent*
+portion — what proof under the defined semantics can back — while
+admission by measurement is PAR-0012's, selection among the admitted
+is PAR-0011's, and the timing of exercise is PAR-0008's. The moment a
+substitution stops being silent it has left this record. "Silent"
+also carries the stakes: the named failure mode is a silent rewrite
+that changes an answer, the one thing this instrument must never do.
+("Comparison authority" was considered and rejected: the word already
+does statistical work in this record's own orbit — the
+multiple-comparisons safeguard — and a name cannot serve two senses
+in one file.)
 
 The occasion is measured, and what it measures must be stated
 carefully. v1 (`antscihub-optical-flow-detector`) runs far faster than
@@ -252,3 +266,13 @@ pipeline terminates in.
   to the next project still requires the footage to be characterized,
   and nothing yet says how. Until then swap results are one-shot
   rather than cumulative.
+- **2026-08-03 — the record has no teeth of its own.** Raised by
+  Kendrick at acceptance: as written it does not enforce anything
+  per se — no test fails today because it exists. Held, and the
+  ground stated with it: it enables functionality (the rules, the
+  offload, the swap machinery all presuppose the representation),
+  and its enforcement arrives through the property tests it derives
+  (PAR-0017's home) and the serializability the hash requires;
+  making sure problems are surfaced is an explicit purpose of the
+  PAR system as a whole, and a record that does that while asking
+  nothing of contributors is earning its keep, not failing to.

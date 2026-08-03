@@ -1,6 +1,6 @@
 # Session — the op contract split out of the tool contract
 
-Status: Open
+Status: Frozen
 Date: 2026-08-03
 
 The separable argument, from the PAR-0007 hardening sitting, that ended
@@ -124,4 +124,7 @@ reason.
 
 - PAR-0020's distillation and acceptance, ordered in
   `docs/PLAN-DEBT-ORDER.md`.
-- PAR-0007's narrowing, carried by the hardening argument's rewrite.
+- PAR-0007's narrowing landed the same day in its plain rewrite
+  (primary `SESSION-2026-08-03-par-0007-hardening.md`): the tool-side
+  refusals stayed, the op-side rules left, and the placement rule is
+  stated in both.

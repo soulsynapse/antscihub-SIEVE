@@ -1,6 +1,6 @@
 # Session — hardening PAR-0007
 
-Status: Open
+Status: Frozen
 Date: 2026-08-03
 
 The sitting that rewrote PAR-0007 in plain language and gave it an

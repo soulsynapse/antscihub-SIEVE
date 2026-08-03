@@ -349,7 +349,87 @@ and it independently confirms the verdict's top two conditions: guides
 and 2 land. A how-to whose check step is unwritable is the cheapest
 detector of a hole in the record it descends from.
 
-## Exchange 10 — verdict
+## Exchange 10 — the acceptance conditions answered
+
+Kendrick directed the skeleton-test technique into the debt system (a
+`DEBT.md` marker, stamp `20260803T043526Z`, moving to the how-to
+layer's repo-work domain at PAR-0003's acceptance) and asked for the
+other three acceptance conditions answered. Mid-argument he supplied
+the missing piece for the second: "The defined semantics equivalence
+can be suggested by the tool that calls it for the input it calls it
+for."
+
+**Condition 1 — where the answer is defined.** The semantics of a
+node is the composed map from the nearest barrier, applied once;
+sampling count is an implementation detail, not part of the answer.
+"Answer-preserving by proof" then means proof under that semantics —
+affine∘affine is the same map; a stateless op commutes — never
+bit-identity between evaluation strategies. What this costs, stated
+rather than hidden: (a) the naive evaluator is not a second
+semantics — the pull path already composes coordinates walking up the
+chain (DESIGN-SESSION.md Exchange 4, "pulled lazily through the fused
+geometric chain"), so naive and fused share the sampling arithmetic
+by construction, and the property test survives as compose-order
+invariance, which is provable — exactly if affine params are held
+exact (integers and rationals compose without rounding), within
+stated ulps if they are floats; (b) materializing a mid-chain
+geometric intermediate and resampling from it IS answer-changing
+under this semantics, so silent materialization is legal only at
+barrier outputs (a `Fold`'s table, an `Opaque`'s frames — those are
+their own logical values); baking a geometric intermediate is
+user-initiated and recorded, like any unproved substitution. The
+reviewer's disable-fusion preference (Exchange 3 of the design
+session) survives with a changed job: it no longer defines
+correctness — nothing privileges the two-pass path — it detects
+implementation bugs in rewrite rules, which is Exchange 9's audit
+how-to.
+
+**Condition 2 — the offload bar.** Split offload into the two halves
+it actually is, and route each to its evidence class (the prior
+session's Exchange 8 already states the classes; the paragraph just
+never routed them). The *pattern rewrite* — several adjacent nodes
+becoming one composed op — is proof territory, same as any fusion.
+The *foreign implementation* of that composed op — FFmpeg's scaler
+rather than OpenCV's — is a second implementation of an existing op,
+which is invariant 4's territory: equivalence earned by measurement,
+selection by measured cost, version-pinned. Admission happens once,
+at registration or at a swap on the user's footage class — not as a
+ceremony per pipeline — which is how a v1-scale win goes default-on
+without ever being silent-by-declaration. Kendrick's mid-argument
+addition completes the mechanism: the equivalence spec the
+measurement judges against — comparator, tolerance, the statistic
+that must survive — is *suggested by the tool that emitted the op,
+for the input it emitted it for*. The tool knows what its output
+means; it declares the yardstick, never the verdict, which keeps
+invariant 4 intact (a metric is not an equivalence claim) and fixes
+the metric before any search, which is the multiple-comparisons
+safeguard's own precondition (`DEFERRED.md`, the corpus entry's
+refinement). The suggestion is declarative — a value in the
+contract, no runtime reach — so tool purity holds. Routed: the
+suggestion surface joins the tool contract (PAR-0007, beside the
+guarantee-voiding declaration); the harness consumes it as the
+default comparator (PAR-0012). Noted for its trigger: FFmpeg-vs-local
+is the first second implementation of any op, so the largest
+available win comes due exactly when the measured-equivalence
+harness does — one trigger, both entries.
+
+**Condition 3 — the Context re-grounded.** Drop the 10× sentence
+from the speed paragraph. Recast the citation as what it measures:
+v1's comments record engine-internal ordering as a 10× *accuracy*
+difference (0.364 vs 3.80 RMS grey-levels), which is evidence for
+the authorization half of the record — rewrites inside an engine
+change answers, so what an offload is licensed to do must be pinned
+— not for the speed half. The occasion restates on the ground
+Exchange 8 named: the speed gap's dominant term is the decode path
+and is conceded; what the gap evidences is diagnosis cost — a whole
+rewrite could not find the loss because the rules lived in a person
+and in comments, untestable in principle for want of a naive path to
+test against. The necessity sentence becomes: rules as values with
+tests are the only home that survives a redesign, and the boundary
+that makes them expressible is free at n=0 and a contract rewrite at
+any later moment.
+
+## Exchange 11 — verdict
 
 **The record stands, on narrower ground, and is not ready to accept as
 written.** It names a real system (the op representation and the

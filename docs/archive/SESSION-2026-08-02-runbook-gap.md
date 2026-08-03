@@ -111,3 +111,156 @@ Still open after this sitting: the form (per-system guides or a tier
 of their own), the home, the residual discipline for the prose
 remainder, and Exchange 1's boundary caution against absorbing the
 tutorial convention.
+
+## Exchange 3 — home and form: the hand-written guide, not the script
+
+Kendrick settled the home in a sentence — "how-to is a top level
+folder, that way someone looking at the repo can see how it's
+organized" — and the agent proposed a form: scripts only, `how-to/*.py`,
+task-named, logic-free, docstring residue, import-and-pointer
+verification as the floor, no `.md` residents. The position lost
+whole. Kendrick, verbatim:
+
+> "Nope, and the reason is the constraints and purpose: how-to has to
+> be human-legible, agent-legible, and trusted. The eventual goal is to
+> have some kind of marker in the yaml of the howto where you can spawn
+> a sonnet session and tell it what to do and check extremely tightly
+> scoped to the content of the how-to without having to hand-craft the
+> context specifically. Give it commands to run, how to run it, spawn
+> the sonnet session and it just does it. This trivializes much of the
+> repo work.. when it works. the how-to folder holds a folder for
+> scripts for meta tooling, then any folders necessary to categorize
+> the different how-to guides. That's the end goal, not the default
+> though: the default is the hand written guide and it is self
+> referrential: a how-to exists as a 4 fold distillation: session
+> archive made it to the PAR, the PAR made it to the ARCHITECTURE.md,
+> and the ARCHITECTURE.md pointed to the how-to. The existence of the
+> how-to is the confirmed validity of the implementation of one of the
+> PAR outcomes. So something in a PAR with an outcome that it is
+> explicitly enables is debt to be paid to ARCHITECTURE.md and the
+> associated how-to file. It comes due when the PAR is mostly settled,
+> but just like PAR, the how-to is continuously updated, and the sign
+> that it's settled is that it's quiet. Within the how-to itself, a
+> step can *optionally* be turned into a script, and that can do a ton
+> for the validity of the how-to, given that one part can be automated.
+> But a how-to is not a script by default."
+
+The agent's assessment, compressed. The scoped-agent runner reframes
+"derived-and-tested" better than derivation did: the how-to is a
+program whose interpreter is an agent — not derived from the tree, but
+testable by execution, drift redding as a failed run rather than
+accumulating silently; scripts are steps compiled down for determinism
+where determinism is available. That makes the runner the layer's
+verification story, not a convenience — `DEFERRED.md` material with
+that stated as what's at stake. One pressure-test survived and was
+agreed (Exchange 4): existence proves the chain was walked once, not
+that it stays valid, and "settled when quiet" is ambiguous for a
+how-to in a way it is not for a PAR — a PAR goes quiet when doubts
+stop arriving; a how-to can go quiet from neglect, and
+quiet-under-use versus quiet-from-neglect look identical in the file.
+Runs are the disambiguating signal, a second reason the runner is
+load-bearing. Smaller notes: YAML frontmatter is a new form in a
+plain-`Status:`-line repo, justified because the runner contract needs
+structured fields, and scoped to this layer; the scripts folder must
+be visibly not-a-category; category folders emerge when a second
+resident forces them, never pre-drawn.
+
+## Exchange 4 — three rulings: the debt's home, the bar, the fallback chain
+
+Kendrick, verbatim:
+
+> "for reference, the debt for the howto lives in the architecture
+> file, not the PAR. that's the separation of responsibility fyi. and
+> also the collision is not a collision, stating something 'should' be
+> something is defined by how useful it would be to automate it, not
+> something that must be built automatically. until it crosses that
+> bar, why make the script? but when various repo tasks become so
+> standard that theres speed to be gained by following the script,
+> then yeah, it should be. agree on your point on the pressure test.
+> but notice the fallback here: how-to is good, you don't need
+> architecture. architecture is good, you don't need par. par is good,
+> you don't need session. that's by design."
+
+Three rulings. **The how-to debt is `ARCHITECTURE.md`'s to state, not
+the PAR's** — separation of responsibility: the PAR holds why, and
+what its outcomes are owed downstream is the synthesis surface's
+business. **Exchange 2's heuristic is defined, not contradicted**:
+"can be a script" reads as "has crossed the utility bar" — a repo task
+standard enough that following a script gains speed — a human-judged
+tipping point like friction confirmation and template owing, not a
+capability trigger. The agent had read the heuristic as
+capability-triggered and named a collision with "optionally"; the
+ruling dissolves it by definition rather than reversal. **The fallback
+chain is the design**: how-to good → architecture unneeded;
+architecture good → PAR unneeded; PAR good → session unneeded — the
+walking path extended to a task-oriented tier 0, read deeper only
+until convinced, which is also what bounds the staleness cost of the
+agreed pressure-test: a bad how-to degrades to a walk down one tier,
+never to being stranded.
+
+Raised by the agent at this exchange, open pending ruling — the
+marker mechanics under PAR-0002's grain: the text surface keys
+`(path, <file>)`, at most one marker per file, so `ARCHITECTURE.md`
+literally carrying the how-to debt class means a second simultaneous
+owed how-to is the grammar-extension pressure PAR-0002 names — and
+simultaneity will be the common case with fourteen stub records
+coming. Two candidate mechanics: extend the marker grammar to a
+multi-marker text form (stamps are already unique, so `(path, stamp)`
+keys exist); or state each owed how-to as a stub file in `how-to/`
+under placeholder doctrine — the placeholder is the debt entry — with
+`ARCHITECTURE.md`'s pointer landing in the same commit, keeping the
+responsibility architecture-side and the grain untouched.
+
+## Exchange 5 — the grain disputed, and its provenance traced
+
+Kendrick, verbatim, on the one-marker-per-file grain:
+
+> "whoa, one marker per file? that's nutty, that was never the intent,
+> I think you swept that up from your own inference FYI."
+
+And, separately, on the form:
+
+> "and yeah we don't have to have yaml frontmatter, follow repo
+> convention"
+
+The second ruling is simple and lands: how-to files use the repo's
+plain column-0 line convention, no YAML frontmatter; the runner
+contract's structured fields, when they arrive, are plain lines like
+`Status:` and `Owed:` are. Exchange 3's note treating frontmatter as
+justified is superseded.
+
+The grain, traced. It is not this conversation's inference: PAR-0002
+states the text surface as "exactly one form: a column-0 line ... at
+most one per file, keyed `(path, <file>)`," `debt.py` enforces it —
+every column-0 `Owed:` line becomes an entry keyed `(path, <file>)`,
+so a second line in one file is a duplicate key and an
+`EnumerationError`, suite red — and PAR-0002's `DEBT.md` passage
+builds doctrine on it ("the surface's one-marker-per-file grain means
+a second simultaneous entry is the grammar-extension pressure the
+Outcomes name, arriving structurally"). But the provenance supports
+the suspicion one level up: the grain entered as a *consequence* of
+the keying choice — file paths as the only stable anchor unstructured
+text has, heading-anchored keys rejected for churn — and the primary
+(`SESSION-2026-08-03-debt-md-marker-form.md`) records it as a limit
+"named rather than hidden," spun as doctrine agreeing with itself,
+with no verbatim ruling choosing one-per-file as intent. An inferred
+structural consequence was doctrinalized without the human's words
+anchoring it. That the trace is possible is the record system working;
+that it was needed is a caution the system should keep: curated
+primaries can launder agent inference into doctrine wherever a passage
+carries no quote.
+
+Candidate resolution, pending ruling: marker rule v3 — the text
+surface admits multiple markers per file, keyed `(path, stamp)`.
+Stamps are already each entry's identity, globally unique by enforced
+rule, and designed to survive rewording and relocation, so the
+stable-anchor argument that produced the grain is satisfied without
+it. Costs, per PAR-0002's own coherence-rewrite doctrine: PAR-0002
+rewritten whole and reviewed as a diff, `debt.py` and its tests, the
+ledger's pinned rule version, the "states one debt" wording in
+`README.md` and `AGENTS.md`, and `DEBT.md`'s second-entry tripwire
+restated (a nonempty `DEBT.md` is already the pressure signal; the
+structural tripwire was the grain's contribution and retires with
+it). Sequencing: the extension gates the first *exercise* of the
+how-to debt class in `ARCHITECTURE.md`, not the close of this design
+session.

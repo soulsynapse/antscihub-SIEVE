@@ -13,12 +13,13 @@ what a governing record holds — follow the pointers.
    order are PAR-0001.
 3. `DEBT-AUTO.txt` — what is presently owed in-tree; `DEFERRED.md` — what is
    not yet due. Building from DEFERRED.md goes poorly, by design.
-4. The live planning cycle: `docs/PLAN-TOOL-CONTRACT.md` (code).
-   Distillation runs system by system from its `DEBT.md` entry
-   (PAR-0001) — no live plan. Exhausted plans sit in `docs/archive/` —
-   `PLAN.md` there still holds the layout settlement, load-bearing until
-   its distillation lands; marker form rule v2 and the classification
-   rule are PAR-0002.
+4. The live planning cycles: `docs/PLAN-TOOL-CONTRACT.md` (code);
+   `docs/PLAN-DEBT-ORDER.md` (distillation). Distillation runs system by
+   system from the stub records' markers in the automatic ledger,
+   ordered by that plan (PAR-0001, PAR-0002). Exhausted plans sit in
+   `docs/archive/` — `PLAN.md` there still holds the layout settlement,
+   load-bearing until its distillation lands (PAR-0018's marker); marker
+   form rule v2 and the classification rule are PAR-0002.
 
 ## The working loop
 
@@ -59,7 +60,9 @@ what a governing record holds — follow the pointers.
   record per decision is expected.
 - A not-yet-due intention → `DEFERRED.md`, always with the trigger that
   makes it due.
-- A present gap no marker can carry → `DEBT.md`.
+- A present gap with no better file to carry its marker → an `Owed:`
+  marker line in `DEBT.md` (one per file; a second simultaneous gap is
+  grammar-extension pressure, PAR-0002).
 - A component the named milestone reaches but that isn't built → a
   placeholder: a real module at its real import path raising
   `sieve.debt.Owed` in marker form rule v2, quoting signatures only from

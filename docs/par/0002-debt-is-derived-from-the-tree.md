@@ -9,7 +9,9 @@ What this system looks like working as intended (stated 2026-08-02,
 while marker rule v1 covered only the Python surface; primary:
 `SESSION-2026-08-02-debt-advance.md`): `DEBT-AUTO.txt` is the de facto
 debt surface — everything owed, in any tracked format, enumerates into
-it, and `DEBT.md` is very rare: its steady state is empty, and a
+it, and it is the only file ever read for present debt, because even
+`DEBT.md`'s entries are marker lines that enumerate (2026-08-03).
+`DEBT.md` itself is very rare: its steady state is empty, and a
 nonempty entry is standing pressure to extend the marker grammar,
 never a parallel list. And the debt system is the true planning
 surface — work is chosen by ordering ledger entries, derived columns
@@ -139,15 +141,22 @@ debt system the dismissal itself asked for.
 
 `DEBT.md` and `DEFERRED.md` are hand-authored and live at the repo root:
 "they sort adjacent in a root listing, and an agent lists the root first."
-`DEBT.md` holds present debt no in-tree marker can carry — a last resort by
-the invariant, not a general-purpose list. The last resort reaches exactly
-as far as derivation cannot (2026-08-02): a real gap the tree can neither
-carry as a marker nor compute is hand-stated here, because every
+`DEBT.md` holds present debt with no better file to carry its marker — a
+last resort by the invariant, not a general-purpose list. The last resort
+reaches exactly as far as placement cannot (2026-08-02): a real gap that
+belongs to no ownable file is hand-stated here, because every
 alternative — a work list, a roadmap, a record filed as its own todo — is
 hand-maintained state describing a tree that moves independently of it,
 the drift this record exists to kill. Felt necessity for any such list is
 therefore an argument for a more exacting debt system, never for a
 parallel mechanism (primary: `SESSION-2026-08-02-distill-worklist.md`).
+And the last resort is a location rule, not a format exception
+(2026-08-03): an entry here is itself a column-0 `Owed:` marker line
+under the text surface, so it enumerates like everything else and
+`DEBT-AUTO.txt` stays the only file ever read for present debt. The
+surface's one-marker-per-file grain means a second simultaneous entry is
+the grammar-extension pressure the Outcomes name, arriving structurally
+(primary: `SESSION-2026-08-03-debt-md-marker-form.md`).
 `DEFERRED.md` holds not-yet-due intentions, each with the trigger that
 makes it due.
 
@@ -404,11 +413,11 @@ adjudicate" the invariant names as bureaucracy arriving.
   everything it keeps; the rule-version pin in the ledger is what keeps
   versions distinguishable in history.
 - `DEBT.md`'s steady state is empty (see Outcomes): its two entries
-  dissolve into the surface — fourteen stub records and PAR-0003's own
-  marker. The dissolution is stated debt in `DEBT.md` until it lands
-  (2026-08-03). A future nonempty entry is standing pressure to extend
-  the marker grammar, and the file's remaining role is the open
-  Challenges question below.
+  dissolved into the surface — fourteen stub records (PAR-0005..0018)
+  and PAR-0003's own marker — landing 2026-08-03. A future nonempty
+  entry is stated in marker form and is standing pressure to extend
+  the marker grammar; the file's remaining role is the open Challenges
+  question below.
 - The instruments constrain each other, so neither can be relaxed alone:
   loosening the enumerator's form checking silently widens what the
   adapter's membership check will fail on.

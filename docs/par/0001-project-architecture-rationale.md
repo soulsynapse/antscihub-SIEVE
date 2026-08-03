@@ -394,7 +394,7 @@ them.
 yet governing — anchored, because an unanchored match also finds
 records that merely quote the query, this one included. It is state,
 not a debt list: what a Proposed record awaits is named in its own
-text or its `DEBT.md` entry (PAR-0003's design session), and no
+text or its own `Owed:` marker (PAR-0003's design session), and no
 trigger elsewhere makes anything due.
 
 **Raw transcripts are not retained.** The tooling writes one per session
@@ -406,15 +406,19 @@ curated record's fidelity is that it is written while the session is live
 and the reasoning is still in hand — not a raw copy sitting behind it,
 which would only move the reconstruction later.
 
-The retrospective work list cannot be derived, which is why it is stated
-debt: a sweep of the below-tier-2 citations in tier 1 misses any settled
-system tier 1 never cited, and two escaped it before this was caught
-(2026-08-02; primary: `SESSION-2026-08-02-distill-worklist.md`, with the
-rejected alternative — `Proposed` stubs as tier-2 placeholders — and why
-todo-list pressure argues for a sharper debt system instead, now
-PAR-0002's doctrine). Sequencing calls that are genuinely a plan's own —
-scope, order, build sequence, definition of done — are not architecture
-decisions and stay in their plans.
+The retrospective work list cannot be derived from citations: a sweep of
+the below-tier-2 citations in tier 1 misses any settled system tier 1
+never cited, and two escaped it before this was caught (2026-08-02;
+primary: `SESSION-2026-08-02-distill-worklist.md`, with the rejected
+alternative — `Proposed` stubs as tier-2 placeholders — and why
+todo-list pressure argues for a sharper debt system instead). That
+sharper system arrived as marker rule v2: each system owed its rationale
+is a stub record at its own number carrying its `Owed:` marker
+(PAR-0002, "What counts as debt"), so the work list is derived after all
+— the ledger's `docs/par/` entries — and the order is
+`docs/PLAN-DEBT-ORDER.md`'s. Sequencing calls that are genuinely a
+plan's own — scope, order, build sequence, definition of done — are not
+architecture decisions and stay in their plans.
 
 ## Consequences
 
@@ -430,16 +434,19 @@ decisions and stay in their plans.
   status is terminal rather than maintained).
 - A plan gate that makes an architecture-touching decision records it as a
   rationale and cites it; the plan keeps what is genuinely its own.
-- The gap between decided and distilled is present debt: filed in
-  `DEBT.md`, retired one entry of work at a time as distillations land.
+- The gap between decided and distilled is present debt: each owed
+  system is a stub record in `docs/par/` carrying its `Owed:` marker
+  (PAR-0005..0018), retired one marker at a time as distillations land.
   Until a decision's rationale exists, its exchange or gate citation
-  remains the governing pointer. The enumerated systems and their order
-  live in that entry; `docs/archive/PLAN-DISTILL.md` sequenced this
-  before it was superseded (2026-08-02).
-- The debt and records machinery settled in archived `PLAN.md` is on that
-  work list rather than waiting on an evolution trigger. It is the
-  most-doubted mechanism in the repo and has been fended off three times
-  with nothing recorded; distilled, it gains a challenge surface.
+  remains the governing pointer — named in the stub's marker reason. The
+  order lives in `docs/PLAN-DEBT-ORDER.md`;
+  `docs/archive/PLAN-DISTILL.md` sequenced this before it was superseded
+  (2026-08-02).
+- The debt and records machinery settled in archived `PLAN.md` was
+  distilled first rather than waiting on an evolution trigger — the
+  most-doubted mechanism in the repo, fended off three times with
+  nothing recorded; distilled, it gained its challenge surface
+  (PAR-0002).
 - A doubt against a founding decision lands on a normal rationale and
   either falls (a Challenges entry) or succeeds (the record is rewritten)
   — without either path touching the archive.

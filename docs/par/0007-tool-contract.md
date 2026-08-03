@@ -48,6 +48,11 @@ themselves editing something else to make their new filter work, they
 know immediately what has gone wrong: some other part of SIEVE is
 holding a piece of the filter that should have been in the filter.
 
+This is the state after `docs/PLAN-TOOL-CONTRACT.md` Phase 2 settles
+which names the kernel exposes. Until it does, a tool naming an unbuilt
+operation fails at import rather than stopping at run time with the gap
+named, so the central property above is an intention and not a report.
+
 ## Context
 
 ### The system this rationale owns
@@ -334,6 +339,23 @@ the vocabulary; it neither defines it nor knows what any word costs.**
 Naming a word that does not exist yet is allowed, and is the ordinary
 way a gap gets recorded (PAR-0002).
 
+For the same reason a tool never states that anything is equivalent to
+anything: equivalence is earned by measurement at the harness, which is
+the only party that decides. What a tool's output *means* — the
+comparator, how close is close enough, which statistic must survive —
+is genuinely the tool's to say, and PAR-0012 is where that declaration
+lands, beside the measurement that consumes it. It is not settled here
+because a declaration can be added to a tool later without touching any
+tool that already exists, which is the same ground on which a declared
+list of inputs was refused above. The companion convention PAR-0005
+routed here — that a tool declares which guarantees it gives up — is
+declined outright, and its own first instance refutes it: what an
+opaque operation gives up is already derivable from its form, so
+declaring it would be a second unchecked copy of what the value
+carries. What is *not* derivable is what that loss means for the user,
+which is worked out when SIEVE chooses an implementation (PAR-0011) and
+shown by the display (PAR-0013).
+
 ### It does not own the method
 
 A tool's settings hold what is true of the measurement however it is
@@ -343,8 +365,11 @@ is whether the field would mean anything to a different implementation
 of the same measurement: a time window would; a particular
 implementation's speed preset would not. This is not a division inside
 the tool's settings model — there is nothing to divide, because those
-fields were never in it — and it costs nothing today, since cropping
-and downsampling have no method choice at all. It also removed a rule
+fields were never in it. No tool has a method choice today, so adopting
+the rule costs nothing; what makes it worth settling now is the
+reversal, since a knob in the wrong file is a schema migration plus a
+changed hash for every result that used it (PAR-0006's pricing). It
+also removed a rule
 rather than adding one: PAR-0006 once had to exclude inert fields from
 the identity of a result, and with method fields living on methods no
 inert field survives to be excluded.
@@ -361,35 +386,6 @@ case is anything added to a tool, because a line registering a method
 with a tool would be the tool holding knowledge about that method. The
 rule itself is PAR-0020's; what matters here is the consequence, that
 nothing is ever appended to a tool.
-
-### A tool declares yardsticks, never verdicts
-
-A tool may state what its output *means* — what would count as the same
-answer, how close is close enough, which statistic matters. It may
-never state that anything is equivalent to anything, because it has no
-way to know: equivalence is earned by measurement at the harness, which
-is the only party that decides. The tool is the only party that knows
-the meaning, which is why the declaration is its to make.
-
-The companion convention PAR-0005 routed here — that a tool declares
-which guarantees it gives up — is declined. Its own first instance
-refutes it: what an opaque operation gives up is already derivable from
-its form, so declaring it would be a second unchecked copy of something
-the value already carries. What is *not* derivable is what that loss
-means for the user, which is worked out when SIEVE chooses an
-implementation (PAR-0011) and shown by the display (PAR-0013).
-
-### The Tool is the only thing with a contract
-
-A **Step** is a tool placed at a point in the pipeline with its settings
-filled in — data in the pipeline file, with no functions of its own, and
-where authored values live. A **Task** is one actual execution, built by
-SIEVE and authored by nobody. The three audiences are already separate
-in practice — users say step, authors say tool, and only the running
-machinery says task — but the pipeline file will hold steps as data, and
-an agent reading `ARCHITECTURE.md` sees three words of equal weight. So
-it is stated once: neither of the other two is anything an author
-implements.
 
 ### How a violation announces itself
 
@@ -458,18 +454,31 @@ anyone.
     supplies the reason it holds.
   - The "Tools" section's Exchange 5 citation moves here, and its
     example gains `lower`'s inputs argument.
-  - **The GUI section is corrected.** It says the settings panel is
-    "generated by walking the tool's `Params`" — the tool's alone —
-    which this rationale's ruling on where method settings live makes
-    wrong. The panel combines the tool's settings with those of the
-    chosen operation. The rule itself is PAR-0013's, but the incorrect
-    sentence is in tier 1 today and this rationale's acceptance is what
-    makes it incorrect, so the repair travels with it.
+  - **The GUI section's false narrowing is struck.** It says the
+    settings panel is "generated by walking the tool's `Params`" — the
+    tool's alone — which this rationale's ruling on where method
+    settings live makes wrong. Only the narrowing is removed: the panel
+    is generated from the declared settings, without tier 1 saying
+    whose. What replaces it is PAR-0013's to rule, and shipping that
+    rule under this rationale's acceptance would land an unwritten
+    rationale's decision in tier 1.
   - The run diagram gains the chosen method being attached between the
-    pipeline and the description, and its arrows are labelled with who
-    performs them. It is repaired rather than joined by a second
-    figure: two diagrams sharing parts would have to be kept consistent
-    by hand.
+    pipeline and the description. Its arrows are deliberately *not*
+    labelled with who performs them: that is what this rationale's own
+    figure is for, and duplicating it into tier 1 would make two
+    documents agree edge for edge forever.
+  - The Step and Task definitions enter the components section —
+    a Step is a tool placed in the pipeline with its settings filled
+    in, a Task is one execution built by SIEVE and authored by nobody,
+    and neither is anything an author implements. The naming is
+    Exchange 2's and is already cited there; what tier 1 lacks is the
+    statement that only the Tool has a contract.
+  - Its `Tools` example and `src/sieve/tools/base.py` both carry
+    `lower(self, p)`. The base's docstring calls its signatures
+    quotations from the settled record, so acceptance makes that
+    quotation false: marker `20260802T023508Z` is amended to the
+    three-argument form and cites this rationale in place of
+    Exchange 5, with `DEBT-AUTO.md` regenerated in the same commit.
   - `README.md`'s "Where contracts live" moves from Exchange 1 to here.
 - PAR-0020 receives what an operation itself owns — its own settings,
   when two implementations are one operation rather than two, the
@@ -500,7 +509,12 @@ anyone.
 - PAR-0011 owns grouping implementations by what they compute, with
   membership earned, and what a lost guarantee means for the user.
 - PAR-0012 owns substitutions the user never sees; PAR-0019 owns
-  equivalences the user is offered and chooses between.
+  equivalences the user is offered and chooses between. PAR-0012 also
+  receives the yardstick surface itself — the comparator, tolerance and
+  target statistic a tool suggests for the operations it emits — which
+  PAR-0005 routed here and this rationale declines to settle, since a
+  declaration added later touches no tool that already exists. What
+  stays here is only the denial: a tool never returns a verdict.
 - PAR-0013 receives the settings panel combining the tool's settings
   with the chosen operation's, and the rendering of gaps: a value that
   is missing or invalid is drawn as such. Absence belongs to the slot
@@ -514,8 +528,17 @@ anyone.
   that no tool file reaches the running machinery, the store, or the
   filesystem.
 - `docs/PLAN-TOOL-CONTRACT.md` Phase 3's gate is narrowed rather than
-  answered. Its first decision is settled here; its fourth must land in
-  tests rather than in a base class that merely withholds.
+  answered. Its first decision is *constrained* here, not settled: a
+  declared list of inputs is ruled out and the inputs are typed, but
+  the bridge from a tool to the dispatch table is not supplied, so
+  `DEFERRED.md`'s entry stands and the gate stays open. Its fourth must
+  land in tests rather than in a base class that merely withholds.
+- Every bullet above that hands a ruling to another rationale is a
+  bequest, and provisional. The receiving rationale may refuse it on
+  evidence this one did not have, and a refusal amends this rationale
+  rather than being overridden by it. Bequests to stubs are questions
+  those stubs will settle, never rulings they inherit — twelve of the
+  records named above are stubs and cannot answer back yet.
 - The how-to layer gains three guides — writing a tool; adding a second
   method to an existing measurement; suggesting a yardstick for an
   operation — **as the surfaces they describe land**, not at

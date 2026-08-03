@@ -1,7 +1,7 @@
 # PAR-0003 — The how-to layer
 
-Status: Proposed
-Date: 2026-08-02
+Status: Accepted
+Date: 2026-08-02 (accepted 2026-08-03)
 
 ## Outcomes
 
@@ -143,10 +143,14 @@ those stakes stated.
 - The index generator is code work, planned from
   `PLAN-TOOL-CONTRACT.md`'s side, including whether it lands as a
   `sieve.debt` sibling or one shared regen entrypoint.
-- PAR-0004's second challenge names this design session as its
+- PAR-0004's second challenge named this record's acceptance as its
   resolution point — whether the template convention folds into this
-  layer. That judgment is Kendrick's, taken at this record's
-  acceptance; nothing here pre-decides it.
+  layer. Taken at acceptance (2026-08-03): PAR-0004 stays its own
+  record. Templates are a sub-system in service to this layer under
+  PAR-0001's pointer criterion — exactly one place they live, exactly
+  one way to cite them — and their derivation-guard rationale stands
+  independent of any guide; folding later remains the cheap, lossless
+  direction if the boundary ever leaks.
 
 ## Challenges
 

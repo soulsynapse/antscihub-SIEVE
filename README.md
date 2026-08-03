@@ -13,7 +13,11 @@ records; when it seems to disagree with one of them, the other is right.
 
 Three tiers, read downward only until convinced. The walking path and the
 authority order — deeper governs, the synthesis reports and rolls up — are
-[PAR-0001](docs/par/0001-project-architecture-rationale.md).
+[PAR-0001](docs/par/0001-project-architecture-rationale.md). Above the walk
+sits tier 0, for doing rather than understanding: task-oriented guides in
+[how-to/](how-to/), one domain folder per major seam
+([PAR-0003](docs/par/0003-how-to-layer.md)); a guide that fails degrades to
+one tier's walk down this chain, never to being stranded.
 
 1. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the synthesis: seven
    components, the authoring and execution flows, five invariants with

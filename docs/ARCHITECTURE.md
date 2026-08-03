@@ -5,10 +5,14 @@ signal-processing filters. The user builds a pipeline; SIEVE runs it. Everything
 below exists so that stays true as filters are added, without the codebase
 becoming something nobody wants to extend.
 
-This document is the synthesis and the first stop: it reports the settled
-architecture, it does not govern it. The reasoning lives in `docs/par/`, the
-primary records in `docs/archive/`; the walking path and the authority order
-are [PAR-0001](par/0001-project-architecture-rationale.md). On conflict the deeper
+This document is the synthesis and the first stop for *understanding*: it
+reports the settled architecture, it does not govern it. For *doing*, the
+walking path has a tier 0 above this one — task-oriented guides in
+`how-to/`, split by domain, read first and fallen back from when a guide
+fails ([PAR-0003](par/0003-how-to-layer.md)). The reasoning lives in
+`docs/par/`, the primary records in `docs/archive/`; the walking path and
+the authority order are
+[PAR-0001](par/0001-project-architecture-rationale.md). On conflict the deeper
 record wins and this synthesis gets fixed. Each section below names the
 records that govern it — exchange numbers cite
 [DESIGN-SESSION.md](archive/DESIGN-SESSION.md). The founding decisions are

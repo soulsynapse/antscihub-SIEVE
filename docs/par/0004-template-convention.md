@@ -31,9 +31,11 @@ Judgment stays with the user for the same reason friction confirmation
 does (PAR-0001): a ceremonial template for every folder is PADding, and
 the tipping point is a human read.
 
-Everything else — the template form, its home, how conformance is
-checked, and whether this system is ultimately one part of the how-to
-layer (PAR-0003) — is open; the second doubt below holds that question.
+Everything else — the template form, its home, and how conformance is
+checked — is open. Whether this system is one part of the how-to layer
+was resolved at PAR-0003's acceptance: it is in service to that layer
+and remains its own record, under PAR-0001's pointer criterion (the
+second doubt below, closed).
 
 ## Consequences
 
@@ -64,5 +66,8 @@ layer (PAR-0003) — is open; the second doubt below holds that question.
   date; renamed at PAR-0003's first design sitting) with zero ambiguity about
   where they live or how they are pointed to, so subset status is no
   problem — the pointer criterion now in PAR-0001's Granularity.
-  Resolves at PAR-0003's design session, when the reversal test has
-  something to run against.
+  Resolved 2026-08-03, at PAR-0003's acceptance: the record survives
+  as its own — the acceptability rationale above held as the ruling,
+  the derivation-guard argument in Context owes nothing to guides, and
+  merging later stays the cheap, lossless direction should Challenges
+  entries ever straddle the two records (PAR-0001's revision test).

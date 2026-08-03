@@ -6,7 +6,9 @@ what a governing record holds — follow the pointers.
 ## Orientation order
 
 1. `README.md` — the map: locations, the record tiers and their walking
-   path, the debt files, the mismatch how-to.
+   path, the debt files, the mismatch how-to. For a task with a guide,
+   `how-to/<domain>/` is tier 0 — follow it and fall back down the
+   chain only when it fails (PAR-0003).
 2. `docs/ARCHITECTURE.md` — before writing code. The one-stop shop: it
    reports, it does not govern. Read deeper — `docs/par/`, then
    `docs/archive/` — only until convinced; the walking path and authority
@@ -58,6 +60,10 @@ what a governing record holds — follow the pointers.
   until acceptance. Hardening sessions are never owed — a deliberate
   attack on a draft is convened at judgment (PAR-0001). More than one
   record per decision is expected.
+- Execution guidance for a task — how it is done, never why → a guide
+  in `how-to/<domain>/` (PAR-0003); folding it into a rationale is the
+  ballooning force arriving by another door. Found inaccurate, a guide
+  is repaired on the spot by whoever hit it.
 - A not-yet-due intention → `DEFERRED.md`, always with the trigger that
   makes it due.
 - A present gap with no better file to carry its marker → an `Owed:`

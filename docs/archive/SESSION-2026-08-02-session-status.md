@@ -1,6 +1,6 @@
 # Session record — 2026-08-02 — session records announce their own state
 
-Status: Open
+Status: Frozen
 Date: 2026-08-02
 
 Curated primary for the freeze-is-deliberate rule and the `Status: Open`

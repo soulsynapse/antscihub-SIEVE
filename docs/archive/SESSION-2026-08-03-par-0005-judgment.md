@@ -1,6 +1,6 @@
 # Session: PAR-0005 at judgment — the deliberate attack
 
-Status: Open
+Status: Frozen
 Date: 2026-08-03
 
 The occasion: PAR-0005 sits Proposed, rewritten in one sitting by the
@@ -15,7 +15,10 @@ on, say so — the Context loses its footing and the Decision is left
 standing on much narrower ground." And: "Do not soften the verdict to
 be agreeable, and do not manufacture objections to look rigorous."
 
-Open because the ruling is Kendrick's; the attack itself is complete.
+Frozen at the ruling: the attack ran, the conditions were answered,
+and the rewrite was cleared and executed (Exchange 12). The record's
+acceptance — or a fresh attack on the rewritten form — is a fresh
+sitting that files its own primary.
 
 ## Exchange 1 — the v1 citations verified, and the one that misreads
 
@@ -459,3 +462,27 @@ What acceptance waits on, in order of weight:
    defended; the `Opaque` hashing sentence routed; the two dangling
    `DEFERRED.md` citations re-anchored; the PAR-0008 seam stated
    (Exchanges 5–7).
+
+## Exchange 12 — the ruling, and what landed
+
+Kendrick: "Rewrite is clear to go."
+
+Executed in the same sitting, all four conditions: PAR-0005 rewritten
+whole (PAR-0001's coherence rule) — the Context re-grounded on
+diagnosis cost with the 10× recast as the accuracy evidence it is,
+the semantics paragraph redrawn around the composed-map definition
+with exact affine parameters and the barrier-only materialization
+rule, the offload paragraph split into proof-for-the-pattern and
+measurement-for-the-engine with the tool-suggested equivalence spec
+routed to PAR-0007 and PAR-0012, `Opaque` restated as
+no-structure-exposed, its hashing sentence routed to PAR-0009,
+Challenge 2 narrowed to the gate-edge barrier, Challenge 3 narrowed
+by the travelling yardstick, the PAR-0008 seam stated in Context,
+and the audit how-to added as a fifth resident. The two dangling
+`DEFERRED.md` citations re-anchored to the admission rule, with the
+retired table's intended-factoring guidance surviving in the entries'
+own text — the home Exchange 5 asked to be named.
+
+The record stays `Proposed`: the ruling cleared the rewrite, not
+acceptance, so `ARCHITECTURE.md` and `kernel.py` keep reporting the
+five-shape table until acceptance amends them in one commit.

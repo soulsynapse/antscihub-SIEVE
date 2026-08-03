@@ -105,8 +105,18 @@ the automatic ledger.
 - **How multiple inputs enter the shape signatures** — background
   subtraction consumes frame + plate, while Exchange 4 treats it as `Fold`;
   the settled unary-looking shape signatures do not say how the second input
-  enters. Due when: the five-shape vocabulary's first real code
-  (`src/sieve/kernel.py`), when those signatures become executable.
+  enters. Due when: the first `Fold` op is written, which is when that
+  signature first becomes executable (PAR-0005 states the shapes beyond
+  `Resample` and `Opaque` as provisional until their first instance).
+- **`PixelMap`, `Window`, and `Fold` enter the kernel** — the kernel
+  implements `Resample` and `Opaque`; the other three shapes are stated
+  in PAR-0005 as the intended factoring and become code with their
+  first instance, each signature settled by the op that needs it.
+  Rider: a standalone spatial-neighborhood op (erosion on a mask, a
+  spatial blur or gradient) fits none of the four reasoned-about shapes
+  and is an `Opaque` until measurement says it is worth a shape of its
+  own — the first candidate for a sixth. Due when: an op of that kind
+  is written, or instrumentation shows an `Opaque` on a hot path.
 - **The dispatch table's home** — DESIGN-SESSION.md Exchange 7 settles the
   mechanism (multiple dispatch over the reified op description, with the
   table doubling as the eligibility check) and Exchange 8 amends selection

@@ -78,7 +78,15 @@ The order:
 7. `20260803T065949Z` — configuration interchange (PAR-0019), inserted
    2026-08-03, after PAR-0012 and PAR-0011: its first question is the
    seam against them, which cannot be judged before they are.
-8. `20260802T225609Z` — the layout settlement (PAR-0018), last; it cites
+8. `20260803T211410Z` — the op contract (PAR-0020), inserted
+   2026-08-03, in practice immediately after PAR-0007's judgment: it
+   receives the op-side of the rules PAR-0007's rewrite narrows out, so
+   it cannot land before that narrowing, and its never-list should
+   govern before the first op is authored (kernel Phase 2). Thin,
+   citational, and denial-led by its stub's own statement — its
+   expensive internals are citations to PAR-0005 and PAR-0009's
+   rulings — so it costs little and pays early.
+9. `20260802T225609Z` — the layout settlement (PAR-0018), last; it cites
    the component records.
 
 ## Next session (picked 2026-08-03)

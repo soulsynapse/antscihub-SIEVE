@@ -202,7 +202,7 @@ argue against.
 The domain's citizens: what lives inside it and does the work.
 
 Cheap is not a verdict on importance — it is a statement about
-mobility, and it is why the record can govern without these being
+mobility, and it is why the rationale can govern without these being
 settled. A cheap internal is often more central to daily use than
 anything above it. It is admitted to the domain on the same terms; what
 it has not done is earn admission to *Expensive*, and the only thing
@@ -218,7 +218,7 @@ Without the trigger the section has no terminal form and grows by whim.
 ## Edges
 
 > **Two flags. Sharing both an upstream and a downstream with another
-> record means you scoped one domain as two. Identical expensive
+> rationale means you scoped one domain as two. Identical expensive
 > internals means you shuffled things to look different.**
 
 Every relation to another rationale, one per line, direction first.
@@ -230,13 +230,13 @@ Every relation to another rationale, one per line, direction first.
   this ↔ PAR-0020   the placement rule, stated from both sides
 ```
 
-Inbound edges are what this record was decided against and must cite.
+Inbound edges are what this rationale was decided against and must cite.
 Outbound edges are **bequests**. A double arrow is a shared border
 deliberately stated twice.
 
 A bequest is provisional and must read that way. The receiving
 rationale may refuse it on evidence this one did not have, and refusal
-amends this record rather than being overridden by it. A bequest to a
+amends this rationale rather than being overridden by it. A bequest to a
 stub goes to a file that cannot answer yet — write it as a question the
 stub will settle, not a ruling it will inherit.
 
@@ -281,7 +281,7 @@ Short. If it cannot be made short, the boundary is not yet understood.
 ## Challenges
 
 > **Test: does this doubt break the decision? If it does, it is not an
-> entry — the record is rewritten.**
+> entry — the rationale is rewritten.**
 
 The tradeoff log: doubts and frictions deliberately stated against the
 decision, with their resolution or the lack of one.
@@ -289,7 +289,7 @@ decision, with their resolution or the lack of one.
 ```
   | Date | Raised by | Doubt | Standing |
   | --- | --- | --- | --- |
-  | 2026-08-03 | Kendrick | The record has no teeth — no test fails
+  | 2026-08-03 | Kendrick | The rationale has no teeth — no test fails
     today because it exists. | Held; enforcement arrives through the
     property tests it derives. |
 ```
@@ -302,7 +302,7 @@ cell. Three further rules:
   sees at a glance which entries survived that.
 - Bare friction — evidence that something rubbed, with no argument — is
   not an entry. It lands with the reason it is friction, or it is
-  dismissed and enters as the record withstanding it.
+  dismissed and enters as the rationale withstanding it.
 - Confirming evidence enters only paired with the doubt it answers.
   Free-floating vindication has no trigger and no terminal form.
 
@@ -350,9 +350,9 @@ rather than silent.
 
 ## Before accepting
 
-Acceptance means the record governs and the roll-up is owed that
+Acceptance means the rationale governs and the roll-up is owed that
 moment — `ARCHITECTURE.md` for architecture, `README.md` or `AGENTS.md`
-for repo mechanisms, amended in the same commit. A `Proposed` record
+for repo mechanisms, amended in the same commit. A `Proposed` rationale
 amends nothing, which is what makes it free to sit.
 
 Four checks, each catching a failure that has actually happened here:

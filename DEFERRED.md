@@ -6,6 +6,34 @@ poorly, which is why it is kept apart from DEBT.md. When a trigger fires,
 the item moves: a decision gets made, or a placeholder enters the tree and
 the automatic ledger.
 
+- **The how-to runner** — scoped agent sessions spawned from a
+  how-to's structured fields (plain-line convention): the commands, how
+  to run them, the check, tightly scoped to the guide's content with no
+  hand-crafted context (PAR-0003 "The runner"). Stakes, stated so this
+  entry is not mistaken for a convenience: it is the how-to layer's
+  verification story — a guide is a program whose interpreter is an
+  agent, drift reds as a failed run, and run logs disambiguate
+  quiet-under-use from quiet-from-neglect (PAR-0003's standing
+  challenge). Due when: following an existing how-to by hand is a
+  session's bottleneck — the utility bar the script heuristic already
+  uses, applied at layer scale.
+- **Marker rule v3 — the multi-marker text surface** — text files admit
+  multiple `Owed:` markers, keyed `(path, stamp)`; stamps are already
+  each entry's identity, globally unique, and survive rewording and
+  relocation, so the stable-anchor argument that produced the
+  one-per-file grain is satisfied without it (PAR-0003 Consequences;
+  primary Exchange 5 for the grain's provenance). Ruled in
+  conditionally — "fine as long as it all works." Scope when due:
+  PAR-0002 rewritten whole and reviewed as a diff, `debt.py` and its
+  tests, the ledger's pinned rule version, the "states one debt"
+  wording in `README.md`/`AGENTS.md`, and `DEBT.md`'s second-entry
+  tripwire restated. Due when: the first PAR outcome is judged mostly
+  settled — the extension lands before the second simultaneous marker
+  in `ARCHITECTURE.md` would red the suite.
+- **How-to position hierarchy** — a stated logical nesting for the
+  generated index, distinct from the alphabetical folder walk
+  (PAR-0003 "The index"). Due when: the folder walk stops making sense
+  as the read surface — a judgment, explicitly "if ever wanted."
 - **The debt read layer** — `sieve.debt` read modes over the v2 ledger
   (PAR-0002 "The line, and the history" / "The planning surface"):
   list/show/log with derived columns — age and last-touched from ledger

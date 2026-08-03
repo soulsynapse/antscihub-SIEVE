@@ -1,6 +1,6 @@
 # Session record — 2026-08-02 — the template convention
 
-Status: Open
+Status: Frozen
 Date: 2026-08-02
 
 Curated primary for PAR-0004 (draft). Doctrine: PAR-0001.

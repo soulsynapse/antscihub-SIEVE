@@ -1,6 +1,6 @@
 # Session — the tool contract's scope
 
-Status: Open
+Status: Frozen
 Date: 2026-08-03
 
 The sitting that scoped PAR-0007 before drafting it whole. Kendrick and

@@ -250,8 +250,9 @@ that it was needed is a caution the system should keep: curated
 primaries can launder agent inference into doctrine wherever a passage
 carries no quote.
 
-Candidate resolution, pending ruling: marker rule v3 — the text
-surface admits multiple markers per file, keyed `(path, stamp)`.
+Candidate resolution, pending ruling (ruled Exchange 6): marker rule
+v3 — the text surface admits multiple markers per file, keyed
+`(path, stamp)`.
 Stamps are already each entry's identity, globally unique by enforced
 rule, and designed to survive rewording and relocation, so the
 stable-anchor argument that produced the grain is satisfied without
@@ -264,3 +265,60 @@ structural tripwire was the grain's contribution and retires with
 it). Sequencing: the extension gates the first *exercise* of the
 how-to debt class in `ARCHITECTURE.md`, not the close of this design
 session.
+
+## Exchange 6 — v3 ruled; the conventions; the index simplified
+
+Kendrick, verbatim:
+
+> "v3 is fine as long as it all works. I want to quickly knock out
+> some back and forth on convention for how-to so you have all the
+> context. first, how-to's main folder has a script folder in it, and
+> it has other folders. any how-to has to live in one of them, and
+> they're organized by domain.. sieve work, repo work, split on the
+> major seams defined in PAR. the how-to main folder has a generated
+> file that walks the folders by the how-to's nesting, not the folder
+> nesting. each how to has some kind of automatically represented
+> position in a hierarchy, random for now, as debt for later if
+> wanted, ideally in a nested list that makes sense but again not
+> important for the initial par. how-to's are referenced in the
+> architecture when they exist, and there must be a test for that.
+> format of how-tos are tbd, but they're written defensively to
+> resist stagnation and to be broadly accurate, and when found to be
+> inaccurate, cheaply updated on the spot to avert the error. again,
+> written to not need fixing."
+
+And, after the agent asked how "random" position should render:
+
+> "when i say random, since they're going into folders where they
+> belong, just walk the folders and alphabetical is fine"
+
+Settled here. **Marker rule v3 is ruled in, conditionally** — "fine
+as long as it all works"; it stays gating work, not doctrine, until
+it lands green. **The conventions**: `how-to/` holds a scripts folder
+(meta-tooling, visibly not a domain) and domain folders split on the
+major seams the PARs define — sieve work, repo work; every how-to
+lives in exactly one domain folder, so the folder set is closed under
+the seams. **The index**: one generated file in `how-to/`, the read
+surface, walking the domain folders alphabetically — the second
+message supersedes the first's stated-position idea, so the index is
+a pure function of the tree with no hand-stated fields; a position
+hierarchy is deferred debt if ever wanted. The full ledger pattern
+applies: never hand-edited, regenerated in the commit that changes
+what it reflects, mismatch-tested so staleness reds. **The reference
+test**: every how-to is referenced from `ARCHITECTURE.md`; the
+agent's grammar refinement stands as the coherent reading — every
+reference either resolves to an existing how-to or is stated as an
+`Owed:` marker, since under Exchange 4's placement an unresolved
+reference *is* the debt class's legal state; dangling either
+direction without a marker reds. **The form doctrine**: individual
+how-to format TBD, but written defensively — broadly accurate at an
+altitude that resists stagnation — and repaired on contact when
+found inaccurate: the mismatch discipline applied to prose, with the
+fallback chain bounding what defensive vagueness costs.
+
+Proposed by the agent, unconfirmed, held as a candidate only: a
+folder-seam conformance check (a how-to's domain folder derivable
+from its cited PAR's seam). Flagged for acceptance judgment, not
+decided here: PAR-0004's second challenge names this design session
+as its resolution point — whether the template convention folds into
+the how-to layer.

@@ -3,6 +3,17 @@
 Status: Accepted
 Date: 2026-08-02
 
+## Outcomes
+
+What this record system looks like working as intended: every
+architecture decision is governed from `docs/par/`, with the three
+tier-1 documents citing nothing deeper. A doubt — recurring or fresh —
+has exactly one place to land and finds the reasoning that answered it
+last time. Rereading a rationale convinces without opening a sibling.
+And the apparatus stays quiet: records written rarely, retired more
+rarely, the directory's silence meaning the architecture is settled
+rather than the record class abandoned.
+
 ## Context
 
 The founding architecture was argued in one recorded session (the design
@@ -55,10 +66,25 @@ were never filed.
 
 **Form and name.** A project architecture rationale (PAR) lives in
 `docs/par/`, one file per decision, named `NNNN-short-title.md`, cited as
-`PAR-NNNN`. It carries a status line, a date, context, the decision, and
-consequences. Every record-to-record citation names its target as
-`PAR-NNNN` at least once, in that form; paths and links are optional
-alongside it.
+`PAR-NNNN`. It carries a status line, a date, outcomes, context, the
+decision, and consequences. Every record-to-record citation names its
+target as `PAR-NNNN` at least once, in that form; paths and links are
+optional alongside it.
+
+**Outcomes.** A record opens with what its system looks like working as
+intended — an `## Outcomes` section directly after the status and date,
+before Context, the first thing a reader meets (2026-08-02; primary:
+`SESSION-2026-08-02-record-outcomes.md`). Outcomes are the yardstick
+later proposals against the system are judged by, and they are what
+dies first when it lives only in conversation — the occasion for this
+rule was the debt system's two stated end states being dropped
+mid-sitting by the agent that had just argued them. They differ from
+Consequences by direction: Consequences report what follows from the
+decision as made; outcomes state the end state it steers toward,
+readable without the argument. Phrased as intention, not current fact,
+and edited like everything else in a living record. Existing records
+gain theirs at their next substantive edit, never in a retro-stamping
+sweep.
 
 The name does double duty, and the pun is the mnemonic. PAR is how the
 ability to work in this project is kept *up to par* — the defense against

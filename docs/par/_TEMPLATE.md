@@ -96,7 +96,7 @@ settled and where:
 ```
 
 A rationale argued live files its primary in the same commit. One with
-no primary is a rationale the living-records argument does not cover:
+no primary is a rationale the living-document argument does not cover:
 the archaeological function is discharged one tier down, and with
 nothing down there it is discharged nowhere.
 

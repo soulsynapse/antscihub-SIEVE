@@ -7,7 +7,6 @@ marker-rule: v2
 
 | path | qualname | stamp | reason |
 | --- | --- | --- | --- |
-| `DEBT.md` | `<file>` | 20260803T043526Z | how-to for verifying a PAR at judgment — the attack procedure (verify every empirical claim against the tree, classify real pipelines against the decision, name the value and the no-other-route argument, enumerate the touch occasions) plus the skeleton test: draft the record's claimed how-tos, and a check step that cannot be stated is the cheapest detector of a hole in the record above it; carried here because its home, the how-to layer's repo-work domain, exists only at PAR-0003's acceptance, when this marker moves there; primary: docs/archive/SESSION-2026-08-03-par-0005-judgment.md, Exchange 9 |
 | `docs/par/0006-param-vs-preference.md` | `<file>` | 20260802T225557Z | rationale for param vs. preference, discussion owed before drafting; governs until acceptance: DESIGN-SESSION.md Exchange 2 |
 | `docs/par/0007-tool-contract.md` | `<file>` | 20260802T225558Z | rationale for the tool contract; claims at acceptance ARCHITECTURE.md invariant 1's archive/PLAN.md Phase 1 decision 2 citation and README's Exchange 1 citation (contracts derive from Params); governs until acceptance: DESIGN-SESSION.md Exchange 5 as rebuilt, and Exchange 2 |
 | `docs/par/0008-executor.md` | `<file>` | 20260802T225559Z | rationale for the executor; governs until acceptance: DESIGN-SESSION.md Exchanges 3, 4, and 6 |

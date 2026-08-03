@@ -199,12 +199,16 @@ module owns that belongs to the tool.
   reason it holds. The "Tools" section's Exchange 5 citation moves here,
   and its example gains `lower`'s inputs argument. `README.md`'s "Where
   contracts live" moves from Exchange 1 to this record.
-- PAR-0002 must settle the placeholder-form split before the contract's
-  first real code (its marker, `20260803T072353Z`). A tool that names an
-  unbuilt op must import cleanly and raise on use; `kernel.py` raising at
-  module top level means such a tool dies at import, never enters the
-  derived registry, and cannot be shown greyed — which makes this
-  record's Outcomes unobservable in the tree today.
+- PAR-0002 settles the placeholder-form split, and stamp
+  `20260803T072353Z` discharged at the sitting that stated it:
+  vocabulary reached for by name takes the function-body position,
+  behavior only called into takes the module position, and the tell is
+  whether a `from <module> import <name>` appears anywhere the milestone
+  reaches. What remains is not a missing rule but an unsettled surface —
+  which names `kernel.py` exposes is `docs/PLAN-TOOL-CONTRACT.md` Phase
+  2's, since PAR-0005 retired the five-shape table and a placeholder may
+  not invent one. Until that lands, a tool naming an unbuilt op still
+  dies at import rather than at use.
 - PAR-0005 amends the Consequences bullet that routes the voiding
   declaration here (its marker, `20260803T072354Z`), or the refusal
   above falls.
@@ -244,12 +248,15 @@ module owns that belongs to the tool.
 *Agent-raised except where noted; none human-confirmed yet (PAR-0001:
 friction is stated, never inferred).*
 
-- **2026-08-03 — the Outcomes describe something the tree cannot do.**
-  The whole record rests on a tool landing against operations that do not
-  exist. Under the current placeholder form it dies at import instead.
-  The fix is cheap and routed to PAR-0002, but until it lands this
-  record's central property is an intention, and the detector it offers
-  has never fired on anything.
+- **2026-08-03 — the Outcomes describe something the tree cannot do
+  yet.** The whole record rests on a tool landing against operations that
+  do not exist. The rule that permits it is settled — PAR-0002's position
+  split, stamp `20260803T072353Z` discharged the same sitting — but
+  `kernel.py` stays module-form until Phase 2 settles which names it
+  exposes, so such a tool still dies at import today. Narrowed
+  2026-08-03 from a missing rule to a pending surface; this record's
+  central property remains an intention, and the detector it offers has
+  never fired on anything.
 - **2026-08-03 — non-inspectable handles are asserted, not designed.**
   "Properties, never history" is a clean line in prose. Nothing here says
   what makes it hold — whether a handle is a distinct type withholding

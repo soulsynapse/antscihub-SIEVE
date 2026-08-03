@@ -16,8 +16,8 @@ class Tool:
 
     def lower(self, p):
         raise Owed(
-            "20260802T023508Z: Tool.lower(p): params to an op graph in the five-shape algebra;"
-            " ARCHITECTURE.md 'Tools', DESIGN-SESSION.md Exchange 5"
+            "20260802T023508Z: Tool.lower(p): params to a graph of op values;"
+            " ARCHITECTURE.md 'Tools', PAR-0005 'Decision', DESIGN-SESSION.md Exchange 5"
         )
 
     def view(self, p, out):

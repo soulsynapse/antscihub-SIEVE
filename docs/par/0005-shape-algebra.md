@@ -16,9 +16,12 @@ computation rather than a new convenience.
 
 ## Context
 
-The named system: the op algebra the kernel is written in — the small
-closed set of shapes every primitive takes, and the rule that an op's
-shape is its classification.
+The named system: the shape algebra — the small closed set of
+signatures an operation may be written as, and the rule that the
+signature written *is* the operation's classification. The kernel (the
+body of primitives — resample, threshold, wavelet transform, optical
+flow, background model, tracker) is written in it: every primitive
+takes one of the five shapes, and nothing else is expressible.
 
 The occasion was a decomposition question with no answer: should
 downsampling be its own step or an extension of crop? Neither, and the

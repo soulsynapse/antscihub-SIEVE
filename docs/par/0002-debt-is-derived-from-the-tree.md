@@ -7,7 +7,7 @@ Date: 2026-08-01
 
 What this system looks like working as intended (stated 2026-08-02,
 while marker rule v1 covered only the Python surface; primary:
-`SESSION-2026-08-02-debt-advance.md`): `DEBT-AUTO.txt` is the de facto
+`SESSION-2026-08-02-debt-advance.md`): `DEBT-AUTO.md` is the de facto
 debt surface — everything owed, in any tracked format, enumerates into
 it, and it is the only file ever read for present debt, because even
 `DEBT.md`'s entries are marker lines that enumerate (2026-08-03).
@@ -153,14 +153,15 @@ parallel mechanism (primary: `SESSION-2026-08-02-distill-worklist.md`).
 And the last resort is a location rule, not a format exception
 (2026-08-03): an entry here is itself a column-0 `Owed:` marker line
 under the text surface, so it enumerates like everything else and
-`DEBT-AUTO.txt` stays the only file ever read for present debt. The
+`DEBT-AUTO.md` stays the only file ever read for present debt. The
 surface's one-marker-per-file grain means a second simultaneous entry is
 the grammar-extension pressure the Outcomes name, arriving structurally
 (primary: `SESSION-2026-08-03-debt-md-marker-form.md`).
 `DEFERRED.md` holds not-yet-due intentions, each with the trigger that
 makes it due.
 
-The automatic ledger is its own file, `DEBT-AUTO.txt`, marked `-text` in
+The automatic ledger is its own file, `DEBT-AUTO.md` (named
+`DEBT-AUTO.txt` until format-version 3, 2026-08-02), marked `-text` in
 `.gitattributes`: "Whole-file byte compare, no delimited-region integrity
 question, no mixed hand/machine authority in one file." The alternative
 considered was a generated region inside a hand-authored file, and it fails
@@ -320,6 +321,18 @@ enumeration rule's version recorded in the ledger "so rule churn is
 distinguishable from debt movement." Entries are sorted by path then
 qualified name, UTF-8, LF.
 
+Format-version 3 (2026-08-02) re-serialized the ledger as a markdown
+table and renamed it `DEBT-AUTO.md`: the only file ever read for
+present debt should render where it is read, so each entry became one
+row — path and qualname as code spans, which is also what keeps
+`<module>` and `<file>` visible in rendering — with the v2 key's fields
+unchanged as columns and reason cells backslash-escaped so parse stays
+serialize's exact inverse. This is a versioned break, not additive
+evolution; the version pin is what makes it legible, the retired name
+and serialization are never reused, and the stamp-landing reader
+parses both key spellings and both file names, so history consumers
+lose nothing across the break.
+
 ### The line, and the history (2026-08-02)
 
 The dividing rule: the marker line carries only what git cannot know —
@@ -395,7 +408,7 @@ adjudicate" the invariant names as bureaucracy arriving.
 ## Consequences
 
 - The question "what does this repo owe right now?" is answered by reading
-  `DEBT-AUTO.txt`, and the answer is correct by construction rather than by
+  `DEBT-AUTO.md`, and the answer is correct by construction rather than by
   anyone's diligence. Nothing has to be remembered at commit time except
   running the regen, and forgetting that reds the suite.
 - Debt movement is legible in git history at entry granularity, which is

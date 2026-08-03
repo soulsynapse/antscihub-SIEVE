@@ -198,7 +198,7 @@ conformed; one that silently misses a criterion is not.
 **Definition of done** (approving this plan confirms this scope reading):
 
 - [ ] `kernel.py`, `views.py`, and `tools/base.py` hold real code and carry no
-      marker; `DEBT-AUTO.txt` is regenerated in the same commit as each
+      marker; `DEBT-AUTO.md` is regenerated in the same commit as each
       removal.
 - [ ] Both closed vocabularies are complete at v1, with the additive-revision
       discipline stated where the code is, not only in a doc.

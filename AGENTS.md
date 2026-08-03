@@ -11,7 +11,7 @@ what a governing record holds — follow the pointers.
    reports, it does not govern. Read deeper — `docs/par/`, then
    `docs/archive/` — only until convinced; the walking path and authority
    order are PAR-0001.
-3. `DEBT-AUTO.txt` — what is presently owed in-tree; `DEFERRED.md` — what is
+3. `DEBT-AUTO.md` — what is presently owed in-tree; `DEFERRED.md` — what is
    not yet due. Building from DEFERRED.md goes poorly, by design.
 4. The live planning cycles: `docs/PLAN-TOOL-CONTRACT.md` (code);
    `docs/PLAN-DEBT-ORDER.md` (distillation). Distillation runs system by
@@ -90,7 +90,7 @@ what a governing record holds — follow the pointers.
 
 ## Never
 
-- Hand-edit `DEBT-AUTO.txt`.
+- Hand-edit `DEBT-AUTO.md`.
 - Invent an API surface a placeholder should merely point at.
 - Build from `DEFERRED.md`.
 - Catch `Owed` outside the debt machinery.

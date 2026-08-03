@@ -53,7 +53,7 @@ class that gives every placeholder its meaning):
 - `tests/test_debt.py`, `test_automatic_ledger.py`, `test_adapter.py`,
   `test_import.py` — the machinery's own tests, including the mismatch test.
 
-The components (which of these are still placeholders is `DEBT-AUTO.txt`'s
+The components (which of these are still placeholders is `DEBT-AUTO.md`'s
 job to say, not this list's; a placeholder's docstring and reason point at
 the governing sections — follow the pointer before building):
 
@@ -97,7 +97,7 @@ Three files with three meanings; never "the ledger" unqualified:
   ledger is the only file ever read for present debt.
 - `DEFERRED.md` — hand-authored. Not-yet-due intentions, each with the
   trigger that makes it due. Building from this file goes poorly.
-- `DEBT-AUTO.txt` — generated, never hand-edited. The automatic ledger of
+- `DEBT-AUTO.md` — generated, never hand-edited. The automatic ledger of
   every in-tree marker, keyed by location (path, qualname), identified
   by its UTC statement stamp, rule version pinned.
 
@@ -111,7 +111,7 @@ markers appear in the suite as skips carrying their reason.
 
 ### Mismatch runbook
 
-The suite goes red when `DEBT-AUTO.txt` disagrees with a fresh enumeration,
+The suite goes red when `DEBT-AUTO.md` disagrees with a fresh enumeration,
 and the failure output is the entry-level diff — added, removed, changed.
 If the change is one you made on purpose: `python -m sieve.debt write`, then
 commit the regenerated ledger with the change it reflects. If it isn't:

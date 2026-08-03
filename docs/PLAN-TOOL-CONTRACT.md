@@ -1,13 +1,18 @@
 # Tool contract plan
 
-Scope: the Tool base's first real code, together with the two closed
-vocabularies its signatures name. `docs/archive/PLAN.md`'s Phase 3 layout settlement
-already made this a single unit — "the five-shape algebra is one design unit
-… all five IR classes landing in the change that first needs `Resample`" —
-and the change that first needs `Resample` is the one that gives `lower()` a
-return type. So this cycle lands `src/sieve/kernel.py`, `src/sieve/views.py`,
-and `src/sieve/tools/base.py`, and removes exactly four markers from the
-automatic ledger.
+Scope: the Tool base's first real code, together with the vocabularies its
+signatures name. `docs/archive/PLAN.md`'s Phase 3 layout settlement made this
+a single unit — "the five-shape algebra is one design unit … all five IR
+classes landing in the change that first needs `Resample`" — on the ground
+that the op vocabulary is one closed contract arriving whole. PAR-0005
+supersedes that ground (2026-08-03): the vocabulary is what has been proved
+and no more, and a further form is admitted one at a time, with the rewrite
+it licenses, never in advance. The unit survives on a narrower footing —
+`kernel.py` carries one marker, and the change that first needs `Resample`
+is the one that gives `lower()` a return type. So this cycle lands
+`src/sieve/kernel.py`, `src/sieve/views.py`, and `src/sieve/tools/base.py`,
+discharging their markers: `20260802T023505Z`, `20260802T023511Z`,
+`20260802T023508Z`, and `20260802T023509Z`.
 
 Crop is out of scope and keeps its marker; it gets its own cycle, per
 `docs/archive/PLAN.md` "After this plan." The executor, the store, the pipeline file
@@ -88,33 +93,50 @@ Exit: the three records say what they mean; suite green; regen a no-op.
 ## Phase 2 — The closed vocabularies
 
 `src/sieve/kernel.py` and `src/sieve/views.py` become real. Both are
-declaration-only modules: the five op shapes as an IR, the seven view layers
-as a vocabulary. Neither holds an implementation of anything — no resampler,
-no renderer.
+declaration-only modules: the proved forms as an IR — the affine coordinate
+map, the sequential bit, and `Opaque` (PAR-0005) — and the seven view layers
+as a closed vocabulary. Neither holds an implementation of anything — no
+resampler, no renderer.
 
-**Gate (four decisions):**
+**Gate (two decisions; narrowed 2026-08-03 from four by PAR-0005 and
+PAR-0007):**
 
-1. **What a shape instance *is*.** Exchange 5's example is
-   `Resample(scale=(1, 1/p.factor, 1/p.factor))` — the op is the shape,
-   parameterized. So `Resample` is a constructor over coordinate maps, not a
-   base class for a library of resamplers. Confirm that reading, and confirm
-   that "the kernel is the set of primitive operations" in `ARCHITECTURE.md`
-   describes a wider thing than `kernel.py` holds.
-2. **Where non-trivial primitives live**, given (1). A `Resample` needs no
-   implementation module because the coordinate map *is* the op; a `Fold`
-   tracker plainly does. Nothing in the record places that module. Likely
-   outcome: a `DEFERRED.md` entry triggered by the first `Fold`- or
-   `Window`-shaped op, not a decision here.
-3. **How a second input enters the shape signatures** — recorded as unpinned
-   in `kernel.py`'s docstring and in `DEFERRED.md`. It becomes due here and
-   not at crop, because the layout settlement lands all five shapes together
-   and `Fold`'s signature is being written for real. Background subtraction
-   consumes frame + plate; Exchange 4 treats it as `Fold`.
-4. **`lower()` returns an op *graph*, not an op.** `ARCHITECTURE.md` says
+1. **What a shape instance *is*, and which names `kernel.py` exposes.**
+   PAR-0005 settles the first half: an op is a value — a closed constructor
+   with typed fields, never a callable — so Exchange 5's
+   `Resample(scale=(1, 1/p.factor, 1/p.factor))` is the op parameterized,
+   not a base class for a library of resamplers. What is left is a
+   confirmation and a surface. Confirm that "the kernel is the set of
+   primitive operations" in `ARCHITECTURE.md` describes a wider thing than
+   `kernel.py` holds; then settle the exposed names, which is this phase's
+   alone: PAR-0002's position split sends vocabulary reached for by name to
+   the function-body form, so the names decide whether `kernel.py` stops
+   raising at import — and PAR-0007's Outcomes are unobservable until it
+   does.
+2. **`lower()` returns an op *graph*, not an op.** `ARCHITECTURE.md` says
    "params to an op graph"; Exchange 5's example returns a bare `Resample`.
    Whether a single op is a one-node graph or graphs are a separate type has
    to be settled before the shapes are written, because it determines whether
-   composition lives in the vocabulary or above it.
+   composition lives in the vocabulary or above it. PAR-0007 settles it —
+   `lower` returns a graph with named outputs, a single op being the one-node
+   case — but is `Proposed` and governs nothing, so the decision is taken
+   here or at that record's acceptance, never twice.
+
+Two gate items came off this phase on 2026-08-03 rather than being answered,
+and are recorded so they are not rediscovered as gaps:
+
+- **Where non-trivial primitives live** is a `DEFERRED.md` entry, deferred on
+  PAR-0007's own one-way-door filter: no module path is in a recipe hash, so
+  being wrong later costs a file move and some imports, never a store
+  migration. PAR-0007 settles only the negative — not the tool module,
+  because the operation is different debt. Loose preference when due:
+  `kernel/` as a package.
+- **How a second input enters the shape signatures** was due here because the
+  layout settlement landed all five shapes together and `Fold`'s signature
+  was being written for real. PAR-0005 retired that table, so `Fold` is no
+  longer landing; the `DEFERRED.md` entry's trigger moved to *the first
+  stateful op is written*, where the form is admitted under PAR-0005's
+  admission rule and its signature is settled by the op that needs it.
 
 Ordering note: vocabularies before the contract, by blast radius. The op
 representation feeds the recipe hash the store addresses by, so changing it
@@ -122,9 +144,13 @@ later orphans every stored value. That is cost, not corruption — no
 git-history semantics here, unlike the pipeline file and the automatic ledger
 — but it is the largest blast radius in this cycle.
 
-Exit: both modules import cleanly, the closed vocabularies are complete at v1
-with their additive-revision discipline stated in code, the ledger is
-regenerated to eight entries, and the suite is green.
+Exit: both modules import cleanly; `views.py`'s vocabulary is closed and
+complete at v1 with its additive-revision discipline stated in code, while
+`kernel.py` holds the forms that have been proved with PAR-0005's admission
+rule stated beside them — "complete" is the wrong bar for a vocabulary that
+is open by admission; `20260802T023505Z` and `20260802T023511Z` no longer
+enumerate and the ledger is regenerated in the same commit as each removal;
+the suite is green.
 
 ---
 
@@ -158,8 +184,9 @@ regenerated to eight entries, and the suite is green.
    that withholds the wires, a conformance test, or some combination — is
    this phase's equivalent of the classification-by-shape call.
 
-Exit: `Tool` is a real contract; `tools/base.py` has no marker; the ledger is
-regenerated to seven entries; the suite is green.
+Exit: `Tool` is a real contract; `20260802T023508Z` and `20260802T023509Z` no
+longer enumerate and the ledger is regenerated in the same commit as their
+removal; the suite is green.
 
 ---
 
@@ -228,15 +255,18 @@ additively, with the v1 record staying put.
 
 ## Known risks
 
-- **Four of the five shapes land with no caller.** Crop reaches `Resample`
-  only. The layout settlement made this call knowingly — one closed contract
-  whose vocabulary arrives together — but it is exactly the n=1 generalization
-  failure Exchange 6 describes, at n=0 for four of the five. Mitigation: the
-  shapes are signatures, not implementations, so the surface area guessed
-  wrong is as small as the design allows; and Phase 4's two worked examples
-  put n=2 under the part of the contract that does have callers. This does not
-  cover `Fold`, `Window`, `PixelMap`, or `Opaque`, and pretending otherwise
-  would be the risk going unnamed.
+- ~~**Four of the five shapes land with no caller.**~~ **Retired 2026-08-03
+  by PAR-0005.** The risk was that four shapes would be guessed at n=0 —
+  exactly the n=1 generalization failure Exchange 6 describes — mitigated
+  only by their being signatures rather than implementations. The admission
+  rule dissolves it rather than mitigating it: `PixelMap`, `Window`, and
+  `Fold` are no longer landing, and each is admitted when a rewrite it would
+  license is both wanted and provable, with its signature settled by the op
+  that needs it (`DEFERRED.md`, "Further forms enter the kernel"). `Opaque`
+  lands with no caller and is not the same risk: it exposes no structure and
+  authorizes nothing, so there is no surface to guess wrong. Kept rather than
+  deleted because a risk dissolved by a later decision is worth the same
+  record as one that fired.
 - **Phase 3's gate is four decisions deep and they interact.** Canonicalization
   depends on GUI topology; identity depends on canonicalization; purity
   enforcement depends on whether `Params` is a Pydantic model or a schema. The

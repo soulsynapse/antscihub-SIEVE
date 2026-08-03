@@ -17,7 +17,7 @@ what a governing record holds — follow the pointers.
    Distillation runs system by system from its `DEBT.md` entry
    (PAR-0001) — no live plan. Exhausted plans sit in `docs/archive/` —
    `PLAN.md` there still holds the layout settlement, load-bearing until
-   its distillation lands; marker form rule v1 and the classification
+   its distillation lands; marker form rule v2 and the classification
    rule are PAR-0002.
 
 ## The working loop
@@ -62,8 +62,15 @@ what a governing record holds — follow the pointers.
 - A present gap no marker can carry → `DEBT.md`.
 - A component the named milestone reaches but that isn't built → a
   placeholder: a real module at its real import path raising
-  `sieve.debt.Owed` in marker form rule v1, quoting signatures only from the
-  settled record, its docstring pointing at the governing sections.
+  `sieve.debt.Owed` in marker form rule v2, quoting signatures only from
+  the settled record, its docstring pointing at the governing sections.
+- A settled system owed its rationale → a stub record at its own number:
+  status line, its `Owed:` marker, the citations that govern until
+  acceptance — never rationale prose (PAR-0002, "What counts as debt").
+- Any marker's reason opens with its statement stamp — the UTC time the
+  debt was stated, `YYYYMMDDTHHMMSSZ`, hand-written at statement time.
+  The suite catches malformed, duplicate, and implausible stamps; a
+  discharged stamp is never reused.
 - Everything derivable from the tree is derived, never hand-maintained (the
   anti-bureaucracy invariant, judged at conformance passes).
 

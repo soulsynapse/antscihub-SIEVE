@@ -36,6 +36,12 @@ implicit-reasoning flags (`SESSION-2026-08-02-record-class.md`, Exchange
 10) upheld as written. Review record:
 `SESSION-2026-08-02-par-0002-acceptance.md`.
 
+Amended to marker rule v2 the same day: the universal surface, timestamp
+identity, and the line-versus-git division, argued in
+`SESSION-2026-08-02-debt-advance.md` — v1's whole form carries forward
+inside v2, and the ledger's rule-version pin keeps the two
+distinguishable in history.
+
 **The problem.** This is a rewrite whose skeleton was placed before its
 code, so most of the tree is components that do not exist yet. A repo in
 that state has to answer, continuously and truthfully, what it owes — and
@@ -115,6 +121,20 @@ the milestone does not reach is an intention with a trigger, and it gets no
 file, because a file for an unreached component would be debt the repo does
 not actually owe.
 
+The rule generalizes past components (2026-08-02): the debt-creating
+event is a governing declaration — the named milestone for code, the
+distillation mandate (PAR-0001) for rationales — and placement makes
+the already-existing debt enumerable, whatever the surface. A settled
+system owed its rationale gets a stub record at its own number carrying
+only its status line, its marker, and the citations that govern until
+acceptance — never rationale prose. The prohibition is the same one
+placeholders carry: an invented signature is a design decision smuggled
+in as scaffolding, and prose typed into a stub would acquire authority
+by existing. This supersedes, on its own terms, the drafts-as-worklist
+dismissal recorded in Challenges — what was dismissed was a new
+mechanism beside the debt system; what lands here is the more exacting
+debt system the dismissal itself asked for.
+
 ### Three files, three authorships
 
 `DEBT.md` and `DEFERRED.md` are hand-authored and live at the repo root:
@@ -142,19 +162,49 @@ check on a clean Windows clone.
 None of the three is called "the ledger" unqualified. They differ in who
 writes them and what a change to one means.
 
-### Marker form rule v1
+### Marker form rule v2
 
 The form is statically decidable, and that is the requirement it exists to
 satisfy: a marker convention the enumerator cannot see is a convention
-rather than a test, which is the state the design forbids.
+rather than a test, which is the state the design forbids. Rule v2
+(2026-08-02) carries all of v1 forward and adds two things: identity, and
+the universal surface. Statically-decidable is also why identity is
+*stored* rather than derived: the alternative — rename detection over
+reasons plus a moves-travel-alone commit discipline — made identity
+accurate only while everyone behaved, a convention the machinery cannot
+see (primary: `SESSION-2026-08-02-debt-advance.md`, Exchange 6).
+
+**Identity.** Every marker's reason opens with its statement stamp: the
+UTC time the debt was stated, second resolution, one canonical
+fixed-width spelling — `YYYYMMDDTHHMMSSZ` — followed by `: `. The stamp
+is the entry's identity: it survives relocation and rewording, so a
+moved marker is `moved` in the entry diff rather than a discharge plus
+a new debt, and per-entry git history is one grep-stable token. It is
+also the minimum priority signal carried on the line — age readable at
+sight, chronological sort free everywhere. Stamps are hand-written at
+statement time and trusted until a test says otherwise (Exchange 9 —
+tool-minting made placing a marker a ceremony): a malformed, omitted,
+or nonsense stamp (invalid calendar, before the repo epoch 2026-08-01,
+future beyond slack) is an enumeration error; a duplicate stamp
+anywhere under the surface is an enumeration error, never a merge; and
+stamps of newly landing entries are audited against first ledger
+appearance where git history exists — a stamp cannot postdate its own
+landing, so a fabricated one convicts itself. A discharged stamp is
+never reused. Two honest edges are named rather than hidden: the stamp
+reads when-*stated*, not when-incurred — the debt-creating event
+remains the declaration — and markers whose shared statement event
+gives them one wall-clock second (a skeleton commit, an enumeration
+restated as several entries) disambiguate by incrementing seconds in
+entry-sort order, a recorded artifact of uniqueness, not a claim about
+sub-second history.
 
 The canonical import is `from sieve.debt import Owed` at module top level,
-no alias. The canonical statement is `raise Owed("<reason>")` where the
-argument is "exactly one static string literal" — adjacent-literal
-concatenation folds at parse and is fine; f-strings are not literals and
-are out of form. The literal requirement is what makes the reason
-comparable bytes at enumeration time rather than a value that only exists
-at runtime.
+no alias. The canonical statement is `raise Owed("<stamp>: <reason>")`
+where the argument is "exactly one static string literal" —
+adjacent-literal concatenation folds at parse and is fine; f-strings are
+not literals and are out of form. The literal requirement is what makes
+the reason comparable bytes at enumeration time rather than a value that
+only exists at runtime.
 
 There are exactly two canonical positions, corresponding to the two things
 a placeholder can be: (a) the sole statement of a function or method body
@@ -164,13 +214,40 @@ docstring, the canonical import, and the raise — the behavior-only form,
 which raises on import. "A module is never both: a module-level raise would
 make quoted signatures unreachable."
 
+**The universal surface.** The file universe is the git index — tracked
+files plus untracked-not-ignored, so a marker is visible to regen before
+its first commit — which makes universality definitional rather than
+maintained: a new file or format is covered the moment git would take
+it, and the exclusion list is `.gitignore`, maintained anyway, rather
+than a hand-listed walk. Python files are the AST surface, rule v1's
+two positions unchanged. Every other file that decodes as UTF-8 is the
+text surface, with exactly one form: a column-0 line
+`Owed: <stamp>: <reason to end of line>`, at most one per file, keyed
+`(path, <file>)` — mirroring the module form, because file paths are
+the only stable anchor unstructured text has (heading-anchored keys
+lost: heading text is mutable content and churns like line numbers).
+A column-0 line opening `Owed:` that fails the form is an enumeration
+error; the word elsewhere is prose. Reasons are read under universal
+newlines and stored LF-clean, so checkout line-ending style cannot make
+two clones enumerate different bytes. Three named boundaries, not
+leniencies: files that do not decode as UTF-8 are outside the text
+surface; the automatic ledger and the sentinel root are machinery, not
+surface; and `docs/archive/` is excluded outright, because a frozen
+file can never be edited, so a frozen enumeration error would be
+permanent — the frozen tier states no live debt by definition. The
+dynamic instrument remains Python-only, and the asymmetry is stated:
+text markers cannot fire, so they are enumerator-only.
+
 Entries are keyed by "(repo-relative POSIX path, qualified name — dotted
 qualname for callables, `<module>` for module-level)", never by line
-number, so edits above a marker cannot churn its entry. The reason text is
-the compared content, so "a reworded reason renders as *changed*, which is
-real signal (the debt's statement moved, the debt didn't)." A duplicate key
-is an enumeration error and never a silent merge, because "one marker per
-scope is the grain of 'this scope is owed.'"
+number, so edits above a marker cannot churn its entry — and identified
+by their stamp, which is what the entry diff joins on across
+relocations. The reason text is the compared content, so "a reworded
+reason renders as *changed*, which is real signal (the debt's statement
+moved, the debt didn't)." A duplicate key is an enumeration error and
+never a silent merge, because "one marker per scope is the grain of
+'this scope is owed'"; a duplicate stamp is the same error one level
+up, because one stamp is the grain of one debt's history.
 
 Anything that references the name and fails the form — non-literal reason,
 non-canonical position, aliased binding — is "an **enumeration error, never
@@ -191,17 +268,18 @@ enumerated roots." Qualnames flatten `<locals>`, and shadow collisions
 surface as loud duplicate-key errors. Canonical positions are reached
 through `def`/`class` nesting only, so a marker under `if` or `try` is out
 of form. Reasons are LF-only; any other line boundary is an enumeration
-error. Class-body markers are not in v1 — if they are ever needed that is
-an additive v2, which is why the rule version is pinned inside the ledger.
+error. Class-body markers remain out of form — if they are ever needed
+that is an additive v3, which is why the rule version is pinned inside
+the ledger.
 
 ### The instruments, and why there are two of them
 
-The enumerator is the static instrument: a library function taking a root
-path, walking `.py` files, AST-matching rule v1, returning canonical
-entries. Because the root path is a parameter, its own tests run against
-fixture trees rather than assuming the live repo; the default roots and
-exclusions are one definition, consumed by both the tests and the regen
-command.
+The enumerator is the static instrument: a library function walking the
+git index by default, AST-matching the Python surface and line-matching
+the text surface, returning canonical entries. Because explicit roots
+can be passed in place of the index walk, its own tests run against
+fixture trees rather than assuming the live repo; the exclusions are
+one definition, consumed by both the tests and the regen command.
 
 The conftest adapter is the dynamic instrument. A test-tree marker raises
 the same exception as everything else — "one syntax, one enumerator key" —
@@ -218,12 +296,13 @@ each other: "the sentinel guards against the enumerator dying, the
 membership check guards against markers raised in forms the enumerator
 can't see."
 
-The sentinel is one known marker in a test-fixture directory that the
-enumerator must always find, failing the suite if it finds zero there.
+The sentinel is one known marker per surface in a test-fixture directory
+that the enumerator must always find, failing the suite if it finds zero
+there — a Python marker and a text-form marker, so a dead scanner on
+either surface is distinguishable from that surface being debt-free.
 "Without it, a dead enumerator regenerates an empty ledger and passes
 vacuously — 'no debt' and 'monitor broken' must be distinguishable." It is
-excluded from the default enumeration roots so it never appears as live
-debt.
+excluded from the default enumeration so it never appears as live debt.
 
 The ledger format is "a published interface consumed by git history" and
 inherits the file-format discipline of `DESIGN-SESSION.md` Exchange 1
@@ -231,6 +310,50 @@ wholesale: additive-only evolution, a removed name never reused, and the
 enumeration rule's version recorded in the ledger "so rule churn is
 distinguishable from debt movement." Entries are sorted by path then
 qualified name, UTF-8, LF.
+
+### The line, and the history (2026-08-02)
+
+The dividing rule: the marker line carries only what git cannot know —
+the stamp (writing time, which git holds only as rebase-mutable landing
+time) and the semantics: what is owed, and the governing citation.
+Everything temporal is derived, because the committed, entry-keyed
+ledger makes git history a per-debt event log: birth is the first
+ledger commit containing a stamp, every restatement is a `changed`
+entry, discharge is the commit whose diff removes it — which also links
+each debt to the exact work that paid it — and all of it is computed on
+call, never stored. Nothing history-derived is ever written into the
+ledger: the ledger is a pure function of the tree at HEAD, or the
+mismatch test loses its meaning (clone-dependent regen, self-referential
+counters, polluted compared-content). The suite's checks are
+correspondingly static and tree-only; audits that need history — the
+stamp-landing check — run where history exists and say so where it
+does not.
+
+What stays off the line, deliberately: dependency edges (a judgment
+about relevance — the only edges are provenance-shaped, extracted at
+read time from citations already required in reasons, which name their
+targets verbatim — `PAR-NNNN`, a stamp, a `path :: qualname` — so
+extraction is mechanical); release conditions (predictions — the
+release path is a commit removing the marker and citing the decision
+that dissolved the debt, so nothing is written in advance to be wrong);
+and every optional annotation, because each optional field is a shuffle
+surface for a context-saturated agent — minimal grammar is an
+agent-alignment feature. The statement-churn count doubles as the
+busywork detector, and cannot be gamed by editing, because it is
+derived.
+
+### The planning surface (2026-08-02)
+
+Work is chosen by ordering ledger entries. The read layer emits the
+ledger in a derived default order — age, last-touched, restatement
+count — and judgment reorders it; the ordering lands as a short dated
+planning decision citing stamps. Identity lives with the debt, order
+lives with the plan: markers are never renumbered, insertion is a
+one-file edit, and a cited stamp that is no longer enumerated means
+exactly one thing — discharged. Ordering is a decision and legitimately
+hand-authored; it is the *list* that is never hand-derived again — the
+citation-derived work list that leaked two settled systems
+(`docs/archive/PLAN-DISTILL.md`) is the in-repo evidence for why.
 
 ### Enforcement
 
@@ -271,13 +394,20 @@ adjudicate" the invariant names as bureaucracy arriving.
 - A reworded marker reason is a ledger change. Later distillations that
   repoint marker reasons from `DESIGN-SESSION.md` exchanges to `PAR-NNNN`
   will therefore render as `changed` entries and travel with a regenerated
-  ledger — the anticipated case, not a defect.
+  ledger — the anticipated case, not a defect. The v1-to-v2 stamp sweep
+  was the same case at scale, and existing markers' stamps were derived
+  once from their placement commits and are pinned bytes thereafter.
 - Known accepted gap: `--doctest-modules` imports module-form placeholders
   outside the adapter's collection path and reds the suite loudly.
-- Marker form rule v2 is anticipated and additive (class-body markers are
+- Marker form rule v3 is anticipated and additive (class-body markers are
   the known candidate). It supersedes this record, which carries forward
-  everything it keeps; the rule-version pin in the ledger is what keeps the
-  two distinguishable in history.
+  everything it keeps; the rule-version pin in the ledger is what keeps
+  versions distinguishable in history.
+- `DEBT.md`'s steady state is empty (see Outcomes): the two entries it
+  held dissolved into the surface — fourteen stub records and PAR-0003's
+  own marker. A future nonempty entry is standing pressure to extend the
+  marker grammar, and the file's remaining role is the open Challenges
+  question below.
 - The instruments constrain each other, so neither can be relaxed alone:
   loosening the enumerator's form checking silently widens what the
   adapter's membership check will fail on.
@@ -298,7 +428,12 @@ adjudicate" the invariant names as bureaucracy arriving.
   this section, arriving contemporaneously rather than reconstructed —
   the surface working as the no-reconstructed-challenges gate
   anticipated (`docs/archive/PLAN-DISTILL.md`, Phase 2). Fuller record:
-  `SESSION-2026-08-02-distill-worklist.md`.
+  `SESSION-2026-08-02-distill-worklist.md`. Superseded on its own terms
+  2026-08-02: the dismissal asked for "a more exacting debt system,"
+  and marker rule v2 is it — stub records now carry the owed rationales
+  as markers, distinguished from the dismissed drafts by the
+  no-rationale-prose rule (see "What counts as debt"; primary:
+  `SESSION-2026-08-02-debt-advance.md`, closing section).
 
 - **2026-08-02 — "Work in the file itself that doesn't touch the
   explicit debt line is signal for potential concurrent work that's

@@ -43,8 +43,9 @@ Real code (the debt machinery,
 [PAR-0002](docs/par/0002-debt-is-derived-from-the-tree.md) — the closed
 class that gives every placeholder its meaning):
 
-- `src/sieve/debt.py` — the `Owed` marker exception, the rule-v1 enumerator,
-  the ledger serializer, and the regen command.
+- `src/sieve/debt.py` — the `Owed` marker exception, the rule-v2
+  enumerator (the Python AST surface and the text surface, walking the
+  git index), the ledger serializer, and the regen command.
 - `tests/conftest.py` — the adapter: a caught marker becomes a skip carrying
   its reason; one the enumerator can't see fails.
 - `tests/_sentinel/` — the marker the enumerator must always find, so "no
@@ -95,12 +96,16 @@ Three files with three meanings; never "the ledger" unqualified:
 - `DEFERRED.md` — hand-authored. Not-yet-due intentions, each with the
   trigger that makes it due. Building from this file goes poorly.
 - `DEBT-AUTO.txt` — generated, never hand-edited. The automatic ledger of
-  every in-tree marker, keyed (path, qualname), rule version pinned.
+  every in-tree marker, keyed by location (path, qualname), identified
+  by its UTC statement stamp, rule version pinned.
 
 A placeholder *is* its debt entry: a real module at its real import path
-raising `Owed("<reason>")` in marker form rule v1 (PAR-0002). Presence in
-the tree is the authorization — there are no status fields anywhere. Test-tree markers appear in the suite as skips carrying their
-reason.
+raising `Owed("<stamp>: <reason>")` in marker form rule v2 (PAR-0002).
+Any other tracked text file states one debt the same way — a column-0
+`Owed: <stamp>: <reason>` line — which is how a settled system's owed
+rationale lives as a stub record in `docs/par/`. Presence in the tree is
+the authorization — there are no status fields anywhere. Test-tree
+markers appear in the suite as skips carrying their reason.
 
 ### Mismatch runbook
 

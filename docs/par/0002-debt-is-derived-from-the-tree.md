@@ -403,11 +403,12 @@ adjudicate" the invariant names as bureaucracy arriving.
   the known candidate). It supersedes this record, which carries forward
   everything it keeps; the rule-version pin in the ledger is what keeps
   versions distinguishable in history.
-- `DEBT.md`'s steady state is empty (see Outcomes): the two entries it
-  held dissolved into the surface — fourteen stub records and PAR-0003's
-  own marker. A future nonempty entry is standing pressure to extend the
-  marker grammar, and the file's remaining role is the open Challenges
-  question below.
+- `DEBT.md`'s steady state is empty (see Outcomes): its two entries
+  dissolve into the surface — fourteen stub records and PAR-0003's own
+  marker. The dissolution is stated debt in `DEBT.md` until it lands
+  (2026-08-03). A future nonempty entry is standing pressure to extend
+  the marker grammar, and the file's remaining role is the open
+  Challenges question below.
 - The instruments constrain each other, so neither can be relaxed alone:
   loosening the enumerator's form checking silently widens what the
   adapter's membership check will fail on.

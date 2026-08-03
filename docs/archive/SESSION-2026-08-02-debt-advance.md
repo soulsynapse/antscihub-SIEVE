@@ -1,6 +1,6 @@
 # Session: advancing the debt system — universal surface, identity, git-derived signal
 
-Status: Open
+Status: Frozen
 Date: 2026-08-02
 
 The argument that produced marker rule v2's design: the universal
@@ -254,3 +254,15 @@ from placeholders: a placeholder never invents a signature, so an owed
 stub never contains rationale prose — any argument typed into it would
 acquire authority by existing. The stub carries the marker, its
 citations, and nothing else.
+
+## Close
+
+Wrapped 2026-08-03 at Kendrick's call, context-bound mid-build. The
+argument above is complete; the build landed through the v2 machinery
+commit (rule v2 code, both surfaces, stamps swept, ledger v2, suite
+green). The unlanded remainder is stated where it belongs, not here:
+the dissolution of DEBT.md's entries into stubs is a DEBT.md entry;
+the read layer is a DEFERRED.md entry with its trigger. Task 4's
+yield was record text only (the verbatim-citation convention in
+PAR-0002's "The line, and the history"); tasks 5 and 6 are the
+deferred read layer and its first planning decision.

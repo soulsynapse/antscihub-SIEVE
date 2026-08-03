@@ -6,6 +6,15 @@ poorly, which is why it is kept apart from DEBT.md. When a trigger fires,
 the item moves: a decision gets made, or a placeholder enters the tree and
 the automatic ledger.
 
+- **The debt read layer** — `sieve.debt` read modes over the v2 ledger
+  (PAR-0002 "The line, and the history" / "The planning surface"):
+  list/show/log with derived columns — age and last-touched from ledger
+  history by stamp (`stamp_landings` exists), restatement count,
+  reference extraction — emitting the derived default order a planning
+  session reorders. Nothing history-derived is ever written into the
+  ledger. Due when: the first planning session over the ledger convenes
+  (the dissolution in DEBT.md landing is its natural occasion), or a
+  mismatch investigation first needs per-stamp history.
 - **The measured-equivalence harness** (ARCHITECTURE.md invariant 4; the §8
   EDIT in DESIGN-BRIEF.md stays recorded as the steelman alternative). Due
   when: the first second implementation of any op — also the moment the

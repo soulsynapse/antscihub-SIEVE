@@ -50,5 +50,22 @@ presently owed.
   session settles the system and PAR-0003 is rewritten to govern it.
   Primary: `SESSION-2026-08-02-runbook-gap.md`.
 
+- **The v2 dissolution of this file is pending** (2026-08-03,
+  PAR-0002 as amended; primary:
+  `SESSION-2026-08-02-debt-advance.md`). Marker rule v2 and its
+  machinery govern and are landed; what has not landed: the fourteen
+  stub records (PAR-0005..0018, stamps 20260802T225556Z+i, statement
+  event b5cce1b) replacing the distillation entry above; PAR-0003's
+  own `Owed:` line (stamp 20260802T210348Z, statement event e32966b)
+  replacing the runbook entry; the first planning decision
+  (`docs/PLAN-DEBT-ORDER.md`) carrying the priority line above; and
+  the then-stale passages — `AGENTS.md` "Distillation runs system by
+  system from its DEBT.md entry" and PAR-0001's "filed in DEBT.md /
+  enumerated systems live in that entry" and "cannot be derived"
+  paragraphs — repointed at the stubs. Retired when this file holds
+  nothing and the suite is green. Stub form: title + `Status:
+  Proposed` + date + the `Owed:` marker + provenance citation, never
+  rationale prose.
+
 (The adapter naming asymmetry recorded here on 2026-08-01 was resolved
 the same day by the step 6.5 collection-time rework.)

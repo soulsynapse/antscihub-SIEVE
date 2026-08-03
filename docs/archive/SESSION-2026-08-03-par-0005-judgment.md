@@ -272,7 +272,84 @@ the hash needs anyway. Where it must never claim keep: as a speed
 argument — speed is weldable, and the Context correction in
 Exchange 2 is what keeps that claim out.
 
-## Exchange 9 — verdict
+## Exchange 9 — when the system is touched, and the how-tos it admits
+
+Kendrick: "When is the system touched? What is the operationalizable
+heuristic for when this system is picked up as a tool, when does it
+indispensably live? Say we are writing how-tos about this. What do
+they look like?"
+
+**Where it indispensably lives vs. when it is picked up.** Two
+different presences. It lives at the boundary — every `lower()`
+return crosses it and every recipe hash serializes it — silently,
+consulted by no one, load-bearing at every frame rendered. It is
+*picked up as a tool* only inside two loops, both evidence-gated:
+the performance loop, entered through the cost surface, and the
+audit loop, entered through doubt about a number (the reviewer's
+fast-vs-naive comparison, DESIGN-SESSION.md Exchange 3's
+preference). The one-line heuristic: **if you arrived without a
+measurement or a doubt in hand, you are in the wrong place — return
+an `Opaque` and leave.** Nobody opens this system to add a feature;
+a tool author touches a constructor from it, never the system. Like
+a type system: always on, opened rarely.
+
+**The touch occasions, enumerated.** (1) Writing a tool — touches a
+constructor only; the null door. (2) Reshaping an `Opaque` — trigger:
+the cost surface names it AND the math admits a proved form.
+(3) Adding a rewrite rule — trigger: a measured hot pattern across
+adjacent nodes. (4) Offloading a subgraph — same trigger, foreign
+emitter. (5) Auditing a result — trigger: a reviewer's doubt, not
+slowness. (6) Admitting a new form — trigger: a rewrite it would
+license is wanted and provable; deliberately NOT a how-to, because it
+is a record edit under the admission rule, not a routine task, and
+writing a guide for it would invite the taxonomy tax back through the
+how-to door. The layer's silence there is the signal that the task is
+architecture, not use.
+
+**The how-to set** (the record's first residents at acceptance,
+PAR-0003 form: task-oriented, altitude that does not churn, each with
+a check step):
+
+1. *Write an op* — return `Opaque(fn)`; ship. One decision table:
+   can it be written as an affine coordinate map with no state and no
+   neighborhood? Then that constructor; if unsure, `Opaque`. Never
+   add a form. Check: suite green. This guide is the "architecture
+   asks nothing" outcome operationalized, readable by someone who
+   read nothing else.
+2. *Diagnose a slow pipeline* — the entry point that dispatches: rank
+   per-node wall-clock; classify the top span as decode-bound (reader
+   work, not this system), a hot `Opaque` (→ 3), or an unfused chain
+   (→ 4/5). Check: name the node and its class before touching code.
+   Unwritable until the executor's instrumentation lands (its
+   `DEFERRED.md` trigger) — stated, not hidden.
+3. *Reshape an `Opaque` into a proved form* — change `lower()`'s
+   return; params, view, output surface unchanged. Check: blocked —
+   cannot be stated until the Decision's third paragraph is redrawn,
+   because bit-identity is false and the defined-semantics bar is
+   unstated.
+4. *Add a rewrite rule* — state the equivalence as the pair of
+   expressions; write the rule over op values; write the independent
+   test against the naive path (both derivable from one description,
+   Exchange 8); the measured delta lands beside the rule, not in a
+   comment — the v1 lesson made procedure. Check: property test
+   green, naive-path test green.
+5. *Offload a subgraph to FFmpeg* — matcher, emitter, engine version
+   pinned in the hash. Check: blocked on Exchange 4's bar decision
+   (silent under defined semantics, or swap ceremony).
+6. *Audit a result against the naive path* — evaluate with rewrites
+   off, compare at the terminal statistic, record the comparison.
+   The reviewer's door; owed since Exchange 3 of the design session
+   and missing from the record's Consequences list, which names four
+   residents and not this one.
+
+**The meta-finding.** Drafting these skeletons is itself part of the
+judgment — "admits feasible how-tos" is one of the four criteria —
+and it independently confirms the verdict's top two conditions: guides
+3 and 5 cannot state their check steps until acceptance conditions 1
+and 2 land. A how-to whose check step is unwritable is the cheapest
+detector of a hole in the record it descends from.
+
+## Exchange 10 — verdict
 
 **The record stands, on narrower ground, and is not ready to accept as
 written.** It names a real system (the op representation and the

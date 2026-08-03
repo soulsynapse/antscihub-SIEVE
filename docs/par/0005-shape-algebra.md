@@ -1,180 +1,166 @@
-# PAR-0005 — Shape algebra and classification by form
+# PAR-0005 — Ops as values, and what the executor may rewrite
 
 Status: Proposed
 Date: 2026-08-03
 
 ## Outcomes
 
-What this system looks like working as intended: a contributor who has
-read nothing about the algebra ships a correct op in an afternoon, and
-the op is classified correctly anyway, because the signature they wrote
-is the classification. Nobody hand-labels an op random-access; nobody
-audits such a label. An op earns a faster shape when a measurement says
-the path is worth it, and that reshaping changes nothing a tool's user
-can see. The vocabulary grows only when a new *kind* of computation
-arrives, never as a new convenience.
+What this system looks like working as intended: a rewrite that made
+something fast is a rule in the tree with a test beside it, not a
+comment in a file that the next redesign deletes. Someone writing a new
+operation writes the naive thing and ships it the same afternoon,
+because the architecture asks nothing of them. The executor never
+changes an answer without being able to prove it didn't. And every
+substitution that cannot be proved is one the user asked for, saw the
+difference from, and has recorded next to the result — so a number that
+gets published can be traced to the decision that produced it.
 
 ## Context
 
-The named system: the shape algebra — the small set of signatures an
-operation may be written as, and the rule that the signature written
-*is* the operation's classification. The kernel (the body of
-primitives — resample, threshold, wavelet transform, optical flow,
-background model, tracker) is written in it.
+The named system: the representation an operation takes, and the
+authority the executor has to rewrite a graph of them.
 
-The occasion was a decomposition question with no answer: should
-downsampling be its own step or an extension of crop? Neither, and the
-question is unanswerable as posed. Crop-then-downsample as two
-resamplings is both slower and *less correct* than one composed sample,
-so the saving is in neither step and belongs to their boundary. The
-cost function is not separable across step boundaries, so the step
-decomposition has no optimal substructure — every boundary forfeits
-some cross-boundary optimization, and redrawing it only moves which one
-is lost. At ten steps that compounds.
+The occasion is measured rather than argued. v1
+(`antscihub-optical-flow-detector`) runs far faster than v2
+(`antscihub-SIEVE-v2`), and the reason went undiagnosed through a whole
+rewrite. Reading both: v1 pushes crop, scale, greyscale conversion and
+replicate packing into one FFmpeg filtergraph (`core/video.py:398-415`),
+so only working-size gray16 crosses the pipe, and it records that the
+*order* inside that graph is worth 10× (`video.py:232-237`: scale before
+`format=gray16le` measures 0.364, reversed 3.80). Its preprocessing is
+hand-fused with the arithmetic stated — the z-score collapsed to one
+affine `g*a + b` because a z-score is affine, a native gray16 path that
+skips the 0–255 conversion because a positive scale cancels out of a
+z-score, a skipped resize when the decoder already produced the target
+size, block reduction at ingest so the wavelet runs on a small grid
+(`core/preprocess.py`, `core/stream_buffer.py`). v2 decodes full
+resolution and shrinks afterwards (`decode/reader.py:112-118`), runs
+four independent readers that each grab-forward over the same frames
+(`decode/prefetch.py:130-146` with `reader.py:86-95`, so decode work
+scales with worker count), and materializes a full array per node per
+frame (`pipeline/executor.py:54-81`).
 
-Primaries: `docs/archive/DESIGN-SESSION.md` — the non-separability and
-the two-layer fix (Exchange 3); the first design's rejection, the
-shapes, and classification by form (Exchange 5); evidence-triggered
-refinement (Exchange 6). And
-`docs/archive/SESSION-2026-08-03-shape-algebra-edges.md` — the closure
-overclaim (Exchange 1); how much is committed in code (2); `Resample`
-as an invertible affine and the guarantee-voiding convention (3);
-`Window`'s surviving declaration (4); refinement as standing debt, and
-the agent's claimed contradiction in the design session withdrawn (5).
+Two of those three are decode-path defects and are not this record's
+business. The third is: every one of v1's measured wins is a rewrite
+rule, and every one lived only in a person and in prose. Nothing in
+either architecture could hold them, so the redesign deleted them and
+left no way to find out why the result was slower. That is the failure
+this record exists to prevent, and it has now happened once.
+
+Primaries: `docs/archive/SESSION-2026-08-03-shape-algebra-edges.md` —
+the closure overclaim (Exchange 1); how much is committed in code (2);
+affine geometry and the guarantee-voiding convention (3); the surviving
+declaration (4); the retrofit argument withdrawn (5); the v1/v2 finding
+(6); subgraph offload and the TRex case (7); representation as the
+opposite of runtime access, and form as authorization (8); equivalence
+in a subtype and the swap test (9); the vocabulary cut to what it
+proves (10). And `docs/archive/DESIGN-SESSION.md` — non-separability
+across step boundaries (Exchange 3), the rejection of declared
+classification (5), evidence-triggered refinement and the peephole
+discipline (6).
 
 ## Decision
 
-**Ops are values; the executor interprets them.** The graph the user
-authors is not the graph the executor runs — steps are units of intent
-and UI, ops are units of execution. DP over user-authored steps has no
-optimal substructure; DP over fusion regions of an op graph does, so
-the state space was wrong rather than the method. This is the standard
-split (Halide's algorithm/schedule, a query planner's logical→physical
-lowering, XLA and TVM fusion, ffmpeg's filtergraph). A tool therefore
-returns an op rather than running one. If instead a tool owned a
-`run(video) -> video`, fusion would be impossible *forever* — not for
-one op but for the system, because no tool written against that
-contract could ever expose structure and gaining the ability means
-changing what every tool implements. The boundary is nonetheless free
-to conform to: the cheapest honest op is `Opaque(fn)`, which is a
-`run()` method with a wrapper around it.
+**An op is a value, not behavior.** A tool returns a description of
+what it wants computed — a closed constructor with typed fields —
+never a callable the executor invokes blindly. The guard is
+serializability: an op that round-trips through a file cannot contain
+code, so it cannot reach the runtime, hold a handle, or smuggle a
+callback. This is not a second rule to remember, because the recipe
+hash needs a canonical serialization anyway; the property that keeps
+tools out of the executor and the property that makes results
+addressable are the same property, enforced by machinery already being
+built. `Opaque(fn)` is the sole exception and therefore the sole
+barrier: it is a `run()` method with a wrapper, which is what makes
+conformance free for someone who has read none of this.
 
-**Five shapes.** `Resample` is an invertible affine coordinate map over
-(t, y, x); `PixelMap` is value → value; `Window` computes frame N from
-a bounded [N−a, N+b]; `Fold` is (state, frame) → (state, output);
-`Opaque` is frames in, frames out. Unifying spatial and temporal
-indexing under one coordinate map is what turns "hoist decimation
-upstream" from a rewrite rule into plain composition. `Opaque` is
-total, so the vocabulary is closed trivially and the real claim is
-narrower: four shapes classify the computations the algebra can reason
-about, and the fifth exists because they do not close over what people
-will write.
+**Form is an authorization, not a label.** Writing an op in a
+particular form states which rewrites the executor may apply *without
+telling anyone*. An affine coordinate map authorizes composition with
+its neighbours, evaluation at frame N without frame N−1, and
+reordering with spatial work; it forbids reordering past a temporal
+filter. An op that carries state authorizes almost nothing and requires
+a sweep. `Opaque` authorizes nothing at all, which is exactly why it is
+always correct and always slow. Correctness-by-default is the op that
+permits no rewrites.
 
-**Classification is the shape, not a flag.** There is no fusion-class
-field and no random-access field, because which shape you implement
-*is* the classification: the others are not expressible in that
-signature. A stateful op cannot be mislabelled random-access, because
-to be a `Resample` you must write a function with no state parameter —
-the bug class is unrepresentable rather than tested for. This is the
-record's load-bearing rejection. The first design carried declared
-classifications, and its tell was that it required a conformance test
-to check whether an op had *honestly declared itself* random-access;
-correctness resting on a hand-set flag is correctness an agent gets
-wrong silently, here as plausible-looking wrong scrub frames. Kendrick's
-rejection named the broader cost: that design taxed every future
-contributor with compiler work before they could ship anything.
+**Silent rewrites must be answer-preserving by proof.** The executor
+may rewrite only where the representation proves the answer is
+unchanged: affine composed with affine is affine, an op with no state
+is order-independent. Everything else is user-initiated, shown, and
+recorded — the swap test, where substituting one implementation for
+another runs both on the user's own footage over a subrange and reports
+the difference at the terminal statistic (PAR-0012). The two failure
+modes are symmetric and both nameable: a silent rewrite that changes
+the answer, and a user-facing swap presented as free when it is not.
+The planner may never introduce, remove, or alter sampling structure at
+all — sampling is the design of the measurement, and no tolerance is
+small enough to license changing it.
 
-One declaration survives it. `Window`'s bound is two numbers the
-contributor writes, and a wrong one makes frame N cold differ from
-frame N during a sweep. It is guarded rather than made impossible: the
-cold-vs-sweep property test reds on it, and a corrected bound produces
-a different recipe hash rather than an invalidation. Stated here
-because the invariant reads as absolute and is not.
+**A subgraph may be lowered to a foreign engine.** Because ops are
+values, a pattern of adjacent nodes can be matched and emitted as one
+call to something that already optimizes internally — crop and
+decimation becoming a single FFmpeg filtergraph rather than two OpenCV
+passes. This is the same authority as any other rewrite and is subject
+to the same proof requirement; it is also, on the evidence above, the
+largest available win, and the one v2 lost. Offload is why the
+representation must be symbolic rather than merely typed: you cannot
+pattern-match a bag of functions.
 
-**Refinement is measured, and owed rather than pre-paid.** `Opaque` is
-the resting state: always correct, always slow, never fused. An op
-earns a real shape when instrumentation says its path is hot — the
-peephole discipline, where each rule must only be correct rather than
-complete, and is independently justified, tested against the naive path
-and deletable (Exchange 6). The naive evaluator is the product surface,
-not a fallback, because the tail pipelines are where the research is.
-The op boundary above is the one thing not deferred this way, and it is
-not deferred because it costs nothing rather than because it is
-insurance: every unreshaped op above it is standing debt with a
-measurable trigger, and what must exist early is the instrumentation
-that produces the measurement, not the optimizer that consumes it.
-
-**Five shapes on paper, two in code.** The kernel implements `Resample`
-and `Opaque`; `PixelMap`, `Window`, and `Fold` arrive with their first
-instance. Adding a shape later is the same work as declaring it now,
-minus the risk of guessing a signature at n=0 — a risk already
-realized, since `(state, frame) → (state, output)` has nowhere to put
-background subtraction's second input. What the unbuilt three do at
-n=0 is tell whoever writes the next op what the intended factoring is,
-so a tracker is not written as an `Opaque` holding a global. That is a
-record's job rather than a module's, which is why they are stated here
-and not stubbed there.
-
-**Guarantees are declared where they are voided.** `Resample` is an
-invertible affine, so composing a chain gives one matrix, the
-anti-aliasing footprint follows from the total Jacobian, and mapping an
-annotation between any two nodes is composing and inverting — a
-guarantee the layers above may spend, not a property of some subset.
-Non-affine geometry — lens undistortion, rolling-shutter correction —
-is `Opaque`, which costs fusion and reprojection and nothing else, and
-is not a priority. Because that choice voids a guarantee a previous
-layer provides, the voiding is declared in the tool contract
-(PAR-0007) and surfaces to the user at selection, rather than being
-discovered when an ROI lands in the wrong place on the source.
-
-**Semantics are defined at the logical level.** Fusion changes pixels:
-two resamplings filter twice and soften, while one composed sample
-filtered from the total Jacobian is the more correct result. That the
-fast path is the more defensible one is the happy case, not a
-guarantee — for an instrument whose premise is interpretable filtering,
-results must not depend on invisible planner decisions. So semantics
-are stated over the logical graph, the planner is required to be
-semantics-preserving within a stated tolerance, and a preference
-disables fusion entirely so a reviewer can confirm the two paths agree.
-That preference changes speed and not values, which is why it is a
-preference and not a param (PAR-0006).
+**The vocabulary is what has been proved, and no more.** Today that is
+an affine coordinate map, the one bit distinguishing sequential from
+random-access, and `Opaque`. A further form is admitted when a rewrite
+it would license is both wanted and provable — never because an op
+feels like it deserves a category. An unreshaped `Opaque` is standing
+debt with a measurable trigger, not a defect, and instrumentation is
+what makes the trigger observable (`DEFERRED.md`, the executor's cost
+surface). This inverts the record this replaces, which fixed five forms
+before any op existed and could not classify the reduction every SIEVE
+pipeline terminates in.
 
 ## Consequences
 
-- The design debt (stamp `20260802T225556Z`) discharges with this
-  record. `Status: Proposed` carries the remaining acceptance-and-
-  hardening debt, as it does for PAR-0003 and PAR-0004.
 - Acceptance amends `ARCHITECTURE.md` in the same commit: invariant 3
-  and the five-shape table cite this record, the table notes which two
-  shapes exist in code, and `src/sieve/kernel.py`'s placeholder marker
-  narrows to `Resample` and `Opaque`.
-- PAR-0007 gains the guarantee-voiding declaration as part of the tool
-  contract; the convention is general, and `Opaque`'s loss of
-  reprojection is its first instance.
-- Two property tests close testing for the whole op space: any chain of
-  `Resample`s is bit-identical fused and unfused, and a `Window` op
-  gives frame N the same cold as during a sweep. Every op is one of the
-  five shapes, so every op is covered. Enforcement's home is PAR-0017's.
-- Content-addressing hashes the *logical* recipe, never the physical
-  node, or every peephole rule added silently invalidates every cached
-  result on disk. The store is PAR-0009's; this is the constraint the
-  op layer imposes on it.
-- `Fold` sweeps once and persists a small result, returning everything
-  downstream to random access — the store's small-result
-  materialization exists for it (PAR-0009).
+  becomes the rewrite-authority rule rather than a statement about
+  flags, the five-shape table narrows to the forms that exist, and
+  `src/sieve/kernel.py`'s placeholder marker narrows with it.
+- The how-to layer (PAR-0003) gains this record's first residents, owed
+  from `ARCHITECTURE.md` at acceptance: writing an op and choosing
+  between `Opaque` and a proved form; adding a rewrite rule with its
+  independent test against the naive path; offloading a subgraph to
+  FFmpeg; diagnosing a slow pipeline from the cost surface.
+- PAR-0007 gains the tool contract's return type — a serializable op —
+  and the convention that a tool voiding a guarantee a previous layer
+  provides declares that voiding, so the loss surfaces at selection.
+  `Opaque`'s loss of reprojection is the first instance.
+- PAR-0009 hashes the op values, never the physical plan, or every
+  rewrite added silently invalidates every stored result.
+- PAR-0012 holds the measured half: substitution admitted by
+  measurement on the user's footage, conditional on footage type,
+  version-pinned, with the result travelling in the provenance and the
+  multiple-comparisons safeguard built into the swap affordance rather
+  than offered as advice.
+- Two property tests follow from the proofs rather than from a
+  vocabulary: an affine chain evaluates identically fused and unfused,
+  and a bounded-neighbourhood op gives frame N the same cold as during
+  a sweep. Enforcement's home is PAR-0017's.
 
 ## Challenges
 
-- **2026-08-03 — three of the five signatures were written with no
-  implementation in hand.** The known instance: `Fold` is unary and
-  background subtraction consumes frame + plate. Held as provisional
-  rather than as a defect — the shapes are guidance until an op needs
-  them, and each is settled by its first instance. `DEFERRED.md` holds
-  the arity question with that trigger.
-- **2026-08-03 — "semantics-preserving within a stated tolerance"
-  names no tolerance.** The fusion-disable preference is the reviewer's
-  check and the measured-equivalence harness (PAR-0012) is where a
-  policy would live; both are deferred, so the claim rests today on the
-  fused path being analytically the more correct one rather than on a
-  measured bound. Resolves when a second implementation of any op makes
-  equivalence testable.
+- **2026-08-03 — the operation SIEVE exists to perform has no proved
+  form.** Every pipeline terminates in a reduction from frames to rows
+  — mean brightness in a mask, detections per frame, the feature vector
+  itself. It is stateless and random-access, so classifying it as
+  sequential would falsely forbid scrubbing, and today it is `Opaque`.
+  This is the first candidate for a new form and the strongest test of
+  the admission rule above.
+- **2026-08-03 — data-dependent domains are outside the
+  representation.** "Run centroid tracking only within the detected
+  windows" makes a downstream op's domain a function of an upstream
+  op's result, which no static op value can express, and which the
+  hash and the composition rules both assume away. It is in real use.
+- **2026-08-03 — equivalence in a subtype does not obviously
+  transfer.** The swap test answers for the user's footage. Carrying
+  "this substitution was fine" to the next project requires the footage
+  to be characterized, and nothing yet says how. Until then swap
+  results are one-shot rather than cumulative.

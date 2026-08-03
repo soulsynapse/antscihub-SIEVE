@@ -160,3 +160,118 @@ instrumentation that produces the measurement, already held in
 it. Exchange 3 stands as written; what it does not license is the
 agent's stronger reading, that the vocabulary above the boundary is
 owed the same urgency as the boundary itself.
+
+## Exchange 6 — why v1 outruns v2
+
+Kendrick: "v1 works a *lot* faster than v2 and I wasn't able to figure
+out why. the shape algebra speed up argument was borne up that, plus
+the intrinsic fusing of functions."
+
+Read side by side, three causes. v1 pushes crop, scale, greyscale and
+replicate packing into one FFmpeg filtergraph and streams only
+working-size gray16 over a pipe (`core/video.py:398-415`), recording
+that filter order inside that graph is worth 10× (`video.py:232-237`).
+Its preprocessing is hand-fused with the arithmetic stated: the z-score
+collapsed to one affine because a z-score is affine, a gray16 path
+skipping the 0–255 conversion because a positive scale cancels out of a
+z-score, a skipped resize when the decoder already produced the target
+size, block reduction at ingest (`core/preprocess.py`,
+`core/stream_buffer.py`). v2 decodes full resolution and shrinks
+afterwards (`decode/reader.py:112-118`); its prefetcher opens four
+readers that each grab-forward across the same frames
+(`decode/prefetch.py:130-146`, `reader.py:86-95`), so decode work scales
+with worker count for parallelism that mostly cancels it; and its
+executor materializes a full array per node per frame
+(`pipeline/executor.py:54-81`).
+
+Two of the three are decode-path defects, not architecture gaps: an
+FFmpeg reader at working size with one sequential decoder would recover
+most of the gap with no representation at all. The third is the
+record's business, and it is the strongest evidence in the argument —
+every v1 win is a rewrite rule, every one lived only in a person and in
+prose, and the rewrite deleted them all while leaving no way to find
+out why the result got slower.
+
+## Exchange 7 — offload, and the tool that has no shape
+
+Kendrick, on the intrinsic fusing of functions: "imagine theres a tool
+call like crop, then another tool call like alias. knowing you can do
+both in one command allows you to leverage the internal optimization
+that is already built into ffmpeg, thus getting speed ups for free."
+
+That is subgraph offload — instruction selection, or a planner pushing
+a subquery into a foreign source — and it requires ops to be symbolic
+data so a pattern of adjacent nodes can be matched. It does not require
+a shape taxonomy.
+
+The counterexample raised in the same breath: TRex 1.1.9 does fast,
+accurate background subtraction for a small subset of footage types,
+and a tool calling it is three welded stages — information dropping,
+the background model, the detector. "these don't map cleanly to any
+particular *shape*, they measure cleanly to a particular *outcome*, and
+procedurally scanning for equivalence in outcomes doesn't sound very
+algebra-shape-related to me."
+
+Correct. The substitutable unit is a subgraph identified by the outcome
+it produces, admission is by measurement, the result is conditional on
+footage type and pinned to a beta version. Nothing in a form vocabulary
+describes it.
+
+## Exchange 8 — representation is the opposite of access
+
+Kendrick: "ops as symbolic data is an oversight waiting to happen, and
+sounds like giving the tools access to run with extra steps. we can't
+give tools access to run because the executor has to be separate,
+right? ... but you said something here that makes me think shapes are
+about swappability, yeah?"
+
+The inversion: a value holding three numbers is strictly less access
+than a callable, and `Opaque(fn)` is the concession rather than the
+strict case. The real risk named here is "symbolic" degrading into a
+dict the executor introspects, through which behavior gets smuggled —
+guarded by serializability, which the recipe hash already requires.
+
+And yes on swappability, which became the record's frame: a form is not
+a classification, it is a statement of which rewrites the executor may
+perform without telling anyone. Forms and the harness answer one
+question and differ only in evidence class — proof versus measurement.
+
+## Exchange 9 — equivalence in a subtype, and the swap test
+
+Kendrick: "it's equivalence in a subtype. that's why the user gets
+access to the test *for* equivalence, which would have been some kind
+of meta utility that gives them that feedback when they click 'swap'."
+
+Better than DESIGN-SESSION Exchange 8's registration-time verification
+against a versioned corpus: measured at swap time, on the user's own
+footage, compared at the terminal statistic, judged by the person who
+knows what they care about. It dissolves most of the corpus-composition
+question held open in `DEFERRED.md`. Two riders: the
+multiple-comparisons safeguard must be built into this affordance
+specifically, since click-swap-and-look is the most efficient way ever
+devised to overfit to one's own data; and the test result belongs in
+the provenance beside the version pin.
+
+## Exchange 10 — the vocabulary cut to what it proves
+
+Kendrick: "are we just arguing for something that doesn't cost anything
+to omit but is a repeating cost for everything else downstream?"
+
+Largely yes, for the taxonomy. Across four real pipelines supplied this
+session, the five forms failed to classify the work: spatial
+neighbourhood and contours have no form, the frames-to-rows reduction
+every pipeline terminates in has no form, TRex has no form,
+data-dependent gating has no form, and `Fold`'s signature was already
+known wrong on arity. A taxonomy charging a classification tax while
+failing to classify is the worst combination. What costs nothing to
+hold is smaller: ops are serializable values, and sequential-ness is
+structural rather than typed by hand.
+
+Asked what declining the record would cost, the answer was the loop
+already run twice — hand-fused and fast, then clean and slow, with the
+rules living only in comments a redesign deletes. Kendrick then asked
+for the record redrawn around only the parts doing real work, required
+to name a system, be load-bearing, and admit feasible how-tos.
+PAR-0005 was rewritten in place under a new title; the form vocabulary
+survives as one consumer of the representation rather than as the
+record's subject.

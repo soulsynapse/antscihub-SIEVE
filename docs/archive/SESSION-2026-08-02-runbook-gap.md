@@ -61,3 +61,53 @@ is decided — the system exists and is anchored; it is outside PAR;
 its purpose is closing the diataxis loop — and naming the rest open.
 Design debt filed in `DEBT.md`, since `Proposed` alone carries hardening
 debt but not design debt.
+
+## Exchange 2 — the name and the heuristic (design session, first sitting)
+
+Kendrick, verbatim, opening the design session:
+
+> "First: renaming runbook -> how-to. This is adopting the diataxis
+> terminology directly, and pattern matches deliberately; better for
+> agentic work. Thoughts?"
+
+The agent's assessment, compressed. For: the record already defined the
+layer by its diataxis role, with "how-to guides" as the referent and
+"runbooks" as the gloss — the rename stops using the gloss as the name;
+"how-to" is the accurate superset (the stated purpose is how-to breadth,
+"runbook" names the layer after its narrowest member); and "runbook"
+primes the SRE incident-response genre, misrouting an agent asking
+"where do I learn to do X." Against, the position that lost: "runbook"
+carries the stronger *executable* prior — SRE culture treats runbook
+automation as the goal state — while stock diataxis how-to guides are
+hand-authored prose with no verification implied, so the rename trades
+away the one prior pointing at the derived-and-tested constraint.
+Resolved: the discipline is carried by the record and the machinery,
+not the noun; the name's job is routing consumption.
+
+Kendrick, verbatim, settling it:
+
+> "how-to is the form and I agree with adopting the stance that
+> anything that can be a script should be a script as a governing
+> heuristic."
+
+Two decisions land. **The name is how-to**; "runbook" is retired
+wholesale — no subgenre survival — since a two-tier vocabulary (a
+how-to layer containing runbooks) reinstates the unqualified-name
+ambiguity the rename kills. Frozen records and this file's name keep
+the word; retirement bars reuse, not history. **The governing heuristic
+for the derivation-and-test discipline: anything that can be a script
+is a script** — which adopts Exchange 1's first candidate direction
+(literally executable steps, so drift reds something) as the default,
+demotes the other two to the residue for what genuinely cannot
+execute, and answers the traded-away prior above: the executable
+discipline the old name gestured at is now doctrine, so the name is
+free to do routing.
+
+Surfaced in passing, deferred by Kendrick ("can surface it later if
+necessary"): `AGENTS.md`'s never-reuse-a-retired-name rule cites no
+governing record — a possibly unfiled gap, parked here.
+
+Still open after this sitting: the form (per-system guides or a tier
+of their own), the home, the residual discipline for the prose
+remainder, and Exchange 1's boundary caution against absorbing the
+tutorial convention.

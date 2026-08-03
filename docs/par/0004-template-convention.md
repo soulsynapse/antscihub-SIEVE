@@ -32,7 +32,7 @@ does (PAR-0001): a ceremonial template for every folder is PADding, and
 the tipping point is a human read.
 
 Everything else — the template form, its home, how conformance is
-checked, and whether this system is ultimately one part of the runbook
+checked, and whether this system is ultimately one part of the how-to
 layer (PAR-0003) — is open; the second doubt below holds that question.
 
 ## Consequences
@@ -54,13 +54,14 @@ layer (PAR-0003) — is open; the second doubt below holds that question.
   that's probably fine."** Kendrick's doubt, standing unresolved and
   deliberately not blocking. It lands as its own draft anyway because
   templates can signal modularity and carry a rationale that
-  runbooks-without-templates do not (the derivation-guard argument in
+  how-tos-without-templates do not (the derivation-guard argument in
   Context); because PAR-0003 is itself undesigned, so the boundary
   cannot be tested against it yet; and because merging living records
   later is the cheap, lossless direction — an active PAR rolling up
   into another as that system's expansion is within doctrine.
   Kendrick's acceptability rationale (primary, Exchange 2): templates
-  *are in service to* the runbook system with zero ambiguity about
+  *are in service to* the how-to system ("runbook" at the primary's
+  date; renamed at PAR-0003's first design sitting) with zero ambiguity about
   where they live or how they are pointed to, so subset status is no
   problem — the pointer criterion now in PAR-0001's Granularity.
   Resolves at PAR-0003's design session, when the reversal test has

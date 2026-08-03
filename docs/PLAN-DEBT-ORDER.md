@@ -35,7 +35,7 @@ The order:
 The head of the order, taken as stated; a cited stamp no longer
 enumerated means discharged:
 
-1. `20260802T210348Z` — PAR-0003's design session, the runbook layer.
+1. `20260802T210348Z` — PAR-0003's design session, the how-to layer.
    A design session, not a distillation — the heavier sitting, first.
 2. `20260802T225556Z` — shape algebra and classification by form
    (PAR-0005), root.

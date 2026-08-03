@@ -109,7 +109,7 @@ rationale lives as a stub record in `docs/par/`. Presence in the tree is
 the authorization — there are no status fields anywhere. Test-tree
 markers appear in the suite as skips carrying their reason.
 
-### Mismatch runbook
+### Mismatch how-to
 
 The suite goes red when `DEBT-AUTO.md` disagrees with a fresh enumeration,
 and the failure output is the entry-level diff — added, removed, changed.

@@ -6,7 +6,7 @@ what a governing record holds — follow the pointers.
 ## Orientation order
 
 1. `README.md` — the map: locations, the record tiers and their walking
-   path, the debt files, the mismatch runbook.
+   path, the debt files, the mismatch how-to.
 2. `docs/ARCHITECTURE.md` — before writing code. The one-stop shop: it
    reports, it does not govern. Read deeper — `docs/par/`, then
    `docs/archive/` — only until convinced; the walking path and authority

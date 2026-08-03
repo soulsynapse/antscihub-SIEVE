@@ -1,9 +1,9 @@
-# PAR-0003 — The runbook layer
+# PAR-0003 — The how-to layer
 
 Status: Proposed
 Date: 2026-08-02
 
-Owed: 20260802T210348Z: the runbook layer's design session — form, home, naming, and the derivation-and-test discipline — after which this record is rewritten to govern the settled system; open directions: SESSION-2026-08-02-runbook-gap.md
+Owed: 20260802T210348Z: the how-to layer's design session — form, home, and the residual derivation-and-test discipline — after which this record is rewritten to govern the settled system; open directions: SESSION-2026-08-02-runbook-gap.md
 
 ## Context
 
@@ -13,10 +13,10 @@ the repo should respect the rationale is left to the reader. In diataxis
 terms, tutorials arrive by convention from working in the repo, and PAR
 carries the explanation and the reference for working in the repo
 directly; the how-to guides — task-oriented, the derived-and-tested
-runbooks of the systems the rationales speak to — have no named home.
+guides to the systems the rationales speak to — have no named home.
 
 The gap is already leaking, which is the evidence it is real: the repo
-holds orphaned how-to fragments — `README.md`'s mismatch runbook,
+holds orphaned how-to fragments — `README.md`'s mismatch how-to,
 `AGENTS.md`'s Procedures — living where they landed rather than where a
 system would put them, which under PAR-0001's granularity rule is
 exactly what "no named system" looks like.
@@ -37,14 +37,20 @@ Three things are decided; everything else is deliberately open.
    door. Tightening what `ARCHITECTURE.md` explicitly points to may be
    handy, but it does not meet this need and is not this system.
 3. **The answer is nebulous, and this record says so** rather than
-   settling it thin. Open, owed to a design session before this record
-   can govern: the form (per-system runbooks or a tier of their own),
-   the home, the naming, and above all the derivation-and-test
-   discipline — "derived-and-tested" is the constraint that separates
-   this from ordinary documentation, because a hand-maintained runbook
-   describing a moving tree is the drift failure PAR-0002 exists to
-   kill, and how much of a runbook can be derived or verified without
-   the verifier itself becoming bureaucracy is the central question.
+   settling it thin. Two pieces landed at the design session's first
+   sitting (primary, Exchange 2): the name — how-to, the diataxis
+   quadrant adopted directly, "runbook" retired — and the governing
+   heuristic for the derivation-and-test discipline: anything that can
+   be a script is a script, so drift reds something and prose is only
+   the residue for what genuinely cannot execute. Still open, owed
+   before this record can govern: the form (per-system guides or a
+   tier of their own), the home, and the residual discipline for that
+   prose remainder — "derived-and-tested" is the constraint that
+   separates this from ordinary documentation, because a
+   hand-maintained guide describing a moving tree is the drift failure
+   PAR-0002 exists to kill, and how much of a guide can be derived or
+   verified without the verifier itself becoming bureaucracy is the
+   central question.
 
 ## Consequences
 

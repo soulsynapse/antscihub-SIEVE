@@ -199,7 +199,7 @@ proliferation (2026-08-02). A large record earns its size only while it
 cannot be understood without each of its parts; once one part's
 reasoning touches nothing else, splitting it out is the gain. A system
 in service to a larger one may hold its own record — templates in
-service to the runbook layer (PAR-0004, PAR-0003) — provided every
+service to the how-to layer (PAR-0004, PAR-0003) — provided every
 pointer stays unambiguous: exactly one place the sub-system lives,
 exactly one way to cite it, so subset status costs nothing.
 
@@ -260,7 +260,7 @@ and that is its design; it must never creep toward a scrapbook.
 
 **Authority runs down; readability rolls up.** `ARCHITECTURE.md` reports,
 it never governs: on any conflict the deeper record wins, and the conflict
-is a defect repaired at the synthesis — mismatch-runbook logic — never
+is a defect repaired at the synthesis — mismatch-how-to logic — never
 adjudicated in the synthesis's favor. Among dated records the later
 decision supersedes the earlier: an accepted rationale supersedes the
 passage of any record it cites, including the design session. The archive

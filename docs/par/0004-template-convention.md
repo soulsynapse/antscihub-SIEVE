@@ -50,7 +50,16 @@ second doubt below, closed).
   templates and hit all the right requirements — but that'll have to be
   tested."** Kendrick's doubt, standing unresolved: no evidence either
   way yet, which is why the decision above keeps template-drawing at
-  user judgment with agents suggesting. Resolves when tried.
+  user judgment with agents suggesting. Resolves when tried. First
+  evidence 2026-08-03, confirmed by Kendrick, and it points the way the
+  decision already does: `how-to/repo-work/draft-a-par.md` was first
+  written by an agent distilling one session and did not work; the
+  derivation procedure that does work was hand-written, and the same
+  pass found the file misnamed — what it contains clears the bar for a
+  draft, not for acceptance, so it split and `accepting-a-par.md` is
+  hand-written separately. Adjacent rather than direct: a how-to
+  distilled from a session is not a template drawn from requirements,
+  so the doubt stands rather than resolving.
 - **2026-08-02 — "This might not survive merging with PAR-0003 —
   templates are probably one part of the runbook system as a whole, and
   that's probably fine."** Kendrick's doubt, standing unresolved and

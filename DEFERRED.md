@@ -58,7 +58,22 @@ the automatic ledger.
   on a pilot subset, confirm on held-out footage, report how many
   configurations were tested and both results — is built into the
   user-facing equivalence tooling, not offered as advice; the session record
-  says "build in the safeguard or it won't happen."
+  says "build in the safeguard or it won't happen." Refined 2026-08-03
+  (PAR-0005's primary, Exchange 9, and the session's closing exchange):
+  the swap test relocates most of the corpus question, since for the
+  decision actually being made the user's own footage is the corpus —
+  what stays open is whether a result transfers to the next project,
+  which needs footage characterized. Hand annotation as the selection
+  target fixes the post-hoc-criterion half and converts the rest into
+  ordinary model selection, so the safeguard's mechanized form is four
+  things the affordance does rather than advises: score against a
+  held-out split that played no part in selection, count and display
+  the configurations tried in the session, resample at the bout level
+  rather than the frame level (frames within a bout are autocorrelated,
+  so frame-count intervals are far too narrow), and surface the
+  annotation's own inter-annotator agreement as the ceiling. The
+  distance metric is fixed before the search for the same reason the
+  target is.
 - **GUI in-process with the executor, or separate** — if separate, the step
   declaration is also a wire format, pushing toward JSON Schema as canonical
   with Pydantic as one consumer. Due when: the Tool base's first real code

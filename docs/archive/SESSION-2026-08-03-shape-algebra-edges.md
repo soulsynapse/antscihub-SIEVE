@@ -1,12 +1,14 @@
 # Session: the shape algebra's edges
 
-Status: Open
+Status: Frozen
 Date: 2026-08-03
 
 The occasion: PAR-0005 landed as a distillation of the design session,
 and a skeptic pass over the fresh record found holes the primary had
-carried unnamed. Four exchanges, of which two moved the decision. The
-argument stays open until the record's acceptance sitting.
+carried unnamed. Ten exchanges, closing with the record redrawn around
+the representation rather than the form vocabulary. Frozen there: the
+redraw is settled, and the record's acceptance — or a deliberate attack
+on it — is a fresh sitting that files its own primary.
 
 ## Exchange 1 — the closure claim, and what the five shapes cover
 

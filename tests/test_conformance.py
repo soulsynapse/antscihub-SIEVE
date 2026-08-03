@@ -12,7 +12,7 @@ until the suite is real.
 from sieve.debt import Owed
 
 raise Owed(
-    "conformance suite: params round-trip, migration corpus, fused-vs-"
+    "20260802T023512Z: conformance suite: params round-trip, migration corpus, fused-vs-"
     "unfused and Window cold-vs-sweep property tests; DESIGN-SESSION.md"
     " Exchanges 1 and 5"
 )

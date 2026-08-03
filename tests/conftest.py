@@ -56,7 +56,7 @@ def _unseen_message(site, exc):
         )
     return (
         f"Owed raised at {site[0]}::{site[1]} (line {site[2]}): a marker "
-        "the enumerator cannot see (outside marker form rule v1)"
+        "the enumerator cannot see (outside marker form rule v2)"
     )
 
 

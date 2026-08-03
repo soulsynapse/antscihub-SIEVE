@@ -18,7 +18,7 @@ enters these signatures is unpinned and recorded in DEFERRED.md.
 from sieve.debt import Owed
 
 raise Owed(
-    "five-shape op algebra as one unit (Resample, PixelMap, Window, Fold,"
+    "20260802T023505Z: five-shape op algebra as one unit (Resample, PixelMap, Window, Fold,"
     " Opaque), vocabulary v1 under additive revision; ARCHITECTURE.md 'The"
     " components', DESIGN-SESSION.md Exchanges 3 and 5"
 )

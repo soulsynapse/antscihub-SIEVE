@@ -13,7 +13,7 @@ marker's scope.
 from sieve.debt import Owed
 
 raise Owed(
-    "GUI two panes: Params-derived config pane, view-rendered canvas with"
+    "20260802T023504Z: GUI two panes: Params-derived config pane, view-rendered canvas with"
     " ROI overlay bound to the param field; ARCHITECTURE.md 'The GUI',"
     " DESIGN-SESSION.md Exchange 2"
 )

@@ -11,7 +11,7 @@ from sieve.debt import Owed
 
 def render(node, frame):
     raise Owed(
-        "render(node, frame): pull-based single-frame evaluation, including"
+        "20260802T023503Z: render(node, frame): pull-based single-frame evaluation, including"
         " the LRU frame cache the pull path requires to feel correct;"
         " ARCHITECTURE.md 'The executor', DESIGN-SESSION.md Exchange 4"
     )

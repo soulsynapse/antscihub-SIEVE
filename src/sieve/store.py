@@ -11,7 +11,7 @@ genuinely open and comes due with this module's first real code.
 from sieve.debt import Owed
 
 raise Owed(
-    "content-addressed store: recipe-hash addressing over the logical graph,"
+    "20260802T023507Z: content-addressed store: recipe-hash addressing over the logical graph,"
     " size-budget aging, no invalidation; ARCHITECTURE.md 'The store',"
     " DESIGN-SESSION.md Exchange 5"
 )

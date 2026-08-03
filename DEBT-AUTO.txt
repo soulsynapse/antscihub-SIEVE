@@ -1,25 +1,25 @@
 # SIEVE automatic ledger. Generated; never hand-edit.
 # Regenerate: python -m sieve.debt write
-format-version: 1
-marker-rule: v1
+format-version: 2
+marker-rule: v2
 
-src/sieve/executor.py :: render
+src/sieve/executor.py :: render :: 20260802T023503Z
     render(node, frame): pull-based single-frame evaluation, including the LRU frame cache the pull path requires to feel correct; ARCHITECTURE.md 'The executor', DESIGN-SESSION.md Exchange 4
-src/sieve/gui.py :: <module>
+src/sieve/gui.py :: <module> :: 20260802T023504Z
     GUI two panes: Params-derived config pane, view-rendered canvas with ROI overlay bound to the param field; ARCHITECTURE.md 'The GUI', DESIGN-SESSION.md Exchange 2
-src/sieve/kernel.py :: <module>
+src/sieve/kernel.py :: <module> :: 20260802T023505Z
     five-shape op algebra as one unit (Resample, PixelMap, Window, Fold, Opaque), vocabulary v1 under additive revision; ARCHITECTURE.md 'The components', DESIGN-SESSION.md Exchanges 3 and 5
-src/sieve/pipeline.py :: <module>
+src/sieve/pipeline.py :: <module> :: 20260802T023506Z
     pipeline file format and loader: intent-only DAG of steps, per-step schema_version, migration registry, unknown-field preservation; ARCHITECTURE.md 'The pipeline', DESIGN-SESSION.md Exchange 1
-src/sieve/store.py :: <module>
+src/sieve/store.py :: <module> :: 20260802T023507Z
     content-addressed store: recipe-hash addressing over the logical graph, size-budget aging, no invalidation; ARCHITECTURE.md 'The store', DESIGN-SESSION.md Exchange 5
-src/sieve/tools/base.py :: Tool.lower
+src/sieve/tools/base.py :: Tool.lower :: 20260802T023508Z
     Tool.lower(p): params to an op graph in the five-shape algebra; ARCHITECTURE.md 'Tools', DESIGN-SESSION.md Exchange 5
-src/sieve/tools/base.py :: Tool.view
+src/sieve/tools/base.py :: Tool.view :: 20260802T023509Z
     Tool.view(p, out): declared view over the closed vocabulary; ARCHITECTURE.md 'The GUI', DESIGN-SESSION.md Exchange 5
-src/sieve/tools/crop.py :: <module>
+src/sieve/tools/crop.py :: <module> :: 20260802T023510Z
     crop tool: Params (ROI regions), lower -> Resample, view -> Image with ROI overlay; ARCHITECTURE.md 'Tools', DESIGN-SESSION.md Exchange 2
-src/sieve/views.py :: <module>
+src/sieve/views.py :: <module> :: 20260802T023511Z
     closed view vocabulary v1 (image, mask, points, paths, vectors, regions, series strip) under additive revision; ARCHITECTURE.md 'The GUI', DESIGN-SESSION.md Exchange 5
-tests/test_conformance.py :: <module>
+tests/test_conformance.py :: <module> :: 20260802T023512Z
     conformance suite: params round-trip, migration corpus, fused-vs-unfused and Window cold-vs-sweep property tests; DESIGN-SESSION.md Exchanges 1 and 5

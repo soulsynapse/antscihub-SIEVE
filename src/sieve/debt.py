@@ -1,35 +1,51 @@
 """Debt machinery: the placeholder marker exception and its enumerator.
 
 A placeholder is a real module at its real import path raising Owed --
-the placeholder is the debt entry. Marker form rule v1 and the machinery
-class are defined in docs/par/0002-debt-is-derived-from-the-tree.md.
+the placeholder is the debt entry; any other tracked text file states one
+debt with a column-0 ``Owed:`` line. Marker form rule v2 and the
+machinery class are defined in docs/par/0002-debt-is-derived-from-the-tree.md.
 """
 
 import ast
+import re
+import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-ROOTS = ("src/sieve", "tests")
 
 SENTINEL_ROOT = "tests/_sentinel"
 
-# The one deliberate skip: the sentinel is a liveness proof, not debt, and
-# must not be enumerated into the ledger. Its own test enumerates it
-# explicitly and fails the suite if it is not found.
-EXCLUDED = (SENTINEL_ROOT,)
+LEDGER_NAME = "DEBT-AUTO.txt"
+
+# Named boundaries, not leniencies (PAR-0002, "The universal surface"):
+# the sentinel is a liveness proof, the ledger is machinery output, and
+# the frozen tier states no live debt -- a frozen enumeration error could
+# never be edited away.
+EXCLUDED = (SENTINEL_ROOT, LEDGER_NAME, "docs/archive")
 
 MODULE_QUALNAME = "<module>"
+FILE_QUALNAME = "<file>"
 
 # Every line boundary str.splitlines() honors, except LF. A reason containing
 # any of these would put non-LF bytes in the ledger and break parse as
 # serialize's inverse.
-_NON_LF_BOUNDARIES = '\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029'
+_NON_LF_BOUNDARIES = ''.join(
+    map(chr, (0x0D, 0x0B, 0x0C, 0x1C, 0x1D, 0x1E, 0x85, 0x2028, 0x2029))
+)
 
-LEDGER_NAME = "DEBT-AUTO.txt"
-FORMAT_VERSION = 1
-MARKER_RULE = "v1"
+FORMAT_VERSION = 2
+MARKER_RULE = "v2"
+
+# The statement stamp: UTC, second resolution, one canonical fixed-width
+# spelling. It is the entry's identity -- it survives relocation and
+# rewording -- and the minimum priority signal carried on the line.
+STAMP_FORMAT = "%Y%m%dT%H%M%SZ"
+REPO_EPOCH = "20260801T000000Z"
+_FUTURE_SLACK = timedelta(days=1)
+_STAMPED_REASON = re.compile(r"(\d{8}T\d{6}Z): (.+)", re.DOTALL)
+_TEXT_MARKER = re.compile(r"Owed: (\d{8}T\d{6}Z): (.+)")
 
 _HEADER = (
     "# SIEVE automatic ledger. Generated; never hand-edit.\n"
@@ -42,49 +58,70 @@ _HEADER = (
 class Owed(Exception):
     """This scope is owed: present debt, announced structurally.
 
-    Raised only in marker form rule v1 (PAR-0002). Deliberately not an
-    -Error name -- a marker is not a fault. Caught only by the debt machinery; catching it elsewhere is
-    out of contract.
+    Raised only in marker form rule v2 (PAR-0002). Deliberately not an
+    -Error name -- a marker is not a fault. Caught only by the debt
+    machinery; catching it elsewhere is out of contract.
     """
 
 
 class EnumerationError(Exception):
-    """A file or Owed raise under an enumerated root that rule v1 cannot
-    account for. Never a skip: a skipped file makes debt vanish while
-    the mismatch test and the sentinel stay blind to it.
+    """A file or Owed marker under the enumerated surface that rule v2
+    cannot account for. Never a skip: a skipped file makes debt vanish
+    while the mismatch test and the sentinel stay blind to it.
     """
 
 
 @dataclass(frozen=True)
 class Entry:
-    """One marker, keyed by (path, qualname); reason is compared content."""
+    """One marker: keyed by (path, qualname), identified by its stamp."""
 
     path: str  # repo-relative POSIX path
-    qualname: str  # dotted ClassDef/FunctionDef path, or MODULE_QUALNAME
-    reason: str
+    qualname: str  # dotted qualname, MODULE_QUALNAME, or FILE_QUALNAME
+    stamp: str  # UTC statement stamp, the entry's identity
+    reason: str  # compared content, stamp-stripped
 
 
 def enumerate_markers(
     repo_root: Path,
-    roots: Sequence[str] = ROOTS,
+    roots: "Sequence[str] | None" = None,
     excluded: Sequence[str] = EXCLUDED,
 ) -> list[Entry]:
-    """Walk .py files under roots and return every rule-v1 marker, sorted.
+    """Return every rule-v2 marker under the surface, sorted by location.
 
-    Static only: nothing under the roots is imported or executed.
+    With roots=None the universe is the git index -- tracked plus
+    untracked-not-ignored, so a marker is visible to regen before its
+    first commit. Explicit roots walk the filesystem instead, so the
+    machinery's own tests run against fixture trees. Static only:
+    nothing under the surface is imported or executed.
     """
     repo_root = Path(repo_root)
+    if roots is None:
+        files = _git_universe(repo_root)
+    else:
+        files = []
+        for root in roots:
+            root_dir = repo_root / root
+            if not root_dir.is_dir():
+                raise EnumerationError(f"enumerated root does not exist: {root}")
+            files.extend(
+                p.relative_to(repo_root).as_posix()
+                for p in sorted(root_dir.rglob("*"))
+                if p.is_file()
+            )
     entries: list[Entry] = []
-    for root in roots:
-        root_dir = repo_root / root
-        if not root_dir.is_dir():
-            raise EnumerationError(f"enumerated root does not exist: {root}")
-        for file in sorted(root_dir.rglob("*.py")):
-            rel = file.relative_to(repo_root).as_posix()
-            if any(rel == p or rel.startswith(p + "/") for p in excluded):
-                continue
-            entries.extend(_scan_file(file, repo_root))
+    for rel in sorted(files):
+        if any(rel == p or rel.startswith(p + "/") for p in excluded):
+            continue
+        if not (repo_root / rel).is_file():
+            # Named boundary: the surface is regular files. Git can list
+            # symlinks, junctions, and gitlinks; none of them is a text.
+            continue
+        if rel.endswith(".py"):
+            entries.extend(_scan_python(repo_root / rel, rel))
+        else:
+            entries.extend(_scan_text(repo_root / rel, rel))
     seen: set[tuple[str, str]] = set()
+    stamps: dict[str, str] = {}
     for entry in entries:
         key = (entry.path, entry.qualname)
         if key in seen:
@@ -92,21 +129,29 @@ def enumerate_markers(
                 f"duplicate marker key: {entry.path}::{entry.qualname}"
             )
         seen.add(key)
+        holder = stamps.setdefault(entry.stamp, f"{entry.path}::{entry.qualname}")
+        if holder != f"{entry.path}::{entry.qualname}":
+            raise EnumerationError(
+                f"duplicate stamp {entry.stamp}: {holder} and "
+                f"{entry.path}::{entry.qualname} -- one stamp is the grain "
+                "of one debt's history"
+            )
     return sorted(entries, key=lambda e: (e.path, e.qualname))
 
 
 def serialize(entries: Sequence[Entry]) -> bytes:
-    """The automatic ledger's canonical bytes: format-version 1.
+    """The automatic ledger's canonical bytes: format-version 2.
 
-    Column 0 is a key line (`path :: qualname`); four-space indentation is
-    reason content, so a multiline reason needs no escaping. Additive-only
-    evolution; nothing derivable beyond the entries themselves.
+    Column 0 is a key line (`path :: qualname :: stamp`); four-space
+    indentation is reason content, so a multiline reason needs no
+    escaping. Additive-only evolution; nothing derivable beyond the
+    entries themselves.
     """
     parts = [_HEADER]
     if entries:
         parts.append("\n")
         for entry in sorted(entries, key=lambda e: (e.path, e.qualname)):
-            parts.append(f"{entry.path} :: {entry.qualname}\n")
+            parts.append(f"{entry.path} :: {entry.qualname} :: {entry.stamp}\n")
             for line in entry.reason.split("\n"):
                 parts.append(f"    {line}\n")
     return "".join(parts).encode("utf-8")
@@ -124,40 +169,104 @@ def parse(data: bytes) -> list[Entry]:
             body = lines[i + 1 :]
             break
     entries: list[Entry] = []
-    key: "tuple[str, str] | None" = None
+    key: "tuple[str, str, str] | None" = None
     reason_lines: list[str] = []
     for line in body:
         if line.startswith("    "):
             reason_lines.append(line[4:])
-        elif " :: " in line:
+        elif line.count(" :: ") == 2:
             if key is not None:
-                entries.append(Entry(key[0], key[1], "\n".join(reason_lines)))
-            path, _, qualname = line.partition(" :: ")
-            key = (path, qualname)
+                entries.append(Entry(*key, "\n".join(reason_lines)))
+            path, qualname, stamp = line.split(" :: ")
+            key = (path, qualname, stamp)
             reason_lines = []
     if key is not None:
-        entries.append(Entry(key[0], key[1], "\n".join(reason_lines)))
+        entries.append(Entry(*key, "\n".join(reason_lines)))
     return entries
 
 
 def entry_diff(old: Sequence[Entry], new: Sequence[Entry]) -> str:
-    """Entry-level added/removed/changed lines, sorted by key.
+    """Entry-level diff joined on the stamp: added / removed / changed /
+    moved, sorted by location.
 
-    This is the mismatch test's failure output: it keeps "stale ledger"
-    and "unintended debt change" distinguishable at the point of failure.
+    This is the mismatch test's failure output: it keeps "stale ledger",
+    "unintended debt change", and "relocation" distinguishable at the
+    point of failure. A location losing one stamp and gaining another is
+    flagged as identity churn rather than read silently as a discharge
+    plus a new debt.
     """
-    old_by = {(e.path, e.qualname): e for e in old}
-    new_by = {(e.path, e.qualname): e for e in new}
-    lines = []
-    for key in sorted(old_by.keys() | new_by.keys()):
-        label = f"{key[0]} :: {key[1]}"
-        if key not in old_by:
-            lines.append(f"added:   {label}")
-        elif key not in new_by:
-            lines.append(f"removed: {label}")
-        elif old_by[key].reason != new_by[key].reason:
-            lines.append(f"changed: {label}")
-    return "\n".join(lines)
+    old_by = {e.stamp: e for e in old}
+    new_by = {e.stamp: e for e in new}
+    keyed: list[tuple[tuple[str, str], int, str]] = []
+    removed: dict[tuple[str, str], Entry] = {}
+    added: dict[tuple[str, str], Entry] = {}
+    for stamp in old_by.keys() | new_by.keys():
+        o, n = old_by.get(stamp), new_by.get(stamp)
+        if n is None:
+            removed[(o.path, o.qualname)] = o
+            keyed.append(((o.path, o.qualname), 0, f"removed: {o.path} :: {o.qualname} :: {stamp}"))
+        elif o is None:
+            added[(n.path, n.qualname)] = n
+            keyed.append(((n.path, n.qualname), 0, f"added:   {n.path} :: {n.qualname} :: {stamp}"))
+        else:
+            if (o.path, o.qualname) != (n.path, n.qualname):
+                keyed.append((
+                    (n.path, n.qualname), 1,
+                    f"moved:   {o.path} :: {o.qualname} -> {n.path} :: {n.qualname} [{stamp}]",
+                ))
+            if o.reason != n.reason:
+                keyed.append(((n.path, n.qualname), 2, f"changed: {n.path} :: {n.qualname} :: {stamp}"))
+    for loc in sorted(removed.keys() & added.keys()):
+        keyed.append((
+            loc, 3,
+            f"rekeyed? {loc[0]} :: {loc[1]} ({removed[loc].stamp} -> "
+            f"{added[loc].stamp}): same scope, new stamp -- identity churn, "
+            "not discharge-plus-new?",
+        ))
+    return "\n".join(line for _, _, line in sorted(keyed))
+
+
+def stamp_landings(repo_root: Path) -> "dict[str, datetime]":
+    """First-ledger-appearance time per stamp, from git history.
+
+    The audit's other half lives at enumeration (form, epoch, future,
+    duplicates); this is the history-dependent half -- a stamp cannot
+    postdate its own landing -- and it is computed on call, never stored
+    (PAR-0002, "The line, and the history").
+    """
+    head = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--verify", "HEAD"],
+        capture_output=True,
+    )
+    if head.returncode != 0:
+        # A repo with no commits has no landings; that is empty history,
+        # not an unavailable instrument.
+        return {}
+    proc = subprocess.run(
+        ["git", "-C", str(repo_root), "log", "--reverse",
+         "--format=commit-time %cI", "-p", "--", LEDGER_NAME],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise EnumerationError(
+            f"git history unavailable for {LEDGER_NAME}: "
+            + proc.stderr.decode("utf-8", errors="replace").strip()
+        )
+    landings: dict[str, datetime] = {}
+    current: "datetime | None" = None
+    for line in proc.stdout.decode("utf-8", errors="replace").splitlines():
+        if line.startswith("commit-time "):
+            current = datetime.fromisoformat(line.removeprefix("commit-time "))
+        elif line.startswith("+") and current is not None and line.count(" :: ") == 2:
+            stamp = line.split(" :: ")[-1]
+            if _STAMPED_REASON.fullmatch(stamp + ": x") and stamp not in landings:
+                landings[stamp] = current
+    return landings
+
+
+def parse_stamp(stamp: str) -> datetime:
+    """The stamp's instant, timezone-aware UTC. Raises ValueError off-form."""
+    return datetime.strptime(stamp, STAMP_FORMAT).replace(tzinfo=timezone.utc)
 
 
 def main(argv: Sequence[str]) -> int:
@@ -173,8 +282,70 @@ def main(argv: Sequence[str]) -> int:
     return 0
 
 
-def _scan_file(file: Path, repo_root: Path) -> list[Entry]:
-    rel = file.relative_to(repo_root).as_posix()
+def _git_universe(repo_root: Path) -> list[str]:
+    proc = subprocess.run(
+        ["git", "-C", str(repo_root), "ls-files", "--cached", "--others",
+         "--exclude-standard"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise EnumerationError(
+            "the enumeration universe is the git index and git could not "
+            "provide it: " + proc.stderr.decode("utf-8", errors="replace").strip()
+        )
+    return proc.stdout.decode("utf-8").splitlines()
+
+
+def _split_stamped(value: str, where: str) -> tuple[str, str]:
+    m = _STAMPED_REASON.fullmatch(value)
+    if m is None:
+        raise EnumerationError(
+            f"{where}: marker reason must open with its UTC statement stamp "
+            "('YYYYMMDDTHHMMSSZ: ')"
+        )
+    stamp, reason = m.group(1), m.group(2)
+    try:
+        instant = parse_stamp(stamp)
+    except ValueError as err:
+        raise EnumerationError(f"{where}: nonsense stamp {stamp}: {err}") from err
+    if instant < parse_stamp(REPO_EPOCH):
+        raise EnumerationError(
+            f"{where}: stamp {stamp} predates the repo epoch {REPO_EPOCH}"
+        )
+    if instant > datetime.now(timezone.utc) + _FUTURE_SLACK:
+        raise EnumerationError(f"{where}: stamp {stamp} is in the future")
+    return stamp, reason
+
+
+def _scan_text(file: Path, rel: str) -> list[Entry]:
+    try:
+        raw = file.read_bytes()
+    except OSError as err:
+        raise EnumerationError(
+            f"{rel}: unreadable, which is an error, not a skip: {err}"
+        ) from err
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        # A named boundary, not a leniency: files that do not decode as
+        # UTF-8 are outside the text surface (PAR-0002).
+        return []
+    entries: list[Entry] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if not line.startswith("Owed:"):
+            continue
+        where = f"{rel}:{lineno}: {FILE_QUALNAME}"
+        m = _TEXT_MARKER.fullmatch(line)
+        if m is None:
+            raise EnumerationError(
+                f"{where}: column-0 'Owed:' line outside marker form rule v2"
+            )
+        stamp, reason = _split_stamped(f"{m.group(1)}: {m.group(2)}", where)
+        entries.append(Entry(rel, FILE_QUALNAME, stamp, reason))
+    return entries
+
+
+def _scan_python(file: Path, rel: str) -> list[Entry]:
     try:
         source = file.read_bytes()
     except OSError as err:
@@ -195,11 +366,11 @@ def _scan_file(file: Path, repo_root: Path) -> list[Entry]:
     module_raise = _module_form_raise(tree)
     if module_raise is not None:
         # The module form's shape includes the canonical import.
-        entries.append(Entry(rel, MODULE_QUALNAME, _reason(module_raise, True, rel, MODULE_QUALNAME)))
+        entries.append(_entry(module_raise, True, rel, MODULE_QUALNAME))
         canonical_ids.add(id(module_raise))
 
     for qualname, node in _callable_form_raises(tree.body, []):
-        entries.append(Entry(rel, qualname, _reason(node, has_canonical, rel, qualname)))
+        entries.append(_entry(node, has_canonical, rel, qualname))
         canonical_ids.add(id(node))
 
     for node in ast.walk(tree):
@@ -209,7 +380,7 @@ def _scan_file(file: Path, repo_root: Path) -> list[Entry]:
             and _references_owed(node, aliased)
         ):
             raise EnumerationError(
-                f"{rel}:{node.lineno}: Owed raised outside marker form rule v1"
+                f"{rel}:{node.lineno}: Owed raised outside marker form rule v2"
             )
 
     return entries
@@ -286,14 +457,14 @@ def _references_owed(node: ast.Raise, aliased: set[str]) -> bool:
     return False
 
 
-def _reason(node: ast.Raise, has_canonical: bool, rel: str, qualname: str) -> str:
-    """Validate a canonically positioned raise and extract its reason."""
+def _entry(node: ast.Raise, has_canonical: bool, rel: str, qualname: str) -> Entry:
+    """Validate a canonically positioned raise and build its entry."""
     where = f"{rel}:{node.lineno}: {qualname}"
     if not has_canonical:
         raise EnumerationError(f"{where}: Owed raised without the canonical import")
     exc = node.exc
     if not (isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name) and exc.func.id == "Owed"):
-        raise EnumerationError(f"{where}: Owed raised outside marker form rule v1")
+        raise EnumerationError(f"{where}: Owed raised outside marker form rule v2")
     if node.cause is not None or exc.keywords or len(exc.args) != 1:
         raise EnumerationError(f"{where}: marker takes exactly one plain reason argument")
     arg = exc.args[0]
@@ -301,7 +472,8 @@ def _reason(node: ast.Raise, has_canonical: bool, rel: str, qualname: str) -> st
         raise EnumerationError(f"{where}: marker reason must be one non-empty static string literal")
     if any(ch in arg.value for ch in _NON_LF_BOUNDARIES):
         raise EnumerationError(f"{where}: marker reason may contain no line boundary other than LF")
-    return arg.value
+    stamp, reason = _split_stamped(arg.value, where)
+    return Entry(rel, qualname, stamp, reason)
 
 
 if __name__ == "__main__":

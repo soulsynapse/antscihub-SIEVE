@@ -10,6 +10,6 @@ sieve.tools.base.Tool -- so this marker is behavior-only.
 from sieve.debt import Owed
 
 raise Owed(
-    "crop tool: Params (ROI regions), lower -> Resample, view -> Image with"
+    "20260802T023510Z: crop tool: Params (ROI regions), lower -> Resample, view -> Image with"
     " ROI overlay; ARCHITECTURE.md 'Tools', DESIGN-SESSION.md Exchange 2"
 )

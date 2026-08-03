@@ -3,6 +3,19 @@
 Status: Accepted
 Date: 2026-08-01
 
+## Outcomes
+
+What this system looks like working as intended (stated 2026-08-02,
+while marker rule v1 covered only the Python surface; primary:
+`SESSION-2026-08-02-debt-advance.md`): `DEBT-AUTO.txt` is the de facto
+debt surface — everything owed, in any tracked format, enumerates into
+it, and `DEBT.md` is very rare: its steady state is empty, and a
+nonempty entry is standing pressure to extend the marker grammar,
+never a parallel list. And the debt system is the true planning
+surface — work is chosen by ordering ledger entries, derived columns
+as the default order and judgment recorded as a dated planning
+decision citing entries, so a work list is never hand-derived again.
+
 ## Context
 
 **Provenance.** This distills `docs/archive/PLAN.md`: the anti-bureaucracy
@@ -286,3 +299,31 @@ adjudicate" the invariant names as bureaucracy arriving.
   the surface working as the no-reconstructed-challenges gate
   anticipated (`docs/archive/PLAN-DISTILL.md`, Phase 2). Fuller record:
   `SESSION-2026-08-02-distill-worklist.md`.
+
+- **2026-08-02 — "Work in the file itself that doesn't touch the
+  explicit debt line is signal for potential concurrent work that's
+  valuable and agent-interpretable, at the risk of overpromoting high
+  churn files. But high churn files are high churn because they're load
+  bearing and signals something else: over coupling."** Raised by
+  Kendrick against a prospective mechanism, before it exists: deriving
+  debt priority from git activity adjacent to a marker. The measurement
+  is real — commits near a gap are interest being paid on it — but the
+  same number scores a defect the debt system does not track: a file
+  with too many reasons to change ranks high whether or not its debt is
+  the thing in the way. Standing caution, not a dismissal: any read
+  mode that ranks by adjacent churn either separates the two readings
+  or inherits the conflation. Fuller record:
+  `SESSION-2026-08-02-debt-advance.md`, Exchange 3.
+
+- **2026-08-02 — "If DEBT.md is always empty and DEBT-AUTO has surface
+  for literally everything, then DEBT.md has a nebulous role, period."**
+  Raised by Kendrick at the marker-rule v2 proposal, whose universal
+  surface (git-index walk, file-form markers for every tracked text
+  format) aims DEBT.md at permanent emptiness. The doctrine above gives
+  an empty last resort a meaning — a nonempty DEBT.md is standing
+  pressure to extend the grammar — but that meaning needs the file to
+  be creatable, not present. Whether an always-empty escape valve earns
+  its place in the root listing, or retires until a grammar failure
+  recreates it, stands open; resolves on evidence once v2 lands and the
+  file's steady state is observed. Fuller record:
+  `SESSION-2026-08-02-debt-advance.md`, Exchange 5.

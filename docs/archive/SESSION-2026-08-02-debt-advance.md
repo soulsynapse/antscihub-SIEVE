@@ -211,11 +211,36 @@ readable at sight while walking the tree, chronological sort free
 everywhere, and auditability — a stamp must precede its own landing
 commit, so a fabricated stamp convicts itself where a fabricated
 random token carries no checkable claim. Pins: UTC, second resolution,
-one canonical fixed-width sortable spelling, minted by the tool
-(hand-written stamps are the copy/hallucination surface), duplicate ID
-an enumeration error, IDs never reused after discharge. Fine print
-kept honest: the stamp reads when-stated, not when-incurred — the
+one canonical fixed-width sortable spelling, duplicate ID an
+enumeration error, IDs never reused after discharge. Fine print kept
+honest: the stamp reads when-stated, not when-incurred — the
 debt-creating event remains the milestone declaration (PAR-0002).
+
+## Exchange 9 — hand-written stamps, trust-but-verify
+
+Exchange 8 had pinned tool-minting (the hand-written stamp read as the
+copy/hallucination surface). Kendrick reversed the workflow cost
+mid-build: "for the tool minted thing we probably want that to be
+pretty cheap for agents to do. if the standing instructions are like...
+write the file, then get the line, then call the sieve.debt new cmd,
+then check it landed properly, it gets messy. lets have it be the agent
+can write the time and trust it'll do it right until it doesn't, and
+verify with the test as stated, and maybe include a test for like,
+malformed or omitted times, or nonsense times, or newly minted times
+that are outside of a plausible period (might catch on debts that are
+updated as things go though)."
+
+Adopted: the agent writes the stamp; placing a marker stays a
+one-touch edit. The mint command dies (a stamp-printing helper stays
+possible as convenience, never required). Trust is bounded by three
+guards: malformed, omitted, or nonsense stamps (invalid calendar,
+pre-repo-epoch, future-beyond-slack) are enumeration errors — the
+near-miss-is-error pattern; the duplicate-ID test as stated, now also
+covering hand-written round-number collisions; and the
+plausibility-window audit against landing time applied only to
+first-appearing IDs — Kendrick's own caveat in the quote, since a
+restated marker keeps its original stamp and must not trip a
+freshness check.
 
 ## The drafts-dismissal supersession
 

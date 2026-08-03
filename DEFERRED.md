@@ -119,19 +119,23 @@ the automatic ledger.
   executable.
 - **How multiple inputs enter the shape signatures** — background
   subtraction consumes frame + plate, while Exchange 4 treats it as `Fold`;
-  the settled unary-looking shape signatures do not say how the second input
-  enters. Due when: the first `Fold` op is written, which is when that
-  signature first becomes executable (PAR-0005 states the shapes beyond
-  `Resample` and `Opaque` as provisional until their first instance).
-- **`PixelMap`, `Window`, and `Fold` enter the kernel** — the kernel
-  implements `Resample` and `Opaque`; the other three shapes are stated
-  in PAR-0005 as the intended factoring and become code with their
-  first instance, each signature settled by the op that needs it.
+  the unary-looking signatures of the retired five-form table do not say
+  how the second input enters. Due when: the first stateful op is written
+  — under PAR-0005's admission rule its form is admitted then, with the
+  rewrite it licenses, and its signature is settled by the op that needs
+  it (the `(state, frame)` arity was already known wrong on this case,
+  PAR-0005's first primary, Exchange 2).
+- **Further forms enter the kernel** — the kernel implements the affine
+  coordinate map and `Opaque`; the retired five-form table's `PixelMap`,
+  `Window`, and `Fold` survive here as the intended factoring for a
+  contributor to aim at, and each is admitted under PAR-0005's rule —
+  when a rewrite it would license is both wanted and provable — with
+  its signature settled by the op that needs it, never in advance.
   Rider: a standalone spatial-neighborhood op (erosion on a mask, a
-  spatial blur or gradient) fits none of the four reasoned-about shapes
-  and is an `Opaque` until measurement says it is worth a shape of its
-  own — the first candidate for a sixth. Due when: an op of that kind
-  is written, or instrumentation shows an `Opaque` on a hot path.
+  spatial blur or gradient) fits none of the reasoned-about factorings
+  and is an `Opaque` until measurement says it is worth a form of its
+  own. Due when: an op of that kind is written, or instrumentation
+  shows an `Opaque` on a hot path.
 - **The dispatch table's home** — DESIGN-SESSION.md Exchange 7 settles the
   mechanism (multiple dispatch over the reified op description, with the
   table doubling as the eligibility check) and Exchange 8 amends selection

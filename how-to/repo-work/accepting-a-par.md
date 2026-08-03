@@ -3,10 +3,12 @@
 Task: you hold a `Status: Proposed` rationale and want it to govern.
 The rules this guide executes are PAR-0001's (status, the acceptance
 judgment, the roll-up discipline, primaries); what a stage means when
-in doubt is that record's to say, never this file's. Worked example:
-PAR-0005's arc, whose attack primary is
-`docs/archive/SESSION-2026-08-03-par-0005-judgment.md` — exchange
-citations below are to that file.
+in doubt is that record's to say, never this file's. Worked examples:
+PAR-0005's attack arc, primary
+`docs/archive/SESSION-2026-08-03-par-0005-judgment.md` — bare exchange
+citations below are to that file — and PAR-0006's plain-rewrite arc,
+primary `docs/archive/SESSION-2026-08-03-par-0006-plain-rewrite.md`,
+cited below by name.
 
 ## 0. Let it sit
 
@@ -111,6 +113,33 @@ passed back as a question at its judgment:
   the architecture must serve against the Decision, case by case. A
   case the vocabulary cannot classify is a finding — a concession, a
   Challenges entry, or a break.
+- **The user story** (the plain-rewrite primary, Exchange 3): state
+  what the record governs as the user experiences it — for PAR-0006,
+  "which knobs recompute and which are free; the file is the complete
+  measurement." A record that cannot be told from the user's chair is
+  mis-scoped or not architecture at all. At PAR-0006's judgment this
+  was the instrument that unstuck the most.
+- **The plain-restatement gate** (plain-rewrite primary, Exchange 5):
+  explain the record until the human can restate the coherent version
+  in their own plain words; acceptance waits until they can, and their
+  restatement becomes the Decision's opening, with the edge-case
+  defense demoted to the primary. The bar, verbatim: "good
+  architecture results in things being easy to implement, not hard" —
+  a record still hard to restate is still facing its edge cases. Easy
+  first, complete second. The restatement is also where mis-syntheses
+  surface and get corrected on the spot (Exchange 5's pass-through
+  correction).
+- **Both-worlds runs** (plain-rewrite primary, Exchange 2): the same
+  concrete events run through the decided and the undecided world,
+  with knobs from the real pipelines, never invented ones. The
+  signature of a rule worth accepting: decided, every error is
+  unrepresentable, caught at PR time, or cheap and visible.
+- **The scope sieve** (plain-rewrite primary, Exchanges 4 and 7, and
+  the Close): concerns argued at judgment that are not architecture —
+  execution behavior, tuning, anything measurable when built — yield
+  at most a one-sentence scope fence in the record; the argument goes
+  to the primary, and nothing else is written anywhere. Arguing them
+  is exercise, not drift — it is how the fences get found.
 
 Check: for each instrument used, its result is in the record or its
 primary, citable by exchange.

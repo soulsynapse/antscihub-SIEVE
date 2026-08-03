@@ -17,7 +17,11 @@ from pathlib import Path
 
 SENTINEL_ROOT = "tests/_sentinel"
 
-LEDGER_NAME = "DEBT-AUTO.txt"
+LEDGER_NAME = "DEBT-AUTO.md"
+
+# The ledger's pre-v3 name. Never reused for anything else; stamp_landings
+# still reads its git history so no landing predates the rename.
+LEGACY_LEDGER_NAME = "DEBT-AUTO.txt"
 
 # Named boundaries, not leniencies (PAR-0002, "The universal surface"):
 # the sentinel is a liveness proof, the ledger is machinery output, and
@@ -35,7 +39,7 @@ _NON_LF_BOUNDARIES = ''.join(
     map(chr, (0x0D, 0x0B, 0x0C, 0x1C, 0x1D, 0x1E, 0x85, 0x2028, 0x2029))
 )
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 MARKER_RULE = "v2"
 
 # The statement stamp: UTC, second resolution, one canonical fixed-width
@@ -48,8 +52,10 @@ _STAMPED_REASON = re.compile(r"(\d{8}T\d{6}Z): (.+)", re.DOTALL)
 _TEXT_MARKER = re.compile(r"Owed: (\d{8}T\d{6}Z): (.+)")
 
 _HEADER = (
-    "# SIEVE automatic ledger. Generated; never hand-edit.\n"
-    "# Regenerate: python -m sieve.debt write\n"
+    "# SIEVE automatic ledger\n"
+    "\n"
+    "Generated; never hand-edit. Regenerate: `python -m sieve.debt write`\n"
+    "\n"
     f"format-version: {FORMAT_VERSION}\n"
     f"marker-rule: {MARKER_RULE}\n"
 )
@@ -140,48 +146,52 @@ def enumerate_markers(
 
 
 def serialize(entries: Sequence[Entry]) -> bytes:
-    """The automatic ledger's canonical bytes: format-version 2.
+    """The automatic ledger's canonical bytes: format-version 3, a
+    markdown table.
 
-    Column 0 is a key line (`path :: qualname :: stamp`); four-space
-    indentation is reason content, so a multiline reason needs no
-    escaping. Additive-only evolution; nothing derivable beyond the
-    entries themselves.
+    One row per entry: path and qualname as code spans -- which is what
+    keeps `<module>` and `<file>` visible in rendering -- then the
+    stamp, then the reason with backslash, `|`, and LF escaped
+    backslash-style so no reason can break its row and parse stays
+    serialize's exact inverse. Version 3 re-serialized version 2's
+    entries as this table, fields unchanged as columns; within a
+    version, evolution stays additive and nothing derivable lives
+    beyond the entries.
     """
     parts = [_HEADER]
     if entries:
-        parts.append("\n")
+        parts.append("\n| path | qualname | stamp | reason |\n")
+        parts.append("| --- | --- | --- | --- |\n")
         for entry in sorted(entries, key=lambda e: (e.path, e.qualname)):
-            parts.append(f"{entry.path} :: {entry.qualname} :: {entry.stamp}\n")
-            for line in entry.reason.split("\n"):
-                parts.append(f"    {line}\n")
+            parts.append(
+                f"| `{entry.path}` | `{entry.qualname}` | {entry.stamp} "
+                f"| {_escape_cell(entry.reason)} |\n"
+            )
     return "".join(parts).encode("utf-8")
 
 
 def parse(data: bytes) -> list[Entry]:
-    """Inverse of serialize, for entry-level diff reporting on mismatch."""
-    lines = data.decode("utf-8").splitlines()
-    # Entries begin after the blank line that ends the header; a header-only
-    # ledger has no blank line. Header lines can never parse as entries,
-    # whatever future (additive) header fields contain.
-    body: list[str] = []
-    for i, line in enumerate(lines):
-        if line == "":
-            body = lines[i + 1 :]
-            break
+    """Inverse of serialize, for entry-level diff reporting on mismatch.
+
+    Only a four-cell row whose path and qualname cells are code spans
+    is an entry; the column header, the separator row, and header prose
+    can never parse as one, whatever future (additive) header fields
+    contain.
+    """
     entries: list[Entry] = []
-    key: "tuple[str, str, str] | None" = None
-    reason_lines: list[str] = []
-    for line in body:
-        if line.startswith("    "):
-            reason_lines.append(line[4:])
-        elif line.count(" :: ") == 2:
-            if key is not None:
-                entries.append(Entry(*key, "\n".join(reason_lines)))
-            path, qualname, stamp = line.split(" :: ")
-            key = (path, qualname, stamp)
-            reason_lines = []
-    if key is not None:
-        entries.append(Entry(*key, "\n".join(reason_lines)))
+    for line in data.decode("utf-8").splitlines():
+        cells = _split_row(line)
+        if cells is None or len(cells) != 4:
+            continue
+        path, qualname, stamp, reason = cells
+        if not all(
+            len(c) > 1 and c.startswith("`") and c.endswith("`")
+            for c in (path, qualname)
+        ):
+            continue
+        entries.append(
+            Entry(path[1:-1], qualname[1:-1], stamp, _unescape_cell(reason))
+        )
     return entries
 
 
@@ -244,7 +254,7 @@ def stamp_landings(repo_root: Path) -> "dict[str, datetime]":
         return {}
     proc = subprocess.run(
         ["git", "-C", str(repo_root), "log", "--reverse",
-         "--format=commit-time %cI", "-p", "--", LEDGER_NAME],
+         "--format=commit-time %cI", "-p", "--", LEDGER_NAME, LEGACY_LEDGER_NAME],
         capture_output=True,
     )
     if proc.returncode != 0:
@@ -257,8 +267,17 @@ def stamp_landings(repo_root: Path) -> "dict[str, datetime]":
     for line in proc.stdout.decode("utf-8", errors="replace").splitlines():
         if line.startswith("commit-time "):
             current = datetime.fromisoformat(line.removeprefix("commit-time "))
-        elif line.startswith("+") and current is not None and line.count(" :: ") == 2:
-            stamp = line.split(" :: ")[-1]
+        elif line.startswith("+") and current is not None:
+            # Both key spellings: format-version 3's table row and the
+            # bare pre-v3 key line still in history.
+            added = line[1:]
+            cells = _split_row(added)
+            if cells is not None and len(cells) == 4:
+                stamp = cells[2]
+            elif added.count(" :: ") == 2:
+                stamp = added.split(" :: ")[-1]
+            else:
+                continue
             if _STAMPED_REASON.fullmatch(stamp + ": x") and stamp not in landings:
                 landings[stamp] = current
     return landings
@@ -294,6 +313,27 @@ def _git_universe(repo_root: Path) -> list[str]:
             "provide it: " + proc.stderr.decode("utf-8", errors="replace").strip()
         )
     return proc.stdout.decode("utf-8").splitlines()
+
+
+_CELL_ESCAPES = {"\\": "\\\\", "|": "\\|", "\n": "\\n"}
+_CELL_UNESCAPES = {"\\": "\\", "|": "|", "n": "\n"}
+
+
+def _escape_cell(reason: str) -> str:
+    return re.sub(r"[\\|\n]", lambda m: _CELL_ESCAPES[m.group()], reason)
+
+
+def _unescape_cell(cell: str) -> str:
+    return re.sub(r"\\([\\|n])", lambda m: _CELL_UNESCAPES[m.group(1)], cell)
+
+
+def _split_row(line: str) -> "list[str] | None":
+    """The line's table cells, or None off-form. Splitting on ' | ' is
+    safe because every literal `|` in a serialized cell is
+    backslash-escaped."""
+    if not (line.startswith("| ") and line.endswith(" |")):
+        return None
+    return line[2:-2].split(" | ")
 
 
 def _split_stamped(value: str, where: str) -> tuple[str, str]:

@@ -298,9 +298,11 @@ def test_non_git_root_without_roots_is_an_enumeration_error(tmp_path):
 
 
 HEADER = (
-    b"# SIEVE automatic ledger. Generated; never hand-edit.\n"
-    b"# Regenerate: python -m sieve.debt write\n"
-    b"format-version: 2\n"
+    b"# SIEVE automatic ledger\n"
+    b"\n"
+    b"Generated; never hand-edit. Regenerate: `python -m sieve.debt write`\n"
+    b"\n"
+    b"format-version: 3\n"
     b"marker-rule: v2\n"
 )
 
@@ -322,10 +324,12 @@ def test_serialize_golden_bytes():
     ]
     assert serialize(entries) == HEADER + (
         b"\n"
-        b"src/sieve/kernel.py :: lower :: 20260801T120000Z\n"
-        b"    kernel: lower() producing a Resample\n"
-        b"src/sieve/store.py :: <module> :: 20260801T120001Z\n"
-        b"    store: content-addressed blob store\n"
+        b"| path | qualname | stamp | reason |\n"
+        b"| --- | --- | --- | --- |\n"
+        b"| `src/sieve/kernel.py` | `lower` | 20260801T120000Z "
+        b"| kernel: lower() producing a Resample |\n"
+        b"| `src/sieve/store.py` | `<module>` | 20260801T120001Z "
+        b"| store: content-addressed blob store |\n"
     )
 
 
@@ -333,14 +337,14 @@ def test_serialize_zero_entries_is_header_only():
     assert serialize([]) == HEADER
 
 
-def test_serialize_multiline_reason():
-    entries = [Entry("pkg/m.py", "f", "20260801T120000Z", "first\n\nsecond")]
+def test_serialize_escapes_row_breaking_reason_characters():
+    entries = [Entry("pkg/m.py", "f", "20260801T120000Z", "first\n\npipe | back\\slash")]
     assert serialize(entries) == HEADER + (
         b"\n"
-        b"pkg/m.py :: f :: 20260801T120000Z\n"
-        b"    first\n"
-        b"    \n"
-        b"    second\n"
+        b"| path | qualname | stamp | reason |\n"
+        b"| --- | --- | --- | --- |\n"
+        b"| `pkg/m.py` | `f` | 20260801T120000Z "
+        b"| first\\n\\npipe \\| back\\\\slash |\n"
     )
 
 
@@ -357,7 +361,7 @@ def test_write_mode_writes_the_ledger(tmp_path, capsys):
     assert main(["write", str(tmp_path)]) == 0
     ledger = tmp_path / LEDGER_NAME
     assert ledger.read_bytes() == serialize(enumerate_markers(tmp_path))
-    assert b"src/sieve/store.py :: <module> :: 20260801T120000Z" in ledger.read_bytes()
+    assert b"| `src/sieve/store.py` | `<module>` | 20260801T120000Z " in ledger.read_bytes()
     assert "1 entries" in capsys.readouterr().out
 
 
@@ -371,16 +375,18 @@ def test_parse_round_trips_serialize():
     entries = [
         Entry("pkg/a.py", MODULE_QUALNAME, "20260801T120000Z", "one"),
         Entry("pkg/b.py", "C.m", "20260801T120001Z", "first\n\nsecond"),
+        Entry("pkg/c.py", "g", "20260801T120002Z", "pipe | back\\slash | \\n"),
     ]
     assert parse(serialize(entries)) == entries
     assert parse(serialize([])) == []
 
 
-def test_parse_never_reads_header_lines_as_entries():
-    doctored = HEADER + b"# future field :: looks :: like an entry\n" + (
+def test_parse_never_reads_header_or_frame_lines_as_entries():
+    doctored = HEADER + b"| future | field | shaped like | a row |\n" + (
         b"\n"
-        b"pkg/m.py :: f :: 20260801T120000Z\n"
-        b"    reason\n"
+        b"| path | qualname | stamp | reason |\n"
+        b"| --- | --- | --- | --- |\n"
+        b"| `pkg/m.py` | `f` | 20260801T120000Z | reason |\n"
     )
     assert parse(doctored) == [Entry("pkg/m.py", "f", "20260801T120000Z", "reason")]
 

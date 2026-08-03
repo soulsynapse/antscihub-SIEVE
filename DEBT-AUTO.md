@@ -7,7 +7,6 @@ marker-rule: v2
 
 | path | qualname | stamp | reason |
 | --- | --- | --- | --- |
-| `docs/par/0005-shape-algebra.md` | `<file>` | 20260802T225556Z | rationale for the shape algebra and classification-by-form; governs until acceptance: DESIGN-SESSION.md Exchanges 3 and 5 |
 | `docs/par/0006-param-vs-preference.md` | `<file>` | 20260802T225557Z | rationale for param vs. preference, discussion owed before drafting; governs until acceptance: DESIGN-SESSION.md Exchange 2 |
 | `docs/par/0007-tool-contract.md` | `<file>` | 20260802T225558Z | rationale for the tool contract; claims at acceptance ARCHITECTURE.md invariant 1's archive/PLAN.md Phase 1 decision 2 citation and README's Exchange 1 citation (contracts derive from Params); governs until acceptance: DESIGN-SESSION.md Exchange 5 as rebuilt, and Exchange 2 |
 | `docs/par/0008-executor.md` | `<file>` | 20260802T225559Z | rationale for the executor; governs until acceptance: DESIGN-SESSION.md Exchanges 3, 4, and 6 |

@@ -1,12 +1,15 @@
 # Session record — 2026-08-02 — the runbook gap
 
-Status: Open
+Status: Frozen
 Date: 2026-08-02
 
-Curated primary for PAR-0003 (draft). The argument is open by its
-author's own statement — the problem is named, the answer is nebulous —
-so this record stays `Status: Open` until the design argument closes.
-Doctrine: PAR-0001.
+Curated primary for PAR-0003. Opened with the problem named and the
+answer nebulous by its author's own statement; the design argument
+closed the same date at Exchange 6, with PAR-0003 rewritten to the
+settled design and the design debt discharged. Frozen at that close —
+a deliberate wrap, not a reflex of the last decision landing. The
+acceptance judgment, when convened, files its own primary (precedent:
+`SESSION-2026-08-02-par-0002-acceptance.md`). Doctrine: PAR-0001.
 
 ## Exchange 1 — naming the problem: the missing how-to layer
 

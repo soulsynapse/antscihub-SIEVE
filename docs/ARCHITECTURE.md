@@ -167,5 +167,9 @@ unmaintainable.
    (Record: Exchange 8.)
 5. **If it can change an output value it is a param**, and it lives in the
    pipeline file and the hash. **If it can only change presentation or speed it is
-   a preference**, and it lives nowhere near them. Anything ambiguous is a param.
-   (Record: Exchange 2.)
+   a preference**, and it lives in one settings object with no channel to an
+   answer — the tool contract has no preference argument, and the scramble test
+   enforces the absence rather than asking authors to obey a rule. Choices the
+   system makes — the seed, which verified-equivalent implementation ran, what
+   was baked — are neither: they are outputs of the run, recorded in the run
+   record. Anything ambiguous is a param. (Record: PAR-0006.)

@@ -140,10 +140,11 @@ would mean anything to a different implementation of the same operation:
 a temporal window would, `dis_preset` would not. This is not a partition
 inside the tool's model — there is nothing to partition, because those
 fields were never in it — and it costs nothing today, since crop and
-downsample have no method choice and stay flat. It also removes a rule
-rather than adding one: PAR-0006's hash over *effective* params exists
-only because inert fields sit in the wrong model, and with the fields on
-the methods no inert field survives to be excluded.
+downsample have no method choice and stay flat. It also removed a rule
+rather than adding one: PAR-0006's former hash-over-effective-params
+exclusion existed only because inert fields sat in one model; with the
+fields on the methods no inert field survives to be excluded, and
+PAR-0006 as accepted records the rule as dissolved.
 
 Two things are called *method* and they behave oppositely. Two
 implementations producing statistically equivalent output are two
@@ -212,12 +213,11 @@ module owns that belongs to the tool.
 - PAR-0005 amends the Consequences bullet that routes the voiding
   declaration here (its marker, `20260803T072354Z`), or the refusal
   above falls.
-- PAR-0006 amends twice (its marker, `20260803T072355Z`): the effective-
-  params hash rule becomes unnecessary rather than obeyed, and the
-  record's classification by effect cannot express measurement-versus-
-  method ownership, which is why `dis_preset` is correctly a param under
-  its rule and still does not belong beside the fields that survive a
-  swap.
+- PAR-0006 amended as ruled here and was accepted 2026-08-03 (stamp
+  `20260803T072355Z` discharged): the effective-params hash rule is
+  recorded as dissolved, and the scope is split — PAR-0006 decides
+  whether a knob is hashed, this record decides where it lives, which is
+  why `dis_preset` is a param and still not in the tool's model.
 - PAR-0009 hashes the tool's params, the chosen op's identity, and that
   op's own params.
 - PAR-0011 owns grouping by generic function with membership earned, and

@@ -3,6 +3,20 @@
 Status: Proposed
 Date: 2026-08-02
 
+## Outcomes
+
+What this layer looks like working as intended: an agent or person
+picking up a task finds the guide for it, follows it, and never opens
+the PAR — and when the guide is wrong, the cost is one tier's walk
+down the chain rather than being stranded, and the guide is repaired on
+the spot by whoever hit it. The `how-to/` folder set stays closed under
+the seams the PARs define, so a new folder means a new seam rather than
+a judgment call. Guides are written at an altitude that does not churn,
+and the layer goes quiet the way a rationale does — quiet because the
+guidance holds, which the runner's logs are what let anyone believe.
+Scripts appear inside guides only where automating a step actually
+gains speed, so the scripts folder stays small enough to read.
+
 ## Context
 
 The tiers before this record: `docs/ARCHITECTURE.md` holds the settled

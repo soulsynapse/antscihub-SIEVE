@@ -1,7 +1,7 @@
 # Working in this repo
 
 Instructions for any agent or person making changes. Nothing here restates
-what a governing record holds — follow the pointers.
+what a governing rationale holds — follow the pointers.
 
 ## Orientation order
 
@@ -35,11 +35,14 @@ what a governing record holds — follow the pointers.
   named out loud before anything is built on top of it, never silently
   resolved toward the easiest reading.
 
-## Where records go
+## Where things go
 
-*Record* is the genus: a rationale, a primary, a stub. **PAR is Project
-Architecture Rationale** — living, amended in place, and
-still taking markers once accepted (PAR-0001).
+Three kinds of writing: a **rationale** — living, amended in place, and
+still taking markers once accepted; a **primary** — the curated session
+argument, frozen once wrapped; a **stub** — a marker carrier. **PAR is
+Project Architecture Rationale**, deliberately not an ADR — and *record*
+is not the word for a rationale; it pattern-matches to ADR semantics and
+re-imports the immutability the rename retired (PAR-0001).
 
 - A settled decision → the active planning document's gate; when it is an
   architecture decision (scope: PAR-0001), it is recorded as a project
@@ -63,7 +66,7 @@ still taking markers once accepted (PAR-0001).
   governed before keeps governing, and the tier-1 citation stays put
   until acceptance. Hardening sessions are never owed — a deliberate
   attack on a draft is convened at judgment (PAR-0001). More than one
-  record per decision is expected.
+  primary per decision is expected.
 - Execution guidance for a task — how it is done, never why → a guide
   in `how-to/<domain>/` (PAR-0003); folding it into a rationale is the
   ballooning force arriving by another door. Found inaccurate, a guide
@@ -77,7 +80,7 @@ still taking markers once accepted (PAR-0001).
   placeholder: a real module at its real import path raising
   `sieve.debt.Owed` in marker form rule v2, quoting signatures only from
   the settled record, its docstring pointing at the governing sections.
-- A settled system owed its rationale → a stub record at its own number:
+- A settled system owed its rationale → a stub at its own number:
   status line, its `Owed:` marker, the citations that govern until
   acceptance — never rationale prose (PAR-0002, "What counts as debt").
 - Any marker's reason opens with its statement stamp — the UTC time the
@@ -95,7 +98,7 @@ still taking markers once accepted (PAR-0001).
 - The suite is green before a commit lands; green includes placeholder
   skips exactly matching the automatic ledger's test-tree entries. Nothing
   physically blocks committing red — possible is not in-contract.
-- Chunk commits: decision-record amendments land separately from placements
+- Chunk commits: rationale amendments land separately from placements
   and code.
 
 ## Never
@@ -112,8 +115,8 @@ still taking markers once accepted (PAR-0001).
 
 Start with the orientation order. End with: working tree clean, suite
 green, regen a no-op, and nothing valuable left unfiled — a decision,
-intention, or gap that surfaced along the way gets its record (see "Where
-records go") before the session closes. Durable context has homes; if
+intention, or gap that surfaced along the way gets its home (see "Where
+things go") before the session closes. Durable context has homes; if
 something fits none of them, that is a missing home to name, not a reason
 to park prose somewhere unowned. A session record left `Status: Open` is
 derivable debt announcing an unwrapped argument (`grep -l "^Status:

@@ -56,6 +56,15 @@ current statement of the reasoning, not the historically faithful one.
 Keeping the ADR name would have every reader import immutability, brevity,
 and one-page skimmability before opening a file that honors none of them.
 
+The same defense reached the word itself (2026-08-03): *record*, used of
+a rationale, was dropped from the working surfaces — `AGENTS.md` and the
+how-tos — because agents reading it pattern-match to ADR semantics and
+re-import the immutability this paragraph retires. *Record* keeps its
+honest meaning for the frozen primaries alone. This file's own older
+prose still says *record* in places; it cleans as the file is next
+rewritten, deliberately not in a sweep. Primary:
+`SESSION-2026-08-03-record-vocabulary.md`.
+
 Primary record for this rewrite: `SESSION-2026-08-02-record-class.md`,
 which holds the argument above in full, including the positions that
 lost. The original 2026-08-01 adoption predates the rule below requiring

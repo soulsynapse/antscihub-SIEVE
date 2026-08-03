@@ -193,7 +193,86 @@ carrying a concession it doesn't owe.
   sentence in each record is cheaper than the merge question
   recurring.
 
-## Exchange 8 — verdict
+## Exchange 8 — the value named, and why no other route avoids a rewrite
+
+Kendrick, after the verification half: "does it pass the criteria for
+a system, and does it earn its keep? is it necessary? Name the value
+explicitly, and how it cannot be gained any other way that doesn't
+result in a rewrite."
+
+**The value, named.** PAR-0005 buys exactly one thing with no
+substitute: a home in the tree for the executor's speed and
+correctness rules, such that a rule is an object with a test beside it
+rather than a property of welded code. Everything else the record
+touches is either gainable another way or free. Speed itself is
+weldable — v1 proves it. The recipe hash is viable at step level —
+DESIGN-SESSION.md Exchange 1 hashed params + upstream hashes +
+impl_version with tools still owning `run()`; op-level hashing is an
+economy (cross-tool cache sharing, rewrite-invariance), not a
+necessity. The irreplaceable part is that a rewrite rule needs a
+representation to be *about*: a rule is a pair of expressions asserted
+equivalent, and welded code contains only one of them. v1's rules were
+not merely unrecorded — they were untestable in principle, because the
+naive path a rule must be tested against (Exchange 6's discipline)
+did not exist as a separate object; verifying the z-score collapse
+meant reverting the code. The independent-test-against-naive-path
+discipline is only possible when fused and naive both derive from one
+description.
+
+**The routes that don't need the representation, priced.** (i) Welding,
+v1's route: rules live as code paths plus comments; the measured
+outcome is that the next redesign deletes them and the loss is
+undiagnosable — the loop already run twice, and the rewrite is the
+route's *consequence*, not a risk. (ii) Metadata on callables — tag
+`run()` with flags the executor reads: classification becomes
+assertable and therefore assertable wrongly (invariant 3's failure
+mode, the exact design Prompt 6 rejected), behavior gets smuggled
+through the introspected surface (prior session Exchange 8's named
+risk), and offload stays impossible regardless, because no metadata
+makes a closure pattern-matchable into a filtergraph. Erosion, then
+rewrite. (iii) A benchmark pin — end-to-end throughput regression
+tests — buys the *alarm* without the representation, and honesty
+requires saying so: it would have caught v2's slowdown at rewrite
+time. It does not buy the rule: the alarm says slower, not why, and
+the rule still has no home to be carried in. v1 had the numbers in
+comments; detection was never the failure — portability was.
+(iv) Defer the boundary and add it later: the return type of the tool
+contract is the one thing not retrofittable per-tool — changing it
+changes every tool at once, which is a rewrite by definition. This is
+consistent with Exchange 5's overruling of the insurance argument:
+the sanctioned reason the boundary lands now is that at n=0 it costs
+nothing (`Opaque(fn)` is `run()` with a wrapper), and n=0 is the only
+moment that price is available.
+
+**Necessity, decomposed.** The boundary is necessary in that precise
+sense: free now, a rewrite later, and without it fusion is foreclosed
+at the contract level (design Exchange 3, standing as written). The
+authorization semantics is the necessary consequence of permitting
+rewrites at all — someone must say which are legal, and the
+alternatives are flags (rejected) or total conservatism (no silent
+rewrites, i.e. the value forfeited). The cut vocabulary is not
+necessary and doesn't claim to be — it is the null hypothesis, holding
+only what is proved, and its necessity question dissolves because it
+costs nothing to hold.
+
+**The system test.** The named system is the boundary language between
+tools and the executor, owned by neither — the same pattern the repo
+already sanctions one level up, where `views.py` is "the language
+between tools and the GUI, owned by neither" and holds its own module.
+Near-decomposability holds the way it does for any interlingua: every
+component touches it, but only through the value type, so coupling is
+citation-shaped — reversing the decision rewrites PAR-0007/0008/0009
+because they *cite* the contract, not because they contain its
+reasoning, and dependency-via-citation is the sanctioned interface
+between records. Dense inside (what a form authorizes, how forms
+compose), sparse across. It earns ARCHITECTURE.md as what invariant 3
+becomes, and its keep is cheap by construction: no contributor
+obligation, one wrapper class, serializability enforced by machinery
+the hash needs anyway. Where it must never claim keep: as a speed
+argument — speed is weldable, and the Context correction in
+Exchange 2 is what keeps that claim out.
+
+## Exchange 9 — verdict
 
 **The record stands, on narrower ground, and is not ready to accept as
 written.** It names a real system (the op representation and the

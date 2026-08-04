@@ -3,6 +3,12 @@
 Instructions for any agent or person making changes. Nothing here restates
 what a governing rationale holds — follow the pointers.
 
+**`proto_sieve/` is exempt from everything in this file.** It is a
+disposable spike on the decomposition, governed solely by
+`proto_sieve/AGENTS.md`, which replaces this file rather than extending
+it. No PAR, no marker, no stamp, no ledger regen, no session primary, and
+no citation in either direction. Working there, read that file and stop.
+
 ## Orientation order
 
 1. `README.md` — the map: locations, the record tiers and their walking

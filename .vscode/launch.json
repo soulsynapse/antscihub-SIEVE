@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "proto_sieve GUI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "proto_sieve.src.sieve.gui.app",
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal"
+        }
+    ]
+}

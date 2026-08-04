@@ -31,8 +31,6 @@ AUTO = 0
 
 
 class BlockSpinBox(QSpinBox):
-    """A spin box over `{0} | [1, max]`, where 0 is a mode and 1 is a size."""
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         # Interpret on commit, not per keystroke: with keyboard tracking on, a
@@ -44,7 +42,6 @@ class BlockSpinBox(QSpinBox):
         self.setToolTip("Block edge in working pixels; 0 is auto (64 source pixels).")
 
     def stepBy(self, steps: int) -> None:
-        """Step down to 1 before stepping to auto — see the module docstring."""
         target = self.value() + steps
         if target <= AUTO and self.value() > 1:
             # However many notches the acceleration was worth, the run ends at

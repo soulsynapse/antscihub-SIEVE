@@ -173,6 +173,14 @@ FLAGGED: dict[str, str] = {
         "reason the budget would delete rather than compress — "
         "composite-view-docstring-budget"
     ),
+    "sieve/pipeline/executor.py": (
+        "one secret (a plan, a reader, and a store become a stream of "
+        "per-frame results — rule 1's single execution path), but 12 "
+        "docstrings and 1,690 words of prose against a 400 cap, each one a "
+        "non-obvious cache-integrity, backend-selection, or lead-in reason "
+        "the budget would delete rather than compress — "
+        "executor-docstring-budget"
+    ),
     "sieve/filters/background_ema.py": (
         "one secret (an EMA background model, updated in place and refined "
         "per-alpha against a static worst-case warmup), but 548 words in the "

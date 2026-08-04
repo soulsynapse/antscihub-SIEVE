@@ -95,6 +95,11 @@ ASSESSED: dict[str, str] = {
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.
 FLAGGED: dict[str, str] = {
+    "sieve/core/filter_base.py": (
+        "already a contract module (600/900) and still 4,649 words of prose against 900 — "
+        "one secret, 25 dense per-method asymmetry docstrings the budget would delete rather "
+        "than compress — filter-base-contract-budget"
+    ),
     "sieve/gui/filter_tab.py": (
         "six decisions (composite refresh state machine, the two-tier drag discipline repeated "
         "per control, document-vs-local knob routing, the wizard session lifecycle, the crop "

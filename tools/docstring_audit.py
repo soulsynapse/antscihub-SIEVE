@@ -214,6 +214,14 @@ FLAGGED: dict[str, str] = {
         "250 cap, 1,954 words of prose against a 400 cap, worst overage found "
         "so far — detect-tables-two-secrets"
     ),
+    "sieve/backend/dispatch.py": (
+        "one secret (the shelf keyed by filter_id/version/backend that finds "
+        "and invokes the callable implementing a spec, including its calling "
+        "convention and per-run state lifecycle), but 18 symbol docstrings and "
+        "1,705 words of prose against a 400 cap, each one a non-obvious "
+        "per-protocol or per-decorator design-rejection reason the budget "
+        "would delete rather than compress — dispatch-docstring-budget"
+    ),
 }
 
 

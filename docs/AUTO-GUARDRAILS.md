@@ -1,6 +1,6 @@
 ---
 status: current
-reviewed: 70b5f37
+reviewed: 1e43ef5
 subjects: [noxfile.py, .github/workflows/, pyproject.toml, tests/docs/, .importlinter]
 ---
 
@@ -42,7 +42,7 @@ by moving it to its own tier or writing a forbidden contract. **Trigger: NOT
 FIRED** (re-checked 2026.07.28) — `workers/` is still four lines in
 SCAFFOLD.md's Projected half, and the stated resolution is still the right one.
 
-## 2. One execution path, and artifact purity — ENFORCED for purity, OPEN for parity
+## 2. One execution path, and artifact purity — ENFORCED
 
 Rule 1 and rule 2 are checked by the same things and are listed together for
 that reason. `pipeline/executor.execute` is the only frame-computing loop; the
@@ -57,17 +57,38 @@ position).
 and `tests/unit/test_pipeline_model.py::test_node_carries_identity_and_nothing_else`,
 plus YAML round-trips there and in `tests/gui/test_project_io.py`.
 
-**OPEN:** the second half — *a pipeline saved from the GUI loads and executes
-identically in the CLI* — has no check. `tests/integration/test_cli_run.py`
-builds its projects directly rather than from a GUI-saved document, and nothing
-diffs GUI-run against CLI-run output. This is the one that would catch a real
-divergence rather than a schema slip, and it is the most valuable unwritten
-check in this file — it is the only thing that would make rule 1 a guarantee
-rather than a property of how the code currently happens to be arranged.
-**Trigger: FIRED** (audited 2026.07.28) → `docs/todo/gui-cli-execution-parity.md`
-— it read "the next item that touches serialization", and schema v3 landed
-`Edge.port`, `Project.detector`, and the pin fields without anyone writing the
-check. The item is what a fired trigger should have become on the day it fired.
+**Enforced by, as of 2026.08.04:** the second half — *a pipeline saved from the
+GUI loads and executes identically in the CLI* —
+`tests/gui/test_gui_cli_parity.py::test_the_series_the_gui_shows_is_the_series_the_cli_computes`
+and
+`tests/gui/test_gui_cli_parity.py::test_the_intervals_agree_and_are_stated_in_the_same_frames`.
+A document is tuned through `ReplicateDocument`'s commands, saved by the real
+writer, and then run twice: through `PreviewRunner` + `SeriesCollector` +
+`detector_worker.derive`, which is the filter tab without the widget, and
+through `sieve detect --csv`. The per-frame series and the claimed intervals are
+diffed. This is what makes rule 1 a guarantee rather than a property of how the
+code currently happens to be arranged, and it is **output, not plan** —
+comparing resolved plans would pass while both sides computed the same wrong
+thing.
+
+**What the third test in that module is for.** `test_the_two_arenas_are_not
+_running_the_same_thing` asserts the fixture still deviates — different block
+sizes, different detection windows, reaching the grid and the gate. A parity
+check whose two arenas resolve alike passes against a front end that drops
+replicate pins entirely, and the first draft of this one was exactly that: over
+the shared uniform fixture the in-band count saturates, so a pinned `D` changed
+nothing observable. A guard on a parity test is not decoration — it is the half
+that fails when *both* sides are wrong together, which is the failure a
+comparison cannot see.
+
+**The trigger that used to be here is gone, which is the point of one.** It read
+"the next item that touches serialization", and schema v3 landed `Edge.port`,
+`Project.detector`, and the pin fields with nobody polling it — a trigger nobody
+polls makes a check a lottery ticket, and this one went unclaimed for a week.
+A **Trigger:** line stands in for a check only while the thing it would guard
+does not exist (see *Adding one*), so it leaves with the check's arrival rather
+than staying on as a record; the record is
+`docs/completed-todo/2026.08.04-gui-cli-execution-parity.md`.
 
 ## 3. Filter self-registration — ENFORCED, and the strongest of the eight
 

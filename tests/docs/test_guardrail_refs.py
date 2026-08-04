@@ -63,7 +63,11 @@ def test_the_claims_being_checked_are_actually_there() -> None:
     assert len(named_checks(G)) >= 5, named_checks(G)
     assert "gui-computes-nothing" in contract_claims(G)
     parsed, _ = triggers()
-    assert len(parsed) >= 4 and any(t.fired for t in parsed)
+    # Three, not the four this read at first. A discharged trigger *leaves* the
+    # file — §2's went when the parity check landed — so this floor moves down
+    # as guardrails get built, and a floor nobody may lower would eventually be
+    # met by leaving a stale trigger in place.
+    assert len(parsed) >= 3 and any(t.fired for t in parsed)
     assert len(gate_paragraphs(REWORK)) >= 6
 
 

@@ -206,6 +206,14 @@ FLAGGED: dict[str, str] = {
         "the same shape as player.py's prior flag; 1,994 words of prose against "
         "a 400 cap — video-view-docstring-split"
     ),
+    "sieve/detect/tables.py": (
+        "two secrets: a generic verified-CSV write (Column, write_table, "
+        "_verify) that knows nothing about detection, bundled with the "
+        "detection export contract itself (column meanings, rule-6 absence "
+        "semantics, precision policy) — 782-word module docstring against a "
+        "250 cap, 1,954 words of prose against a 400 cap, worst overage found "
+        "so far — detect-tables-two-secrets"
+    ),
 }
 
 

@@ -165,6 +165,14 @@ FLAGGED: dict[str, str] = {
         "non-obvious per-method thread-safety or design-rejection reason the "
         "budget would delete rather than compress — prefetch-docstring-budget"
     ),
+    "sieve/gui/player.py": (
+        "the docstring's own structure admits six bundled decisions (request "
+        "coalescing, adaptive coarse scrubbing, bounded transport, wall-clock "
+        "playback, retention tracing, render-feed gating) wiring five "
+        "already-separately-owned policy modules to Qt and a decode thread; "
+        "2,077 words of prose against a 400 cap, worst overage in the repo — "
+        "player-docstring-split"
+    ),
     "sieve/gui/composite_view.py": (
         "one secret (a step's contribution shown as two blended images or a "
         "grid overlay, sharing one rectangle and one emit-not-apply gesture "

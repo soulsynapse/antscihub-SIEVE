@@ -78,6 +78,7 @@ ASSESSED: dict[str, str] = {
     "sieve/gui/app.py": "the one place that mutates process-wide state before any window exists, and resolves which video a launch opens",
     "sieve/backend/identity.py": "a cache key must say which backend produced a frame, since backends can disagree in the low bits, unless the filter declared backend_agnostic",
     "sieve/gui/block_spin.py": "0 is a mode (auto), not a smaller size, so stepping down stops at 1 before it can cross into auto",
+    "sieve/cli/materialize_cmd.py": "materialize is one headless command that derives its format from the graph and writes+registers a single replicate's crop atomically",
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

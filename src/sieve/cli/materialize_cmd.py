@@ -16,6 +16,10 @@ parent and may write a second artifact; that is a second file, not a mode.
 minutes of decode, and a command that quietly started twelve of them is a
 command whose cost nobody estimated. A loop in a shell script is the honest
 form of "all of them", and it prints per-artifact progress for free.
+
+**Write and registration are one command.** An artifact nothing points at is
+an artifact the next session re-cuts, so cutting and recording happen in the
+same call rather than two.
 """
 
 from __future__ import annotations
@@ -58,17 +62,6 @@ def materialize_replicate(
         ),
     ] = None,
 ) -> None:
-    """Write one replicate's crop to disk and register it on the project.
-
-    The project file is rewritten in place with the new record — an artifact
-    nothing points at is an artifact the next session will re-cut, so the write
-    and the registration are one command rather than two.
-
-    Raises:
-        typer.Exit: code 1 for anything refused deliberately — an invalid
-            document, a replicate that names nothing, a span the footage cannot
-            supply, or a written file that did not read back as what was fed.
-    """
     discover()
     project = load_project(project_path)
     video = project.source_path(project_path)
@@ -102,16 +95,9 @@ def materialize_replicate(
 
 
 def _target(project: Project, wanted: str) -> Replicate:
-    """The replicate `--replicate` names, by id first and then by name.
-
-    Ids before names because an id is unambiguous and a name is not: two arenas
-    may legitimately share a display name, and a command that picked one of them
-    by document order would write an artifact for whichever was drawn first. An
-    ambiguous name is refused with both ids, so the retry is a copy and paste.
-
-    Raises:
-        typer.Exit: code 1 if it names nothing, or names more than one.
-    """
+    # Ids before names: an id is unambiguous, a name is not — two arenas may
+    # legitimately share a display name, and picking by document order would
+    # write an artifact for whichever was drawn first.
     for candidate in project.replicates:
         if candidate.replicate_id == wanted:
             return candidate
@@ -121,5 +107,6 @@ def _target(project: Project, wanted: str) -> Replicate:
     if not named:
         known = ", ".join(candidate.name for candidate in project.replicates) or "none"
         raise refuse(f"no replicate named {wanted!r}; this project has: {known}")
+    # Ids in the message so the retry is a copy-paste, not a rename.
     ids = ", ".join(candidate.replicate_id for candidate in named)
     raise refuse(f"{len(named)} replicates are named {wanted!r}; pass one of these ids: {ids}")

@@ -1,11 +1,11 @@
 """Every registered command describes itself, whatever happened to its docstring.
 
 `sieve --help` is the only place a user learns what the subcommands are, and
-Typer will happily render a blank line for a command it has no summary for. The
-prose convention in `tools/docstring_audit.py` deletes function docstrings, so
-for a stretch `materialize` and `sweep` were listed with nothing beside them —
-a user-visible regression that `nox -s checks` passed cleanly, because nothing
-here asserted on help text.
+Typer will happily render a blank line for a command it has no summary for. A
+docstring-stripping sweep took the summaries off `materialize` and `sweep`, and
+for a stretch both were listed with nothing beside them — a user-visible
+regression that `nox -s checks` passed cleanly, because nothing here asserted
+on help text.
 
 Asserting on emptiness rather than on wording: the summaries are prose and will
 be rewritten, but a command that lost its description is always a defect.

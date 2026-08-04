@@ -10,14 +10,31 @@ The cap counts docstring and comment words together. On 2026-08-04 `src/` held
 -- prose blocks, not trailing notes -- so a docstring-only cap would have moved
 the banned paragraphs into `#` blocks and changed nothing.
 
-`ASSESSED` and `FLAGGED` are the ledger and both mean somebody read the file.
-Flagged is the answer "not mechanically": more than one secret, or prose the
-budget would destroy. It leaves the queue exactly as a pass does, because a
+`ASSESSED`, `CONDENSED`, and `FLAGGED` are the ledger and all three mean
+somebody read the file. Flagged is the answer "not mechanically": more than one
+secret, or prose the budget would destroy. All three leave the queue, because a
 queue that keeps handing the file back until somebody bulldozes it punishes the
 correct call. Passing the checks below is necessary and not sufficient -- a
 40-line module with no docstrings satisfies every assertion here while nobody
 has yet asked what it is for -- so the ledger holds a sentence a reader can
 judge, as `bench/budgets.py:WITHOUT_PRODUCER` does.
+
+`CONDENSED` exists because the first two ledgers were a false dichotomy. A run
+that takes a 1,871-word file to 404 against a 400 cap has done nearly all of
+the work and, under a two-state ledger, must either report a pass it did not
+achieve or a flag that reads as a refusal -- and the flag's own instructions
+used to say revert, so the 1,467 words came back. The intermediate outcome is
+the common one and it is a good one, so it gets a state.
+
+The number recorded beside a condensed file is what that run achieved, and it
+becomes that file's ceiling: `--gate` holds the file to its own number instead
+of to the cap. That is what stops the third state from being an amnesty. The
+ceiling only ever ratchets down; lowering it is the deliberate edit a later
+pass makes, and raising it is the regression the gate exists to catch. What
+still binds at full strength is the structural half of the convention -- one
+module docstring, under the docstring cap, and no per-symbol docstrings --
+because those test whether the file states one secret, which is a different
+question from how many words the secret takes.
 
 Order is largest job first, reversed 2026-08-04 after 22 files had passed
 without a single flag. Smallest-first defers every file that could plausibly
@@ -93,6 +110,13 @@ ASSESSED: dict[str, str] = {
     "sieve/gui/editing_sources.py": "editing state is a set keyed by claimant source, not a bool or counter, so two overlapping typing controls can't strand or prematurely release the keyboard shortcuts",
     "sieve/filters/motion_history.py": "decay and neighbourhood coupling are one stateful kernel, not two composed nodes, because coupling must apply inside the feedback path to the previous state before it decays",
 }
+
+#: path -> (the prose-word ceiling this file earned, the secret it owns). The
+#: ceiling is what the condensing run measured when it stopped, and `--gate`
+#: holds the file to it rather than to FILE_PROSE_WORDS. A later pass may lower
+#: the number; nothing may raise it without saying so here, which is the edit
+#: that makes a regression visible instead of a rounding error.
+CONDENSED: dict[str, tuple[int, str]] = {}
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.
 FLAGGED: dict[str, str] = {
@@ -325,12 +349,49 @@ def violations(m: Measurement) -> list[str]:
     return out
 
 
+def condensed_violations(m: Measurement) -> list[str]:
+    """What a condensed file still answers to: its own ceiling, and the structural
+    half of the convention.
+
+    The word cap is relaxed to the number the run earned and nothing else is. One
+    module docstring under the docstring cap, no per-symbol docstrings: those ask
+    whether the file states a single secret, which is the question the volume cap
+    was only ever a proxy for.
+    """
+    ceiling = CONDENSED[m.path][0]
+    doc_cap = caps(m.path)[0]
+
+    out: list[str] = []
+    if not m.has_module_docstring:
+        out.append("no module docstring: the file's secret is unstated")
+    if m.module_docstring_words > doc_cap:
+        out.append(
+            f"module docstring is {m.module_docstring_words} words, cap {doc_cap} "
+            "-- condensing relaxes the file's total, never the one-secret test"
+        )
+    if m.symbol_docstrings and m.path not in CONTRACT_MODULES:
+        out.append(
+            f"{m.symbol_docstrings} class/function docstrings "
+            f"({m.symbol_docstring_words} words) reappeared after condensing"
+        )
+    if m.prose_words > ceiling:
+        out.append(
+            f"{m.prose_words} words of prose against the {ceiling} this file was "
+            f"condensed to -- lower the ceiling deliberately or take the words back out"
+        )
+    return out
+
+
 def audit(root: Path) -> list[tuple[Measurement, list[str]]]:
     return [(m, violations(m)) for m in (measure(p, root) for p in iter_modules(root))]
 
 
+def ledgered(path: str) -> bool:
+    return path in ASSESSED or path in CONDENSED or path in FLAGGED
+
+
 def queue(rows: list[tuple[Measurement, list[str]]]) -> list[Measurement]:
-    pending = [m for m, _ in rows if m.path not in ASSESSED and m.path not in FLAGGED]
+    pending = [m for m, _ in rows if not ledgered(m.path)]
     return sorted(pending, key=lambda m: (-excess(m), -m.symbol_docstrings, -m.lines))
 
 
@@ -357,24 +418,33 @@ def main() -> int:
         return 0
 
     if args.progress:
-        print(len(ASSESSED) + len(FLAGGED))
+        print(len(ASSESSED) + len(CONDENSED) + len(FLAGGED))
         return 0
 
     if args.gate:
         broken = [(m, v) for m, v in rows if m.path in ASSESSED and v]
+        broken += [
+            (m, v)
+            for m, v in ((m, condensed_violations(m)) for m, _ in rows if m.path in CONDENSED)
+            if v
+        ]
         for m, vs in broken:
             for v in vs:
                 print(f"{m.path}: {v}", file=sys.stderr)
         if broken:
-            print(f"\n{len(broken)} assessed file(s) regressed.", file=sys.stderr)
+            print(f"\n{len(broken)} ledgered file(s) regressed.", file=sys.stderr)
             return 1
-        print(f"{len(ASSESSED)} assessed file(s) still at the convention.")
+        print(
+            f"{len(ASSESSED)} assessed and {len(CONDENSED)} condensed file(s) "
+            "still where they were left."
+        )
         return 0
 
     total_prose = sum(m.prose_words for m, _ in rows)
     print(
         f"{len(rows)} modules, {total_prose} words of prose, "
-        f"{len(ASSESSED)} assessed, {len(FLAGGED)} flagged, {len(pending)} to go"
+        f"{len(ASSESSED)} assessed, {len(CONDENSED)} condensed, "
+        f"{len(FLAGGED)} flagged, {len(pending)} to go"
     )
     print()
     print(f"{'file':<48}{'lines':>6}{'doc':>6}{'sym':>5}{'cmt':>6}{'prose':>7}{'over':>7}")

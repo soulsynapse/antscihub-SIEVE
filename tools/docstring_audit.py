@@ -63,6 +63,7 @@ PRAGMA_PREFIXES = ("noqa", "type:", "ruff:", "pyright:", "isort:", "fmt:", "!")
 ASSESSED: dict[str, str] = {
     "sieve/__init__.py": "the runtime __version__ string CLI/GUI report, apart from pyproject.toml",
     "sieve/decode/__init__.py": "decode/ is the only package allowed to import cv2 directly",
+    "sieve/gui/__init__.py": "Qt stays in sieve.gui; it reaches the rest only via public APIs",
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

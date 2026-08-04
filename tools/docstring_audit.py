@@ -110,6 +110,12 @@ FLAGGED: dict[str, str] = {
         "plausibly four bundled secrets (graph identity, replicate inheritance, crop artifact "
         "provenance, document lifecycle), not one — pipeline-model-prose-budget"
     ),
+    "sieve/gui/preview_runner.py": (
+        "one secret (a PreviewSession run on its own thread, revision-current, "
+        "cache warm across renders), but 39 symbol docstrings and 4,283 words of "
+        "prose against a 400 cap, each one a non-obvious per-method reason the "
+        "budget would delete rather than compress — preview-runner-docstring-budget"
+    ),
 }
 
 

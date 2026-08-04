@@ -108,3 +108,20 @@ Format: `<date> — <decision> — <why, in a clause>`
   name-to-file primitive. Kendrick's correction: scanning a directory was
   standing in for a decision — which projects the app knows about — that
   belongs to the user, not to what files happen to sit in a folder.
+- 2026-08-03 — `gui/representation/` and `gui/pipeline_panel/` renamed to
+  `gui/canvas/` and `gui/control/` (`pipeline/` nested one level inside
+  `control/` so a second control, project selection, can sit alongside it).
+  Canvas is the information side, control is the generic "user selects
+  stuff" space; the only thing that stays control's alone is deciding
+  which step or project is *current* — a canvas reacts to that, it never
+  sets it. Everything else about the two is deliberately unenforced:
+  Kendrick's call is that canvas and control are genuinely coupled, a
+  canvas is in effect an extension of whichever control is active (a
+  dragged crop box is control's current step, drawn somewhere else), so an
+  import-direction fence between the packages would be encoding a
+  separation the design doesn't actually want. No fence test for this one.
+  Recovery note: the move's first attempt lost `rail.py`/`step.py` and both
+  their `__init__.py`s — never committed to git (only `pipeline.py` itself
+  was, in an earlier commit), deleted by an `rm -rf` that ran after a failed
+  `rmdir` broke the intended move. Reconstructed from this session's own
+  transcript, not from disk or git.

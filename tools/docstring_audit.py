@@ -105,6 +105,11 @@ FLAGGED: dict[str, str] = {
         "5,793 words of prose against a 400 cap, each one a non-obvious per-method reason the "
         "budget would delete rather than compress — document-docstring-budget"
     ),
+    "sieve/core/pipeline_model.py": (
+        "already a contract module (600/900) and still 6,214 words of prose against 900 — "
+        "plausibly four bundled secrets (graph identity, replicate inheritance, crop artifact "
+        "provenance, document lifecycle), not one — pipeline-model-prose-budget"
+    ),
 }
 
 

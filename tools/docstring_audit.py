@@ -116,7 +116,13 @@ ASSESSED: dict[str, str] = {
 #: holds the file to it rather than to FILE_PROSE_WORDS. A later pass may lower
 #: the number; nothing may raise it without saying so here, which is the edit
 #: that makes a regression visible instead of a rounding error.
-CONDENSED: dict[str, tuple[int, str]] = {}
+CONDENSED: dict[str, tuple[int, str]] = {
+    "sieve/core/shares.py": (
+        748,
+        "how a session divides the machine among threads and bytes -- one "
+        "checkable table instead of a constant argued per consumer",
+    ),
+}
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.
 FLAGGED: dict[str, str] = {

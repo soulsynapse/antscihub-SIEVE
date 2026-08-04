@@ -44,8 +44,6 @@ SESSION_MARK = "  ·  session start"
 
 
 class HistoryDialog(QDialog):
-    """Choose a snapshot to roll back to, or cancel."""
-
     def __init__(self, snapshots: list[Snapshot], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Project History")
@@ -87,12 +85,10 @@ class HistoryDialog(QDialog):
 
     @Slot(QListWidgetItem)
     def _on_double_clicked(self, item: QListWidgetItem) -> None:
-        """Double-click is the same commit as pressing Restore."""
         del item
         self.accept()
 
     def chosen(self) -> Snapshot | None:
-        """The snapshot the user picked, or None if they picked nothing."""
         row = self._list.currentRow()
         if not 0 <= row < len(self._snapshots):
             return None

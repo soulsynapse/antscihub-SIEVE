@@ -8,15 +8,20 @@ look like are ``step/`` and ``rail/``'s secrets, not this module's.
 "Current" is a placeholder, index 0, until something real (a selection,
 the executor) decides it.
 
-No tab bar — the two panes sit side by side in a track twice this widget's
-width, and switching slides the track instead of cutting instantly (the
-Obsidian sliding-panes look). ``_SlidingPanes`` is this module's own
-plumbing, not a shared GUI primitive yet; nothing else needs the sliding
-behavior today, so it isn't factored out until something else does.
+No tab bar — Step drills in over Pipeline (Obsidian sliding-panes / Andy's
+mode: going to Step collapses Pipeline to a labeled bar rather than
+sliding it off-screen; going back re-expands that same bar, nothing
+rebuilds), via ``gui/breadcrumb_stack``'s ``BreadcrumbStack`` — shared with
+``app.py``'s project-info/workspace transition, since both need the same
+mechanic. This module owns which two widgets go in and what "Pipeline" vs
+"Step" means (including the click-to-go-back path — the stack's own
+``activated`` signal is wired straight back to this module's own
+``show_pipeline_tab``/``show_step_tab``, the same as Left/Right); the
+stack itself owns how the switch looks.
 
 ``show_pipeline_tab``/``show_step_tab``/``current_tab`` exist so a caller
 (``app.py``'s Left/Right navigation) can drive which pane is showing
-without reaching into ``_SlidingPanes`` itself — index 0 is "Pipeline",
+without reaching into ``BreadcrumbStack`` itself — index 0 is "Pipeline",
 index 1 is "Step", but that numbering is this module's own secret, not
 exposed. The method names keep the word "tab" even though there's no tab
 bar anymore — "pane" would be more honest, but renaming would touch
@@ -42,68 +47,12 @@ if str(_REPO_ROOT) not in sys.path:
     # same as running it via -m.
     sys.path.insert(0, str(_REPO_ROOT))
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation
-from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QListWidget,
-    QListWidgetItem,
-    QSizePolicy,
-    QWidget,
-)
+from PySide6.QtWidgets import QHBoxLayout, QListWidget, QListWidgetItem, QWidget
 
+from proto_sieve.src.sieve.gui.breadcrumb_stack import BreadcrumbStack
 from proto_sieve.src.sieve.gui.control.pipeline.rail import StepRail
 from proto_sieve.src.sieve.gui.control.pipeline.step import StepBox
 from proto_sieve.src.sieve.pipeline import Pipeline
-
-_SLIDE_DURATION_MS = 220
-
-
-class _SlidingPanes(QWidget):
-    """A fixed set of panes, laid out side by side in a track N-times this
-    widget's width; showing one is animating the track so exactly one pane
-    sits in the visible frame. Not a ``QTabWidget`` (no tab bar wanted) or a
-    plain ``QStackedWidget`` (cuts instantly instead of sliding). Panes are
-    fixed at construction — nothing here supports adding one later, this
-    spike only ever needs two."""
-
-    def __init__(self, panes: list[QWidget], parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-        self._panes = panes
-        self._current = 0
-
-        self._track = QWidget(self)
-        for pane in panes:
-            pane.setParent(self._track)
-
-        self._animation = QPropertyAnimation(self._track, b"pos", self)
-        self._animation.setDuration(_SLIDE_DURATION_MS)
-        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-    def current_index(self) -> int:
-        return self._current
-
-    def set_current(self, index: int) -> None:
-        if not 0 <= index < len(self._panes):
-            raise IndexError(index)
-        self._current = index
-        target = QPoint(-index * self.width(), 0)
-        self._animation.stop()
-        self._animation.setStartValue(self._track.pos())
-        self._animation.setEndValue(target)
-        self._animation.start()
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        width, height = self.width(), self.height()
-        self._track.setFixedSize(width * len(self._panes), height)
-        for i, pane in enumerate(self._panes):
-            pane.setGeometry(i * width, 0, width, height)
-        # A resize mid-animation would otherwise leave the track at a
-        # now-stale pixel offset computed against the old width.
-        self._animation.stop()
-        self._track.move(-self._current * width, 0)
 
 
 class PipelinePanel(QWidget):
@@ -111,21 +60,25 @@ class PipelinePanel(QWidget):
         super().__init__(parent)
 
         self._rail = StepRail(step_count=len(pipeline.steps), current_index=0)
-        self._panes = _SlidingPanes([QWidget(), self._build_step_list(pipeline)])
+        self._stack = BreadcrumbStack([("Pipeline", QWidget()), ("Step", self._build_step_list(pipeline))])
+        self._stack.activated.connect(self._on_breadcrumb_clicked)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._rail)
-        layout.addWidget(self._panes)
+        layout.addWidget(self._stack)
 
     def show_pipeline_tab(self) -> None:
-        self._panes.set_current(0)
+        self._stack.set_current(0)
 
     def show_step_tab(self) -> None:
-        self._panes.set_current(1)
+        self._stack.set_current(1)
 
     def current_tab(self) -> str:
-        return "pipeline" if self._panes.current_index() == 0 else "step"
+        return "pipeline" if self._stack.current_index() == 0 else "step"
+
+    def _on_breadcrumb_clicked(self, index: int) -> None:
+        self.show_pipeline_tab() if index == 0 else self.show_step_tab()
 
     def _build_step_list(self, pipeline: Pipeline) -> QWidget:
         step_list = QListWidget()

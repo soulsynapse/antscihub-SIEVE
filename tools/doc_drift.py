@@ -48,7 +48,7 @@ REPO_ROOT = DOCS_ROOT.parent
 #: The `status:` values a top-level doc may declare. `current` claims truth
 #: about the code as it is now and is therefore the only kind that can go
 #: stale. `record` is dated and superseded, never revisited — VISION,
-#: REFINED-VISION, SIEVE-HANDOFF, the parity plan.
+#: REFINED-VISION, SIEVE-HANDOFF.
 #:
 #: This replaces a hardcoded two-name tuple of stamped docs, which was the
 #: same failure the docs it governs are prone to: a list in one file naming

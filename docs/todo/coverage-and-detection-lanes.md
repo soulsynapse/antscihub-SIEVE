@@ -61,8 +61,8 @@ Read: V1 `../antscihub-optical-flow-detector/gui/explorers/detection_timeline.py
 
 ## Detection ticks came here on 2026.07.27, and why
 
-Item 8 of `docs/filter-tab-parity-plan.md` was split that day: the bracket and
-the hover bubble stayed in the seeker item
+The filter tab's parity plan asked for one seeker item, and it was split that
+day: the bracket and the hover bubble stayed in the seeker item
 (`docs/completed-todo/2026.07.27-seeker-upgrades.md`), and **detection
 ticks and the `|<` / `>|` jumps moved here**, because they share this item's
 trigger rather than the seeker's absence of one.
@@ -87,10 +87,11 @@ item's `gated_on` line, unchanged; ticks are a fifth array off the same record
 (`detected`, beside `measure`, `gate`, `covered`, `current`), not a second
 subsystem.
 
-Two constraints for tick rendering, both from the mockup contract in
-`docs/filter-tab-parity-plan.md` §Seeker: ticks are floored to 1 px so a
-one-frame detection stays visible at any zoom, and green remains a status
-colour used for nothing else. The variant is settled as `lanes`, so ticks share
+Two constraints for tick rendering, both settled by the seeker mockup and
+carried by `src/sieve/gui/band_plot.py`'s gate underpaint: ticks are floored to
+1 px so a one-frame detection stays visible at any zoom, and green is a status
+colour used for nothing else — never a data series, so a magnitude surface
+under the lane brings its own sequential ramp. The variant is `lanes`, so ticks share
 the strip's top edge with the window header — watch that seam, since the seeker
 mockup flagged it as possibly too crowded before it was deleted on 2026.07.27
 (`docs/completed-todo/2026.07.27-seeker-upgrades.md`).

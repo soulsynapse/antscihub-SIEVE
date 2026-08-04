@@ -2,7 +2,7 @@
 
 One base class carries everything the scalogram, density, and count plots have
 in common, because what they have in common *is* the interaction contract the
-graph mockups pinned (`docs/filter-tab-parity-plan.md` § 2, plot contracts):
+graph mockups pinned, and this docstring is its one home:
 
 **One drag gesture, two meanings.** A drag that starts within `GRAB_PX` of a
 band handle moves the handle; any other drag scrubs the shared playhead. No

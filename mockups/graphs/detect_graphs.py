@@ -1,6 +1,7 @@
 """The graphs themselves: what each one shows, and what dragging it does.
 
-docs/filter-tab-parity-plan.md names the widgets; this mockup makes them
+This mockup predates the real widgets (`src/sieve/gui/band_plot.py` and its
+subclasses, which now own the interaction contract); it makes them
 drag-able against honest data, so the interaction decisions get made by hand
 and not by argument. The synthetic signal is real math on fake footage: 64
 blocks, three 12 Hz bursts in a 4x4 cluster, one single-frame spike, and a

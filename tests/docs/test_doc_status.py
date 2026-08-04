@@ -37,10 +37,10 @@ def test_every_status_is_in_the_vocabulary() -> None:
 
 
 def test_the_dated_records_are_marked_as_records() -> None:
-    # CLAUDE.md names these four as superseded-never-edited. They are the
+    # CLAUDE.md names these three as superseded-never-edited. They are the
     # documents most likely to be read as current, being the longest and the
     # most specification-shaped.
-    records = {"VISION.md", "REFINED-VISION.md", "SIEVE-HANDOFF.md", "filter-tab-parity-plan.md"}
+    records = {"VISION.md", "REFINED-VISION.md", "SIEVE-HANDOFF.md"}
     mislabelled = {name for name in records if status_of(name) != "record"}
     assert not mislabelled, f"dated records not marked `status: record`: {sorted(mislabelled)}"
     assert not (records & set(current_docs())), "a record is being drift-reported as current"

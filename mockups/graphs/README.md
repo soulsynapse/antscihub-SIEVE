@@ -1,7 +1,8 @@
 # Detection graphs & interactions
 
-A clickable mockup of the visualization widgets from
-`docs/filter-tab-parity-plan.md` items 5-6, plus the color-gate stretch goal.
+A clickable mockup of the visualization widgets — since shipped as
+`src/sieve/gui/band_plot.py` and its subclasses — plus the color-gate stretch
+goal, which is the only part of this folder not yet built.
 Unlike a layout sketch, the data under these plots is real math on synthetic
 footage — 64 blocks, three 12 Hz bursts in a 4x4 cluster, one single-frame
 spike, and a true Morlet transform — so every drag honestly recomputes what

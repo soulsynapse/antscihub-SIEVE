@@ -196,7 +196,7 @@ narration of what the function does, and the second-person aside. One test:
 it; if no, it is the whole value of the comment and shortening it is the wrong
 cut. `pipeline/executor.py` on why the backend is the plan's is the shape to
 keep — it names a failure mode that leaves no trace. Do not touch dated
-records (VISION, REFINED-VISION, SIEVE-HANDOFF, the parity plan, entries in
+records (VISION, REFINED-VISION, SIEVE-HANDOFF, entries in
 `completed-todo/`); they are superseded, never edited.
 
 **Split by axis of change, not by size.** The goal is a file that never has to
@@ -244,7 +244,10 @@ that was taken. Two rules keep that from turning into accretion:
 - **Every `docs/*.md` says what kind of thing it is in its own first three
   lines** — `status: current | record`. Only `current` claims truth about the
   code as it is now, and only `current` is drift-reported; `record` is dated
-  and never edited (VISION, REFINED-VISION, SIEVE-HANDOFF, the parity plan).
+  and never edited (VISION, REFINED-VISION, SIEVE-HANDOFF). A record whose
+  targets have drifted far enough that it would misdirect is deleted, not
+  demoted — git holds it (`git log --diff-filter=D -- <path>`), and anything
+  in it still load-bearing moves to the module or item that owns the claim.
   A `current` doc also carries a `reviewed:`/`subjects:` stamp, and
   `tools/doc_drift.py` *reports* (never gates) when its subjects moved — an
   unstamped one is listed as unassessable, which is what it is. The generated

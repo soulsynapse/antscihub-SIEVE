@@ -10,17 +10,28 @@ gated_on: >
   dumps its count/gate series as a fixture a headless harness then compares
   against forever (recommended)
 reads:
-  - docs/filter-tab-parity-plan.md
   - docs/findings/_TEMPLATE.md
   - docs/todo/downsample-or-rescale.md
 ---
 
 # Parity comparison finding
 
-Item 9 of `docs/filter-tab-parity-plan.md`, described there rather than
-restated: run v1 and v2 on `videos-testing/stab_GX010050c2_02_18_26.MP4` with
-matched settings and write the numeric agreement, the interaction latencies
-against the budget table, and a gained/lost list to `docs/findings/`.
+Run v1 and v2 on `videos-testing/stab_GX010050c2_02_18_26.MP4` at matched
+settings — scale 0.25, block auto, zscore, same frequency band, same D — and
+write to `docs/findings/`: the numeric agreement of the count and gate series
+where comparable, the interaction latencies against the budget table, the
+throughput, and a gained/lost list. Anything lost that matters becomes its own
+`docs/todo/` item with its trigger.
+
+This was the last item of the filter tab's v1-parity plan, the one work item
+that plan left open when it was deleted on 2026-08-04; items 1–8 landed
+2026.07.26–27 and their entries are in `docs/completed-todo/`. The v1 semantics
+the port had to match are recorded where they are implemented —
+`core/wavelet.py` (Morlet `W0`, the scale bank, the COI e-folding),
+`core/detection.py` (the count/window/gate chain and the two deliberate
+deviations from v1), `filters/block_signal.py` (σ = 2.0, the LK solve before
+reduction, auto block from 64 source px), `filters/normalize.py`, and
+`filters/rescale.py`.
 
 **This is the only item anywhere that produces evidence the rewrite did not
 lose signal**, which is worth weighing against its position in an ordering.
@@ -29,7 +40,7 @@ lose signal**, which is worth weighing against its position in an ordering.
 
 ## Why it is deferred, and what it is not
 
-Not a scoping problem — the plan's §6 item 9 is specific enough to execute.
+Not a scoping problem — the brief above is specific enough to execute.
 The blocker is that **v1 is not in this repository and cannot be made to be**:
 it lives in the sibling `antscihub-optical-flow-detector` folder, which is
 outside any working directory a session is granted, and the four modules that
@@ -103,7 +114,7 @@ runnable by any later session.
   it is written, it should be written the way the rule now demands (read back
   and verified before being registered), not as an ad-hoc `.npy` beside the
   video.
-- Items 1–3 of the plan were ports with their claims already pinned by unit
+- The `core/` and `filters/` ports had their claims already pinned by unit
   tests against v1's stated semantics. Parity is therefore a check on the
   *composition*, not on each function — which argues for comparing end-of-chain
   series (count, gate), exactly what C dumps, rather than instrumenting stages.

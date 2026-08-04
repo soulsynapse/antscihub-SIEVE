@@ -109,6 +109,11 @@ select = [
 # Budget labels are copied verbatim from docs/ARCHITECTURE.md, en dash and all,
 # because tests/bench/test_budget_table.py compares them character for character.
 "src/sieve/bench/budgets.py" = ["RUF001"]
+# The ASSESSED/FLAGGED ledger is one prose sentence per module, keyed by path.
+# A sentence worth reading does not fit in 100 columns beside a path that can
+# run to 31 characters, and the ledger's whole point is being the part of the
+# audit a human can judge — shortening the sentence to fit is the wrong cut.
+"tools/docstring_audit.py" = ["E501"]
 
 [tool.pyright]
 include = ["src", "tests", "tools"]

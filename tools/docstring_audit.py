@@ -136,6 +136,14 @@ FLAGGED: dict[str, str] = {
         "non-obvious per-method rejection ordering or cache-fold reason the "
         "budget would delete rather than compress — dag-docstring-budget"
     ),
+    "sieve/pipeline/preview.py": (
+        "one secret (PreviewSession takes the graph fresh per render and "
+        "relies on cache_key's keying, which excludes span and window, for "
+        "incremental re-render with no invalidation logic here), but 17 "
+        "symbol docstrings and 2,463 words of prose against a 400 cap, each "
+        "one a non-obvious layering or failure-mode reason the budget would "
+        "delete rather than compress — preview-docstring-budget"
+    ),
 }
 
 

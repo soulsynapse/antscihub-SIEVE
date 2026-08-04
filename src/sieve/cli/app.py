@@ -10,6 +10,14 @@ and 1 for everything this package refuses deliberately. There is no code that
 means "ran but produced nothing" — a run over an empty graph is a successful
 run of an empty graph, and a caller that cares about output counts reads them
 rather than a status.
+
+The console-script entry point (`main`) is deliberately not the Typer callback
+(`root_options`). The callback runs inside `CliRunner` too, which drives the
+app in-process with `sys.stderr` replaced by its own capture, and
+`decode/quiet.py` takes file descriptor 2 — so installing the stderr filter
+from the callback would displace a fixture a test is about to read from.
+`main` runs only for a real process started by a real invocation, which is
+the only time taking fd 2 is anyone's business.
 """
 
 from __future__ import annotations
@@ -46,7 +54,6 @@ app.command("sweep")(sweep_decode)
 
 
 def _print_version(value: bool) -> None:
-    """Eager `--version`, so it answers without a subcommand being required."""
     if value:
         typer.echo(f"sieve {__version__}")
         raise typer.Exit()
@@ -61,28 +68,10 @@ def root_options(
         ),
     ] = False,
 ) -> None:
-    """Root callback. Exists to carry `--version`; the commands do the work.
-
-    Named for what it carries rather than `main`, which is the console script
-    below: Typer takes the options from the signature and the help text from
-    `Typer(help=...)`, so the name is free, and leaving it as `main` would have
-    put the entry point and the option carrier under one name that only one of
-    them can have. Public because a leading underscore makes it look unused to
-    a type checker that cannot see the decorator registering it.
-    """
+    pass
 
 
 def main() -> None:
-    """The `sieve` console script: install the stderr filter, then run.
-
-    Deliberately not the Typer callback, and the distinction is the whole reason
-    this function exists. The callback runs inside `CliRunner` too, which drives
-    the app in-process with `sys.stderr` replaced by its own capture — and
-    `decode/quiet.py` takes file descriptor 2, so installing from there displaces
-    the fixture a test is about to read from. This runs only when a real process
-    was started by a real invocation, which is the only time taking fd 2 is
-    anyone's business.
-    """
     silence_raw_format_warning()
     app()
 

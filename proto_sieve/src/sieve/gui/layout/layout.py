@@ -69,18 +69,18 @@ def _require_fixed_bar(widget: QWidget) -> None:
         )
 
 
-def compose(top: QWidget, video: QWidget, pipeline: QWidget, bottom: QWidget) -> QWidget:
+def compose(top: QWidget, representation: QWidget, pipeline: QWidget, bottom: QWidget) -> QWidget:
     """``top`` and ``bottom`` span the full width at a fixed height; the
-    middle band splits ``video`` and ``pipeline`` evenly. The dividers —
-    top edge and bottom edge of the middle band, plus the vertical split
-    inside it — trace an I."""
+    middle band splits ``representation`` and ``pipeline`` evenly. The
+    dividers — top edge and bottom edge of the middle band, plus the
+    vertical split inside it — trace an I."""
     _require_fixed_bar(top)
     _require_fixed_bar(bottom)
-    _require_layout_section(video)
+    _require_layout_section(representation)
     _require_layout_section(pipeline)
 
     middle = QSplitter(Qt.Orientation.Horizontal)
-    middle.addWidget(video)
+    middle.addWidget(representation)
     middle.addWidget(pipeline)
     middle.setStretchFactor(0, 1)
     middle.setStretchFactor(1, 1)
@@ -123,8 +123,9 @@ def size_window(window: QMainWindow) -> None:
 
 
 if __name__ == "__main__":
-    # Standalone smoke test: video on the left, the tool (pipeline steps) on
-    # the right, with no app.py in the loop.
+    # Standalone smoke test: a representation (the video player) on the
+    # left, the tool (pipeline steps) on the right, with no app.py in the
+    # loop.
     import sys
     from pathlib import Path
 
@@ -144,7 +145,7 @@ if __name__ == "__main__":
 
     from proto_sieve.src.sieve.gui import style
     from proto_sieve.src.sieve.gui.pipeline_panel import PipelinePanel
-    from proto_sieve.src.sieve.gui.video_player import VideoPlayer
+    from proto_sieve.src.sieve.gui.representation.video_player import VideoPlayer
     from proto_sieve.src.sieve.pipeline import Pipeline, Step
 
     video_path = _repo_root / "video-test" / "rep3_intermittent_crop.MP4"
@@ -154,8 +155,8 @@ if __name__ == "__main__":
     )
 
     app = QApplication(sys.argv)
-    video = VideoPlayer()
-    video.open(video_path)
+    representation = VideoPlayer()
+    representation.open(video_path)
 
     top = QLabel("top")
     top.setFixedHeight(style.bar_height())
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     bottom.setFixedHeight(style.bar_height())
 
     window = QMainWindow()
-    window.setCentralWidget(compose(top, video, PipelinePanel(pipeline), bottom))
+    window.setCentralWidget(compose(top, representation, PipelinePanel(pipeline), bottom))
     size_window(window)
     window.show()
     sys.exit(app.exec())

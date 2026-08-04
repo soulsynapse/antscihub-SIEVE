@@ -38,8 +38,36 @@ per the caveat below.
 
 ## Next action
 
-All seven chunks are green and chunk 2's live pair is decided. The remaining
-item is the GUI sitting with Kendrick (not a chunk — no cheap proof).
+All seven chunks are green and chunk 2's live pair is decided. Domain
+packages under `proto_sieve/src/sieve/`, 40 tests total, all green:
+
+- `store/` — generic name-to-file persistence (repo-root resolution,
+  guarded path, text read/write/list). `pipeline/store.py` and
+  `projects/discovery.py` both build on it.
+- `pipeline/` — `pipeline.py` (the value, JSON round-trip, lowering,
+  unchanged from chunk 6) plus `store.py` (saves/loads a named pipeline to
+  `proto_sieve/pipelines/<name>.json`).
+- `projects/` — `Project` (name, source video path) and `registry.py`
+  (`add_project`/`remove_project`/`list_projects`, persisted as one JSON
+  array under `proto_sieve/config/projects.json`). Nothing is scanned;
+  a project exists only because it was deliberately added — the registry
+  starts empty.
+- `session/` — `history.py` (undo/redo over whole `Pipeline` values),
+  `session.py` (current step, draft edits, commit), `frames.py` (the frame
+  for a step index), `app_state.py` (`NoProject` vs `ProjectActive`,
+  `select(project)` between them).
+
+None of this is wired into the GUI yet. `app.py`'s `PIPELINE` is still
+hardcoded and always builds the video-player-plus-pipeline-panel layout;
+there is no project selection screen, and the registry starts empty (no
+project is added automatically — see the discovery-to-registry decision
+above). The planned next slice: a `gui/project_select/` screen (project
+list on the right, a placeholder preview on the left — no real spec
+loading yet), `app.py` branching on `AppState` instead of assuming a
+project, and a one-time seed (`add_project` for the checked-in
+`rep3_intermittent_crop` clip, run once, not on every launch) so the app
+has something to select without requiring the add-a-project flow to exist
+yet. This is GUI work — no cheap proof — done in a sitting with Kendrick.
 
 ## Caveat a fresh session must not skip
 

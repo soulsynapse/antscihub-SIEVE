@@ -37,6 +37,12 @@ class VideoPlayer(QWidget):
         self._player.setSource(QUrl.fromLocalFile(str(resolved)))
         self._player.play()
 
+    def toggle_play_pause(self) -> None:
+        if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self._player.pause()
+        else:
+            self._player.play()
+
 
 if __name__ == "__main__":
     # Standalone smoke test: this widget must play something on its own,

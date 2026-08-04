@@ -1,11 +1,13 @@
-"""Secret: how a pipeline is represented on disk.
+"""Secret: what a pipeline value is and how it lowers to a graph.
 
 Chunk 6. A pipeline is a source name and an ordered list of (tool, params)
 steps — a value, not a graph. Lowering it walks the steps through each
 tool's ``lower`` (chunk 5) to produce the ``Node`` the executor evaluates.
-Nothing outside this module may depend on the on-disk shape (JSON, field
-names) — only on ``to_json`` / ``from_json`` round-tripping and on ``lower``
-producing the same graph a hand-built one would.
+Nothing outside this module may depend on the JSON shape (field names) —
+only on ``to_json`` / ``from_json`` round-tripping and on ``lower``
+producing the same graph a hand-built one would. Where a pipeline *lives* —
+a name resolving to a file on disk — is ``store.py``'s secret, not this
+module's; this file never touches a path.
 """
 
 from __future__ import annotations

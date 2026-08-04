@@ -20,6 +20,9 @@ from proto_sieve.src.sieve.preferences.appearance import Appearance, get_appeara
 # subclass or a local ``setStyleSheet`` — the QSS below is still the only
 # place a color gets attached to one.
 ROLE_BAR = "bar"
+ROLE_STEP_TICK = "step-tick"
+ROLE_STEP_TICK_CURRENT = "step-tick-current"
+ROLE_STEP_HALO = "step-halo"
 
 
 def tag(widget: QWidget, role: str) -> None:
@@ -28,6 +31,16 @@ def tag(widget: QWidget, role: str) -> None:
 
 def bar_height() -> int:
     return get_appearance().bar_height
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
+    return r, g, b
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    r, g, b = _hex_to_rgb(hex_color)
+    return f"rgba({r}, {g}, {b}, {alpha})"
 
 
 def _build_qss(a: Appearance) -> str:
@@ -96,6 +109,21 @@ QMenu::item:selected {{
 QSplitter::handle {{
     background-color: {a.border};
 }}
+
+QWidget[role="step-tick"] {{
+    background-color: {_rgba(a.accent, 0.14)};
+    border-radius: 2px;
+}}
+
+QWidget[role="step-tick-current"] {{
+    background-color: {a.accent};
+    border-radius: 2px;
+}}
+
+QWidget[role="step-halo"] {{
+    background-color: {_rgba(a.accent, 0.18)};
+    border-radius: 5px;
+}}
 """
 
 
@@ -106,7 +134,7 @@ _DWMWA_TEXT_COLOR = 36
 def _colorref(hex_color: str) -> int:
     # DWM wants a COLORREF: 0x00BBGGRR, the reverse byte order of the hex
     # strings above.
-    r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
+    r, g, b = _hex_to_rgb(hex_color)
     return r | (g << 8) | (b << 16)
 
 

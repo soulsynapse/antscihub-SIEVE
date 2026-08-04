@@ -13,18 +13,15 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 # The defaults appearance falls back to before anything is overridden.
-# These are the exact values gui/style.py hardcoded before preferences
-# existed — moving them here didn't change what the app looks like on
-# first launch, only where the source of truth is.
 
 
 @dataclass(frozen=True)
 class Appearance:
-    background: str = "#1e1f24"
-    surface: str = "#26282f"
-    border: str = "#33353d"
-    text: str = "#e4e4e8"
-    text_muted: str = "#8b8d97"
+    background: str = "#f5f5f7"
+    surface: str = "#ffffff"
+    border: str = "#d8d8dc"
+    text: str = "#1e1f24"
+    text_muted: str = "#6b6d76"
     accent: str = "#5b8def"
     spacing_unit: int = 8
     radius: int = 4

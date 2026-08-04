@@ -1,8 +1,9 @@
 """The GUI sitting, per docs/AGENTS.md: not a chunk, no cheap proof.
 
-PySide6. Video on the left (``VideoPlayer``, owns what's played), pipeline
-steps on the right (``PipelinePanel``, step/tool only for now). The pipeline
-here is hardcoded — nothing yet feeds it from a saved file or the resolver.
+PySide6. A representation on the left — today that's ``VideoPlayer``, the
+raw source video, owning what's played — pipeline steps on the right
+(``PipelinePanel``, step/tool only for now). The pipeline here is
+hardcoded — nothing yet feeds it from a saved file or the resolver.
 """
 
 from __future__ import annotations
@@ -28,13 +29,14 @@ if str(_REPO_ROOT) not in sys.path:
 
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
 
+from proto_sieve.src.sieve.gui.hotkeys import bind_hotkeys
 from proto_sieve.src.sieve.gui.layout import compose, size_window
 from proto_sieve.src.sieve.gui.menu import build_menu_bar
 from proto_sieve.src.sieve.gui.pipeline_panel import PipelinePanel
 from proto_sieve.src.sieve.gui import style
 from proto_sieve.src.sieve.gui.style import apply as apply_style
 from proto_sieve.src.sieve.gui.style import apply_title_bar
-from proto_sieve.src.sieve.gui.video_player import VideoPlayer
+from proto_sieve.src.sieve.gui.representation.video_player import VideoPlayer
 from proto_sieve.src.sieve.pipeline import Pipeline, Step
 from proto_sieve.src.sieve.preferences import appearance as appearance_prefs
 
@@ -51,7 +53,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("proto_sieve")
 
-        self._video_player = VideoPlayer()
+        self._representation = VideoPlayer()
         self._pipeline_panel = PipelinePanel(PIPELINE)
 
         self._top_bar = QLabel("top")
@@ -62,12 +64,13 @@ class MainWindow(QMainWindow):
         style.tag(self._bottom_bar, style.ROLE_BAR)
 
         self.setCentralWidget(
-            compose(self._top_bar, self._video_player, self._pipeline_panel, self._bottom_bar)
+            compose(self._top_bar, self._representation, self._pipeline_panel, self._bottom_bar)
         )
 
         build_menu_bar(self)
+        bind_hotkeys(self, self._representation)
 
-        self._video_player.open(VIDEO_PATH)
+        self._representation.open(VIDEO_PATH)
 
         size_window(self)
 

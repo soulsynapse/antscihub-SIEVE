@@ -128,6 +128,13 @@ FLAGGED: dict[str, str] = {
         "400 cap, each one a non-obvious per-method ordering or shutdown hazard "
         "the budget would delete rather than compress — main-window-docstring-budget"
     ),
+    "sieve/pipeline/dag.py": (
+        "one secret (Pipeline resolved into an ordered, validated Dag the "
+        "executor and cache key walk without re-deriving order), but 22 symbol "
+        "docstrings and 3,147 words of prose against a 400 cap, each one a "
+        "non-obvious per-method rejection ordering or cache-fold reason the "
+        "budget would delete rather than compress — dag-docstring-budget"
+    ),
 }
 
 

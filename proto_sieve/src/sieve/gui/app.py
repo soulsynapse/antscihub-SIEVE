@@ -1,9 +1,13 @@
 """The GUI sitting, per docs/AGENTS.md: not a chunk, no cheap proof.
 
-PySide6. A canvas on the left — today that's ``VideoPlayer``, the raw
-source video, owning what's played — a control on the right
-(``PipelinePanel``, step/tool only for now). The pipeline here is
-hardcoded — nothing yet feeds it from a saved file or the resolver.
+PySide6. Two screens, both built from ``layout.compose``'s canvas/control
+split: with no project chosen, the left is a bare "select a project" label
+(not a real canvas implementation — nothing designed yet, see
+``gui/canvas/__init__.py``) and the right is ``ProjectSelect`` reading the
+projects registry; once one's picked (``session.app_state.select``), the
+left becomes ``VideoPlayer`` on the project's source and the right becomes
+``PipelinePanel`` on a fresh empty pipeline for it. Nothing here saves or
+loads a pipeline yet — a freshly-chosen project always starts empty.
 """
 
 from __future__ import annotations
@@ -33,19 +37,14 @@ from proto_sieve.src.sieve.gui.hotkeys import bind_hotkeys
 from proto_sieve.src.sieve.gui.layout import compose, size_window
 from proto_sieve.src.sieve.gui.menu import build_menu_bar
 from proto_sieve.src.sieve.gui.control.pipeline import PipelinePanel
+from proto_sieve.src.sieve.gui.control.project_select import ProjectSelect
 from proto_sieve.src.sieve.gui import style
 from proto_sieve.src.sieve.gui.style import apply as apply_style
 from proto_sieve.src.sieve.gui.style import apply_title_bar
 from proto_sieve.src.sieve.gui.canvas.video_player import VideoPlayer
-from proto_sieve.src.sieve.pipeline import Pipeline, Step
+from proto_sieve.src.sieve.projects import Project, list_projects
+from proto_sieve.src.sieve.session import app_state
 from proto_sieve.src.sieve.preferences import appearance as appearance_prefs
-
-VIDEO_PATH = _REPO_ROOT / "video-test" / "rep3_intermittent_crop.MP4"
-
-PIPELINE = Pipeline(
-    source="rep3_intermittent_crop",
-    steps=(Step(tool="crop", params={"y0": 0, "y1": 200, "x0": 0, "x1": 200}),),
-)
 
 
 class MainWindow(QMainWindow):
@@ -53,8 +52,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("proto_sieve")
 
-        self._canvas = VideoPlayer()
-        self._control = PipelinePanel(PIPELINE)
+        self._state: app_state.AppState = app_state.NoProject()
 
         self._top_bar = QLabel("top")
         self._top_bar.setFixedHeight(style.bar_height())
@@ -63,16 +61,26 @@ class MainWindow(QMainWindow):
         self._bottom_bar.setFixedHeight(style.bar_height())
         style.tag(self._bottom_bar, style.ROLE_BAR)
 
-        self.setCentralWidget(
-            compose(self._top_bar, self._canvas, self._control, self._bottom_bar)
-        )
-
         build_menu_bar(self)
-        bind_hotkeys(self, self._canvas)
-
-        self._canvas.open(VIDEO_PATH)
+        self._show_project_select()
 
         size_window(self)
+
+    def _show_project_select(self) -> None:
+        canvas = QLabel("Select a project")
+        control = ProjectSelect(list_projects())
+        control.project_selected.connect(self._on_project_selected)
+        self.setCentralWidget(compose(self._top_bar, canvas, control, self._bottom_bar))
+
+    def _on_project_selected(self, project: Project) -> None:
+        self._state = app_state.select(project)
+
+        canvas = VideoPlayer()
+        control = PipelinePanel(self._state.session.pipeline)
+        self.setCentralWidget(compose(self._top_bar, canvas, control, self._bottom_bar))
+
+        bind_hotkeys(self, canvas)
+        canvas.open(self._state.project.source_path)
 
 
 def main() -> None:

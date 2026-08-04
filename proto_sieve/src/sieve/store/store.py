@@ -1,9 +1,13 @@
 """Secret: how a named thing round-trips to a file under a directory —
 repo-root resolution, the name-to-path mapping (with its escape guard), and
 reading/writing text. Content encoding (JSON shape, or anything else) is
-not this module's concern; it only ever sees a name and a string. Any
-domain that needs "save this by name, load it back, list what's saved"
-builds on this instead of walking to ``pyproject.toml`` itself.
+not this module's concern; it only ever sees a name and a string in, a
+string out. ``suffix`` defaults to ``.json`` because every caller so far
+(``pipeline/store.py``, ``projects/registry.py``) happens to write JSON,
+not because this module assumes it — pass a different ``suffix`` and
+nothing here cares what's in the text. Any domain that needs "save this by
+name, load it back, list what's saved" builds on this instead of walking
+to ``pyproject.toml`` itself.
 """
 
 from __future__ import annotations

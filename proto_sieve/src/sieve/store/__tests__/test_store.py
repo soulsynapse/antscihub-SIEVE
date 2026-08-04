@@ -40,3 +40,10 @@ def test_list_names_on_a_missing_directory_is_empty(tmp_path):
 def test_a_name_cannot_escape_the_directory(tmp_path, name):
     with pytest.raises(ValueError):
         save_text(name, "x", tmp_path)
+
+
+def test_suffix_is_not_hardcoded_to_json(tmp_path):
+    path = save_text("notes", "not json at all", tmp_path, suffix=".txt")
+    assert path == tmp_path / "notes.txt"
+    assert load_text("notes", tmp_path, suffix=".txt") == "not json at all"
+    assert list_names(tmp_path, suffix=".txt") == ["notes"]

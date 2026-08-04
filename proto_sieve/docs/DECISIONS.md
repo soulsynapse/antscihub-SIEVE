@@ -150,3 +150,24 @@ Format: `<date> — <decision> — <why, in a clause>`
   this or the halo — `style.py`'s role constants and QSS rules are
   untouched, so re-wiring is confined to `rail.py` once whatever's wrong
   with the `role` property/QSS selectors here is found.
+- 2026-08-03 — `store.py`'s docstring tightened: it claimed content-encoding
+  indifference while every call site relied on the `suffix=".json"`
+  default without ever overriding it, so the genericity was aspirational,
+  unexercised. Docstring now says the default is a convenience, not an
+  assumption; added `test_suffix_is_not_hardcoded_to_json` (`.txt`,
+  round-trips, `list_names` respects it too) so the claim is actually
+  pinned rather than just stated. Behavior unchanged.
+- 2026-08-03 — `app.py` wired to the real project layer: `MainWindow`
+  starts in `app_state.NoProject`, central widget is
+  `compose(top, <placeholder label>, ProjectSelect(list_projects()), bottom)`.
+  Picking a project calls `app_state.select`, then rebuilds the central
+  widget as `compose(top, VideoPlayer, PipelinePanel, bottom)` against the
+  fresh empty pipeline `select` seeds and the project's `source_path`. The
+  hardcoded `PIPELINE`/`VIDEO_PATH` constants are gone. The left slot in
+  the no-project screen is a bare `QLabel`, not a real canvas
+  implementation — still nothing designed there, per
+  `gui/canvas/__init__.py`'s "a project preview" gap. No save/load of a
+  chosen pipeline yet — every selection starts empty, per `app_state.py`'s
+  still-open question. Smoke-launched (`MainWindow` shown, closed via a
+  timer) rather than proven by a committed GUI test — this is the GUI
+  sitting's territory, no cheap proof.

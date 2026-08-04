@@ -1,11 +1,14 @@
 """Secret: the strip of one tick per step, on the left edge of the pipeline
-panel, marking which step is current — the "halo" treatment: a small dot
-for every step, and a soft rounded backdrop behind whichever one is
-current. Not which step that is — ``pipeline.py`` owns and passes
-``current_index``. Not what a tick or the halo look like — ``gui/style.py``
-owns those roles' colors. This module only ever lays the ticks out, one
-per step, vertical, and never hides — nothing here depends on which of
-``pipeline.py``'s tabs is showing.
+panel, marking which step is current. Not which step that is —
+``pipeline.py`` owns and passes ``current_index``. Not what a tick looks
+like — ``gui/style.py`` owns those roles' colors. This module only ever
+lays the ticks out, one per step, vertical, and never hides — nothing here
+depends on which of ``pipeline.py``'s tabs is showing.
+
+The halo backdrop behind the current tick (``style.ROLE_STEP_HALO``) is
+temporarily unwired — it was blocking launches. See docs/DECISIONS.md.
+The current tick is still distinguishable (``ROLE_STEP_TICK_CURRENT``'s
+color), just without the wrapper widget.
 """
 
 from __future__ import annotations
@@ -15,7 +18,6 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from proto_sieve.src.sieve.gui import style
 
 _TICK_SIZE = 8
-_HALO_PADDING = 4
 
 
 class StepRail(QWidget):
@@ -28,27 +30,14 @@ class StepRail(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         for i in range(step_count):
-            layout.addWidget(self._build_current() if i == current_index else self._build_tick())
+            layout.addWidget(self._build_tick(current=i == current_index))
         layout.addStretch(1)
 
-    def _build_tick(self) -> QWidget:
+    def _build_tick(self, current: bool) -> QWidget:
         tick = QWidget(self)
         tick.setFixedSize(_TICK_SIZE, _TICK_SIZE)
-        style.tag(tick, style.ROLE_STEP_TICK)
+        style.tag(tick, style.ROLE_STEP_TICK_CURRENT if current else style.ROLE_STEP_TICK)
         return tick
-
-    def _build_current(self) -> QWidget:
-        halo = QWidget(self)
-        style.tag(halo, style.ROLE_STEP_HALO)
-
-        halo_layout = QVBoxLayout(halo)
-        halo_layout.setContentsMargins(_HALO_PADDING, _HALO_PADDING, _HALO_PADDING, _HALO_PADDING)
-        tick = QWidget(halo)
-        tick.setFixedSize(_TICK_SIZE, _TICK_SIZE)
-        style.tag(tick, style.ROLE_STEP_TICK_CURRENT)
-        halo_layout.addWidget(tick)
-
-        return halo
 
 
 if __name__ == "__main__":

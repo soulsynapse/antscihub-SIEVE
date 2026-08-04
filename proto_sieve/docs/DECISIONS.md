@@ -125,3 +125,20 @@ Format: `<date> — <decision> — <why, in a clause>`
   was, in an earlier commit), deleted by an `rm -rf` that ran after a failed
   `rmdir` broke the intended move. Reconstructed from this session's own
   transcript, not from disk or git.
+- 2026-08-03 — the step-halo backdrop (`style.ROLE_STEP_HALO`, the wrapper
+  widget behind the current tick) is temporarily unwired in `rail.py` — it
+  was blocking launches. Root cause not diagnosed; `rail.py` now tags the
+  current tick's color directly (`ROLE_STEP_TICK_CURRENT`) with no wrapper
+  widget. `style.py`'s role constant and QSS rule are left in place,
+  unused, so re-wiring later is a `rail.py`-only change.
+- 2026-08-03 — `gui/control/project_select/`: `ProjectSelect` lists the
+  registry's projects and emits `project_selected` (a `Project`) when one
+  is clicked; an "Add project…" button opens a file picker, names the
+  project from the video file's stem, and calls `projects.add_project`
+  directly — same pattern as `windows/preferences.py`'s accent picker
+  calling `appearance_prefs.set_appearance` directly, a control can act on
+  a domain mutation without a caller mediating it. This module never
+  touches `AppState`; it only emits which project was picked. Not wired
+  into `app.py` yet — `app.py` branching on `AppState` (this screen when
+  `NoProject`, the existing canvas+pipeline layout when `ProjectActive`)
+  is still the open item before the GUI sitting.

@@ -214,6 +214,14 @@ FLAGGED: dict[str, str] = {
         "250 cap, 1,954 words of prose against a 400 cap, worst overage found "
         "so far — detect-tables-two-secrets"
     ),
+    "sieve/pipeline/plan.py": (
+        "one secret (ExecutionPlan: everything about a run knowable before a "
+        "frame is decoded — resolved params, cache keys, and lead-in, derived "
+        "once from a validated Dag), but 12 docstrings and 1,455 words of "
+        "prose against a 400 cap, each one a non-obvious crop/pre-cropped, "
+        "lead-in-algorithm, or cache-asymmetry reason the budget would delete "
+        "rather than compress — plan-docstring-budget"
+    ),
     "sieve/backend/dispatch.py": (
         "one secret (the shelf keyed by filter_id/version/backend that finds "
         "and invokes the callable implementing a spec, including its calling "

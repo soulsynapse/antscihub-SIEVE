@@ -71,15 +71,25 @@ ignores costs it nothing; a method it must stub out is a lie. The previous
 implementation defined three protocols, and the missing fourth cell is exactly
 where its detection work went — built beside the pipeline instead of in it,
 unkeyed, unschedulable, carrying its own threading, invisible to every rule.
+Multi-input is real and built this way, not a separate mechanism: a spec's
+`accepts` can be a named-port mapping (`Mapping[str, StreamSpec]`), and a
+`MergingKernel` consumes the matching `Mapping[str, Frame]` by that same key —
+one field on the existing declaration, not a fourth protocol.
 
 **Windows are declared on both sides — history and lookahead, as separate
-fields.** This is the single most expensive omission in the last implementation. A
-centred window reads frames *after* the one it is emitting for; its detection code
-computed `t + (window - window // 2)`, which no one-sided declaration can express,
-so detection was built outside the graph and stayed there. Each side is a bound
+fields — where an operation actually needs both.** This is the single most
+expensive omission in the last implementation. A centred window reads frames
+*after* the one it is emitting for; its detection code computed
+`t + (window - window // 2)`, which no one-sided declaration can express, so
+detection was built outside the graph and stayed there. Each side is a bound
 plus a function of resolved parameters: the bound admits the operation, the
 resolved value sizes the actual lead-in or read-ahead, and a resolved value
-exceeding its own bound is a registration error.
+exceeding its own bound is a registration error. **As of this reconciliation,
+only history (`warmup_frames`) is implemented.** No operation has yet needed
+lookahead, so the second field does not exist — that is correct under this
+document's own rule (build the field when the operation needs it), but do not
+claim a two-sided window is done until one actually exists. The first op that
+needs read-ahead adds the field; it does not get a design session first.
 
 A shortfall at either boundary — fewer frames of history than declared at the
 start of a source, less lookahead than declared at the end — is **legal and
@@ -117,11 +127,16 @@ what path the source sat at: a cheaper route to identical bytes must not
 invalidate everything it was meant to help. Twenty lines of code. It is what makes
 compounding outputs work, and it is why deleting any cache is safe.
 
-**Source identity is content-derived, or at minimum path-independent.** The hash
-chain terminates at sources, so a source named by its current path makes every
+**Source identity is content-derived, or at minimum path-independent — this is
+currently violated and is a defect, not a design question.** The hash chain
+terminates at sources, so a source named by its current path makes every
 artifact non-portable while leaving the spec perfectly portable — the spec
 resolves on another machine, every artifact misses, and it looks like a cold cache
-rather than a defect.
+rather than a defect. **As of this reconciliation, `source_identity()` hashes
+path + size + mtime_ns**, which is path-dependent and violates this paragraph's
+own rule: moving or renaming a source file, or touching its mtime without
+touching its bytes, invalidates every downstream artifact. Fix this before
+trusting the cache across a moved source tree.
 
 **One place owns each contended resource, and one entry point per capability.**
 One threading owner, one cache, one facility that writes artifacts. Surfaces
@@ -157,7 +172,13 @@ multi-input nodes. A surface modelling a pipeline as a list expresses a proper
 subset of what the runtime can do, and it cannot be widened later — placement and
 connection rules written against adjacency in a list do not survive the change of
 relation. The previous implementation built edges with `itertools.pairwise` and
-its engine's branching was never reachable.
+its engine's branching was never reachable. **As of this reconciliation, the
+engine side of this is built (a real port/edge/cycle-checked graph, `dag.py`) and
+the authoring surface is not** — the only pipeline-authoring UI that exists is
+still a linear chain (`chain_model.py`, `wizard_model.py`), built with
+`itertools.pairwise`, the exact pattern this paragraph names as the failure. This
+is not a design gap to argue about; it is the next real work, and it is
+graph-shaped work, not a linear one extended.
 
 **Backward chaining is the answer to "I want this output."** Given a target,
 enumerate the operations whose declared output admits it, recurse on their declared
@@ -201,11 +222,18 @@ carrying state across frames, one taking more than one input, one changing rate,
 one declaring a two-sided window — because a single easy member demonstrates only
 the easy contract, and the hard contracts are exactly where someone reinvents
 instead of reusing. A reference member breaks the build when it goes stale; a
-document does not.
+document does not. (The two-sided-window reference member does not exist yet,
+per §2 — add it the same day the field does, not before.)
 
 Adding an operation touches its own folder — declarations, kernel, fixture — and
 nothing else. If it touches the interface, the engine, or a catalogue, the design
 is wrong and that is the defect to fix.
+
+Boundaries between layers are enforced by an import-linter contract
+(`.importlinter`), not by convention or review: which package may import which,
+which layers may never see Qt or OpenCV. If a new package needs a new boundary,
+the contract file changes in the same commit as the code that needs it — a
+boundary that exists only in a reviewer's head is not a boundary.
 
 ## 5. Performance
 
@@ -337,6 +365,17 @@ partitioning, straggler handling. Replication, consensus and distributed
 transactions are permanently out of scope; a design discussion reaching for them
 has gone wrong.
 
+**A harness for admitting alternate implementations of the same operation by
+measured statistical equivalence — comparator, tolerance, corpus, who declares
+what — is explicitly in this category, not a design question owed an answer.**
+Nothing in this codebase has two implementations of one operation, so there is
+nothing for such a system to compare, and no amount of arguing where the
+declaration would live changes that. The trigger is the same as everything else
+in this section: a second implementation of a real operation actually gets
+written, for a real reason. Until then, this is not open, it is not decided, and
+it is not due — do not let a document written in its absence accumulate an
+answer nobody needed yet.
+
 Irregular regions and non-rectangular addressing: rectangles and uniform grids are
 fine. Just do not encode the assumption in three places — the crop, the logic
 matching a result against a request, and the surface mapping a click to an element —
@@ -362,6 +401,16 @@ second implementation acquired the first's problems.
 One measurement is missing and would be worth having early: **v1 is believed to be
 faster than v2 and nobody knows why.** No number exists for both on the same
 footage. If you want that answered, it is one benchmark run, not an investigation.
+
+**A third attempt exists, on this same repository's `rewrite` branch: months of
+argued rationale (`docs/par/`, `DEFERRED.md`) with almost no code.** It was not
+wrong to want the shape argued before it was built — but arguing shape and
+building shape are different activities, and running only the first one for
+months is how development stops without anyone deciding to stop it. Most of what
+it argued, this document already answers, in working code, checked against real
+filters — read §2 and §7 above before re-opening any of it. What it does not
+answer (graph-shaped authoring, in the GUI specifically) is named as open above,
+not owed a rationale first.
 
 ## 9. The rule behind most of the above
 

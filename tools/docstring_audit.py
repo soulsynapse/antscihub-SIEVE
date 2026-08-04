@@ -75,6 +75,7 @@ ASSESSED: dict[str, str] = {
     "sieve/detect/__init__.py": "detection takes a resolved DetectorSettings and a series, never a Project or the GUI's mutable tuning state, so both front ends compute it the same way",
     "sieve/core/__init__.py": "core/ is pure logic: nothing here imports a layer above it, Qt, Zarr, or subprocess, machine-checked by .importlinter",
     "sieve/decode/identity.py": "a cache key over decoded content must include who decoded it, since decoders can disagree on pixel values for the same input",
+    "sieve/gui/app.py": "the one place that mutates process-wide state before any window exists, and resolves which video a launch opens",
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

@@ -166,7 +166,7 @@ PAD_EFOLDINGS = 3.0
 #: against the *band's* lowest frequency, so a detector tuned to a real
 #: behavioural band pays a fraction of that — only the wide-open default band
 #: pays the worst case, and only for gating, since the curve still draws.
-COI_SETTLE_EFOLDINGS = 2.0
+COI_SETTLE_EFOLDINGS = 1.0
 
 
 def settled_frames(n_frames: int, fs: float, freqs_hz: FloatArray) -> int:

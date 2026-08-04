@@ -5,17 +5,16 @@ like — ``gui/style.py`` owns those roles' colors. This module only ever
 lays the ticks out, one per step, vertical, and never hides — nothing here
 depends on which of ``pipeline.py``'s tabs is showing.
 
-The halo backdrop behind the current tick (``style.ROLE_STEP_HALO``) is
-temporarily unwired — it was blocking launches. See docs/DECISIONS.md.
-The current tick is still distinguishable (``ROLE_STEP_TICK_CURRENT``'s
-color), just without the wrapper widget.
+All role tagging here (``ROLE_STEP_TICK``, ``ROLE_STEP_TICK_CURRENT``, and
+the halo before it) is temporarily unwired — both were blocking launches
+and the root cause isn't diagnosed yet. Every tick renders as a plain,
+unstyled ``QWidget`` for now; ``current`` is still tracked and passed in
+but has no visible effect. See docs/DECISIONS.md.
 """
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import QVBoxLayout, QWidget
-
-from proto_sieve.src.sieve.gui import style
 
 _TICK_SIZE = 8
 
@@ -34,9 +33,10 @@ class StepRail(QWidget):
         layout.addStretch(1)
 
     def _build_tick(self, current: bool) -> QWidget:
+        # `current` is unused while role tagging is disabled — kept in the
+        # signature so re-wiring the style back doesn't change the caller.
         tick = QWidget(self)
         tick.setFixedSize(_TICK_SIZE, _TICK_SIZE)
-        style.tag(tick, style.ROLE_STEP_TICK_CURRENT if current else style.ROLE_STEP_TICK)
         return tick
 
 

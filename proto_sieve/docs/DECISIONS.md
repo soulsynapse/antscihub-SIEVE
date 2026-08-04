@@ -142,3 +142,11 @@ Format: `<date> — <decision> — <why, in a clause>`
   into `app.py` yet — `app.py` branching on `AppState` (this screen when
   `NoProject`, the existing canvas+pipeline layout when `ProjectActive`)
   is still the open item before the GUI sitting.
+- 2026-08-03 — the rest of the step-tick role tagging (`ROLE_STEP_TICK`,
+  `ROLE_STEP_TICK_CURRENT`) is also temporarily unwired — still blocking
+  launches after the halo alone was disabled. `rail.py` renders every tick
+  as a plain unstyled `QWidget`; `current` is still tracked and passed
+  through but has no visible effect. Root cause not diagnosed for either
+  this or the halo — `style.py`'s role constants and QSS rules are
+  untouched, so re-wiring is confined to `rail.py` once whatever's wrong
+  with the `role` property/QSS selectors here is found.

@@ -96,6 +96,13 @@ ASSESSED: dict[str, str] = {
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.
 FLAGGED: dict[str, str] = {
+    "sieve/gui/timeline_bar.py": (
+        "two secrets, not one (TimelineStrip's geometry/mouse-classification/paint "
+        "model vs TimelineBar's document-player wiring and feedback-loop discipline), "
+        "each a widget that would change for unrelated reasons, and TimelineStrip's own "
+        "symbol docstrings alone already run to 753 words against the 400 cap — "
+        "timeline-bar-two-secrets"
+    ),
     "sieve/filters/temporal_baseline.py": (
         "683 words against the 250 cap, and the excess is four bundled arguments "
         "beyond the filter's own secret (ring-sampling cost, the node/port-model "

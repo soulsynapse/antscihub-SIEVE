@@ -198,6 +198,14 @@ FLAGGED: dict[str, str] = {
         "aliasing reasoning the budget would delete rather than compress — "
         "background-ema-docstring-budget"
     ),
+    "sieve/gui/video_view.py": (
+        "the docstring's own structure admits at least four bundled decisions "
+        "(source-pixel-vs-proxy coordinate mapping, crop-mode single-ownership, "
+        "adjustment restricted to the selected replicate, and the undeclared "
+        "gesture-interpretation state machine spread across method docstrings), "
+        "the same shape as player.py's prior flag; 1,994 words of prose against "
+        "a 400 cap — video-view-docstring-split"
+    ),
 }
 
 

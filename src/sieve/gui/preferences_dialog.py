@@ -62,8 +62,6 @@ _PROXY_HELP = (
 
 
 class PreferencesDialog(QDialog):
-    """Edits a `Preferences` store in place."""
-
     def __init__(self, preferences: Preferences, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("SIEVE Preferences")
@@ -146,7 +144,6 @@ class PreferencesDialog(QDialog):
 
     @Slot()
     def _load(self) -> None:
-        """Pull every value from the store without re-emitting changes."""
         widgets = (
             self._adaptive_check,
             self._interval_spin,
@@ -185,7 +182,6 @@ class PreferencesDialog(QDialog):
 
 
 def _help_label(text: str) -> QLabel:
-    """Wrapped, de-emphasised explanatory text under a control."""
     label = QLabel(text)
     label.setWordWrap(True)
     label.setTextFormat(Qt.TextFormat.PlainText)

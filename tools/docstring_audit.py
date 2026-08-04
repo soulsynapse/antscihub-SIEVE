@@ -83,6 +83,7 @@ ASSESSED: dict[str, str] = {
     "sieve/cli/app.py": "the exhaustive, hand-registered assembly of subcommands into one Typer app, with the real-process entry point kept separate from the callback so installing the stderr filter never displaces a test's fd-2 capture",
     "sieve/gui/history_dialog.py": "the two facts (action, how long ago) that make a snapshot identifiable to the person who caused it, and that restoring is the window's job, not the dialog's",
     "sieve/cli/sweep_cmd.py": "the sweep reproduces the luma finding's hand-run protocol across a machine axis, and refuses rather than measures unpinned when the platform won't grant affinity",
+    "sieve/gui/preferences_dialog.py": "the pane applies every change immediately and has no Cancel, because the setting's only value is seeing its effect on the video while the pane is open",
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

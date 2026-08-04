@@ -69,6 +69,37 @@ def _require_fixed_bar(widget: QWidget) -> None:
         )
 
 
+class CanvasSlot(QWidget):
+    """The left side of the split, held for the main window's lifetime —
+    one already-built widget at a time, swapped in place with no
+    animation, so ``app.py`` can update the canvas without rebuilding
+    ``Control`` (and losing its sliding-track state) alongside it. Content
+    must meet the same layout-section contract as a control screen
+    (checked here, not left to the caller) since it ends up in the same
+    splitter."""
+
+    def __init__(self, initial: QWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        _require_layout_section(initial)
+        self._current = initial
+        self._layout.addWidget(initial)
+
+    def set_content(self, widget: QWidget) -> None:
+        _require_layout_section(widget)
+        old = self._current
+        self._layout.removeWidget(old)
+        old.setParent(None)
+        old.deleteLater()
+        self._current = widget
+        self._layout.addWidget(widget)
+        # Same reasoning as Control.replace_pane: adding a widget to an
+        # already-visible tree does not itself make the widget visible.
+        widget.show()
+
+
 def compose(top: QWidget, canvas: QWidget, control: QWidget, bottom: QWidget) -> QWidget:
     """``top`` and ``bottom`` span the full width at a fixed height; the
     middle band splits ``canvas`` and ``control`` evenly. The dividers —
@@ -144,7 +175,7 @@ if __name__ == "__main__":
 
     from proto_sieve.src.sieve.gui import style
     from proto_sieve.src.sieve.gui.canvas.video_player import VideoPlayer
-    from proto_sieve.src.sieve.gui.control.pipeline import PipelinePanel
+    from proto_sieve.src.sieve.gui.control import Control
     from proto_sieve.src.sieve.pipeline import Pipeline, Step
 
     video_path = _repo_root / "video-test" / "rep3_intermittent_crop.MP4"
@@ -162,8 +193,11 @@ if __name__ == "__main__":
     bottom = QLabel("bottom")
     bottom.setFixedHeight(style.bar_height())
 
+    control = Control(projects=[])
+    control.show_workspace(pipeline, current_index=0)
+
     window = QMainWindow()
-    window.setCentralWidget(compose(top, canvas, PipelinePanel(pipeline), bottom))
+    window.setCentralWidget(compose(top, canvas, control, bottom))
     size_window(window)
     window.show()
     sys.exit(app.exec())

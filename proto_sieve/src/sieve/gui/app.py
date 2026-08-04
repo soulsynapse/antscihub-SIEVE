@@ -1,31 +1,34 @@
 """The GUI sitting, per docs/AGENTS.md: not a chunk, no cheap proof.
 
-PySide6. Two screens, both built from ``layout.compose``'s canvas/control
-split: with no project chosen, the left is a bare "select a project" label
-(not a real canvas implementation — nothing designed yet, see
-``gui/canvas/__init__.py``) and the right is ``ProjectSelect`` reading the
-projects registry; once one's picked (``session.app_state.select``), the
-left becomes ``VideoPlayer`` on the project's source and the right becomes
-``PipelinePanel`` on a fresh empty pipeline for it. A freshly-chosen project
-always starts empty — nothing loads a saved pipeline automatically.
+PySide6. The central widget (built exactly once, by ``layout.compose``) is
+a canvas/control split: ``layout.CanvasSlot`` on the left, swapped in place
+with no animation, and ``control.Control`` on the right, a three-position
+sliding track (project info, Pipeline, Step) plus the current-step rail —
+built once and never rebuilt, so its own state (which position is current)
+survives every navigation. With no project chosen, the canvas holds a bare
+"select a project" label (not a real canvas implementation — nothing
+designed yet, see ``gui/canvas/__init__.py``) and ``Control`` sits at
+project info; once one's picked (``session.app_state.select``), the canvas
+becomes ``VideoPlayer`` on the project's source and ``Control`` is told to
+show the workspace. A freshly-chosen project always starts empty — nothing
+loads a saved pipeline automatically.
 
 ``menu.py`` calls back into three public methods (``load_project``,
 ``save_pipeline``, ``open_history``) rather than reaching into ``AppState``
 itself — this file owns what those verbs mean, ``menu.py`` only owns that
 they're reachable. All three states that can replace the current
 ``Pipeline`` (fresh project select, a loaded save, a timeline jump) funnel
-through ``_render_workspace``, which rebuilds the whole canvas+control slot
-— there is no incremental update path yet, so all three reopen the video.
+through ``_render_workspace``, which re-renders the canvas and tells
+``Control`` to show the (possibly changed) workspace — there is no
+incremental update path yet, so all three reopen the video.
 
 Left/Right (``go_back``/``go_forward``, bound once by
-``hotkeys.bind_navigation_hotkeys``) walk a three-position chain — project
-info, the Pipeline tab, the Step tab — inferred from ``self._control``'s
-type rather than tracked as separate state: ``ProjectSelect`` means
-project info, and ``PipelinePanel.current_tab()`` tells the two workspace
-positions apart. Moving between the two workspace tabs calls
-``PipelinePanel``'s own tab methods directly (no rebuild, video keeps
+``hotkeys.bind_navigation_hotkeys``) walk the same three-position chain
+``Control`` tracks, read via ``Control.current_position()`` rather than
+inferred from a widget's type. Moving between the two workspace positions
+calls ``Control``'s own tab methods directly (no rebuild, video keeps
 playing); moving to or from project info still goes through the full
-``show_project_info``/``show_workspace`` rebuild.
+``show_project_info``/``show_workspace`` path.
 """
 
 from __future__ import annotations
@@ -49,13 +52,12 @@ if str(_REPO_ROOT) not in sys.path:
     # direct script launch (VSCode's "Run Python File", etc.) doesn't add.
     sys.path.insert(0, str(_REPO_ROOT))
 
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
 
 from proto_sieve.src.sieve.gui.hotkeys import bind_hotkeys, bind_navigation_hotkeys
-from proto_sieve.src.sieve.gui.layout import compose, size_window
+from proto_sieve.src.sieve.gui.layout import CanvasSlot, compose, size_window
 from proto_sieve.src.sieve.gui.menu import build_menu_bar
-from proto_sieve.src.sieve.gui.control.pipeline import PipelinePanel
-from proto_sieve.src.sieve.gui.control.project_select import ProjectSelect
+from proto_sieve.src.sieve.gui.control import Control
 from proto_sieve.src.sieve.gui import style
 from proto_sieve.src.sieve.gui.style import apply as apply_style
 from proto_sieve.src.sieve.gui.style import apply_title_bar
@@ -73,7 +75,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("proto_sieve")
 
         self._state: app_state.AppState = app_state.NoProject()
-        self._control: QWidget | None = None
 
         self._top_bar = QLabel("top")
         self._top_bar.setFixedHeight(0)  # unused for now, zeroed rather than removed
@@ -82,9 +83,13 @@ class MainWindow(QMainWindow):
         self._bottom_bar.setFixedHeight(style.bar_height() * 2)
         style.tag(self._bottom_bar, style.ROLE_BAR)
 
+        self._canvas_slot = CanvasSlot(QLabel("Select a project"))
+        self._control = Control(list_projects())
+        self._control.project_selected.connect(self._on_project_selected)
+        self.setCentralWidget(compose(self._top_bar, self._canvas_slot, self._control, self._bottom_bar))
+
         build_menu_bar(self)
         bind_navigation_hotkeys(self)
-        self.show_project_info()
 
         size_window(self)
 
@@ -94,11 +99,8 @@ class MainWindow(QMainWindow):
         underneath it untouched (``show_workspace``/Right returns to exactly
         where it was); picking a project from the list here still starts a
         fresh one, same as it always has."""
-        canvas = QLabel("Select a project")
-        control = ProjectSelect(list_projects())
-        control.project_selected.connect(self._on_project_selected)
-        self._control = control
-        self.setCentralWidget(compose(self._top_bar, canvas, control, self._bottom_bar))
+        self._canvas_slot.set_content(QLabel("Select a project"))
+        self._control.show_project_info(list_projects())
 
     def show_workspace(self) -> None:
         """Right (from project info): back to the pipeline workspace for the
@@ -109,18 +111,20 @@ class MainWindow(QMainWindow):
         self._render_workspace()
 
     def go_back(self) -> None:
-        """Left: Step -> Pipeline tab (no rebuild) -> project info."""
-        if isinstance(self._control, PipelinePanel) and self._control.current_tab() == "step":
+        """Left: Step -> Pipeline tab (no rebuild) -> project info. A no-op
+        already at project info — nothing further back."""
+        position = self._control.current_position()
+        if position == "step":
             self._control.show_pipeline_tab()
-            return
-        self.show_project_info()
+        elif position == "pipeline":
+            self.show_project_info()
 
     def go_forward(self) -> None:
         """Right: project info -> workspace (Pipeline tab) -> Step tab."""
-        if isinstance(self._control, ProjectSelect):
+        position = self._control.current_position()
+        if position == "project":
             self.show_workspace()
-            return
-        if isinstance(self._control, PipelinePanel):
+        elif position == "pipeline":
             self._control.show_step_tab()
 
     def _on_project_selected(self, project: Project) -> None:
@@ -128,19 +132,18 @@ class MainWindow(QMainWindow):
         self._render_workspace()
 
     def _render_workspace(self) -> None:
-        """Rebuild the canvas+control workspace from ``self._state``'s
-        current pipeline. Reused after picking a project, loading a saved
-        pipeline, and jumping the undo/redo timeline — all three replace
-        which ``Pipeline`` is current, and none of them have an incremental
-        update path yet, so all three pay the same full-rebuild (video
-        reopened) cost. Cheaper live updates are future work, not this
-        slice's problem."""
+        """Re-render the canvas and tell ``Control`` to show the workspace
+        for ``self._state``'s current pipeline. Reused after picking a
+        project, loading a saved pipeline, and jumping the undo/redo
+        timeline — all three replace which ``Pipeline`` is current, and
+        none of them have an incremental update path yet, so all three pay
+        the same full-rebuild (video reopened) cost. Cheaper live updates
+        are future work, not this slice's problem."""
         assert isinstance(self._state, app_state.ProjectActive)
 
         canvas = VideoPlayer()
-        control = PipelinePanel(self._state.session.pipeline)
-        self._control = control
-        self.setCentralWidget(compose(self._top_bar, canvas, control, self._bottom_bar))
+        self._canvas_slot.set_content(canvas)
+        self._control.show_workspace(self._state.session.pipeline, self._state.session.current_index)
 
         bind_hotkeys(self, canvas)
         canvas.open(self._state.project.source_path)

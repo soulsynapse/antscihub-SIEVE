@@ -57,28 +57,35 @@ packages under `proto_sieve/src/sieve/`, 40 tests total, all green:
   for a step index), `app_state.py` (`NoProject` vs `ProjectActive`,
   `select(project)` between them).
 
-None of the domain layer above is wired into the GUI yet. `gui/` itself
-was renamed this session: `representation/` and `pipeline_panel/` are now
+The domain layer above is now wired into the GUI. `gui/` was renamed
+earlier this session: `representation/` and `pipeline_panel/` are
 `canvas/` (the information side) and `control/` (the generic "user selects
-stuff" space, with the pipeline step list nested at `control/pipeline/`).
-That rename is deliberately not behind an enforced boundary — canvas and
-control are meant to be coupled (a dragged crop box is control's current
-step, drawn on the canvas), so nothing stops a canvas file importing a
-control type; the one thing that stays control-only is deciding which
-step or project is current. See `DECISIONS.md`.
+stuff" space). That rename is deliberately not behind an enforced boundary
+— canvas and control are meant to be coupled (a dragged crop box is
+control's current step, drawn on the canvas), so nothing stops a canvas
+file importing a control type. See `DECISIONS.md`.
 
-`app.py`'s `PIPELINE` is still hardcoded and always builds the
-canvas-plus-control layout; there is no project selection screen, and the
-registry starts empty (no project is added automatically — see the
-discovery-to-registry decision above). The planned next slice: a
-`gui/control/project_select/` screen (project list on the right — where
-"the left serves the right" still holds even though the import fence
-doesn't — with a placeholder preview in `canvas/`, no real spec loading
-yet), `app.py` branching on `AppState` instead of assuming a project, and
-a one-time seed (`add_project` for the checked-in `rep3_intermittent_crop`
-clip, run once, not on every launch) so the app has something to select
-without requiring the add-a-project flow to exist yet. This is GUI work —
-no cheap proof — done in a sitting with Kendrick.
+`app.py`'s central widget (`layout.compose`) is built exactly once:
+`layout.CanvasSlot` on the left (swapped in place, no rebuild) and
+`gui/control/control.py`'s `Control` on the right — a three-position
+sliding track (project info, Pipeline, Step) plus the current-step rail,
+also built once so its own state survives every navigation. `app.py`
+branches on `AppState` (`NoProject`/`ProjectActive`) to decide when
+`Control.show_workspace` is allowed to fire; `Control` itself never
+touches `AppState`. `PipelinePanel` (the old two-pane widget) is gone —
+dissolved into `Control`; `control/pipeline/pipeline.py` is now just
+`build_step_list`. The rail's current tick is `Session.current_index`,
+passed in on every `show_workspace` call, not hardcoded. See
+`DECISIONS.md`'s most recent entry for the full shape.
+
+Still open: the "Pipeline" pane has nothing in it (not designed, per
+`pipeline.py`'s own longstanding note); nothing wires a step-list click to
+`Session.select` yet, so the rail's current tick never moves off 0 in
+practice. No committed GUI test exists for any of this — still the GUI
+sitting's territory, no cheap proof, verified this pass only by an
+offscreen smoke script (construct, `_render_workspace`, walk
+`go_forward`/`go_back` through all three positions) and the existing 44
+non-GUI tests staying green.
 
 ## Caveat a fresh session must not skip
 

@@ -171,3 +171,22 @@ Format: `<date> — <decision> — <why, in a clause>`
   still-open question. Smoke-launched (`MainWindow` shown, closed via a
   timer) rather than proven by a committed GUI test — this is the GUI
   sitting's territory, no cheap proof.
+- 2026-08-03 — the breadcrumb-bar collapse (`6bbb9d1`) is reverted
+  (`c4ba472`); animated sliding is back, but as one three-position track
+  (project info, Pipeline, Step), not the old two nested two-position ones.
+  `gui/control/control.py` (new) owns the track, the rail, and
+  `current_position()` — dissolving `PipelinePanel`, whose Pipeline/Step
+  distinction was the only reason `control/pipeline/pipeline.py` existed as
+  more than a step-list builder. That file is kept anyway, slimmed to just
+  `build_step_list` — Kendrick's call, over dissolving `pipeline/` into
+  `rail/`/`step/` siblings of `control.py`, so the package boundary stays
+  put even though the name now undersells what's left in it.
+  `layout.CanvasSlot` is back too (canvas swapped in place, no rebuild),
+  but `app.py` no longer owns pane/rail construction at all — that's
+  `control.py`'s now, keeping `app.py` to `AppState` transitions and
+  canvas/control coordination, per Kendrick's "not a dumping ground."
+  The rail's `current_index` is `session.Session.current_index`, passed in
+  by `app.py` on every `show_workspace` call rather than hardcoded to 0 —
+  the one domain fact this pass was still faking. Which *pane* (Pipeline
+  vs Step) is showing has no `Session` equivalent and stays `control.py`'s
+  own secret; `Session` stays headless, no Qt. 44 tests still green.

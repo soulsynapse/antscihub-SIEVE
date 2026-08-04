@@ -216,3 +216,13 @@ Format: `<date> — <decision> — <why, in a clause>`
   walk). Still unaddressed and deliberately not folded in: `STATUS.md`'s
   dropping of the proof-first regime after chunk 4 left finding list 1 with no
   mechanism anywhere in the tree, GUI or otherwise.
+- 2026-08-03 — **a tool registry exists and it lives in `pipeline/pipeline.py`**
+  (`_TOOLS = {"crop": (Crop, CropParams)}`, plus a concrete import of
+  `tools.crop` and an exported `tool_for` nothing calls) — recorded because
+  `AGENTS.md` lists "the registry" under *Deliberately absent*, so this is a
+  deferred decision that got made in passing, in a neighbour's file, and never
+  declared. Left where it is for now; the point is that it stops being
+  invisible. What it costs: `pipeline/pipeline.py`'s stated secret is what a
+  pipeline *value* is, and adding a second tool edits it. The name-to-class
+  mapping is `tools/`'s fact — `tools/` does not yet have an `__init__.py` to
+  put it in, which is the same observation from the other side.

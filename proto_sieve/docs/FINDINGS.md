@@ -35,6 +35,27 @@ leaked secret.)*
   the concrete case that showed the old "the GUI is not a chunk" wording was
   suppressing findings rather than just proofs.
 
+- **Chunk 5's tool needed the resolver, and the import is circular.**
+  `resolver.py` imports `Requirement` from `tools/base.py` at module level;
+  `Tool.lower` imports `resolve` at line 32, *inside the method body*, because
+  a module-level import would not resolve. That deferred import is the whole
+  evidence. `DECISIONS.md` says a tool "declares a requirement; it does not
+  construct a graph of named ops — because implementation choice belongs to
+  the resolver", but `Tool.lower` calls `resolve` and builds the `Node`: the
+  tool does construct the graph, it delegates one field of it. **A leaked
+  secret, not a missing interface item** — what leaked is *which side owns the
+  vocabulary*. `Requirement` is the thing both modules speak, so it belongs
+  where both can see it (beside `Affine`, which it is made of), and the only
+  caller of `lower` — `pipeline.lower` — is where `resolve` should be applied:
+  `Node(resolve(tool.requirement(params)), (source,))`. Then `tools/` never
+  imports `resolver` at all. Not worked around; recorded as it stands.
+  Corollary from the same read: `Requirement(map, out_shape)` and
+  `Resample(map, out_shape)` are field-for-field identical and `resolve`'s
+  fallback branch is `Resample(req.map, req.out_shape)` — a rename. The
+  requirement/op distinction carries information on exactly one branch (the
+  `Slice` swap). That does not make the boundary wrong; it does mean the
+  decision behind it is demonstrated by a single `if`.
+
 ## Co-touches
 
 *(Anticipated changes absorbed by two modules instead of one. Also: commits
@@ -58,6 +79,24 @@ a signal; one is noise.)*
   walk from `Path(__file__)` and take a `start` argument, `store/`'s walks
   from itself — so a naive dedupe to the existing `repo_root` would not
   have been a pure move.
+
+- **Four files know the 2x3 affine is row-major with the translation in
+  slots 2 and 5.** `kernel.py` declares it (`Affine.m`), `crop.requirement`
+  constructs it positionally (`Affine((1.0, 0.0, x0, 0.0, 1.0, y0))`),
+  `resolver._is_unit_translation` unpacks it (`a, b, c, d, e, f = m.m`) and
+  tests slots 0/1/3/4 for identity and 2/5 for integrality, and
+  `executor._resample` unpacks it again and indexes `a*ox + b*oy + c`. Same
+  shape as the repo-root walk: one unanticipated fact spread across four
+  modules rather than an anticipated change absorbed by two. Moving to a 3x3,
+  to named fields, or to column-major edits all four, and nothing catches a
+  missed site — `_canon` hashes whatever tuple it is handed. Note this sits
+  directly against `kernel.py`'s own docstring ("nothing outside this module
+  may depend on ... the field layout of an op"), which as written is
+  indefensible for the ops themselves — `executor._apply` must read `op.y0`,
+  `op.out_shape`, `op.name` to evaluate anything, and a value type whose
+  fields nobody may read is not a value type. The docstring's claim is sound
+  for the *canonical form and the digest*, and overclaims when it extends to
+  field layout. The co-touch on `Affine.m` is real either way.
 
 ## Things learned that were not on any list
 

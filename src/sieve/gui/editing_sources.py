@@ -34,33 +34,22 @@ from __future__ import annotations
 
 
 class EditingSources:
-    """The set of sources that currently claim the keyboard."""
-
     def __init__(self) -> None:
         self._open: set[str] = set()
 
     @property
     def active(self) -> bool:
-        """True while at least one source is being edited."""
         return bool(self._open)
 
     @property
     def sources(self) -> frozenset[str]:
-        """The claimants, for a test or a diagnostic to name them."""
         return frozenset(self._open)
 
     def mark(self, source: str, editing: bool) -> None:
-        """Record that `source` started or stopped being edited.
-
-        Both directions are idempotent — `discard`, not `remove` — because a
-        source ending an edit it never began is exactly the case a counter gets
-        wrong, and silently doing nothing is the correct answer to it.
-        """
         if editing:
             self._open.add(source)
         else:
             self._open.discard(source)
 
     def clear(self) -> None:
-        """Forget every claim. A known-good point, for a caller that has one."""
         self._open.clear()

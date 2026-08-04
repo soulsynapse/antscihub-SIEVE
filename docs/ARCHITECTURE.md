@@ -439,7 +439,9 @@ weeks. Each has its trigger and reasoning in a `docs/todo/` item.
 - **The general result store.** *Filesystem is truth at rest* left this list on
   2026.07.28 and is rule 8 above; what stayed behind is the half the first
   writer does not cover. No sink writes, `storage/zarr_store.py` does not exist,
-  `zarr` is a declared dependency imported nowhere, and `MemoryFrameStore` is
+  `zarr` is not a dependency (it was declared and imported nowhere for three
+  weeks; removed 2026-08-04, so the store arrives with its format still an open
+  question rather than pre-answered), and `MemoryFrameStore` is
   still an unbounded dict — so a *node's* output has no home on disk, only a
   replicate's crop does. During interactive tuning truth is supposed to live in
   memory, so this is not a violation; it is the second instance the rule is

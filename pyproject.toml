@@ -25,9 +25,6 @@ dependencies = [
     # every read of an artifact goes back through OpenCV's `VideoReader`, so
     # this does not become a second decoder identity.
     "av>=13",
-    "zarr>=3.0",
-    "duckdb",
-    "pyarrow",
     # core/machine.py: the session RSS producer (ledger-producers item). A
     # declared dependency, decided explicitly: it previously resolved in dev
     # only as a transitive of pytest-benchmark, and a runtime sensor standing
@@ -63,9 +60,11 @@ dev = [
     "nox",
     "ruff",
     "pyright",
+    # Run, not imported — `viztracer script.py`, `py-spy dump`. A grep for an
+    # import will not find their consumer; `bench/profiling.py` (SCAFFOLD,
+    # projected) is where the invocations will be wrapped.
     "viztracer",
     "py-spy",
-    "jaxtyping",
     "import-linter>=2.13",
     # psutil ships no py.typed; pyright strict needs the typeshed stubs.
     "types-psutil",

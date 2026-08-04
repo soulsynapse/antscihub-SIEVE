@@ -173,6 +173,15 @@ FLAGGED: dict[str, str] = {
         "reason the budget would delete rather than compress — "
         "composite-view-docstring-budget"
     ),
+    "sieve/filters/background_ema.py": (
+        "one secret (an EMA background model, updated in place and refined "
+        "per-alpha against a static worst-case warmup), but 548 words in the "
+        "module docstring alone, 9 symbol docstrings, and 2,137 words of "
+        "prose against a 400 cap — partly science already duplicated in "
+        "background_ema.md, partly non-obvious per-method correctness and "
+        "aliasing reasoning the budget would delete rather than compress — "
+        "background-ema-docstring-budget"
+    ),
 }
 
 

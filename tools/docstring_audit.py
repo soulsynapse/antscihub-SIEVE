@@ -73,6 +73,7 @@ ASSESSED: dict[str, str] = {
     "sieve/storage/__init__.py": "storage/ knows a file format and an array, never a cache key, replicate, or project",
     "sieve/cli/__init__.py": "commands own no arithmetic — parsing, one run-only decision, and printing, nothing execute doesn't already do",
     "sieve/detect/__init__.py": "detection takes a resolved DetectorSettings and a series, never a Project or the GUI's mutable tuning state, so both front ends compute it the same way",
+    "sieve/core/__init__.py": "core/ is pure logic: nothing here imports a layer above it, Qt, Zarr, or subprocess, machine-checked by .importlinter",
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

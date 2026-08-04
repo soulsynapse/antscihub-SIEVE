@@ -1,6 +1,6 @@
 ---
 status: current
-reviewed: 1e43ef5
+reviewed: 07c379e
 subjects: [noxfile.py, .github/workflows/, pyproject.toml, tests/docs/, .importlinter]
 ---
 

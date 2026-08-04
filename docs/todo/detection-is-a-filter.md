@@ -1,7 +1,7 @@
 ---
 title: Detection is a filter emitting a per-frame channel
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: high
 gated_on: nothing
 after: [a-kernel-that-sees-a-span, a-filter-names-what-it-emits]

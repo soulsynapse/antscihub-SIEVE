@@ -1,7 +1,7 @@
 ---
 title: The mutual tier — shared by dependency, not by agreement
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: normal
 gated_on: nothing
 reads: [.importlinter, src/sieve/core/shares.py, src/sieve/core/machine.py, src/sieve/core/pool_meter.py]

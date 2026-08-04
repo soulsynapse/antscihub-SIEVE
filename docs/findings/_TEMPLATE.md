@@ -3,7 +3,8 @@
 title: The seek is irreducible            # what was learned, not what was done
 date: 2026-07-25                          # the day it was measured
 status: closed                            # closed | open | superseded
-commit: 4b2431a                           # the commit that acted on it, or omit
+commit: "4b2431a"                         # the commit that acted on it, or omit.
+                                          # Quoted — see completed-todo/_TEMPLATE.
 tags: [decode, scrub, opencv]
 
 # The one-line answer. This is the field the index table shows, so it has to

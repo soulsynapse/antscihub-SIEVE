@@ -1,7 +1,7 @@
 ---
 title: Name the fold, and give the combining rule to whoever fixes the strategy
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: low
 gated_on: nothing
 after: [ceilings-in-the-dimension-they-bound, a-kernel-that-sees-a-span]

@@ -1,7 +1,7 @@
 ---
 title: Presentation is a declared channel, not a switch in a widget
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: normal
 gated_on: nothing
 after: [the-spec-has-three-channels, a-filter-names-what-it-emits]

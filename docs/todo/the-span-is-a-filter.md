@@ -1,7 +1,7 @@
 ---
 title: The span is a filter; the decode range is an optimization
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: normal
 gated_on: nothing
 after: [the-crop-is-a-filter]

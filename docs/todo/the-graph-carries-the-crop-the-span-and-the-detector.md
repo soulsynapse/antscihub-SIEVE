@@ -1,7 +1,7 @@
 ---
 title: The graph carries the crop, the span, and the detector
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: high
 gated_on: nothing
 after: [the-crop-is-a-filter, the-span-is-a-filter, detection-is-a-filter, gui-cli-execution-parity]

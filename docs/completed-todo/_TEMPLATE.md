@@ -1,8 +1,13 @@
 ---
 # ---- identity -------------------------------------------------------------
 title: Scrub budget and Preferences        # the TODO item's name, verbatim
-date: 2026-07-25                           # YYYY-MM-DD, the day it landed
-commit: 4b2431a                            # see "Filling in `commit`" below
+date: 2026-07-25T18:07:03-07:00            # stamped by tools/complete_item.py:
+                                           # the moment it landed. This is the
+                                           # sort key of the whole index.
+commit: "4b2431a"                          # see "Filling in `commit`" below.
+                                           # Quoted: an all-digit hash is a YAML
+                                           # integer, and a leading zero makes it
+                                           # octal (0707005 rendered as 232965).
 tags: [pre-pipeline, gui, budgets]         # free-form; grep handles the rest
 
 summary: >

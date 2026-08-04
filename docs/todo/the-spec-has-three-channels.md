@@ -1,7 +1,7 @@
 ---
 title: The spec has three channels, and every field is in exactly one
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: high
 gated_on: nothing
 reads: [src/sieve/core/filter_base.py, src/sieve/pipeline/cache_key.py]

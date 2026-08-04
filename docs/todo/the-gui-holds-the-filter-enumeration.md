@@ -2,6 +2,7 @@
 title: The GUI holds the enumeration rule 3 forbids
 status: superseded
 superseded_by: [presentation-is-a-channel-not-a-switch, a-filter-id-spelled-twice]
+opened: 2026-07-28T12:57:15-07:00
 priority: unassessed
 
 gated_on: >

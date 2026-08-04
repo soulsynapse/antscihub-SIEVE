@@ -32,6 +32,8 @@ import re
 import sys
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from datetime import date as date_cls
 from pathlib import Path
 from typing import Any, cast
 
@@ -53,6 +55,36 @@ GENERATED_NOTICE = (
 
 class FrontmatterError(ValueError):
     """A file in an indexed folder could not be read as an entry."""
+
+
+#: What an absent or unreadable stamp sorts as. Distant past rather than
+#: `datetime.min`, which is naive and cannot be compared with the rest.
+NO_STAMP = datetime.min.replace(tzinfo=UTC)
+
+
+def _as_stamp(value: object) -> datetime:
+    """Read a frontmatter date field as an aware datetime.
+
+    YAML hands back `datetime` for `2026-07-28T13:52:07-07:00` and `date` for
+    `2026-07-28`; both spellings reach here, and a naive datetime would raise
+    on the first comparison against an aware one, which is a sort crash rather
+    than a bad sort. Everything is widened to an offset — a bare date to local
+    midnight, a naive time to the local zone — so a mixed folder still orders.
+    """
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.astimezone()
+    if isinstance(value, date_cls):
+        return datetime(value.year, value.month, value.day).astimezone()
+    if isinstance(value, str):
+        # A quoted date. Unparseable falls through to `NO_STAMP` rather than
+        # raising, because the folders where the stamp is load-bearing have a
+        # gate of their own (`test_todo_hygiene`) that names the offending
+        # file — an exception here would only say "the index would not build".
+        try:
+            return _as_stamp(datetime.fromisoformat(value))
+        except ValueError:
+            return NO_STAMP
+    return NO_STAMP
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,9 +109,9 @@ class IndexSpec:
     #: rather than an empty cell — a blank `verdict` is a finding nobody can
     #: triage from the table, which defeats the table.
     required: tuple[str, ...]
-    #: Order rows by `priority` instead of by date. Only `todo/` sets it:
-    #: its entries carry no `date`, so the default sort is filename order,
-    #: which is the one ordering that means nothing to a reader choosing work.
+    #: Order rows by `priority` instead of by date. Only `todo/` sets it: an
+    #: item is chosen by how much it matters, not by when it was written, and
+    #: `opened` is only the tiebreak inside a band (see `item_order`).
     by_priority: bool = False
 
 
@@ -135,7 +167,7 @@ SPECS: tuple[IndexSpec, ...] = (
             ColumnSpec("Item", "title", link=True),
             ColumnSpec("Gated on", "gated_on"),
         ),
-        required=("title", "status", "gated_on", "priority"),
+        required=("title", "status", "gated_on", "priority", "opened"),
         by_priority=True,
     ),
 )
@@ -170,9 +202,32 @@ class Entry:
     fields: dict[str, Any]
 
     @property
-    def sort_key(self) -> tuple[str, str]:
-        """Newest first, then by filename so equal dates stay stable."""
-        return (str(self.fields.get("date", "")), self.path.name)
+    def stamp(self) -> datetime:
+        """When this entry happened, as an aware datetime.
+
+        A day-precision `date:` widens to local midnight rather than raising:
+        `findings/` is dated by the day a measurement was taken, which is the
+        honest precision for it. `completed-todo/` is the folder where the
+        ordering is load-bearing — twenty entries a day landed there, and a
+        day-precision sort left the tiebreak to the filename — so the time
+        component is required *there*, by `test_todo_hygiene`, not here.
+        """
+        return _as_stamp(self.fields.get("date"))
+
+    @property
+    def day(self) -> str:
+        """`YYYY-MM-DD`, for the places a reader wants the date and not the clock."""
+        return self.stamp.date().isoformat()
+
+    @property
+    def sort_key(self) -> tuple[datetime, str]:
+        """Newest first, then by filename so equal stamps stay stable."""
+        return (self.stamp, self.path.name)
+
+    @property
+    def opened_stamp(self) -> datetime:
+        """When this item was minted. Ordering key for equally urgent work."""
+        return _as_stamp(self.fields.get("opened"))
 
     @property
     def priority_rank(self) -> int:
@@ -196,7 +251,7 @@ class Entry:
 
 
 def item_order(entries: Iterable[Entry]) -> list[Entry]:
-    """Most urgent first, takeable before waiting, then by filename.
+    """Most urgent first, takeable before waiting, then oldest-minted first.
 
     Named for the result rather than for the first key: status is a real part
     of the ordering, and a name that said only `priority` would leave the
@@ -206,12 +261,20 @@ def item_order(entries: Iterable[Entry]) -> list[Entry]:
     reader scanning a band of equal priority wants the items they can act on
     at the top of it. The primer splits on status before it renders, so the
     tiebreak only ever moves rows in the table.
+
+    `opened` breaks the remaining tie, oldest first, because the band an agent
+    actually reads from is one priority deep and most of the list is
+    `unassessed`: nine items said `high` and the order among them was the
+    alphabet. Oldest-first is the queue discipline the reader would assume
+    anyway, and it makes an item that has been passed over surface rather than
+    sink. Filename stays underneath it only to keep equal stamps stable.
     """
     return sorted(
         entries,
         key=lambda entry: (
             entry.priority_rank,
             entry.status_rank,
+            entry.opened_stamp,
             entry.path.name,
         ),
     )
@@ -289,6 +352,11 @@ def _cell(value: object) -> str:
         return ""
     if isinstance(value, bool):
         return "yes" if value else "no"
+    if isinstance(value, datetime):
+        # To the minute, because this column is the evidence for the row order
+        # and a column of twenty identical dates is not. The offset stays in
+        # the file: it disambiguates the stamp, it does not order anything.
+        return value.strftime("%Y-%m-%d %H:%M")
     if isinstance(value, list | tuple):
         items = cast(Sequence[Any], value)
         parts = [_cell(item) for item in items]
@@ -698,7 +766,7 @@ def render_settled(completed: Sequence[Entry]) -> str:
         "|---|---|---|---|",
     ]
     for row, entry in rows:
-        link = f"[{entry.fields.get('date')}](completed-todo/{entry.path.name})"
+        link = f"[{entry.day}](completed-todo/{entry.path.name})"
         lines.append(f"| {row['what']} | {row['where']} | {row['do_not_redecide']} | {link} |")
 
     if overturned:
@@ -715,8 +783,8 @@ def render_settled(completed: Sequence[Entry]) -> str:
         ]
         for row, entry in overturned:
             over = overturned_by[row["what"]]
-            was = f"[{entry.fields.get('date')}](completed-todo/{entry.path.name})"
-            now = f"[{over.fields.get('date')}](completed-todo/{over.path.name})"
+            was = f"[{entry.day}](completed-todo/{entry.path.name})"
+            now = f"[{over.day}](completed-todo/{over.path.name})"
             lines.append(f"| {row['what']} | {was} | {now} |")
 
     silent = sum(1 for entry in completed if not settled_rows(entry))
@@ -849,7 +917,7 @@ def render_state(root: Path = DOCS_ROOT) -> str:
         "",
     ]
     for entry in completed[:3]:
-        lines.append(f"- {_cell(entry.fields.get('date'))} — {_cell(entry.fields.get('title'))}")
+        lines.append(f"- {entry.day} — {_cell(entry.fields.get('title'))}")
     lines += ["", "**Latest finding:**", ""]
     for entry in findings[:1]:
         lines.append(f"- {_cell(entry.fields.get('title'))} — {_cell(entry.fields.get('verdict'))}")

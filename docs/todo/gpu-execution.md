@@ -1,6 +1,7 @@
 ---
 title: GPU execution
 status: deferred
+opened: 2026-07-27T15:01:34-07:00
 priority: unassessed
 gated_on: >
   a filter whose CPU kernel is measurably the bottleneck of a tuning session —

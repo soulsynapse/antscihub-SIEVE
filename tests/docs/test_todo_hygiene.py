@@ -11,6 +11,7 @@ then took twelve commits of real building without gaining a single row.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from doc_index import (
@@ -135,7 +136,10 @@ def test_the_primer_orders_open_items_by_priority(tmp_path: Path) -> None:
         (tmp_path / directory).mkdir()
     for name, priority in _ORDERING_FIXTURE:
         (tmp_path / "todo" / f"{name}.md").write_text(
-            f"---\ntitle: {name}\nstatus: open\npriority: {priority}\ngated_on: nothing\n---\n",
+            f"---\ntitle: {name}\nstatus: open\npriority: {priority}\n"
+            # Identical stamps on purpose: this test is about `priority`, and
+            # an `opened` that varied would let the tiebreak pass it.
+            f"opened: 2026-07-29T09:00:00-07:00\ngated_on: nothing\n---\n",
             encoding="utf-8",
         )
 
@@ -193,3 +197,50 @@ def test_no_completed_entry_still_carries_a_scaffold_marker() -> None:
         "entries still carrying complete_item.py's 'TODO —' markers: "
         + ", ".join(p.name for p in offenders)
     )
+
+
+def test_every_completed_entry_says_when_it_landed_to_the_minute() -> None:
+    # A day-precision `date:` is not a wrong fact, it is a missing one: 90
+    # entries fell in five days, so the day fixed only 87% of the pair order
+    # and the remaining 13% went to the filename. Measured 2026-08-04 against
+    # the commits: within a day, 51-58% of pairs were backwards — a coin flip.
+    spec = next(spec for spec in SPECS if spec.directory == "completed-todo")
+    dayonly = [
+        entry.path.name
+        for entry in collect(spec)
+        if not isinstance(entry.fields.get("date"), datetime)
+    ]
+    assert not dayonly, (
+        "completed entries dated to the day, so their order inside it is the "
+        "filename: " + ", ".join(dayonly)
+    )
+
+
+def test_every_item_says_when_it_was_minted_to_the_minute() -> None:
+    # Same defect on the other side: `opened` is the tiebreak inside a
+    # priority band, and 24 of 50 items were minted on one day.
+    spec = next(spec for spec in SPECS if spec.directory == "todo")
+    dayonly = [
+        entry.path.name
+        for entry in collect(spec)
+        if not isinstance(entry.fields.get("opened"), datetime)
+    ]
+    assert not dayonly, (
+        "items opened to the day, so their order inside it is the filename — "
+        "mint with tools/new_item.py: " + ", ".join(dayonly)
+    )
+
+
+def test_no_commit_hash_is_read_as_a_number() -> None:
+    # `commit: 0707005` is a valid YAML *integer* in octal, and the index
+    # rendered it as 232965 — a commit that does not exist — for six days,
+    # past a byte-exact `--check` that only ever compared the generator to
+    # itself. Quoting is the fix; this is the check that it stays quoted.
+    offenders: list[str] = []
+    for directory in ("completed-todo", "findings"):
+        spec = next(spec for spec in SPECS if spec.directory == directory)
+        for entry in collect(spec):
+            value = entry.fields.get("commit")
+            if value is not None and not isinstance(value, str):
+                offenders.append(f"{entry.path.name}: {value!r}")
+    assert not offenders, "unquoted `commit:` values parsed as numbers: " + ", ".join(offenders)

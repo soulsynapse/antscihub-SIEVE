@@ -1,6 +1,7 @@
 ---
 title: "Click-through navigation: the output boundary lives in the chain-stack"
 status: deferred
+opened: 2026-07-27T15:01:34-07:00
 priority: unassessed
 after: [materialization]
 gated_on: >

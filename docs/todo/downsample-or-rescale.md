@@ -3,7 +3,7 @@ title: Downsample or rescale
 status: deferred
 priority: unassessed
 after: [parity-comparison-finding]
-opened: 2026-07-27
+opened: 2026-07-27T22:04:50-07:00
 gated_on: >
   the parity-comparison finding landing — rescale is v1's semantic and must
   exist unchanged until the comparison has run; after it, this item decides

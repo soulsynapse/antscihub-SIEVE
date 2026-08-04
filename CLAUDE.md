@@ -118,6 +118,10 @@ Work that is real but not yet timely is a `docs/todo/` file with
 axis and moves independently: how much an item matters is not how soon it can
 be started, so a deferred item can be `high` and an open one `low`.
 
+Mint an item with `uv run python tools/new_item.py <slug>`, never by hand: it
+stamps `opened` to the second, which is the tiebreak inside a priority band,
+and the wall-clock is the one field an agent cannot type accurately.
+
 ---
 
 ## Gates
@@ -159,6 +163,28 @@ you build something the projected section named, move the line.
 `tests/conftest.py` gives a session-scoped `synthetic_video`: 40 frames, 20 fps,
 160x120, where frame `n` has blue channel `n * 5` — so a test can assert *which*
 frame a seek landed on, not merely that something decoded.
+
+---
+
+## A bulk edit is two scripts
+
+**Script the evidence before you script the change.** The first script reads
+and writes nothing but an evidence file — one row per target, the value it
+would get, where that value came from, and a note on anything anomalous. You
+read that before anything mutates. The second applies from the evidence file
+and prints what it would do until `--apply`.
+
+Reach for it above roughly ten files, and at *any* count when the value being
+written is **derived rather than typed** — that is the real threshold. A
+derived value is wrong in ways a diff cannot show, and the evidence pass is
+where the anomalies surface together instead of one at a time: backfilling
+`date:` from git surfaced two entries naming a commit *range*, four findings
+whose unquoted hash was being read as an integer, and two items minted before
+the folder that holds them existed. Renaming a symbol in forty files is not
+this — the value is typed, and the diff reviews it.
+
+Both scripts are throwaway. They go in the scratchpad, not in `tools/`; what
+survives is the gate that stops the defect coming back.
 
 ---
 
@@ -236,7 +262,7 @@ that was taken. Two rules keep that from turning into accretion:
   table a test can parse over a paragraph a reader must trust. The budget table,
   the doc indexes, and the scaffold tree are all machine-checked for this reason;
   that is the mechanism that kept them true while the prose around them drifted.
-- **Only two things bind: the seven rules and what CI checks.** Everything else
+- **Only two things bind: the eight rules and what CI checks.** Everything else
   is evidence — findings can be superseded, records age without being wrong,
   and a doc you disagree with is an argument to answer, not a law to obey. The
   v1 doc tree died of the opposite: nineteen ADRs prescribing an architecture

@@ -3,7 +3,7 @@ title: Sessions log how the app was used, and changes are scored against a movin
 status: open
 priority: unassessed
 serves: [A1]
-opened: 2026-07-28
+opened: 2026-07-28T09:10:36-07:00
 gated_on: >
   nothing — the trigger fired 2026-07-28 when ledger-producers landed
   (docs/completed-todo/2026.07.28-ledger-producers.md): the resource probe and

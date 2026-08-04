@@ -3,7 +3,7 @@ title: Sink writers, and the replicate status that reads them
 status: deferred
 priority: unassessed
 after: [materialization]
-opened: 2026-07-25
+opened: 2026-07-25T00:00:00-07:00
 gated_on: >
   the first filter that emits a TableSpec (a detector producing coordinates),
   or materialization landing and needing somewhere for a compacted array

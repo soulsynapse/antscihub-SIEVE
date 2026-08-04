@@ -1,6 +1,7 @@
 ---
 title: Application config, and where the boundary with Preferences falls
 status: deferred
+opened: 2026-07-27T15:01:34-07:00
 priority: unassessed
 gated_on: >
   the first setting the CLI and the GUI both need to read — backend selection

@@ -2,7 +2,7 @@
 title: flow_direction, and whether a signal is a plane or a parameter
 status: deferred
 priority: unassessed
-opened: 2026-07-27
+opened: 2026-07-27T22:04:50-07:00
 gated_on: >
   two decisions, both Kendrick's. (1) How a *circular* signal bands and
   renders — flow_direction is orthogonal to everything existing and is the

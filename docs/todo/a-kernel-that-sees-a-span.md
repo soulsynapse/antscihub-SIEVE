@@ -1,7 +1,7 @@
 ---
 title: A kernel that sees a span — Mode.WINDOWED runs
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: high
 gated_on: nothing
 after: [declarable-but-not-runnable]

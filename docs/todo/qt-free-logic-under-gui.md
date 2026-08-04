@@ -3,7 +3,7 @@ title: Qt-free logic is stranded under gui/
 status: open
 priority: unassessed
 after: [headless-detection, the-mutual-tier]
-opened: 2026-07-28
+opened: 2026-07-28T12:57:15-07:00
 
 gated_on: >
   nothing structurally — but the rework moves the biggest rows on its own

@@ -4,7 +4,10 @@ title: Sink writers                       # short name, under five words
 status: deferred                          # open — takeable now | deferred — timing is the decision
                                           # | superseded — scope moved; name it in superseded_by
                                           #   and keep the file so references resolve
-opened: 2026-07-27                        # the day the item was written
+opened: 2026-07-29T12:18:58-07:00         # stamped by tools/new_item.py: the
+                                          # moment it was written, not the day.
+                                          # It is the tiebreak inside a priority
+                                          # band, and a day holds two dozen items.
 
 # How much it matters, which is a different axis from `status`: a deferred
 # item can be `high` and an open one `low`. Ordering everything the tools

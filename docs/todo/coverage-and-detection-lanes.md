@@ -1,6 +1,7 @@
 ---
 title: Coverage and detection lanes on the timeline
 status: deferred
+opened: 2026-07-27T15:01:34-07:00
 priority: unassessed
 gated_on: >
   the executor recording, per replicate and per frame, that it ran and under

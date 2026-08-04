@@ -1,7 +1,7 @@
 ---
 title: A number says how it was founded, and for which machine
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: normal
 gated_on: nothing
 after: [work-units-have-one-anchor]

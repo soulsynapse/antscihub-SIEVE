@@ -1,6 +1,7 @@
 ---
 title: Materialization, and the rule that is waiting on it
 status: deferred
+opened: 2026-07-27T15:01:34-07:00
 priority: unassessed
 gated_on: >
   a workload that can say what the general store's chunking is for — the

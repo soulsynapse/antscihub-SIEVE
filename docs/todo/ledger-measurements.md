@@ -4,7 +4,7 @@ status: deferred
 priority: unassessed
 after: [ledger-producers]
 serves: [A2]
-opened: 2026-07-27
+opened: 2026-07-27T22:32:53-07:00
 gated_on: >
   a floor reading on a *small* machine. The instrumented session ran 2026-07-28
   (docs/findings/2026.07.28-the-session-floor-is-the-window.md) and changed the

@@ -1,6 +1,7 @@
 ---
 title: HPC handoff, and review mode
 status: deferred
+opened: 2026-07-27T15:01:34-07:00
 priority: unassessed
 after: [sink-writers]
 gated_on: >

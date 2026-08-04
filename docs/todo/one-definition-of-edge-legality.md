@@ -1,7 +1,7 @@
 ---
 title: One definition of edge legality, two consumption modes
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: normal
 gated_on: nothing
 reads: [src/sieve/pipeline/dag.py, src/sieve/gui/chain_model.py]

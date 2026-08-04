@@ -2,6 +2,7 @@
 title: A kernel protocol that is not one frame in, one frame out
 status: superseded
 superseded_by: [a-kernel-that-sees-a-span, a-kernel-that-changes-the-rate]
+opened: 2026-07-27T15:01:34-07:00
 priority: unassessed
 gated_on: >
   superseded 2026-07-29 — the trigger fired from inside the tree (REWORK.md

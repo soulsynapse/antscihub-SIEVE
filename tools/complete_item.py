@@ -36,7 +36,7 @@ import argparse
 import re
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -58,7 +58,10 @@ Still yours to do, in order:
   4. If anything was *measured*, it goes to docs/findings/, not this entry.
   5. uv run nox -s checks
   6. uv run nox -s docs
-  7. Commit, then `git rev-parse --short HEAD` into `commit:`, then push.
+  7. Commit, then `git rev-parse --short HEAD` into `commit:`, keeping the
+     quotes — an unquoted all-digit hash is read as a YAML integer, and one
+     beginning with a zero as an *octal* one (`0707005` indexed as 232965).
+     Then push.
 """
 
 
@@ -136,12 +139,19 @@ def render(
     were added in one burst and then not at all, while the building continued.
     The cost of the marker is that `none` must be typed; that is the point.
     """
-    today = date.today()
+    # The completion moment, to the second and with its offset. Day precision
+    # put twenty entries a day in one bucket and left the order inside it to
+    # the filename, which is alphabetical and says nothing. Not the commit's
+    # own timestamp: `commit:` is `pending` here and is filled in after the
+    # commit exists, so deriving the order from it would make the order depend
+    # on a field that is routinely left unfilled — and on hashes surviving a
+    # history rewrite, which this repo has already had one of.
+    stamp = datetime.now().astimezone().replace(microsecond=0)
     return f"""\
 ---
 title: {title}
-date: {today.isoformat()}
-commit: pending
+date: {stamp.isoformat()}
+commit: "pending"
 tags: []
 
 summary: >

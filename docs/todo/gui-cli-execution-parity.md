@@ -2,7 +2,7 @@
 title: A GUI-saved pipeline must run identically in the CLI
 status: open
 priority: high
-opened: 2026-07-28
+opened: 2026-07-28T14:57:43-07:00
 
 gated_on: >
   nothing — AUTO-GUARDRAILS §2's own trigger ("the next item that touches

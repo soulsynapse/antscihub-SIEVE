@@ -3,7 +3,7 @@ title: A budget check gets slower the more of the suite pytest imported
 status: open
 priority: unassessed
 serves: [A2]
-opened: 2026-07-28
+opened: 2026-07-28T09:10:36-07:00
 gated_on: >
   nothing — but the first step is a measurement of the mechanism, not a choice
   among fixes; every option written before 2026-07-28 was written against a

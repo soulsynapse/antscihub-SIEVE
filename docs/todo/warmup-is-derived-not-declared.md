@@ -1,7 +1,7 @@
 ---
 title: Warmup is derived, epsilon is a field, cacheable splits fact from policy
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: normal
 gated_on: nothing
 reads: [src/sieve/core/filter_base.py, src/sieve/filters/temporal_baseline.py, src/sieve/filters/background_ema.py]

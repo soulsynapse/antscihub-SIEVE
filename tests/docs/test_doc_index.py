@@ -72,6 +72,34 @@ class TestPriorityOrdering:
         entries = [self._item("typo.md", "P1"), self._item("real.md", "low")]
         assert [e.path.name for e in item_order(entries)] == ["real.md", "typo.md"]
 
+    def test_equally_urgent_takeable_work_is_ordered_oldest_first(self) -> None:
+        # The band an agent reads from is one priority deep, and most of the
+        # list is `unassessed` — so this tiebreak, not `priority`, is what
+        # actually orders the work. It used to be the filename.
+        newer = Entry(
+            path=Path("a.md"),
+            fields={"priority": "high", "status": "open", "opened": "2026-07-29T12:00:00-07:00"},
+        )
+        older = Entry(
+            path=Path("z.md"),
+            fields={"priority": "high", "status": "open", "opened": "2026-07-25T09:00:00-07:00"},
+        )
+        assert [e.path.name for e in item_order([newer, older])] == ["z.md", "a.md"]
+
+    def test_two_items_minted_the_same_day_still_order(self) -> None:
+        # The defect this whole key exists for: twenty-four items were minted
+        # on 2026-07-29 and a day-precision stamp left their order to the
+        # alphabet, which put `a-filter-...` above work opened six hours later.
+        first = Entry(
+            path=Path("z.md"),
+            fields={"priority": "high", "status": "open", "opened": "2026-07-29T09:14:00-07:00"},
+        )
+        second = Entry(
+            path=Path("a.md"),
+            fields={"priority": "high", "status": "open", "opened": "2026-07-29T15:41:00-07:00"},
+        )
+        assert [e.path.name for e in item_order([second, first])] == ["z.md", "a.md"]
+
     def test_takeable_work_leads_its_priority_band(self) -> None:
         # Only the index table interleaves the two statuses; the primer splits
         # on status first. Without this, a `high` item nobody can start yet

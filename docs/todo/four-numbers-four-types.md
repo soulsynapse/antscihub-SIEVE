@@ -1,7 +1,7 @@
 ---
 title: Four kinds of number, four types
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: high
 gated_on: nothing
 reads: [src/sieve/core/types.py, src/sieve/core/filter_base.py]

@@ -2,7 +2,7 @@
 title: One edit is three regions in two files
 status: open
 priority: unassessed
-opened: 2026-07-28
+opened: 2026-07-28T12:57:15-07:00
 
 gated_on: >
   nothing — scoped to option A on 2026-07-28 after 937ac91 refused option B

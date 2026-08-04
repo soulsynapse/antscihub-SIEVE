@@ -4,7 +4,7 @@ status: deferred
 priority: unassessed
 after: [ledger-producers]
 serves: [A2]
-opened: 2026-07-28
+opened: 2026-07-28T09:10:36-07:00
 gated_on: >
   evidence that the fixed constants are wrong on machines that are not the
   reference — concretely, pool-utilisation samples from more than one class of

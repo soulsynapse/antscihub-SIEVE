@@ -3,7 +3,7 @@ title: What the viewport keeps of a render, and what it drops
 status: deferred
 priority: unassessed
 after: [slow-path-surfacing]
-opened: 2026-07-27
+opened: 2026-07-27T21:48:22-07:00
 gated_on: >
   a recorded session that scrubs, which is docs/todo/slow-path-surfacing.md's
   gesture mix to make visible. The capacity half landed 2026-07-28 in 14ce201:

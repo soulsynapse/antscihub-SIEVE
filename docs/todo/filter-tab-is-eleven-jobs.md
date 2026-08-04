@@ -2,7 +2,7 @@
 title: filter_tab.py is eleven jobs in one widget
 status: open
 priority: unassessed
-opened: 2026-07-28
+opened: 2026-07-28T12:57:15-07:00
 
 gated_on: >
   nothing structurally — but take it one named responsibility per item, never

@@ -2,7 +2,7 @@
 title: Parity comparison finding
 status: deferred
 priority: unassessed
-opened: 2026-07-27
+opened: 2026-07-27T14:35:51-07:00
 gated_on: >
   a seated session with the v1 checkout — v1 is a sibling repo no agent can
   reach and no headless run can drive, so the pending decision is what that

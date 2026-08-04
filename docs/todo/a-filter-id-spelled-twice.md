@@ -1,7 +1,7 @@
 ---
 title: A filter id spelled outside its module is an enumeration
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: high
 gated_on: nothing
 reads: [tests/bench/test_budget_producers.py, src/sieve/core/filter_registry.py]

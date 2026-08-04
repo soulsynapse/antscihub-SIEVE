@@ -1,7 +1,7 @@
 ---
 title: Rule 6's frontier moves into the execution contract
 status: open
-opened: 2026-07-29
+opened: 2026-07-29T12:18:58-07:00
 priority: normal
 gated_on: nothing
 after: [a-kernel-that-sees-a-span, detector-state-dies]

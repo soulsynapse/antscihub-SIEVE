@@ -151,6 +151,14 @@ FLAGGED: dict[str, str] = {
         "non-obvious per-method thread-safety or design-rejection reason the "
         "budget would delete rather than compress — prefetch-docstring-budget"
     ),
+    "sieve/gui/composite_view.py": (
+        "one secret (a step's contribution shown as two blended images or a "
+        "grid overlay, sharing one rectangle and one emit-not-apply gesture "
+        "protocol), but 38 symbol docstrings and 2,346 words of prose against "
+        "a 400 cap, each one a non-obvious pixel-registration or gesture "
+        "reason the budget would delete rather than compress — "
+        "composite-view-docstring-budget"
+    ),
 }
 
 

@@ -144,6 +144,13 @@ FLAGGED: dict[str, str] = {
         "one a non-obvious layering or failure-mode reason the budget would "
         "delete rather than compress — preview-docstring-budget"
     ),
+    "sieve/decode/prefetch.py": (
+        "one secret (N VideoReaders claiming a sliding window ahead of one "
+        "consumer, byte-identical to a single reader), but 15 symbol "
+        "docstrings and 2,392 words of prose against a 400 cap, each one a "
+        "non-obvious per-method thread-safety or design-rejection reason the "
+        "budget would delete rather than compress — prefetch-docstring-budget"
+    ),
 }
 
 

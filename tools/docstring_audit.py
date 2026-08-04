@@ -98,6 +98,7 @@ ASSESSED: dict[str, str] = {
     "sieve/detect/__init__.py": "detection takes a resolved DetectorSettings and a series, never a Project or the GUI's mutable tuning state, so both front ends compute it the same way",
     "sieve/core/__init__.py": "core/ is pure logic: nothing here imports a layer above it, Qt, Zarr, or subprocess, machine-checked by .importlinter",
     "sieve/decode/identity.py": "a cache key over decoded content must include who decoded it, since decoders can disagree on pixel values for the same input",
+    "sieve/decode/reader.py": "grab-vs-seek and BGR-vs-luma are both traded for measured cost, but only the luma trade moves pixels the cache key must see",
     "sieve/gui/app.py": "the one place that mutates process-wide state before any window exists, and resolves which video a launch opens",
     "sieve/backend/identity.py": "a cache key must say which backend produced a frame, since backends can disagree in the low bits, unless the filter declared backend_agnostic",
     "sieve/gui/block_spin.py": "0 is a mode (auto), not a smaller size, so stepping down stops at 1 before it can cross into auto",

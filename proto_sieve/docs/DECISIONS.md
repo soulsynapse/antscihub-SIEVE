@@ -190,3 +190,29 @@ Format: `<date> — <decision> — <why, in a clause>`
   the one domain fact this pass was still faking. Which *pane* (Pipeline
   vs Step) is showing has no `Session` equivalent and stays `control.py`'s
   own secret; `Session` stays headless, no Qt. 44 tests still green.
+- 2026-08-03 — the sliding track animates in *pane units*, not pixels.
+  `_SlidingPanes` animates a float `offset` property (1.5 = halfway between
+  panes 1 and 2) and derives the track's pixel position from it, so a
+  resize mid-slide re-lays out at the fraction reached instead of having to
+  stop the animation and jump (which is what the pixel version did from
+  `resizeEvent`). That mattered because every transition in or out of the
+  workspace resizes the track — `Control` shows or hides the rail beside it
+  — so Pipeline <-> Step were the only transitions that ever animated.
+  The rail now keeps its width when hidden (`setRetainSizeWhenHidden`) and
+  is a fixed one tick wide whatever the step count, so no navigation
+  changes the track's width at all. Same pass: `Control`'s layout spacing
+  goes to 0 and its right margin to the rail's width, so the panes sit in
+  equal whitespace either side instead of inset 14px left, 0 right.
+- 2026-08-03 — the GUI is chunk 8, not an exemption. `AGENTS.md` used to say
+  "the GUI is not a chunk. It has no cheap proof" — one clause justifying the
+  other, but dropping it out of the table took its *fence* away too, and a
+  halt or a co-touch is declared against a fence, not against a proof. So GUI
+  sittings could not produce a finding at all, which is the only thing this
+  spike is for. It now has a table row with `none` in the proof column and a
+  fence named at the start of each sitting. Nothing else changes: no test, no
+  apparatus, the sitting-with-Kendrick rule stands. Two findings that were
+  already owed under the corrected rule are backfilled into `FINDINGS.md`
+  (the missing "slide finished" signal on `Control`; the twelve-file repo-root
+  walk). Still unaddressed and deliberately not folded in: `STATUS.md`'s
+  dropping of the proof-first regime after chunk 4 left finding list 1 with no
+  mechanism anywhere in the tree, GUI or otherwise.

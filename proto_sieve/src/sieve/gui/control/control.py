@@ -13,7 +13,8 @@ panes must never hide it" (``rail.py``'s own docstring) still holds, just
 one level up from where it used to live (``PipelinePanel``, since
 dissolved into this module). It's rebuilt fresh (new step count) on every
 ``show_workspace`` call; project info (position 0) hides it rather than
-showing an empty one.
+showing an empty one — but keeps its width reserved, so no navigation ever
+changes the track's width while the track is sliding.
 
 ``project_selected`` forwards straight from whichever ``ProjectSelect``
 instance currently sits at position 0 — this module never touches
@@ -30,7 +31,13 @@ that choice stays this module's own secret.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Signal
+from PySide6.QtCore import (
+    Property,
+    QAbstractAnimation,
+    QEasingCurve,
+    QPropertyAnimation,
+    Signal,
+)
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QWidget
 
 from proto_sieve.src.sieve.gui.control.pipeline.pipeline import build_step_list
@@ -39,7 +46,7 @@ from proto_sieve.src.sieve.gui.control.project_select import ProjectSelect
 from proto_sieve.src.sieve.pipeline import Pipeline
 from proto_sieve.src.sieve.projects import Project
 
-_SLIDE_DURATION_MS = 220
+_SLIDE_DURATION_MS = 260
 
 _POS_PROJECT, _POS_PIPELINE, _POS_STEP = range(3)
 _POSITION_NAMES = ("project", "pipeline", "step")
@@ -52,7 +59,20 @@ class _SlidingPanes(QWidget):
     widget in place, with no animation, whether or not it's current — used
     when a position's content changes (a fresh project list, a newly
     rendered step list) as opposed to when only which position is current
-    changes (``set_current``, the only thing that animates)."""
+    changes (``set_current``, the only thing that animates).
+
+    What animates is ``offset``, a float in *pane units* (1.5 = halfway
+    between panes 1 and 2), not the track's pixel position. That indirection
+    is the whole reason a slide survives a resize: pixels computed against
+    one width are stale the instant the width changes, so the earlier
+    pixel-animating version had to stop the animation from ``resizeEvent``
+    and jump to the destination — and every transition in or out of the
+    workspace resizes this widget (``Control`` shows or hides the rail
+    beside it), so in practice the only transitions that ever animated were
+    Pipeline <-> Step. An offset in pane units stays correct across a width
+    change; a resize just re-lays out at whatever fraction the slide has
+    reached, and the slide keeps running.
+    """
 
     def __init__(self, panes: list[QWidget], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -60,14 +80,28 @@ class _SlidingPanes(QWidget):
 
         self._panes = list(panes)
         self._current = 0
+        self._offset = 0.0
 
         self._track = QWidget(self)
         for pane in self._panes:
             pane.setParent(self._track)
 
-        self._animation = QPropertyAnimation(self._track, b"pos", self)
+        self._animation = QPropertyAnimation(self, b"offset", self)
         self._animation.setDuration(_SLIDE_DURATION_MS)
+        # Out-only easing reads as the track being flicked and coasting to
+        # rest; an InOut curve on a distance this short just looks sluggish.
         self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        self._relayout()
+
+    def _get_offset(self) -> float:
+        return self._offset
+
+    def _set_offset(self, value: float) -> None:
+        self._offset = float(value)
+        self._track.move(-round(self._offset * self.width()), 0)
+
+    offset = Property(float, _get_offset, _set_offset)
 
     def current_index(self) -> int:
         return self._current
@@ -79,15 +113,13 @@ class _SlidingPanes(QWidget):
         widget.setParent(self._track)
         self._panes[index] = widget
 
-        width, height = self.width(), self.height()
-        if width:
-            widget.setGeometry(index * width, 0, width, height)
         # Every pane stays visible, side by side in the track — it's the
-        # track's own position (moved by set_current) that decides what's
-        # in frame, same as the parent clipping the ones off-screen. Unlike
-        # BreadcrumbStack's overlaid panes, hiding a pane here would hide
-        # the very thing set_current is about to slide to.
+        # track's own position (moved as offset animates) that decides
+        # what's in frame, with the parent clipping the ones off-screen.
+        # Unlike BreadcrumbStack's overlaid panes, hiding a pane here would
+        # hide the very thing the next slide is about to reveal.
         widget.show()
+        self._relayout()
 
         old.hide()
         old.setParent(None)
@@ -96,23 +128,28 @@ class _SlidingPanes(QWidget):
     def set_current(self, index: int) -> None:
         if not 0 <= index < len(self._panes):
             raise IndexError(index)
+        running = self._animation.state() == QAbstractAnimation.State.Running
+        if index == self._current and not running:
+            return
         self._current = index
-        target = QPoint(-index * self.width(), 0)
+        # Restarting from the live offset rather than from the pane it was
+        # heading to keeps a fast Left-Right-Left from jumping backwards
+        # before it slides.
         self._animation.stop()
-        self._animation.setStartValue(self._track.pos())
-        self._animation.setEndValue(target)
+        self._animation.setStartValue(self._offset)
+        self._animation.setEndValue(float(index))
         self._animation.start()
 
     def resizeEvent(self, event) -> None:  # noqa: ARG002 - Qt event signature
         super().resizeEvent(event)
+        self._relayout()
+
+    def _relayout(self) -> None:
         width, height = self.width(), self.height()
-        self._track.setFixedSize(width * len(self._panes), height)
+        self._track.resize(width * len(self._panes), height)
         for i, pane in enumerate(self._panes):
             pane.setGeometry(i * width, 0, width, height)
-        # A resize mid-animation would otherwise leave the track at a
-        # now-stale pixel offset computed against the old width.
-        self._animation.stop()
-        self._track.move(-self._current * width, 0)
+        self._set_offset(self._offset)
 
 
 class Control(QWidget):
@@ -122,13 +159,21 @@ class Control(QWidget):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        self._rail = StepRail(step_count=0, current_index=0)
+        self._rail = self._build_rail(step_count=0, current_index=0)
         self._rail.setVisible(False)
 
         self._panes = _SlidingPanes([self._build_project_select(projects), QWidget(), QWidget()])
 
         self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
+        # The rail is a left gutter, so zero margins are not symmetric: the
+        # panes would sit rail-width plus the layout's default spacing in
+        # from the left edge and flush against the right one. Spacing goes
+        # to 0 and the right margin to the rail's own width, which leaves
+        # equal whitespace either side of the panes — the left gutter being
+        # the one with ticks drawn in it. Read off the rail rather than
+        # restated as a constant here; how wide the strip is is rail.py's.
+        self._layout.setSpacing(0)
+        self._layout.setContentsMargins(0, 0, self._rail.maximumWidth(), 0)
         self._layout.addWidget(self._rail)
         self._layout.addWidget(self._panes)
 
@@ -142,7 +187,7 @@ class Control(QWidget):
 
     def show_workspace(self, pipeline: Pipeline, current_index: int) -> None:
         old_rail = self._rail
-        self._rail = StepRail(step_count=len(pipeline.steps), current_index=current_index)
+        self._rail = self._build_rail(len(pipeline.steps), current_index)
         self._layout.replaceWidget(old_rail, self._rail)
         old_rail.setParent(None)
         old_rail.deleteLater()
@@ -157,6 +202,19 @@ class Control(QWidget):
 
     def show_step_tab(self) -> None:
         self._panes.set_current(_POS_STEP)
+
+    def _build_rail(self, step_count: int, current_index: int) -> StepRail:
+        rail = StepRail(step_count=step_count, current_index=current_index)
+        # Hiding the rail at project info must not take its width back:
+        # that would resize the track beside it in the same event loop turn
+        # as the slide it's part of. The slide itself now survives a resize
+        # (see _SlidingPanes), but the panes would still visibly jog
+        # sideways mid-flight. The rail is one tick wide, so the reserved
+        # strip costs nothing to look at.
+        policy = rail.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        rail.setSizePolicy(policy)
+        return rail
 
     def _build_project_select(self, projects: list[Project]) -> ProjectSelect:
         select = ProjectSelect(projects)

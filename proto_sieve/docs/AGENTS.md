@@ -78,13 +78,22 @@ only decisions here that are unrecoverable if wrong.
 | 5 | how a named user operation becomes a graph | `tools/base.py`, `tools/crop.py` | `hash(lower(p))` equals the hash of chunk 1's hand-built graph |
 | 6 | how a pipeline is represented on disk | `pipeline.py` | write, read, lower, same hash |
 | 7 | how a result is described for display | `views.py`, `Tool.view` | the view is a value and compares structurally; nothing renders |
+| 8 | which top-level screen is showing, and how switching looks | named per sitting, e.g. `gui/control/**`, `gui/layout/**`, `gui/app.py` | none — a sitting with Kendrick watching |
 
 Chunk 4 is the load-bearing one: if chunk 3's test has to change to
 accommodate the cache, materialization is not a secret and that is the most
 valuable thing this spike can tell us.
 
-The GUI is not a chunk. It has no cheap proof, so it is done in a sitting
-with Kendrick watching, after everything under it is green.
+Chunk 8 has no cheap proof, so its proof column is a sitting rather than a
+test, and it comes after everything under it is green. It is still a chunk:
+it names a secret and a fence, so a halt against it is declarable and a
+co-touch across it is recordable. **The exemption is on the proof, not on
+the finding lists** — this used to read "the GUI is not a chunk", which
+dropped the fence along with the proof and left GUI sittings unable to
+produce a finding at all, which is the only thing this spike is for. Its
+fence is named at the start of each sitting rather than fixed here, since
+which files a GUI sitting touches is not knowable in advance the way chunk
+1's was.
 
 ### Chunk 2, the adversarial pairs
 

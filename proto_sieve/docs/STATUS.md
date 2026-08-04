@@ -26,7 +26,7 @@ directly under `proto_sieve/`. Docs live under `proto_sieve/docs/`.
 | 5 | tool declares a requirement; resolver picks the op | green | REPL check only |
 | 6 | pipeline on disk | green | REPL check only |
 | 7 | view as a value | green | REPL check only |
-| — | GUI | not a chunk; a sitting with Kendrick, last | — |
+| 8 | GUI | in progress | nothing — a sitting, per `AGENTS.md` |
 
 Chunk 2's live pair — *same requirement, resolver picked a different op* — is
 resolved (see `DECISIONS.md`, 2026-08-03): the resolved op enters the hash,
@@ -77,6 +77,23 @@ dissolved into `Control`; `control/pipeline/pipeline.py` is now just
 `build_step_list`. The rail's current tick is `Session.current_index`,
 passed in on every `show_workspace` call, not hardcoded. See
 `DECISIONS.md`'s most recent entry for the full shape.
+
+The GUI is chunk 8 as of this session — see `DECISIONS.md`. A GUI sitting
+now names its fence before it starts and records halts and co-touches like
+any other chunk; only the proof column is exempt. This session's fence was
+`gui/control/control.py` and `gui/control/pipeline/rail/rail.py`, and it
+produced one halt, now in `FINDINGS.md`.
+
+The track's animation was fixed this pass: it now animates a float offset
+in pane units rather than the track's pixel position, and the rail beside
+it holds a constant width (fixed one tick wide, size retained when
+hidden). Before that, every transition in or out of the workspace resized
+the track, which stopped the animation and cut instantly — only Pipeline
+<-> Step ever visibly slid. All four transitions now interpolate, and a
+resize mid-slide continues rather than snapping. `Control`'s own left/right
+gutters were evened up at the same time. See `DECISIONS.md`. Verified by an
+offscreen script that samples the offset every 20ms across each
+transition; still no committed GUI test.
 
 Still open: the "Pipeline" pane has nothing in it (not designed, per
 `pipeline.py`'s own longstanding note); nothing wires a step-list click to

@@ -5,6 +5,11 @@ like — ``gui/style.py`` owns those roles' colors. This module only ever
 lays the ticks out, one per step, vertical, and never hides — nothing here
 depends on which of ``pipeline.py``'s tabs is showing.
 
+The strip is one tick wide whatever the step count, including zero — a
+sizeHint-driven width would collapse to 0 with no steps, and a rail that
+changes width when it's rebuilt resizes whatever sits beside it, which is
+enough to interrupt a slide in progress (see ``control.py``).
+
 All role tagging here (``ROLE_STEP_TICK``, ``ROLE_STEP_TICK_CURRENT``, and
 the halo before it) is temporarily unwired — both were blocking launches
 and the root cause isn't diagnosed yet. Every tick renders as a plain,
@@ -24,6 +29,7 @@ class StepRail(QWidget):
         self, step_count: int, current_index: int, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
+        self.setFixedWidth(_TICK_SIZE)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

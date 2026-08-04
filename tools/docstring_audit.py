@@ -79,6 +79,7 @@ ASSESSED: dict[str, str] = {
     "sieve/backend/identity.py": "a cache key must say which backend produced a frame, since backends can disagree in the low bits, unless the filter declared backend_agnostic",
     "sieve/gui/block_spin.py": "0 is a mode (auto), not a smaller size, so stepping down stops at 1 before it can cross into auto",
     "sieve/cli/materialize_cmd.py": "materialize is one headless command that derives its format from the graph and writes+registers a single replicate's crop atomically",
+    "sieve/gui/param_form.py": "one widget per params-model field, bounds read from the field's own constraints, so a filter's settings surface exists the moment the filter does with no per-filter GUI code",
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

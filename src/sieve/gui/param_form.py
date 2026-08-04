@@ -10,6 +10,10 @@ class + one markdown" holding at the widget layer.
 Edits flow one way: widget → `on_edit(name, value)` → the tab rewrites the
 chain value and the caption restates it. Nothing here reads the chain back;
 a rebuilt form is how new values arrive, exactly like the stack's cards.
+
+A field named in the catalog's `hidden_params` (state that mirrors the chain
+rather than user intent) gets no widget at all rather than a disabled one: a
+knob the user must not touch is noise, not a control.
 """
 
 from __future__ import annotations
@@ -42,12 +46,6 @@ def param_rows(
     hidden: frozenset[str],
     on_edit: Callable[[str, object], None],
 ) -> list[QWidget]:
-    """One labelled row per editable field of `node`'s params model.
-
-    `hidden` names fields that mirror chain state rather than user intent
-    (the catalog entry's `hidden_params`); they get no widget at all rather
-    than a disabled one, because a knob the user must not touch is noise.
-    """
     spec = REGISTRY.get(node.filter_id, node.version)
     rows: list[QWidget] = []
     for name, field in spec.params_model.model_fields.items():
@@ -120,7 +118,6 @@ def _widget_for(
 
 
 def _bounds(metadata: list[Any], *, integer: bool) -> tuple[float, float]:
-    """The field's declared range, or a wide-open one."""
     low, high = float(-_UNBOUNDED), float(_UNBOUNDED)
     nudge = 1.0 if integer else 1e-6
     for constraint in metadata:

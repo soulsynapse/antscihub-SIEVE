@@ -100,6 +100,11 @@ FLAGGED: dict[str, str] = {
         "per control, document-vs-local knob routing, the wizard session lifecycle, the crop "
         "boundary card, structure-edit macros), not one — filter-tab-many-secrets"
     ),
+    "sieve/gui/document.py": (
+        "one secret (ReplicateSet plus undo history, GUI-side), but 67 symbol docstrings and "
+        "5,793 words of prose against a 400 cap, each one a non-obvious per-method reason the "
+        "budget would delete rather than compress — document-docstring-budget"
+    ),
 }
 
 

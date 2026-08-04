@@ -9,7 +9,18 @@ machine axis — the same measurement under a restricted set of cores, which is
 how one machine answers a question about several.
 
 **It changes process affinity and is therefore a command, not a test.** See
-`bench/sweep.py`; the isolation a sweep needs is a process of its own.
+`bench/sweep.py`; the isolation a sweep needs is a process of its own. A
+platform that will not pin a process refuses outright (exit 1) rather than
+running unpinned, which would report the machine axis as noise under the
+labels of an experiment.
+
+Per cell, two statistics are kept: `best` is what the configuration can do,
+`typical` is what a session gets, and the gap between them is itself a
+reading — wide on a core set means the scheduler moved the work around during
+the measurement. The worst/best ratio across worker counts, per core set, is
+the number the controller question turns on: a core set whose best and worst
+worker counts are within a few percent has no gradient for a controller to act
+on, and that result closes the question rather than opening it.
 """
 
 from __future__ import annotations
@@ -71,17 +82,6 @@ def sweep_decode(
         False
     ),
 ) -> None:
-    """Measure ms/frame across core sets and worker counts, and report the spread.
-
-    The spread is the point. A core set whose best and worst worker counts are
-    within a few percent has no gradient for a controller to act on, and that
-    result closes a question rather than opening one.
-
-    Raises:
-        typer.Exit: code 1 if the footage cannot be read, or if this platform
-            will not pin a process — a sweep that silently ran unpinned would
-            report the machine axis as noise under the labels of an experiment.
-    """
     try:
         counts = _integers(workers, "--workers")
         core_counts = _integers(sizes, "--core-counts") if sizes else ()
@@ -115,7 +115,6 @@ def sweep_decode(
 
 
 def _integers(raw: str, option: str) -> tuple[int, ...]:
-    """A comma-separated list, refused as a whole rather than partially parsed."""
     try:
         values = tuple(int(part) for part in raw.split(",") if part.strip())
     except ValueError as error:
@@ -126,13 +125,6 @@ def _integers(raw: str, option: str) -> tuple[int, ...]:
 
 
 def _report(readings: tuple[Reading, ...], *, luma: bool, as_json: bool) -> str:
-    """The surface, and the one number the controller question turns on.
-
-    Both statistics per cell: `best` is what the configuration can do and
-    `typical` is what a session gets, and the gap between them on a core set is
-    itself a reading — a wide one means the scheduler moved the work around
-    during the measurement, which is the effect the whole sweep exists to see.
-    """
     records = [
         {
             "cores": reading.cell.cores.label,

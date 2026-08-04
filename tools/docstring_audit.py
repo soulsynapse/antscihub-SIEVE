@@ -121,6 +121,13 @@ FLAGGED: dict[str, str] = {
         "prose against a 400 cap, each one a non-obvious per-method reason the "
         "budget would delete rather than compress — preview-runner-docstring-budget"
     ),
+    "sieve/gui/main_window.py": (
+        "one secret (the window as composition root, holding the session-only "
+        "identity the document excludes and wiring player/document/preview/probe "
+        "together), but 33 symbol docstrings and 3,570 words of prose against a "
+        "400 cap, each one a non-obvious per-method ordering or shutdown hazard "
+        "the budget would delete rather than compress — main-window-docstring-budget"
+    ),
 }
 
 

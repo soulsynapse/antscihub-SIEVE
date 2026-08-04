@@ -67,3 +67,22 @@ class Session:
     def redo(self) -> Pipeline:
         self._draft = None
         return self._history.redo()
+
+    def history_timeline(self) -> list[Pipeline]:
+        return self._history.timeline()
+
+    def history_index(self) -> int:
+        return self._history.index
+
+    def jump_to(self, index: int) -> Pipeline:
+        """Move directly to a timeline entry, same pointer-move as undo/redo
+        (does not touch ``current_index`` — neither does undo/redo today)."""
+        self._draft = None
+        return self._history.jump(index)
+
+    def load(self, pipeline: Pipeline) -> None:
+        """Adopt a pipeline loaded from storage as a fresh commit — it becomes
+        the new present, the old present becomes undoable-back-to."""
+        self._draft = None
+        self._current_index = 0
+        self._history.push(pipeline)

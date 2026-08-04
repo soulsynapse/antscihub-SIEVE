@@ -3,8 +3,12 @@
 Two stacks of whole ``Pipeline`` values, past and future, around one present
 value. History never sees a step, a draft, an index, or the GUI — only
 ``Pipeline`` values going in (``push``) and coming back out (``undo``/
-``redo``). Undo is moving a pointer through a list of values, not inverting
-an edit, which is what keeps this module from needing to know what a step is.
+``redo``/``jump``). Undo is moving a pointer through a list of values, not
+inverting an edit, which is what keeps this module from needing to know what
+a step is. ``timeline``/``index``/``jump`` exist so a caller can display and
+revisit any entry directly, not just step one at a time — ``jump`` still
+moves the same pointer through the same list, it just accepts an arbitrary
+target instead of ±1.
 """
 
 from __future__ import annotations
@@ -45,4 +49,20 @@ class History:
         if self._future:
             self._past.append(self._present)
             self._present = self._future.pop()
+        return self._present
+
+    @property
+    def index(self) -> int:
+        return len(self._past)
+
+    def timeline(self) -> list[Pipeline]:
+        return [*self._past, self._present, *self._future]
+
+    def jump(self, index: int) -> Pipeline:
+        combined = self.timeline()
+        if not 0 <= index < len(combined):
+            raise IndexError(f"history index {index} out of range for {len(combined)} entries")
+        self._past = combined[:index]
+        self._present = combined[index]
+        self._future = combined[index + 1 :]
         return self._present

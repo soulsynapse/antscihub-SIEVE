@@ -6,8 +6,26 @@ split: with no project chosen, the left is a bare "select a project" label
 ``gui/canvas/__init__.py``) and the right is ``ProjectSelect`` reading the
 projects registry; once one's picked (``session.app_state.select``), the
 left becomes ``VideoPlayer`` on the project's source and the right becomes
-``PipelinePanel`` on a fresh empty pipeline for it. Nothing here saves or
-loads a pipeline yet — a freshly-chosen project always starts empty.
+``PipelinePanel`` on a fresh empty pipeline for it. A freshly-chosen project
+always starts empty — nothing loads a saved pipeline automatically.
+
+``menu.py`` calls back into three public methods (``load_project``,
+``save_pipeline``, ``open_history``) rather than reaching into ``AppState``
+itself — this file owns what those verbs mean, ``menu.py`` only owns that
+they're reachable. All three states that can replace the current
+``Pipeline`` (fresh project select, a loaded save, a timeline jump) funnel
+through ``_render_workspace``, which rebuilds the whole canvas+control slot
+— there is no incremental update path yet, so all three reopen the video.
+
+Left/Right (``go_back``/``go_forward``, bound once by
+``hotkeys.bind_navigation_hotkeys``) walk a three-position chain — project
+info, the Pipeline tab, the Step tab — inferred from ``self._control``'s
+type rather than tracked as separate state: ``ProjectSelect`` means
+project info, and ``PipelinePanel.current_tab()`` tells the two workspace
+positions apart. Moving between the two workspace tabs calls
+``PipelinePanel``'s own tab methods directly (no rebuild, video keeps
+playing); moving to or from project info still goes through the full
+``show_project_info``/``show_workspace`` rebuild.
 """
 
 from __future__ import annotations
@@ -31,9 +49,9 @@ if str(_REPO_ROOT) not in sys.path:
     # direct script launch (VSCode's "Run Python File", etc.) doesn't add.
     sys.path.insert(0, str(_REPO_ROOT))
 
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
-from proto_sieve.src.sieve.gui.hotkeys import bind_hotkeys
+from proto_sieve.src.sieve.gui.hotkeys import bind_hotkeys, bind_navigation_hotkeys
 from proto_sieve.src.sieve.gui.layout import compose, size_window
 from proto_sieve.src.sieve.gui.menu import build_menu_bar
 from proto_sieve.src.sieve.gui.control.pipeline import PipelinePanel
@@ -42,6 +60,8 @@ from proto_sieve.src.sieve.gui import style
 from proto_sieve.src.sieve.gui.style import apply as apply_style
 from proto_sieve.src.sieve.gui.style import apply_title_bar
 from proto_sieve.src.sieve.gui.canvas.video_player import VideoPlayer
+from proto_sieve.src.sieve.gui.windows import ProjectHistoryWindow
+from proto_sieve.src.sieve.pipeline import load as load_pipeline, save as save_pipeline
 from proto_sieve.src.sieve.projects import Project, list_projects
 from proto_sieve.src.sieve.session import app_state
 from proto_sieve.src.sieve.preferences import appearance as appearance_prefs
@@ -53,34 +73,110 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("proto_sieve")
 
         self._state: app_state.AppState = app_state.NoProject()
+        self._control: QWidget | None = None
 
         self._top_bar = QLabel("top")
-        self._top_bar.setFixedHeight(style.bar_height())
+        self._top_bar.setFixedHeight(0)  # unused for now, zeroed rather than removed
         style.tag(self._top_bar, style.ROLE_BAR)
         self._bottom_bar = QLabel("bottom")
-        self._bottom_bar.setFixedHeight(style.bar_height())
+        self._bottom_bar.setFixedHeight(style.bar_height() * 2)
         style.tag(self._bottom_bar, style.ROLE_BAR)
 
         build_menu_bar(self)
-        self._show_project_select()
+        bind_navigation_hotkeys(self)
+        self.show_project_info()
 
         size_window(self)
 
-    def _show_project_select(self) -> None:
+    def show_project_info(self) -> None:
+        """Left, and the initial screen: the project-select screen. Never
+        touches ``self._state`` itself — an already-active session survives
+        underneath it untouched (``show_workspace``/Right returns to exactly
+        where it was); picking a project from the list here still starts a
+        fresh one, same as it always has."""
         canvas = QLabel("Select a project")
         control = ProjectSelect(list_projects())
         control.project_selected.connect(self._on_project_selected)
+        self._control = control
         self.setCentralWidget(compose(self._top_bar, canvas, control, self._bottom_bar))
+
+    def show_workspace(self) -> None:
+        """Right (from project info): back to the pipeline workspace for the
+        active session, landing on the Pipeline tab. A no-op with no active
+        session — nothing to return to."""
+        if not isinstance(self._state, app_state.ProjectActive):
+            return
+        self._render_workspace()
+
+    def go_back(self) -> None:
+        """Left: Step -> Pipeline tab (no rebuild) -> project info."""
+        if isinstance(self._control, PipelinePanel) and self._control.current_tab() == "step":
+            self._control.show_pipeline_tab()
+            return
+        self.show_project_info()
+
+    def go_forward(self) -> None:
+        """Right: project info -> workspace (Pipeline tab) -> Step tab."""
+        if isinstance(self._control, ProjectSelect):
+            self.show_workspace()
+            return
+        if isinstance(self._control, PipelinePanel):
+            self._control.show_step_tab()
 
     def _on_project_selected(self, project: Project) -> None:
         self._state = app_state.select(project)
+        self._render_workspace()
+
+    def _render_workspace(self) -> None:
+        """Rebuild the canvas+control workspace from ``self._state``'s
+        current pipeline. Reused after picking a project, loading a saved
+        pipeline, and jumping the undo/redo timeline — all three replace
+        which ``Pipeline`` is current, and none of them have an incremental
+        update path yet, so all three pay the same full-rebuild (video
+        reopened) cost. Cheaper live updates are future work, not this
+        slice's problem."""
+        assert isinstance(self._state, app_state.ProjectActive)
 
         canvas = VideoPlayer()
         control = PipelinePanel(self._state.session.pipeline)
+        self._control = control
         self.setCentralWidget(compose(self._top_bar, canvas, control, self._bottom_bar))
 
         bind_hotkeys(self, canvas)
         canvas.open(self._state.project.source_path)
+
+    def load_project(self) -> None:
+        """File > Load Project: back to the project-select screen, whatever
+        the current state was. Does not save first — nothing here asks.
+        Unlike Left/Right, this discards the active session — it's the
+        "start over" path, not the "peek back" one."""
+        self._state = app_state.NoProject()
+        self.show_project_info()
+
+    def save_pipeline(self) -> None:
+        """File > Save Pipeline: one save per project, overwrite, keyed by
+        the project's own name (see docs/DECISIONS.md)."""
+        if not isinstance(self._state, app_state.ProjectActive):
+            return
+        save_pipeline(self._state.project.name, self._state.session.pipeline)
+
+    def open_history(self) -> None:
+        if not isinstance(self._state, app_state.ProjectActive):
+            return
+        dialog = ProjectHistoryWindow(self._state.project, self._state.session, self)
+        dialog.saved_pipeline_load_requested.connect(self._on_saved_pipeline_load)
+        dialog.timeline_jump_requested.connect(self._on_timeline_jump)
+        dialog.exec()
+
+    def _on_saved_pipeline_load(self, name: str) -> None:
+        assert isinstance(self._state, app_state.ProjectActive)
+        self._state.session.load(load_pipeline(name))
+        self._render_workspace()
+
+    def _on_timeline_jump(self, index: int) -> None:
+        assert isinstance(self._state, app_state.ProjectActive)
+        self._state.session.jump_to(index)
+        self._render_workspace()
 
 
 def main() -> None:

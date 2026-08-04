@@ -31,12 +31,6 @@ _CUPY_DISTRIBUTIONS = ("cupy", "cupy-cuda12x", "cupy-cuda11x")
 
 @cache
 def backend_identity(backend: Backend) -> str:
-    """Stable string identifying the backend that produced a frame.
-
-    Raises:
-        RuntimeError: for `Backend.GPU` when no cupy distribution is installed,
-            which means nothing could have run a GPU kernel to be identified.
-    """
     if backend is Backend.CPU:
         return f"cpu-numpy-{np.__version__}/policy-{BACKEND_POLICY_VERSION}"
     return f"gpu-cupy-{_cupy_version()}/policy-{BACKEND_POLICY_VERSION}"

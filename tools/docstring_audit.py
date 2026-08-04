@@ -71,6 +71,7 @@ ASSESSED: dict[str, str] = {
     "sieve/backend/__init__.py": "which kernel runs and what to call the machine that ran it, never a kernel itself",
     "sieve/bench/__init__.py": "budgets are checkable headlessly, so CLI and GUI runs are held to the same numbers",
     "sieve/storage/__init__.py": "storage/ knows a file format and an array, never a cache key, replicate, or project",
+    "sieve/cli/__init__.py": "commands own no arithmetic — parsing, one run-only decision, and printing, nothing execute doesn't already do",
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

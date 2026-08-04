@@ -65,6 +65,9 @@ ASSESSED: dict[str, str] = {
     "sieve/decode/__init__.py": "decode/ is the only package allowed to import cv2 directly",
     "sieve/gui/__init__.py": "Qt stays in sieve.gui; it reaches the rest only via public APIs",
     "sieve/gui/__main__.py": "python -m sieve.gui delegates to gui.app.main, keeping its exit code",
+    "sieve/pipeline/__init__.py": (
+        "pipeline/ is Qt-free by contract; CLI, GUI, and cluster batch jobs execute through it"
+    ),
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

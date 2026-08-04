@@ -109,8 +109,9 @@ The reason is not that this filter's results vary. Given the 90 frames of warmup
 above they do not, and that is tested. It is that the pipeline decides what may
 be cached from a filter's *declarations*, and no declaration distinguishes a
 filter whose warmup number is honest from one whose is not. Rather than serve
-plausible but incorrect cache entries on the strength of an unverifiable claim,
-anything that remembers across frames is excluded.
+cache entries on the strength of an unverifiable claim, anything that remembers
+across frames is excluded. The full argument is in
+`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`.
 
 **It does not go below `alpha = 0.05`.** Lower values are legitimate and are
 what footage with long rest bouts wants, but the warmup they need grows fast —

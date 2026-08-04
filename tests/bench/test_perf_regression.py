@@ -1,7 +1,7 @@
 """The budget table enforced against a running player, not against a doc.
 
-The table alone says nothing about whether the software meets its limits. Until
-this file, `check()` had
+`test_budget_table.py` checks that the numbers in code and prose agree. It says
+nothing about whether the software meets them — until this file, `check()` had
 no call site outside its own unit test, so non-negotiable #4 was enforced by a
 measurement someone ran by hand once and wrote down.
 
@@ -17,8 +17,8 @@ a 10 ms interval, which would be a tenth of the `scrub_settle` budget of
 invented latency. The timestamps below are taken inside `frame_changed`, so
 what is measured is the player's round trip and not the harness's.
 
-The fixture is 160x120, so treating these measurements as representative-source
-performance would be wrong:
+The fixture is 160x120 and the reference footage is 5312x2988, so these numbers
+are not comparable to the ones in `docs/findings/`. That is fine and deliberate:
 the job here is to catch a regression that blows past a ceiling by an order of
 magnitude, not to certify the reference hardware.
 """

@@ -1,3 +1,27 @@
+"""The scalogram: pooled Morlet power on a log-frequency axis, band on top.
+
+Three of its rules come straight from the plot contracts (parity plan § 2):
+
+**Per-column max reduction, not averaging.** A working window is hundreds to
+thousands of frames wide and the plot a few hundred pixels; letting
+`drawImage` average them would dissolve a single-frame event into the noise
+floor. Each pixel column takes the *max* over the source columns it covers,
+so anything the transform saw survives any width. The reduction is cached per
+width and rebuilt only when the data or the width moves.
+
+**The COI is graded, not clipped.** Within an e-folding time of either end of
+the record the coefficients are zero-padding artifact, decaying — so the fade
+is an alpha ramp over that wedge per row (`core.wavelet.coi_edge_samples`),
+not a mask. A reader sees *that* the edge is untrustworthy and *how much*.
+
+**Frequency handles clamp.** The bank has edges; a band outside it would be
+silently snapped by `band_indices` anyway, and a handle that can say ``inf``
+here would be drawing a value the transform cannot use. The *snapped* band —
+the truth the transform uses — is the tab's to render through `set_readout`,
+because snapping needs the bank and the detector state, and plots own
+neither.
+"""
+
 from __future__ import annotations
 
 import math
@@ -14,7 +38,8 @@ from sieve.gui.band_plot import DIM, BandPlot, argb_to_qimage, plot_font, ramp_l
 
 FloatArray = NDArray[np.floating[Any]]
 
-
+#: Warm sequential ramp, dark → light, one family. The scalogram is the only
+#: surface that uses it (one ramp per magnitude surface).
 SCALO_STOPS: tuple[tuple[int, int, int], ...] = (
     (12, 8, 20),
     (86, 24, 48),
@@ -23,23 +48,33 @@ SCALO_STOPS: tuple[tuple[int, int, int], ...] = (
     (250, 214, 130),
 )
 
-
+#: Alpha the fade bottoms out at, at the record's very edge. Not zero: the
+#: wedge is contaminated, not absent.
 _COI_FLOOR = 0.15
 
 
 class ScalogramPlot(BandPlot):
+    """Pooled Morlet power over the working window, frequency band handles."""
+
     title = "scalogram"
-    unbounded = False
+    unbounded = False  # the bank has edges; handles clamp to them
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._norm: NDArray[np.float32] | None = None
+        self._norm: NDArray[np.float32] | None = None  # (F, T) in [0, 1]
         self._freqs: FloatArray = np.array([0.5, 25.0])
         self._fps = 30.0
         self._image: QImage | None = None
         self._image_width = 0
 
+    # ---- data ---------------------------------------------------------------
+
     def set_power(self, power: FloatArray, freqs: FloatArray, fps: float) -> None:
+        """The pooled `(F, T)` power to show, over `freqs` (row 0 = lowest).
+
+        Normalized in log space here, once — contrast belongs to the whole
+        surface, not to whichever columns a resize happens to group.
+        """
         self._freqs = np.asarray(freqs, np.float64)
         self._fps = fps
         log_p = np.log10(np.asarray(power, np.float64) + 1e-12)
@@ -48,6 +83,8 @@ class ScalogramPlot(BandPlot):
         self._image = None
         self._image_width = 0
         self.update()
+
+    # ---- the value axis -------------------------------------------------
 
     def _fwd(self, value: float) -> float:
         return math.log10(max(value, 1e-12))
@@ -61,7 +98,10 @@ class ScalogramPlot(BandPlot):
     def format_value(self, value: float) -> str:
         return f"{value:.2f}"
 
+    # ---- the image --------------------------------------------------------
+
     def _reduced(self, width: int) -> QImage:
+        """The surface at `width` pixel columns: max-reduce, ramp, COI fade."""
         assert self._norm is not None
         frames = self._norm.shape[1]
         if frames > width > 0:
@@ -79,21 +119,25 @@ class ScalogramPlot(BandPlot):
             if edge <= 1:
                 continue
             fade = np.linspace(_COI_FLOOR, 1.0, edge)
-            for sl, ramp in (
-                (np.s_[:edge], fade),
-                (np.s_[columns - edge :], fade[::-1]),
-            ):
+            for sl, ramp in ((np.s_[:edge], fade), (np.s_[columns - edge :], fade[::-1])):
                 cell = argb[row, sl]
                 alpha = ((cell >> np.uint32(24)) * ramp).astype(np.uint32)
-                argb[row, sl] = (alpha << np.uint32(24)) | (
-                    cell & np.uint32(0x00FFFFFF)
-                )
+                argb[row, sl] = (alpha << np.uint32(24)) | (cell & np.uint32(0x00FFFFFF))
+        # Row 0 is the lowest frequency; the axis runs upward.
         return argb_to_qimage(argb[::-1])
+
+    # ---- painting ---------------------------------------------------------
 
     def paint_content(self, painter: QPainter, r: QRect) -> None:
         painter.fillRect(r, QColor(*SCALO_STOPS[0]))
         if self._norm is None:
             return
+        # The surface covers the frames it was given, which while a render
+        # fills is a prefix of the axis — so it is drawn into `content_rect`
+        # and the rest of the frame stays the empty ramp floor. The COI fade
+        # `_reduced` already applies at both ends then tells the truth about
+        # the cut for free: the trailing wedge of a partial record really is
+        # pad artifact, and it is drawn as exactly that.
         target = self.content_rect()
         if target.width() <= 0:
             return

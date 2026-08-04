@@ -3,7 +3,9 @@
 `sieve.bench.budgets` is the table and `check()` is the verdict on one number.
 Neither knows how many numbers a test should take or what to do when the
 machine is busy, and neither should: that is harness policy and it does not
-ship with the application. This module keeps that policy in one place.
+ship with the application. This module is that policy, in one place, because
+`docs/todo/budget-checks-under-ambient-load.md` is about the adjudication and
+not about any single threshold.
 
 **The statistic is the kind of claim, not a house style.** Two kinds live in
 this suite and they take opposite statistics:
@@ -38,7 +40,6 @@ batches only run after a miss.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable, Sequence
 from statistics import median
 
@@ -91,12 +92,6 @@ def within_budget(
             unknown key is a typo in the test and no number of readings makes
             it true.
     """
-    # A budget is a claim about a machine, and under `-n` the machine is running
-    # five other workers. The retry below absorbs contention; it cannot absorb
-    # being deliberately oversubscribed, and a debt xfailed for that reason
-    # reads as evidence about the code when it is evidence about the harness.
-    if os.environ.get("PYTEST_XDIST_WORKER") is not None:
-        pytest.skip(f"{key} is a timing budget; re-take it serially with -n0")
     rounds = len(first_batch)
     best: float | None = None
     for attempt in range(1, ATTEMPTS + 1):
@@ -112,5 +107,5 @@ def within_budget(
                 ) from miss
             continue
         if debt is not None:
-            pytest.xfail(f"{key} in declared debt: {debt.why}")
+            pytest.xfail(f"{key} in declared debt ({debt.why}) — repaid by {debt.item}")
         return

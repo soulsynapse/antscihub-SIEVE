@@ -1,3 +1,38 @@
+"""The live tab's chain and detector, as Qt-free state the stack renders.
+
+The chain is a hybrid (parity plan § 2): the spatial-prep and extraction
+steps are real pipeline nodes — `runnable_prefix` turns them into the
+`Pipeline` value the tab hands `PreviewRunner` — while the temporal filter
+and detection are tab-side derivation over the collected series
+(`recompute`). The stack widgets are one presentation over this model; the
+wizard's provisional chain is another instance of the same types.
+
+**Kinds are a chain-model concept, not `FilterSpec` metadata.** `ArraySpec`
+cannot distinguish an image frame from a `(ny, nx)` block-series frame —
+both are GRAY float32 arrays (see
+`docs/findings/2026.07.25-the-filter-contract-cannot-type-vision.md`) — so
+each step carries its own `kind_in`/`kind_out` and `grade` walks them. The
+type-system version of this question comes due when the temporal filter
+becomes a real windowed node (plan § 7), not before.
+
+**`grade` never throws** (plan learning 1). `Dag.build` raises on the first
+bad edge, which is right for execution and useless for a stack that must
+draw a chain a removal or a loaded file broke: every step gets ok /
+conflict / unreached, the conflict names what it expects and what it is
+receiving, and everything after the first conflict is unreached rather than
+a cascade of conflicts.
+
+**Unset count threshold = disarmed.** `DetectorState.count_frac` is `None`
+until the user places the handle, `recompute` produces no gate and no
+intervals for it, and the footer says so. v1's unset-means-unbounded painted
+a fresh tab as one giant detection; a band the user never placed claims
+nothing here. Frequency and value bands default wide open instead — they
+shape a signal, they don't claim an event.
+
+**Reset is parameters-not-structure.** `reset()` returns the same steps with
+default parameters and a default detector; the chain the user built stays.
+"""
+
 from __future__ import annotations
 
 import itertools
@@ -12,13 +47,15 @@ from numpy.typing import NDArray
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
 from sieve.core.wavelet import band_indices, default_freqs
 
-
+#: `DetectorUpdate` is re-exported rather than redefined: the type belongs to
+#: `sieve.detect` now, and the tab importing it from here keeps one import line
+#: for a family it uses together.
 from sieve.detect import DetectorUpdate, detect
 from sieve.filters.block_signal import resolve_block
 
 FloatArray = NDArray[np.floating[Any]]
 
-
+#: How the extraction signals read on their card and quick-switch.
 SIGNAL_LABELS: dict[str, str] = {
     "change_energy": "change energy (Jtt)",
     "flow_speed": "LK optical flow",
@@ -28,12 +65,21 @@ SIGNAL_LABELS: dict[str, str] = {
 
 
 class ChainKind(StrEnum):
+    """What travels between two steps, at the granularity the stack grades.
+
+    Deliberately not `core.filter_base.StreamKind`: that one cannot tell an
+    image from a block grid (see the module docstring), and this one exists
+    for exactly that distinction.
+    """
+
     IMAGE = "image"
     BLOCK_SERIES = "block series"
     EVENTS = "events"
 
 
 class Stage(StrEnum):
+    """The fixed headers the stack groups cards under, in chain order."""
+
     SPATIAL_PREP = "spatial prep"
     EXTRACTION = "signal extraction"
     TEMPORAL_FILTER = "temporal filter"
@@ -41,6 +87,8 @@ class Stage(StrEnum):
 
 
 class Status(StrEnum):
+    """One step's grade."""
+
     OK = "ok"
     CONFLICT = "conflict"
     UNREACHED = "unreached"
@@ -48,6 +96,14 @@ class Status(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ChainStep:
+    """One card of the stack.
+
+    `node` is set for the pipeline-backed prefix (rescale, normalize,
+    block_signal) and `None` for the tab-side suffix (morlet band, windowed
+    count). The distinction is what `runnable_prefix` walks; the kinds are
+    what `grade` walks; the stage is what the headers group by.
+    """
+
     step_id: str
     title: str
     stage: Stage
@@ -58,12 +114,24 @@ class ChainStep:
 
 @dataclass(frozen=True, slots=True)
 class StepGrade:
-    status: Status
+    """One step's status, with the conflict spelled out for its card."""
 
+    status: Status
+    #: For a conflict: "expects image, receiving block series". Empty
+    #: otherwise — the message *is* the repair prompt, so it exists only when
+    #: there is something to repair.
     message: str = ""
 
 
 def grade(steps: tuple[ChainStep, ...]) -> tuple[StepGrade, ...]:
+    """Every step's status, for a chain in any state at all.
+
+    The walk carries one kind — the source is an image — and compares each
+    step's `kind_in` against it. The *first* mismatch is the conflict; every
+    step after it is unreached, because its true input is unknowable until
+    the conflict is repaired and grading it against a guess would paint
+    repairable chains as wrecks.
+    """
     grades: list[StepGrade] = []
     current = ChainKind.IMAGE
     broken = False
@@ -85,40 +153,68 @@ def grade(steps: tuple[ChainStep, ...]) -> tuple[StepGrade, ...]:
 
 
 def runnable_prefix(steps: tuple[ChainStep, ...]) -> Pipeline:
+    """The `Pipeline` value of the ok node-backed prefix, edges included.
+
+    Stops at the first step that is not ok or not node-backed: a conflicted
+    chain still previews the video through whatever prefix survives, which is
+    what "no reachable step, no graph" means for the *graphs* while the
+    footage stays watchable.
+    """
     nodes: list[Node] = []
     for step, step_grade in zip(steps, grade(steps), strict=True):
         if step_grade.status is not Status.OK or step.node is None:
             break
         nodes.append(step.node)
     edges = tuple(
-        Edge(upstream=a.node_id, downstream=b.node_id)
-        for a, b in itertools.pairwise(nodes)
+        Edge(upstream=a.node_id, downstream=b.node_id) for a, b in itertools.pairwise(nodes)
     )
     return Pipeline(nodes=tuple(nodes), edges=edges)
 
 
 @dataclass(frozen=True, slots=True)
 class DetectorState:
+    """The tab-side suffix's parameters: bands, window, arming, solo.
+
+    Frozen, so every edit is a `replace(...)` and the two-tier drag
+    discipline has a value to hand each tier. Bands are in the units the
+    plots drag them in; the count threshold alone is a *fraction* of the
+    region's blocks (`core.detection.count_band_to_counts` is the one
+    denomination point).
+    """
+
+    #: Frequency band in Hz over the Morlet bank. Wide open by default;
+    #: handles clamp to the bank's edges, so `inf` here means "the top row".
     freq_band: tuple[float, float] = (0.0, math.inf)
-
+    #: Value band over band power. Wide open by default.
     value_band: tuple[float, float] = (-math.inf, math.inf)
-
+    #: Count threshold as fractions of region blocks, or None = disarmed:
+    #: nothing is green and the footer says so until the user places it.
     count_frac: tuple[float, float] | None = None
-
+    #: Detection window D, in frames. The label shows frames and seconds.
     window_frames: int = 30
     centered: bool = True
-
+    #: A block soloed from the heat panel, as its column in the series, or
+    #: None for the whole population.
     solo_block: int | None = None
 
     @property
     def armed(self) -> bool:
+        """Whether a count threshold exists to detect with."""
         return self.count_frac is not None
 
     @classmethod
     def default(cls, fps: float) -> DetectorState:
+        """The documented defaults: wide-open bands, disarmed, D of one second."""
         return cls(window_frames=max(1, round(fps)))
 
     def as_settings_changes(self) -> dict[str, Any]:
+        """This state as `DetectorSettings` fields — what a document edit submits.
+
+        `solo_block` is deliberately absent: soloing is looking, not tuning,
+        and the artifact refuses to carry it (`core.pipeline_model`'s module
+        docstring). Prefer submitting a *subset* of this — only the fields
+        the gesture touched — for `edited_params`' baseline-drag reason.
+        """
         return {
             "freq_band": self.freq_band,
             "value_band": self.value_band,
@@ -128,12 +224,25 @@ class DetectorState:
         }
 
     def to_settings(self) -> DetectorSettings:
+        """This state as the artifact value, for anything below the GUI.
+
+        The inverse of `from_settings`, and the boundary `sieve.detect` is
+        reached across: everything past it takes a resolved `DetectorSettings`
+        and never learns this type. Distinct from `as_settings_changes` on
+        purpose — that returns a dict because a document edit submits a
+        *subset*, and this returns the whole value because a derivation needs
+        all of it.
+        """
         return DetectorSettings(**self.as_settings_changes())
 
     @classmethod
-    def from_settings(
-        cls, settings: DetectorSettings, *, solo_block: int | None
-    ) -> DetectorState:
+    def from_settings(cls, settings: DetectorSettings, *, solo_block: int | None) -> DetectorState:
+        """The live state a resolved artifact value renders as.
+
+        `solo_block` is threaded through from the state being replaced,
+        because the artifact does not carry it and a replicate switch must
+        not silently un-solo the block the user is inspecting.
+        """
         return cls(
             freq_band=settings.freq_band,
             value_band=settings.value_band,
@@ -153,6 +262,14 @@ def recompute(
     band_power: NDArray[np.float32] | None = None,
     workers: int,
 ) -> DetectorUpdate:
+    """`sieve.detect.detect` with the live state converted at the boundary.
+
+    The derivation itself is not here and must not come back: it is what a
+    saved `DetectorSettings` names, and a document that declares a value only
+    the GUI can compute is `docs/todo/headless-detection.md`'s defect. This is
+    the two-line adapter that keeps `DetectorState` — mutable, carrying a
+    soloed block nothing downstream reads — on this side of the line.
+    """
     return detect(
         series,
         fps,
@@ -164,12 +281,29 @@ def recompute(
 
 
 def snapped_band_label(freq_band: tuple[float, float], fps: float) -> str:
+    """The *snapped* frequency band, as the scalogram title and caption render it.
+
+    Snapped, not the handle positions: `band_indices` is what the transform
+    actually uses, and the title tells the truth the transform uses (plot
+    contracts, parity plan § 2). `[i, j)` is half-open, so the upper edge is
+    row `j - 1`.
+    """
     freqs = default_freqs(fps)
     i, j = band_indices(freqs, freq_band[0], freq_band[1])
     return f"band {freqs[i]:.2f}-{freqs[j - 1]:.2f} Hz"
 
 
 def caption_for(step: ChainStep, detector: DetectorState, fps: float) -> str:
+    """One line restating the step's current values.
+
+    Captions are what makes a collapsed reading of the stack complete (plan
+    § 2): every parameter a card's widgets hold is restated here in words, so
+    scanning titles and captions answers "what is this chain doing" without
+    opening anything. Node-backed steps read their captions from the node's
+    params — the same values the pipeline runs — and the tab-side suffix
+    reads from the detector, so a caption can never disagree with the value
+    it restates.
+    """
     node = step.node
     if node is not None:
         if node.filter_id == "rescale":
@@ -194,6 +328,7 @@ def caption_for(step: ChainStep, detector: DetectorState, fps: float) -> str:
 
 
 def _threshold_caption(detector: DetectorState) -> str:
+    """The count threshold in words, fraction-denominated like the state."""
     if detector.count_frac is None:
         return "threshold off"
     lo, hi = detector.count_frac
@@ -204,6 +339,10 @@ def _threshold_caption(detector: DetectorState) -> str:
     return f"threshold {lo:.0%}-{hi:.0%} of blocks"
 
 
+# ---- the parity chain -------------------------------------------------------
+
+#: The stack's fixed stage headers with their `in -> out` type chips, in
+#: order. A tuple of pairs rather than a dict so the header row iterates it.
 STAGE_CHIPS: tuple[tuple[Stage, str], ...] = (
     (Stage.SPATIAL_PREP, "image -> image"),
     (Stage.EXTRACTION, "image -> block series"),
@@ -214,37 +353,63 @@ STAGE_CHIPS: tuple[tuple[Stage, str], ...] = (
 
 @dataclass(frozen=True, slots=True)
 class LiveChain:
+    """The whole tab-side model: steps plus detector, one value.
+
+    Frozen like everything it contains; the tab holds the current one and
+    replaces it on every edit, which is what gives the wizard's
+    Cancel-restores-everything its mechanism for free.
+    """
+
     steps: tuple[ChainStep, ...]
     detector: DetectorState
     fps: float = 30.0
 
     def grades(self) -> tuple[StepGrade, ...]:
+        """Every step's status. See `grade`."""
         return grade(self.steps)
 
     def pipeline(self) -> Pipeline:
+        """The runnable node-backed prefix. See `runnable_prefix`."""
         return runnable_prefix(self.steps)
 
     def detection_reachable(self) -> bool:
+        """Whether the detection step exists and the walk reaches it.
+
+        False is what makes the count plot say "no reachable detection step"
+        and the summary say "chain incomplete — see the stack".
+        """
         for step, step_grade in zip(self.steps, self.grades(), strict=True):
             if step.stage is Stage.DETECTION and step_grade.status is Status.OK:
                 return True
         return False
 
     def without(self, step_id: str) -> LiveChain:
+        """The chain minus one step — removal, the operation that can break it."""
         return replace(self, steps=tuple(s for s in self.steps if s.step_id != step_id))
 
     def reset(self, defaults: LiveChain) -> LiveChain:
+        """Parameters-not-structure: this chain's steps, `defaults`' knobs.
+
+        Each surviving step keeps its place and identity; a step whose id
+        exists in `defaults` takes the default node parameters, one the user
+        inserted keeps its own (there is no default to reset it to). The
+        detector always resets — bands cleared, disarmed, D back to one
+        second.
+        """
         by_id = {s.step_id: s for s in defaults.steps}
         steps = tuple(
-            replace(s, node=by_id[s.step_id].node)
-            if s.step_id in by_id and s.node
-            else s
+            replace(s, node=by_id[s.step_id].node) if s.step_id in by_id and s.node else s
             for s in self.steps
         )
         return replace(self, steps=steps, detector=DetectorState.default(self.fps))
 
 
 def parity_chain(fps: float, *, scale: float = 1.0) -> LiveChain:
+    """The tab's default chain: the five parity steps, default knobs, disarmed.
+
+    Node ids are minted fresh per call, which is what keeps two tabs' chains
+    from sharing cache identity by accident.
+    """
     rescale = Node(filter_id="rescale", version="1.0.0", params={"scale": scale})
     normalize = Node(filter_id="normalize", version="1.0.0", params={"mode": "off"})
     signal = Node(

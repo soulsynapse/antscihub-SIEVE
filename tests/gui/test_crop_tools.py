@@ -262,7 +262,7 @@ class TestToolsPanel:
         assert (placed.width, placed.height) == (137, 91)
 
     def test_the_source_box_names_the_parent(self, panel: CropToolsPanel) -> None:
-        """A derived crop must not hide which source it came from."""
+        """`REFINED-VISION.md`: the information panel points at the parent."""
         label = panel.findChild(QLabel, "source-summary")
         assert label is not None
         text = label.text()
@@ -417,7 +417,7 @@ def _set_all(panel: CropToolsPanel, width: int, height: int) -> None:
 
 
 class TestSetAll:
-    """Set-all must update the whole rack, not only the selected crop."""
+    """`REFINED-VISION.md`'s "set all": one size across a hand-cut rack."""
 
     def test_every_replicate_takes_the_stamp_size(
         self, panel: CropToolsPanel, rack: ReplicateDocument

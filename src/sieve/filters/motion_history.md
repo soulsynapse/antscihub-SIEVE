@@ -84,7 +84,8 @@ continuously driven block at `τ = 1 s` and 30 fps, `dilate` holds the peak at t
 input's own value at every reach while `diffuse` drops it to 0.39, 0.16 and 0.066
 of it at `reach_blocks` of 1, 2 and 4 — so **switching to `diffuse` means
 re-tuning the threshold**, and by an amount that moves with a parameter that
-looks like it is only about width.
+looks like it is only about width. See
+`docs/findings/2026.07.27-dilation-creates-activity-and-diffusion-conserves-it.md`.
 It ships because "much testing would be needed" is the correct answer to which
 operator suits real footage, not because it is expected to win.
 

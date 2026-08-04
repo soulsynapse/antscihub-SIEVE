@@ -1,4 +1,4 @@
-"""Pins on `core/wavelet.py` where a plausible implementation can be wrong.
+"""Pins on `core/wavelet.py` — the claims the parity plan names.
 
 Each test fails for a distinct real reason: a wrong scale relation smears a
 tone across rows, a broken snap makes an empty band a dead detector, and a

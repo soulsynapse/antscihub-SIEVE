@@ -15,14 +15,15 @@ resized.
 
 ## What they are not
 
-Not production code, not part of the package, and not imported by anything
-under `src/`. `pyright` does not see this directory because its configured
-include path is only `src`.
+Not tests, not part of the package, not imported by anything under `src/`.
+`pyright` does not see this directory (`[tool.pyright] include` is
+`src`/`tests`/`tools`) and pytest does not collect it. `ruff` does check it,
+because a mockup that will be read as a proposal should not be sloppy.
 
 They are also **not promoted into `src/` by copying.** A mockup is fake data in
 a hurry; the widget that replaces it is written against real signals with real
-production contracts. What survives is the layout decision, recorded in the
-TODO item or the completed entry that cites the mockup.
+tests. What survives is the layout decision, recorded in the TODO item or the
+completed entry that cites the mockup.
 
 ## Running one
 

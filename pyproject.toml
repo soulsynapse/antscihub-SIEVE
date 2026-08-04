@@ -7,37 +7,72 @@ requires-python = ">=3.11,<3.14"
 
 dependencies = [
     "numpy>=2.0",
+    # core/wavelet.py: scipy.fft keeps float32 single-precision, pads to fast
+    # composite lengths, and threads across block columns — numpy.fft has none
+    # of the three and v1 measured the difference at ~10x on (T, B) series.
     "scipy>=1.14",
     "pydantic>=2.0",
-    "annotated-types",
+    "pydantic-settings",
     "pyyaml",
     "typer",
+    "structlog",
+    # Pinned below 5.x: the decoder identity feeds cache-key derivation, and a
+    # major OpenCV bump changes seek/decode behaviour. Revisit deliberately.
     "opencv-python-headless>=4.10,<5",
+    # storage/crop_writer.py: the FFV1 encoder for the replicate crop artifact.
+    # A base dependency, not an extra, because O3 requires the artifact to be
+    # creatable headless — `sieve materialize` is a CLI command. Encode only;
+    # every read of an artifact goes back through OpenCV's `VideoReader`, so
+    # this does not become a second decoder identity.
     "av>=13",
+    "zarr>=3.0",
+    "duckdb",
+    "pyarrow",
+    # core/machine.py: the session RSS producer (ledger-producers item). A
+    # declared dependency, decided explicitly: it previously resolved in dev
+    # only as a transitive of pytest-benchmark, and a runtime sensor standing
+    # on an accident of the dev environment would vanish in any install that
+    # skipped the dev group. ctypes/GetProcessMemoryInfo was the alternative
+    # and loses the day SIEVE has child processes to account for.
     "psutil>=5.9",
 ]
 
 [project.scripts]
+# `sieve` is the headless path and needs nothing beyond the base dependencies;
+# `sieve-gui` needs the `gui` extra. Two scripts rather than one with a
+# subcommand, so that installing without Qt still installs a working command.
 sieve = "sieve.cli.app:main"
 sieve-gui = "sieve.gui.app:main"
 
 [project.optional-dependencies]
+# QPainter is the plot layer (parity plan § 2, plot contracts): pyqtgraph and
+# napari sat here unused through three items and are dropped, not adopted.
 gui = [
     "PySide6",
 ]
+gpu = [
+    "cupy-cuda12x",
+]
+
 [dependency-groups]
 dev = [
     "pytest",
     "pytest-benchmark",
-    "pytest-xdist",
     "hypothesis",
+    "nox",
+    "ruff",
     "pyright",
+    "viztracer",
+    "py-spy",
+    "jaxtyping",
     "import-linter>=2.13",
+    # psutil ships no py.typed; pyright strict needs the typeshed stubs.
     "types-psutil",
 ]
 dev-gui = [
     "pytest-qt",
 ]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -45,9 +80,44 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sieve"]
 
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "N",        # pep8-naming
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "A",        # builtin shadowing
+    "C4",       # comprehensions
+    "SIM",      # simplify
+    "TID",      # tidy imports
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Qt's virtuals are camelCase. Renaming them would stop them being overrides.
+"src/sieve/gui/*" = ["N802"]
+# Same, for the layout sketches under `mockups/`. They subclass QWidget to show
+# what a panel would look like and override the same virtuals for it.
+"mockups/**" = ["N802"]
+# Budget labels are copied verbatim from docs/ARCHITECTURE.md, en dash and all,
+# because tests/bench/test_budget_table.py compares them character for character.
+"src/sieve/bench/budgets.py" = ["RUF001"]
+
 [tool.pyright]
-include = ["src", "tests"]
-extraPaths = ["src"]
+include = ["src", "tests", "tools"]
+# `tools/` is not a package and is not installed; both pyright and pytest need
+# telling where the doc-index generator lives so its test can import it.
+# `src` is listed alongside it because setting `extraPaths` at all replaces
+# pyright's src-layout inference — without it, `sieve` resolves to the editable
+# install in site-packages and every import becomes a missing-stub error.
+extraPaths = ["src", "tools"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
@@ -55,7 +125,8 @@ typeCheckingMode = "strict"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers --strict-config -n 6 --dist loadscope"
+pythonpath = ["tools"]
+addopts = "--strict-markers --strict-config"
 markers = [
     "slow: excluded from the fast feedback loop",
     "gui: requires the gui extra and a Qt runtime",

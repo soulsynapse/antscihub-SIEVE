@@ -18,8 +18,9 @@ on a number in a decorator.
 
 The last is the one worth spelling out, and two tests below do it from opposite
 sides: the honest filter agrees across spans, the dishonest one does not, and
-they are indistinguishable to everything that decides what may be cached. A
-false warmup declaration can therefore serve plausible but incorrect frames.
+they are indistinguishable to everything that decides what may be cached.
+`docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md` is the
+argument in full.
 
 A scratch registry throughout: the filter under test is the real one, because
 the claims are about how the real declaration and the real machinery fit

@@ -1,8 +1,8 @@
 """The Block spin box refuses nothing, and steps across one semantic boundary.
 
 This file used to pin a refusal: `density_plot.MAX_BLOCKS` implied a
-per-replicate floor and the spin box stepped over the sizes under it. Do not
-restore that cap: block count
+per-replicate floor and the spin box stepped over the sizes under it. That is
+gone (`docs/todo/budgets-attribute-cost-they-do-not-cap-it.md`) — block count
 is a scientific parameter and the stall that justified capping it left the GUI
 thread. What survives is the distinction the hole was hiding: `0` is auto, a
 *mode*, and a crank down the range must not cross into it without the smallest

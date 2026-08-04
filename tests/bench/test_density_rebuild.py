@@ -2,7 +2,8 @@
 
 `density_rebuild` used to be the producer for a *refusal*: `MAX_BLOCKS` was the
 largest B the surface could be built at inside the budget and the Block spin box
-declined everything implying more. Do not restore that cap: block count is a
+declined everything implying more. That cap is gone
+(`docs/todo/budgets-attribute-cost-they-do-not-cap-it.md`) — a block count is a
 scientific choice, and the binning no longer runs on the GUI thread, so a large
 one costs time rather than a frozen window.
 
@@ -16,7 +17,9 @@ the reference workload), not a bound on anything a user may enter.
 **It times `density_surface`, not `set_series`.** That is where the work is
 now, on `gui/detector_worker.py`'s thread; the widget's remaining job is a
 `QImage` wrap, which is not what the ceiling is about. `T = 600` is the working
-window the graph budgets are written against.
+window the graph budgets are written against
+(`docs/findings/2026.07.27-the-density-histogram-was-a-scatter.md` measured
+599).
 """
 
 from __future__ import annotations
@@ -69,8 +72,9 @@ def test_the_reference_block_count_rebuilds_within_budget(benchmark: Benchmark) 
     """`density_surface` at the reference window and block count."""
     samples: list[float] = []
     # `ROUNDS` up front and no more, and the count is load-bearing. One array is
-    # 600 x 16384 float32 = 39 MB, and the binning is memory-bandwidth bound,
-    # so holding nine of them to pre-build every retry
+    # 600 x 16384 float32 = 39 MB, and the binning is memory-bandwidth bound
+    # over it (docs/findings/2026.07.28-the-density-rebuild-is-bandwidth-bound-
+    # on-its-own-input.md), so holding nine of them to pre-build every retry
     # slows the thing under test by half again. A retry generates its array
     # instead, before the clock starts, and lets it go afterwards — so the
     # resident footprint is the same on the tenth reading as on the first.

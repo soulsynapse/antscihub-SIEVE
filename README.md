@@ -1,95 +1,92 @@
-# SIEVE
+# SIEVE *(Signal Isolation for Ethological Video Events)*
 
-Signal Isolation for Ethological Video Events (SIEVE) isolates behavior from
-video using interpretable signal-processing filters rather than a trained
-model.
 
-## Setup
+AntSciHub SIEVE is a tool to filter out behaviors from video without the need for training. If there is a *pure signal* that can identify your behavior, SIEVE enables you to isolate that quickly.
 
-The project uses [uv](https://docs.astral.sh/uv/):
 
-```powershell
-uv sync --extra gui --group dev --group dev-gui
+## Detection, fast. Goals:
+
+* **Time to first detection: ~30 seconds** from a raw video to a working filter.
+* **Time to first annotated footage: ~2.5 minutes** for a 10 minute video.
+* **Standard workflow:** Drag threshold → see detections shift → drag frequency band → see scalogram change → set block count → done.
+
+
+## Development environment
+
+Managed entirely by [uv](https://docs.astral.sh/uv/). Three files define it and all three are committed:
+
+| File | Role |
+|---|---|
+| `pyproject.toml` | What the project depends on, declared loosely (`numpy>=2.0`) |
+| `uv.lock` | The exact resolved versions of all 153 packages, cross-platform |
+| `.python-version` | The interpreter uv builds the env against (3.11) |
+
+The environment itself lives in `.venv/` and is disposable — delete it and `uv sync` rebuilds it identically from the lockfile. Never edit it, never commit it.
+
+### Setup
+
+```
+uv sync --extra gui --group dev-gui
 ```
 
-Run the application, the tests, and the static checks without activating the
-environment:
+That's the whole thing. uv downloads Python 3.11 if it's missing, creates `.venv/`, installs the locked versions, and installs SIEVE itself in editable mode so `src/` edits take effect immediately.
 
-```powershell
-uv run sieve-gui
-uv run pytest
-uv run pyright
-uv run lint-imports
+### Running things
+
+Prefix commands with `uv run` instead of activating the venv:
+
+```
+uv run pytest                  # test suite
+uv run nox -s checks           # ruff + pyright + import contracts + pytest — the CI gate
+uv run nox -s benchmark        # latency budget checks
+uv run nox -s docs             # regenerate docs/*/.index.md from entry frontmatter
+uv run python -c "import sieve"
 ```
 
-The three checks cover behaviour, static types, and architectural import
-contracts.
+The product's own commands are `sieve` (headless — needs no extra) and
+`sieve-gui` (needs `--extra gui`):
 
-## Tests
-
-`tests/` is laid out by what a test needs rather than by what it covers, because
-what it needs is what decides whether it can run:
-
-| Directory | What lives there |
-| --- | --- |
-| `tests/unit` | Pure functions and models; no Qt, no decode, no disk |
-| `tests/integration` | The CLI and the pipeline end to end, over synthetic video |
-| `tests/gui` | Qt widgets and gestures; needs the `gui` extra and `pytest-qt` |
-| `tests/property` | Hypothesis properties over the pure layer |
-| `tests/bench` | `pytest-benchmark` budgets; timing-sensitive |
-
-Fixtures are synthesized rather than committed — `tests/conftest.py` writes a
-short video whose frame *n* is identifiable by its intensity, so a decode test
-can assert which frame a seek landed on. Qt tests run under
-`QT_QPA_PLATFORM=offscreen` unless a platform is already chosen, so
-`$env:QT_QPA_PLATFORM = "windows"; uv run pytest tests/gui` is how you watch a
-gesture test do what it says.
-
-`--strict-markers` is on, so a marker has to be declared in `pyproject.toml`
-before it can be used. `gui` carries the Qt requirement and is what
-`uv run pytest -m "not gui"` skips to get the headless suite; `slow` is on a
-single subprocess test; `cuda` is declared but unused, since no GPU kernel is
-under test yet. `benchmark` comes from `pytest-benchmark` rather than from the
-declaration list.
-
-The suite runs on six `pytest-xdist` workers by default, grouped by module
-(`--dist loadscope`), which takes it from ~20 s to ~8 s. Six rather than one per
-core: the tests are individually short, so past six the per-worker cost of
-importing Qt, numpy, and OpenCV outweighs the parallelism, and 32 workers is
-slower than 6. `loadscope` rather than the default `load` because keeping a
-module on one worker imports it once and builds the session video fixture once.
-
-**The timing budgets do not run in parallel.** `tests/bench` asserts what a
-machine can do, and five sibling workers make that a claim about the harness
-instead, so `gate.py` skips a budget when it sees `PYTEST_XDIST_WORKER`. Take
-them serially:
-
-```powershell
-uv run pytest tests/bench -n0
+```
+uv run sieve inspect                        # every installed filter
+uv run sieve inspect downsample             # its declaration and its guidance
+uv run sieve run arena.sieve.yaml --dry-run # what a run would decode and key
+uv run sieve run arena.sieve.yaml           # the same executor the GUI uses
+uv run sieve-gui                            # the desktop app
 ```
 
-`-n0` is also the way to run anything serially without editing `addopts` — it
-keeps the plugin loaded and asks it for zero workers.
+Work in flight is `docs/todo/` — one file per item, `status: open` for the
+scoped and startable ones. Work that is real and deliberately not being done
+yet is `status: deferred` in the same folder, where each item's `gated_on` line
+carries the trigger that would make it takeable; promotion is a one-line
+`status:` flip, not a copy. Every item also carries a `priority`, which is what
+the generated tables sort on — `unassessed` says nobody has ranked it rather
+than that it ranked low, so it is a visible triage queue instead of a blank.
 
-## Commands
+`docs/completed-todo/` and `docs/findings/` hold one file per item, each with
+YAML frontmatter and a `YYYY.MM.DD-` prefix. Their `.index.md` tables are
+generated from that frontmatter by `tools/doc_index.py` — never edited by hand,
+and `checks` fails when one is stale.
 
-```powershell
-uv run sieve inspect
-uv run sieve inspect downsample
-uv run sieve run arena.sieve.yaml --dry-run
-uv run sieve run arena.sieve.yaml
-uv run sieve-gui
+`uv run` re-syncs the env first if it has drifted from the lockfile, so you cannot accidentally run against a stale environment. Activating (`.venv\Scripts\activate`) still works and is what VSCode does — you just lose that guarantee.
+
+### Changing dependencies
+
 ```
-
-The headless `sieve` command uses the base dependencies. The desktop
-`sieve-gui` command requires the `gui` extra.
-
-## Dependencies
-
-Manage dependencies with uv:
-
-```powershell
-uv add scipy
-uv add --group dev pyright
+uv add scipy                   # runtime dependency
+uv add --group dev pytest-cov  # dev tooling
 uv remove scipy
 ```
+
+These edit `pyproject.toml` and `uv.lock` together. **Do not use `uv pip install`** — it mutates `.venv/` without touching the lockfile, which is exactly the drift the lockfile exists to prevent. CI runs `uv sync --locked` and fails if `uv.lock` is out of date with `pyproject.toml`.
+
+To pull in someone else's dependency changes after a `git pull`, run `uv sync` again.
+
+### Extras and groups
+
+Optional dependencies are split so headless machines don't drag in Qt:
+
+- `--extra gui` — PySide6, napari, pyqtgraph. Needed for the desktop app; omitted on HPC nodes.
+- `--extra gpu` — CuPy. Opt-in, requires CUDA 12.
+- `--group dev` — test and lint tooling. Included by default; use `--no-dev` to skip.
+- `--group dev-gui` — pytest-qt. Only needed to run the GUI tests.
+

@@ -56,22 +56,10 @@ def test_a_scrub_a_ring_hit_and_a_decode_are_told_apart(
     player = VideoPlayer(trace=recorder)
     ring = RenderFrameRing(capacity_bytes=1024 * 1024, trace=recorder)
     opened: list[VideoMetadata] = []
-    shown: list[int] = []
     player.opened.connect(opened.append)
-
-    def note_shown(index: int, _image: object) -> None:
-        shown.append(index)
-
-    player.frame_changed.connect(note_shown)
     try:
         player.open(str(synthetic_video))
         qtbot.waitUntil(lambda: bool(opened), timeout=OPEN_TIMEOUT_MS)
-        # Opening issues its own EXACT(0), and the flip below bumps the
-        # generation. If that first decode is still in flight when it does, the
-        # flip's EXACT(0) becomes *pending* and `_outranks` then discards the
-        # scrub to 21 outright — the playhead settles on 0 and the wait below
-        # can only time out. Land the first frame and the in-flight slot is free.
-        qtbot.waitUntil(lambda: bool(shown), timeout=FRAME_TIMEOUT_MS)
 
         ring.put(gray_frame(7))
         player.set_render_feed(ring)

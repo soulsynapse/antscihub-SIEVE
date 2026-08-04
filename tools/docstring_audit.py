@@ -60,7 +60,9 @@ CONTRACT_FILE_PROSE_WORDS = 900
 PRAGMA_PREFIXES = ("noqa", "type:", "ruff:", "pyright:", "isort:", "fmt:", "!")
 
 #: path -> the secret it owns, in one line.
-ASSESSED: dict[str, str] = {}
+ASSESSED: dict[str, str] = {
+    "sieve/__init__.py": "the runtime __version__ string CLI/GUI report, apart from pyproject.toml",
+}
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.
 FLAGGED: dict[str, str] = {}

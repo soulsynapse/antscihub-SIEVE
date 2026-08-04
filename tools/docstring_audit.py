@@ -96,6 +96,13 @@ ASSESSED: dict[str, str] = {
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.
 FLAGGED: dict[str, str] = {
+    "sieve/filters/temporal_baseline.py": (
+        "683 words against the 250 cap, and the excess is four bundled arguments "
+        "beyond the filter's own secret (ring-sampling cost, the node/port-model "
+        "shape, why warmup became params-derived, the stateful/uncacheable "
+        "exclusion already stated verbatim in background_ema) — each names a "
+        "different owner and none is this file's — temporal-baseline-scope-split"
+    ),
     "sieve/core/filter_base.py": (
         "already a contract module (600/900) and still 4,649 words of prose against 900 — "
         "one secret, 25 dense per-method asymmetry docstrings the budget would delete rather "

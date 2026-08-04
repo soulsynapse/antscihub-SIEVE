@@ -43,7 +43,7 @@ packages under `proto_sieve/src/sieve/`, 40 tests total, all green:
 
 - `store/` — generic name-to-file persistence (repo-root resolution,
   guarded path, text read/write/list). `pipeline/store.py` and
-  `projects/discovery.py` both build on it.
+  `projects/registry.py` both build on it.
 - `pipeline/` — `pipeline.py` (the value, JSON round-trip, lowering,
   unchanged from chunk 6) plus `store.py` (saves/loads a named pipeline to
   `proto_sieve/pipelines/<name>.json`).
@@ -57,22 +57,43 @@ packages under `proto_sieve/src/sieve/`, 40 tests total, all green:
   for a step index), `app_state.py` (`NoProject` vs `ProjectActive`,
   `select(project)` between them).
 
-None of this is wired into the GUI yet. `app.py`'s `PIPELINE` is still
-hardcoded and always builds the video-player-plus-pipeline-panel layout;
-there is no project selection screen, and the registry starts empty (no
-project is added automatically — see the discovery-to-registry decision
-above). The planned next slice: a `gui/project_select/` screen (project
-list on the right, a placeholder preview on the left — no real spec
-loading yet), `app.py` branching on `AppState` instead of assuming a
-project, and a one-time seed (`add_project` for the checked-in
-`rep3_intermittent_crop` clip, run once, not on every launch) so the app
-has something to select without requiring the add-a-project flow to exist
-yet. This is GUI work — no cheap proof — done in a sitting with Kendrick.
+None of the domain layer above is wired into the GUI yet. `gui/` itself
+was renamed this session: `representation/` and `pipeline_panel/` are now
+`canvas/` (the information side) and `control/` (the generic "user selects
+stuff" space, with the pipeline step list nested at `control/pipeline/`).
+That rename is deliberately not behind an enforced boundary — canvas and
+control are meant to be coupled (a dragged crop box is control's current
+step, drawn on the canvas), so nothing stops a canvas file importing a
+control type; the one thing that stays control-only is deciding which
+step or project is current. See `DECISIONS.md`.
+
+`app.py`'s `PIPELINE` is still hardcoded and always builds the
+canvas-plus-control layout; there is no project selection screen, and the
+registry starts empty (no project is added automatically — see the
+discovery-to-registry decision above). The planned next slice: a
+`gui/control/project_select/` screen (project list on the right — where
+"the left serves the right" still holds even though the import fence
+doesn't — with a placeholder preview in `canvas/`, no real spec loading
+yet), `app.py` branching on `AppState` instead of assuming a project, and
+a one-time seed (`add_project` for the checked-in `rep3_intermittent_crop`
+clip, run once, not on every launch) so the app has something to select
+without requiring the add-a-project flow to exist yet. This is GUI work —
+no cheap proof — done in a sitting with Kendrick.
 
 ## Caveat a fresh session must not skip
 
-Nothing here is committed — `proto_sieve/` is entirely untracked. The claims
-in `FINDINGS.md` (chunk 4 not forcing an edit to chunk 3, chunks 5/6/7 hashing
-or comparing correctly) are demonstrated, not pinned. Without either the old
-tests or committed code, none of it is re-checkable except by rerunning the
-REPL snippets by hand.
+This line used to say "nothing here is committed, `proto_sieve/` is
+entirely untracked" — that stopped being true partway through this
+session (see recent `git log`; commits landed both from Kendrick allowing
+local commits and from an auto-commit hook neither of us was watching
+closely). Don't trust that sentence if you find it copied anywhere else in
+these docs; `git log`/`git status` are the actual source of truth for what
+survives a cleared context now, not just this file. One concrete cost of
+the gap: this session's first `gui/` restructuring pass lost `rail.py`,
+`step.py`, and both their `__init__.py`s (untracked, deleted by a
+follow-up `rm -rf` after a failed `rmdir`) and had to be reconstructed
+from the conversation transcript rather than `git checkout`. Commit early
+and often in this tree from here on — the FINDINGS.md claims (chunk 4 not
+forcing an edit to chunk 3, chunks 5/6/7 hashing or comparing correctly)
+are still only demonstrated, not pinned by a currently-committed test,
+which is a separate, still-open gap.

@@ -19,9 +19,15 @@ correct call. Passing the checks below is necessary and not sufficient -- a
 has yet asked what it is for -- so the ledger holds a sentence a reader can
 judge, as `bench/budgets.py:WITHOUT_PRODUCER` does.
 
-Order is smallest job first. Contexts are fresh per file, so front-loading the
-hard ones buys no accumulated skill; what it buys is flags arriving last, as
-considered exceptions rather than the rule's first output.
+Order is largest job first, reversed 2026-08-04 after 22 files had passed
+without a single flag. Smallest-first defers every file that could plausibly
+hide two secrets to the tail, which leaves the flag path — the one that writes
+a `docs/todo/` proposal and runs the co-change check — unexercised until it
+fires in an unattended batch at the end. Contexts are fresh per file, so
+ordering buys no accumulated skill either way; what largest-first buys is the
+hard case arriving while somebody is still watching. The cost, accepted: the
+first runs are the ones most likely to flag, so early flags read as the rule's
+opening output rather than as considered exceptions.
 """
 
 from __future__ import annotations
@@ -189,7 +195,7 @@ def audit(root: Path) -> list[tuple[Measurement, list[str]]]:
 
 def queue(rows: list[tuple[Measurement, list[str]]]) -> list[Measurement]:
     pending = [m for m, _ in rows if m.path not in ASSESSED and m.path not in FLAGGED]
-    return sorted(pending, key=lambda m: (excess(m), m.symbol_docstrings, m.lines))
+    return sorted(pending, key=lambda m: (-excess(m), -m.symbol_docstrings, -m.lines))
 
 
 def main() -> int:

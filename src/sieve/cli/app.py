@@ -45,12 +45,25 @@ app = typer.Typer(
     add_completion=False,
 )
 
-app.command("inspect")(inspect_filters)
-app.command("run")(run_project)
-app.command("preview")(preview_project)
-app.command("materialize")(materialize_replicate)
-app.command("detect")(detect_project)
-app.command("sweep")(sweep_decode)
+# The one-line summary is passed here rather than left to Typer's fallback of
+# reading the command function's docstring. The fallback couples user-facing
+# help to a docstring the prose convention deletes — `materialize` and `sweep`
+# had already lost their help text that way — and it pastes the whole docstring
+# in, so a `Raises:` block reached the terminal as if it were guidance.
+app.command("inspect", help="List the installed filters, or describe one of them.")(inspect_filters)
+app.command("run", help="Run a project's pipeline over its representative clip.")(run_project)
+app.command("preview", help="Render a project's representative clip and report what it cost.")(
+    preview_project
+)
+app.command(
+    "materialize", help="Write one replicate's crop to disk and register it on the project."
+)(materialize_replicate)
+app.command("detect", help="Detect events in a project's replicates and print the intervals.")(
+    detect_project
+)
+app.command(
+    "sweep", help="Measure ms/frame across core sets and worker counts, and report the spread."
+)(sweep_decode)
 
 
 def _print_version(value: bool) -> None:

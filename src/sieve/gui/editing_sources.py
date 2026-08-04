@@ -1,30 +1,26 @@
 """Who is being edited right now — a set of sources, not a flag.
 
-Window shortcuts that collide with typing (space plays, Delete removes the
-selected replicate, I and O mark the clip) have to stand down while the user is
-entering something, because Qt dispatches a window shortcut before the focused
-widget ever sees the key. The question "should they stand down?" has more than
-one answer arriving at it: a cell editor in the replicate table, a number field
-in the crop tools, and every typing control added after them.
+Window shortcuts that collide with typing (space plays, Delete removes a
+replicate) have to stand down while the user is entering something, because Qt
+dispatches a window shortcut before the focused widget ever sees the key. More
+than one control answers "should they stand down?": a cell editor in the
+replicate table, a number field in the crop tools, and every typing control
+added after them.
 
 A `bool` cannot carry more than one answer. Two sources interleaving — a
 `False` from one arriving while the other is still live — either strands the
 keys off for the rest of the session or hands them back while somebody is still
-typing, and which one you get depends on the order Qt happened to deliver the
-signals in. That was the defect in `docs/completed-todo/2026.07.27-spacebar-dies-on-focus.md`.
+typing, depending on the order Qt happened to deliver the signals in. That was
+the defect in
+`docs/completed-todo/2026.07.27-spacebar-dies-on-focus.md`.
 
-So the state is a **set keyed by source**, and the aggregate is "is it
-non-empty". Three properties follow, and each of them is why this is a set
-rather than a counter:
-
-- A stale end cannot clear a live begin: ending source A discards A and leaves
-  B, where a decrement would have reached zero.
-- A duplicate begin from one source is idempotent, so a widget that announces
-  twice — Qt re-delivering a focus event, a field that both types and commits —
-  does not have to be balanced exactly.
-- A source that disappears is dropped by identity. A field hidden mid-edit, or
-  a cell editor destroyed without a focus-out, names itself on the way out; no
-  rescue hook has to guess how many outstanding begins it owned.
+A counter fixes the interleaving and loses the rest: an unbalanced end
+decrements to zero while another source is still live, a widget that announces
+twice has to be balanced exactly, and a field hidden mid-edit or a cell editor
+destroyed without a focus-out leaves a begin nobody can attribute. Keying by
+source settles all three by identity instead of arithmetic — a departing source
+names itself on the way out, so no rescue hook has to guess how many
+outstanding begins it owned.
 
 Qt-free on purpose: this is the arithmetic, and the widget that owns it emits
 the signal. `gui/replicate_tab.py` holds the one instance that exists today.

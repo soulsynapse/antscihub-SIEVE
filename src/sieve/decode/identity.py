@@ -30,5 +30,4 @@ DECODE_POLICY_VERSION = 2
 
 @cache
 def decoder_identity() -> str:
-    """Stable string identifying the decoder that produced a frame."""
     return f"opencv-{cv2.__version__}/policy-{DECODE_POLICY_VERSION}"

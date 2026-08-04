@@ -40,6 +40,7 @@ batches only run after a miss.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Sequence
 from statistics import median
 
@@ -92,6 +93,12 @@ def within_budget(
             unknown key is a typo in the test and no number of readings makes
             it true.
     """
+    # A budget is a claim about a machine, and under `-n` the machine is running
+    # five other workers. The retry below absorbs contention; it cannot absorb
+    # being deliberately oversubscribed, and a debt xfailed for that reason
+    # reads as evidence about the code when it is evidence about the harness.
+    if os.environ.get("PYTEST_XDIST_WORKER") is not None:
+        pytest.skip(f"{key} is a timing budget; re-take it serially with -n0")
     rounds = len(first_batch)
     best: float | None = None
     for attempt in range(1, ATTEMPTS + 1):

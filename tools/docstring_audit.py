@@ -94,7 +94,13 @@ ASSESSED: dict[str, str] = {
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.
-FLAGGED: dict[str, str] = {}
+FLAGGED: dict[str, str] = {
+    "sieve/gui/filter_tab.py": (
+        "six decisions (composite refresh state machine, the two-tier drag discipline repeated "
+        "per control, document-vs-local knob routing, the wizard session lifecycle, the crop "
+        "boundary card, structure-edit macros), not one — filter-tab-many-secrets"
+    ),
+}
 
 
 @dataclass(frozen=True)

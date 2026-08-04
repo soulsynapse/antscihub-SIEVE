@@ -1,11 +1,11 @@
 """Secret: where and how big the chunky parts of the main window go.
 
-Not the subparts themselves — ``video_player.py`` and ``pipeline_panel.py``
-each own their own insides. Not other windows — ``gui/windows/`` entries own
-their own layout too. This module only ever touches the main window's
-position and size: splitter proportions, window geometry. Swapping what
-fills a slot must not touch this file; changing where a slot sits or how
-big it starts must never touch a subpart's file.
+Not the subparts themselves — each ``canvas/`` and ``control/`` entry owns
+its own insides. Not other windows — ``gui/windows/`` entries own their own
+layout too. This module only ever touches the main window's position and
+size: splitter proportions, window geometry. Swapping what fills a slot
+must not touch this file; changing where a slot sits or how big it starts
+must never touch a subpart's file.
 """
 
 from __future__ import annotations
@@ -69,19 +69,19 @@ def _require_fixed_bar(widget: QWidget) -> None:
         )
 
 
-def compose(top: QWidget, representation: QWidget, pipeline: QWidget, bottom: QWidget) -> QWidget:
+def compose(top: QWidget, canvas: QWidget, control: QWidget, bottom: QWidget) -> QWidget:
     """``top`` and ``bottom`` span the full width at a fixed height; the
-    middle band splits ``representation`` and ``pipeline`` evenly. The
-    dividers — top edge and bottom edge of the middle band, plus the
-    vertical split inside it — trace an I."""
+    middle band splits ``canvas`` and ``control`` evenly. The dividers —
+    top edge and bottom edge of the middle band, plus the vertical split
+    inside it — trace an I."""
     _require_fixed_bar(top)
     _require_fixed_bar(bottom)
-    _require_layout_section(representation)
-    _require_layout_section(pipeline)
+    _require_layout_section(canvas)
+    _require_layout_section(control)
 
     middle = QSplitter(Qt.Orientation.Horizontal)
-    middle.addWidget(representation)
-    middle.addWidget(pipeline)
+    middle.addWidget(canvas)
+    middle.addWidget(control)
     middle.setStretchFactor(0, 1)
     middle.setStretchFactor(1, 1)
     # setSizes() only scales its argument against the splitter's *current*
@@ -123,9 +123,8 @@ def size_window(window: QMainWindow) -> None:
 
 
 if __name__ == "__main__":
-    # Standalone smoke test: a representation (the video player) on the
-    # left, the tool (pipeline steps) on the right, with no app.py in the
-    # loop.
+    # Standalone smoke test: a canvas (the video player) on the left, a
+    # control (pipeline steps) on the right, with no app.py in the loop.
     import sys
     from pathlib import Path
 
@@ -144,8 +143,8 @@ if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication, QLabel
 
     from proto_sieve.src.sieve.gui import style
-    from proto_sieve.src.sieve.gui.pipeline_panel import PipelinePanel
-    from proto_sieve.src.sieve.gui.representation.video_player import VideoPlayer
+    from proto_sieve.src.sieve.gui.canvas.video_player import VideoPlayer
+    from proto_sieve.src.sieve.gui.control.pipeline import PipelinePanel
     from proto_sieve.src.sieve.pipeline import Pipeline, Step
 
     video_path = _repo_root / "video-test" / "rep3_intermittent_crop.MP4"
@@ -155,8 +154,8 @@ if __name__ == "__main__":
     )
 
     app = QApplication(sys.argv)
-    representation = VideoPlayer()
-    representation.open(video_path)
+    canvas = VideoPlayer()
+    canvas.open(video_path)
 
     top = QLabel("top")
     top.setFixedHeight(style.bar_height())
@@ -164,7 +163,7 @@ if __name__ == "__main__":
     bottom.setFixedHeight(style.bar_height())
 
     window = QMainWindow()
-    window.setCentralWidget(compose(top, representation, PipelinePanel(pipeline), bottom))
+    window.setCentralWidget(compose(top, canvas, PipelinePanel(pipeline), bottom))
     size_window(window)
     window.show()
     sys.exit(app.exec())

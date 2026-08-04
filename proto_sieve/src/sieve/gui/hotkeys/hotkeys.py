@@ -13,7 +13,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QMainWindow
 
-from proto_sieve.src.sieve.gui.representation.video_player import VideoPlayer
+from proto_sieve.src.sieve.gui.canvas.video_player import VideoPlayer
 
 
 def bind_hotkeys(window: QMainWindow, video_player: VideoPlayer) -> None:
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication, QMainWindow
 
     from proto_sieve.src.sieve.gui.hotkeys import bind_hotkeys
-    from proto_sieve.src.sieve.gui.representation.video_player import VideoPlayer
+    from proto_sieve.src.sieve.gui.canvas.video_player import VideoPlayer
 
     video_path = _repo_root / "video-test" / "rep3_intermittent_crop.MP4"
 

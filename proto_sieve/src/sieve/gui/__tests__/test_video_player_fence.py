@@ -1,5 +1,5 @@
 """video_player/ owns the claim that nothing outside it touches playback
-machinery — nothing outside ``gui/representation/video_player/`` may import
+machinery — nothing outside ``gui/canvas/video_player/`` may import
 ``QMediaPlayer`` or ``QVideoWidget``. Calling ``VideoPlayer``'s own public
 methods (``open``, ``toggle_play_pause``) from elsewhere is the point of the
 interface and is not a violation; reaching past it into the Qt classes it
@@ -11,7 +11,7 @@ from pathlib import Path
 
 SIEVE_ROOT = Path(__file__).resolve().parents[2]
 GUI_ROOT = SIEVE_ROOT / "gui"
-VIDEO_PLAYER_ROOT = GUI_ROOT / "representation" / "video_player"
+VIDEO_PLAYER_ROOT = GUI_ROOT / "canvas" / "video_player"
 
 _FORBIDDEN_NAMES = {"QMediaPlayer", "QVideoWidget"}
 
@@ -37,6 +37,6 @@ def test_nothing_outside_video_player_touches_playback_machinery():
 
     assert not violations, (
         "playback machinery was reached from outside "
-        "gui/representation/video_player/ — "
+        "gui/canvas/video_player/ — "
         f"found: {violations}"
     )

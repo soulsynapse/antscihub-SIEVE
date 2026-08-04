@@ -6,23 +6,6 @@ layout too. This module only ever touches the main window's position and
 size: splitter proportions, window geometry. Swapping what fills a slot
 must not touch this file; changing where a slot sits or how big it starts
 must never touch a subpart's file.
-
-Two ways to assemble a screen. ``compose`` is the original, single-screen
-frame (still what a standalone smoke test reaches for — no ``app.py``, no
-sliding, in the loop): ``canvas`` and ``control`` split evenly, both fixed
-for the container's lifetime.
-
-``compose_split`` is what ``app.py`` actually uses, and it does not slide
-canvas and control together — an earlier version did (two whole screens as
-positions in one sliding container), and it looked wrong: the canvas isn't
-a "screen", it's a single view that should just update to match whichever
-control is current. So the middle band is a static split between
-``CanvasSlot`` (a single already-built widget on the left, swapped in
-place with no animation whenever the caller has a new one) and a
-``gui/breadcrumb_stack.BreadcrumbStack`` on the right (one already-built
-control widget per position — drilling in collapses the one you're leaving
-to a labeled bar rather than sliding it away). Only the right side
-animates; the left side is told to update, not animated to it.
 """
 
 from __future__ import annotations
@@ -31,7 +14,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QMainWindow, QSizePolicy, QSplitter, QVBoxLayout, QWidget
 
-from proto_sieve.src.sieve.gui.breadcrumb_stack import BreadcrumbStack
 from proto_sieve.src.sieve.preferences.dev import flags
 
 _WINDOW_WIDTH = 960
@@ -87,70 +69,28 @@ def _require_fixed_bar(widget: QWidget) -> None:
         )
 
 
-class CanvasSlot(QWidget):
-    """The static, non-sliding left side of the split — one already-built
-    widget at a time, swapped in place with no animation. Content must meet
-    the same layout-section contract as a control screen (checked here, not
-    left to the caller) since it ends up in the same splitter."""
+def compose(top: QWidget, canvas: QWidget, control: QWidget, bottom: QWidget) -> QWidget:
+    """``top`` and ``bottom`` span the full width at a fixed height; the
+    middle band splits ``canvas`` and ``control`` evenly. The dividers —
+    top edge and bottom edge of the middle band, plus the vertical split
+    inside it — trace an I."""
+    _require_fixed_bar(top)
+    _require_fixed_bar(bottom)
+    _require_layout_section(canvas)
+    _require_layout_section(control)
 
-    def __init__(self, initial: QWidget, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        _require_layout_section(initial)
-        self._current = initial
-        self._layout.addWidget(initial)
-
-    def set_content(self, widget: QWidget) -> None:
-        _require_layout_section(widget)
-        old = self._current
-        self._layout.removeWidget(old)
-        old.setParent(None)
-        old.deleteLater()
-        self._current = widget
-        self._layout.addWidget(widget)
-        # Same reasoning as BreadcrumbStack.replace_pane: adding a widget to
-        # an already-visible tree does not itself make the widget visible.
-        widget.show()
-
-
-def _split(left: QWidget, right: QWidget) -> QSplitter:
-    """The draggable, evenly-sized divider shared by ``build_screen`` and
-    ``compose_split`` — the only difference between the two is what ends up
-    on each side (two fixed widgets vs. a ``CanvasSlot``/``BreadcrumbStack``
-    pair)."""
-    splitter = QSplitter(Qt.Orientation.Horizontal)
-    splitter.addWidget(left)
-    splitter.addWidget(right)
-    splitter.setStretchFactor(0, 1)
-    splitter.setStretchFactor(1, 1)
+    middle = QSplitter(Qt.Orientation.Horizontal)
+    middle.addWidget(canvas)
+    middle.addWidget(control)
+    middle.setStretchFactor(0, 1)
+    middle.setStretchFactor(1, 1)
     # setSizes() only scales its argument against the splitter's *current*
     # width — and at this point (unshown, unparented) that's 0, so a ratio
     # like [1, 1] is taken as literal pixels, collapses to nothing, and
     # first show falls back to sizeHint()-driven allocation instead (the
     # same failure mode as the video-collapse bug). Passing real pixel
     # values matching the window size this module controls sidesteps that.
-    splitter.setSizes([_WINDOW_WIDTH // 2, _WINDOW_WIDTH // 2])
-    return splitter
-
-
-def build_screen(canvas: QWidget, control: QWidget) -> QWidget:
-    """The canvas|control split for ``compose``'s single, non-sliding
-    screen. Not used by ``compose_split`` — there, canvas and control are
-    two independent slots, not one paired screen."""
-    _require_layout_section(canvas)
-    _require_layout_section(control)
-    return _split(canvas, control)
-
-
-def _assemble(top: QWidget, middle: QWidget, bottom: QWidget) -> QWidget:
-    """``top`` and ``bottom`` span the full width at a fixed height; the
-    middle band absorbs whatever vertical space is left. The dividers —
-    top edge and bottom edge of the middle band — trace an I regardless of
-    what's inside the middle band."""
-    _require_fixed_bar(top)
-    _require_fixed_bar(bottom)
+    middle.setSizes([_WINDOW_WIDTH // 2, _WINDOW_WIDTH // 2])
 
     container = QWidget()
     rows = QVBoxLayout(container)
@@ -160,35 +100,6 @@ def _assemble(top: QWidget, middle: QWidget, bottom: QWidget) -> QWidget:
     rows.addWidget(middle, 1)  # the only row that absorbs extra vertical space
     rows.addWidget(bottom)
     return container
-
-
-def compose(top: QWidget, canvas: QWidget, control: QWidget, bottom: QWidget) -> QWidget:
-    """Single-screen frame: ``top``/``bottom`` around one ``build_screen``
-    middle band, instantly swapped in and out by whoever owns the central
-    widget. ``app.py`` no longer uses this for its own screens (see
-    ``compose_split``) — kept for standalone smoke tests that want a frame
-    with no sliding, no app.py, in the loop."""
-    return _assemble(top, build_screen(canvas, control), bottom)
-
-
-def compose_split(
-    top: QWidget, canvas_slot: CanvasSlot, control_screens: list[tuple[str, QWidget]], bottom: QWidget
-) -> tuple[QWidget, BreadcrumbStack]:
-    """Same ``top``/``bottom`` frame as ``compose``, but the middle band
-    splits a static ``CanvasSlot`` (left, swapped in place, no animation)
-    from a ``BreadcrumbStack`` over ``control_screens`` — (label, widget)
-    pairs — on the right. Meant to be called once, at window construction;
-    the returned container is set as the central widget once, and the
-    returned ``BreadcrumbStack`` handle is what the caller keeps to later
-    swap a position's contents (``replace_pane``) and drill to it
-    (``set_current``) — the caller updates ``canvas_slot`` (``set_content``)
-    alongside each such switch, but that update is the caller's to
-    sequence, not this function's."""
-    for _, screen in control_screens:
-        _require_layout_section(screen)
-
-    control = BreadcrumbStack(control_screens)
-    return _assemble(top, _split(canvas_slot, control), bottom), control
 
 
 def _move_to_dev_monitor(window: QMainWindow) -> None:

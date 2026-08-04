@@ -1,40 +1,21 @@
 """The GUI sitting, per docs/AGENTS.md: not a chunk, no cheap proof.
 
-PySide6. Two screens' worth of content, but the canvas (left) and control
-(right) sides no longer move together — an earlier version slid whole
-canvas+control pairs as one screen; that looked wrong, because the canvas
-isn't a "screen" the user navigates to, it's a view that should just track
-whichever control is current. So the central widget (built exactly once,
-by ``layout.compose_split``) splits a ``gui/layout.CanvasSlot`` (left,
-content swapped in place, no animation) from a
-``gui/breadcrumb_stack.BreadcrumbStack`` (right, two positions — "Project
-Info" at 0, "Workspace" at 1). Drilling into the workspace collapses
-project info to a labeled bar (Obsidian sliding-panes / Andy's mode)
-rather than sliding it away; going back re-expands that same bar. With no
-project chosen, the canvas slot holds a bare "select a project" label (not
-a real canvas implementation — nothing designed yet, see
-``gui/canvas/__init__.py``) and the control side is ``ProjectSelect``
-reading the projects registry; once one's picked
-(``session.app_state.select``), the canvas slot holds ``VideoPlayer`` on
-the project's source and the control side is ``PipelinePanel`` on a fresh
-empty pipeline for it. A freshly-chosen project always starts empty —
-nothing loads a saved pipeline automatically.
-
-Every screen switch touches both sides together, in the same method:
-``self._canvas_slot.set_content(...)`` (instant) alongside
-``self._control_stack.replace_pane(index, ...)`` +
-``self._control_stack.set_current(index)`` (animated). Replacing the pane
-you're already on (Save/Load a pipeline, a timeline jump — none of which
-change *which* screen is showing) still only touches content, no
-animation, on either side.
+PySide6. Two screens, both built from ``layout.compose``'s canvas/control
+split: with no project chosen, the left is a bare "select a project" label
+(not a real canvas implementation — nothing designed yet, see
+``gui/canvas/__init__.py``) and the right is ``ProjectSelect`` reading the
+projects registry; once one's picked (``session.app_state.select``), the
+left becomes ``VideoPlayer`` on the project's source and the right becomes
+``PipelinePanel`` on a fresh empty pipeline for it. A freshly-chosen project
+always starts empty — nothing loads a saved pipeline automatically.
 
 ``menu.py`` calls back into three public methods (``load_project``,
 ``save_pipeline``, ``open_history``) rather than reaching into ``AppState``
 itself — this file owns what those verbs mean, ``menu.py`` only owns that
 they're reachable. All three states that can replace the current
 ``Pipeline`` (fresh project select, a loaded save, a timeline jump) funnel
-through ``_render_workspace``, which rebuilds the whole workspace screen —
-there is no incremental update path yet, so all three reopen the video.
+through ``_render_workspace``, which rebuilds the whole canvas+control slot
+— there is no incremental update path yet, so all three reopen the video.
 
 Left/Right (``go_back``/``go_forward``, bound once by
 ``hotkeys.bind_navigation_hotkeys``) walk a three-position chain — project
@@ -42,13 +23,9 @@ info, the Pipeline tab, the Step tab — inferred from ``self._control``'s
 type rather than tracked as separate state: ``ProjectSelect`` means
 project info, and ``PipelinePanel.current_tab()`` tells the two workspace
 positions apart. Moving between the two workspace tabs calls
-``PipelinePanel``'s own tab methods directly (its own, separate
-``BreadcrumbStack``, canvas untouched throughout); moving to or from
-project info goes through ``show_project_info``/``show_workspace``.
-Clicking a breadcrumb bar does the same thing keyboard nav does —
-``self._control_stack.activated`` is wired to ``_on_control_breadcrumb_clicked``,
-which just calls ``show_project_info``, the only bar that can ever exist
-at this level (a 2-position stack only ever has one collapsed position).
+``PipelinePanel``'s own tab methods directly (no rebuild, video keeps
+playing); moving to or from project info still goes through the full
+``show_project_info``/``show_workspace`` rebuild.
 """
 
 from __future__ import annotations
@@ -75,7 +52,7 @@ if str(_REPO_ROOT) not in sys.path:
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
 from proto_sieve.src.sieve.gui.hotkeys import bind_hotkeys, bind_navigation_hotkeys
-from proto_sieve.src.sieve.gui.layout import CanvasSlot, compose_split, size_window
+from proto_sieve.src.sieve.gui.layout import compose, size_window
 from proto_sieve.src.sieve.gui.menu import build_menu_bar
 from proto_sieve.src.sieve.gui.control.pipeline import PipelinePanel
 from proto_sieve.src.sieve.gui.control.project_select import ProjectSelect
@@ -105,20 +82,6 @@ class MainWindow(QMainWindow):
         self._bottom_bar.setFixedHeight(style.bar_height() * 2)
         style.tag(self._bottom_bar, style.ROLE_BAR)
 
-        # Placeholder content — real content is filled in by
-        # show_project_info() below and by the first _render_workspace();
-        # compose_split just needs a canvas and two control positions to
-        # exist before either has ever run.
-        self._canvas_slot = CanvasSlot(QWidget())
-        container, self._control_stack = compose_split(
-            self._top_bar,
-            self._canvas_slot,
-            [("Project Info", QWidget()), ("Workspace", QWidget())],
-            self._bottom_bar,
-        )
-        self.setCentralWidget(container)
-        self._control_stack.activated.connect(self._on_control_breadcrumb_clicked)
-
         build_menu_bar(self)
         bind_navigation_hotkeys(self)
         self.show_project_info()
@@ -131,12 +94,11 @@ class MainWindow(QMainWindow):
         underneath it untouched (``show_workspace``/Right returns to exactly
         where it was); picking a project from the list here still starts a
         fresh one, same as it always has."""
+        canvas = QLabel("Select a project")
         control = ProjectSelect(list_projects())
         control.project_selected.connect(self._on_project_selected)
         self._control = control
-        self._canvas_slot.set_content(QLabel("Select a project"))
-        self._control_stack.replace_pane(0, control)
-        self._control_stack.set_current(0)
+        self.setCentralWidget(compose(self._top_bar, canvas, control, self._bottom_bar))
 
     def show_workspace(self) -> None:
         """Right (from project info): back to the pipeline workspace for the
@@ -161,12 +123,6 @@ class MainWindow(QMainWindow):
         if isinstance(self._control, PipelinePanel):
             self._control.show_step_tab()
 
-    def _on_control_breadcrumb_clicked(self, index: int) -> None:
-        """A 2-position stack only ever has one collapsed bar to click —
-        position 0, project info — while showing the workspace."""
-        if index == 0:
-            self.show_project_info()
-
     def _on_project_selected(self, project: Project) -> None:
         self._state = app_state.select(project)
         self._render_workspace()
@@ -184,9 +140,7 @@ class MainWindow(QMainWindow):
         canvas = VideoPlayer()
         control = PipelinePanel(self._state.session.pipeline)
         self._control = control
-        self._canvas_slot.set_content(canvas)
-        self._control_stack.replace_pane(1, control)
-        self._control_stack.set_current(1)
+        self.setCentralWidget(compose(self._top_bar, canvas, control, self._bottom_bar))
 
         bind_hotkeys(self, canvas)
         canvas.open(self._state.project.source_path)

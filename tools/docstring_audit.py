@@ -68,6 +68,7 @@ ASSESSED: dict[str, str] = {
     "sieve/pipeline/__init__.py": (
         "pipeline/ is Qt-free by contract; CLI, GUI, and cluster batch jobs execute through it"
     ),
+    "sieve/backend/__init__.py": "which kernel runs and what to call the machine that ran it, never a kernel itself",
 }
 
 #: path -> why it was not edited, ending in the docs/todo/ slug if one was written.

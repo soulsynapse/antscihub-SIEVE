@@ -107,7 +107,7 @@ class MetricBus:
     twice, or stopped by the wrong thread; a context manager cannot. `measure`
     is therefore the only intended way to produce a sample, and `publish` exists
     for the case where the number was already computed for some other reason —
-    `gui/player.py`'s scrub round trip, which `ScrubPolicy` needs anyway.
+    `gui/transport/player.py`'s scrub round trip, which `ScrubPolicy` needs anyway.
     """
 
     def __init__(self, *, clock: Clock = perf_counter) -> None:

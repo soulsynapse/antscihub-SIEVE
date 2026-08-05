@@ -9,7 +9,7 @@ gated_on: >
   needs ground truth before one exists
 reads:
   - ../antscihub-optical-flow-detector/gui/marks_store.py
-  - src/sieve/core/detection.py
+  - src/sieve/core/ops/detection.py
   - docs/REFINED-VISION.md
 ---
 
@@ -63,4 +63,4 @@ docs/todo/coverage-and-detection-lanes.md, names as V1's standing failure,
 arriving through a different widget.
 
 Read: V1 `../antscihub-optical-flow-detector/gui/marks_store.py`,
-`src/sieve/core/detection.py`, `docs/REFINED-VISION.md` **F**.
+`src/sieve/core/ops/detection.py`, `docs/REFINED-VISION.md` **F**.

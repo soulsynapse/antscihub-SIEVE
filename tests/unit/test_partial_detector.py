@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from sieve.core.detection import settled_frames as settled_after_window
-from sieve.core.wavelet import (
+from sieve.core.ops.detection import settled_frames as settled_after_window
+from sieve.core.ops.wavelet import (
     COI_SETTLE_EFOLDINGS,
     coi_edge_samples,
     default_freqs,

@@ -49,11 +49,11 @@ from sieve.core.replicates import Replicate
 from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
 from sieve.pipeline.cache import MemoryFrameStore
-from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import UnrunnableNodeError
 from sieve.pipeline.preview import PreviewRender, PreviewSession
 from sieve.pipeline.resolve_source import ResolvedSource, resolve
+from sieve.pipeline.source_home import SourceHome
 
 
 def preview_project(
@@ -119,7 +119,7 @@ def preview_project(
         )
 
     try:
-        source = source_identity(video)
+        home = SourceHome.for_video(video, project_path.parent)
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
     window = span_for(project, frames, video)
@@ -136,9 +136,7 @@ def preview_project(
     resolved = resolve(
         project.crops,
         target,
-        project_dir=project_path.parent,
-        parent=video,
-        parent_identity=source,
+        home=home,
         luma=luma,
         want=window,
     )

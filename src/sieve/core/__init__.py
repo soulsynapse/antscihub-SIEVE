@@ -35,6 +35,7 @@ from sieve.core.pipeline_model import (
     Project,
     Sink,
     SourceRef,
+    as_project_path,
     project_path_for,
 )
 from sieve.core.replicates import Replicate, ReplicateSet
@@ -70,6 +71,7 @@ __all__ = [
     "TableSpec",
     "UnknownFilterError",
     "VideoMetadata",
+    "as_project_path",
     "project_path_for",
     "register_filter",
     "source_warmup_frames",

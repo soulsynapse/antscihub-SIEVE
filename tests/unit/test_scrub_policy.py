@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from sieve.gui.scrub_policy import (
+from sieve.gui.transport.scrub_policy import (
     FALLBACK_FPS,
     SAMPLE_WINDOW,
     ScrubMode,

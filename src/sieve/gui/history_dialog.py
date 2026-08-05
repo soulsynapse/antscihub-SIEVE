@@ -30,7 +30,27 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui.history import Snapshot, age_text
+from sieve.core.history import Snapshot
+
+
+def age_text(seconds: float) -> str:
+    """How long ago, in the coarsest unit that still distinguishes two entries.
+
+    Coarse on purpose. The user is choosing between snapshots, so what has to be
+    legible is the *order* and roughly how far back — "17:42:03" would be more
+    precise and less answerable, because nobody remembers what time they made a
+    mistake.
+    """
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} min ago"
+    if seconds < 86400:
+        hours = int(seconds // 3600)
+        return f"{hours} hour ago" if hours == 1 else f"{hours} hours ago"
+    days = int(seconds // 86400)
+    return "yesterday" if days == 1 else f"{days} days ago"
+
 
 #: Shown instead of the list when nothing has been written yet. Says why rather
 #: than showing an empty box, because an empty history and a broken history look

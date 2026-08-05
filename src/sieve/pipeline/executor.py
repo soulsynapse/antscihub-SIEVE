@@ -150,7 +150,7 @@ class FrameResult:
     #: would be showing a region of the arena as the whole of it. Rule 6 in its
     #: mirror direction: never let a result look better-founded than it is. The
     #: one consumer today declines the frame on this flag rather than drawing it
-    #: (`gui/preview_runner.py`, feeding `gui/render_ring.py`).
+    #: (`gui/preview_runner.py`, feeding `gui/transport/render_ring.py`).
     source_cropped: bool = False
 
     def __getitem__(self, node_id: str) -> Frame:

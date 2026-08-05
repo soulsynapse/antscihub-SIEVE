@@ -1,4 +1,4 @@
-"""Pins on `core/wavelet.py` — the claims the parity plan names.
+"""Pins on `core/ops/wavelet.py` — the claims the parity plan names.
 
 Each test fails for a distinct real reason: a wrong scale relation smears a
 tone across rows, a broken snap makes an empty band a dead detector, and a
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from sieve.core.wavelet import (
+from sieve.core.ops.wavelet import (
     band_indices,
     coi_efolding_s,
     default_freqs,

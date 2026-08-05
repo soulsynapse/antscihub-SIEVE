@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
+from sieve.core.request_intent import RequestKind
+from sieve.gui.transport.coalescer import Request, RequestCoalescer
 
 
 class FakeClock:

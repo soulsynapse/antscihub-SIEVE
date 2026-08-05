@@ -30,6 +30,7 @@ from sieve.core.types import ROI, ChannelSpec, Frame
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.resolve_source import OffsetFrameSource, ResolvedSource, resolve
+from sieve.pipeline.source_home import SourceHome
 
 ARENA = ROI(x=16, y=8, width=64, height=48)
 SPAN = ClipRange(start=10, end=20)
@@ -79,9 +80,7 @@ def _resolve(
     return resolve(
         crops,
         _replicate() if replicate is None else replicate,
-        project_dir=tmp_path,
-        parent=parent,
-        parent_identity=parent_identity,
+        home=SourceHome(video=parent, project_dir=tmp_path, identity=parent_identity),
         luma=luma,
         want=want,
     )
@@ -114,9 +113,7 @@ class TestAMatchingRecordIsServed:
         resolved = resolve(
             (record,),
             None,
-            project_dir=tmp_path,
-            parent=parent,
-            parent_identity=PARENT_IDENTITY,
+            home=SourceHome(video=parent, project_dir=tmp_path, identity=PARENT_IDENTITY),
             luma=True,
             want=WANT,
         )

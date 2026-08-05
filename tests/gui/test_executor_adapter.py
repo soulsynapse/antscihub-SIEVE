@@ -102,7 +102,7 @@ class TestThreadHop:
 
         `AutoConnection` would deliver this one synchronously and the one above
         by queue, so the order two samples arrive in would depend on which
-        thread produced each — and `gui/player.py` publishing
+        thread produced each — and `gui/transport/player.py` publishing
         `scrub_to_repaint` from a GUI-thread slot makes that a real mixture
         rather than a hypothetical one. The explicit `QueuedConnection` is what
         this pins, and the observable is that nothing has arrived yet on the

@@ -34,10 +34,10 @@ from sieve.core.types import ROI
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.editing_sources import EditingSources
 from sieve.gui.main_window import MainWindow
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.replicate_tab import ReplicateTab
 from sieve.gui.replicate_table import Column, EditingAwareDelegate, ReplicateTableModel
+from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.video_view import VideoView
 from tests.gui.qt_input import drag
 

@@ -44,12 +44,15 @@ tools/session_hooks.py                  # what the session hooks run; jq-free by
 .claude/skills/comment-check/SKILL.md   # runs it over the working diff, by line range not by file
 
 src/sieve/core/types.py                 # Frame, ROI, value objects everything pattern-matches on
+src/sieve/core/request_intent.py        # why a frame was asked for, and whether it may be snapped, retained, or felt
 src/sieve/core/filter_base.py           # THE FILTER CONTRACT: FilterSpec, ParamsBase, Mode, warmup arithmetic
 src/sieve/core/filter_registry.py       # the shelf; filters/ puts things on it via decorator
-src/sieve/core/pipeline_model.py        # THE SAVED ARTIFACT: pydantic DAG, schema v3 with Edge.port and Project.detector
+src/sieve/core/pipeline_model.py        # THE SAVED ARTIFACT: pydantic DAG at schema v5, and the .sieve.yaml filename convention
+src/sieve/core/history.py               # rollback snapshots at rest: the .history/ directory, its filename grammar, retention
 src/sieve/core/replicates.py            # replicate identity, overrides, resolved_params, equivalence groups
-src/sieve/core/detection.py             # windowed_mean + detect_gate, the detection chain tail
-src/sieve/core/wavelet.py               # morlet_band_power, default_freqs (capped at 0.45*fps)
+src/sieve/core/clip_window.py           # ClipRange's algebra: which of a window's length or edges survives an edit
+src/sieve/core/ops/detection.py         # windowed_mean + detect_gate, the detection chain tail
+src/sieve/core/ops/wavelet.py           # morlet_band_power, default_freqs (capped at 0.45*fps)
 src/sieve/core/machine.py               # the machine read once: available_cpus, available_memory, process_memory_bytes
 src/sieve/core/pool_meter.py            # busy-time and depth counters a worker pool exposes to a sampler
 src/sieve/core/shares.py                # rule 5's ledger: worker constants, memory shares, sensor lists
@@ -61,7 +64,7 @@ src/sieve/decode/identity.py            # decoder identity string feeding the ca
 src/sieve/backend/dispatch.py           # device policy only; holds no kernel
 src/sieve/backend/identity.py           # backend identity for keys of non-backend_agnostic filters
 
-src/sieve/filters/__init__.py           # pkgutil scan; names no filter module (a test enforces this)
+src/sieve/filters/__init__.py           # pkgutil scan, and §3's markdown half: where guidance lives and what it is made of
 src/sieve/filters/downsample.py         # anti-aliased spatial decimation
 src/sieve/filters/rescale.py            # intensity rescale
 src/sieve/filters/normalize.py          # per-frame global illumination removal
@@ -70,14 +73,17 @@ src/sieve/filters/block_signal.py       # change_energy, flow_speed, coherence �
 src/sieve/filters/temporal_baseline.py  # per-cell median/MAD null; the units thresholds are denominated in
 src/sieve/filters/motion_history.py     # MHI: leaky accumulator with dilate/diffuse coupling, declared group delay
 
-src/sieve/pipeline/dag.py               # resolve, reject cycles and untypeable edges, one topological order
+src/sieve/pipeline/dag.py               # resolve, reject cycles and untypeable edges, one topological order; linear_order for the graphs a stack can host
 src/sieve/pipeline/plan.py              # everything knowable before a frame decodes: params, keys, lead-in
 src/sieve/pipeline/cache_key.py         # key derivation; ports bind upstream keys so a-b != b-a
 src/sieve/pipeline/cache.py             # store protocol
 src/sieve/pipeline/executor.py          # THE ONE EXECUTION PATH. CLI, GUI, and HPC all call this
 src/sieve/pipeline/preview.py           # PreviewSession: re-render the working window, pay only below the edit
+src/sieve/pipeline/series_collector.py  # one node's per-frame outputs into the (T, ny, nx) series a detector runs on
 src/sieve/pipeline/materialize.py       # the replicate crop artifact: cut it, verify the read-back, record it
+src/sieve/pipeline/source_home.py       # what a crop record is read against: video, project dir, parent identity — one value
 src/sieve/pipeline/resolve_source.py    # which file a replicate reads — a crop artifact or the parent — and in whose numbering
+src/sieve/pipeline/crop_binding.py      # its reporting twin: which record backs a replicate, and which clause a stale one missed
 
 src/sieve/storage/crop_writer.py        # FFV1/Matroska encode from arrays; knows no identity
 
@@ -102,8 +108,7 @@ src/sieve/gui/app.py                    # QApplication bootstrap
 src/sieve/gui/main_window.py            # tabs, the cross-tab timeline, panel orchestration
 src/sieve/gui/document.py               # ReplicateDocument: the edited project, clip, selection
 src/sieve/gui/commands.py               # QUndoCommands; the only writers of document state
-src/sieve/gui/history.py                # automatic rollback snapshots: whole projects on disk; Qt-free
-src/sieve/gui/history_dialog.py         # File > History: action text plus age, and the restore
+src/sieve/gui/history_dialog.py         # File > History: the restore list, and age_text that renders it
 src/sieve/gui/wizard.py                 # project creation flow
 src/sieve/gui/wizard_model.py           # its Qt-free half
 src/sieve/gui/replicate_tab.py          # video + tools panel + replicate table
@@ -116,7 +121,6 @@ src/sieve/gui/zoom.py                   # the magnifier: zoom, pan centre, and t
 src/sieve/gui/filter_tab.py             # the tuning surface: composite, chain, plots
 src/sieve/gui/chain_stack.py            # the step cards, and the source card above them
 src/sieve/gui/chain_model.py            # its Qt-free half
-src/sieve/gui/crop_binding.py           # which record backs a replicate, and why one stopped; Qt-free
 src/sieve/gui/param_form.py             # widgets generated from a filter's params model
 src/sieve/gui/commit_combo.py           # a drop menu that commits on selection, never on highlight
 src/sieve/gui/block_spin.py             # the Block knob, refusing the sizes the density graph cannot bin
@@ -127,20 +131,22 @@ src/sieve/gui/materialize_worker.py     # writes a crop artifact off the GUI thr
 src/sieve/gui/concurrency.py            # the one declaration of how the session divides the machine
 src/sieve/gui/executor_adapter.py       # the ONLY place that knows both bench/metrics and Qt
 src/sieve/gui/resource_probe.py         # samples RSS and pool utilisation off the GUI thread, mode-tagged
-src/sieve/gui/player.py                 # playback, scrub, frame requests
-src/sieve/gui/decode_worker.py          # decode off the GUI thread
-src/sieve/gui/proxy_cache.py            # coarse-grid frame cache serving the scrub budget
-src/sieve/gui/render_ring.py            # the render's recent frames as proxies, played instead of re-decoded
-src/sieve/gui/scrub_policy.py           # when to degrade to the coarse grid; Qt-free
-src/sieve/gui/coalescer.py              # two slots, rank rule, source stamp; Qt-free
-src/sieve/gui/timeline_bar.py           # the full-width band: working window and playhead
-src/sieve/gui/timeline_model.py         # its Qt-free arithmetic
+src/sieve/gui/transport/__init__.py     # frames arriving: the package boundary, and why it is one
+src/sieve/gui/transport/player.py       # playback, scrub, frame requests
+src/sieve/gui/transport/decode_worker.py  # decode off the GUI thread
+src/sieve/gui/transport/proxy_cache.py  # coarse-grid frame cache serving the scrub budget
+src/sieve/gui/transport/render_ring.py  # the render's recent frames as proxies, played instead of re-decoded
+src/sieve/gui/transport/scrub_policy.py # when to degrade to the coarse grid; Qt-free
+src/sieve/gui/transport/coalescer.py    # two slots, rank arithmetic, source stamp; Qt-free
+src/sieve/gui/transport/pacing.py       # where playback goes next, and the frontier it folds against; Qt-free
+src/sieve/gui/timeline/__init__.py      # the band, and the one-way edge to the transport
+src/sieve/gui/timeline/bar.py           # the full-width band: working window and playhead
+src/sieve/gui/timeline/geometry.py      # its Qt-free arithmetic: the frame-to-column mapping
 src/sieve/gui/band_plot.py              # the base plot widget the rest specialize
 src/sieve/gui/graph_hud.py              # per-frame cost series; BandPlot with handles suppressed
 src/sieve/gui/scalogram_plot.py         # morlet scalogram with draggable band handles
 src/sieve/gui/count_plot.py             # windowed block count with the detection threshold handle
 src/sieve/gui/density_plot.py           # detection density
-src/sieve/gui/series_collector.py       # accumulates per-frame series for the plots
 src/sieve/gui/wheel_steps.py            # app-wide one-detent-one-step wheel filter, with run acceleration
 src/sieve/gui/preferences.py            # persisted user preferences
 src/sieve/gui/preferences_dialog.py     # their editor
@@ -158,8 +164,8 @@ tests/unit/test_cache_key.py            # cache isolation between sibling branch
 ```
 
 Directories not listed line by line, because their contents are conventional and
-the test only guards the named files: `tests/unit/` (38 modules), `tests/gui/`
-(28), `tests/integration/` (7), `tests/property/` (4).
+the test only guards the named files: `tests/unit/` (49 modules), `tests/gui/`
+(39), `tests/integration/` (11), `tests/property/` (6).
 
 ---
 

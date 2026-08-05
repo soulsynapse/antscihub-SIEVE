@@ -27,7 +27,7 @@ the asset. That is what makes the window the unit of work VISION step 4 asks
 for: the user picks the ten seconds that matter and the transport stops being
 able to leave them. The window arrives from the document through `set_window`,
 and the arithmetic — which frame is shown last before the loop, and where a
-playhead the window has moved out from under goes — is in `timeline_model.py`,
+playhead the window has moved out from under goes — is in `pacing.py`,
 because it is off-by-one work and belongs somewhere a test can reach it without
 a decode thread.
 
@@ -67,15 +67,16 @@ from sieve.bench.retention_trace import (
 )
 from sieve.core.pipeline_model import ClipRange
 from sieve.core.pool_meter import PoolMeter
+from sieve.core.request_intent import RequestKind
 from sieve.core.shares import PROXY_CACHE_SHARE, resolved_bytes
 from sieve.core.types import VideoMetadata
-from sieve.gui.coalescer import Request, RequestCoalescer, RequestKind
-from sieve.gui.decode_worker import DecodeWorker
 from sieve.gui.preferences import Preferences
-from sieve.gui.proxy_cache import ProxyFrameCache
-from sieve.gui.render_ring import RenderFrameRing
-from sieve.gui.scrub_policy import ScrubPolicy
-from sieve.gui.timeline_model import feed_bounds, playback_step
+from sieve.gui.transport.coalescer import Request, RequestCoalescer
+from sieve.gui.transport.decode_worker import DecodeWorker
+from sieve.gui.transport.pacing import feed_bounds, playback_step
+from sieve.gui.transport.proxy_cache import ProxyFrameCache
+from sieve.gui.transport.render_ring import RenderFrameRing
+from sieve.gui.transport.scrub_policy import ScrubPolicy
 
 #: How often playback re-evaluates which frame the clock is on. Finer than any
 #: source frame rate we expect, so the limit on smoothness is decode, not this.
@@ -437,7 +438,7 @@ class VideoPlayer(QObject):
         index = self._clamp(index)
         self._anchor_playback(index)
 
-        target = self._clamp(self._policy.snap(index)) if kind is RequestKind.SCRUB else index
+        target = self._clamp(self._policy.snap(index)) if kind.may_be_snapped else index
         if self._display_cached(target, kind):
             return
         self._request(target, kind)
@@ -504,7 +505,7 @@ class VideoPlayer(QObject):
         """Show the render's frame if it kept one. The no-second-decode path.
 
         Deliberately not copied into `_cache`: the ring is its own retention,
-        and playback frames are exactly what `gui/proxy_cache.py` says must
+        and playback frames are exactly what `gui/transport/proxy_cache.py` says must
         not evict a scrub's warmed grid.
         """
         ring = self._feed_ring()
@@ -578,7 +579,7 @@ class VideoPlayer(QObject):
             self._issue(self._coalescer.drain())
             return
 
-        if arrival.request.kind is not RequestKind.PLAYBACK:
+        if arrival.request.kind.may_be_retained:
             self._cache.put(index, image)
 
         if arrival.display:
@@ -594,7 +595,7 @@ class VideoPlayer(QObject):
         # round trip cost, which is what `scrub_to_repaint` names and what a HUD
         # or a gate reads. Publishing the policy's verdict instead would give a
         # consumer the conclusion and not the measurement.
-        if arrival.request.kind is RequestKind.SCRUB:
+        if arrival.request.kind.is_felt_latency:
             round_trip_ms = self._coalescer.round_trip_ms()
             self._metrics.publish("scrub_to_repaint", round_trip_ms)
             if self._policy.observe(round_trip_ms):

@@ -19,12 +19,10 @@ Four rules, and they are the whole object:
 **One in flight, one pending.** A third request overwrites the second. The
 decode already running cannot be recalled, so two slots is the floor.
 
-**A commitment outranks a guess.** Requests carry *why* they were made. A drag
-position is a guess the user is still refining; a released slider, a step, or a
-menu action is a commitment to land on exactly that frame. Where they compete
-for the one pending slot the commitment wins regardless of arrival order —
-otherwise a playback tick or a fresh drag silently strands the user somewhere
-they never asked to be. Between requests of equal rank, later wins.
+**A commitment outranks a guess.** Requests carry *why* they were made
+(`core/request_intent.RequestKind`). Where a guess and a commitment compete for
+the one pending slot the commitment wins regardless of arrival order. Between
+requests of equal rank, later wins.
 
 **Displays are monotonic.** A frame served from a cache can overtake a decode
 that is still running, and that decode must not then repaint the older frame
@@ -41,22 +39,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import StrEnum, auto
 from time import perf_counter
 
-
-class RequestKind(StrEnum):
-    """Why a frame was asked for. Governs rank, snapping, caching, and timing."""
-
-    #: A committed position: a released slider, a step, a menu action. Must
-    #: land on exactly this frame. The only kind that outranks another.
-    EXACT = auto()
-    #: A drag position. May be snapped to a coarse grid by the caller, and is
-    #: the only kind whose latency counts toward the degradation decision.
-    SCRUB = auto()
-    #: Driven by the playback clock. Never snapped, never cached — playback
-    #: walks the whole timeline and would evict everything a scrub warmed.
-    PLAYBACK = auto()
+from sieve.core.request_intent import RequestKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +80,7 @@ class Arrival:
 
 def _outranks(kind: RequestKind, pending: Request) -> bool:
     """Whether a new intent of `kind` may take the pending slot from `pending`."""
-    return pending.kind is not RequestKind.EXACT or kind is RequestKind.EXACT
+    return not pending.kind.is_commitment or kind.is_commitment
 
 
 class RequestCoalescer:

@@ -3,7 +3,7 @@
 Four claims, each failing for its own reason.
 
 **Stale is not absent, on screen and not only in the model.** The reading was
-pinned when `gui/crop_binding.py` landed; what is new here is that the card
+pinned when `pipeline/crop_binding.py` landed; what is new here is that the card
 renders the two differently — a user who cannot tell an orphaned artifact from
 one that was never cut re-cuts a file they already have, which is a minute of
 encoding rule 6 exists to prevent.
@@ -39,14 +39,15 @@ from sieve.bench.metrics import MetricBus
 from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.types import ROI
 from sieve.gui.chain_stack import SourceCard
-from sieve.gui.crop_binding import CropState
-from sieve.gui.document import ReplicateDocument, SourceHome
+from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import FilterTab
 from sieve.gui.materialize_worker import MaterializeRequest
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.preview_runner import PreviewRunner
+from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.video_view import VideoView
+from sieve.pipeline.crop_binding import CropState
+from sieve.pipeline.source_home import SourceHome
 from tests.gui import qt_input
 from tests.gui.conftest import SOURCE_FRAMES, answering
 from tests.gui.test_preview_runner import (

@@ -1,17 +1,21 @@
 """Assemble one node's per-frame outputs into a (T, ny, nx) series.
 
-The live tab's detector runs on a *series* — the Morlet transform needs the
-whole working window of `block_signal` grids at once — and the runner delivers
-frames one at a time on the render thread. This is the bridge: a consumer
-appends rows as they arrive, the GUI takes the assembled array when the render
-finishes, and revisions are how the two sides agree about staleness without
-sharing a flag (the same discipline `preview_runner.py` documents).
+A detector runs on a *series* — the Morlet transform needs the whole working
+window of `block_signal` grids at once — and `execute` yields frames one at a
+time. This is the bridge: a producer appends rows as they arrive, a consumer
+takes the assembled array when the render finishes, and revisions are how the
+two sides agree about staleness without sharing a flag.
 
-Qt-free deliberately: everything here is arithmetic over indices and arrays,
-and the tests that pin the staleness rules should not need an event loop.
-Thread-safety is one lock around the row list — `add` runs on the render
-thread, `start`/`take` on the GUI thread, and none of them holds the lock
-across anything slower than an append.
+It sits at this layer and not under `gui/` because the CLI assembles the same
+series: `cli/detect_cmd._collect` stacks one node's outputs over a span, which
+is this class with the revision fence removed because a batch run has nothing
+to supersede. Two implementations of "what the detector was run on" is how the
+GUI and the CLI drift into disagreeing about the same project, which is what
+`tests/gui/test_gui_cli_parity.py` exists to catch.
+
+Thread-safety is one lock around the row list, held across nothing slower than
+an append: `add` runs on whichever thread `execute` is driven from, `start`
+and `take` on the caller's.
 
 The frame axis is the *span's*, not the decode's: `execute` yields only
 frames at or after `plan.span.start` (the warmup lead-in is consumed and
@@ -58,12 +62,11 @@ class CollectedRows:
 
 
 class SeriesCollector:
-    """Rows in on the render thread, one array out on the GUI thread.
+    """Rows in on the render thread, one array out on the consumer's.
 
-    One collector watches one node. The stack builds one per graph-producing
-    step; a wizard's provisional render gets its own instance rather than a
-    shared one, per the parity plan's no-shared-widgets learning applied to
-    state.
+    One collector watches one node, and callers that render provisionally take
+    their own instance rather than sharing one — a shared collector makes a
+    speculative render's rows indistinguishable from the committed render's.
     """
 
     def __init__(self, node_id: str) -> None:
@@ -81,9 +84,9 @@ class SeriesCollector:
     def start(self, revision: int) -> None:
         """A new render is about to produce frames; everything older is dead.
 
-        Wire to `PreviewRunner.render_started`. Rows a superseded render
-        manages to deliver after this are discarded by the revision check in
-        `add`, which is what makes the served series never contain them.
+        Rows a superseded render manages to deliver after this are discarded
+        by the revision check in `add`, which is what makes the served series
+        never contain them.
         """
         with self._lock:
             self._revision = revision
@@ -129,7 +132,7 @@ class SeriesCollector:
         and never a series with a hole standing in for frames still in flight.
         What it is *not* is final: the trailing frames are inside the
         transform's cone of influence and change as the record grows, which is
-        `core.wavelet.settled_frames`' business to say and the caller's to
+        `core.ops.wavelet.settled_frames`' business to say and the caller's to
         render honestly.
         """
         with self._lock:
@@ -140,13 +143,13 @@ class SeriesCollector:
             )
 
     def snapshot_rows(self, revision: int) -> CollectedRows | None:
-        """`snapshot` without the stack: an O(rows) pointer copy, GUI-thread cheap.
+        """`snapshot` without the stack: an O(rows) pointer copy.
 
         The stack itself is O(frames x blocks) — tens of megabytes at a small
-        block size — and belongs on the thread that will transform the result
-        (`detector_worker.derive` stacks), not on the GUI thread once per
-        pacing kick, where it was a per-kick stall the playback timer and
-        every queued repaint sat behind.
+        block size — and belongs on the thread that will transform the result,
+        not on the one pacing the render. Called once per pacing kick on the
+        GUI thread it was a per-kick stall the playback timer and every queued
+        repaint sat behind.
         """
         with self._lock:
             if revision != self._revision or self._start is None or not self._rows:
@@ -156,12 +159,9 @@ class SeriesCollector:
     def take(self, revision: int) -> CollectedSeries | None:
         """The finished series for `revision`, or None if it was superseded.
 
-        Wire to `PreviewRunner.render_finished` (the runner only forwards the
-        newest revision's finish, so a None here is a programming error being
-        tolerated rather than a race being hidden). Returns None too for a
-        render that produced no rows — a chain whose watched node was never
-        reached — which the caller reports as "no reachable step", not as an
-        empty detection.
+        Returns None too for a render that produced no rows — a chain whose
+        watched node was never reached — which the caller reports as "no
+        reachable step", not as an empty detection.
 
         Identical to `snapshot` in what it computes and different in what it
         claims: this one is called when the render is over, so the record is

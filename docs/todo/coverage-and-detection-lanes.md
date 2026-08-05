@@ -69,7 +69,7 @@ ticks and the `|<` / `>|` jumps moved here**, because they share this item's
 trigger rather than the seeker's absence of one.
 
 Ticks look free and are not. Detections exist only over the **working window**:
-`gui/series_collector.py`'s frame axis is the rendered span's, `execute` yields
+`pipeline/series_collector.py`'s frame axis is the rendered span's, `execute` yields
 only frames at or after `plan.span.start`, and nothing anywhere persists a
 detection outside the span currently rendered. A strip painting ticks from that
 would show them across the ten seconds under the window and nothing across the

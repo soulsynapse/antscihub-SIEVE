@@ -12,7 +12,7 @@ from __future__ import annotations
 from hypothesis import given
 from hypothesis import strategies as st
 
-from sieve.gui.scrub_policy import SAMPLE_WINDOW, ScrubMode, ScrubPolicy
+from sieve.gui.transport.scrub_policy import SAMPLE_WINDOW, ScrubMode, ScrubPolicy
 
 BUDGET_MS = 100.0
 

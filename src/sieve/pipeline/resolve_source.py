@@ -27,9 +27,10 @@ the parent: a moved box, a re-exported source, a deleted file, a colour artifact
 in a luma session, a window reaching outside what was cut. The fallback is the
 status quo — same paths, same keys, same pixels as before the record existed —
 not an error, because a stale artifact is a storage fact and the run it would
-have accelerated is still perfectly runnable. Surfacing staleness to the user
-belongs to the GUI (`docs/todo/crop-boundary-gesture.md`); the pipeline declines
-quietly and correctly.
+have accelerated is still perfectly runnable. Declining quietly is this module's
+job; naming which clause missed is `crop_binding.py`'s, next door, so that a
+caller that wants to *say* why it fell back does not re-walk the clauses to find
+out.
 
 **The span clause is this module's, not `backs`'s.** `CropArtifact.backs`
 deliberately stops short of the span, because a record covering `[10, 20)` asked
@@ -58,6 +59,7 @@ from sieve.core.types import Frame
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.executor import FrameSource
+from sieve.pipeline.source_home import SourceHome
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,9 +142,7 @@ def resolve(
     crops: Sequence[CropArtifact],
     replicate: Replicate | None,
     *,
-    project_dir: Path,
-    parent: Path,
-    parent_identity: str,
+    home: SourceHome,
     luma: bool,
     want: ClipRange,
 ) -> ResolvedSource:
@@ -156,11 +156,9 @@ def resolve(
         replicate: The arena being run, or None for a project with no fan-out.
             None never resolves to an artifact: every record is a crop of some
             replicate, and the baseline is the whole frame.
-        project_dir: What `CropArtifact.path` is relative to.
-        parent: The project's source video.
-        parent_identity: `source_identity(parent)`, already computed. Taken
-            rather than derived so a caller that has one does not stat twice,
-            and so the identity a run keys on is the identity it matched on.
+        home: What the records are read against. Its `identity` is taken rather
+            than derived so a caller that has one does not stat twice, and so
+            the identity a run keys on is the identity it matched on.
         luma: Whether this run decodes the luma plane — `not Dag.needs_chroma`.
             An artifact in the other format is declined, because a luma read of
             a colour file is the wrong-pixels trap the codec finding measured.
@@ -172,16 +170,16 @@ def resolve(
     """
     if replicate is None:
         return ResolvedSource(
-            path=parent, identity=parent_identity, pre_cropped=False, first_index=0
+            path=home.video, identity=home.identity, pre_cropped=False, first_index=0
         )
     for artifact in crops:
         if not artifact.backs(
-            replicate, source=parent_identity, luma=luma, project_dir=project_dir
+            replicate, source=home.identity, luma=luma, project_dir=home.project_dir
         ):
             continue
         if artifact.span.start > want.start or artifact.span.end < want.end:
             continue
-        path = artifact.resolve(project_dir)
+        path = artifact.resolve(home.project_dir)
         try:
             identity = source_identity(path)
         except OSError:
@@ -196,4 +194,4 @@ def resolve(
             first_index=artifact.span.start,
             artifact=artifact,
         )
-    return ResolvedSource(path=parent, identity=parent_identity, pre_cropped=False, first_index=0)
+    return ResolvedSource(path=home.video, identity=home.identity, pre_cropped=False, first_index=0)

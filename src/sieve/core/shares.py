@@ -82,7 +82,7 @@ class MemoryShare:
     fraction: float = 0.0
 
 
-#: The scrub proxy cache (`gui/proxy_cache.py`). The floor is its historical
+#: The scrub proxy cache (`gui/transport/proxy_cache.py`). The floor is its historical
 #: 96 MB bound — `tests/gui/test_proxy_cache.py` pins the two numbers equal —
 #: and the fraction is a judgement: more allocation buys more warmed grid
 #: points, and one percent of a big machine is a useful cache that is still
@@ -98,7 +98,7 @@ PREVIEW_INFLIGHT_SHARE = MemoryShare(
 
 PLAYER_INFLIGHT_SHARE = MemoryShare("player in-flight decode", floor_bytes=REFERENCE_FRAME_BYTES)
 
-#: The render-fed playback ring (`gui/render_ring.py`): the render's recent
+#: The render-fed playback ring (`gui/transport/render_ring.py`): the render's recent
 #: source frames as display proxies, so the player can show them instead of
 #: decoding the same file a second time. The floor is the bound the item
 #: fixed up front — ~280 gray 1280-wide proxies, ~4.7 s at 59.94 fps. The

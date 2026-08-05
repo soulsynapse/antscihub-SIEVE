@@ -21,7 +21,7 @@ with an explicit `QueuedConnection`, so Qt posts the event to the thread this
 object *lives* on and delivers it when that thread next runs its event loop.
 Explicit rather than relying on `AutoConnection` working out that the emitting
 thread differs: auto would deliver directly whenever a sample happens to be
-published on the GUI thread, which is a real case — `gui/player.py` publishes
+published on the GUI thread, which is a real case — `gui/transport/player.py` publishes
 `scrub_to_repaint` from a GUI-thread slot — and it would make delivery order
 depend on who published. One rule, one order.
 
@@ -74,7 +74,7 @@ class ExecutorAdapter(QObject):
 
         Args:
             bus: Where samples come from. Injectable for the reason
-                `gui/player.py` takes one: a test asserting on what arrived must
+                `gui/transport/player.py` takes one: a test asserting on what arrived must
                 not hear another test's publisher, and `METRICS` is shared by
                 construction.
             parent: Owner. Giving one is what ties `close` below to the

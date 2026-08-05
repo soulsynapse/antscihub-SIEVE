@@ -9,9 +9,10 @@ whole question is which of them a different policy would have moved. Recording
 the same source for both, or recording twice for one request as it fell
 through a layer, would give a trace that replays to a confident wrong answer.
 
-**The kind column matches what `bench/` scores on.** `SCRUB_KIND` is a string
-spelled out one layer away from the `RequestKind` it mirrors, so nothing but a
-test that drives a real drag can notice the day they stop agreeing.
+**The kind column survives the round trip.** `AccessEvent.kind` is written as
+a `RequestKind` member's value and read back as a bare string, so nothing but a
+test that drives a real drag can notice the day the written column stops
+parsing back into the member `bench/` scores on.
 """
 
 from __future__ import annotations
@@ -27,14 +28,14 @@ from sieve.bench.retention_trace import (
     FROM_RING,
     GET,
     PUT,
-    SCRUB_KIND,
     UNKNOWN_PLAYHEAD,
     TraceRecorder,
     load_trace,
 )
+from sieve.core.request_intent import RequestKind
 from sieve.core.types import ChannelSpec, Frame, VideoMetadata
-from sieve.gui.player import VideoPlayer
-from sieve.gui.render_ring import RenderFrameRing
+from sieve.gui.transport.player import VideoPlayer
+from sieve.gui.transport.render_ring import RenderFrameRing
 
 pytestmark = pytest.mark.gui
 
@@ -77,7 +78,9 @@ def test_a_scrub_a_ring_hit_and_a_decode_are_told_apart(
         (7, 7, UNKNOWN_PLAYHEAD)
     ]
 
-    scrubs = [event for event in events if event.op == GET and event.kind == SCRUB_KIND]
+    scrubs = [
+        event for event in events if event.op == GET and RequestKind(event.kind).is_felt_latency
+    ]
     assert [(event.index, event.source) for event in scrubs] == [
         (7, FROM_RING),
         (21, FROM_DECODE),

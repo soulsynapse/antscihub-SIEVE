@@ -22,12 +22,11 @@ default, blocking duplicates until a real chain needs repetition. Enabled
 means exactly one thing: the hypothetical chain grades conflict-free.
 
 **Guidance is user-facing UI content** (learning 7). The wizard pane is built
-from the filter's own markdown — `summary` becomes the row blurb, "When to
-use it" and "What it does not do" become the pane — so the `.md` beside each
-filter module is read here, through the same `guidance_path` the CLI's
-`sieve inspect` uses. The tab-side steps have no `.md`; their guidance is
-inline, because their parameters are the detector the wizard's center column
-already shows live.
+from the filter's own markdown, split into sections by `sieve.filters` — the
+package that owns §3's "one module + one markdown" owns what the markdown is
+made of. What is left here is the dispatch: the two tab-side steps have no
+`.md`, so their guidance is inline, because their parameters are the detector
+the wizard's center column already shows live.
 """
 
 from __future__ import annotations
@@ -36,7 +35,8 @@ from dataclasses import dataclass, replace
 
 from sieve.core.filter_registry import REGISTRY, UnknownFilterError
 from sieve.core.pipeline_model import Node, Pipeline
-from sieve.filters import discover, guidance_path
+from sieve.filters import Guidance, discover
+from sieve.filters import guidance_for as _filter_guidance
 from sieve.gui.chain_model import (
     ChainKind,
     ChainStep,
@@ -46,6 +46,7 @@ from sieve.gui.chain_model import (
     Status,
     grade,
 )
+from sieve.pipeline.dag import linear_order
 
 #: Disable reasons, verbatim from the mockup's success criteria. A candidate
 #: with an empty reason is enabled.
@@ -86,16 +87,6 @@ class Candidate:
     entry: CatalogEntry
     enabled: bool
     reason: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class Guidance:
-    """The sections the wizard pane renders, already split out of the markdown."""
-
-    summary: str
-    when_to_use: str
-    not_do: str
-    cost: str
 
 
 #: Inline guidance for the steps that have no filter module to keep an `.md`
@@ -411,14 +402,14 @@ def chain_from_pipeline(pipeline: Pipeline, fps: float) -> LiveChain:
     without them would open with its graphs unreachable.
 
     Raises:
-        ValueError: if the graph is not the linear chain the tab can host, or
-            names a filter the catalog has no entry for. Refused rather than
-            approximated: a stack silently missing a loaded step would look
-            better-founded than it is.
+        GraphError: if the graph is not the one path a stack can host.
+        ValueError: if it names a filter the catalog has no entry for. Refused
+            rather than approximated: a stack silently missing a loaded step
+            would look better-founded than it is.
     """
     by_filter = {e.filter_id: e for e in catalog() if e.filter_id is not None}
     steps: list[ChainStep] = []
-    for node in _linear_order(pipeline):
+    for node in linear_order(pipeline):
         entry = by_filter.get(node.filter_id)
         if entry is None:
             raise ValueError(f"no catalog entry for filter {node.filter_id!r}")
@@ -449,78 +440,11 @@ def chain_from_pipeline(pipeline: Pipeline, fps: float) -> LiveChain:
     return LiveChain(steps=tuple(steps), detector=DetectorState.default(fps), fps=fps)
 
 
-def _linear_order(pipeline: Pipeline) -> tuple[Node, ...]:
-    """The pipeline's nodes root to sink, refusing anything but one path.
-
-    Deliberately not `dag.py`'s topological order: that one exists for
-    execution and tolerates every DAG, while the stack can only host a chain
-    — one root, one edge out of each node. Accepting a genuine DAG here and
-    flattening it would draw a stack whose seams lie about what feeds what.
-
-    Raises:
-        ValueError: if the graph branches, merges, or is disconnected.
-    """
-    if not pipeline.nodes:
-        return ()
-    downstream_of = {edge.upstream: edge.downstream for edge in pipeline.edges}
-    if len(downstream_of) != len(pipeline.edges):
-        raise ValueError("graph branches — not a chain the stack can host")
-    fed = {edge.downstream for edge in pipeline.edges}
-    roots = [node for node in pipeline.nodes if node.node_id not in fed]
-    if len(roots) != 1:
-        raise ValueError(f"expected one root, found {len(roots)}")
-    ordered: list[Node] = [roots[0]]
-    while ordered[-1].node_id in downstream_of:
-        ordered.append(pipeline.node(downstream_of[ordered[-1].node_id]))
-    if len(ordered) != len(pipeline.nodes):
-        raise ValueError("graph is disconnected — not a chain the stack can host")
-    return tuple(ordered)
-
-
 # ---- guidance -----------------------------------------------------------------
 
 
-def parse_guidance(text: str) -> dict[str, str]:
-    """`## ` sections of a guidance file, header → body, reading order.
-
-    The intro before the first `##` lands under `""`. Deliberately dumb — the
-    guidance files are house-written markdown, and a parser that understood
-    more of it would invite prose that renders here and nowhere else.
-    """
-    sections: dict[str, str] = {}
-    header = ""
-    lines: list[str] = []
-    for line in text.splitlines():
-        if line.startswith("## "):
-            sections[header] = "\n".join(lines).strip()
-            header = line[3:].strip()
-            lines = []
-        else:
-            lines.append(line)
-    sections[header] = "\n".join(lines).strip()
-    return sections
-
-
 def guidance_for(entry: CatalogEntry) -> Guidance:
-    """The pane's sections for `entry`: its `.md` split up, or the inline text.
-
-    A node-backed filter whose guidance file is missing degrades to its
-    summary — the same posture as `sieve inspect`, which prints the absence
-    rather than failing, because an out-of-tree filter is allowed to exist
-    before its documentation does.
-    """
+    """The pane's sections for `entry`: its filter's `.md`, or the inline text."""
     if entry.filter_id is None:
         return _TAB_SIDE_GUIDANCE[entry.entry_id]
-    spec = REGISTRY.latest(entry.filter_id)
-    try:
-        path = guidance_path(spec)
-        text = path.read_text(encoding="utf-8") if path.is_file() else ""
-    except (OSError, ValueError):
-        text = ""
-    sections = parse_guidance(text)
-    return Guidance(
-        summary=spec.summary,
-        when_to_use=sections.get("When to use it", ""),
-        not_do=sections.get("What it does not do", ""),
-        cost=sections.get("Cost", ""),
-    )
+    return _filter_guidance(REGISTRY.latest(entry.filter_id))

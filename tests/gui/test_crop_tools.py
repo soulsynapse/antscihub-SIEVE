@@ -28,8 +28,8 @@ from pytestqt.qtbot import QtBot
 from sieve.core.types import ROI, VideoMetadata
 from sieve.gui.crop_tools import CropToolsPanel
 from sieve.gui.document import ReplicateDocument
-from sieve.gui.player import VideoPlayer
 from sieve.gui.replicate_tab import ReplicateTab
+from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.video_view import CropMode, VideoView
 from tests.gui.qt_input import click, drag, move, press, release, wheel
 

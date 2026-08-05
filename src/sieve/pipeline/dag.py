@@ -35,7 +35,9 @@ check a type against.
 upstreams' keys and declines to say which nodes those are; `node_keys` below is
 the traversal that answers it, and it is the only one. Anything else that needs
 an order — the executor, a cost prediction, an HPC job script — takes `order`
-from here rather than sorting again.
+from here rather than sorting again. `linear_order` is the second walk and not
+a second answer: it refuses every graph `order` tolerates, because a caller
+that *draws* the graph as a stack can host one path and nothing else.
 """
 
 from __future__ import annotations
@@ -628,6 +630,39 @@ class Dag:
             except NotCacheableError:
                 continue
         return keys
+
+
+def linear_order(pipeline: Pipeline) -> tuple[Node, ...]:
+    """The pipeline's nodes root to sink, refusing anything but one path.
+
+    Deliberately not `Dag.order`: that one exists for execution and tolerates
+    every DAG, while a caller that draws a chain — the filter tab's stack — can
+    only host one path. Accepting a genuine DAG here and flattening it would
+    draw seams that lie about what feeds what.
+
+    No registry and no `Dag`: this is a question about the graph's *shape*, and
+    a chain whose filters are all missing is still a chain. Asking it of an
+    unresolvable graph is what lets the stack rebuild from a project before it
+    knows whether the project can run.
+
+    Raises:
+        GraphError: if the graph branches, merges, or is disconnected.
+    """
+    if not pipeline.nodes:
+        return ()
+    downstream_of = {edge.upstream: edge.downstream for edge in pipeline.edges}
+    if len(downstream_of) != len(pipeline.edges):
+        raise GraphError("graph branches — not a chain")
+    fed = {edge.downstream for edge in pipeline.edges}
+    roots = [node for node in pipeline.nodes if node.node_id not in fed]
+    if len(roots) != 1:
+        raise GraphError(f"expected one root, found {len(roots)}")
+    ordered: list[Node] = [roots[0]]
+    while ordered[-1].node_id in downstream_of:
+        ordered.append(pipeline.node(downstream_of[ordered[-1].node_id]))
+    if len(ordered) != len(pipeline.nodes):
+        raise GraphError("graph is disconnected — not a chain")
+    return tuple(ordered)
 
 
 def graph_needs_chroma(pipeline: Pipeline, registry: FilterRegistry | None = None) -> bool:

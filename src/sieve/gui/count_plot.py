@@ -7,7 +7,7 @@ single-frame detection survives any zoom.
 
 **The threshold handle speaks counts; the state stores a fraction.** Drags
 emit count values and the tab divides by B on the way into
-`DetectorState.count_frac` — `core.detection.count_band_to_counts` is the one
+`DetectorState.count_frac` — `core.ops.detection.count_band_to_counts` is the one
 conversion back. The widget never learns the fraction, which is the point:
 re-denomination on a block-size change is the state's problem, not a
 repaint's (the v1 foot-gun this design deletes).

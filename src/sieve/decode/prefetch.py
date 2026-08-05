@@ -62,7 +62,7 @@ decomposition costs grabs and never seeks.
 **A jump abandons the window.** `read` at anything other than the next expected
 index bumps an epoch counter, discards what was claimed for the old position, and
 starts over. Work already in flight cannot be recalled, so it is stamped and
-dropped on arrival — borrowed from `gui/coalescer.py`'s `generation`, though *not*
+dropped on arrival — borrowed from `gui/transport/coalescer.py`'s `generation`, though *not*
 for the same reason, and the difference is worth stating because the resemblance
 invites the wrong one.
 

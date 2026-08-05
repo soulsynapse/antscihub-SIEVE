@@ -52,11 +52,11 @@ from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore, NullFrameStore
-from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag, GraphError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan
 from sieve.pipeline.resolve_source import ResolvedSource, resolve
+from sieve.pipeline.source_home import SourceHome
 
 
 def run_project(
@@ -106,7 +106,7 @@ def run_project(
     except GraphError as error:
         raise refuse(str(error)) from error
     try:
-        source = source_identity(video)
+        home = SourceHome.for_video(video, project_path.parent)
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
 
@@ -121,9 +121,7 @@ def run_project(
         resolve(
             project.crops,
             target,
-            project_dir=project_path.parent,
-            parent=video,
-            parent_identity=source,
+            home=home,
             luma=luma,
             want=span,
         )

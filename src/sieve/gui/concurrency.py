@@ -8,7 +8,7 @@ once, they must leave the GUI thread a core, and on a smaller allocation they
 degrade in a stated priority order.
 
 **The split between the two files is defaults, not numbers.** Nothing below
-`gui/` may *default* to the interactive split — `core.wavelet` takes every core
+`gui/` may *default* to the interactive split — `core.ops.wavelet` takes every core
 unless a caller caps it, which is right for a CLI run, a whole-clip pass, or a
 headless parity check on a cluster node, and a module-level cap down there
 would throttle exactly the runs that should saturate a node. That rule is

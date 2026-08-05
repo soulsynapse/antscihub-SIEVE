@@ -1,14 +1,14 @@
 """Bands, threshold, and window composed into intervals. Qt-free, front-end-free.
 
-`core/wavelet.py` holds the transform and `core/detection.py` the gate; this is
+`core/ops/wavelet.py` holds the transform and `core/ops/detection.py` the gate; this is
 the composition of them that a saved `DetectorSettings` names, and the only
 thing between a document on disk and the intervals it claims.
 
 **Two frontiers, and the smaller wins.** A record still being filled is
 provisional at its cut in two independent ways: the transform zero-pads past
 the end, so the trailing cone of influence is not settled
-(`core.wavelet.settled_frames`), and a centered detection window near the cut
-averages frames that have not arrived (`core.detection.settled_frames`).
+(`core.ops.wavelet.settled_frames`), and a centered detection window near the cut
+averages frames that have not arrived (`core.ops.detection.settled_frames`).
 `settled_for` is where they meet and `gate_to` is what enforces it — curves are
 published in full and drawn faded past the frontier, because a provisional
 *value* reads as one, while a provisional *detection* does not: an interval
@@ -29,17 +29,17 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from sieve.core.detection import (
+from sieve.core.ops.detection import (
     count_band_to_counts,
     detect_gate,
     gate_intervals,
     inband_count,
     windowed_mean,
 )
-from sieve.core.detection import settled_frames as settled_after_window
+from sieve.core.ops.detection import settled_frames as settled_after_window
+from sieve.core.ops.wavelet import band_indices, default_freqs, morlet_band_power
+from sieve.core.ops.wavelet import settled_frames as settled_after_coi
 from sieve.core.pipeline_model import DetectorSettings
-from sieve.core.wavelet import band_indices, default_freqs, morlet_band_power
-from sieve.core.wavelet import settled_frames as settled_after_coi
 
 FloatArray = NDArray[np.floating[Any]]
 

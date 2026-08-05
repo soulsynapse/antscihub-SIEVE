@@ -20,10 +20,10 @@ from pytestqt.qtbot import QtBot
 
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.main_window import MainWindow
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.replicate_tab import ReplicateTab
-from sieve.gui.timeline_bar import TimelineStrip
+from sieve.gui.timeline.bar import TimelineStrip
+from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.video_view import VideoView
 
 pytestmark = pytest.mark.gui
@@ -107,7 +107,7 @@ class TestTopSplit:
         """No transport inside the tab, in either pane.
 
         The seeker is one band across the bottom of the window now
-        (`gui/timeline_bar.py`). A tab that kept its own would answer "where am
+        (`gui/timeline/bar.py`). A tab that kept its own would answer "where am
         I" once per tab, and the copies drift the first time one is moved
         without the other.
         """

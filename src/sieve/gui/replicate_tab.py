@@ -12,7 +12,7 @@ and a provenance claim in one, which is what `REFINED-VISION.md` asks for when
 it says the settings should "point to the parent".
 
 **The left half is the picture and nothing else.** There is no seeker here and
-no clip editor: both are `gui/timeline_bar.py`, one band across the bottom of
+no clip editor: both are `gui/timeline/bar.py`, one band across the bottom of
 the window and outside every tab. A transport living inside a tab answers
 "where am I" once per tab, and the copies drift; a transport that spans the
 window answers it once. What this tab keeps is the only thing that is genuinely
@@ -45,8 +45,8 @@ from sieve.core.types import ROI, VideoMetadata
 from sieve.gui.crop_tools import CropToolsPanel
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.editing_sources import EditingSources
-from sieve.gui.player import VideoPlayer
 from sieve.gui.replicate_table import Column, EditingAwareDelegate, ReplicateTableModel
+from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.video_view import NO_SELECTION, CropMode, VideoView
 
 _DRAW_HINT = "Drag to cut a replicate.  Drag the selected box or its handles to adjust it."

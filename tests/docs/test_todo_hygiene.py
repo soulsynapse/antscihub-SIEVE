@@ -11,9 +11,13 @@ then took twelve commits of real building without gaining a single row.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
+import new_item
 from doc_index import (
     DOCS_ROOT,
     PRIORITIES,
@@ -21,10 +25,12 @@ from doc_index import (
     SKIP_PREFIXES,
     SPECS,
     STATUSES,
+    IndexSpec,
     ItemGraph,
     build_graph,
     collect,
     overturns_list,
+    render,
     render_state,
     settled_rows,
     superseded_by_slugs,
@@ -244,3 +250,101 @@ def test_no_commit_hash_is_read_as_a_number() -> None:
             if value is not None and not isinstance(value, str):
                 offenders.append(f"{entry.path.name}: {value!r}")
     assert not offenders, "unquoted `commit:` values parsed as numbers: " + ", ".join(offenders)
+
+
+#: A key line in a frontmatter block, either live at column 0 or commented out
+#: because the field is optional. Both count as *offered*: an optional key is
+#: only discoverable if it is on the form the author fills in, which is why
+#: `new_item.BODY` comments them out rather than leaving them off.
+_LIVE_KEY = re.compile(r"^([a-z_]+):", re.MULTILINE)
+_COMMENTED_KEY = re.compile(r"^[ \t]*#[ \t]*([a-z_]+):", re.MULTILINE)
+
+#: Written when an item is superseded, never when one is minted, so the
+#: scaffold does not offer it and `_TEMPLATE.md` documents it where the
+#: decision is actually made: the comment on `status`.
+_WRITTEN_AFTER_MINTING = frozenset({"superseded_by"})
+
+
+#: The fence, as a whole line. Splitting on the bare string instead finds the
+#: `# ---- identity ----` rule inside `_TEMPLATE.md`'s own frontmatter and
+#: returns an empty block — which reads as "offers no keys" and would pass the
+#: agreement test below in the one case it exists to catch.
+_FENCE = re.compile(r"^---[ \t]*$", re.MULTILINE)
+
+
+def _offered_keys(text: str) -> set[str]:
+    """Frontmatter keys a scaffold offers, live or commented out."""
+    block = _FENCE.split(text, maxsplit=2)[1]
+    return set(_LIVE_KEY.findall(block)) | set(_COMMENTED_KEY.findall(block))
+
+
+def _todo_spec() -> IndexSpec:
+    return next(spec for spec in SPECS if spec.directory == "todo")
+
+
+def test_a_minted_item_survives_every_generator_with_no_hand_editing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Minting is the only supported way to make an item, so what the tool
+    # writes has to satisfy `collect`'s required tuple and render through both
+    # consumers untouched. Nothing checked that: the scaffold and the template
+    # were separate texts, and only the template was ever asserted against
+    # anything (`test_the_template_offers_every_priority`, alone).
+    for directory in ("todo", "completed-todo", "findings"):
+        (tmp_path / directory).mkdir()
+    monkeypatch.setattr(new_item, "TODO_DIR", tmp_path / "todo")
+    assert new_item.main(["a-minted-item", "--title", "A minted item"]) == 0
+
+    spec = _todo_spec()
+    # Raises FrontmatterError naming any required key the scaffold forgot.
+    entries = collect(spec, tmp_path)
+    assert [entry.path.name for entry in entries] == ["a-minted-item.md"]
+    assert "A minted item" in render(spec, entries)
+    assert "todo/a-minted-item.md" in render_state(tmp_path)
+
+
+def test_a_minted_item_is_valid_at_every_status_and_priority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The flags are the part of the form the tool fills in rather than the
+    # author, so an off-vocabulary default would be minted rather than typed —
+    # invisible to the two vocabulary tests above, which only ever see what
+    # already got written.
+    for directory in ("todo", "completed-todo", "findings"):
+        (tmp_path / directory).mkdir()
+    monkeypatch.setattr(new_item, "TODO_DIR", tmp_path / "todo")
+    minted = [(status, priority) for status in ("open", "deferred") for priority in PRIORITIES]
+    for index, (status, priority) in enumerate(minted):
+        assert new_item.main([f"item-{index}", "--status", status, "--priority", priority]) == 0
+
+    entries = collect(_todo_spec(), tmp_path)
+    assert len(entries) == len(minted)
+    assert {entry.fields["status"] for entry in entries} == {"open", "deferred"}
+    assert {entry.fields["priority"] for entry in entries} == set(PRIORITIES)
+
+
+def test_the_scaffold_and_the_template_offer_the_same_keys() -> None:
+    # `_TEMPLATE.md` annotates the scaffold; it is not a second thing to copy.
+    # While it was both, they disagreed for exactly as long as nothing compared
+    # them: the tool emitted two body headings that 0 of 49 items carried, and
+    # omitted `reads`, which 49 of 49 did.
+    scaffold = _offered_keys(new_item.BODY)
+    template = _offered_keys((DOCS_ROOT / "todo" / "_TEMPLATE.md").read_text(encoding="utf-8"))
+    assert scaffold == template, (
+        f"only in tools/new_item.py: {sorted(scaffold - template)}; "
+        f"only in _TEMPLATE.md: {sorted(template - scaffold)}"
+    )
+
+
+def test_every_key_the_live_items_use_is_one_the_scaffold_offers() -> None:
+    # The drift check in the direction that actually happened. A key invented
+    # in one item and then read by a generator is invisible to the next author,
+    # who fills in the form and never sees the question — which is how `after:`
+    # (25 items, cycle-checked) and `serves:` (10 items, grouping the primer's
+    # aspiration block) came to be named in neither scaffold nor template.
+    used = {key for entry in collect(_todo_spec()) for key in entry.fields}
+    undocumented = used - _WRITTEN_AFTER_MINTING - _offered_keys(new_item.BODY)
+    assert not undocumented, (
+        "item frontmatter keys the scaffold never offers, so nobody minting an "
+        "item learns they exist: " + ", ".join(sorted(undocumented))
+    )

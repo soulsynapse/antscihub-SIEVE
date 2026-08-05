@@ -28,8 +28,8 @@ from pytestqt.qtbot import QtBot
 
 from sieve.core.types import VideoMetadata
 from sieve.gui.gray_toggle import LABEL_AUTO, LABEL_COLOR, LABEL_GRAY, GrayToggle
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
+from sieve.gui.transport.player import VideoPlayer
 
 pytestmark = pytest.mark.gui
 

@@ -34,7 +34,7 @@ the runnable prefix through `PreviewRunner.request_render` with a consumer
 feeding one `SeriesCollector`; the runner's latest-wins submission and the
 collector's revision check are what make a burst of knob edits compute one
 final series with the last value — the tab adds no timer and no debounce of
-its own, which is the whole point of `gui/coalescer.py`'s discipline living
+its own, which is the whole point of `gui/transport/coalescer.py`'s discipline living
 in the runner.
 
 **Two tiers, made visible at the signal boundary.** `band_changed` from any
@@ -79,9 +79,9 @@ from PySide6.QtWidgets import (
 )
 
 from sieve.bench.metrics import METRICS, MetricBus
+from sieve.core.ops.wavelet import default_freqs
 from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.pool_meter import PoolMeter
-from sieve.core.wavelet import default_freqs
 from sieve.detect import gate_to
 from sieve.filters.block_signal import resolve_block
 from sieve.gui.band_plot import DIM
@@ -105,7 +105,6 @@ from sieve.gui.commit_combo import CommitCombo
 from sieve.gui.composite_view import StepCompositeView
 from sieve.gui.concurrency import resolve_worker_split
 from sieve.gui.count_plot import CountPlot
-from sieve.gui.crop_binding import CropBacking, CropState
 from sieve.gui.density_plot import DensityPlot, DensitySurface
 from sieve.gui.detector_worker import (
     DetectorFailure,
@@ -119,13 +118,14 @@ from sieve.gui.graph_hud import GraphHud
 from sieve.gui.gray_toggle import GrayToggle
 from sieve.gui.materialize_worker import MaterializeRequest, MaterializeRunner
 from sieve.gui.param_form import param_rows
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.scalogram_plot import ScalogramPlot
-from sieve.gui.series_collector import SeriesCollector
+from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
 from sieve.gui.wizard_model import catalog, chain_from_pipeline
+from sieve.pipeline.crop_binding import CropBacking, CropState, evidence_for
+from sieve.pipeline.series_collector import SeriesCollector
 
 #: The two interaction budgets this tab produces (ARCHITECTURE.md rows).
 BAND_DRAG_BUDGET = "band_drag_repaint"
@@ -2081,7 +2081,7 @@ class FilterTab(QWidget):
     # ---- the source boundary ---------------------------------------------
     # The card above the stack, and the write pass behind it. The *reading* of
     # which state a replicate's boundary is in belongs to the document
-    # (`crop_backing`, over `gui/crop_binding.py`); everything here is the
+    # (`crop_backing`, over `pipeline/crop_binding.py`); everything here is the
     # wording of the four states and the gesture that moves between them.
 
     @Slot()
@@ -2134,25 +2134,23 @@ class FilterTab(QWidget):
         )
 
     def _artifact_stamp(self, artifact: CropArtifact) -> str:
-        """Size, format, span, and when it was written — read off the file itself.
+        """Size, format, span, and when it was written, as the card's one line.
 
-        Off the file rather than off the record, because the record is a claim
-        and the stamp is the evidence for it: a folder someone has been tidying
-        shows up here as a missing size rather than as a confident number the
-        document remembered.
+        The reading is `crop_binding.evidence_for`; what is here is the wording.
+        With no home bound there is no directory to resolve against, so the line
+        falls back to what the record itself carries rather than stating a size
+        it has not looked at.
         """
         home = self._document.source_home
         fmt = artifact.format
         extent = f"frames [{artifact.span.start}:{artifact.span.end})"
         if home is None:
             return f"{fmt} · {extent}"
-        path = artifact.resolve(home.project_dir)
-        try:
-            stat = path.stat()
-        except OSError:
-            return f"{fmt} · {extent} · {path.name} (not readable)"
-        written = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
-        return f"{stat.st_size / 1e6:.1f} MB · {fmt} · {extent} · written {written}"
+        evidence = evidence_for(artifact, home.project_dir)
+        if evidence.size_bytes is None or evidence.written_at is None:
+            return f"{fmt} · {extent} · {evidence.path.name} (not readable)"
+        written = datetime.fromtimestamp(evidence.written_at).strftime("%Y-%m-%d %H:%M")
+        return f"{evidence.size_bytes / 1e6:.1f} MB · {fmt} · {extent} · written {written}"
 
     @Slot()
     def _on_materialize(self) -> None:

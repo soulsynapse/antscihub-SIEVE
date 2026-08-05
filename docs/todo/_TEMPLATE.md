@@ -35,6 +35,17 @@ gated_on: >
 # searching. An item needing three documents read before the first edit is
 # not scoped yet.
 reads: [src/sieve/core/pipeline_model.py, src/sieve/cli/run_cmd.py]
+
+# ---- optional, and both machine-read ---------------------------------------
+# Items this one must not be started before. Slugs, not sentences: a sentence
+# points only the way it runs and a rename breaks it silently. The slug
+# survives completion, so an edge into finished work still resolves.
+# `test_todo_hygiene` fails an unresolvable slug and any cycle.
+after: [materialization]
+
+# The docs/ASPIRATIONS.md capability this walks toward. Groups the primer's
+# aspiration block; a bare `serves: A1` is accepted as well as a list.
+serves: [A1]
 ---
 
 # Sink writers
@@ -57,8 +68,14 @@ that costs a day if re-derived.
 
 ## How to use this file
 
-Copy to `docs/todo/<short-kebab-name>.md`, delete this section, fill it in,
-run `uv run nox -s docs`. One file per item.
+**Do not copy it.** Mint with
+`uv run python tools/new_item.py <short-kebab-name>`, which stamps `opened` to
+the second — the tiebreak inside a priority band, and the one field nobody can
+type accurately. This file explains what each field above means and what a
+body has to contain; `new_item.BODY` is the scaffold that gets written, and
+`tests/docs/test_todo_hygiene.py` fails if the two stop offering the same keys,
+or if a key the live items use appears in neither. One file per item. Then
+`uv run nox -s docs`.
 
 - **Promotion** (deferred → open) is a one-line edit to `status:` when the
   trigger fires — plus rescoping the body if it has aged.
@@ -75,6 +92,11 @@ run `uv run nox -s docs`. One file per item.
   reasoning — open work, or a deferred decision with a trigger.
 - **Measurements go to `docs/findings/`**, from here as from everywhere.
 
-Required frontmatter: `title`, `status`, `priority`, `gated_on`. `reads` is
-close to mandatory in practice. `tests/docs/test_todo_hygiene.py` enforces both
-vocabularies; `.index.md` and `docs/.state.md` are generated from these fields.
+Required frontmatter, and `tools/doc_index.py` raises on a missing one rather
+than rendering a blank cell: `title`, `status`, `priority`, `gated_on`,
+`opened`. `reads` is optional to the machine and close to mandatory in
+practice — 49 of 49 live items carry it. `after` and `serves` are optional and
+checked when present. `tests/docs/test_todo_hygiene.py` enforces both
+vocabularies, `opened` being a real timestamp rather than a date, and the
+`after` graph; `.index.md` and `docs/.state.md` are generated from these
+fields.

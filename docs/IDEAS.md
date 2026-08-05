@@ -6,4 +6,4 @@ Ideas are one line each, starting below ---, so any line without a paragraph bel
 
 ---
 
-How difficult is aspirations a1 to implement?
+How difficult is aspirations a1 to implement? Should they be done differently?

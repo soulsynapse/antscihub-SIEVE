@@ -14,6 +14,15 @@ on `backend.dispatch.KERNELS`, both at import time.
 Kernels live in the filter's module, not in a shared `backend/cpu.py`, for the
 same reason: if adding a filter meant editing a shared file, §3 is broken
 whether that file is a manifest or a dispatch table.
+
+**The markdown has a grammar, and it is declared here** — `GUIDANCE_SECTIONS`,
+with `parse_guidance` and `guidance_for` reading against it. §3's second half is
+a file every filter ships, so what that file is made of is this package's fact
+in the same way `guidance_path` is: the two change in one commit whenever the
+convention moves. It lived in `gui/wizard_model.py`, where the pane happened to
+be the first thing that needed the sections split, and the cost was that the §3
+guardrail could only assert the file *existed* — the one module able to say
+whether it said anything sat a layer above the test.
 """
 
 from __future__ import annotations
@@ -21,6 +30,7 @@ from __future__ import annotations
 import importlib
 import pkgutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from sieve.core.filter_base import FilterSpec
@@ -83,3 +93,65 @@ def guidance_path(spec: FilterSpec) -> Path:
             f"{spec.params_model.__module__!r}, which has no file to find guidance beside"
         )
     return Path(source).with_suffix(GUIDANCE_SUFFIX)
+
+
+#: The `## ` headers a guidance file answers, in the order it answers them.
+#: Three questions a user asks in front of a filter they have not used: when it
+#: helps, where it will disappoint them, and what it costs. A filter is free to
+#: add sections; a reader of `Guidance` only ever sees these.
+GUIDANCE_SECTIONS = ("When to use it", "What it does not do", "Cost")
+
+
+@dataclass(frozen=True, slots=True)
+class Guidance:
+    """A filter's markdown split into the sections above, plus its one-liner.
+
+    `summary` comes off the spec, not out of the file, so the sentence a
+    listing shows and the sentence a reader of the guidance sees are the same
+    string rather than two that drift.
+    """
+
+    summary: str
+    when_to_use: str
+    not_do: str
+    cost: str
+
+
+def parse_guidance(text: str) -> dict[str, str]:
+    """`## ` sections of a guidance file, header → body, reading order.
+
+    The intro before the first `##` lands under `""`. Deliberately dumb — the
+    guidance files are house-written markdown, and a parser that understood
+    more of it would invite prose that renders in one consumer and nowhere
+    else.
+    """
+    sections: dict[str, str] = {}
+    header = ""
+    lines: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("## "):
+            sections[header] = "\n".join(lines).strip()
+            header = line[3:].strip()
+            lines = []
+        else:
+            lines.append(line)
+    sections[header] = "\n".join(lines).strip()
+    return sections
+
+
+def guidance_for(spec: FilterSpec) -> Guidance:
+    """`spec`'s guidance, degrading to its summary when the file cannot be read.
+
+    Missing guidance is not an error here, the same posture `sieve inspect`
+    takes: an out-of-tree filter is allowed to exist before its documentation
+    does, and it is the guardrail test's job — not a user's — to insist that
+    everything in this package has both halves of §3.
+    """
+    try:
+        path = guidance_path(spec)
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except (LookupError, OSError):
+        text = ""
+    sections = parse_guidance(text)
+    when_to_use, not_do, cost = (sections.get(name, "") for name in GUIDANCE_SECTIONS)
+    return Guidance(summary=spec.summary, when_to_use=when_to_use, not_do=not_do, cost=cost)

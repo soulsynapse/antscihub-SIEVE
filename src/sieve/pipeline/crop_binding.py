@@ -1,11 +1,16 @@
-"""Which record backs a replicate right now, and what that freezes.
+"""Which record backs a replicate right now, and why one stopped.
 
-The GUI half of the match rule, and deliberately a *reading* of the same
-predicate the pipeline serves from rather than a second copy of it:
-`CropArtifact.backs` is called here exactly as `pipeline/resolve_source.py`
-calls it, and everything this module adds is the part `backs` refuses to
-answer — which of the four states the user is looking at, and why a record
-that does not match no longer does.
+The reporting twin of `resolve_source.py`, beside it because the two walk the
+same clauses over the same records and a clause added to `CropArtifact.backs`
+is owed to both. `resolve` answers which file to open and declines quietly;
+this answers which of the four states a reader is being shown, and names the
+clause that missed. Neither is a copy of the predicate — both call `backs` — and
+everything here is the part `backs` refuses to answer.
+
+It lived under `gui/` until it was moved, on the reading that only a card wants
+these sentences. A `sieve run` that falls back to the parent and says nothing
+about the artifact sitting next to it is the same underclaim the card would be
+making, and it had no way to reach the sentence from a layer above it.
 
 **Absent and stale are different claims, and rule 6 is why they are.** A crop
 that was cut and then orphaned — by a re-exported source, a deleted file, a
@@ -25,6 +30,13 @@ a replicate's card when it overlaps that replicate's region and no other. When
 two replicates overlap the orphan, it is shown on neither, because a card that
 guesses is worse than one that stays quiet about a file the user can still see
 in the folder.
+
+**The record is a claim; `evidence_for` is the evidence.** `backs` reduces the
+file to a boolean because that is all a resolver needs, and every question past
+that — how big it is, when it was written, whether it can be read at all — was
+answerable only in `gui/filter_tab.py`, where it was formatted straight into a
+card. `sieve run` prints `served by <path>` and can say nothing about the file
+it names, which is the same underclaim this module moved down here to fix.
 
 **Nothing here refuses an edit.** This module reports; it does not hold
 anything still. An earlier version froze the box a record was cut at and the
@@ -47,6 +59,7 @@ from pathlib import Path
 from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
+from sieve.pipeline.source_home import SourceHome
 
 
 class CropState(Enum):
@@ -88,14 +101,54 @@ class CropBacking:
     reason: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class ArtifactEvidence:
+    """What is behind a record, as the directory entry has it rather than as the
+    document remembers it.
+
+    Everything here comes from one `stat`, so a folder someone has been tidying
+    shows up as a refusal instead of as a confident number.
+    """
+
+    path: Path
+    #: File size. `None` is the refusal, never a zero (rule 6): an entry that
+    #: could not be read is unexamined, not empty.
+    size_bytes: int | None
+    #: Seconds since the epoch, from the mtime — `history.Snapshot.written_at`'s
+    #: unit and for its reason: nothing stamps a time into a crop, and how a
+    #: time reads is the caller's. `None` exactly when `size_bytes` is.
+    written_at: float | None
+
+    @property
+    def readable(self) -> bool:
+        """Whether the entry was read at all."""
+        return self.size_bytes is not None
+
+
+def evidence_for(artifact: CropArtifact, project_dir: Path) -> ArtifactEvidence:
+    """What is actually on disk behind `artifact`.
+
+    Deliberately not folded into `backing_for`. That answers whether a record
+    serves, which is a question about the record; this answers what the file is,
+    and the two are taken at different instants and must be able to disagree —
+    an `AT_REST` backing and a file deleted a moment later is an ordinary race,
+    not an inconsistency to be resolved by asking once.
+    """
+    path = artifact.resolve(project_dir)
+    try:
+        stat = path.stat()
+    except OSError:
+        return ArtifactEvidence(path=path, size_bytes=None, written_at=None)
+    return ArtifactEvidence(path=path, size_bytes=stat.st_size, written_at=stat.st_mtime)
+
+
 def backing_for(
     crops: Sequence[CropArtifact],
     index: int,
     replicates: Sequence[Replicate],
     *,
-    source: str,
+    home: SourceHome,
     luma: bool,
-    project_dir: Path,
     window: ClipRange | None,
 ) -> CropBacking:
     """The state of `replicates[index]`'s source boundary.
@@ -106,12 +159,13 @@ def backing_for(
         index: Which replicate is being asked about.
         replicates: All of them — needed for orphan attribution, which is a
             question about whether any *other* box claims the record.
-        source: `source_identity` of the parent footage.
+        home: What the records are read against — the same value `resolve`
+            takes, so the card and the run cannot disagree about which parent
+            they are reporting on.
         luma: Whether the current graph decodes luma. `not
             graph_needs_chroma(pipeline)`, derived by the caller for the same
             reason `sieve materialize` derives it: a format is a consequence of
             the chain, never a choice.
-        project_dir: What `CropArtifact.path` is relative to.
         window: The working window the artifact has to cover — the document's
             effective window, not its clip, because that is what a render
             actually asks for and it is what `resolve_source` matches against.
@@ -124,7 +178,9 @@ def backing_for(
     """
     replicate = replicates[index]
     for artifact in crops:
-        if not artifact.backs(replicate, source=source, luma=luma, project_dir=project_dir):
+        if not artifact.backs(
+            replicate, source=home.identity, luma=luma, project_dir=home.project_dir
+        ):
             continue
         if window is not None and (
             artifact.span.start > window.start or artifact.span.end < window.end
@@ -137,10 +193,12 @@ def backing_for(
             )
         return CropBacking(CropState.AT_REST, artifact)
 
-    near = _near_miss(crops, replicate, source=source, luma=luma, project_dir=project_dir)
+    near = _near_miss(
+        crops, replicate, source=home.identity, luma=luma, project_dir=home.project_dir
+    )
     if near is not None:
         return near
-    orphan = _orphan_for(crops, index, replicates, source=source)
+    orphan = _orphan_for(crops, index, replicates, source=home.identity)
     if orphan is not None:
         return CropBacking(
             CropState.STALE,

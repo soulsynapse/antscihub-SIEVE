@@ -35,14 +35,18 @@ from PySide6.QtWidgets import (
 )
 from yaml import YAMLError
 
-from sieve.core.pipeline_model import PROJECT_SUFFIX, Project, project_path_for
+from sieve.core.history import SnapshotStore, history_directory
+from sieve.core.pipeline_model import (
+    PROJECT_SUFFIX,
+    Project,
+    as_project_path,
+    project_path_for,
+)
 from sieve.core.types import VideoMetadata
-from sieve.gui.document import ReplicateDocument, SourceHome
+from sieve.gui.document import ReplicateDocument
 from sieve.gui.executor_adapter import ExecutorAdapter
 from sieve.gui.filter_tab import FilterTab
-from sieve.gui.history import SnapshotStore, history_directory
 from sieve.gui.history_dialog import HistoryDialog
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
 from sieve.gui.preferences_dialog import PreferencesDialog
 from sieve.gui.preview_runner import PreviewRunner
@@ -54,10 +58,11 @@ from sieve.gui.resource_probe import (
     MODE_RENDER_FED_PLAYBACK,
     ResourceProbe,
 )
-from sieve.gui.timeline_bar import TimelineBar
+from sieve.gui.timeline.bar import TimelineBar
 from sieve.gui.toast import Toast
-from sieve.pipeline.cache_key import source_identity
+from sieve.gui.transport.player import VideoPlayer
 from sieve.pipeline.preview import PreviewRender
+from sieve.pipeline.source_home import SourceHome
 
 VIDEO_FILTER = (
     "Video files (*.mp4 *.MP4 *.mov *.MOV *.avi *.AVI *.mkv *.MKV *.m4v *.mpg *.mpeg *.wmv);;"
@@ -512,7 +517,7 @@ class MainWindow(QMainWindow):
         chosen, _ = QFileDialog.getSaveFileName(self, "Save Project", str(default), PROJECT_FILTER)
         if not chosen:
             return False
-        return self._write_project(_with_project_suffix(Path(chosen)))
+        return self._write_project(as_project_path(Path(chosen)))
 
     # ---- project plumbing ------------------------------------------------
 
@@ -541,8 +546,7 @@ class MainWindow(QMainWindow):
         self._declare_source_home()
         # The one thing the render worker needs from the document that the
         # document does not hand it: which replicates have a crop on disk it
-        # can read instead of the parent. Told at adoption and at save, the
-        # two moments `Project.crops` changes.
+        # can read instead of the parent.
         self._preview.set_crops(project.crops, path.parent)
         self._document.undo_stack.setClean()
         self._update_title()
@@ -615,25 +619,18 @@ class MainWindow(QMainWindow):
             return
         anchor = self._project_path or project_path_for(metadata.path)
         try:
-            identity = source_identity(metadata.path)
+            home = SourceHome.for_video(metadata.path, anchor.parent)
         except OSError:
             # Footage that has gone since it was opened. No identity means no
             # record can match, which is the same fallback every clause of the
             # matching rule takes — never a claim that a crop is at rest.
             self._document.set_source_home(None)
             return
-        self._document.set_source_home(
-            SourceHome(video=metadata.path, project_dir=anchor.parent, identity=identity)
-        )
+        self._document.set_source_home(home)
 
     @Slot()
     def _on_crops_changed(self) -> None:
-        """A record was written or discarded: the worker is told, the title dirties.
-
-        The runner is *told* rather than asked, exactly as at adoption and at
-        save — it holds no reference to the document — and the third moment
-        `Project.crops` changes is this one.
-        """
+        """A record was written or discarded: the worker is told, the title dirties."""
         home = self._document.source_home
         if home is None:
             return
@@ -1008,16 +1005,3 @@ class MainWindow(QMainWindow):
         # worker thread has already gone.
         self._filter_tab.shutdown()
         super().closeEvent(event)
-
-
-def _with_project_suffix(path: Path) -> Path:
-    """`path` renamed to end in `.sieve.yaml`.
-
-    A file dialog hands back whatever was typed, and `project_path_for` is a
-    convention other code reads: a project saved as `arena.yaml` would never be
-    found beside its video again. The double suffix is why `with_suffix` cannot
-    do this.
-    """
-    if path.name.endswith(PROJECT_SUFFIX):
-        return path
-    return path.with_name(path.stem + PROJECT_SUFFIX)

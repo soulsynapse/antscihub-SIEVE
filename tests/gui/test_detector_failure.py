@@ -33,8 +33,8 @@ from sieve.gui.chain_model import DetectorState
 from sieve.gui.detector_worker import DetectorFailure, DetectorRequest, DetectorRunner
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import FilterTab
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preview_runner import PreviewRunner
+from sieve.gui.transport.player import VideoPlayer
 
 pytestmark = pytest.mark.gui
 

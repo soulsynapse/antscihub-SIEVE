@@ -23,6 +23,7 @@ from sieve.core.pipeline_model import (
     Project,
     Sink,
     SourceRef,
+    as_project_path,
     project_path_for,
 )
 from sieve.core.replicates import Replicate
@@ -404,6 +405,22 @@ class TestConventions:
         video = Path("/data/arena/stab_GX010050.MP4")
 
         assert project_path_for(video) == Path("/data/arena/stab_GX010050.sieve.yaml")
+
+    def test_a_typed_name_is_coerced_without_with_suffix_eating_the_convention(self) -> None:
+        # `with_suffix` replaces the last component, so it would turn
+        # `arena.yaml` into `arena.sieve` — the trap this exists to avoid.
+        assert as_project_path(Path("/data/arena/arena.yaml")) == Path(
+            "/data/arena/arena.sieve.yaml"
+        )
+        assert as_project_path(Path("/data/arena/arena")) == Path("/data/arena/arena.sieve.yaml")
+
+    def test_a_name_already_obeying_the_convention_is_returned_untouched(self) -> None:
+        # Not idempotence for its own sake: the stem of `arena.sieve.yaml` is
+        # `arena.sieve`, so coercing twice would produce `arena.sieve.sieve.yaml`
+        # and `history_directory` would then be keyed off a name nothing forms.
+        path = Path("/data/arena/arena.sieve.yaml")
+
+        assert as_project_path(path) == path
 
     def test_an_empty_clip_is_refused(self) -> None:
         # A zero-frame clip would make the executor's warmup request

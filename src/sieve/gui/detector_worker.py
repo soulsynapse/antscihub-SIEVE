@@ -36,8 +36,8 @@ GUI side and their cost is bounded by the one-in-flight rule.
 
 **What a partial pass may claim.** Two frontiers, and the smaller wins. The
 transform zero-pads past the cut, so the trailing cone of influence is
-provisional (`core.wavelet.settled_frames`); a centered detection window near
-the cut averages frames that have not arrived (`core.detection.settled_frames`).
+provisional (`core.ops.wavelet.settled_frames`); a centered detection window near
+the cut averages frames that have not arrived (`core.ops.detection.settled_frames`).
 `DetectorResult.settled` is where they meet, and it is the whole record once
 `final` is set — a render that is over has no moving frontier, and its edges
 mean what the clip means.
@@ -53,8 +53,8 @@ import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
+from sieve.core.ops.wavelet import default_freqs, morlet_power
 from sieve.core.pool_meter import PoolMeter
-from sieve.core.wavelet import default_freqs, morlet_power
 from sieve.detect import gate_to
 from sieve.detect import settled_for as settled_for_settings
 from sieve.gui.chain_model import DetectorState, DetectorUpdate, recompute

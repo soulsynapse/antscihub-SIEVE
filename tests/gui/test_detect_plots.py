@@ -26,7 +26,7 @@ import pytest
 from PySide6.QtCore import QPointF
 from pytestqt.qtbot import QtBot
 
-from sieve.core.wavelet import default_freqs
+from sieve.core.ops.wavelet import default_freqs
 from sieve.gui.band_plot import GRAB_PX
 from sieve.gui.composite_view import StepCompositeView
 from sieve.gui.count_plot import CountPlot

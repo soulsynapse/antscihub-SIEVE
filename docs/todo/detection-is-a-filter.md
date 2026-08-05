@@ -6,7 +6,7 @@ priority: high
 gated_on: nothing
 after: [a-kernel-that-sees-a-span, a-filter-names-what-it-emits]
 serves: A3
-reads: [src/sieve/detect/detector.py, src/sieve/gui/detector_worker.py, src/sieve/core/detection.py]
+reads: [src/sieve/detect/detector.py, src/sieve/gui/detector_worker.py, src/sieve/core/ops/detection.py]
 ---
 
 # Detection is a filter emitting a per-frame channel

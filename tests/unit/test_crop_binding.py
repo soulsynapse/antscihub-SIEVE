@@ -19,6 +19,11 @@ that stays quiet about a file the user can still see in the folder.
 derived was removed, and every claim below is about what the card *says* rather
 than about what an edit is allowed to do.
 
+**Evidence comes off the entry, and an unreadable entry refuses.** `stat` is
+the only way a claim about a file can be wrong in a direction the record cannot
+show, so `evidence_for` is pinned on both halves: that the numbers are the
+file's, and that a missing one is `None` rather than a zero (rule 6).
+
 Nothing here opens a video, for `test_resolve_source.py`'s reason: the only
 thing a file is asked is whether it exists.
 """
@@ -32,7 +37,8 @@ import pytest
 from sieve.core.pipeline_model import ClipRange, CropArtifact, Project, SourceRef
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
-from sieve.gui.crop_binding import CropBacking, CropState, backing_for
+from sieve.pipeline.crop_binding import CropBacking, CropState, backing_for, evidence_for
+from sieve.pipeline.source_home import SourceHome
 
 ARENA = ROI(x=100, y=100, width=64, height=48)
 SPAN = ClipRange(start=10, end=20)
@@ -83,9 +89,8 @@ def _backing(
         crops,
         index,
         (_replicate(),) if replicates is None else replicates,
-        source=source,
+        home=SourceHome(video=tmp_path / "arena.MP4", project_dir=tmp_path, identity=source),
         luma=luma,
-        project_dir=tmp_path,
         window=window,
     )
 
@@ -203,6 +208,44 @@ class TestAnOrphanIsAttributedByOverlapOrNotAtAll:
         elsewhere = _replicate(ROI(x=500, y=500, width=64, height=48))
 
         assert _backing((record,), tmp_path, replicates=(elsewhere,)).state is CropState.ABSENT
+
+
+class TestEvidenceIsReadOffTheEntryOrRefused:
+    def test_the_numbers_are_the_files_and_not_the_records(
+        self, tmp_path: Path, record: CropArtifact
+    ) -> None:
+        """Size and mtime come from `stat`, which is the whole point of asking.
+
+        A record carries a span and a format and nothing about the bytes, so an
+        implementation that answered from the model would have to invent both —
+        and would agree with this assertion only by accident.
+        """
+        written = (tmp_path / record.path).stat()
+
+        evidence = evidence_for(record, tmp_path)
+
+        assert evidence.readable
+        assert evidence.size_bytes == written.st_size
+        assert evidence.written_at == written.st_mtime
+        assert evidence.path == tmp_path / record.path
+
+    def test_a_file_that_is_gone_refuses_rather_than_reading_as_empty(
+        self, tmp_path: Path, record: CropArtifact
+    ) -> None:
+        """Rule 6: absent must not render as zero.
+
+        This is the case a caller cannot avoid — `backs` proved the file existed
+        at an earlier instant, and nothing stops it being deleted between then
+        and the card being drawn — so a zero here would put "0.0 MB" under a
+        record the user is being told is serving.
+        """
+        (tmp_path / record.path).unlink()
+
+        evidence = evidence_for(record, tmp_path)
+
+        assert not evidence.readable
+        assert evidence.size_bytes is None
+        assert evidence.written_at is None
 
 
 class TestTheDocumentOwnsTheWholeSet:

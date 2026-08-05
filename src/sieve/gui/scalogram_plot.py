@@ -11,7 +11,7 @@ width and rebuilt only when the data or the width moves.
 
 **The COI is graded, not clipped.** Within an e-folding time of either end of
 the record the coefficients are zero-padding artifact, decaying — so the fade
-is an alpha ramp over that wedge per row (`core.wavelet.coi_edge_samples`),
+is an alpha ramp over that wedge per row (`core.ops.wavelet.coi_edge_samples`),
 not a mask. A reader sees *that* the edge is untrustworthy and *how much*.
 
 **Frequency handles clamp.** The bank has edges; a band outside it would be
@@ -33,7 +33,7 @@ from PySide6.QtCore import QRect, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QWidget
 
-from sieve.core.wavelet import coi_edge_samples
+from sieve.core.ops.wavelet import coi_edge_samples
 from sieve.gui.band_plot import DIM, BandPlot, argb_to_qimage, plot_font, ramp_lut
 
 FloatArray = NDArray[np.floating[Any]]

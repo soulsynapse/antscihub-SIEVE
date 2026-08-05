@@ -29,9 +29,9 @@ from pytestqt.qtbot import QtBot
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI, ChannelSpec, Frame, VideoMetadata
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preview_runner import PreviewRunner
-from sieve.gui.render_ring import RenderFrameRing
+from sieve.gui.transport.player import VideoPlayer
+from sieve.gui.transport.render_ring import RenderFrameRing
 from sieve.pipeline.materialize import materialize_crop
 from sieve.pipeline.preview import PreviewRender
 

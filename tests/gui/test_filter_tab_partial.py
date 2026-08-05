@@ -25,8 +25,8 @@ from sieve.bench.metrics import MetricBus
 from sieve.gui.detector_worker import DetectorResult
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import FilterTab
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preview_runner import PreviewRunner
+from sieve.gui.transport.player import VideoPlayer
 from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
 
 pytestmark = pytest.mark.gui

@@ -37,7 +37,7 @@ pytest.importorskip("PySide6", reason="requires the gui extra")
 from PySide6.QtGui import QImage
 from pytestqt.qtbot import QtBot
 
-from sieve.gui.player import VideoPlayer
+from sieve.gui.transport.player import VideoPlayer
 from tests.bench.gate import TYPICAL, within_budget
 
 pytestmark = [pytest.mark.gui, pytest.mark.benchmark]

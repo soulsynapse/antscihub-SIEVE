@@ -53,20 +53,20 @@ from numpy.typing import NDArray
 from sieve.backend.dispatch import Backend, NoKernelError
 from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
 from sieve.core.filter_base import ArraySpec, ElementKind
+from sieve.core.ops.wavelet import ALL_CORES
 from sieve.core.pipeline_model import DetectorSettings, Project, resolved_detector
 from sieve.core.replicates import Replicate
-from sieve.core.wavelet import ALL_CORES
 from sieve.decode.reader import VideoDecodeError
 from sieve.detect import detect
 from sieve.detect.detector import DetectorUpdate
 from sieve.detect.tables import DetectionExport, TableVerificationError, write_tables
 from sieve.filters import discover
 from sieve.pipeline.cache import MemoryFrameStore
-from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag, GraphError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan
 from sieve.pipeline.resolve_source import resolve
+from sieve.pipeline.source_home import SourceHome
 
 
 def detect_project(
@@ -124,7 +124,7 @@ def detect_project(
     except GraphError as error:
         raise refuse(str(error)) from error
     try:
-        source = source_identity(video)
+        home = SourceHome.for_video(video, project_path.parent)
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
 
@@ -142,9 +142,7 @@ def detect_project(
         resolved = resolve(
             project.crops,
             target,
-            project_dir=project_path.parent,
-            parent=video,
-            parent_identity=source,
+            home=home,
             luma=luma,
             want=span,
         )

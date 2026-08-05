@@ -16,7 +16,7 @@ gated_on: >
   eviction rule is a stall-length argument, not a throughput one, so it needs a
   recorded session that actually scrubs.
 reads:
-  - src/sieve/gui/render_ring.py
+  - src/sieve/gui/transport/render_ring.py
   - src/sieve/gui/concurrency.py
   - src/sieve/bench/retention_trace.py
   - docs/findings/2026.07.28-capacity-beats-policy-in-the-render-ring.md
@@ -31,7 +31,7 @@ the luma decode the render produces ~88 fps against playback's 59.94, so the
 producer is ahead, and everything it has produced and dropped is exactly what a
 user scrubbing backwards would want.
 
-`gui/render_ring.py` answered the retention half. What is left is the *size* of
+`gui/transport/render_ring.py` answered the retention half. What is left is the *size* of
 what it retains, and one question the trace could not answer.
 
 ## The change that is left

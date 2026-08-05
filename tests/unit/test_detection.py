@@ -1,4 +1,4 @@
-"""Pins on `core/detection.py` — honest edges, one denomination, real runs."""
+"""Pins on `core/ops/detection.py` — honest edges, one denomination, real runs."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import math
 
 import numpy as np
 
-from sieve.core.detection import (
+from sieve.core.ops.detection import (
     count_band_to_counts,
     detect_gate,
     gate_intervals,

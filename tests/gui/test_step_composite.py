@@ -31,7 +31,7 @@ from sieve.gui.band_plot import PANEL
 from sieve.gui.composite_view import GRID_STEPS, StepCompositeView
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import BAND_DRAG_BUDGET, FilterTab
-from sieve.gui.player import VideoPlayer
+from sieve.gui.transport.player import VideoPlayer
 from tests.gui.qt_input import click, leave, move, wheel
 
 pytestmark = pytest.mark.gui

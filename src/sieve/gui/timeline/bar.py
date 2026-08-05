@@ -11,7 +11,7 @@ The window is the document's, because it is saved into the project; the playhead
 is the player's, because the player is what a frame arrives from. A copy of
 either here would be a second answer to a question that already has one, and the
 copy is the one that goes stale. What the strip owns is a *mapping*, and even
-that is `timeline_model.Geometry`, rebuilt per paint and per click.
+that is `timeline/geometry.py`, rebuilt per paint and per click.
 
 **Three mouse events, three claims.** A press is a position the user has
 committed to and is where the window rule is applied. A move is a guess they are
@@ -54,11 +54,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sieve.core.clip_window import ended_at_handle, moved_to, started_at
 from sieve.core.pipeline_model import ClipRange
 from sieve.core.types import VideoMetadata
 from sieve.gui.document import ReplicateDocument
-from sieve.gui.player import VideoPlayer
-from sieve.gui.timeline_model import Geometry, ended_at_handle, moved_to, started_at
+from sieve.gui.timeline.geometry import Geometry
+from sieve.gui.transport.player import VideoPlayer
 
 #: Height of the band. Tall enough to be a target for a mouse rather than a
 #: hairline to be aimed at, and sized now for the coverage and detection lanes
@@ -139,7 +140,7 @@ class TimelineStrip(QWidget):
 
     A view and a hit-test, nothing else. It emits frame indices and is told what
     to paint; every rule about what those indices *mean* is in
-    `timeline_model.py` or in the document.
+    `timeline/geometry.py`, `core/clip_window.py`, or in the document.
     """
 
     #: Mouse-down. A committed position, and where the window rule is applied.

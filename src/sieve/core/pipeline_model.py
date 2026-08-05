@@ -152,6 +152,22 @@ def project_path_for(video: Path) -> Path:
     return video.parent / (video.stem + PROJECT_SUFFIX)
 
 
+def as_project_path(path: Path) -> Path:
+    """`path` renamed to end in `.sieve.yaml`, for a caller handed a typed name.
+
+    `project_path_for` is a convention other code reads back — `history_directory`
+    appends to it, the snapshot filename grammar parses it, and a video's project
+    is found beside it — so a project saved as `arena.yaml` is a file nothing
+    looks for. Coercing is what makes a name a user typed obey the convention.
+
+    The double suffix is why `with_suffix` cannot do this: it would replace
+    `.yaml`, leaving `arena.sieve` behind.
+    """
+    if path.name.endswith(PROJECT_SUFFIX):
+        return path
+    return path.with_name(path.stem + PROJECT_SUFFIX)
+
+
 def _new_id() -> str:
     return uuid4().hex
 

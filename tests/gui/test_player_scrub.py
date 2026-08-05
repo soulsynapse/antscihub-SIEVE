@@ -22,8 +22,8 @@ from pytestqt.qtbot import QtBot
 from sieve.bench.metrics import MetricBus
 from sieve.bench.metrics import Recorder as MetricRecorder
 from sieve.core.types import VideoMetadata
-from sieve.gui.player import VideoPlayer
-from sieve.gui.scrub_policy import SAMPLE_WINDOW, ScrubPolicy
+from sieve.gui.transport.player import VideoPlayer
+from sieve.gui.transport.scrub_policy import SAMPLE_WINDOW, ScrubPolicy
 
 pytestmark = pytest.mark.gui
 

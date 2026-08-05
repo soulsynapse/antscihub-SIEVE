@@ -44,8 +44,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from sieve.core.ops.wavelet import band_indices, default_freqs
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
-from sieve.core.wavelet import band_indices, default_freqs
 
 #: `DetectorUpdate` is re-exported rather than redefined: the type belongs to
 #: `sieve.detect` now, and the tab importing it from here keeps one import line
@@ -178,7 +178,7 @@ class DetectorState:
     Frozen, so every edit is a `replace(...)` and the two-tier drag
     discipline has a value to hand each tier. Bands are in the units the
     plots drag them in; the count threshold alone is a *fraction* of the
-    region's blocks (`core.detection.count_band_to_counts` is the one
+    region's blocks (`core.ops.detection.count_band_to_counts` is the one
     denomination point).
     """
 

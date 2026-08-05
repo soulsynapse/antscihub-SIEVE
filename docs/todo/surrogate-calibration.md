@@ -8,7 +8,7 @@ gated_on: >
   the temporal chain settling — concretely, the first parameter set somebody
   wants to run over a whole video and report
 reads:
-  - src/sieve/core/detection.py
+  - src/sieve/core/ops/detection.py
   - docs/REFINED-VISION.md
 ---
 
@@ -60,4 +60,4 @@ This is the single item in the doc tree most likely to make SIEVE's output
 defensible in review, which is why it is written down now rather than when
 somebody asks for it.
 
-Read: `src/sieve/core/detection.py`, `docs/REFINED-VISION.md` **D**.
+Read: `src/sieve/core/ops/detection.py`, `docs/REFINED-VISION.md` **D**.

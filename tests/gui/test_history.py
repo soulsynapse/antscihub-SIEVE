@@ -25,10 +25,11 @@ import pytest
 from PySide6.QtCore import QSettings
 from pytestqt.qtbot import QtBot
 
+from sieve.core.history import SnapshotStore, history_directory
 from sieve.core.pipeline_model import Project, project_path_for
 from sieve.core.types import ROI
 from sieve.gui.document import ReplicateDocument
-from sieve.gui.history import SnapshotStore, history_directory
+from sieve.gui.history_dialog import age_text
 from sieve.gui.main_window import HISTORY_FAILED, MainWindow
 from sieve.gui.preferences import Preferences
 
@@ -179,3 +180,15 @@ class TestRollback:
 
         document.restore(document.state_from_project(project), "Add Replicate 1")
         assert document.at(0).roi == ROI(x=0, y=0, width=1000, height=800)
+
+
+class TestAge:
+    def test_the_units_are_the_coarsest_that_still_distinguish(self) -> None:
+        # Lives with the dialog because it is a rendering, not a fact about
+        # what is on disk: a snapshot carries an mtime and nothing else.
+        assert age_text(5) == "just now"
+        assert age_text(300) == "5 min ago"
+        assert age_text(3600) == "1 hour ago"
+        assert age_text(7200) == "2 hours ago"
+        assert age_text(86400) == "yesterday"
+        assert age_text(86400 * 3) == "3 days ago"

@@ -1,4 +1,4 @@
-"""The collector's staleness and alignment rules — item 4's Qt-free claims.
+"""The collector's staleness and alignment rules.
 
 Each failure is a different corruption of the detector's input: a stale row
 puts an old parameterization's numbers inside a new render's series, a gap
@@ -12,8 +12,8 @@ import numpy as np
 import pytest
 
 from sieve.core.types import ChannelSpec, Frame
-from sieve.gui.series_collector import SeriesCollector
 from sieve.pipeline.executor import FrameResult
+from sieve.pipeline.series_collector import SeriesCollector
 
 
 def result_at(index: int, node_id: str = "sig", fill: float = 0.0) -> FrameResult:

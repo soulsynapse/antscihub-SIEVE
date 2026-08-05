@@ -1,11 +1,12 @@
-"""What a graph has to be rejected for, and what the one walk has to agree with.
+"""What a graph has to be rejected for, and what the walks have to agree with.
 
-Three of these are rejections the artifact layer deliberately cannot make —
+The rejections are the ones the artifact layer deliberately cannot make —
 `Pipeline` validates structure and stops, so a cycle, a filter that is not
 installed, and an edge whose ends cannot be connected all reach this module
-unchallenged. The other three are about the traversal: that its order is the
-document's rather than a dict's, that it produces the same keys a hand-walk
-does, and that a node with no key takes its descendants with it and nobody else.
+unchallenged. The rest are about traversal: that the order is the document's
+rather than a dict's, that it produces the same keys a hand-walk does, that a
+node with no key takes its descendants with it and nobody else, and that
+`linear_order` refuses precisely what `Dag.order` accepts.
 """
 
 from __future__ import annotations
@@ -32,8 +33,10 @@ from sieve.pipeline.dag import (
     CycleError,
     Dag,
     EdgeTypeError,
+    GraphError,
     PortWiringError,
     UnresolvedFilterError,
+    linear_order,
 )
 
 COST = CostEstimate(seconds_per_megapixel=0.001)
@@ -502,3 +505,54 @@ class TestWhereMeaningWasLost:
         # `assert ... is not None` gets written.
         with pytest.raises(ValueError, match="so nothing was lost"):
             Dag.build(diamond(), SHELF).element_lost_at("d")
+
+
+class TestLinearOrder:
+    """`linear_order` refuses every graph `Dag.order` tolerates but one path.
+
+    The two walks answer different questions over the same structure, so what
+    is worth pinning is the gap between them, not that either one sorts.
+    """
+
+    def test_the_order_is_the_edges_and_not_the_declaration(self) -> None:
+        # Reversed in the tuple, so a walk that iterated `pipeline.nodes` and
+        # called it an order would pass every branch check and still hand the
+        # stack a chain drawn upside down.
+        graph = Pipeline(
+            nodes=(node("c"), node("b"), node("a")),
+            edges=edges("a>b", "b>c"),
+        )
+
+        assert tuple(each.node_id for each in linear_order(graph)) == ("a", "b", "c")
+
+    def test_a_chain_of_filters_nobody_has_installed_still_orders(self) -> None:
+        # No registry and no `Dag`: shape is answerable without resolution, and
+        # this is what lets the stack rebuild from a project opened on a machine
+        # missing half its filters instead of failing to draw at all.
+        graph = Pipeline(
+            nodes=(node("a", "mystery"), node("b", "also_missing")),
+            edges=edges("a>b"),
+        )
+
+        assert tuple(each.node_id for each in linear_order(graph)) == ("a", "b")
+
+    def test_a_diamond_is_refused_though_it_executes_fine(self) -> None:
+        # The seam: `Dag.build` accepts this graph and the executor runs it.
+        # Flattening it to a stack would draw seams claiming `c` feeds `d` in
+        # sequence when it feeds it in parallel with `b`.
+        Dag.build(diamond(), SHELF)
+
+        with pytest.raises(GraphError, match="branches"):
+            linear_order(diamond())
+
+    def test_a_cycle_off_the_root_is_refused_as_disconnected(self) -> None:
+        # One root, no node with two edges out — so the branch and root checks
+        # both pass and only the reachability count catches it. `linear_order`
+        # resolves nothing and so never gets a `CycleError` to report.
+        graph = Pipeline(
+            nodes=tuple(node(node_id) for node_id in ("a", "b", "c", "d")),
+            edges=edges("a>b", "c>d", "d>c"),
+        )
+
+        with pytest.raises(GraphError, match="disconnected"):
+            linear_order(graph)

@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 
 from sieve.gui.band_plot import ACCENT, DIM, LINE, PANEL, TEXT, plot_font
 from sieve.gui.chain_model import STAGE_CHIPS, ChainStep, Stage, Status, StepGrade
-from sieve.gui.crop_binding import CropState
+from sieve.pipeline.crop_binding import CropState
 
 #: Conflict red — the card edge, the message, and the repair buttons.
 CONFLICT = QColor(235, 110, 100)
@@ -326,7 +326,7 @@ class SourceCard(QWidget):
 
     Four states, one input: `set_state` takes the `CropState` and the sentences
     that go with it, and the widget decides nothing. That is deliberate — the
-    reading of which state a replicate is in is `gui/crop_binding.py`'s and the
+    reading of which state a replicate is in is `pipeline/crop_binding.py`'s and the
     document's, and a card that re-derived any clause of it would be the second
     answer rule 6's absent-versus-unexamined distinction exists to prevent.
 

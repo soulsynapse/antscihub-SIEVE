@@ -2,8 +2,9 @@
 
 Each test here stands for a distinct way discovery stops being real: a filter
 that only works because someone imported it by name, a filter that ships with no
-guidance, a params model that cannot survive the artifact it is written to, or a
-params model whose canonical form is a memory address in disguise.
+guidance or with guidance that answers none of the three questions, a params
+model that cannot survive the artifact it is written to, or a params model whose
+canonical form is a memory address in disguise.
 """
 
 from __future__ import annotations
@@ -14,7 +15,8 @@ import sys
 from pathlib import Path
 
 import sieve.filters
-from sieve.filters import discover, guidance_path
+from sieve.core.filter_base import FilterSpec
+from sieve.filters import GUIDANCE_SECTIONS, discover, guidance_for, guidance_path
 from sieve.filters.downsample import DownsampleParams
 
 
@@ -50,6 +52,29 @@ def test_every_discovered_filter_has_guidance_markdown() -> None:
     """§3's "one class + one colocated markdown", as an assertion."""
     missing = [spec.key for spec in discover() if not guidance_path(spec).is_file()]
     assert not missing, f"filters with no guidance markdown: {missing}"
+
+
+def test_every_guidance_file_answers_the_three_questions() -> None:
+    """A file that exists but says nothing passes §3 while failing its reader.
+
+    `guidance_for` degrades a missing file to blank sections rather than
+    raising, which is right for an out-of-tree filter and wrong for one in this
+    package — so the refusal to ship undocumented lives here, where the shelf
+    is known, and not in the reader.
+    """
+    blank = {
+        spec.key: [
+            name for name, body in zip(GUIDANCE_SECTIONS, _sections(spec), strict=True) if not body
+        ]
+        for spec in discover()
+    }
+    empty = {key: names for key, names in blank.items() if names}
+    assert not empty, f"guidance sections missing or empty: {empty}"
+
+
+def _sections(spec: FilterSpec) -> tuple[str, str, str]:
+    guidance = guidance_for(spec)
+    return guidance.when_to_use, guidance.not_do, guidance.cost
 
 
 def test_params_round_trip_through_json() -> None:

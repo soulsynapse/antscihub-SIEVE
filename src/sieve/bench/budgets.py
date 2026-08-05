@@ -83,7 +83,7 @@ BUDGETS: dict[str, Budget] = _table(
         # Newell's ~0.1 s perceptual cycle). It is also the trigger: sustained
         # scrub latency above this is what flips the player into coarse mode,
         # so this number is enforced by degradation, not by hope. See
-        # `gui/scrub_policy.py` and the note under the table in ARCHITECTURE.md.
+        # `gui/transport/scrub_policy.py` and the note under the table in ARCHITECTURE.md.
         limit_ms=100.0,
     ),
     Budget(
@@ -174,11 +174,11 @@ BUDGETS: dict[str, Budget] = _table(
         # ceiling's meaning as an attribution.
         #
         # It is also the only budget in this table a control was ever derived
-        # from: `gui/density_plot.MAX_BLOCKS` refuses a block count implying
-        # more than this. That derivation is what
-        # `docs/todo/budgets-attribute-cost-they-do-not-cap-it.md` removes, and
-        # the move above is its precondition — a cap justified by "the window
-        # freezes" has no justification once the window does not freeze.
+        # from — `density_plot.MAX_BLOCKS` refused any block count implying more
+        # than this — and that derivation is gone (2026-07-28,
+        # `completed-todo/2026.07.28-budgets-attribute-cost-they-do-not-cap-it.md`):
+        # a cap justified by "the window freezes" has no justification once the
+        # window does not freeze.
         limit_ms=100.0,
     ),
     Budget(

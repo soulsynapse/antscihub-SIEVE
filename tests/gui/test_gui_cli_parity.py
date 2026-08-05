@@ -73,8 +73,8 @@ from sieve.gui.chain_model import DetectorState
 from sieve.gui.detector_worker import DetectorRequest, derive
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.preview_runner import PreviewRunner
-from sieve.gui.series_collector import SeriesCollector
 from sieve.pipeline.executor import FrameResult
+from sieve.pipeline.series_collector import SeriesCollector
 
 pytestmark = pytest.mark.gui
 

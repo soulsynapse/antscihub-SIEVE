@@ -2,17 +2,19 @@
 retention keeps the entries a rollback is actually reached for.
 
 Everything here is filesystem and naming, which is why it is a unit test rather
-than a GUI one — `SnapshotStore` is deliberately Qt-free.
+than a GUI one — the store sits in `core/`, below every front end. How an age
+reads in the restore list is the window's question and is tested in
+`tests/gui/test_history.py`.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from sieve.core.history import SnapshotStore, history_directory, slugged
 from sieve.core.pipeline_model import Project
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
-from sieve.gui.history import SnapshotStore, age_text, history_directory, slugged
 
 
 def a_project(tmp_path: Path, *, replicates: int = 0) -> Project:
@@ -113,13 +115,3 @@ class TestTheDirectoryReadsAsHistory:
         # Not the stem: `arena.sieve.yaml` must not share a directory with a
         # sibling that happens to be called `arena.history`.
         assert history_directory(tmp_path / "arena.sieve.yaml").name == "arena.sieve.yaml.history"
-
-
-class TestAge:
-    def test_the_units_are_the_coarsest_that_still_distinguish(self) -> None:
-        assert age_text(5) == "just now"
-        assert age_text(300) == "5 min ago"
-        assert age_text(3600) == "1 hour ago"
-        assert age_text(7200) == "2 hours ago"
-        assert age_text(86400) == "yesterday"
-        assert age_text(86400 * 3) == "3 days ago"

@@ -42,6 +42,7 @@ from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
 from sieve.pipeline.plan import ExecutionPlan
 from sieve.pipeline.resolve_source import OffsetFrameSource, ResolvedSource, resolve
+from sieve.pipeline.source_home import SourceHome
 
 runner = CliRunner()
 
@@ -82,9 +83,7 @@ def _resolved(project: Project, project_dir: Path, replicate: Replicate) -> Reso
     return resolve(
         project.crops,
         replicate,
-        project_dir=project_dir,
-        parent=video,
-        parent_identity=source_identity(video),
+        home=SourceHome.for_video(video, project_dir),
         luma=not Dag.build(project.pipeline).needs_chroma,
         want=CLIP,
     )
@@ -251,9 +250,7 @@ class TestAStaleRecordChangesNothing:
         stale = resolve(
             backed.crops,
             moved,
-            project_dir=tmp_path,
-            parent=video,
-            parent_identity=source_identity(video),
+            home=SourceHome.for_video(video, tmp_path),
             luma=not dag.needs_chroma,
             want=CLIP,
         )

@@ -13,7 +13,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from sieve.core.wavelet import ALL_CORES
+from sieve.core.ops.wavelet import ALL_CORES
 from sieve.gui.chain_model import (
     ChainKind,
     DetectorState,

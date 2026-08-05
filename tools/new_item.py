@@ -9,6 +9,11 @@ only guarantees the one that cannot be typed accurately.
 day-precision stamp is the same defect the completed entries had: twenty-four
 items were minted on 2026-07-29 and their order was the alphabet.
 
+`BODY` below is the *only* scaffold. `docs/todo/_TEMPLATE.md` explains the
+fields; it is not a second thing to copy. While it was, the two disagreed and
+neither noticed: this tool emitted two body headings that 0 of 49 items ever
+carried and omitted `reads`, which 49 of 49 do.
+
     uv run python tools/new_item.py the-crop-is-a-filter --title "The crop is a filter"
     uv run python tools/new_item.py gpu-execution --status deferred --priority low
 """
@@ -30,12 +35,20 @@ new_item: wrote {path}
 `opened` is stamped and `status`/`priority` are set. Still yours:
   1. Fill `gated_on` — for an open item usually `nothing structurally`; for a
      deferred one the trigger, as an event a later session can recognise.
-  2. Write the body: what is wrong now, what "done" looks like, and the files
-     it touches. An item whose steps cannot be listed up front is not written.
-  3. Add `after: [slug]` for any item this one must not be started before.
-  4. uv run nox -s docs
+  2. Fill `reads` — the files to open before the first edit.
+  3. Uncomment `after:` / `serves:` if they apply.
+  4. Write the body. An item whose steps cannot be listed up front is not
+     written; `docs/todo/_TEMPLATE.md` says what belongs there, by status.
+  5. uv run nox -s docs
 """
 
+#: The one scaffold. `docs/todo/_TEMPLATE.md` annotates these fields and is not
+#: a second copy to fill in by hand — the two drifted for exactly as long as
+#: nothing compared them; `tests/docs/test_todo_hygiene.py` compares them now,
+#: in both directions. Every key the generators read appears below, the
+#: optional ones commented rather than omitted: an absent key is invisible, and
+#: the author who never sees the question never answers it. That is the same
+#: argument `priority: unassessed` is spelled out for.
 BODY = """\
 ---
 title: {title}
@@ -43,15 +56,19 @@ status: {status}
 opened: {stamp}
 priority: {priority}
 gated_on: TODO — `nothing structurally`, or the trigger this waits on
+# TODO — the files to open before the first edit, so starting is opening rather
+# than searching. An item needing three documents read first is not scoped yet.
+reads: []
+# Optional, both machine-read. Uncomment what applies:
+# after: [slug]   # items this must not be started before; checked for cycles
+# serves: [A1]    # the docs/ASPIRATIONS.md capability this walks toward
 ---
 
-## What is wrong now
-
-TODO — the defect or the gap, in the present tense, with the file it lives in.
-
-## What done looks like
-
-TODO — the observable state, and the check that would fail if it regressed.
+TODO — the body, and the body is the item: what is wrong now in the present
+tense with the file it lives in, what done looks like as an observable state,
+and the check that would fail if it regressed. Free prose, scoped to fit one
+context window. A deferred item also says *why not now* — the actual reason,
+not "no time".
 """
 
 
@@ -82,7 +99,14 @@ def main(argv: list[str] | None = None) -> int:
         priority=args.priority,
     )
     path.write_text(text, encoding="utf-8", newline="\n")
-    print(CHECKLIST.format(path=path.relative_to(REPO_ROOT)))
+    # Shortening the path for display must not be able to fail after the file
+    # is on disk: `relative_to` raises for anything outside the repo, and the
+    # traceback would report a failure on work that succeeded.
+    try:
+        shown: Path = path.relative_to(REPO_ROOT)
+    except ValueError:
+        shown = path
+    print(CHECKLIST.format(path=shown))
     return 0
 
 

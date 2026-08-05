@@ -39,7 +39,7 @@ measurements:
 # ---- what it changed ------------------------------------------------------
 consequences:
   - scrub_to_repaint moved 50 ms -> 100 ms, met by degrading rather than by decoding faster
-  - added gui/scrub_policy.py and gui/frame_cache.py
+  - added gui/transport/scrub_policy.py and gui/frame_cache.py
 
 closed:                                   # hypotheses this measurement killed
   - what: hardware-accelerated decode
@@ -52,7 +52,7 @@ open_questions:                           # what this deliberately did not settl
     blocked on where a project file lives
 
 budgets: [scrub_to_repaint, scrub_settle]
-files: [src/sieve/gui/scrub_policy.py, src/sieve/gui/player.py]
+files: [src/sieve/gui/transport/scrub_policy.py, src/sieve/gui/transport/player.py]
 supersedes: []                            # earlier findings this overturns
 ---
 

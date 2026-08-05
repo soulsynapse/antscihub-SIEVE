@@ -25,6 +25,7 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QUndoStack
 
+from sieve.core.clip_window import containing, effective_window, ended_at, fitted, moved_to
 from sieve.core.pipeline_model import (
     ClipRange,
     CropArtifact,
@@ -52,9 +53,9 @@ from sieve.gui.commands import (
     SetReplicateROI,
     SetReplicateROIs,
 )
-from sieve.gui.crop_binding import CropBacking, CropState, backing_for
-from sieve.gui.timeline_model import containing, effective_window, ended_at, fitted, moved_to
+from sieve.pipeline.crop_binding import CropBacking, CropState, backing_for
 from sieve.pipeline.dag import graph_needs_chroma
+from sieve.pipeline.source_home import SourceHome
 
 
 @dataclass(frozen=True)
@@ -81,28 +82,6 @@ class DocumentState:
     pipeline: Pipeline
     detector: DetectorSettings | None
     clip: ClipRange | None
-
-
-@dataclass(frozen=True)
-class SourceHome:
-    """Where the bound footage is, what it is, and what its crops sit beside.
-
-    The three facts a crop record cannot be read without, carried as one value
-    for `ResolvedSource`'s reason: a caller holding `project_dir` without
-    `identity` would resolve a path and then match it against nothing, and one
-    holding `identity` without `video` would know a record is stale and have
-    nothing to re-cut from.
-
-    `project_dir` is the directory `CropArtifact.path` is relative to — the
-    project file's home once there is one, and the conventional home beside the
-    video until then, exactly as `MainWindow._retarget_history` anchors history.
-    An artifact written before the first save must not become unfindable by the
-    save.
-    """
-
-    video: Path
-    project_dir: Path
-    identity: str
 
 
 @dataclass(frozen=True)
@@ -348,7 +327,7 @@ class ReplicateDocument(QObject):
         return equivalence_groups(self._pipeline, self._replicates.as_list(), self._detector)
 
     # ---- the source boundary ---------------------------------------------
-    # Crops are read here and nowhere else in the GUI. `gui/crop_binding.py`
+    # Crops are read here and nowhere else in the GUI. `pipeline/crop_binding.py`
     # holds the rule; this section is the one place that has all four of its
     # inputs at once — the records, the replicates, the parent's identity, and
     # the format the graph decodes — so the card, the box, and the timeline
@@ -432,9 +411,8 @@ class ReplicateDocument(QObject):
             self._crops,
             index,
             self._replicates.as_list(),
-            source=home.identity,
+            home=home,
             luma=self.decodes_luma(),
-            project_dir=home.project_dir,
             window=self.window,
         )
 
@@ -708,14 +686,7 @@ class ReplicateDocument(QObject):
         self.undo_stack.push(RestoreSnapshot(self, state, text))
 
     def _fit_clip(self, clip: ClipRange | None) -> ClipRange | None:
-        """A saved span trimmed onto the bound source, or `None` if none of it lands.
-
-        `None` out is a different statement from `None` in, and both are honest:
-        it means the span that was saved covers no frame of the video that is
-        actually open, which is the state a user is in before they have chosen
-        anything. Clamping it to the last frame instead would hand back a
-        one-frame clip nobody marked.
-        """
+        """`clip_window.fitted` against the source this document has bound."""
         return fitted(clip, self._source_frames)
 
     # ---- user intents ----------------------------------------------------
@@ -997,7 +968,7 @@ class ReplicateDocument(QObject):
         point moved past the out point has to invent an out point and every
         answer to that question is a span nobody asked for. A window pushed off
         the end of the source rests against it at full length — see
-        `timeline_model.moved_to`.
+        `clip_window.moved_to`.
         """
         window = self.window
         if window is None:
@@ -1008,7 +979,7 @@ class ReplicateDocument(QObject):
         """End the window after `frame`, inclusive of it. This is the resize.
 
         The user presses this on the frame they want *last*; `ClipRange` is
-        half-open. That `+ 1` lives in `timeline_model.ended_at` rather than in
+        half-open. That `+ 1` lives in `core/clip_window.ended_at` rather than in
         the caller so that every front end marking an out point agrees on which
         frame the user meant.
         """

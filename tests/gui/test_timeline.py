@@ -24,9 +24,9 @@ from pytestqt.qtbot import QtBot
 from sieve.core.pipeline_model import ClipRange
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.main_window import MainWindow
-from sieve.gui.player import VideoPlayer
 from sieve.gui.preferences import Preferences
-from sieve.gui.timeline_bar import TimelineBar, TimelineStrip
+from sieve.gui.timeline.bar import TimelineBar, TimelineStrip
+from sieve.gui.transport.player import VideoPlayer
 from tests.conftest import FIXTURE_FRAMES
 from tests.gui import qt_input
 from tests.gui.conftest import SOURCE_FPS, SOURCE_FRAMES

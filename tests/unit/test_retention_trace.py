@@ -17,11 +17,18 @@ something.
 **The frontier is pinned.** Follow-the-render mode displays the newest frame,
 so a policy that evicted it for being far from the playhead would blank the
 pane at the moment the user is watching it fill.
+
+**A kind the build does not know stops the replay.** The scrub hit rate is the
+half of a score the item actually argues from, and a trace written by a build
+with a different vocabulary would otherwise score every unrecognised request as
+not-a-drag — a number that reads as measured.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+
+import pytest
 
 from sieve.bench.retention_trace import (
     FROM_CACHE,
@@ -40,6 +47,7 @@ from sieve.bench.retention_trace import (
     recorder_from_env,
     replay,
 )
+from sieve.core.request_intent import RequestKind
 
 
 def put(index: int) -> AccessEvent:
@@ -53,7 +61,12 @@ def put(index: int) -> AccessEvent:
     )
 
 
-def get(index: int, playhead: int, kind: str = "scrub", source: str = FROM_RING) -> AccessEvent:
+def get(
+    index: int,
+    playhead: int,
+    kind: str = RequestKind.SCRUB,
+    source: str = FROM_RING,
+) -> AccessEvent:
     return AccessEvent(
         op=GET, index=index, playhead=playhead, kind=kind, source=source, frontier=None
     )
@@ -170,6 +183,11 @@ class TestTheReplayScopesWhatItCounts:
             get(0, playhead=52),
         )
         assert replay(events, RingSim(10)).worst_miss_run == 3
+
+    def test_an_unknown_kind_refuses_rather_than_scoring_as_not_a_drag(self) -> None:
+        events = (put(0), get(0, playhead=0, kind="hover"))
+        with pytest.raises(ValueError):
+            replay(events, RingSim(10))
 
     def test_compare_scores_every_named_policy_once(self) -> None:
         scores = compare(backward_scrub_trace(), capacity_frames=10)

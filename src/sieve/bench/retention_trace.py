@@ -27,7 +27,7 @@ fixable by a bigger trace:
 
 * *The get sequence is mildly counterfactual.* Playback folds at the render
   frontier, which is policy-independent; but scrub degradation
-  (`gui/scrub_policy.py`) triggers on measured latency, so a policy with a
+  (`gui/transport/scrub_policy.py`) triggers on measured latency, so a policy with a
   better hit rate would have degraded later and asked for slightly different
   frames. The put sequence is not affected — the render produces what it
   produces.
@@ -57,6 +57,8 @@ from pathlib import Path
 from threading import Lock
 from typing import IO, Protocol
 
+from sieve.core.request_intent import RequestKind
+
 #: Environment variable holding the path a session writes its trace to. An
 #: environment variable rather than a preference on purpose: this is a
 #: developer's instrument for one experiment, not a setting a user of the
@@ -81,13 +83,6 @@ FROM_DECODE = "decode"
 #: `playhead` on a `put`: the render thread does not know where the user is
 #: looking. See the module docstring on reconstruction.
 UNKNOWN_PLAYHEAD = -1
-
-#: `RequestKind.SCRUB`'s value, scored separately because a drag is the latency
-#: a user feels. Spelled out rather than imported: `RequestKind` is a `gui`
-#: symbol and this layer runs where Qt is not installed. The coupling is one
-#: string, and a trace whose kinds stopped matching would score every drag as
-#: not-a-drag — which `tests/gui/test_retention_trace.py` is what catches.
-SCRUB_KIND = "scrub"
 
 
 @dataclass(frozen=True, slots=True)
@@ -396,7 +391,11 @@ def replay(events: Sequence[AccessEvent], policy: RetentionSim) -> ReplayScore:
         else:
             miss_run += 1
             worst_miss_run = max(worst_miss_run, miss_run)
-        if event.kind == SCRUB_KIND:
+        # Raises on a kind this build does not know. A trace hand-edited or
+        # written by an older build would otherwise score every unrecognised
+        # request as not-a-drag, which is a scrub hit rate that reads as
+        # measured and is not.
+        if RequestKind(event.kind).is_felt_latency:
             scrub_requests += 1
             scrub_hits += int(hit)
         playhead = event.index

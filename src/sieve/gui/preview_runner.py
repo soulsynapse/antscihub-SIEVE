@@ -87,12 +87,13 @@ from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.filters import discover
 from sieve.gui.concurrency import resolve_worker_split
-from sieve.gui.render_ring import RenderFrameRing
+from sieve.gui.transport.render_ring import RenderFrameRing
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
 from sieve.pipeline.preview import Consumer, PreviewRender, PreviewSession
 from sieve.pipeline.resolve_source import ResolvedSource, resolve
+from sieve.pipeline.source_home import SourceHome
 
 #: The budget this module exists to give a producer. A literal for the reason
 #: `pipeline/preview.py` uses literals — except here it is not a layering
@@ -401,9 +402,11 @@ class _RenderWorker(QObject):
         return resolve(
             () if crops is None else crops.records,
             request.replicate,
-            project_dir=self._path.parent if crops is None else crops.project_dir,
-            parent=self._path,
-            parent_identity=self._source,
+            home=SourceHome(
+                video=self._path,
+                project_dir=self._path.parent if crops is None else crops.project_dir,
+                identity=self._source,
+            ),
             luma=request.luma,
             want=request.window,
         )
@@ -566,7 +569,7 @@ class PreviewRunner(QObject):
             parent: Owner.
             metrics: Where `filter_to_first_tick` is published and where
                 `pipeline/preview.py`'s two spans go. Injectable for
-                `gui/player.py`'s reason: a test asserting on what was published
+                `gui/transport/player.py`'s reason: a test asserting on what was published
                 must not hear the process-wide bus.
             backend: Where every node of every preview runs.
             registry: The filter shelf graphs resolve against. `None` is the
@@ -605,7 +608,7 @@ class PreviewRunner(QObject):
         # The other thing both threads touch, and it carries its own lock:
         # the worker writes a proxy of every source frame a window render
         # decodes, and the player reads them back instead of decoding the
-        # same file again (`gui/render_ring.py`).
+        # same file again (`gui/transport/render_ring.py`).
         self._ring = RenderFrameRing()
 
         # When a non-empty graph was first submitted for this source, and
@@ -741,10 +744,11 @@ class PreviewRunner(QObject):
     def set_crops(self, crops: tuple[CropArtifact, ...], project_dir: Path) -> None:
         """Declare the crop artifacts renders of this footage may be served from.
 
-        Call after adopting or saving a project — those are the two moments
-        `Project.crops` changes, and the runner is told rather than asked
-        because it holds no reference to the document (`gui/document.py` is a
-        GUI-thread model and this is a worker's input).
+        Call after adopting a project, after saving one, and after a record is
+        written or discarded — the three moments `Project.crops` changes. The
+        runner is told rather than asked because it holds no reference to the
+        document (`gui/document.py` is a GUI-thread model and this is a
+        worker's input).
 
         A replicate whose record matches is rendered from its crop from the next
         render onward, which is 107x cheaper per frame and re-keys once. No

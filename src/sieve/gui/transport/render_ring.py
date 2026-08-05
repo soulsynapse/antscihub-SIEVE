@@ -12,7 +12,7 @@ the second decode never happens.
 
 Deliberately not `ProxyFrameCache` at the call site, though one sits inside:
 that cache is the *scrub* cache, GUI-thread-owned, warmed by the user's own
-returns, and `gui/proxy_cache.py` says why playback must not evict it. This
+returns, and `gui/transport/proxy_cache.py` says why playback must not evict it. This
 is a render-owned buffer with a different lifetime (cleared when the source
 closes, frontier reset when a window render starts) and a lock, because it is
 the one image store two threads touch. The LRU inside is the right eviction
@@ -40,7 +40,7 @@ what that experiment replays, and it exists nowhere else.
 The frontier is "the last frame the render has produced", reset when a window
 render starts. It is *not* the settled frontier (`DetectorResult.settled` is
 "will not change", this is "exists"), and the player folds playback at this
-one only while a render is filling — `timeline_model.feed_bounds` is that
+one only while a render is filling — `pacing.feed_bounds` is that
 arithmetic.
 """
 
@@ -61,8 +61,8 @@ from sieve.bench.retention_trace import (
 )
 from sieve.core.shares import RENDER_RING_SHARE, resolved_bytes
 from sieve.core.types import ChannelSpec, Frame
-from sieve.gui.decode_worker import PROXY_WIDTH
-from sieve.gui.proxy_cache import ProxyFrameCache
+from sieve.gui.transport.decode_worker import PROXY_WIDTH
+from sieve.gui.transport.proxy_cache import ProxyFrameCache
 
 
 class RenderFrameRing:

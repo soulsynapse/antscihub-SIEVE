@@ -65,19 +65,19 @@ type = forbidden
 #
 # Direct imports only, for `opencv-containment`'s reason and a sharper version
 # of it: once detection is a filter, `gui -> pipeline -> filters ->
-# core.wavelet` is the supported path — the one execution path reached from
+# core.ops.wavelet` is the supported path — the one execution path reached from
 # above. What this forbids is `gui/` *holding* a computation, which is only
 # ever a direct import.
 #
-# `sieve.core.detection` carries no exceptions: nothing in `gui/` imports it
+# `sieve.core.ops.detection` carries no exceptions: nothing in `gui/` imports it
 # today, and the line exists to refuse the sideways move — deleting a wavelet
 # import by reaching for `count_band_to_counts` instead.
 allow_indirect_imports = True
 source_modules =
     sieve.gui
 forbidden_modules =
-    sieve.core.wavelet
-    sieve.core.detection
+    sieve.core.ops.wavelet
+    sieve.core.ops.detection
     sieve.detect
 # The exception list is the work list (REWORK.md). The `error` alerting below
 # is what makes it shrink-only: an entry whose import is gone fails the
@@ -85,13 +85,42 @@ forbidden_modules =
 # adding an entry is a reviewed widening of the rework itself.
 unmatched_ignore_imports_alerting = error
 ignore_imports =
-    sieve.gui.chain_model -> sieve.core.wavelet
+    sieve.gui.chain_model -> sieve.core.ops.wavelet
     sieve.gui.chain_model -> sieve.detect
-    sieve.gui.detector_worker -> sieve.core.wavelet
+    sieve.gui.detector_worker -> sieve.core.ops.wavelet
     sieve.gui.detector_worker -> sieve.detect
-    sieve.gui.filter_tab -> sieve.core.wavelet
+    sieve.gui.filter_tab -> sieve.core.ops.wavelet
     sieve.gui.filter_tab -> sieve.detect
-    sieve.gui.scalogram_plot -> sieve.core.wavelet
+    sieve.gui.scalogram_plot -> sieve.core.ops.wavelet
+
+[importlinter:contract:transport-is-handed-its-work]
+name = the transport is handed a request; it never reaches for the project
+type = forbidden
+# `sieve.gui.transport` is how a frame is asked for and how it arrives. Its
+# whole input is a request — a frame, a consumer, an intent — so a second tab
+# can drive it without either tab learning about the other. That property is
+# invisible to the layers contract, which governs packages and sees `gui` as
+# one unit; this is the sentence made checkable.
+#
+# The direction is the point. Widgets above may reach down into the transport;
+# a reach back up is the defect. `sieve.gui.timeline` is on the list for the
+# same reason and a sharper one: `player` and `timeline_bar` shared a module
+# until this package was drawn, and the two halves of it went opposite ways
+# (`transport/pacing.py`, `timeline/geometry.py`) precisely so the packages
+# would not import each other. Without this line the cycle reforms the first
+# time a paint rule looks convenient from below.
+#
+# Not on the list, deliberately: `preferences`. The transport reads persisted
+# user settings and that is a downward read like any other.
+allow_indirect_imports = True
+source_modules =
+    sieve.gui.transport
+forbidden_modules =
+    sieve.gui.document
+    sieve.gui.filter_tab
+    sieve.gui.main_window
+    sieve.gui.replicate_tab
+    sieve.gui.timeline
 
 [importlinter:contract:opencv-containment]
 name = OpenCV stays out of core, bench, and the GUI

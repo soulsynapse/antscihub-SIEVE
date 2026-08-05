@@ -239,7 +239,7 @@ loop came to run in a widget, in full compliance (§7's story, one level
 deeper).
 
 **Enforced by:** `.importlinter`'s `gui-computes-nothing` forbidden contract —
-`sieve.gui` may not import `sieve.core.wavelet`, `sieve.core.detection`, or
+`sieve.gui` may not import `sieve.core.ops.wavelet`, `sieve.core.ops.detection`, or
 `sieve.detect`. Indirect imports are allowed for `opencv-containment`'s
 reason: reaching computation *through* `pipeline/` is the supported path; what
 is forbidden is holding it. The seven current violations are the

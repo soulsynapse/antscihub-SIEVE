@@ -27,8 +27,8 @@ This was the last item of the filter tab's v1-parity plan, the one work item
 that plan left open when it was deleted on 2026-08-04; items 1–8 landed
 2026.07.26–27 and their entries are in `docs/completed-todo/`. The v1 semantics
 the port had to match are recorded where they are implemented —
-`core/wavelet.py` (Morlet `W0`, the scale bank, the COI e-folding),
-`core/detection.py` (the count/window/gate chain and the two deliberate
+`core/ops/wavelet.py` (Morlet `W0`, the scale bank, the COI e-folding),
+`core/ops/detection.py` (the count/window/gate chain and the two deliberate
 deviations from v1), `filters/block_signal.py` (σ = 2.0, the LK solve before
 reduction, auto block from 64 source px), `filters/normalize.py`, and
 `filters/rescale.py`.

@@ -44,7 +44,7 @@ misspelling into a first-render failure instead of an unwatched metric.
 see it.
 
 **Nothing here coalesces, and the reason is the same boundary.**
-`gui/coalescer.py` is Qt-free but lives in `sieve.gui`, above this layer, which
+`gui/transport/coalescer.py` is Qt-free but lives in `sieve.gui`, above this layer, which
 is correct: coalescing exists because a human is dragging something, and
 `sieve preview` renders once and has nothing to discard. What this module owes
 the interactive caller is that a render is a plain synchronous call with no
@@ -325,7 +325,7 @@ class PreviewSession:
 
         `index` need not be inside the window: the caller's playhead already is,
         and re-deriving that here would be a second definition of a bound
-        `gui/player.py` owns.
+        `gui/transport/player.py` owns.
 
         Raises:
             ValidationError: if `index` is negative — a span has to start
@@ -368,7 +368,7 @@ class PreviewSession:
         user who edits a parameter waits for all of it before seeing anything.
 
         The consumer is called inside the timed spans, matching what
-        `gui/player.py` publishes for a scrub: the budget's label says "preview
+        `gui/transport/player.py` publishes for a scrub: the budget's label says "preview
         repaint", and a number that excluded the caller's paint would be a
         number about this module rather than about what the user waited for.
         """

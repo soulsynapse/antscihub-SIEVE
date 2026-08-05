@@ -29,8 +29,21 @@ unboundedness: a few kilobytes per session against losing the one snapshot a
 user would actually want. Revisit when outputs make documents heavy — rule 7
 already names which fields would do it.
 
-Qt-free on purpose. The store is a filesystem question, and the window is what
-decides *when* to ask it.
+**In `core/` beside `pipeline_model.py`, because the filename is the metadata.**
+Nothing stamps a time or an action into a snapshot — the document has no field
+for either — so `NNNNNN-kind-slug.sieve.yaml` *is* the record, and reading a
+history without SIEVE running means parsing that name. That makes the grammar a
+serialization claim of the same kind as `Project.save`, and it belongs beside
+it. `storage/` would be the other candidate and is the wrong one: that package
+declares it never knows a project, which is what keeps `crop_writer.py`
+testable without a document, and `SnapshotStore` writes projects.
+
+This module was `gui/history.py` until it was moved on the grounds above. What
+stayed in `gui/` is the half that is genuinely the window's: *when* to snapshot
+(`document.py`, `main_window.py`) and how to render an age as English
+(`history_dialog.age_text`). The file held both, and Qt-freedom hid it —
+`docs/todo/qt-free-logic-under-gui.md` had this module in "probably stay,
+interaction policy" for exactly that reason.
 """
 
 from __future__ import annotations
@@ -204,22 +217,3 @@ class SnapshotStore:
 def history_directory(project_path: Path) -> Path:
     """Where the history for the project file at `project_path` lives."""
     return project_path.with_name(project_path.name + HISTORY_SUFFIX)
-
-
-def age_text(seconds: float) -> str:
-    """How long ago, in the coarsest unit that still distinguishes two entries.
-
-    Coarse on purpose. The user is choosing between snapshots, so what has to be
-    legible is the *order* and roughly how far back — "17:42:03" would be more
-    precise and less answerable, because nobody remembers what time they made a
-    mistake.
-    """
-    if seconds < 60:
-        return "just now"
-    if seconds < 3600:
-        return f"{int(seconds // 60)} min ago"
-    if seconds < 86400:
-        hours = int(seconds // 3600)
-        return f"{hours} hour ago" if hours == 1 else f"{hours} hours ago"
-    days = int(seconds // 86400)
-    return "yesterday" if days == 1 else f"{days} days ago"

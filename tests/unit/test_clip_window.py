@@ -1,12 +1,10 @@
-"""The timeline's arithmetic: the held length, the mapping, and the loop.
+"""What survives an edit to a window: its length, or the edge that was grabbed.
 
-Three things here are load-bearing and each fails for its own reason. The
-window can lose its length under an edit, which is the failure the origin-plus-
-length model exists to prevent. The mapping can be off by a column at the first
-or last frame, which is exactly where a user marking the start or the end of a
-video is looking and nowhere a mid-band test would catch. And the loop can skip
-the window's last frame, which is the frame somebody watching a behaviour end
-is waiting for.
+Two things here are load-bearing and each fails for its own reason. The window
+can lose its length under a body move, which is the failure the origin-plus-
+length model exists to prevent. And a handle drag can move the edge that was
+supposed to be pinned, which reads to the user as the box running away from the
+frame they were holding it against.
 
 No Qt anywhere: the module is arithmetic, and these are numbers fed to it.
 """
@@ -15,21 +13,18 @@ from __future__ import annotations
 
 import pytest
 
-from sieve.core.pipeline_model import ClipRange
-from sieve.gui.timeline_model import (
+from sieve.core.clip_window import (
     DEFAULT_WINDOW_SECONDS,
-    Geometry,
     containing,
     default_window,
     effective_window,
     ended_at,
     ended_at_handle,
-    feed_bounds,
     fitted,
     moved_to,
-    playback_step,
     started_at,
 )
+from sieve.core.pipeline_model import ClipRange
 
 SOURCE_FRAMES = 1000
 
@@ -162,109 +157,14 @@ class TestTheDefaultWindow:
         chosen = ClipRange(start=10, end=20)
         assert effective_window(chosen, SOURCE_FRAMES, 30.0) is chosen
 
+
+class TestFittingOntoTheBoundSource:
+    """A saved span against the video actually open, which may be a different one."""
+
     def test_a_window_landing_past_the_end_is_no_window(self) -> None:
         assert fitted(ClipRange(start=1200, end=1500), SOURCE_FRAMES) is None
+
+    def test_a_window_overhanging_the_end_is_trimmed_to_it(self) -> None:
         assert fitted(ClipRange(start=900, end=1500), SOURCE_FRAMES) == ClipRange(
             start=900, end=SOURCE_FRAMES
         )
-
-
-class TestPlaybackWraps:
-    @pytest.fixture
-    def window(self) -> ClipRange:
-        return ClipRange(start=100, end=200)
-
-    def test_a_target_inside_the_window_is_taken_as_it_is(self, window: ClipRange) -> None:
-        step = playback_step(150, 149, window)
-        assert (step.index, step.rewound) == (150, False)
-
-    def test_the_last_frame_is_shown_before_the_wrap(self, window: ClipRange) -> None:
-        """Playback drops frames it could not decode, so the clock overshoots.
-
-        Without this the window's last frame is skipped on every lap — and it
-        is the frame anybody timing the end of a behaviour is watching for.
-        """
-        step = playback_step(240, 187, window)
-        assert (step.index, step.rewound) == (199, False)
-
-    def test_the_wrap_happens_from_the_last_frame_and_re_anchors(self, window: ClipRange) -> None:
-        step = playback_step(240, 199, window)
-        assert (step.index, step.rewound) == (100, True)
-
-    def test_a_playhead_left_behind_the_window_is_pulled_into_it(self, window: ClipRange) -> None:
-        """Reachable by moving the window while playback is running."""
-        step = playback_step(40, 40, window)
-        assert (step.index, step.rewound) == (100, True)
-
-
-class TestGeometry:
-    @pytest.fixture
-    def geometry(self) -> Geometry:
-        return Geometry(frame_count=SOURCE_FRAMES, width=500.0)
-
-    @pytest.mark.parametrize("frame", [0, 1, 499, 998, 999])
-    def test_a_column_maps_back_to_the_frame_that_owns_it(
-        self, geometry: Geometry, frame: int
-    ) -> None:
-        """The round trip, at both ends and not only in the middle.
-
-        A `width - 1` denominator — the obvious inverse, and the one V1 used —
-        passes at 0 and in the middle and reaches the last frame one pixel
-        early.
-        """
-        assert geometry.frame_at(geometry.centre_of_frame(frame)) == frame
-
-    def test_the_asset_ends_at_the_right_edge(self, geometry: Geometry) -> None:
-        """`frame_count` is not a frame; it is where a half-open span stops."""
-        assert geometry.x_of_frame(SOURCE_FRAMES) == pytest.approx(500.0)
-        assert geometry.x_of_frame(SOURCE_FRAMES - 1) < 500.0
-
-    def test_a_click_past_either_edge_lands_on_a_real_frame(self, geometry: Geometry) -> None:
-        """A drag does not stop at the widget's border; the mouse keeps arriving."""
-        assert geometry.frame_at(-40.0) == 0
-        assert geometry.frame_at(9999.0) == SOURCE_FRAMES - 1
-
-    def test_a_one_frame_window_is_still_visible(self, geometry: Geometry) -> None:
-        left, right = geometry.span(500, 501)
-        assert right - left >= 2.0
-
-    def test_widening_a_span_does_not_move_it(self, geometry: Geometry) -> None:
-        left, _ = geometry.span(500, 501)
-        assert left == pytest.approx(geometry.x_of_frame(500))
-
-    def test_an_empty_geometry_maps_everything_to_nothing(self) -> None:
-        """The state on startup and after closing a video, hit by every paint."""
-        empty = Geometry(frame_count=0, width=500.0)
-        assert empty.is_empty
-        assert empty.frame_at(250.0) == 0
-        assert empty.x_of_frame(10) == 0.0
-
-
-class TestTheFrontierFold:
-    """Render-fed playback's bound: play only what the render has produced."""
-
-    def test_playback_is_confined_to_the_rendered_prefix(self) -> None:
-        window = ClipRange(start=100, end=400)
-        bounds = feed_bounds(window, 249)
-        assert bounds == ClipRange(start=100, end=250)
-        # And `playback_step` folds a clock past the frontier back to the
-        # window's start — the loop over what exists, not a stall at its edge.
-        assert playback_step(300, 249, bounds).index == window.start
-
-    def test_a_frontier_past_the_window_end_changes_nothing(self) -> None:
-        """The render's last frame is the window's; an overshoot must not widen it."""
-        window = ClipRange(start=100, end=400)
-        assert feed_bounds(window, 399) == window
-        assert feed_bounds(window, 5000) == window
-
-    def test_no_frontier_and_a_stale_frontier_both_yield_the_window(self) -> None:
-        """Folding to nothing, or to a foreign span, would freeze the pane
-        in the name of keeping it moving."""
-        window = ClipRange(start=100, end=400)
-        assert feed_bounds(window, None) == window
-        assert feed_bounds(window, 99) == window
-
-    def test_a_frontier_at_the_window_start_is_a_one_frame_loop(self) -> None:
-        """The very start of a render: one frame exists and it is shown."""
-        window = ClipRange(start=100, end=400)
-        assert feed_bounds(window, 100) == ClipRange(start=100, end=101)

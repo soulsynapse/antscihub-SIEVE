@@ -102,6 +102,26 @@ so the guardrail cannot be defeated by adding an import — and
 `tests/unit/test_filter_discovery.py::test_every_discovered_filter_has_guidance_markdown`,
 which enforces the `.md`.
 
+**Enforced by, as of 2026.08.04:** the half both of those are blind to —
+`tests/unit/test_filter_id_spelling.py::test_no_filter_id_is_spelled_outside_its_module_undeclared`,
+REWORK.md R4's literal half. The import check makes a manifest impossible; it
+cannot see `"block_signal"` typed into a widget, which is the same enumeration
+spelled as data. Eleven `(module, filter_id)` pairs across `gui/chain_model.py`,
+`gui/filter_tab.py`, and `gui/wizard_model.py` are the shrink-only exception
+list, and it is the work list — `test_the_declared_spellings_only_shrink` fails
+on an entry whose literal has gone, so removing the code and removing its
+exception are one edit. The owning module is asked of the registered params
+class rather than assumed to be `filters/<id>.py`, so the check does not quietly
+stop working for the first filter that breaks the convention.
+
+A second check in the same module is **vacuous today and deliberately so**: no
+name declared in a `TableSpec.columns` may be spelled in two top-level packages,
+with the package list read off the tree. Nothing declares columns yet, so it is
+pinned against a planted tree instead — the `.importlinter` idiom of governing a
+layer before it exists. The first table emitter is the moment a column name
+starts being typed twice, and a check written after that arrives as an exception
+list rather than as a rule.
+
 ## 4. Latency budgets — ENFORCED for the table and the producers, PARTIAL for the timings
 
 **Enforced by:** `tests/bench/test_budget_table.py` compares the prose table in

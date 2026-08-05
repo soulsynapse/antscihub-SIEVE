@@ -92,12 +92,15 @@ combining rule belongs to whatever fixes the execution strategy, or it is
 correct only for the sequential case. (Rule 7's discipline applied to names
 and placement.)
 
-**Gate:** half landed — `gui-computes-nothing` is the placement half for
-computation. The duplicated-literal half is OPEN (item
-`a-filter-id-spelled-twice`), aimed at registered filter ids and declared
-column names, deliberately not at every string: a generic two-layer literal
-detector would seed an exception list the size of the codebase, which is
-enumeration rot re-encoded in Python.
+**Gate:** both halves landed — `gui-computes-nothing` is the placement half for
+computation, and the duplicated-literal half is
+`tests/unit/test_filter_id_spelling.py::test_no_filter_id_is_spelled_outside_its_module_undeclared`
+(2026-08-04), aimed at registered filter ids and declared column names,
+deliberately not at every string: a generic two-layer literal detector would
+seed an exception list the size of the codebase, which is enumeration rot
+re-encoded in Python. Neither shrink-only list is empty — seven ignored imports
+and eleven `(module, filter_id)` pairs — so this rule does not graduate on the
+gates existing; the two lists together are what is left of it.
 
 **R5. Every value is exactly one of: parameter, product, view state.** A
 parameter changes what a result *is* and is hashed. A product is what a
@@ -156,9 +159,15 @@ The rules bind through CI or they do not bind.
 - **R3:** a property test over `discover()` — run each filter from two start
   points, require agreement within its declared epsilon past its derived
   warmup.
-- **R4:** the existing AST instrument, re-aimed narrowly — registered filter
-  ids spelled outside their own module, declared column names spelled in two
-  layers — never at every string (see R4's Gate line for why).
+- **R4 (landed 2026-08-04):** `tests/unit/test_filter_id_spelling.py` — the AST
+  instrument re-aimed narrowly: registered filter ids spelled outside their own
+  module, declared column names spelled in two packages, never every string (see
+  R4's Gate line for why). Its exception list lives in the test rather than in
+  `src/` — the one place `WITHOUT_PRODUCER`'s shape does not carry over, since a
+  list of filter ids under `src/sieve/` would be eleven foreign spellings of its
+  own. **The exception list is the work list.** The column half is vacuous today
+  and is written against a planted tree, so it governs the first table emitter
+  instead of arriving after it.
 - **R5, R6:** pyright, once the buckets and the four quantity types exist.
 
 The GUI needs no rule of its own: with every transform a filter (R1), every

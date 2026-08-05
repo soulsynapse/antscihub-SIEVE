@@ -17,7 +17,7 @@ import pytest
 from pydantic import ValidationError
 
 from sieve.core.filter_base import node_warmup_frames
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, FrameCount
 from sieve.filters.background_ema import (
     MIN_ALPHA,
     SETTLED_EPSILON,
@@ -101,12 +101,12 @@ def test_the_model_converges_to_within_the_declared_epsilon_by_the_declared_fram
             from_high = background_ema_cpu(flat(128, index), SETTLED, high)
         return abs(float(from_low.data.mean()) - float(from_high.data.mean()))
 
-    assert divergence_after(SPEC.warmup_frames) <= gap * SETTLED_EPSILON
+    assert divergence_after(SPEC.warmup_frames.frames) <= gap * SETTLED_EPSILON
 
     # And the declaration is not slack by an order of magnitude: a tenth of the
     # frames must *not* be enough, or `warmup_frames` would be paying for
     # lead-in nobody needs.
-    assert divergence_after(SPEC.warmup_frames // 10) > gap * SETTLED_EPSILON
+    assert divergence_after(SPEC.warmup_frames.frames // 10) > gap * SETTLED_EPSILON
 
 
 def test_the_declared_warmup_is_the_worst_case_over_the_legal_alpha_range() -> None:
@@ -123,7 +123,7 @@ def test_the_declared_warmup_is_the_worst_case_over_the_legal_alpha_range() -> N
     with pytest.raises(ValidationError):
         BackgroundEmaParams(alpha=lower_bound / 2)
 
-    assert SPEC.warmup_frames == settle_frames(lower_bound)
+    assert SPEC.warmup_frames == FrameCount(settle_frames(lower_bound))
     assert settle_frames(1.0) == 1
     # Monotone: a slower model needs more warmup, which is why the bound is the
     # worst case rather than the default.
@@ -141,7 +141,7 @@ def test_a_fast_model_is_charged_its_own_warmup_rather_than_the_bound() -> None:
     """
     step = (SPEC, BackgroundEmaParams(alpha=0.5))
 
-    assert node_warmup_frames(step) == settle_frames(0.5) == 7
+    assert node_warmup_frames(step) == FrameCount(settle_frames(0.5)) == FrameCount(7)
     assert node_warmup_frames((SPEC, BackgroundEmaParams())) == SPEC.warmup_frames
 
 

@@ -43,7 +43,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, FrameCount
 
 #: Below ~0.1s the accumulator is a frame difference with extra steps.
 TAU_SECONDS_MIN = 0.1
@@ -106,7 +106,7 @@ def dilate_radius(reach_blocks: float, tau_seconds: float, fps: float) -> int:
 
 
 #: Worst case over the legal range; no run pays it.
-MAX_WARMUP_FRAMES = settle_frames(TAU_SECONDS_MAX, FPS_MAX)
+MAX_WARMUP_FRAMES = FrameCount(settle_frames(TAU_SECONDS_MAX, FPS_MAX))
 
 
 class Couple(StrEnum):
@@ -140,8 +140,8 @@ class MotionHistoryParams(ParamsBase):
     couple: Couple = Couple.DILATE
     fps: float = Field(default=30.0, gt=0.0, le=FPS_MAX)
 
-    def warmup_frames(self) -> int:
-        return settle_frames(self.tau_seconds, self.fps)
+    def warmup_frames(self) -> FrameCount:
+        return FrameCount(settle_frames(self.tau_seconds, self.fps))
 
     def group_delay_frames(self) -> float:
         return group_delay(self.tau_seconds, self.fps)

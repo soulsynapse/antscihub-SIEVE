@@ -34,6 +34,7 @@ from sieve.core.filter_base import (
 )
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
+from sieve.core.types import NO_FRAMES, FrameCount
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.plan import ExecutionPlan, root_paths
 
@@ -92,7 +93,9 @@ def _register(warmup: int, rate: Fraction, arity: int) -> type[ParamsBase]:
         "emits": ArraySpec(),
         "element": ElementRelation.PRESERVED,
         "cost": COST,
-        "warmup_frames": warmup,
+        # `FrameCount` and not the bare int: `common` is a `dict[str, Any]`, so the
+        # splat below erases every argument type and pyright cannot see this one.
+        "warmup_frames": FrameCount(warmup),
         "registry": SHELF,
     }
     if rate == 1:
@@ -166,13 +169,13 @@ def test_lead_in_equals_the_maximum_over_enumerated_paths(pipeline: Pipeline) ->
         backend=Backend.CPU,
     )
 
-    def cost(path: tuple[Node, ...]) -> int:
+    def cost(path: tuple[Node, ...]) -> FrameCount:
         return source_warmup_frames(
             [(dag.spec(step.node_id), plan.params[step.node_id]) for step in path]
         )
 
     brute = max(
         (cost(path) for node in dag.order for path in root_paths(dag, node.node_id)),
-        default=0,
+        default=NO_FRAMES,
     )
     assert plan.lead_in == brute

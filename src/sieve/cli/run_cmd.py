@@ -193,8 +193,9 @@ def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) ->
     label = "baseline" if plan.replicate is None else plan.replicate.name
     if not plan.warmed:
         typer.echo(
-            f"{label}: warning — {plan.lead_in_shortfall} of {plan.lead_in} lead-in frames are "
-            "before the start of the video, so the first outputs are under-warmed"
+            f"{label}: warning — {plan.lead_in_shortfall.frames} of "
+            f"{plan.lead_in.frames} lead-in frames are before the start of the video, "
+            "so the first outputs are under-warmed"
         )
     computed = 0
     hits = 0
@@ -263,8 +264,8 @@ def _describe(plan: ExecutionPlan, resolved: ResolvedSource) -> str:
     lines = [
         f"{label}: frames {plan.span.start}:{plan.span.end}, "
         f"decoding {plan.decode_range.start}:{plan.decode_range.stop} "
-        f"({plan.lead_in} frames of lead-in"
-        + (f", {plan.lead_in_shortfall} unavailable" if not plan.warmed else "")
+        f"({plan.lead_in.frames} frames of lead-in"
+        + (f", {plan.lead_in_shortfall.frames} unavailable" if not plan.warmed else "")
         + ")",
     ]
     if resolved.artifact is not None:

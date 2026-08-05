@@ -20,7 +20,7 @@ from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, Mod
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI, ChannelSpec, Frame
+from sieve.core.types import ROI, ChannelSpec, Frame, FrameCount
 from sieve.pipeline import cache_key
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
 from sieve.pipeline.dag import Dag
@@ -44,7 +44,7 @@ ARENA = ROI(x=4, y=2, width=10, height=6)
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    warmup_frames=3,
+    warmup_frames=FrameCount(3),
     registry=SHELF,
 )
 class TagParams(ParamsBase):
@@ -236,7 +236,7 @@ def test_the_lead_in_reaches_the_kernel_and_not_the_caller() -> None:
     frames are adjacent and plausible, nothing downstream would notice.
     """
     plan = plan_for(Pipeline(nodes=(node("t"),)))
-    assert plan.lead_in == 3
+    assert plan.lead_in == FrameCount(3)
 
     results = run(plan, ListSource())
 
@@ -393,7 +393,7 @@ def test_a_merge_below_branches_of_unequal_warmup_sees_aligned_settled_inputs() 
         ),
     )
     plan = plan_for(deep)
-    assert plan.lead_in == 6
+    assert plan.lead_in == FrameCount(6)
 
     results = run(plan, ListSource())
 

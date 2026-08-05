@@ -44,7 +44,7 @@ from sieve.backend.dispatch import (
 from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount
 from sieve.filters.background_ema import (
     BackgroundEmaParams,
     BackgroundState,
@@ -185,7 +185,7 @@ def test_a_filter_whose_warmup_is_a_lie_disagrees_with_itself_across_spans() -> 
         pass
 
     spec = AccumulateParams.spec()
-    assert spec.warmup_frames == 0
+    assert spec.warmup_frames == NO_FRAMES
 
     @stateful_kernel(
         AccumulateParams, Backend.CPU, state=list[int], registry=(shelved := KernelRegistry())
@@ -235,7 +235,7 @@ def test_the_lead_in_is_what_settles_the_model() -> None:
 
     results = list(execute(plan, source, kernels=kernels()))
 
-    assert plan.lead_in == EMA_SPEC.warmup_frames == 90
+    assert plan.lead_in == EMA_SPEC.warmup_frames == FrameCount(90)
     assert source.reads == list(range(10, 102))
     assert [result.index for result in results] == [100, 101]
 

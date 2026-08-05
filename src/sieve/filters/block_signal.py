@@ -69,7 +69,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import ArraySpec, CostEstimate, ElementKind, Mode, ParamsBase
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, FrameCount
 
 #: The tensor window, in working pixels. v1's constant: every measured band
 #: and threshold in every v1 session was tuned against this blur, so it is
@@ -155,7 +155,7 @@ class Signal(StrEnum):
     mode=Mode.STREAMING,
     # The first frame has no previous frame and emits an all-zero grid; one
     # frame of lead-in replaces it with a real measurement.
-    warmup_frames=1,
+    warmup_frames=FrameCount(1),
     stateful=True,
     primary_params=("signal", "block"),
 )

@@ -1,19 +1,254 @@
-"""Frame, ROI, and metadata value objects shared across all layers.
+"""Frame, ROI, quantities, and metadata value objects shared across all layers.
 
 These are the vocabulary every other layer pattern-matches on. Metadata is
 typed, never stringly-typed: a filter that needs to know the channel layout
 reads `ChannelSpec`, not a `str` it has to parse.
+
+**The four quantities.** `MediaTime`, `WallTime`, `WorkUnits` and `FrameCount`
+are four kinds of number that a `float` makes one kind, and the confusions a
+`float` permits are not hypothetical — each of the four already had a name in
+this repo that read like one of the others. They are separate types with no
+implicit conversion between any two, so the checker refuses the mixture where
+it is written rather than leaving a plausible number to be read later.
+
+The distinctions that are load-bearing, in the order they cost something:
+
+- **A frame count is node-relative, and is not a duration.** Warmup is counted
+  in a filter's own *input* frames, and a rate-changing node between two others
+  makes them speak different index spaces — `at_input_of` is that conversion and
+  the reason folding frames into media time would erase the arithmetic
+  `source_warmup_frames` exists to get right. Turning frames into seconds needs
+  an fps and says so in the signature.
+- **Work never wears a time-flavored name.** `WorkUnits` has no `.milliseconds`
+  and no conversion to `WallTime`, because the conversion is a rate that belongs
+  to a particular machine. The moment a work estimate is spelled `estimated_ms`,
+  the anchor it was denominated against is gone and no reader can recover it.
+- **Media time is rational**, and the reason is not accumulated drift. Adding a
+  float frame duration a million times is off by 1e-6 frames, which would never
+  matter. What matters is that `floor` and `ceil` sit on a boundary: at
+  30000/1001, the exact duration of 15 frames is 15/fps, and `floor(float(15 /
+  fps) * float(fps))` is **14**. The first failure is at frame 15, not in hour
+  two, and it is a whole frame every time — `ParamsBase.output_rate` carries the
+  same argument in its own words ("`ceil(5 / 0.1)` is 50 only until the day the
+  factor is 3"). Wall time is `float` seconds precisely because nothing rounds
+  it to a grid: it is a measurement of the world with no exactness to lose.
+
+Only `FrameCount` is a count and only `FrameCount` refuses to be negative: a
+frame that is not there is not a frame, while a wall-clock difference is
+routinely a headroom below a limit and a media offset is routinely backwards.
+
+The four repeat their arithmetic rather than sharing a base. A base would have
+to name its scalar something dimensionless, and the accessor naming the
+dimension — `.frames`, `.seconds`, `.units` — is most of what these types are;
+the four lines each of `__add__` are the cheap half.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import StrEnum
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Self
 
 import numpy as np
 from numpy.typing import NDArray
+
+
+@dataclass(frozen=True, order=True, slots=True)
+class MediaTime:
+    """A position or a length on the *media* clock, exactly.
+
+    `Fraction` rather than `float`, and the failure it closes is immediate
+    rather than cumulative — see the module docstring for the arithmetic. Every
+    quantity derived from a media time is eventually floored onto the frame
+    grid, which is where a representation error stops being in the fifteenth
+    decimal place and becomes one whole frame of a window, a seek, or a
+    reported span.
+
+    Never a measurement of the real world. A render that took 12 ms to produce
+    a frame that lasts 33 ms is two different numbers about the same frame, and
+    `WallTime` is the other one; there is no conversion between them because
+    there is no fact that would justify one.
+    """
+
+    seconds: Fraction
+
+    @classmethod
+    def of_frames(cls, count: FrameCount, fps: Fraction) -> Self:
+        """How long `count` frames last at `fps`.
+
+        `fps` is required rather than defaulted because a frame count is
+        node-relative: the same 90 frames are three seconds of source footage
+        and thirty seconds of a decimator's output, and no default could be
+        right for both.
+        """
+        if fps <= 0:
+            raise ValueError(f"fps must be positive to convert frames to media time, got {fps}")
+        return cls(Fraction(count.frames) / fps)
+
+    def __add__(self, other: MediaTime) -> MediaTime:
+        return MediaTime(self.seconds + other.seconds)
+
+    def __sub__(self, other: MediaTime) -> MediaTime:
+        return MediaTime(self.seconds - other.seconds)
+
+    def __mul__(self, factor: int | Fraction) -> MediaTime:
+        return MediaTime(self.seconds * factor)
+
+    def __str__(self) -> str:
+        return f"{float(self.seconds):.3f} s"
+
+
+@dataclass(frozen=True, order=True, slots=True)
+class WallTime:
+    """Elapsed real time — what a budget bounds and a stopwatch reports.
+
+    `float` seconds, and the imprecision is honest: this is a measurement, its
+    fourth decimal place is scheduler noise, and an exact rational would be
+    claiming a precision the clock did not supply. Contrast `MediaTime`, which
+    is a definition rather than a reading.
+
+    Seconds internally with `.milliseconds` on the outside, because the budget
+    table is denominated in milliseconds and a second spelling of the scale in
+    every caller is how the two drift apart.
+    """
+
+    seconds: float
+
+    @classmethod
+    def of_milliseconds(cls, milliseconds: float) -> Self:
+        return cls(milliseconds / 1000.0)
+
+    @property
+    def milliseconds(self) -> float:
+        return self.seconds * 1000.0
+
+    def __add__(self, other: WallTime) -> WallTime:
+        return WallTime(self.seconds + other.seconds)
+
+    def __sub__(self, other: WallTime) -> WallTime:
+        """Signed: a reading below a limit is a negative difference, not zero.
+
+        `bench/budgets.Budget.exceeded_by` is the caller that matters — it
+        reports headroom as a negative overage, and a difference that clamped
+        at zero would make "just made it" and "made it by a mile" the same
+        number, which is the direction rule 6 refuses.
+        """
+        return WallTime(self.seconds - other.seconds)
+
+    def __mul__(self, factor: float) -> WallTime:
+        return WallTime(self.seconds * factor)
+
+    def __str__(self) -> str:
+        return f"{self.seconds:.3f} s"
+
+
+@dataclass(frozen=True, order=True, slots=True)
+class WorkUnits:
+    """An amount of work, denominated against an anchor and not against a clock.
+
+    The type exists to keep a prediction from wearing a measurement's name. A
+    cost model says a kernel is *this much work per megapixel*; how long that
+    takes is that number divided by a rate that belongs to one machine, one
+    backend, and one moment. Storing the division's result and calling it
+    `estimated_ms` throws away which machine it was divided by, and nothing
+    downstream can tell the estimate from a reading.
+
+    So there is deliberately no conversion to `WallTime` here and no
+    `.milliseconds`. Supplying the rate is `docs/todo/work-units-have-one-anchor`
+    and it is a separate decision: the anchor has to be named before anything
+    may divide by it.
+    """
+
+    units: float
+
+    def __add__(self, other: WorkUnits) -> WorkUnits:
+        return WorkUnits(self.units + other.units)
+
+    def __sub__(self, other: WorkUnits) -> WorkUnits:
+        return WorkUnits(self.units - other.units)
+
+    def __mul__(self, factor: float) -> WorkUnits:
+        return WorkUnits(self.units * factor)
+
+    def __str__(self) -> str:
+        return f"{self.units:g} work units"
+
+
+@dataclass(frozen=True, order=True, slots=True)
+class FrameCount:
+    """A number of frames in one node's index space. Never a duration.
+
+    Which node's is not carried, and cannot be: the count is meaningful only
+    where it was computed, and the one operation that moves it — `at_input_of`,
+    crossing a rate change — is the whole of the warmup arithmetic. That is why
+    this is not seconds with an fps attached. `source_warmup_frames` walks a
+    path applying that conversion once per node, and five frames behind a 10:1
+    decimator being fifty source frames is the error a duration would hide.
+
+    Non-negative, unlike the other three. A negative count is not a direction,
+    it is a mistake — a warmup refinement that came back below zero, a shortfall
+    subtracted the wrong way round — and refusing it here is what makes
+    `FilterSpec.warmup_frames` unable to be declared negative in the first
+    place, at the decorator where somebody wrote it.
+    """
+
+    frames: int
+
+    def __post_init__(self) -> None:
+        if self.frames < 0:
+            raise ValueError(f"a frame count must be non-negative, got {self.frames}")
+
+    def at_input_of(self, rate: Fraction) -> FrameCount:
+        """This many frames at a node's output, counted at its *input*.
+
+        `ceil(self / rate)`, where `rate` is `ParamsBase.output_rate` — output
+        frames per input frame. Ceiling because a fraction of an input frame
+        cannot be decoded, and rounding the other way would under-warm by up to
+        one frame of the *coarser* stream, which behind a 10:1 decimator is ten
+        source frames of an IIR that has not settled.
+
+        Monotone non-decreasing, which `pipeline/plan.py` relies on to fold this
+        over a topological order instead of enumerating a diamond's
+        exponentially many paths.
+        """
+        if rate <= 0:
+            raise ValueError(f"output rate must be positive to convert frames, got {rate}")
+        return FrameCount(math.ceil(Fraction(self.frames) / rate))
+
+    @classmethod
+    def spanning(cls, duration: MediaTime, fps: Fraction) -> Self:
+        """Whole frames `duration` covers at `fps`, truncating the partial one.
+
+        Truncating rather than rounding: this answers "how many frames am I
+        certain of", which is the question a window length asks. A caller whose
+        gesture is "the nearest frame to where I let go" is rounding a *cursor*
+        and should say so at the cursor.
+        """
+        if fps <= 0:
+            raise ValueError(f"fps must be positive to convert media time to frames, got {fps}")
+        return cls(math.floor(duration.seconds * fps))
+
+    def __add__(self, other: FrameCount) -> FrameCount:
+        return FrameCount(self.frames + other.frames)
+
+    def __sub__(self, other: FrameCount) -> FrameCount:
+        """Raises `ValueError` if the difference is negative; see the class."""
+        return FrameCount(self.frames - other.frames)
+
+    def __mul__(self, factor: int) -> FrameCount:
+        return FrameCount(self.frames * factor)
+
+    def __str__(self) -> str:
+        return f"{self.frames} frame{'' if self.frames == 1 else 's'}"
+
+
+#: No lead-in, no window, nothing to warm. Allocated once: it is the default on
+#: `FilterSpec.warmup_frames` and the identity of the warmup fold, so it is
+#: written more often than any other value of the type.
+NO_FRAMES = FrameCount(0)
 
 
 class ChannelSpec(StrEnum):

@@ -49,7 +49,7 @@ from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import ParamsBase, input_warmup_frames
 from sieve.core.pipeline_model import ClipRange, Node, resolved_params
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI
+from sieve.core.types import NO_FRAMES, ROI, FrameCount
 from sieve.pipeline.dag import Dag
 
 
@@ -75,7 +75,7 @@ class ExecutionPlan:
     keys: Mapping[str, str]
     #: Source frames to decode ahead of `span.start` so every node is warmed.
     #: The maximum over the graph, not per node: one decode feeds all of them.
-    lead_in: int
+    lead_in: FrameCount
     #: Where each node runs, per `node_id`. Total over `dag.order`.
     #:
     #: **Per node rather than one for the graph**, because `dispatch.py` holds
@@ -220,7 +220,7 @@ class ExecutionPlan:
         unfixable way. It is the same clamp, and the shortfall reports it in
         the same field.
         """
-        return max(self.span.start - self.lead_in, self.source_start)
+        return max(self.span.start - self.lead_in.frames, self.source_start)
 
     @property
     def decode_range(self) -> range:
@@ -228,7 +228,7 @@ class ExecutionPlan:
         return range(self.decode_start, self.span.end)
 
     @property
-    def lead_in_shortfall(self) -> int:
+    def lead_in_shortfall(self) -> FrameCount:
         """Lead-in frames wanted that the video cannot supply. 0 when warmed.
 
         Nonzero means the first outputs of the span are computed from a filter
@@ -236,12 +236,12 @@ class ExecutionPlan:
         someone will publish — warns on it; a preview scrubbing near frame 0
         ignores it.
         """
-        return self.lead_in - (self.span.start - self.decode_start)
+        return self.lead_in - FrameCount(self.span.start - self.decode_start)
 
     @property
     def warmed(self) -> bool:
         """Whether every node's lead-in is fully available in the source."""
-        return self.lead_in_shortfall == 0
+        return self.lead_in_shortfall == NO_FRAMES
 
     @property
     def luma(self) -> bool:
@@ -286,7 +286,7 @@ class ExecutionPlan:
         return self.keys.get(node_id)
 
 
-def _lead_in(dag: Dag, params: Mapping[str, ParamsBase]) -> int:
+def _lead_in(dag: Dag, params: Mapping[str, ParamsBase]) -> FrameCount:
     """Source frames of lead-in for the whole graph.
 
     One backward pass over the topological order. `need[node]` is the lead-in
@@ -302,14 +302,15 @@ def _lead_in(dag: Dag, params: Mapping[str, ParamsBase]) -> int:
     An empty graph decodes no lead-in, and `max` is given a default rather than
     being handed an empty sequence for exactly that case.
     """
-    need: dict[str, int] = {}
+    need: dict[str, FrameCount] = {}
     for node in reversed(dag.order):
         downstream_need = max(
-            (need[downstream] for downstream in dag.downstreams[node.node_id]), default=0
+            (need[downstream] for downstream in dag.downstreams[node.node_id]),
+            default=NO_FRAMES,
         )
         step = (dag.specs[node.node_id], params[node.node_id])
         need[node.node_id] = input_warmup_frames(step, downstream_need)
-    return max((need[root.node_id] for root in dag.roots), default=0)
+    return max((need[root.node_id] for root in dag.roots), default=NO_FRAMES)
 
 
 def root_paths(dag: Dag, node_id: str) -> tuple[tuple[Node, ...], ...]:

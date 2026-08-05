@@ -16,7 +16,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, FrameCount
 from sieve.filters.temporal_baseline import (
     FPS_MAX,
     MAX_SAMPLES,
@@ -157,7 +157,9 @@ def test_the_declared_warmup_is_the_worst_case_over_the_legal_range() -> None:
     assert corner.warmup_frames() == SPEC.warmup_frames
 
     default = TemporalBaselineParams()
-    assert default.warmup_frames() == window_frames(default.window_seconds, default.fps) - 1
+    assert default.warmup_frames() == FrameCount(
+        window_frames(default.window_seconds, default.fps) - 1
+    )
     assert default.warmup_frames() * 40 < SPEC.warmup_frames
 
     with pytest.raises(ValueError):

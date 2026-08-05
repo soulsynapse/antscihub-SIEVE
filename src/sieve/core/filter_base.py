@@ -36,7 +36,6 @@ too large only wastes decode.
 from __future__ import annotations
 
 import json
-import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -46,7 +45,7 @@ from typing import Any, ClassVar, TypeAlias
 
 from pydantic import BaseModel, ConfigDict
 
-from sieve.core.types import ChannelSpec
+from sieve.core.types import NO_FRAMES, ChannelSpec, FrameCount
 
 #: `MAJOR.MINOR.PATCH`, no pre-release or build metadata. A filter version is
 #: an input to a cache key before it is a human-facing label, and `1.0.0-rc1`
@@ -276,7 +275,7 @@ class ParamsBase(BaseModel):
         """
         return UNCHANGED_RATE
 
-    def warmup_frames(self) -> int:
+    def warmup_frames(self) -> FrameCount:
         """Frames *this configuration* must consume before its output is good.
 
         A refinement of `FilterSpec.warmup_frames`, which is the worst case over
@@ -301,7 +300,7 @@ class ParamsBase(BaseModel):
         undeclared rate change under-warms every downstream node silently, while
         a warmup that was never refined merely decodes frames nobody needed.
         """
-        return 0
+        return NO_FRAMES
 
     def frame_bytes_ratio(self) -> float:
         """Bytes of one output frame per byte of one input frame.
@@ -482,7 +481,7 @@ class FilterSpec:
     #: be. The claim this makes is "my first N outputs are untrustworthy", and
     #: kernel state is one way to have such outputs rather than the only one — a
     #: `WINDOWED` filter has them too, and its protocol does not exist yet.
-    warmup_frames: int = 0
+    warmup_frames: FrameCount = NO_FRAMES
     #: This filter's output is not indexed like its input — a decimator. Must
     #: agree with whether `params_model` overrides `output_rate`, and the
     #: agreement is checked below. Declaring it is not redundant with the
@@ -557,8 +556,6 @@ class FilterSpec:
             )
         if not SEMVER_PATTERN.match(self.version):
             raise ValueError(f"version must be MAJOR.MINOR.PATCH, got {self.version!r}")
-        if self.warmup_frames < 0:
-            raise ValueError(f"warmup_frames must be non-negative, got {self.warmup_frames}")
         if self.backend_agnostic and not self.deterministic:
             # Bit-for-bit agreement across backends is a strictly stronger
             # claim than agreement with itself on one backend. Allowing both
@@ -676,7 +673,7 @@ class FilterSpec:
 PathStep: TypeAlias = "tuple[FilterSpec, ParamsBase]"
 
 
-def node_warmup_frames(step: PathStep) -> int:
+def node_warmup_frames(step: PathStep) -> FrameCount:
     """One node's own lead-in: the refinement if it has one, else the bound.
 
     `FilterSpec.warmup_frames` is the worst case over the legal parameter range;
@@ -690,23 +687,23 @@ def node_warmup_frames(step: PathStep) -> int:
     because a params model cannot be instantiated there and the check that
     matters needs a value rather than a signature.
 
+    A refinement below zero is refused by `FrameCount` itself, at the return
+    inside the filter that computed it, which is a better place to meet it than
+    here — so the only check left is the one this function is the only place to
+    make.
+
     Raises:
-        ValueError: if the refinement is negative, or exceeds the spec's bound.
-            The second is the one worth refusing: a bound is what `sieve inspect`
-            prints and what a reader checks a filter's cost against, and a
-            configuration quietly needing more lead-in than the declaration
-            admits is the silent direction — the preview renders, the filter has
-            not settled, and the tuning done against it is wrong rather than
-            absent.
+        ValueError: if the refinement exceeds the spec's bound. A bound is what
+            `sieve inspect` prints and what a reader checks a filter's cost
+            against, and a configuration quietly needing more lead-in than the
+            declaration admits is the silent direction — the preview renders,
+            the filter has not settled, and the tuning done against it is wrong
+            rather than absent.
     """
     spec, params = step
     if type(params).warmup_frames is ParamsBase.warmup_frames:
         return spec.warmup_frames
     refined = params.warmup_frames()
-    if refined < 0:
-        raise ValueError(
-            f"{spec.filter_id}: {type(params).__name__}.warmup_frames() returned {refined}"
-        )
     if refined > spec.warmup_frames:
         raise ValueError(
             f"{spec.filter_id}: {type(params).__name__}.warmup_frames() returned {refined}, "
@@ -717,11 +714,11 @@ def node_warmup_frames(step: PathStep) -> int:
     return refined
 
 
-def input_warmup_frames(step: PathStep, output_warmup: int) -> int:
+def input_warmup_frames(step: PathStep, output_warmup: FrameCount) -> FrameCount:
     """One node's conversion: lead-in at its input, given lead-in at its output.
 
     The single edge of the warmup arithmetic. `output_warmup` frames wanted at
-    this node's output cost `ceil(output_warmup / rate)` at its input, and the
+    this node's output cost `FrameCount.at_input_of` at its input, and the
     node's own warmup is already denominated there, so it adds on top.
 
     Extracted from `source_warmup_frames` rather than inlined in it because a
@@ -731,7 +728,7 @@ def input_warmup_frames(step: PathStep, output_warmup: int) -> int:
     that function's docstring argues against, so there is one and both call it.
 
     **Monotone non-decreasing in `output_warmup`**, and that is load-bearing
-    rather than incidental: `ceil` and `+` are both monotone, so the maximum
+    rather than incidental: `at_input_of` and `+` are both monotone, so the maximum
     over a node's paths equals the maximum taken node-by-node along the way.
     Without it a DAG walk would have to enumerate paths, of which a diamond
     chain has exponentially many.
@@ -752,10 +749,10 @@ def input_warmup_frames(step: PathStep, output_warmup: int) -> int:
     rate = params.output_rate()
     if rate <= 0:
         raise ValueError(f"{spec.filter_id}: output_rate must be positive, got {rate}")
-    return math.ceil(Fraction(output_warmup) / rate) + node_warmup_frames(step)
+    return output_warmup.at_input_of(rate) + node_warmup_frames(step)
 
 
-def source_warmup_frames(path: Sequence[PathStep]) -> int:
+def source_warmup_frames(path: Sequence[PathStep]) -> FrameCount:
     """Lead-in to decode, in *source* frames, for a path ordered root to sink.
 
     ARCHITECTURE says the executor "sums `warmup_frames` over the topological
@@ -791,7 +788,7 @@ def source_warmup_frames(path: Sequence[PathStep]) -> int:
         ValueError: if any node reports a non-positive output rate, which would
             mean an output frame the source could never supply enough input for.
     """
-    need = 0
+    need = NO_FRAMES
     for step in reversed(path):
         need = input_warmup_frames(step, need)
     return need

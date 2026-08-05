@@ -299,7 +299,10 @@ def _describe(render: PreviewRender, edits: Sequence[str] | None) -> str:
     warning = (
         ""
         if render.plan.warmed
-        else f", {render.plan.lead_in_shortfall} of {render.plan.lead_in} lead-in frames missing"
+        else (
+            f", {render.plan.lead_in_shortfall.frames} of "
+            f"{render.plan.lead_in.frames} lead-in frames missing"
+        )
     )
     return (
         f"{render.frames} frames {render.span.start}:{render.span.end}{applied}, "

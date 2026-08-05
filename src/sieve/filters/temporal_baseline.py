@@ -84,7 +84,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame
+from sieve.core.types import Frame, FrameCount
 
 #: MAD to standard-deviation-equivalent for a normal distribution:
 #: `1 / Phi^-1(0.75)`. Applied so that a deviation of 4 means roughly what four
@@ -147,7 +147,7 @@ def ring_capacity(frames: int) -> int:
 #: the first trustworthy output. No run pays it —
 #: `TemporalBaselineParams.warmup_frames` refines it to the configured window —
 #: and the fact that it is unpayable is what the refinement was built for.
-MAX_WARMUP_FRAMES = window_frames(WINDOW_SECONDS_MAX, FPS_MAX) - 1
+MAX_WARMUP_FRAMES = FrameCount(window_frames(WINDOW_SECONDS_MAX, FPS_MAX) - 1)
 
 
 class Emit(StrEnum):
@@ -217,7 +217,7 @@ class TemporalBaselineParams(ParamsBase):
         """This configuration's window, in frames."""
         return window_frames(self.window_seconds, self.fps)
 
-    def warmup_frames(self) -> int:
+    def warmup_frames(self) -> FrameCount:
         """The frames that must precede the first full window.
 
         `window_frames - 1`: the window includes the frame being measured, so
@@ -225,7 +225,7 @@ class TemporalBaselineParams(ParamsBase):
         Below the spec's bound for every legal configuration, and equal to it
         only at the corner where both parameters are at their maxima.
         """
-        return self.frames() - 1
+        return FrameCount(self.frames() - 1)
 
 
 @dataclass(slots=True)

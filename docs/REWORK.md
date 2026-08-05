@@ -129,8 +129,14 @@ which machine profile; an uncalibrated machine yields work units that say so
 into a point estimate wearing a quantile's name. (Rule 6 applied to
 quantities: a number must never look better-founded than it is.)
 
-**Gate:** OPEN — pyright, once the four types land (item
-`four-numbers-four-types`), which must precede anything fitted or measured.
+**Gate:** OPEN — half of it is live. The four types landed 2026-08-04 in
+`core/types.py` and pyright now refuses the mixtures, so the ordering
+constraint below is discharged: anything fitted or measured from here is
+denominated in a type. What is still ungated is the rest of the rule's
+sentence — the anchor (`work-units-have-one-anchor`), the re-denomination of
+the ceilings (`ceilings-in-the-dimension-they-bound`), and the measured-versus-
+predicted stamp (`a-number-says-how-it-was-founded`). A type separation is not
+a provenance claim, and only the separation is checked today.
 
 ## Enforcement
 

@@ -71,7 +71,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame
+from sieve.core.types import Frame, FrameCount
 
 #: What the accumulator can hold without losing the input's range. Same set as
 #: `downsample`'s, so the two chain in either order — the ordinary graph is a
@@ -157,7 +157,7 @@ class Emit(StrEnum):
     # ceil(ln 0.01 / ln (1 - 0.05)) — the worst case over the legal `alpha`
     # range, which is what a bound stated without a configuration has to be.
     # `BackgroundEmaParams.warmup_frames` refines it per run.
-    warmup_frames=90,
+    warmup_frames=FrameCount(90),
     stateful=True,
     primary_params=("alpha", "emit"),
 )
@@ -173,7 +173,7 @@ class BackgroundEmaParams(ParamsBase):
     alpha: float = Field(default=MIN_ALPHA, ge=MIN_ALPHA, le=1.0)
     emit: Emit = Emit.FOREGROUND
 
-    def warmup_frames(self) -> int:
+    def warmup_frames(self) -> FrameCount:
         """`settle_frames(alpha)` — the bound, refined to the configured model.
 
         Equal to the spec's 90 at the default `alpha` and strictly below it
@@ -182,7 +182,7 @@ class BackgroundEmaParams(ParamsBase):
         background that has not settled and a foreground taken against it are
         untrustworthy together.
         """
-        return settle_frames(self.alpha)
+        return FrameCount(settle_frames(self.alpha))
 
 
 #: Any floating array. The accumulator is `float32` for every input dtype except

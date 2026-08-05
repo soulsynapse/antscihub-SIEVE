@@ -16,7 +16,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, FrameCount
 from sieve.filters.motion_history import (
     FPS_MAX,
     MAX_DIFFUSION_NUMBER,
@@ -199,10 +199,10 @@ def test_the_declared_warmup_is_a_bound_that_every_run_refines() -> None:
 
     params = MotionHistoryParams(tau_seconds=1.0, reach_blocks=0.0, fps=FPS)
     warmup = params.warmup_frames()
-    assert warmup == settle_frames(1.0, FPS)
+    assert warmup == FrameCount(settle_frames(1.0, FPS))
     assert warmup * 70 < SPEC.warmup_frames
 
-    settled = run(driven_block(warmup + 1), params)[warmup]
+    settled = run(driven_block(warmup.frames + 1), params)[warmup.frames]
     assert float(settled[CENTRE, CENTRE]) > 1.0 - 2.0 * (1.0 - decay_lambda(1.0, FPS))
     assert float(settled[CENTRE, CENTRE]) == pytest.approx(1.0, abs=0.01)
 

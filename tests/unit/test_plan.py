@@ -20,7 +20,7 @@ from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, Par
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI
+from sieve.core.types import ROI, FrameCount
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.plan import ExecutionPlan, root_paths
 
@@ -29,7 +29,7 @@ SOURCE = "footage|1|2"
 SHELF = FilterRegistry()
 
 
-def _settling(filter_id: str, warmup: int) -> type[ParamsBase]:
+def _settling(filter_id: str, warmup: FrameCount) -> type[ParamsBase]:
     """A streaming filter that needs `warmup` frames before it is trustworthy."""
 
     @register_filter(
@@ -49,9 +49,9 @@ def _settling(filter_id: str, warmup: int) -> type[ParamsBase]:
     return Params
 
 
-_settling("settle1", 1)
-_settling("settle3", 3)
-_settling("settle5", 5)
+_settling("settle1", FrameCount(1))
+_settling("settle3", FrameCount(3))
+_settling("settle5", FrameCount(5))
 
 
 @register_filter(
@@ -62,7 +62,7 @@ _settling("settle5", 5)
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    warmup_frames=1,
+    warmup_frames=FrameCount(1),
     registry=SHELF,
 )
 class Join1Params(ParamsBase):
@@ -169,7 +169,7 @@ def test_lead_in_is_the_longest_path_not_the_whole_graph() -> None:
         ),
         edges=edges("a>b", "a>c", "b>d:left", "c>d:right"),
     )
-    assert plan_for(pipeline).lead_in == 7
+    assert plan_for(pipeline).lead_in == FrameCount(7)
     # And the walk agrees with the definition it is an optimization of.
     assert len(root_paths(Dag.build(pipeline, SHELF), "d")) == 2
 
@@ -184,7 +184,7 @@ def test_lead_in_crosses_a_rate_change_in_source_frames() -> None:
         nodes=(node("d", "decimate", factor=10), node("s", "settle5")),
         edges=edges("d>s"),
     )
-    assert plan_for(pipeline).lead_in == 50
+    assert plan_for(pipeline).lead_in == FrameCount(50)
 
 
 def test_params_are_validated_even_where_no_key_is_derived() -> None:
@@ -209,10 +209,10 @@ def test_a_clip_near_the_start_runs_under_warmed_rather_than_failing() -> None:
     """
     pipeline = Pipeline(nodes=(node("s", "settle5"),))
     plan = plan_for(pipeline, span=ClipRange(start=2, end=6))
-    assert plan.lead_in == 5
+    assert plan.lead_in == FrameCount(5)
     assert plan.decode_start == 0
     assert plan.decode_range == range(0, 6)
-    assert plan.lead_in_shortfall == 3
+    assert plan.lead_in_shortfall == FrameCount(3)
     assert not plan.warmed
 
 
@@ -289,8 +289,8 @@ class TestPlanningAgainstACropThatAlreadyExists:
 
         plan = plan_for(pipeline, span=ClipRange(start=40, end=46), source_start=40)
 
-        assert plan.lead_in == 5
+        assert plan.lead_in == FrameCount(5)
         assert plan.decode_start == 40
         assert plan.decode_range == range(40, 46)
-        assert plan.lead_in_shortfall == 5
+        assert plan.lead_in_shortfall == FrameCount(5)
         assert not plan.warmed

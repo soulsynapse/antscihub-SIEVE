@@ -31,7 +31,7 @@ from sieve.core.filter_registry import (
     UnknownFilterError,
     register_filter,
 )
-from sieve.core.types import ChannelSpec
+from sieve.core.types import NO_FRAMES, ChannelSpec, FrameCount
 
 COST = CostEstimate(seconds_per_megapixel=0.001)
 
@@ -86,8 +86,8 @@ class WindowParams(ParamsBase):
 
     length: int = 5
 
-    def warmup_frames(self) -> int:
-        return self.length - 1
+    def warmup_frames(self) -> FrameCount:
+        return FrameCount(self.length - 1)
 
 
 def make_spec(**overrides: object) -> FilterSpec:
@@ -110,12 +110,12 @@ def make_spec(**overrides: object) -> FilterSpec:
 #: are about, not part of it.
 DECIMATOR = make_spec(filter_id="decimate", params_model=DecimateParams, rate_changing=True)
 DOWNSAMPLER = make_spec(filter_id="downsample", params_model=DownsampleParams)
-IIR = make_spec(filter_id="iir", warmup_frames=5)
+IIR = make_spec(filter_id="iir", warmup_frames=FrameCount(5))
 INTERPOLATOR = make_spec(
     filter_id="interpolate", params_model=InterpolateParams, rate_changing=True
 )
 #: Declares a bound of 99 and refines it per configuration.
-WINDOWED = make_spec(filter_id="window", params_model=WindowParams, warmup_frames=99)
+WINDOWED = make_spec(filter_id="window", params_model=WindowParams, warmup_frames=FrameCount(99))
 
 
 class TestFilterSpec:
@@ -156,8 +156,11 @@ class TestRate:
         # settled rather than failing in any visible way.
         path = [(DECIMATOR, DecimateParams()), (IIR, SampleParams())]
 
-        assert source_warmup_frames(path) == 50
-        assert sum(spec.warmup_frames for spec, _ in path) == 5  # what a sum would have said
+        assert source_warmup_frames(path) == FrameCount(50)
+        # What a sum would have said — and `FrameCount` has no `__radd__`, so writing
+        # the wrong thing now costs an explicit unwrap per term rather than reading
+        # like ordinary arithmetic.
+        assert sum(spec.warmup_frames.frames for spec, _ in path) == 5
 
     def test_rate_is_read_from_params_not_from_the_spec(self) -> None:
         # The factor is a parameter, so two nodes sharing one spec must be able
@@ -165,7 +168,7 @@ class TestRate:
         by_three = source_warmup_frames(
             [(DECIMATOR, DecimateParams(stride=3)), (IIR, SampleParams())]
         )
-        assert by_three == 15
+        assert by_three == FrameCount(15)
 
     def test_a_partial_input_frame_rounds_up(self) -> None:
         # A rate of 3/2 means two input frames buy three output frames, so five
@@ -174,8 +177,9 @@ class TestRate:
         # example rather than a property: every rate of the form 1/n divides
         # exactly, so a suite generated from decimators alone cannot tell the
         # two roundings apart no matter how many graphs it draws.
-        assert input_warmup_frames((INTERPOLATOR, InterpolateParams()), 5) == 4
-        assert input_warmup_frames((INTERPOLATOR, InterpolateParams()), 6) == 4
+        step = (INTERPOLATOR, InterpolateParams())
+        assert input_warmup_frames(step, FrameCount(5)) == FrameCount(4)
+        assert input_warmup_frames(step, FrameCount(6)) == FrameCount(4)
 
     def test_a_configured_warmup_is_charged_instead_of_the_bound(self) -> None:
         # The point of the refinement. Without it every run of a graph holding
@@ -188,10 +192,10 @@ class TestRate:
         short = [(DECIMATOR, DecimateParams()), (WINDOWED, WindowParams(length=31))]
         long_window = [(DECIMATOR, DecimateParams()), (WINDOWED, WindowParams(length=91))]
 
-        assert source_warmup_frames(short) == 300
-        assert source_warmup_frames(long_window) == 900
+        assert source_warmup_frames(short) == FrameCount(300)
+        assert source_warmup_frames(long_window) == FrameCount(900)
         # And the bound is what a spec-only reading would have charged both.
-        assert WINDOWED.warmup_frames == 99
+        assert WINDOWED.warmup_frames == FrameCount(99)
 
     def test_a_refinement_above_the_bound_is_refused(self) -> None:
         # The silent direction, and the only one worth an exception. A bound is
@@ -199,10 +203,11 @@ class TestRate:
         # against; a configuration quietly needing more lead-in than the
         # declaration admits renders a preview from a filter that never settled.
         with pytest.raises(ValueError, match="exceeds the spec's declared bound"):
-            input_warmup_frames((WINDOWED, WindowParams(length=101)), 0)
+            input_warmup_frames((WINDOWED, WindowParams(length=101)), NO_FRAMES)
 
         # The bound itself is legal — it is a bound, not a strict one.
-        assert input_warmup_frames((WINDOWED, WindowParams(length=100)), 0) == 99
+        at_bound = (WINDOWED, WindowParams(length=100))
+        assert input_warmup_frames(at_bound, NO_FRAMES) == FrameCount(99)
 
     def test_undeclared_rate_change_is_refused_at_registration(self) -> None:
         # Without this the gap reopens silently: a decimator whose spec forgot

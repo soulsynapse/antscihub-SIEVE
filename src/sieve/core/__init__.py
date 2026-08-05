@@ -39,9 +39,20 @@ from sieve.core.pipeline_model import (
     project_path_for,
 )
 from sieve.core.replicates import Replicate, ReplicateSet
-from sieve.core.types import ROI, ChannelSpec, Frame, VideoMetadata
+from sieve.core.types import (
+    NO_FRAMES,
+    ROI,
+    ChannelSpec,
+    Frame,
+    FrameCount,
+    MediaTime,
+    VideoMetadata,
+    WallTime,
+    WorkUnits,
+)
 
 __all__ = [
+    "NO_FRAMES",
     "PROJECT_SUFFIX",
     "REGISTRY",
     "ROI",
@@ -57,6 +68,8 @@ __all__ = [
     "FilterRegistry",
     "FilterSpec",
     "Frame",
+    "FrameCount",
+    "MediaTime",
     "Mode",
     "Node",
     "ParamsBase",
@@ -71,6 +84,8 @@ __all__ = [
     "TableSpec",
     "UnknownFilterError",
     "VideoMetadata",
+    "WallTime",
+    "WorkUnits",
     "as_project_path",
     "project_path_for",
     "register_filter",

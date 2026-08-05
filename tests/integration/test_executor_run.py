@@ -19,7 +19,7 @@ import numpy as np
 from sieve.backend.dispatch import Backend
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI, ChannelSpec, Frame
+from sieve.core.types import NO_FRAMES, ROI, ChannelSpec, Frame
 from sieve.decode.reader import VideoReader
 from sieve.filters import discover
 from sieve.filters.downsample import DownsampleParams, downsample_cpu
@@ -58,7 +58,7 @@ def test_a_real_video_through_a_real_filter(synthetic_video: Path) -> None:
     # A stateless filter declares no warmup, so nothing is decoded ahead of the
     # span. Asserted rather than assumed: it is what makes the frame indices
     # below say what they say.
-    assert plan.lead_in == 0
+    assert plan.lead_in == NO_FRAMES
 
     store = MemoryFrameStore()
     with VideoReader(synthetic_video, luma=plan.luma) as reader:

@@ -9,16 +9,6 @@ AntSciHub SIEVE is a tool to filter out behaviors from video without the need fo
 * **Time to first annotated footage: ~2.5 minutes** for a 10 minute video.
 * **Standard workflow:** Drag threshold → see detections shift → drag frequency band → see scalogram change → set block count → done.
 
-## Mathematical premise, with an example.
-
-The mathematical premise is important to understand because it tells you when and how to use SIEVE. You can arrive at the requirements or tools to use within SIEVE to enable your project. The initial framing is somewhat weak but I wrote it this way to ground the premise in familiar territory. I attempt to rescue the sampling theorem framing in the example, so bear with me.
-
-Under the Shannon-Nyquist sampling theorem, in order to capture any signal, the sampling frequency must be >2x the maximum frequency component of the signal. Thus, if you have a signal you are looking for, the signal can necessarily be constructed from the weakest necessary form of that signal sampled above 2x frequency of the signal itself.
-
-The representation of the signal can be stretched and condensed, filtered, gated, thresholded, frame decimated, smeared, etc, to functionally drop the unnecessary sampling or relate sampling to itself to encode the signal. This can give you the theoretical idealized signal or minimum components necessary for detection. SIEVE allows you explore that.
-
-As an example: say you have bird footage, and a specific behavior is a single flash of red plumage. The flash takes place over 10 frames in 30fps footage. What is the minimum frames per second the original footage needs to capture that signal without chance of losing it? 3 frames per second. but what is the minimum frames per second you can encode the footage, knowing that the flash happens for 1/3rd of a second? That depends on the inter-behavioral interval. Say it happens once per 10 seconds at its most frequent. If you smear the signal symmetrically over 3 seconds, the signal is still centered in time relative to the gap between flashes. Therefore you can save decimated footage that is time smeared to amplify the signal and retain the accuracy of the detections. SIEVE is a tool useful for showing that.
-
 
 ## Development environment
 

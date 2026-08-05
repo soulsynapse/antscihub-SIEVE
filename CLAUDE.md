@@ -110,7 +110,18 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
    completed entry says what was built; a finding says what is true about the
    system and outlives the code that prompted it.
 8. **Rebuild the indexes**: `uv run nox -s docs`. Staleness is a test failure.
-9. **Commit, then push.** Commits do not count until pushed.
+9. **Commit, then push.** Commits do not count until pushed. A session that
+   ends with work in the tree ends with a commit — the `Stop` hook in
+   `tools/session_hooks.py` reports an uncommitted tree and unpushed commits
+   for exactly this reason, and reporting it is not the same as doing it.
+
+   Subject lines are `type(scope): the sentence this repo already writes`.
+   The prefix is *additive*: it buys `git log --grep` and nothing else, and it
+   is not license to write a changelog subject where an argument belongs —
+   `docs: order the docs by when things happened, not by the alphabet` is the
+   shape, not `docs: update docs`. `type` is one of `feat`, `fix`, `refactor`,
+   `perf`, `docs`, `test`, `build`, `ci`, `chore`. `scope` is the
+   `docs/todo/` slug the commit serves, and is omitted when no item owns it.
 
 Work that is real but not yet timely is a `docs/todo/` file with
 `status: deferred` and its trigger in `gated_on` — promotion is a one-line

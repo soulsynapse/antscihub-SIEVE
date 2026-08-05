@@ -59,8 +59,13 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
-from sieve.backend.dispatch import KERNELS, Kernel, KernelRegistry, MergingKernel
-from sieve.core.filter_base import Mode
+from sieve.backend.dispatch import (
+    KERNELS,
+    Kernel,
+    KernelRegistry,
+    MergingKernel,
+    unrunnable_reason,
+)
 from sieve.core.pipeline_model import Node
 from sieve.core.types import ROI, ChannelSpec, Frame
 from sieve.pipeline.cache import FrameStore, NullFrameStore
@@ -87,13 +92,11 @@ class UnrunnableNodeError(RuntimeError):
     and that is a property of the executor rather than of the document, so it is
     raised here and at run time rather than by `Dag.build` or `ExecutionPlan`.
 
-    Two causes, one root cause: `Kernel` is one frame in, one frame out. A
-    `WINDOWED` filter needs a span, and a `rate_changing` filter needs to emit
-    nothing for some inputs. `dispatch.py` declines to invent those protocols
-    before a filter needs one, so this names the gap instead of guessing at it.
-    A node with several upstreams was the third cause until the temporal chain
-    needed one; `MergingKernel` is its protocol now, and the executor hands it
-    a frame per declared port.
+    Which shapes those are is `dispatch.unrunnable_reason`, and deliberately not
+    a list repeated here: every cause is a protocol this executor has no
+    signature for, so the enumeration belongs with the protocols and a second
+    copy in this docstring would be the one that went stale. The message this
+    carries is that function's clause with the node's identity in front of it.
     """
 
 
@@ -294,6 +297,11 @@ def _bind(
     is static: it reads declarations and the kernel shelf, and nothing about
     the footage can change the answer.
 
+    The two rejections are different questions and stay apart. Whether any
+    protocol *could* call this spec is `unrunnable_reason`, which reads
+    declarations alone and answers the same on every machine; whether a kernel
+    for the plan's backend exists *here* is `select`, which does not.
+
     **`start()` rather than `.run`, and that is what makes state per-run.** This
     function is called once inside `execute`, so a stateful node's state is
     created here, lives in the closure `start` returned, and is unreachable from
@@ -306,16 +314,11 @@ def _bind(
     bindings: dict[str, Kernel[Any] | MergingKernel[Any]] = {}
     for node in plan.dag.order:
         spec = plan.dag.spec(node.node_id)
-        if spec.mode is not Mode.STREAMING:
-            raise UnrunnableNodeError(
-                f"{node.node_id} ({spec.filter_id} {spec.version}) is {spec.mode}, and the kernel "
-                "protocol is one frame in, one frame out — a windowed filter needs a span"
-            )
-        if spec.rate_changing:
-            raise UnrunnableNodeError(
-                f"{node.node_id} ({spec.filter_id} {spec.version}) is rate-changing, and the "
-                "kernel protocol has no way to emit nothing for an input frame"
-            )
+        reason = unrunnable_reason(spec)
+        if reason is not None:
+            # The node id, not only the filter: a graph may name the same filter
+            # twice and the reader has to know which one to go and edit.
+            raise UnrunnableNodeError(f"{node.node_id} ({spec.filter_id} {spec.version}) {reason}")
         # A one-element preference: see the module docstring. A fallback here
         # would write entries keyed on a backend that did not produce them.
         bindings[node.node_id] = kernels.select(spec, (plan.backend_for(node.node_id),)).start()

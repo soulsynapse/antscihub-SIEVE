@@ -13,6 +13,12 @@ every filter module. That is also what keeps `backend/` free of any filter's
 implementation — non-negotiable #3 fails the moment adding a filter means
 editing a file in this package.
 
+The shelf also answers the complement — which specs *nothing* here can call.
+`unrunnable_reason` is that enumeration, and it belongs beside the protocols
+whose signatures decide it rather than beside the executor that raises on it:
+a shape is refused because no protocol above takes it, so the refusal shrinks
+in this file on the day one does.
+
 **State belongs to the run, and this is where that is made structural.** A
 streaming filter that has to remember the last frame — a background model, an
 IIR, a tracker — is still one frame in, one frame out; it only needs somewhere
@@ -30,9 +36,9 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from importlib.util import find_spec
-from typing import Any, Protocol, TypeVar, cast
+from typing import Any, Protocol, TypeVar, assert_never, cast
 
-from sieve.core.filter_base import FilterSpec, ParamsBase
+from sieve.core.filter_base import FilterSpec, Mode, ParamsBase, StreamKind
 from sieve.core.types import Frame
 
 
@@ -121,6 +127,80 @@ class StatefulKernel(Protocol[ParamsT_contra, StateT_contra]):
     """
 
     def __call__(self, frame: Frame, params: ParamsT_contra, state: StateT_contra, /) -> Frame: ...
+
+
+def unrunnable_reason(spec: FilterSpec) -> str | None:
+    """Why no protocol above can call `spec`, or `None` if one can.
+
+    The single enumeration of what the filter contract can declare and this
+    module has no signature for. It lives here rather than beside the executor
+    that raises on it because the answer is a function of the three protocols
+    directly above: each refusal below names the sentence in one of their
+    docstrings that declined to invent a signature early, and when the filter
+    that needs one arrives, the protocol and its refusal change together in this
+    file rather than in two.
+
+    Pure over the spec — declarations only, no shelf, no machine, no footage —
+    so `_bind` can ask it once for the whole graph before a frame is read, and
+    so a test can walk the declarable shape space without an executor.
+
+    **Every branch is enumerated, and the `else` arms are why.** A declarable
+    shape with no runnable kernel *and no refusal* is worse than an absent
+    field: it fails at the author's desk with no message naming what they
+    declared. `emits=TableSpec(...)` was exactly that until this function
+    existed — `_bind` checked `mode` and `rate_changing` by name and never
+    looked at the rest. Each `assert_never` is what stops that recurring: a
+    third `Mode` or `StreamKind` member narrows to itself instead of to `Never`
+    and is a pyright error *here*, at the gate, on the day the member is
+    written — rather than a shape that binds and then has nothing to call.
+    Written as `if`/`elif`/`else` rather than `match` for that reason alone: an
+    exhaustive `match` needs a catch-all pattern, and pyright strict reports the
+    catch-all as unreachable, so the construct that reads better is the one that
+    cannot carry the check.
+
+    Args:
+        spec: the filter to check. Its node, its parameters, and the machine
+            are all irrelevant to the answer.
+
+    Returns:
+        A clause naming the field that cannot be run — the caller supplies
+        whatever identifies the node — or `None` when the spec is callable.
+    """
+    if spec.mode is Mode.STREAMING:
+        pass
+    elif spec.mode is Mode.WINDOWED:
+        return (
+            f"declares mode={spec.mode}, and the kernel protocol is one frame in, one frame out "
+            "— a windowed filter needs a span"
+        )
+    else:
+        assert_never(spec.mode)
+    if spec.rate_changing:
+        return (
+            "declares rate_changing, and the kernel protocol has no way to emit nothing for an "
+            "input frame"
+        )
+    for port, accepts in spec.input_ports.items():
+        accepted = accepts.kind
+        if accepted is StreamKind.ARRAY:
+            pass
+        elif accepted is StreamKind.TABLE:
+            return (
+                f"accepts rows on port {port!r}, and every kernel protocol is handed frames — "
+                "nothing downstream of a table has anything to feed it"
+            )
+        else:
+            assert_never(accepted)
+    emitted = spec.emits.kind
+    if emitted is StreamKind.ARRAY:
+        return None
+    elif emitted is StreamKind.TABLE:
+        return (
+            "emits rows, and every kernel protocol returns a frame — a table emitter has no way "
+            "to hand its rows back"
+        )
+    else:
+        assert_never(emitted)
 
 
 class DuplicateKernelError(LookupError):

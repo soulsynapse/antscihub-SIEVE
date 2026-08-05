@@ -62,9 +62,17 @@ table-emitting execution; do not wait for a filter the current protocol makes
 impossible to write. (Rule 6 turned inward: the contract must not look more
 runnable than it is.)
 
-**Gate:** OPEN — the declarable-shape walk (item `declarable-but-not-runnable`),
-which also closes the unnamed `emits` refusal in the same commit rather than
-declaring it as a gap.
+**Gate:** landed 2026-08-04 — `tests/unit/test_declarable_shapes.py` walks the
+product of `Mode`, `rate_changing`, and the stream kind on each side, built from
+the enums rather than listed, and requires every point either to execute against
+a minimal kernel or to be refused by a message naming its own field. The one
+enumeration it checks is `backend/dispatch.unrunnable_reason`, which also closed
+the unnamed `emits` refusal in the same commit rather than declaring it as a
+gap. **This rule has no shrink-only list**, and that is not an omission: what
+shrinks is the refusals themselves, as `a-kernel-that-sees-a-span` and
+`a-kernel-that-changes-the-rate` land the protocols they name. So R2 already
+meets the graduation condition below, and whether it should fold into
+ARCHITECTURE.md rule 6 now or wait until those two have emptied it is open.
 
 **R3. The spec declares facts; everything derivable is derived.** Never
 declare — or fuse into one flag — what is a function of things already
@@ -154,8 +162,13 @@ The rules bind through CI or they do not bind.
   exception list is the work list**; no prose table of what moves where.
   "Core carries no GUI policy" is a field, not an import, and its honest gate
   is the spec-channel partition under R5's Gate line.
-- **R2:** a test that walks the declarable spec fields and asserts each
-  either executes or is refused by name.
+- **R2 (landed 2026-08-04):** `tests/unit/test_declarable_shapes.py` — the walk
+  over the declarable shape space, derived from `Mode` and `StreamKind` so it
+  grows when they do. Its second instrument is pyright: a new member of either
+  enum narrows to itself rather than to `Never` in `unrunnable_reason`'s
+  `assert_never` branches, so the failure lands at the gate on the day the
+  member is written rather than at the first graph that declares it. No
+  exception list — see R2's Gate line for why there is nothing here to shrink.
 - **R3:** a property test over `discover()` — run each filter from two start
   points, require agreement within its declared epsilon past its derived
   warmup.

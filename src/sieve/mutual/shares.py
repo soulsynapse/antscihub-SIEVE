@@ -108,6 +108,11 @@ RENDER_RING_SHARE = MemoryShare(
     "render-fed playback ring", floor_bytes=256 * 1024 * 1024, fraction=0.01
 )
 
+#: The OS pipe and subprocess buffers for the FFmpeg-lowered preview source.
+#: The process is capped to the preview worker share; this row declares the
+#: extra byte tenant that appears when FFmpeg owns crop/scale before Python.
+FFMPEG_LOWERED_PIPE_SHARE = MemoryShare("ffmpeg lowered pipe", floor_bytes=64 * 1024 * 1024)
+
 #: Every bounded slab the interactive session holds. A new consumer adds a row
 #: here in the commit that creates it, or it is the undeclared tenant H4's
 #: instrumentation exists to catch.
@@ -116,6 +121,7 @@ MEMORY_SHARES: tuple[MemoryShare, ...] = (
     PREVIEW_INFLIGHT_SHARE,
     PLAYER_INFLIGHT_SHARE,
     RENDER_RING_SHARE,
+    FFMPEG_LOWERED_PIPE_SHARE,
 )
 
 #: Consumers that hold real memory and no row above — the ledger's honest gap,
@@ -147,6 +153,7 @@ WITHOUT_SENSOR: frozenset[str] = frozenset(
         "preview in-flight decodes",
         "player in-flight decode",
         "render-fed playback ring",
+        "ffmpeg lowered pipe",
     }
 )
 

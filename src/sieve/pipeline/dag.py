@@ -79,6 +79,7 @@ from sieve.core.filter_registry import REGISTRY, FilterRegistry, UnknownFilterEr
 from sieve.core.pipeline_model import Node, Pipeline
 from sieve.core.replicates import Replicate
 from sieve.core.types import ChannelSpec
+from sieve.decode.lowered import LoweredPrefix
 from sieve.pipeline.cache_key import NotCacheableError, node_key, source_key
 
 
@@ -743,6 +744,7 @@ class Dag:
         backend: Backend | Mapping[str, Backend],
         replicate: Replicate | None = None,
         pre_cropped: bool = False,
+        lowered_prefix: LoweredPrefix | None = None,
     ) -> dict[str, str]:
         """Every cacheable node's key, for one replicate.
 
@@ -801,6 +803,7 @@ class Dag:
             source,
             None if pre_cropped or replicate is None else replicate.roi,
             luma=not self.needs_chroma,
+            lowered_prefix=lowered_prefix,
         )
         keys: dict[str, str] = {}
         for node in self.order:

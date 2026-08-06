@@ -65,6 +65,7 @@ from sieve.core.pipeline_model import Node, resolved_params
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
 from sieve.decode.identity import decoder_identity
+from sieve.decode.lowered import LoweredPrefix
 
 #: Seeds every key. Bumping it invalidates the whole cache in one edit, which is
 #: the remedy when a *derivation* changes — a field added to a key, a canonical
@@ -178,7 +179,13 @@ def source_identity(video: Path) -> str:
     return f"{PurePosixPath(video.resolve()).as_posix()}|{stat.st_size}|{stat.st_mtime_ns}"
 
 
-def source_key(source: str, roi: ROI | None = None, *, luma: bool = False) -> str:
+def source_key(
+    source: str,
+    roi: ROI | None = None,
+    *,
+    luma: bool = False,
+    lowered_prefix: LoweredPrefix | None = None,
+) -> str:
     """The key for frames as one replicate sees them: the ancestor of every root.
 
     `roi` is the replicate's crop, and it is here rather than on the first node
@@ -227,7 +234,20 @@ def source_key(source: str, roi: ROI | None = None, *, luma: bool = False) -> st
             that has always been the default rather than a silently cheaper one.
     """
     region = None if roi is None else [roi.x, roi.y, roi.width, roi.height]
-    return _digest("source", source, decoder_identity(), region, "luma" if luma else "bgr")
+    if lowered_prefix is None:
+        return _digest("source", source, decoder_identity(), region, "luma" if luma else "bgr")
+    if roi is not None:
+        raise ValueError("a lowered source carries its crop in the lowered prefix")
+    if not luma:
+        raise ValueError("a lowered source emits gray frames and must be keyed as luma")
+    return _digest(
+        "source",
+        source,
+        lowered_prefix.decoder_identity,
+        None,
+        "luma",
+        lowered_prefix.cache_parts(),
+    )
 
 
 def node_key(

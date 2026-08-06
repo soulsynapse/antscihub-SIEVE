@@ -72,6 +72,7 @@ from sieve.core.filter_base import ALL_FRAMES, ParamsBase, input_warmup_frames
 from sieve.core.pipeline_model import ClipRange, Node, resolved_params
 from sieve.core.replicates import Replicate
 from sieve.core.types import NO_FRAMES, ROI, FrameCount, FrameIndex, FrameRange
+from sieve.decode.lowered import LoweredPrefix
 from sieve.pipeline.dag import Dag
 
 SOURCE_FRAME_ZERO = FrameIndex(0)
@@ -136,6 +137,7 @@ class ExecutionPlan:
     #: requested and refused — the same treatment a clip near frame 0 already
     #: gets, for the same reason.
     source_start: FrameIndex = SOURCE_FRAME_ZERO
+    lowered_prefix: LoweredPrefix | None = None
 
     @classmethod
     def build(
@@ -148,6 +150,7 @@ class ExecutionPlan:
         replicate: Replicate | None = None,
         pre_cropped: bool = False,
         source_start: int | FrameIndex = SOURCE_FRAME_ZERO,
+        lowered_prefix: LoweredPrefix | None = None,
     ) -> ExecutionPlan:
         """Derive the run of `dag` over `span`.
 
@@ -194,6 +197,10 @@ class ExecutionPlan:
                 because a caller forgot it would key correctly and run on the
                 wrong device, which is a performance bug with no symptom.
         """
+        if lowered_prefix is not None and not pre_cropped:
+            raise ValueError("a lowered source must be planned as pre_cropped")
+        if lowered_prefix is not None and dag.needs_chroma:
+            raise ValueError("a lowered source emits gray frames and cannot feed a chroma graph")
         params = {
             node.node_id: dag.specs[node.node_id].params_model.model_validate(
                 resolved_params(node, replicate)
@@ -209,13 +216,18 @@ class ExecutionPlan:
             span=_selected(dag, params, span),
             params=params,
             keys=dag.node_keys(
-                source=source, backend=backends, replicate=replicate, pre_cropped=pre_cropped
+                source=source,
+                backend=backends,
+                replicate=replicate,
+                pre_cropped=pre_cropped,
+                lowered_prefix=lowered_prefix,
             ),
             lead_in=_lead_in(dag, params),
             backends=backends,
             replicate=replicate,
             pre_cropped=pre_cropped,
             source_start=FrameIndex.of(source_start),
+            lowered_prefix=lowered_prefix,
         )
 
     # ---- what the reader is asked for ------------------------------------

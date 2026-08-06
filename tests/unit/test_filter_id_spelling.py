@@ -69,6 +69,11 @@ SPELLED_AWAY_FROM_HOME = frozenset(
         ("gui/wizard_model.py", "downsample"),
         ("gui/wizard_model.py", "normalize"),
         ("gui/wizard_model.py", "rescale"),
+        # The FFmpeg source lowerer recognizes the one root crop/area-scale
+        # prefix whose filter semantics it can move into the decoder contract.
+        ("pipeline/lowering.py", "crop"),
+        ("pipeline/lowering.py", "downsample"),
+        ("pipeline/lowering.py", "rescale"),
     }
 )
 

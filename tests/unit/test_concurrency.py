@@ -10,9 +10,11 @@ else's budget.
 
 from __future__ import annotations
 
+from sieve.decode.ffmpeg import FFMPEG_LOWERED_WORKER_CAP
 from sieve.gui.concurrency import fits_machine, resolve_worker_split, total_workers
 from sieve.mutual.shares import (
     DETECTOR_WORKERS,
+    FFMPEG_LOWERED_PIPE_SHARE,
     MEMORY_SHARES,
     PLAYER_WORKERS,
     PREVIEW_WORKERS,
@@ -60,6 +62,11 @@ def test_the_detector_has_the_weakest_claim_on_the_machine() -> None:
     about.
     """
     assert DETECTOR_WORKERS <= PREVIEW_WORKERS
+
+
+def test_the_ffmpeg_lowered_source_borrows_the_preview_share() -> None:
+    """The subprocess is a preview implementation detail, not a fourth pool."""
+    assert FFMPEG_LOWERED_WORKER_CAP <= PREVIEW_WORKERS
 
 
 def test_the_split_degrades_detector_first_and_the_player_never() -> None:
@@ -135,3 +142,7 @@ def test_the_preview_in_flight_share_covers_its_own_arithmetic() -> None:
     understating the session again."""
     (preview_share,) = [s for s in MEMORY_SHARES if s.name == "preview in-flight decodes"]
     assert preview_share.floor_bytes >= PREVIEW_WORKERS * 2 * REFERENCE_FRAME_BYTES
+
+
+def test_the_ffmpeg_lowered_pipe_is_declared_in_the_byte_ledger() -> None:
+    assert FFMPEG_LOWERED_PIPE_SHARE in MEMORY_SHARES

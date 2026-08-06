@@ -59,6 +59,36 @@ def _project(video: Path, directory: Path) -> Path:
     return path
 
 
+def _baseline_project(video: Path, directory: Path) -> Path:
+    """A two-node whole-frame chain, where no source crop exists to lower."""
+    project = (
+        Project.for_video(video, directory)
+        .with_pipeline(
+            Pipeline(
+                nodes=(
+                    Node(
+                        node_id="head",
+                        filter_id="downsample",
+                        version="1.0.0",
+                        params={"factor": 2},
+                    ),
+                    Node(
+                        node_id="tail",
+                        filter_id="downsample",
+                        version="1.0.0",
+                        params={"factor": 2},
+                    ),
+                ),
+                edges=(Edge(upstream="head", downstream="tail"),),
+            )
+        )
+        .with_clip(ClipRange(start=10, end=14))
+    )
+    path = directory / "baseline.sieve.yaml"
+    project.save(path)
+    return path
+
+
 def test_a_repeated_render_reuses_the_store_and_reports_both_budgets(
     synthetic_video: Path, tmp_path: Path
 ) -> None:
@@ -81,11 +111,21 @@ def test_a_repeated_render_reuses_the_store_and_reports_both_budgets(
 
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert lines[0] == "arena 1: window 10:14, 2 nodes"
-    assert lines[1] == "render 1: 4 frames 10:14, 8 node outputs computed, 0 from cache (0% reuse)"
-    assert lines[2] == (
-        "render 2: 4 frames 10:14, 0 node outputs computed, 8 from cache (100% reuse)"
-    )
+    assert lines[0].startswith("arena 1: window 10:14, 2 nodes")
+    if "lowered by ffmpeg-lowered-gray8" in lines[0]:
+        assert lines[1] == (
+            "render 1: 4 frames 10:14, 4 node outputs computed, 0 from cache (0% reuse)"
+        )
+        assert lines[2] == (
+            "render 2: 4 frames 10:14, 0 node outputs computed, 4 from cache (100% reuse)"
+        )
+    else:
+        assert lines[1] == (
+            "render 1: 4 frames 10:14, 8 node outputs computed, 0 from cache (0% reuse)"
+        )
+        assert lines[2] == (
+            "render 2: 4 frames 10:14, 0 node outputs computed, 8 from cache (100% reuse)"
+        )
     assert "slider_to_preview: median" in result.output
     assert "full_preview_render: median" in result.output
     assert result.output.isascii()
@@ -96,12 +136,11 @@ def test_an_edit_below_the_root_is_reported_as_a_half_reuse(
 ) -> None:
     """The claim the module exists for, at the layer a user types.
 
-    `--edit tail:factor=4` moves the downstream node's parameters — pinned on
-    the arena and moved on the node, through `with_param_edit`, which is what the
-    GUI will do — so the head's four entries are found and the tail's four are
-    computed. 50% reuse of a two-node chain is a suffix; 0% would be the graph.
+    `--edit tail:factor=4` moves the downstream node's parameters, so the
+    head's four entries are found and the tail's four are computed. 50% reuse
+    of a two-node chain is a suffix; 0% would be the graph.
     """
-    project = _project(synthetic_video, tmp_path)
+    project = _baseline_project(synthetic_video, tmp_path)
 
     result = runner.invoke(
         app, ["preview", str(project), "--repeat", "2", "--edit", "tail:factor=4"]

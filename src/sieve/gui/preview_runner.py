@@ -82,6 +82,8 @@ from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, CropArtifact, Pipeline
 from sieve.core.replicates import Replicate
+from sieve.core.types import VideoMetadata
+from sieve.decode.ffmpeg import FfmpegLoweredFrameSource, ffmpeg_decoder_identity
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.filters import discover
@@ -89,8 +91,9 @@ from sieve.gui.concurrency import resolve_worker_split
 from sieve.gui.transport.render_ring import RenderFrameRing
 from sieve.mutual.pool_meter import PoolMeter
 from sieve.pipeline.cache_key import source_identity
-from sieve.pipeline.dag import GraphError, graph_needs_chroma
+from sieve.pipeline.dag import Dag, GraphError, graph_needs_chroma
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
+from sieve.pipeline.lowering import lower_resolved_source
 from sieve.pipeline.preview import Consumer, PreviewRender, PreviewSession
 from sieve.pipeline.resolve_source import ResolvedSource, resolve
 from sieve.pipeline.source_home import SourceHome
@@ -100,6 +103,8 @@ from sieve.pipeline.source_home import SourceHome
 #: constraint but the same discipline: `MetricBus.publish` refusing an unknown
 #: key is what turns a misspelling into a failure rather than a dead metric.
 FIRST_TICK_BUDGET = "filter_to_first_tick"
+
+_PreviewReader = PrefetchFrameSource | FfmpegLoweredFrameSource
 
 
 class _AbandonedError(Exception):
@@ -228,8 +233,9 @@ class _RenderWorker(QObject):
         self._kernels = kernels
         self._source = ""
         self._path: Path | None = None
+        self._metadata: VideoMetadata | None = None
         self._crops: _Crops | None = None
-        self._reader: PrefetchFrameSource | None = None
+        self._reader: _PreviewReader | None = None
         self._resolved: ResolvedSource | None = None
         self._session: PreviewSession | None = None
 
@@ -255,11 +261,13 @@ class _RenderWorker(QObject):
         """
         self.close()
         try:
-            VideoReader(Path(path)).close()
+            with VideoReader(Path(path)) as reader:
+                metadata = reader.metadata
         except VideoDecodeError as error:
             self.open_failed.emit(str(error))
             return
         self._path = Path(path)
+        self._metadata = metadata
         self._source = source
         self.opened.emit()
 
@@ -273,9 +281,10 @@ class _RenderWorker(QObject):
         parameters, or the machine that a user can act on, and a traceback on a
         worker thread would reach nobody at all.
         """
-        session = self._session_for(request)
-        if session is None:
+        prepared = self._session_for(request)
+        if prepared is None:
             return
+        session, pipeline = prepared
 
         # A window render's frontier starts from nothing; a single-frame
         # refresh is not a render filling and must not move it.
@@ -319,9 +328,9 @@ class _RenderWorker(QObject):
 
         try:
             if request.frame_index is None:
-                rendered = session.render_window(request.pipeline, on_frame)
+                rendered = session.render_window(pipeline, on_frame)
             else:
-                rendered = session.render_frame(request.pipeline, request.frame_index, on_frame)
+                rendered = session.render_frame(pipeline, request.frame_index, on_frame)
         except _AbandonedError:
             self.render_abandoned.emit(request.revision)
         except (
@@ -347,6 +356,7 @@ class _RenderWorker(QObject):
         self._ring.clear()
         self._session = None
         self._path = None
+        self._metadata = None
         self._crops = None
         self._resolved = None
         if self._reader is not None:
@@ -413,7 +423,7 @@ class _RenderWorker(QObject):
 
     def _reader_for(
         self, request: RenderRequest, resolved: ResolvedSource
-    ) -> PrefetchFrameSource | None:
+    ) -> _PreviewReader | None:
         """The reader over the resolved file in the format this graph wants.
 
         The decode format is a property of the graph (`Dag.needs_chroma`), so it
@@ -448,6 +458,7 @@ class _RenderWorker(QObject):
             and self._reader.luma == luma
             and self._resolved is not None
             and self._resolved.identity == resolved.identity
+            and self._resolved.lowered_prefix == resolved.lowered_prefix
         ):
             return self._reader
 
@@ -460,15 +471,28 @@ class _RenderWorker(QObject):
             # The resolved split, not the declared constant: on an allocation
             # smaller than the reference class the preview's pool degrades
             # before the player's does (`concurrency.resolve_worker_split`).
-            reader = PrefetchFrameSource(
-                resolved.path,
-                workers=resolve_worker_split().preview,
-                luma=luma,
-                # The runner's meter, not a fresh one: readers are rebuilt per
-                # footage and per format, and utilisation is a question about
-                # the session's pool, so the busy total must survive the churn.
-                meter=self._meter,
-            )
+            workers = resolve_worker_split().preview
+            if resolved.lowered_prefix is None:
+                reader = PrefetchFrameSource(
+                    resolved.path,
+                    workers=workers,
+                    luma=luma,
+                    # The runner's meter, not a fresh one: readers are rebuilt per
+                    # footage and per format, and utilisation is a question about
+                    # the session's pool, so the busy total must survive the churn.
+                    meter=self._meter,
+                )
+            else:
+                reader = FfmpegLoweredFrameSource(
+                    resolved.path,
+                    resolved.lowered_prefix,
+                    workers=workers,
+                    # Same meter and worker share as the OpenCV preview route:
+                    # lowering changes which process owns the pixels, not the
+                    # preview pool's rule-5 allocation.
+                    meter=self._meter,
+                    source_metadata=self._metadata,
+                )
         except VideoDecodeError as error:
             self.render_failed.emit(request.revision, str(error))
             return None
@@ -476,7 +500,32 @@ class _RenderWorker(QObject):
         self._resolved = resolved
         return reader
 
-    def _session_for(self, request: RenderRequest) -> PreviewSession | None:
+    def _lower(
+        self, request: RenderRequest, resolved: ResolvedSource
+    ) -> tuple[Pipeline, ResolvedSource] | None:
+        """Lower this request's root prefix when the source contract allows it."""
+        try:
+            dag = Dag.build(request.pipeline, self._registry)
+        except GraphError as error:
+            self.render_failed.emit(request.revision, str(error))
+            return None
+        if resolved.pre_cropped or dag.needs_chroma or self._metadata is None:
+            return dag.pipeline, resolved
+        try:
+            decoder = ffmpeg_decoder_identity()
+        except VideoDecodeError:
+            return dag.pipeline, resolved
+        dag, resolved = lower_resolved_source(
+            dag,
+            resolved,
+            replicate=request.replicate,
+            source_metadata=self._metadata,
+            decoder_identity=decoder,
+            registry=self._registry,
+        )
+        return dag.pipeline, resolved
+
+    def _session_for(self, request: RenderRequest) -> tuple[PreviewSession, Pipeline] | None:
         """This source's session, built on first use and re-aimed after that.
 
         Built lazily because a session is constructed over a window and the
@@ -494,6 +543,10 @@ class _RenderWorker(QObject):
         resolved = self._resolve(request)
         if resolved is None:
             return None
+        lowered = self._lower(request, resolved)
+        if lowered is None:
+            return None
+        pipeline, resolved = lowered
         reader = self._reader_for(request, resolved)
         if reader is None:
             return None
@@ -509,11 +562,12 @@ class _RenderWorker(QObject):
                 kernels=self._kernels,
                 pre_cropped=resolved.pre_cropped,
                 source_start=resolved.first_index,
+                lowered_prefix=resolved.lowered_prefix,
             )
         else:
             self._session.set_window(request.window)
             self._session.set_replicate(request.replicate)
-        return self._session
+        return self._session, pipeline
 
 
 class PreviewRunner(QObject):

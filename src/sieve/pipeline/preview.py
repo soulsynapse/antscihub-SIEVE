@@ -84,6 +84,7 @@ from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, Pipeline
 from sieve.core.replicates import Replicate
 from sieve.core.types import FrameIndex
+from sieve.decode.lowered import LoweredPrefix
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import FrameResult, FrameSource, execute
@@ -175,6 +176,7 @@ class PreviewSession:
         kernels: KernelRegistry | None = None,
         pre_cropped: bool = False,
         source_start: int | FrameIndex = 0,
+        lowered_prefix: LoweredPrefix | None = None,
     ) -> None:
         """Open a preview over `window` of the footage `reader` reads.
 
@@ -222,6 +224,7 @@ class PreviewSession:
         self._kernels = kernels
         self._pre_cropped = pre_cropped
         self._source_start = source_start
+        self._lowered_prefix = lowered_prefix
 
     # ---- state -----------------------------------------------------------
 
@@ -357,6 +360,7 @@ class PreviewSession:
             replicate=self._replicate,
             pre_cropped=self._pre_cropped,
             source_start=self._source_start,
+            lowered_prefix=self._lowered_prefix,
         )
 
     def _run(self, plan: ExecutionPlan, on_frame: Consumer | None, *, whole: bool) -> PreviewRender:

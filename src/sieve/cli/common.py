@@ -20,9 +20,16 @@ from pathlib import Path
 import typer
 from pydantic import ValidationError
 
+from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, Project
+from sieve.core.replicates import Replicate
+from sieve.decode.ffmpeg import FfmpegLoweredFrameSource, ffmpeg_decoder_identity
+from sieve.decode.lowered import LoweredPrefix
 from sieve.decode.prefetch import PrefetchFrameSource
-from sieve.decode.reader import VideoReader
+from sieve.decode.reader import VideoDecodeError, VideoReader
+from sieve.pipeline.dag import Dag
+from sieve.pipeline.lowering import lower_resolved_source
+from sieve.pipeline.resolve_source import ResolvedSource
 
 #: The `--workers` option, shared by every command that decodes a span.
 #:
@@ -42,7 +49,16 @@ WORKERS_OPTION = typer.Option(
 )
 
 
-def frame_source(video: Path, workers: int | None, *, luma: bool = False) -> PrefetchFrameSource:
+FrameSourceContext = PrefetchFrameSource | FfmpegLoweredFrameSource
+
+
+def frame_source(
+    video: Path,
+    workers: int | None,
+    *,
+    luma: bool = False,
+    lowered_prefix: LoweredPrefix | None = None,
+) -> FrameSourceContext:
     """The reader a span is decoded through, however many threads it gets.
 
     Always a `PrefetchFrameSource`, including at one worker, so that `--workers 1`
@@ -57,7 +73,41 @@ def frame_source(video: Path, workers: int | None, *, luma: bool = False) -> Pre
     from the plan and pass it; the default is colour so that a caller which has
     not been taught to derive it is slow rather than wrong.
     """
-    return PrefetchFrameSource(video, workers=workers, luma=luma)
+    if lowered_prefix is None:
+        return PrefetchFrameSource(video, workers=workers, luma=luma)
+    if not luma:
+        raise VideoDecodeError(
+            "a lowered FFmpeg source emits gray frames, but this graph needs colour"
+        )
+    return FfmpegLoweredFrameSource(video, lowered_prefix, workers=workers)
+
+
+def lower_source_contract(
+    dag: Dag,
+    resolved: ResolvedSource,
+    replicate: Replicate | None,
+    *,
+    registry: FilterRegistry | None = None,
+    protected_nodes: tuple[str, ...] = (),
+) -> tuple[Dag, ResolvedSource]:
+    """Move a safe root crop/area-scale prefix into FFmpeg, or decline."""
+    if resolved.pre_cropped or dag.needs_chroma:
+        return dag, resolved
+    try:
+        with VideoReader(resolved.path, luma=True) as reader:
+            metadata = reader.metadata
+        decoder = ffmpeg_decoder_identity()
+    except VideoDecodeError:
+        return dag, resolved
+    return lower_resolved_source(
+        dag,
+        resolved,
+        replicate=replicate,
+        source_metadata=metadata,
+        decoder_identity=decoder,
+        registry=registry,
+        protected_nodes=protected_nodes,
+    )
 
 
 def refuse(message: str) -> typer.Exit:

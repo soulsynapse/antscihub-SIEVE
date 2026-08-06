@@ -43,13 +43,21 @@ import typer
 from sieve.backend.dispatch import Backend, NoKernelError
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import MetricBus, Recorder
-from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
+from sieve.cli.common import (
+    WORKERS_OPTION,
+    FrameSourceContext,
+    frame_source,
+    load_project,
+    lower_source_contract,
+    refuse,
+    span_for,
+)
 from sieve.core.pipeline_model import ClipRange, Pipeline, Project
 from sieve.core.replicates import Replicate
 from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
 from sieve.pipeline.cache import MemoryFrameStore
-from sieve.pipeline.dag import GraphError, graph_needs_chroma
+from sieve.pipeline.dag import Dag, GraphError
 from sieve.pipeline.executor import UnrunnableNodeError
 from sieve.pipeline.preview import PreviewRender, PreviewSession
 from sieve.pipeline.resolve_source import ResolvedSource, resolve
@@ -128,35 +136,67 @@ def preview_project(
     recorder = Recorder()
     bus.subscribe(recorder.record)
 
-    # `--edit` rewrites parameters, never the shelf a node names, so no edit can
-    # move the answer: the format is the project's and holds for every repeat.
-    # Which is also why the source resolves once, before the loop — an edit
-    # cannot make a crop artifact stop backing this arena.
-    luma = not graph_needs_chroma(project.pipeline)
-    resolved = resolve(
-        project.crops,
-        target,
-        home=home,
-        luma=luma,
-        want=window,
-    )
-    with frame_source(resolved.path, workers, luma=luma) as reader:
-        session = PreviewSession(
-            source=resolved.identity,
-            reader=resolved.wrap(reader),
-            window=window,
-            measure=bus.measure,
-            replicate=target,
-            backend=backend,
-            store=MemoryFrameStore(),
-            pre_cropped=resolved.pre_cropped,
-            source_start=resolved.first_index,
-        )
-        typer.echo(_header(project, target, window, at=at, resolved=resolved))
+    # `--edit` can move a root scale that FFmpeg would own, so the source
+    # contract is resolved per repeat. The store still outlives those contracts:
+    # the root key distinguishes them, so old entries are harmless misses.
+    store = MemoryFrameStore()
+    reader: FrameSourceContext | None = None
+    session: PreviewSession | None = None
+    opened: tuple[Path, str, bool, object] | None = None
+    try:
         for attempt in range(repeat):
-            edited = project.pipeline if attempt == 0 else _apply(project, target, parsed).pipeline
-            render = _render(session, edited, at)
+            edited_project = project if attempt == 0 else _apply(project, target, parsed)
+            try:
+                dag = Dag.build(edited_project.pipeline)
+            except GraphError as error:
+                raise refuse(str(error)) from error
+            luma = not dag.needs_chroma
+            resolved = resolve(
+                project.crops,
+                target,
+                home=home,
+                luma=luma,
+                want=window,
+            )
+            dag, resolved = lower_source_contract(dag, resolved, target)
+            contract = (resolved.path, resolved.identity, luma, resolved.lowered_prefix)
+            if reader is None or opened != contract:
+                if reader is not None:
+                    reader.close()
+                try:
+                    reader = frame_source(
+                        resolved.path,
+                        workers,
+                        luma=luma,
+                        lowered_prefix=resolved.lowered_prefix,
+                    )
+                except VideoDecodeError as error:
+                    raise refuse(str(error)) from error
+                session = None
+                opened = contract
+            if session is None:
+                session = PreviewSession(
+                    source=resolved.identity,
+                    reader=resolved.wrap(reader),
+                    window=window,
+                    measure=bus.measure,
+                    replicate=target,
+                    backend=backend,
+                    store=store,
+                    pre_cropped=resolved.pre_cropped,
+                    source_start=resolved.first_index,
+                    lowered_prefix=resolved.lowered_prefix,
+                )
+            else:
+                session.set_window(window)
+                session.set_replicate(target)
+            if attempt == 0:
+                typer.echo(_header(edited_project, target, window, at=at, resolved=resolved))
+            render = _render(session, dag.pipeline, at)
             typer.echo(f"render {attempt + 1}: {_describe(render, edits if attempt else None)}")
+    finally:
+        if reader is not None:
+            reader.close()
 
     for key in recorder.keys:
         typer.echo(_timings(recorder, key))
@@ -284,8 +324,13 @@ def _header(
     arena = "whole frame" if target is None else target.name
     span = f"frame {at}" if at is not None else f"window {window.start}:{window.end}"
     nodes = len(project.pipeline.nodes)
-    served = "" if resolved.artifact is None else f", served by {resolved.artifact.path}"
-    return f"{arena}: {span}, {nodes} node{'' if nodes == 1 else 's'}{served}"
+    served: list[str] = []
+    if resolved.artifact is not None:
+        served.append(f"served by {resolved.artifact.path}")
+    if resolved.lowered_prefix is not None:
+        served.append(f"lowered by {resolved.lowered_prefix.description()}")
+    suffix = "" if not served else f", {', '.join(served)}"
+    return f"{arena}: {span}, {nodes} node{'' if nodes == 1 else 's'}{suffix}"
 
 
 def _describe(render: PreviewRender, edits: Sequence[str] | None) -> str:

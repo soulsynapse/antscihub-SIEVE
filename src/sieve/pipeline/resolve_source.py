@@ -56,6 +56,7 @@ from pathlib import Path
 from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.replicates import Replicate
 from sieve.core.types import Frame, FrameIndex
+from sieve.decode.lowered import LoweredPrefix
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.executor import FrameSource
@@ -86,6 +87,18 @@ class ResolvedSource:
     #: that wants to *say* what it is serving — `sieve run --dry-run` prints
     #: it — and for a test to assert on. Nothing about the run depends on it.
     artifact: CropArtifact | None = None
+    lowered_prefix: LoweredPrefix | None = None
+
+    def with_lowered_prefix(self, prefix: LoweredPrefix) -> ResolvedSource:
+        """Treat this source as already holding the lowered working frame."""
+        return ResolvedSource(
+            path=self.path,
+            identity=self.identity,
+            pre_cropped=True,
+            first_index=self.first_index,
+            artifact=self.artifact,
+            lowered_prefix=prefix,
+        )
 
     def wrap(self, reader: FrameSource) -> FrameSource:
         """`reader` in source frame numbering, whatever its own numbering is.

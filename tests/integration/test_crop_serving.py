@@ -34,7 +34,7 @@ from sieve.cli.app import app
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline, Project
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
-from sieve.decode.prefetch import PrefetchFrameSource
+from sieve.decode.lowered import LoweredPrefix
 from sieve.decode.reader import VideoReader
 from sieve.filters import discover
 from sieve.pipeline.cache_key import source_identity
@@ -126,9 +126,15 @@ class TestTheArtifactIsWhatGetsDecoded:
         opened: list[Path] = []
         original = run_cmd.frame_source
 
-        def recording(video: Path, workers: int | None, *, luma: bool) -> PrefetchFrameSource:
+        def recording(
+            video: Path,
+            workers: int | None,
+            *,
+            luma: bool,
+            lowered_prefix: LoweredPrefix | None = None,
+        ) -> run_cmd.FrameSourceContext:
             opened.append(video)
-            return original(video, workers, luma=luma)
+            return original(video, workers, luma=luma, lowered_prefix=lowered_prefix)
 
         monkeypatch.setattr(run_cmd, "frame_source", recording)
         project_path = _materialized(

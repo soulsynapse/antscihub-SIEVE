@@ -45,10 +45,17 @@ from typing import Annotated
 import typer
 
 from sieve.backend.dispatch import Backend, NoKernelError
-from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
+from sieve.cli.common import (
+    WORKERS_OPTION,
+    FrameSourceContext,
+    frame_source,
+    load_project,
+    lower_source_contract,
+    refuse,
+    span_for,
+)
 from sieve.core.pipeline_model import Project
 from sieve.core.replicates import Replicate
-from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError
 from sieve.filters import discover
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore, NullFrameStore
@@ -127,26 +134,33 @@ def run_project(
         )
         for target in targets
     ]
-    plans = [
-        ExecutionPlan.build(
-            dag,
-            source=resolved.identity,
-            span=span,
-            backend=backend,
-            replicate=target,
-            pre_cropped=resolved.pre_cropped,
-            source_start=resolved.first_index,
+    plans: list[ExecutionPlan] = []
+    planned_sources: list[ResolvedSource] = []
+    for target, resolved in zip(targets, sources, strict=True):
+        plan_dag, plan_source = (
+            (dag, resolved) if dry_run else lower_source_contract(dag, resolved, target)
         )
-        for target, resolved in zip(targets, sources, strict=True)
-    ]
+        planned_sources.append(plan_source)
+        plans.append(
+            ExecutionPlan.build(
+                plan_dag,
+                source=plan_source.identity,
+                span=span,
+                backend=backend,
+                replicate=target,
+                pre_cropped=plan_source.pre_cropped,
+                source_start=plan_source.first_index,
+                lowered_prefix=plan_source.lowered_prefix,
+            )
+        )
 
     if dry_run:
-        for plan, resolved in zip(plans, sources, strict=True):
+        for plan, resolved in zip(plans, planned_sources, strict=True):
             typer.echo(_describe(plan, resolved))
         return
 
     store: FrameStore = NullFrameStore() if no_cache else MemoryFrameStore()
-    _execute_all(plans, sources, store, workers=workers, luma=luma)
+    _execute_all(plans, planned_sources, store, workers=workers, luma=luma)
 
 
 def _execute_all(
@@ -167,15 +181,21 @@ def _execute_all(
     reopening at each transition costs one pool build, and the alternative costs
     every pool at once for the length of the run.
     """
-    reader: PrefetchFrameSource | None = None
-    opened: Path | None = None
+    reader: FrameSourceContext | None = None
+    opened: tuple[Path, str, bool, object] | None = None
     try:
         for plan, resolved in zip(plans, sources, strict=True):
-            if reader is None or opened != resolved.path:
+            contract = (resolved.path, resolved.identity, luma, resolved.lowered_prefix)
+            if reader is None or opened != contract:
                 if reader is not None:
                     reader.close()
-                reader = frame_source(resolved.path, workers, luma=luma)
-                opened = resolved.path
+                reader = frame_source(
+                    resolved.path,
+                    workers,
+                    luma=luma,
+                    lowered_prefix=resolved.lowered_prefix,
+                )
+                opened = contract
             _execute_one(plan, resolved.wrap(reader), store)
     finally:
         if reader is not None:
@@ -270,6 +290,8 @@ def _describe(plan: ExecutionPlan, resolved: ResolvedSource) -> str:
     ]
     if resolved.artifact is not None:
         lines.append(f"  served by {resolved.artifact.path} (crop, uncropped at the root)")
+    if resolved.lowered_prefix is not None:
+        lines.append(f"  served by {resolved.lowered_prefix.description()} (lowered source)")
     for node in plan.dag.order:
         spec = plan.dag.spec(node.node_id)
         key = plan.key(node.node_id)

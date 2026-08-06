@@ -8,8 +8,10 @@ wrong version of a filter an old pipeline named.
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import fields
 from fractions import Fraction
+from typing import Any
 
 import pytest
 
@@ -377,3 +379,92 @@ class TestFilterRegistry:
         assert spec.params_model is BlurParams
         assert BlurParams.__filter_spec__ is spec
         assert registry.ids() == ("blur",)
+
+
+def decorator_keywords() -> set[str]:
+    """`register_filter`'s keywords, less `registry`, which is the decorator's own.
+
+    `params_model` is the other name the two lists differ by, and it is absent
+    here rather than removed: the decorated class supplies it, which is the one
+    field of a spec that cannot be written in the decoration.
+    """
+    parameters = inspect.signature(register_filter).parameters.values()
+    return {p.name for p in parameters if p.kind is p.KEYWORD_ONLY} - {"registry"}
+
+
+#: A registration with every optional keyword left at its default, so a probe
+#: below can be the only thing that differs from it.
+BASE: dict[str, Any] = {
+    "filter_id": "blur",
+    "version": "2.1.0",
+    "summary": "Gaussian blur.",
+    "accepts": ArraySpec(),
+    "emits": ArraySpec(),
+    "cost": COST,
+    "element": ElementRelation.PRESERVED,
+}
+
+#: One legal value per keyword, differing from both that parameter's default
+#: and `BASE`'s value — so a keyword the decorator accepts and never forwards
+#: leaves the spec holding the other one. Applied one at a time rather than all
+#: at once, because several pairs are illegal together: `backend_agnostic`
+#: requires `deterministic`, and both probes are the non-default.
+PROBES: dict[str, Any] = {
+    "filter_id": "probe",
+    "version": "3.2.1",
+    "summary": "Something else entirely.",
+    "accepts": ArraySpec(dtypes=("float32",)),
+    "emits": ArraySpec(channels=(ChannelSpec.GRAY,)),
+    "cost": CostEstimate(seconds_per_megapixel=0.5),
+    "mode": Mode.WINDOWED,
+    "warmup_frames": FrameCount(7),
+    "rate_changing": True,
+    "deterministic": False,
+    "stateful": True,
+    "backend_agnostic": True,
+    "primary_params": ("factor",),
+    "element": ElementKind.BLOCK,
+}
+
+
+class TestDecoratorMatchesSpec:
+    """The decorator's keywords are `FilterSpec`'s fields, written out twice more.
+
+    ARCHITECTURE §3 calls the duplication one field addition away from drifting
+    silently, and the drift does not crash: a field added to the spec with a
+    default is simply unreachable from the decorator, so every filter gets the
+    default and nothing says so. Fixing it — building the spec from `**kwargs`,
+    or generating the signature — would cost every keyword the static type a
+    filter author is checked against at the one place they write it, so the
+    copies stay and these two tests hold them in step.
+    """
+
+    def test_the_keywords_are_the_specs_field_list(self) -> None:
+        # Set equality, not containment, and each direction catches a different
+        # half: the spec growing a field the decorator never learned about, and
+        # a keyword left behind after the field it filled was removed.
+        assert decorator_keywords() == {f.name for f in fields(FilterSpec)} - {"params_model"}
+
+    def test_every_keyword_reaches_the_field_it_names(self) -> None:
+        # The third copy — `decorate`'s body — which the signature test cannot
+        # see. A keyword accepted and then not forwarded to the `FilterSpec(...)`
+        # call is the same silent default with the same absence of a symptom.
+        assert set(PROBES) == decorator_keywords()
+
+        class ProbeParams(SampleParams):
+            pass
+
+        class RateProbeParams(DecimateParams):
+            pass
+
+        for name, probe in PROBES.items():
+            registry = FilterRegistry()
+            # `rate_changing` is the one probe that cannot ride on the shared
+            # params model: the spec refuses the flag unless the decorated class
+            # overrides `output_rate`, and refuses the override without it.
+            model = RateProbeParams if name == "rate_changing" else ProbeParams
+            decorated = register_filter(**{**BASE, name: probe}, registry=registry)(model)
+
+            spec = decorated.__filter_spec__
+            assert spec is not None
+            assert getattr(spec, name) == probe

@@ -70,7 +70,7 @@ from sieve.backend.dispatch import (
 )
 from sieve.core.filter_base import Mode, node_warmup_frames
 from sieve.core.pipeline_model import Node
-from sieve.core.types import ROI, ChannelSpec, Frame, FrameSpan
+from sieve.core.types import ROI, ChannelSpec, Frame, FrameIndex, FrameSpan
 from sieve.pipeline.cache import FrameStore, NullFrameStore
 from sieve.pipeline.plan import ExecutionPlan
 
@@ -118,7 +118,7 @@ class FrameSource(Protocol):
         ...
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, init=False, slots=True)
 class FrameResult:
     """Every node's output for one source frame.
 
@@ -130,7 +130,7 @@ class FrameResult:
 
     #: The source frame index these outputs derive from. Authoritative, and
     #: preserved through every node — see `_run_node`.
-    index: int
+    index: FrameIndex
     #: `node_id` to that node's output.
     outputs: Mapping[str, Frame]
     #: Which nodes were served from the store rather than computed. What a HUD
@@ -158,6 +158,20 @@ class FrameResult:
     #: one consumer today declines the frame on this flag rather than drawing it
     #: (`gui/preview_runner.py`, feeding `gui/transport/render_ring.py`).
     source_cropped: bool = False
+
+    def __init__(
+        self,
+        index: int | FrameIndex,
+        outputs: Mapping[str, Frame],
+        from_cache: frozenset[str],
+        source: Frame | None = None,
+        source_cropped: bool = False,
+    ) -> None:
+        object.__setattr__(self, "index", FrameIndex.of(index))
+        object.__setattr__(self, "outputs", outputs)
+        object.__setattr__(self, "from_cache", from_cache)
+        object.__setattr__(self, "source", source)
+        object.__setattr__(self, "source_cropped", source_cropped)
 
     def __getitem__(self, node_id: str) -> Frame:
         """That node's output.
@@ -258,7 +272,7 @@ def execute(
                     # roots crops the same decoded frame once rather than
                     # seeking twice. `decoded` outlives the crop so the
                     # result below can carry the whole frame.
-                    decoded = reader.read(index)
+                    decoded = reader.read(int(index))
                     _check_format(decoded, plan)
                     source = decoded if roi is None else _crop(decoded, roi)
                 incoming = source
@@ -365,7 +379,7 @@ def _crop(frame: Frame, roi: ROI) -> Frame:
 def _run_node(
     node: Node,
     incoming: Frame | Mapping[str, Frame],
-    index: int,
+    index: FrameIndex,
     plan: ExecutionPlan,
     bindings: Mapping[str, BoundNode],
     histories: Mapping[str, deque[Frame]],

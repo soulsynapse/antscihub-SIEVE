@@ -207,7 +207,7 @@ class TestSuperseding:
         @kernel(SlowParams, Backend.CPU, registry=kernels)
         def slow_cpu(frame: Frame, params: SlowParams) -> Frame:
             sleep(SLOW_FRAME_SECONDS)
-            calls.append(frame.index)
+            calls.append(int(frame.index))
             return Frame(
                 data=(frame.data + np.uint8(params.bias)),
                 index=frame.index,
@@ -318,7 +318,7 @@ class TestPerFrameDelivery:
 
         def consumer(result: FrameResult) -> None:
             assert "small" in result.outputs
-            seen.append((result.index, get_ident()))
+            seen.append((int(result.index), get_ident()))
 
         assert runner.request_render(downsampling(), WINDOW, consumer=consumer)
         qtbot.waitUntil(lambda: bool(landings.finished), timeout=RENDER_TIMEOUT_MS)
@@ -334,7 +334,7 @@ class TestPerFrameDelivery:
         landings = Landings(runner)
         seen: list[int] = []
 
-        assert runner.request_frame(downsampling(), 7, consumer=lambda r: seen.append(r.index))
+        assert runner.request_frame(downsampling(), 7, consumer=lambda r: seen.append(int(r.index)))
         qtbot.waitUntil(lambda: bool(landings.finished), timeout=RENDER_TIMEOUT_MS)
 
         assert seen == [7]

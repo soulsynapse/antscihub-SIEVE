@@ -13,6 +13,7 @@ hashes and therefore never checked.
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import assert_type
 
 import pytest
 from pydantic import Field, ValidationError
@@ -22,7 +23,7 @@ from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, Par
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI, FrameCount, WorkUnits
+from sieve.core.types import NO_FRAMES, ROI, FrameCount, FrameIndex, FrameRange, WorkUnits
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.plan import ExecutionPlan, root_paths
 
@@ -258,6 +259,11 @@ class TestSelection:
         )
 
         assert (plan.span.start, plan.decode_start) == (102, 97)
+        assert_type(plan.decode_start, FrameIndex)
+        assert_type(plan.decode_range, FrameRange)
+        assert_type(plan.decode_range.start, FrameIndex)
+        assert FrameIndex(plan.span.start) - plan.decode_start == FrameCount(5)
+        assert plan.decode_start - plan.source_start == FrameCount(97)
         assert plan.decode_range == range(97, 108)
         assert plan.warmed
 
@@ -431,5 +437,6 @@ class TestPlanningAgainstACropThatAlreadyExists:
         assert plan.lead_in == FrameCount(5)
         assert plan.decode_start == 40
         assert plan.decode_range == range(40, 46)
+        assert plan.decode_start - plan.source_start == NO_FRAMES
         assert plan.lead_in_shortfall == FrameCount(5)
         assert not plan.warmed

@@ -44,7 +44,7 @@ from sieve.core.ops.wavelet import (
     morlet_power,
 )
 from sieve.core.pipeline_model import DetectorSettings
-from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan, WorkUnits
+from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameIndex, FrameSpan, WorkUnits
 from sieve.detect.detector import DetectorUpdate
 from sieve.detect.detector import detect as _detect_settings
 from sieve.detect.detector import gate_to as _gate_to
@@ -147,7 +147,7 @@ def detect_series(
     series: FloatArray,
     params: DetectParams,
     *,
-    start_index: int = 0,
+    start_index: int | FrameIndex = 0,
     band_power: NDArray[np.float32] | None = None,
     workers: int,
 ) -> DetectorUpdate:
@@ -164,7 +164,7 @@ def detect_series(
         _series2d(series),
         params.fps,
         params.to_settings(),
-        start_index=start_index,
+        start_index=int(start_index),
         band_power=band_power,
         workers=workers,
     )
@@ -187,9 +187,9 @@ def settled_for(frames: int, params: DetectParams, *, final: bool) -> int:
     return _settled_for_settings(frames, params.fps, params.to_settings(), final=final)
 
 
-def gate_to(update: DetectorUpdate, settled: int, start_index: int) -> DetectorUpdate:
+def gate_to(update: DetectorUpdate, settled: int, start_index: int | FrameIndex) -> DetectorUpdate:
     """Truncate a gate through the filter-owned compatibility boundary."""
-    return _gate_to(update, settled, start_index)
+    return _gate_to(update, settled, int(start_index))
 
 
 @windowed_kernel(DetectParams, Backend.CPU)

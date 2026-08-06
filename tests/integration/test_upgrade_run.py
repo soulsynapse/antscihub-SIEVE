@@ -75,7 +75,7 @@ def _rendered(
         replicate=replicate,
     )
     with VideoReader(video, luma=plan.luma) as reader:
-        return [(result.index, result[LEAF].data) for result in execute(plan, reader)]
+        return [(int(result.index), result[LEAF].data) for result in execute(plan, reader)]
 
 
 def _as_v6_shell(upgraded: dict[str, Any]) -> Project:

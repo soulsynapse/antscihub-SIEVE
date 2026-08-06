@@ -40,7 +40,7 @@ import av.error
 import cv2
 from numpy.typing import NDArray
 
-from sieve.core.types import ChannelSpec, Frame, VideoMetadata
+from sieve.core.types import ChannelSpec, Frame, FrameIndex, VideoMetadata
 
 GRAB_FORWARD_LIMIT = 40
 
@@ -133,7 +133,8 @@ class VideoReader:
 
     # `max_width` is decode-side proxy media for display only — downscaled,
     # never a pipeline filter — so it must never enter the DAG or a cache key.
-    def read(self, index: int, max_width: int | None = None) -> Frame:
+    def read(self, index: int | FrameIndex, max_width: int | None = None) -> Frame:
+        index = int(index)
         if not 0 <= index < self._metadata.frame_count:
             raise VideoDecodeError(
                 f"Frame {index} out of range 0..{self._metadata.frame_count - 1}"

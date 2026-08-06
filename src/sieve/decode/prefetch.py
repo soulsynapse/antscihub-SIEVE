@@ -97,7 +97,7 @@ from threading import Condition, Thread
 from types import TracebackType
 from typing import Self
 
-from sieve.core.types import Frame, VideoMetadata
+from sieve.core.types import Frame, FrameIndex, VideoMetadata
 from sieve.decode.reader import VideoDecodeError, VideoReader
 
 # Re-exported, not just used: callers learned `available_cpus` at this name
@@ -300,7 +300,7 @@ class PrefetchFrameSource:
 
     # ---- reading ---------------------------------------------------------
 
-    def read(self, index: int) -> Frame:
+    def read(self, index: int | FrameIndex) -> Frame:
         """The frame at `index`, waiting for it if a worker is still on it.
 
         Sequential calls are the fast path and the only one worth having this
@@ -314,6 +314,7 @@ class PrefetchFrameSource:
                 out-of-range message matches `VideoReader`'s, because a caller
                 should not be able to tell which source refused it.
         """
+        index = int(index)
         if not 0 <= index < self._metadata.frame_count:
             raise VideoDecodeError(
                 f"Frame {index} out of range 0..{self._metadata.frame_count - 1}"

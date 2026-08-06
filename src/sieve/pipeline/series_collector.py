@@ -109,7 +109,7 @@ class SeriesCollector:
             if revision != self._revision:
                 return
             if self._start is None:
-                self._start = result.index
+                self._start = int(result.index)
             expected = self._start + len(self._rows)
             if result.index != expected:
                 raise ValueError(

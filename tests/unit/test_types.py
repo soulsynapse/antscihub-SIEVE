@@ -9,7 +9,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from sieve.core.types import ROI, ChannelSpec, Frame, FrameCount, MediaTime, VideoMetadata
+from sieve.core.types import (
+    ROI,
+    ChannelSpec,
+    Frame,
+    FrameCount,
+    FrameIndex,
+    MediaTime,
+    VideoMetadata,
+)
 
 #: The rate the whole exactness argument is about — see `test_quantities.py`,
 #: which makes the same point one layer down, on the types alone.
@@ -93,6 +101,8 @@ class TestFrame:
             channels=ChannelSpec.BGR,
         )
         assert (frame.width, frame.height, frame.index) == (64, 48, 7)
+        assert isinstance(frame.index, FrameIndex)
+        assert frame.index == FrameIndex(7)
         assert frame.dtype == np.uint8
         assert frame.channels.channel_count == 3
 

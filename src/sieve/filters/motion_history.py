@@ -44,7 +44,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import ChannelSpec, Frame, FrameCount, WorkUnits
+from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameIndex, WorkUnits
 
 #: Below ~0.1s the accumulator is a frame difference with extra steps.
 TAU_SECONDS_MIN = 0.1
@@ -162,7 +162,7 @@ class MotionHistoryState:
     # None until the first frame: no state factory knows the footage's shape.
     accumulator: FloatArray | None = None
 
-    def for_frame(self, data: FloatArray, index: int) -> FloatArray:
+    def for_frame(self, data: FloatArray, index: FrameIndex) -> FloatArray:
         # Executor crops every root to a fixed ROI; a shape change here is a
         # resized proxy or spliced source, not the graph -- raise rather than
         # silently restart the warmup.

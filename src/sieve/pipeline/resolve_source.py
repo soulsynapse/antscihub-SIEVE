@@ -55,7 +55,7 @@ from pathlib import Path
 
 from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.replicates import Replicate
-from sieve.core.types import Frame
+from sieve.core.types import Frame, FrameIndex
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.executor import FrameSource
@@ -81,7 +81,7 @@ class ResolvedSource:
     #: field of the same name; see it for what the flag turns off.
     pre_cropped: bool
     #: Source frame index of `path`'s frame 0. Zero for the parent.
-    first_index: int
+    first_index: FrameIndex
     #: The record being served, or None when this is the parent. For a caller
     #: that wants to *say* what it is serving — `sieve run --dry-run` prints
     #: it — and for a test to assert on. Nothing about the run depends on it.
@@ -96,7 +96,7 @@ class ResolvedSource:
         the ring — sees exactly one numbering scheme and no module has to know
         which file it came from.
         """
-        if self.first_index == 0:
+        if self.first_index == FrameIndex(0):
             return reader
         return OffsetFrameSource(reader, self.first_index)
 
@@ -115,12 +115,12 @@ class OffsetFrameSource:
     renumbered its output, which is a true message about the wrong thing.
     """
 
-    def __init__(self, inner: FrameSource, first: int) -> None:
+    def __init__(self, inner: FrameSource, first: int | FrameIndex) -> None:
         """Present `inner` as footage beginning at source frame `first`."""
         self._inner = inner
-        self._first = first
+        self._first = FrameIndex.of(first)
 
-    def read(self, index: int) -> Frame:
+    def read(self, index: int | FrameIndex) -> Frame:
         """The frame at source index `index`.
 
         Raises:
@@ -130,11 +130,12 @@ class OffsetFrameSource:
                 negative index reaching a reader that treats it as an offset —
                 into the message it deserves.
         """
+        index = FrameIndex.of(index)
         if index < self._first:
             raise VideoDecodeError(
                 f"frame {index} is before this footage begins (frame {self._first})"
             )
-        frame = self._inner.read(index - self._first)
+        frame = self._inner.read((index - self._first).frames)
         return Frame(data=frame.data, index=index, channels=frame.channels)
 
 
@@ -170,7 +171,7 @@ def resolve(
     """
     if replicate is None:
         return ResolvedSource(
-            path=home.video, identity=home.identity, pre_cropped=False, first_index=0
+            path=home.video, identity=home.identity, pre_cropped=False, first_index=FrameIndex(0)
         )
     for artifact in crops:
         if not artifact.backs(
@@ -191,7 +192,9 @@ def resolve(
             path=path,
             identity=identity,
             pre_cropped=True,
-            first_index=artifact.span.start,
+            first_index=FrameIndex(artifact.span.start),
             artifact=artifact,
         )
-    return ResolvedSource(path=home.video, identity=home.identity, pre_cropped=False, first_index=0)
+    return ResolvedSource(
+        path=home.video, identity=home.identity, pre_cropped=False, first_index=FrameIndex(0)
+    )

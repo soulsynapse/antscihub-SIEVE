@@ -15,11 +15,13 @@ ever executed: it is refused where it is written, and nowhere else.
 from __future__ import annotations
 
 import math
+import operator
 from fractions import Fraction
+from typing import TYPE_CHECKING, Any, assert_type, cast
 
 import pytest
 
-from sieve.core.types import NO_FRAMES, FrameCount, MediaTime, WallTime, WorkUnits
+from sieve.core.types import NO_FRAMES, FrameCount, FrameIndex, MediaTime, WallTime, WorkUnits
 
 #: 29.97 drop-frame, the rate every rational-fps argument is actually about.
 NTSC = Fraction(30000, 1001)
@@ -71,6 +73,39 @@ class TestFrameCount:
     def test_a_rate_that_could_not_be_supplied_is_refused(self) -> None:
         with pytest.raises(ValueError, match="must be positive"):
             FrameCount(5).at_input_of(Fraction(0))
+
+
+class TestFrameIndex:
+    def test_positions_move_by_counts_and_differ_to_counts(self) -> None:
+        """The index arithmetic this type exists to make writable and no more."""
+        start = FrameIndex(40)
+        decode = FrameIndex(35)
+        lead_in = FrameCount(5)
+
+        assert_type(start - decode, FrameCount)
+        assert start - decode == lead_in
+        assert_type(decode + lead_in, FrameIndex)
+        assert decode + lead_in == start
+        assert_type(start - lead_in, FrameIndex)
+        assert start - lead_in == decode
+        if TYPE_CHECKING:
+            # The ignore is the assertion: if positions ever become addable,
+            # this line stops being a pyright operator error.
+            _added_positions = cast(
+                FrameIndex,
+                start + decode,  # pyright: ignore[reportOperatorIssue]
+            )
+
+    def test_two_positions_do_not_add(self) -> None:
+        """Runtime backstop for the static refusal pyright enforces."""
+        with pytest.raises(TypeError):
+            operator.add(FrameIndex(2), cast(Any, FrameIndex(3)))
+
+    def test_negative_positions_and_reversed_differences_are_refused(self) -> None:
+        with pytest.raises(ValueError, match="non-negative"):
+            FrameIndex(-1)
+        with pytest.raises(ValueError, match="non-negative"):
+            assert FrameIndex(3) - FrameIndex(5)
 
 
 class TestMediaTime:

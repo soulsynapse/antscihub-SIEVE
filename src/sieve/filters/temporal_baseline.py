@@ -85,7 +85,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame, FrameCount, WorkUnits
+from sieve.core.types import Frame, FrameCount, FrameIndex, WorkUnits
 
 #: MAD to standard-deviation-equivalent for a normal distribution:
 #: `1 / Phi^-1(0.75)`. Applied so that a deviation of 4 means roughly what four
@@ -258,7 +258,7 @@ class BaselineState:
     #: `(baseline, spread)`, or `None` when a sample has invalidated it.
     estimate: tuple[FloatArray, FloatArray] | None = None
 
-    def admit(self, data: FloatArray, capacity: int, index: int) -> None:
+    def admit(self, data: FloatArray, capacity: int, index: FrameIndex) -> None:
         """Put `data` in the ring, allocating it on the first frame.
 
         Raises:

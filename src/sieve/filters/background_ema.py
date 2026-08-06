@@ -72,7 +72,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame, FrameCount, WorkUnits
+from sieve.core.types import Frame, FrameCount, FrameIndex, WorkUnits
 
 #: What the accumulator can hold without losing the input's range. Same set as
 #: `downsample`'s, so the two chain in either order — the ordinary graph is a
@@ -237,7 +237,7 @@ class BackgroundState:
 
     buffers: _Buffers | None = None
 
-    def for_frame(self, data: NDArray[Any], index: int) -> _Buffers:
+    def for_frame(self, data: NDArray[Any], index: FrameIndex) -> _Buffers:
         """This run's arrays, seeded on `data` if it is the first frame.
 
         The one place `buffers` is narrowed, so the kernel below reads three

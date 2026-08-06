@@ -70,7 +70,7 @@ CALLS: list[tuple[int, int]] = []
 
 @kernel(TagParams, Backend.CPU, registry=KERNELS)
 def tag_cpu(frame: Frame, params: TagParams) -> Frame:
-    CALLS.append((frame.index, params.amount))
+    CALLS.append((int(frame.index), params.amount))
     return Frame(
         data=frame.data + np.uint8(params.amount),
         index=frame.index,
@@ -148,7 +148,7 @@ class SpanParams(ParamsBase):
 @windowed_kernel(SpanParams, Backend.CPU, registry=KERNELS)
 def span_cpu(span: FrameSpan, params: SpanParams) -> Frame:
     del params
-    WINDOWS.append(tuple(frame.index for frame in span))
+    WINDOWS.append(tuple(int(frame.index) for frame in span))
     data = np.mean([frame.data.astype(np.float32) for frame in span], axis=0).astype(np.uint8)
     return Frame(data=data, index=span.target.index, channels=span.target.channels)
 
@@ -567,7 +567,7 @@ def test_one_graph_can_span_two_backends(monkeypatch: pytest.MonkeyPatch) -> Non
     shelf.register(SHELF.get("cpu_only", "1.0.0"), Backend.CPU, cpu_only_cpu)
 
     def tag_gpu(frame: Frame, params: TagParams) -> Frame:
-        CALLS.append((frame.index, -params.amount))  # negative marks the GPU path
+        CALLS.append((int(frame.index), -params.amount))  # negative marks the GPU path
         return Frame(data=frame.data, index=frame.index, channels=frame.channels)
 
     shelf.register(SHELF.get("tag", "1.0.0"), Backend.GPU, tag_gpu)

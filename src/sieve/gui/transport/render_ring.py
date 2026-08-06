@@ -133,17 +133,18 @@ class RenderFrameRing:
                 # is what lets the numpy array die. `scaledToWidth` above
                 # allocates its own pixels, so only this branch needs it.
                 image = image.copy()
-            self._frames.put(frame.index, image)
-            self._frontier = frame.index
+            index = int(frame.index)
+            self._frames.put(index, image)
+            self._frontier = index
         if self._trace.enabled:
             self._trace.record(
                 AccessEvent(
                     op=PUT,
-                    index=frame.index,
+                    index=int(frame.index),
                     playhead=UNKNOWN_PLAYHEAD,
                     kind="",
                     source="",
-                    frontier=frame.index,
+                    frontier=int(frame.index),
                 )
             )
 

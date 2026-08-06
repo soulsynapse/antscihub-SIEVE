@@ -83,6 +83,7 @@ from sieve.backend.dispatch import Backend, KernelRegistry
 from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, Pipeline
 from sieve.core.replicates import Replicate
+from sieve.core.types import FrameIndex
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import FrameResult, FrameSource, execute
@@ -173,7 +174,7 @@ class PreviewSession:
         registry: FilterRegistry | None = None,
         kernels: KernelRegistry | None = None,
         pre_cropped: bool = False,
-        source_start: int = 0,
+        source_start: int | FrameIndex = 0,
     ) -> None:
         """Open a preview over `window` of the footage `reader` reads.
 

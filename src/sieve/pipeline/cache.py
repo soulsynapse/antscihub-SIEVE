@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from sieve.core.types import Frame
+from sieve.core.types import Frame, FrameIndex
 
 
 @runtime_checkable
@@ -46,7 +46,7 @@ class FrameStore(Protocol):
     lookup is always for a key the caller already computed.
     """
 
-    def get(self, key: str, index: int) -> Frame | None:
+    def get(self, key: str, index: int | FrameIndex) -> Frame | None:
         """The stored output of `key` at source frame `index`, or `None`.
 
         `None` rather than a raise: a miss is the ordinary case on the first
@@ -55,7 +55,7 @@ class FrameStore(Protocol):
         """
         ...
 
-    def put(self, key: str, index: int, frame: Frame) -> None:
+    def put(self, key: str, index: int | FrameIndex, frame: Frame) -> None:
         """Store `frame` as the output of `key` at source frame `index`.
 
         Overwriting is legal and means nothing changed: the same key at the
@@ -78,19 +78,19 @@ class MemoryFrameStore:
     """
 
     def __init__(self) -> None:
-        self._frames: dict[tuple[str, int], Frame] = {}
+        self._frames: dict[tuple[str, FrameIndex], Frame] = {}
 
     def __len__(self) -> int:
         """Entries held. For tests and for a HUD, not for the executor."""
         return len(self._frames)
 
-    def get(self, key: str, index: int) -> Frame | None:
+    def get(self, key: str, index: int | FrameIndex) -> Frame | None:
         """The stored output of `key` at source frame `index`, or `None`."""
-        return self._frames.get((key, index))
+        return self._frames.get((key, FrameIndex.of(index)))
 
-    def put(self, key: str, index: int, frame: Frame) -> None:
+    def put(self, key: str, index: int | FrameIndex, frame: Frame) -> None:
         """Store `frame` as the output of `key` at source frame `index`."""
-        self._frames[(key, index)] = frame
+        self._frames[(key, FrameIndex.of(index))] = frame
 
     def clear(self) -> None:
         """Drop everything. What "clear the cache" in the GUI will call."""
@@ -106,9 +106,9 @@ class NullFrameStore:
     one function that may not have one.
     """
 
-    def get(self, key: str, index: int) -> Frame | None:
+    def get(self, key: str, index: int | FrameIndex) -> Frame | None:
         """Always `None`."""
         return None
 
-    def put(self, key: str, index: int, frame: Frame) -> None:
+    def put(self, key: str, index: int | FrameIndex, frame: Frame) -> None:
         """Discards `frame`."""

@@ -71,8 +71,10 @@ from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import ALL_FRAMES, ParamsBase, input_warmup_frames
 from sieve.core.pipeline_model import ClipRange, Node, resolved_params
 from sieve.core.replicates import Replicate
-from sieve.core.types import NO_FRAMES, ROI, FrameCount
+from sieve.core.types import NO_FRAMES, ROI, FrameCount, FrameIndex, FrameRange
 from sieve.pipeline.dag import Dag
+
+SOURCE_FRAME_ZERO = FrameIndex(0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,7 +135,7 @@ class ExecutionPlan:
     #: the artifact begins is reported by `lead_in_shortfall` rather than
     #: requested and refused — the same treatment a clip near frame 0 already
     #: gets, for the same reason.
-    source_start: int = 0
+    source_start: FrameIndex = SOURCE_FRAME_ZERO
 
     @classmethod
     def build(
@@ -145,7 +147,7 @@ class ExecutionPlan:
         backend: Backend | Mapping[str, Backend],
         replicate: Replicate | None = None,
         pre_cropped: bool = False,
-        source_start: int = 0,
+        source_start: int | FrameIndex = SOURCE_FRAME_ZERO,
     ) -> ExecutionPlan:
         """Derive the run of `dag` over `span`.
 
@@ -213,7 +215,7 @@ class ExecutionPlan:
             backends=backends,
             replicate=replicate,
             pre_cropped=pre_cropped,
-            source_start=source_start,
+            source_start=FrameIndex.of(source_start),
         )
 
     # ---- what the reader is asked for ------------------------------------
@@ -235,7 +237,7 @@ class ExecutionPlan:
         return self.replicate.roi
 
     @property
-    def decode_start(self) -> int:
+    def decode_start(self) -> FrameIndex:
         """First source frame to decode, clamped at the start of the footage.
 
         Clamped rather than rejected. A clip that begins at frame 3 behind a
@@ -250,12 +252,16 @@ class ExecutionPlan:
         unfixable way. It is the same clamp, and the shortfall reports it in
         the same field.
         """
-        return max(self.span.start - self.lead_in.frames, self.source_start)
+        span_start = FrameIndex(self.span.start)
+        available = span_start - self.source_start
+        if available < self.lead_in:
+            return self.source_start
+        return span_start - self.lead_in
 
     @property
-    def decode_range(self) -> range:
+    def decode_range(self) -> FrameRange:
         """Every source frame the run touches, lead-in included, in order."""
-        return range(self.decode_start, self.span.end)
+        return FrameRange(self.decode_start, FrameIndex(self.span.end))
 
     @property
     def lead_in_shortfall(self) -> FrameCount:
@@ -266,7 +272,7 @@ class ExecutionPlan:
         someone will publish — warns on it; a preview scrubbing near frame 0
         ignores it.
         """
-        return self.lead_in - FrameCount(self.span.start - self.decode_start)
+        return self.lead_in - (FrameIndex(self.span.start) - self.decode_start)
 
     @property
     def warmed(self) -> bool:

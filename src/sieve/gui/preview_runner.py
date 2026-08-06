@@ -314,7 +314,7 @@ class _RenderWorker(QObject):
             if request.consumer is not None:
                 request.consumer(result)
             now = perf_counter()
-            self.frame_timed.emit(request.revision, result.index, (now - previous) * 1000.0)
+            self.frame_timed.emit(request.revision, int(result.index), (now - previous) * 1000.0)
             previous = now
 
         try:

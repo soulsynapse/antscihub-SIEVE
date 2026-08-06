@@ -51,7 +51,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -260,6 +260,115 @@ class FrameCount:
 NO_FRAMES = FrameCount(0)
 
 
+@dataclass(frozen=True, slots=True)
+class FrameIndex:
+    """A source-frame position, not a count of frames.
+
+    The position's origin is not carried. `pipeline/resolve_source.py` is the
+    one artifact boundary that translates local file numbering into source
+    numbering; above that boundary, a frame index is a position in the stream a
+    run is answering about. The type exists for the arithmetic: two positions
+    may be subtracted to produce a `FrameCount`, and a count may move a
+    position. Adding two positions is not an operation.
+    """
+
+    value: int
+
+    def __post_init__(self) -> None:
+        if self.value < 0:
+            raise ValueError(f"a frame index must be non-negative, got {self.value}")
+
+    @classmethod
+    def of(cls, value: int | FrameIndex) -> FrameIndex:
+        """Return `value` as a `FrameIndex`, preserving an existing instance."""
+        return value if isinstance(value, FrameIndex) else cls(value)
+
+    def __int__(self) -> int:
+        return self.value
+
+    def __index__(self) -> int:
+        return self.value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, FrameIndex):
+            return self.value == other.value
+        if isinstance(other, int):
+            return self.value == other
+        return NotImplemented
+
+    def __lt__(self, other: FrameIndex | int) -> bool:
+        return self.value < int(other)
+
+    def __le__(self, other: FrameIndex | int) -> bool:
+        return self.value <= int(other)
+
+    def __gt__(self, other: FrameIndex | int) -> bool:
+        return self.value > int(other)
+
+    def __ge__(self, other: FrameIndex | int) -> bool:
+        return self.value >= int(other)
+
+    def __add__(self, other: FrameCount) -> FrameIndex:
+        if not hasattr(other, "frames"):
+            raise TypeError("a frame index can only move by a frame count")
+        return FrameIndex(self.value + other.frames)
+
+    @overload
+    def __sub__(self, other: FrameIndex) -> FrameCount: ...
+
+    @overload
+    def __sub__(self, other: FrameCount) -> FrameIndex: ...
+
+    def __sub__(self, other: FrameIndex | FrameCount) -> FrameCount | FrameIndex:
+        if isinstance(other, FrameIndex):
+            return FrameCount(self.value - other.value)
+        if not hasattr(other, "frames"):
+            raise TypeError("a frame index can only subtract a frame index or frame count")
+        return FrameIndex(self.value - other.frames)
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
+@dataclass(frozen=True, slots=True)
+class FrameRange:
+    """A half-open source-frame range whose iteration yields `FrameIndex`."""
+
+    start: FrameIndex
+    stop: FrameIndex
+
+    def __init__(self, start: int | FrameIndex, stop: int | FrameIndex) -> None:
+        object.__setattr__(self, "start", FrameIndex.of(start))
+        object.__setattr__(self, "stop", FrameIndex.of(stop))
+        if self.stop < self.start:
+            raise ValueError(f"a frame range must be ordered, got {self.start}:{self.stop}")
+
+    def __iter__(self) -> Iterator[FrameIndex]:
+        for index in range(int(self.start), int(self.stop)):
+            yield FrameIndex(index)
+
+    def __len__(self) -> int:
+        return (self.stop - self.start).frames
+
+    def __contains__(self, index: object) -> bool:
+        if not isinstance(index, (FrameIndex, int)):
+            return False
+        return self.start <= index < self.stop
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, FrameRange):
+            return self.start == other.start and self.stop == other.stop
+        if isinstance(other, range):
+            return range(int(self.start), int(self.stop)) == other
+        return NotImplemented
+
+    def __repr__(self) -> str:
+        return f"FrameRange({self.start}, {self.stop})"
+
+
 class ChannelSpec(StrEnum):
     """How the trailing axis of a frame's array is laid out."""
 
@@ -421,14 +530,14 @@ class VideoMetadata:
             return MediaTime(Fraction(0))
         return MediaTime.of_frames(FrameCount(self.frame_count), self.fps)
 
-    def timestamp_of(self, index: int) -> MediaTime:
+    def timestamp_of(self, index: int | FrameIndex) -> MediaTime:
         """Presentation time of the frame at `index`, exactly."""
         if self.fps <= 0:
             return MediaTime(Fraction(0))
-        return MediaTime.of_frames(FrameCount(index), self.fps)
+        return MediaTime.of_frames(FrameCount(int(index)), self.fps)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, init=False, slots=True)
 class Frame:
     """One decoded frame plus the identity needed to reason about it.
 
@@ -437,8 +546,13 @@ class Frame:
     """
 
     data: NDArray[Any]
-    index: int
+    index: FrameIndex
     channels: ChannelSpec
+
+    def __init__(self, data: NDArray[Any], index: int | FrameIndex, channels: ChannelSpec) -> None:
+        object.__setattr__(self, "data", data)
+        object.__setattr__(self, "index", FrameIndex.of(index))
+        object.__setattr__(self, "channels", channels)
 
     @property
     def height(self) -> int:
@@ -474,7 +588,7 @@ class FrameSpan:
             raise ValueError("a frame span must contain at least one frame")
         previous = self.frames[0].index
         for frame in self.frames[1:]:
-            if frame.index != previous + 1:
+            if frame.index != previous + FrameCount(1):
                 raise ValueError(
                     f"a frame span must be consecutive, got {previous} then {frame.index}"
                 )
@@ -490,14 +604,14 @@ class FrameSpan:
         return self.frames[index]
 
     @property
-    def start(self) -> int:
+    def start(self) -> FrameIndex:
         """The first source frame index in the span."""
         return self.frames[0].index
 
     @property
-    def end(self) -> int:
+    def end(self) -> FrameIndex:
         """One past the last source frame index in the span."""
-        return self.frames[-1].index + 1
+        return self.frames[-1].index + FrameCount(1)
 
     @property
     def target(self) -> Frame:

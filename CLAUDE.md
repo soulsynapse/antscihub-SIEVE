@@ -99,7 +99,12 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
    *moves* the item file to `docs/completed-todo/YYYY.MM.DD-<slug>.md` with the
    completion frontmatter and git-derived file lists scaffolded. Never mark an
    item done in place — a finished item is *moved*. **Fill `summary`, answer
-   `settled`, and stop there.** The frontmatter is the entry; the index is
+   `settled`, and stop there** — or pass both as `--summary` and
+   `--settled "what|where|do_not_redecide"` (repeatable, or the word `none`)
+   and the entry is finished by the call that writes it. Work that never had
+   an item takes the same call with `--new`; do **not** mint one first, since
+   an item minted and moved in the same session never reaches a commit. An
+   omitted `--settled` still writes the marker that fails the gate. The frontmatter is the entry; the index is
    built from it alone, and a body is the exception, written only when a
    rejected alternative would otherwise be re-proposed. `settled` is the only
    thing that writes `docs/SETTLED.md`, and `none` is a real answer — a
@@ -138,7 +143,10 @@ be started, so a deferred item can be `high` and an open one `low`.
 
 Mint an item with `uv run python tools/new_item.py <slug>`, never by hand: it
 stamps `opened` to the second, which is the tiebreak inside a priority band,
-and the wall-clock is the one field an agent cannot type accurately.
+and the wall-clock is the one field an agent cannot type accurately. Mint it
+for work that is *going* to be done — an item minted for work already finished
+is deleted by `complete_item.py` before anything commits it, so it exists for
+seconds and leaves nothing behind but a wrong row in `files.added`.
 
 ---
 

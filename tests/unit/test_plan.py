@@ -22,11 +22,11 @@ from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, Par
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI, FrameCount
+from sieve.core.types import ROI, FrameCount, WorkUnits
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.plan import ExecutionPlan, root_paths
 
-COST = CostEstimate(seconds_per_megapixel=0.001)
+COST = CostEstimate(work_per_megapixel=WorkUnits(1.0))
 SOURCE = "footage|1|2"
 SHELF = FilterRegistry()
 

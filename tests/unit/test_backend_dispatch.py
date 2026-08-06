@@ -30,7 +30,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import FilterRegistry, register_filter
-from sieve.core.types import Frame, FrameSpan
+from sieve.core.types import Frame, FrameSpan, WorkUnits
 
 
 class Registered(NamedTuple):
@@ -54,7 +54,7 @@ def cpu_only() -> Registered:
         accepts=ArraySpec(),
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
-        cost=CostEstimate(seconds_per_megapixel=0.0),
+        cost=CostEstimate(work_per_megapixel=WorkUnits(0.0)),
         registry=specs,
     )
     class PassthroughParams(ParamsBase):
@@ -124,7 +124,7 @@ def test_windowed_spec_refuses_single_frame_kernel() -> None:
         accepts=ArraySpec(),
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
-        cost=CostEstimate(seconds_per_megapixel=0.0),
+        cost=CostEstimate(work_per_megapixel=WorkUnits(0.0)),
         mode=Mode.WINDOWED,
         registry=specs,
     )
@@ -146,7 +146,7 @@ def test_windowed_kernel_decorator_registers_a_span_callable() -> None:
         accepts=ArraySpec(),
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
-        cost=CostEstimate(seconds_per_megapixel=0.0),
+        cost=CostEstimate(work_per_megapixel=WorkUnits(0.0)),
         mode=Mode.WINDOWED,
         registry=specs,
     )

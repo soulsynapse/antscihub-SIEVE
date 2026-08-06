@@ -67,5 +67,8 @@ def test_the_description_carries_the_bounds_and_the_guidance() -> None:
     assert result.exit_code == 0
     assert "minimum=2" in result.output
     assert "maximum=64" in result.output
+    assert "work units/MP (uncalibrated)" in result.output
+    assert "work_anchor" in result.output
+    assert " s/MP" not in result.output
     # A sentence from `src/sieve/filters/downsample.md`, not from the spec.
     assert "Put it early" in result.output

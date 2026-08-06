@@ -59,11 +59,10 @@ multiply them.
 
 ## Cost
 
-Roughly 0.33 ms per megapixel of *input* with `anti_alias` on, 0.14 ms with it
-off, measured on 1080p three-channel frames. Near enough independent of
-`factor`: the read of the source frame dominates and the write is already small.
+Declared as **2 work units per input megapixel** for the anti-aliased path: one
+neighborhood read and one smaller write, relative to the copy anchor rather than
+to a reference CPU.
 
-The 2.4x between the two settings is real but is almost never the reason to
-choose between them — at 1080p it is 0.7 ms against 0.3 ms per frame, against a
-decode that costs tens of milliseconds. Choose `anti_alias` for what it does to
+Turning `anti_alias` off is cheaper, but that difference is almost never the
+reason to choose between the settings. Choose `anti_alias` for what it does to
 the pixels. If this filter is the thing you are waiting on, raise `factor`.

@@ -42,6 +42,7 @@ from sieve.core.replicates import Replicate, ReplicateSet
 from sieve.core.types import (
     NO_FRAMES,
     ROI,
+    WORK_UNIT_ANCHOR,
     ChannelSpec,
     Frame,
     FrameCount,
@@ -59,6 +60,7 @@ __all__ = [
     "ROI",
     "SCHEMA_VERSION",
     "UNCHANGED_RATE",
+    "WORK_UNIT_ANCHOR",
     "ArraySpec",
     "ChannelSpec",
     "ClipRange",

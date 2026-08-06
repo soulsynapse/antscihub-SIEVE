@@ -137,21 +137,19 @@ walking the perimeter lives.
 
 ## Cost
 
-On `block_signal`'s default grid from 1080p footage, at the default
-`τ = 1 s`, `reach_blocks = 1`: **0.035 ms/frame** for `dilate` and 0.026 for
-`diffuse`. Both are noise next to extraction.
+Declared as **4 work units per input megapixel** for the ordinary coupled
+update. That is uncalibrated work, not elapsed time.
 
 `diffuse` is the one that can get expensive, and predictably: the explicit heat
 scheme is stable only up to a diffusion number of `1/4`, so a frame is split
-into `ceil(reach² / (2·τ·fps·0.25))` sub-steps. A 16-block reach against a 0.1 s
-persistence at 30 fps is 171 sub-steps and **3.1 ms/frame**. That is a cost
-rather than a refusal on purpose: the constraint couples three parameters, two
-of which you are not thinking about while dragging the third, so a validator
+into `ceil(reach^2 / (2 * tau * fps * 0.25))` sub-steps. That is a cost rather
+than a refusal on purpose: the constraint couples three parameters, two of
+which you are not thinking about while dragging the third, so a validator
 rejecting the combination would land as a slider that stops responding.
 
 `dilate`'s radius grows the same way and almost never does: it is one block
 unless the requested reach outruns one block per frame, which needs
-`reach_blocks > τ·fps`.
+`reach_blocks > tau * fps`.
 
 ## Warmup
 

@@ -45,6 +45,6 @@ persists across frames.
 
 ## Cost
 
-One statistics pass and one fused multiply-add per frame, all SIMD — roughly
-1.5 ms per megapixel. `off` costs nothing at all; the frame is handed
-through, not copied.
+Declared as **3 work units per input megapixel** for one gray statistics pass
+and one fused multiply-add over the frame. `off` has no per-pixel work; the
+frame is handed through, not copied.

@@ -29,7 +29,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame
+from sieve.core.types import Frame, WorkUnits
 
 #: What `cv2.INTER_AREA` will actually accept. Narrower than the stride path,
 #: which works on anything, but a declaration has to hold for every setting of
@@ -54,10 +54,10 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
     # in blocks has nothing to be taken over.
     element=ElementRelation.AGGREGATED,
     cost=CostEstimate(
-        # 0.33 ms/MP measured on 1080p BGR with `anti_alias` on, 0.14 ms with it
-        # off. The declaration takes the slower path because it is the default,
-        # and a static number cannot branch on a parameter.
-        seconds_per_megapixel=0.00035,
+        # The static declaration takes the anti-aliased path: one neighborhood
+        # read and one smaller write, stated relative to a full-frame copy
+        # rather than as one machine's elapsed time.
+        work_per_megapixel=WorkUnits(2.0),
         # Input plus an output that is at most a quarter of it, no scratch.
         # Static, so it takes the largest value any legal `factor` produces.
         peak_bytes_per_input_byte=1.25,

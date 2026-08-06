@@ -43,7 +43,7 @@ from sieve.bench.metrics import MetricBus, Recorder
 from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
-from sieve.core.types import Frame
+from sieve.core.types import Frame, WorkUnits
 from sieve.gui.preview_runner import FIRST_TICK_BUDGET, PreviewRunner
 from sieve.pipeline.executor import FrameResult
 
@@ -198,7 +198,7 @@ class TestSuperseding:
             accepts=ArraySpec(),
             emits=ArraySpec(),
             element=ElementRelation.PRESERVED,
-            cost=CostEstimate(seconds_per_megapixel=0.001),
+            cost=CostEstimate(work_per_megapixel=WorkUnits(1.0)),
             registry=filters,
         )
         class SlowParams(ParamsBase):

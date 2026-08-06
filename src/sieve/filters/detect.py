@@ -44,7 +44,7 @@ from sieve.core.ops.wavelet import (
     morlet_power,
 )
 from sieve.core.pipeline_model import DetectorSettings
-from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan
+from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan, WorkUnits
 from sieve.detect.detector import DetectorUpdate
 from sieve.detect.detector import detect as _detect_settings
 from sieve.detect.detector import gate_to as _gate_to
@@ -79,7 +79,13 @@ MAX_WARMUP_FRAMES = max(
     emits=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
     element=ElementKind.FRAME,
     element_names=ElementNames("frame", "frames"),
-    cost=CostEstimate(seconds_per_megapixel=0.08, peak_bytes_per_input_byte=10.0),
+    cost=CostEstimate(
+        # Windowed Morlet power and gate derivation over the largest declared
+        # target window. Calibration decides how this work maps to wall time on
+        # a target profile.
+        work_per_megapixel=WorkUnits(float(MAX_WINDOW_FRAMES)),
+        peak_bytes_per_input_byte=10.0,
+    ),
     mode=Mode.WINDOWED,
     warmup_frames=FrameCount(MAX_WARMUP_FRAMES),
     primary_params=("freq_band", "value_band", "count_frac", "window_frames"),

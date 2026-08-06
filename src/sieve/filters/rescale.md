@@ -42,6 +42,6 @@ knob, where 0.3 is a legitimate answer.
 
 ## Cost
 
-Roughly 0.33 ms per megapixel of input (the same INTER_AREA kernel as
-`downsample`'s anti-aliased path). At 1.0 it costs nothing at all — the
-no-op is skipped, not computed.
+Declared as **2 work units per input megapixel**, the same copy-equivalent tier
+as `downsample`'s anti-aliased path. At `scale = 1.0` it has no per-pixel work:
+the no-op is skipped, not computed.

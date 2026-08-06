@@ -40,9 +40,9 @@ from sieve.core.filter_registry import (
     UnknownFilterError,
     register_filter,
 )
-from sieve.core.types import NO_FRAMES, ChannelSpec, FrameCount
+from sieve.core.types import NO_FRAMES, WORK_UNIT_ANCHOR, ChannelSpec, FrameCount, WorkUnits
 
-COST = CostEstimate(seconds_per_megapixel=0.001)
+COST = CostEstimate(work_per_megapixel=WorkUnits(1.0))
 
 
 class SampleParams(ParamsBase):
@@ -358,6 +358,18 @@ class TestElementMeaning:
 
 
 class TestStoredBytes:
+    def test_cost_is_work_units_against_one_anchor(self) -> None:
+        # This is the item boundary: a filter may declare relative work and a
+        # peak working set, but not a reference-machine timing coefficient that
+        # an uncalibrated install could print as if it meant seconds.
+        assert {field.name for field in fields(CostEstimate)} == {
+            "work_per_megapixel",
+            "peak_bytes_per_input_byte",
+        }
+        assert COST.work_per_megapixel == WorkUnits(1.0)
+        assert CostEstimate.anchor == WORK_UNIT_ANCHOR
+        assert "seconds_per_megapixel" not in dir(COST)
+
     def test_stored_size_multiplies_rate_by_frame_size(self) -> None:
         # Two filters that know nothing about each other: one drops nine frames
         # in ten, the other quarters what is left. Applying either alone is off
@@ -503,7 +515,7 @@ PROBES: dict[str, Any] = {
     "summary": "Something else entirely.",
     "accepts": ArraySpec(dtypes=("float32",)),
     "emits": ArraySpec(channels=(ChannelSpec.GRAY,)),
-    "cost": CostEstimate(seconds_per_megapixel=0.5),
+    "cost": CostEstimate(work_per_megapixel=WorkUnits(2.0)),
     "mode": Mode.WINDOWED,
     "warmup_frames": FrameCount(7),
     "rate_changing": True,

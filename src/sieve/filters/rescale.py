@@ -34,7 +34,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame
+from sieve.core.types import Frame, WorkUnits
 
 #: What `cv2.resize` with INTER_AREA accepts — the same set as `downsample`,
 #: for the same reason: a declaration must hold for every parameter setting.
@@ -52,9 +52,8 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
     # `downsample`'s relation at a float scale, and for its reason.
     element=ElementRelation.AGGREGATED,
     cost=CostEstimate(
-        # Same kernel as `downsample`'s anti-aliased path; its measured
-        # 0.33 ms/MP on 1080p BGR carries over.
-        seconds_per_megapixel=0.00035,
+        # Same copy-equivalent tier as `downsample`'s anti-aliased path.
+        work_per_megapixel=WorkUnits(2.0),
         # Input plus an output no larger than it, no scratch.
         peak_bytes_per_input_byte=2.0,
     ),

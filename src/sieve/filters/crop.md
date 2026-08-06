@@ -55,13 +55,14 @@ notices.
 
 ## Cost
 
-0.48 ms per megapixel kept on 1080p three-channel frames — a memory copy, and
-the number is the memory bandwidth rather than anything about the operation.
+Declared as **1 work unit per input megapixel** in the static bound: the copied
+path is one contiguous copy of the retained pixels. Actual work tracks the
+pixels kept, but the declaration must be safe without knowing a run's frame
+size or ROI.
 
-The identity crop is free: a full-frame region is already contiguous and no copy
-happens, 0.002 ms at any resolution. So a crop node left at its default costs
-nothing measurable, which is what makes "no crop" affordable to spell as a
-present node.
+The identity crop has no per-pixel work: a full-frame region is already
+contiguous and no copy happens. So a crop node left at its default is affordable
+to spell as a present node.
 
-Against a decode of tens of milliseconds per frame this is never what a run is
-waiting on. It is the thing that makes what comes after it cheap.
+Against decoding, this is almost never what a run is waiting on. It is the step
+that makes what comes after it cheap.

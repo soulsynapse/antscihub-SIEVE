@@ -125,22 +125,21 @@ filter's job.
 
 ## Cost
 
-Roughly **10 ms per megapixel** of input — 20.6 ms per frame on 1080p
-three-channel uint8. That is about 30x `downsample`'s anti-aliased path, and it
-is the single most expensive thing in this repo per pixel: five float traversals
-of the frame against a downsample's one strided read.
+Declared as **6 work units per input megapixel**, anchored to a full-frame copy
+at the reference resolution. That is relative work, not seconds: an
+uncalibrated machine can compare it to other filters, but cannot turn it into
+wall time until calibration measures the anchor.
 
-Take that number seriously when planning a run. At 1080p this filter alone is
-20 ms a frame, so a 10-second clip at 30 fps is six seconds of compute — twice
-the `full_preview_render` budget, before anything downstream of it runs. **With
-a 4x downsample in front it is 1.3 ms a frame** and the same clip is under half
-a second. This is the filter the "put a downsample early" advice in
-`downsample.md` was written for.
+The work comes from widening the frame, updating the float model, deriving the
+requested output, and narrowing the result. This is still the filter the "put a
+downsample early" advice in `downsample.md` was written for: downsampling lowers
+the pixel count before the model and scratch buffers are allocated and before
+the repeated frame traversals run.
 
-Emitting the background is marginally cheaper than the foreground (17.9 ms
-against 20.6 at 1080p): the model is updated either way and the difference is
-one extra pass. `alpha` does not affect cost at all.
+Emitting the background is cheaper than the foreground by one difference and
+absolute-value pass, but the static declaration takes the default foreground
+path. `alpha` does not affect per-frame work.
 
 It is also recomputed on every run, because it does not cache — see *What it
 does not do*. A graph you re-run while tuning something downstream pays this
-cost every time, which is the other reason to keep the frames small.
+work every time, which is the other reason to keep the frames small.

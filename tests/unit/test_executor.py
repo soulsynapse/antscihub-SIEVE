@@ -27,14 +27,14 @@ from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, Mod
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI, ChannelSpec, Frame, FrameCount, FrameSpan
+from sieve.core.types import ROI, ChannelSpec, Frame, FrameCount, FrameSpan, WorkUnits
 from sieve.pipeline import cache_key
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import FrameResult, FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan
 
-COST = CostEstimate(seconds_per_megapixel=0.001)
+COST = CostEstimate(work_per_megapixel=WorkUnits(1.0))
 SOURCE = "footage|1|2"
 SHELF = FilterRegistry()
 KERNELS = KernelRegistry()

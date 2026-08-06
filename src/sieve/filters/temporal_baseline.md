@@ -97,15 +97,15 @@ the 256th sample is already buying about a percent.
 
 ## Cost
 
-Two per-cell medians, recomputed when a sample is admitted rather than every
-frame. On `block_signal`'s default grid from 1080p footage: **4.9 ms/frame at
-the default 5 s window**, 8.0 ms at 8.5 s, and 1.1 ms at 30 s.
+Declared as **512 work units per input megapixel**: two per-cell medians over at
+most 256 retained samples, recomputed when a sample is admitted rather than
+every frame.
 
-That is not a typo — **cost rises with the window and then falls.** Below about
-8.5 s (at 30 fps) every frame is admitted and every frame pays for a median over
-a longer ring. Above it the stride exceeds one, the medians run on one frame in
-two or one in four, and the per-frame cost drops. The step is visible if you
-sweep the slider across it.
+Cost still rises with the window and then falls. Below about 8.5 s at 30 fps,
+every frame is admitted and every frame pays for a median over a longer ring.
+Above it the stride exceeds one, the medians run on one frame in two or one in
+four, and the per-frame work drops. The step is visible if you sweep the slider
+across it.
 
 Memory is up to 512 copies of one input frame — trivial on a block grid, which
 is where this filter belongs, and gigabytes on a full-resolution frame, which is

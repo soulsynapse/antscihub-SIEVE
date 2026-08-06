@@ -27,11 +27,11 @@ from sieve.core.filter_base import (
 )
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI
+from sieve.core.types import ROI, WorkUnits
 from sieve.pipeline import cache_key
 from sieve.pipeline.cache_key import NotCacheableError, node_key, source_key
 
-COST = CostEstimate(seconds_per_megapixel=0.001)
+COST = CostEstimate(work_per_megapixel=WorkUnits(1.0))
 
 
 class BlurParams(ParamsBase):
@@ -195,7 +195,7 @@ class TestIsolation:
         # `primary_params` names are checked against `params_model`.
         substitutes: dict[str, object] = {
             "caption": (CaptionPart(label="radius", param="radius"),),
-            "cost": CostEstimate(seconds_per_megapixel=0.5),
+            "cost": CostEstimate(work_per_megapixel=WorkUnits(2.0)),
             "param_value_labels": {"radius": {"3": "three pixels"}},
             "primary_params": ("radius",),
             "summary": "Blurs, described differently.",

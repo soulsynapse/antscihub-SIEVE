@@ -77,7 +77,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import ChannelSpec, Frame, FrameCount
+from sieve.core.types import ChannelSpec, Frame, FrameCount, WorkUnits
 
 #: The tensor window, in working pixels. v1's constant: every measured band
 #: and threshold in every v1 session was tuned against this blur, so it is
@@ -150,13 +150,10 @@ class Signal(StrEnum):
     element=ElementKind.BLOCK,
     element_names=ElementNames("block", "blocks"),
     cost=CostEstimate(
-        # Dominated by the Gaussian blurs. v1's change-only pass measured the
-        # products + one blur at ~7% of a full six-component pass; this
+        # Dominated by Gaussian blurs and tensor products. The static
         # declaration takes the six-blur tier shared by flow_speed and
-        # coherence because a static number cannot branch on a parameter.
-        # (Coherence's eigensolves are a few hundred 3x3 symmetric matrices
-        # per frame — not the cost.)
-        seconds_per_megapixel=0.012,
+        # coherence because a cost field cannot branch on `signal`.
+        work_per_megapixel=WorkUnits(12.0),
         # Worst case (flow_speed): the gray frame, the previous frame, six
         # product planes and their blurs reusing storage, plus u/v/speed.
         peak_bytes_per_input_byte=12.0,

@@ -29,7 +29,7 @@ from sieve.core.filter_base import (
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI
+from sieve.core.types import ROI, WorkUnits
 from sieve.pipeline.cache_key import node_key, source_key
 from sieve.pipeline.dag import (
     CycleError,
@@ -41,7 +41,7 @@ from sieve.pipeline.dag import (
     linear_order,
 )
 
-COST = CostEstimate(seconds_per_megapixel=0.001)
+COST = CostEstimate(work_per_megapixel=WorkUnits(1.0))
 SOURCE = "footage|1|2"
 ARENA = ROI(x=0, y=0, width=64, height=64)
 

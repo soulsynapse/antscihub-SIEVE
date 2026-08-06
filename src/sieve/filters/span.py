@@ -56,7 +56,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame
+from sieve.core.types import Frame, WorkUnits
 
 
 @register_filter(
@@ -78,7 +78,7 @@ from sieve.core.types import Frame
         # wearing a resolution's units. What this node actually saves is the
         # decode of everything outside the range, and that saving is the
         # planner's — a cost model over nodes has nowhere to put it.
-        seconds_per_megapixel=0.0,
+        work_per_megapixel=WorkUnits(0.0),
         # The output *is* the input. No copy, no scratch.
         peak_bytes_per_input_byte=1.0,
     ),

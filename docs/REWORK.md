@@ -144,10 +144,14 @@ quantities: a number must never look better-founded than it is.)
 `core/types.py` and pyright now refuses the mixtures, so the ordering
 constraint below is discharged: anything fitted or measured from here is
 denominated in a type. What is still ungated is the rest of the rule's
-sentence — the anchor (`work-units-have-one-anchor`), the re-denomination of
-the ceilings (`ceilings-in-the-dimension-they-bound`), and the measured-versus-
-predicted stamp (`a-number-says-how-it-was-founded`). A type separation is not
-a provenance claim, and only the separation is checked today.
+sentence: the re-denomination of the ceilings
+(`ceilings-in-the-dimension-they-bound`) and the measured-versus-predicted
+stamp (`a-number-says-how-it-was-founded`). The anchor landed with
+`work-units-have-one-anchor`: `CostEstimate.work_per_megapixel` is typed as
+`WorkUnits`, `WORK_UNIT_ANCHOR` names the single reference operation, and
+`sieve inspect` prints uncalibrated work units rather than seconds. A type
+separation and a named anchor are not a provenance claim; that stamp remains
+unbuilt.
 
 ## Enforcement
 

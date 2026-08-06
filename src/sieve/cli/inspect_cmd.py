@@ -141,8 +141,9 @@ def _describe(spec: FilterSpec, *, guidance: bool) -> str:
         f"selecting         {spec.selecting}",
         f"deterministic     {spec.deterministic} (cacheable: {spec.cacheable})",
         f"backend_agnostic  {spec.backend_agnostic}",
-        f"cost              {spec.cost.seconds_per_megapixel} s/MP, "
-        f"peak {spec.cost.peak_bytes_per_input_byte}x input bytes",
+        f"cost              {spec.cost.work_per_megapixel}/MP (uncalibrated)",
+        f"work_anchor       {spec.cost.anchor}",
+        f"peak_memory       {spec.cost.peak_bytes_per_input_byte}x input bytes",
         f"backends          {', '.join(str(b) for b in KERNELS.backends_for(spec)) or 'none'}",
         "",
         "parameters",

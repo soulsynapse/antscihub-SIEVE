@@ -85,7 +85,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame, FrameCount
+from sieve.core.types import Frame, FrameCount, WorkUnits
 
 #: MAD to standard-deviation-equivalent for a normal distribution:
 #: `1 / Phi^-1(0.75)`. Applied so that a deviation of 4 means roughly what four
@@ -178,14 +178,11 @@ class Emit(StrEnum):
     # frame, and either constant would be a lie in the other position.
     element=ElementRelation.PRESERVED,
     cost=CostEstimate(
-        # The worst case, and it is not the longest window — it is the longest
-        # window that still admits every frame. Measured on a 34x60 float32
-        # grid (`block_signal`'s output at the default block on 1080p): 7.96
-        # ms/frame at a 255-frame window, against 4.88 at the 150-frame default
-        # and 1.14 at 900 frames, where a stride of 4 means the medians run on
-        # one frame in four. Cost therefore rises with the window up to
-        # `MAX_SAMPLES` frames and falls after it — see the module docstring.
-        seconds_per_megapixel=3.9,
+        # Two medians over at most `MAX_SAMPLES` retained frames. Work rises
+        # with the window until every frame is admitted, then falls as the
+        # stride skips samples; calibration is the only place this becomes
+        # seconds on a target machine.
+        work_per_megapixel=WorkUnits(2.0 * MAX_SAMPLES),
         # The ring plus its scratch, both `MAX_SAMPLES` frames deep, plus the
         # two estimates. Enormous as a *ratio* and small as a quantity: the
         # input frame is a block grid of a few thousand cells, so 500x it is a

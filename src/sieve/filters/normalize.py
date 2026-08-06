@@ -40,7 +40,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, WorkUnits
 
 #: Target first moments of the normalized frame, from v1: mean 128 and sd 32
 #: place the signal comfortably inside uint8 range with ~4 sigma of headroom
@@ -79,9 +79,8 @@ class NormalizeMode(StrEnum):
     # it describes coming out.
     element=ElementRelation.PRESERVED,
     cost=CostEstimate(
-        # One meanStdDev pass plus one fused multiply-add, all SIMD; in v1
-        # this was a small slice of a preprocess span dominated by resize.
-        seconds_per_megapixel=0.0015,
+        # One gray statistics pass plus one fused multiply-add over the frame.
+        work_per_megapixel=WorkUnits(3.0),
         # Input, a float32 copy, and the gray projection for stats.
         peak_bytes_per_input_byte=6.0,
     ),

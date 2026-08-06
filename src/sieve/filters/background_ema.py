@@ -72,7 +72,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import Frame, FrameCount
+from sieve.core.types import Frame, FrameCount, WorkUnits
 
 #: What the accumulator can hold without losing the input's range. Same set as
 #: `downsample`'s, so the two chain in either order — the ordinary graph is a
@@ -138,13 +138,10 @@ class Emit(StrEnum):
     # is untouched, exactly as the unstated channels above say.
     element=ElementRelation.PRESERVED,
     cost=CostEstimate(
-        # 9.9 ms/MP measured on 1080p BGR uint8 (20.6 ms/frame) on the
-        # foreground path, 8.7 on the background one; the declaration takes the
-        # slower, which is also the default. That is ~30x `downsample`'s
-        # anti-aliased 0.32 ms/MP, and it is the honest number rather than the
-        # one that flatters: this filter traverses the frame in float five times
-        # where a downsample makes one strided read.
-        seconds_per_megapixel=0.0099,
+        # The foreground path widens, updates, subtracts, takes an absolute
+        # value, and narrows. Declared as six copy-equivalent passes; the
+        # calibration that turns that into wall time belongs outside the spec.
+        work_per_megapixel=WorkUnits(6.0),
         # Large, and honestly so. The worst case is uint8 input, where one input
         # byte becomes four bytes of float32 model, four of widened frame, and
         # four of scratch — the three buffers `_Buffers` holds — plus the input

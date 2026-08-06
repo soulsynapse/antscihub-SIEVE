@@ -38,7 +38,7 @@ from sieve.bench.budgets import BUDGETS
 from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, WorkUnits
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.preview import (
     FIRST_FRAME_BUDGET,
@@ -108,7 +108,7 @@ def shelves() -> Iterator[tuple[FilterRegistry, KernelRegistry]]:
         accepts=ArraySpec(),
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
-        cost=CostEstimate(seconds_per_megapixel=0.001),
+        cost=CostEstimate(work_per_megapixel=WorkUnits(1.0)),
         registry=filters,
     )
     class BiasParams(ParamsBase):

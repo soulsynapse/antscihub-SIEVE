@@ -16,13 +16,13 @@ from sieve.backend.dispatch import Backend, KernelRegistry, kernel
 from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase, TableSpec
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, WorkUnits
 from sieve.pipeline.cache_key import source_key
 from sieve.pipeline.dag import Dag, graph_needs_chroma
 from sieve.pipeline.executor import FormatMismatchError, execute
 from sieve.pipeline.plan import ExecutionPlan
 
-COST = CostEstimate(seconds_per_megapixel=0.001, peak_bytes_per_input_byte=2.0)
+COST = CostEstimate(work_per_megapixel=WorkUnits(1.0), peak_bytes_per_input_byte=2.0)
 
 SHELF = FilterRegistry()
 

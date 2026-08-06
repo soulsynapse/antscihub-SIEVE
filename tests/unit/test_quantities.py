@@ -124,8 +124,8 @@ class TestWorkAndWallTime:
         one backend at one moment*, and the quotient does not carry which. The
         moment `WorkUnits` grows a `.milliseconds` — or a `.seconds`, or an
         `as_wall_time()` — the estimate becomes indistinguishable from a
-        reading, and `docs/todo/work-units-have-one-anchor.md` is the item that
-        has to name the anchor before anything may divide by it.
+        reading. `WORK_UNIT_ANCHOR` names the denominator calibration may
+        measure; the conversion still cannot live on the type.
         """
         clock_names = {"seconds", "milliseconds", "ms", "as_wall_time", "elapsed"}
 

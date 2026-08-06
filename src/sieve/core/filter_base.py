@@ -46,7 +46,7 @@ from typing import Any, ClassVar, TypeAlias
 
 from pydantic import BaseModel, ConfigDict
 
-from sieve.core.types import NO_FRAMES, ChannelSpec, FrameCount
+from sieve.core.types import NO_FRAMES, WORK_UNIT_ANCHOR, ChannelSpec, FrameCount, WorkUnits
 
 #: `MAJOR.MINOR.PATCH`, no pre-release or build metadata. A filter version is
 #: an input to a cache key before it is a human-facing label, and `1.0.0-rc1`
@@ -535,11 +535,13 @@ StreamSpec: TypeAlias = ArraySpec | TableSpec
 class CostEstimate:
     """Order-of-magnitude cost, for predicting a run before making it.
 
-    Normalized per megapixel rather than per frame: the same kernel on 4K and
-    on a 256x256 crop differ by two orders of magnitude, so a per-frame number
-    would be wrong for every resolution but the one it was measured at. These
-    drive HUD predictions and scheduling hints, never a correctness decision,
-    so a factor-of-two error is tolerable and a missing declaration is not.
+    Normalized per megapixel rather than per frame: the same kernel on 4K and on
+    a 256x256 crop differ by two orders of magnitude, so a per-frame number
+    would be wrong for every resolution but the one it described. The numerator
+    is `WorkUnits`, not wall time. One unit is anchored to
+    `WORK_UNIT_ANCHOR`, and conversion to seconds belongs to a calibration for
+    one target profile. An uncalibrated install therefore still has a relative
+    cost to show and nothing to divide by.
 
     Nothing here predicts *stored* bytes, and nothing here can: what a
     checkpoint costs on disk depends on the decimation factor and the
@@ -550,8 +552,11 @@ class CostEstimate:
     for exactly the filters VISION step 4 puts in front of everything else.
     """
 
-    #: Wall-clock seconds to process one megapixel on the reference CPU.
-    seconds_per_megapixel: float
+    #: The one reference operation that defines a work unit.
+    anchor: ClassVar[str] = WORK_UNIT_ANCHOR
+    #: Relative work to process one input megapixel, anchored by
+    #: `WORK_UNIT_ANCHOR`.
+    work_per_megapixel: WorkUnits
     #: Peak working set as a multiple of one input frame's bytes. 1.0 is an
     #: in-place kernel; 3.0 is one that holds input, output, and a scratch.
     peak_bytes_per_input_byte: float = 2.0

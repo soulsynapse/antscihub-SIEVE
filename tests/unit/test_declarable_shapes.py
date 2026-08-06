@@ -41,12 +41,12 @@ from sieve.core.filter_base import (
 )
 from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
-from sieve.core.types import ChannelSpec, Frame, FrameSpan
+from sieve.core.types import ChannelSpec, Frame, FrameSpan, WorkUnits
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan
 
-COST = CostEstimate(seconds_per_megapixel=0.001)
+COST = CostEstimate(work_per_megapixel=WorkUnits(1.0))
 SOURCE = "footage|1|2"
 SPAN = ClipRange(start=20, end=23)
 WIDTH, HEIGHT = 32, 24

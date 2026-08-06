@@ -44,7 +44,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import ChannelSpec, Frame, FrameCount
+from sieve.core.types import ChannelSpec, Frame, FrameCount, WorkUnits
 
 #: Below ~0.1s the accumulator is a frame difference with extra steps.
 TAU_SECONDS_MIN = 0.1
@@ -124,9 +124,10 @@ class Couple(StrEnum):
     # Coupling changes a cell's value, not its correspondence to the input.
     element=ElementRelation.PRESERVED,
     cost=CostEstimate(
-        # 0.035ms/frame at defaults (dilate, the default); diffuse sub-steps,
-        # so this isn't the worst case.
-        seconds_per_megapixel=0.017,
+        # The ordinary coupled update is a few copy-equivalent passes. Diffuse
+        # sub-steps can exceed this, but the static declaration stays a
+        # relative work bound rather than a wall-clock prediction.
+        work_per_megapixel=WorkUnits(4.0),
         peak_bytes_per_input_byte=5.0,
     ),
     mode=Mode.STREAMING,

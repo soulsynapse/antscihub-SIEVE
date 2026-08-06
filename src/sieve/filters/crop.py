@@ -49,7 +49,7 @@ from sieve.core.filter_base import (
     ParamsBase,
 )
 from sieve.core.filter_registry import register_filter
-from sieve.core.types import ROI, Frame
+from sieve.core.types import ROI, Frame, WorkUnits
 
 #: Extent of the unbounded region, per axis. Any frame is smaller, so clamping
 #: it yields that frame exactly. `1 << 20` rather than a machine maximum: it is
@@ -75,13 +75,11 @@ WHOLE_FRAME = ROI(x=0, y=0, width=WHOLE_FRAME_EXTENT, height=WHOLE_FRAME_EXTENT)
     # `block_signal`'s output is still a count of blocks.
     element=ElementRelation.PRESERVED,
     cost=CostEstimate(
-        # 0.48 ms per megapixel of input, measured on 1080p BGR: a region one
-        # pixel inside the frame on every side, which is the worst case a static
-        # declaration has to hold for. The identity crop is 0.002 ms whatever
-        # the resolution — a full-frame slice is already contiguous, so the copy
-        # below does not happen — and a 160x120 region of the same frame is
-        # 0.003 ms. Cost tracks the pixels kept, and this is the bound on them.
-        seconds_per_megapixel=0.00048,
+        # A non-identity crop is one contiguous copy of the retained pixels.
+        # The identity crop returns a contiguous view and pays effectively no
+        # per-pixel work, but the static declaration has to hold for the copied
+        # path.
+        work_per_megapixel=WorkUnits(1.0),
         # Input plus an output no larger than it, no scratch.
         peak_bytes_per_input_byte=2.0,
     ),

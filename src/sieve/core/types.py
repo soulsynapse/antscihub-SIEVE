@@ -151,16 +151,16 @@ class WorkUnits:
     """An amount of work, denominated against an anchor and not against a clock.
 
     The type exists to keep a prediction from wearing a measurement's name. A
-    cost model says a kernel is *this much work per megapixel*; how long that
-    takes is that number divided by a rate that belongs to one machine, one
-    backend, and one moment. Storing the division's result and calling it
-    `estimated_ms` throws away which machine it was divided by, and nothing
-    downstream can tell the estimate from a reading.
+    cost model says a kernel is *this much work*; how long that takes is that
+    number divided by a rate that belongs to one machine, one backend, and one
+    moment. Storing the division's result and calling it `estimated_ms` throws
+    away which machine it was divided by, and nothing downstream can tell the
+    estimate from a reading.
 
     So there is deliberately no conversion to `WallTime` here and no
-    `.milliseconds`. Supplying the rate is `docs/todo/work-units-have-one-anchor`
-    and it is a separate decision: the anchor has to be named before anything
-    may divide by it.
+    `.milliseconds`. Calibration may measure the anchor below on a target
+    profile and divide by that rate; an uncalibrated machine can only display
+    work units.
     """
 
     units: float
@@ -175,7 +175,15 @@ class WorkUnits:
         return WorkUnits(self.units * factor)
 
     def __str__(self) -> str:
-        return f"{self.units:g} work units"
+        unit = "unit" if self.units == 1 else "units"
+        return f"{self.units:g} work {unit}"
+
+
+#: The single operation against which all `WorkUnits` are denominated.
+#: Calibration measures this operation on a target profile; filter declarations
+#: remain relative to it and therefore do not smuggle a reference CPU into the
+#: spec.
+WORK_UNIT_ANCHOR = "copy one full frame at the reference resolution"
 
 
 @dataclass(frozen=True, order=True, slots=True)

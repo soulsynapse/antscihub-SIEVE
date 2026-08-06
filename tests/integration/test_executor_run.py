@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from sieve.backend.dispatch import Backend
-from sieve.core.pipeline_model import ClipRange, Node, Pipeline
+from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
 from sieve.core.types import NO_FRAMES, ROI, ChannelSpec, Frame
 from sieve.decode.reader import VideoReader
@@ -34,6 +34,89 @@ from sieve.pipeline.plan import ExecutionPlan
 #: `//` rounding rather than about the graph.
 ARENA = ROI(x=16, y=8, width=64, height=48)
 FACTOR = 2
+
+
+def test_a_crop_node_and_a_replicate_roi_produce_the_same_pixels(
+    synthetic_video: Path,
+) -> None:
+    """The equivalence the schema flip rests on, established before it.
+
+    `docs/todo/the-graph-carries-the-crop-the-span-and-the-detector.md` will
+    synthesize a crop node from `Replicate.roi` and delete `plan.roi`, and its
+    failure mode is a plausible frame — the right size, the wrong pixels, from a
+    box read in a numbering nobody checked. This is that check while both paths
+    still exist: the same region, once through `executor._crop` from the
+    replicate and once through the filter at the root, frame for frame.
+
+    Not a unit test against the kernel, because what could disagree is not the
+    slice — it is where each path applies it and what it hands downstream.
+    """
+    assert discover()
+    span = ClipRange(start=10, end=14)
+    through_replicate = ExecutionPlan.build(
+        Dag.build(
+            Pipeline(
+                nodes=(
+                    Node(
+                        node_id="down",
+                        filter_id="downsample",
+                        version="1.0.0",
+                        params={"factor": FACTOR},
+                    ),
+                )
+            )
+        ),
+        source=source_identity(synthetic_video),
+        span=span,
+        backend=Backend.CPU,
+        replicate=Replicate(name="arena 1", roi=ARENA),
+    )
+    through_graph = ExecutionPlan.build(
+        Dag.build(
+            Pipeline(
+                nodes=(
+                    Node(
+                        node_id="crop",
+                        filter_id="crop",
+                        version="1.0.0",
+                        params={
+                            "roi": {
+                                "x": ARENA.x,
+                                "y": ARENA.y,
+                                "width": ARENA.width,
+                                "height": ARENA.height,
+                            }
+                        },
+                    ),
+                    Node(
+                        node_id="down",
+                        filter_id="downsample",
+                        version="1.0.0",
+                        params={"factor": FACTOR},
+                    ),
+                ),
+                edges=(Edge(upstream="crop", downstream="down"),),
+            )
+        ),
+        source=source_identity(synthetic_video),
+        span=span,
+        backend=Backend.CPU,
+        replicate=None,
+    )
+
+    with VideoReader(synthetic_video, luma=through_replicate.luma) as reader:
+        cropped_by_plan = [result["down"].data for result in execute(through_replicate, reader)]
+    with VideoReader(synthetic_video, luma=through_graph.luma) as reader:
+        cropped_by_graph = [result["down"].data for result in execute(through_graph, reader)]
+
+    assert len(cropped_by_plan) == 4
+    assert all(
+        np.array_equal(left, right)
+        for left, right in zip(cropped_by_plan, cropped_by_graph, strict=True)
+    )
+    # And the pixels are the arena's rather than the whole frame's, which the
+    # comparison above would be satisfied by if neither path cropped at all.
+    assert cropped_by_graph[0].shape == (ARENA.height // FACTOR, ARENA.width // FACTOR)
 
 
 def test_a_real_video_through_a_real_filter(synthetic_video: Path) -> None:

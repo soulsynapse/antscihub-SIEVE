@@ -18,7 +18,7 @@ import pytest
 from typer.testing import CliRunner
 
 from sieve.cli.app import app
-from sieve.core.pipeline_model import ClipRange, Node, Pipeline, Project, Sink
+from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline, Project, Sink
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
 
@@ -79,6 +79,54 @@ def test_two_replicates_run_and_the_second_reuses_the_first(
     lines = result.output.splitlines()
     assert lines[0] == "arena 1: 4 frames, 4 node outputs computed, 0 from cache"
     assert lines[1] == "arena 2: 4 frames, 0 node outputs computed, 4 from cache"
+
+
+def test_a_hand_written_crop_node_runs_with_no_replicates(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """The crop reaches a run from a YAML file and nothing else.
+
+    What `docs/todo/the-crop-is-a-filter.md` asks for end to end: a project with
+    no fan-out — so `plan.roi` is `None` and the executor crops nothing — whose
+    graph names the region itself. It is the whole chain the GUI does not touch:
+    the params model parsing a nested `roi` out of YAML, discovery putting the
+    kernel on the shelf, and `Dag.build` chaining an unconstrained `ArraySpec`
+    into the next filter's declared dtypes.
+    """
+    project = (
+        Project.for_video(synthetic_video, tmp_path)
+        .with_pipeline(
+            Pipeline(
+                nodes=(
+                    Node(
+                        node_id="crop",
+                        filter_id="crop",
+                        version="1.0.0",
+                        params={
+                            "roi": {
+                                "x": ARENA.x,
+                                "y": ARENA.y,
+                                "width": ARENA.width,
+                                "height": ARENA.height,
+                            }
+                        },
+                    ),
+                    Node(node_id="down", filter_id="downsample", version="1.0.0"),
+                ),
+                edges=(Edge(upstream="crop", downstream="down"),),
+            )
+        )
+        .with_clip(ClipRange(start=10, end=14))
+    )
+    path = tmp_path / "cropped.sieve.yaml"
+    project.save(path)
+
+    result = runner.invoke(app, ["run", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[0] == (
+        "baseline: 4 frames, 8 node outputs computed, 0 from cache"
+    )
 
 
 def test_a_dry_run_never_opens_the_video(

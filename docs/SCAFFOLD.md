@@ -67,6 +67,7 @@ src/sieve/backend/dispatch.py           # device policy only; holds no kernel
 src/sieve/backend/identity.py           # backend identity for keys of non-backend_agnostic filters
 
 src/sieve/filters/__init__.py           # pkgutil scan, and §3's markdown half: where guidance lives and what it is made of
+src/sieve/filters/crop.py               # the ROI as a filter; the identity crop is the unbounded region, never None
 src/sieve/filters/downsample.py         # anti-aliased spatial decimation
 src/sieve/filters/rescale.py            # intensity rescale
 src/sieve/filters/normalize.py          # per-frame global illumination removal
@@ -201,7 +202,6 @@ src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
 src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see docs/SETTLED.md
-src/sieve/filters/crop.py               # the ROI as a filter, identity crop is full-frame — todo/the-crop-is-a-filter.md
 src/sieve/filters/span.py               # the clip span as a filter; decode pushdown stays a planner optimization — todo/the-span-is-a-filter.md
 src/sieve/mutual/__init__.py            # dependency-shared, not agreement-shared: shares, machine, pool_meter — todo/the-mutual-tier.md
 ```

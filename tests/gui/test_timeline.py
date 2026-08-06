@@ -13,7 +13,8 @@ leaves the user a frame or two from where they let go.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from PySide6.QtCore import QPointF, QSettings
 from PySide6.QtGui import QAction
 from pytestqt.qtbot import QtBot
 
+from sieve.core.clip_window import DEFAULT_WINDOW_SECONDS
 from sieve.core.pipeline_model import ClipRange
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.main_window import MainWindow
@@ -566,3 +568,64 @@ class TestWindowWiring:
 
         clear.trigger()
         assert not clear.isEnabled()
+
+
+class TestTheLengthOutlivesTheSession:
+    """A window length set in one session is the one the next opens at.
+
+    The length, not the span: the user tunes against a stretch of a fixed size
+    and is asked to re-choose it on every launch otherwise. Where it lands is a
+    property of the video and stays with the project; how long it is is a
+    property of the person and follows them to the next file. Two sessions over
+    one settings file is the only way to see that, because within a session the
+    document holds the length anyway and would pass for the wrong reason.
+    """
+
+    #: One second at the fixture's 20 fps — not the shipped ten seconds and not
+    #: the fixture's two, so a result equal to either names which fallback ran.
+    REMEMBERED_FRAMES = 20
+
+    @pytest.fixture
+    def settings_file(self, tmp_path: Path) -> str:
+        return str(tmp_path / "sieve.ini")
+
+    @contextmanager
+    def _session(
+        self, qtbot: QtBot, settings_file: str, video: Path
+    ) -> Generator[tuple[MainWindow, ReplicateDocument]]:
+        """One launch of the application over `settings_file`, with `video` open."""
+        main = MainWindow(Preferences(QSettings(settings_file, QSettings.Format.IniFormat)))
+        qtbot.addWidget(main)
+        try:
+            main.open_video(video)
+            qtbot.waitUntil(lambda: main.windowTitle() != "SIEVE", timeout=OPEN_TIMEOUT_MS)
+            document = main.findChild(ReplicateDocument)
+            assert isinstance(document, ReplicateDocument)
+            yield main, document
+        finally:
+            main.close()
+
+    def test_a_length_set_in_one_session_is_what_the_next_opens_at(
+        self, qtbot: QtBot, settings_file: str, synthetic_video: Path
+    ) -> None:
+        with self._session(qtbot, settings_file, synthetic_video) as (_, document):
+            document.set_window_length(self.REMEMBERED_FRAMES)
+            assert document.window == ClipRange(start=0, end=self.REMEMBERED_FRAMES)
+
+        with self._session(qtbot, settings_file, synthetic_video) as (_, reopened):
+            assert reopened.window == ClipRange(start=0, end=self.REMEMBERED_FRAMES)
+            # The *choice* did not come back with it. A remembered length that
+            # arrived as a marked clip would make `Project.clip = None`
+            # unreachable from a second launch, which is `plan.py`'s whole-video
+            # fallback gone for anyone who has ever dragged the bracket.
+            assert reopened.clip is None
+
+    def test_the_fallback_itself_is_never_what_gets_remembered(
+        self, qtbot: QtBot, settings_file: str, synthetic_video: Path
+    ) -> None:
+        """The fixture is shorter than ten seconds, so its fallback is the whole
+        asset. Writing that back would teach every later session that two
+        seconds is the length this user works in, on the strength of a video
+        they never touched the window on."""
+        with self._session(qtbot, settings_file, synthetic_video) as (window, _):
+            assert window.preferences.window_seconds == pytest.approx(DEFAULT_WINDOW_SECONDS)

@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QSettings
 
+from sieve.core.clip_window import DEFAULT_WINDOW_SECONDS
 from sieve.gui.preferences import (
     ADAPTIVE_SCRUB,
     COARSE_INTERVAL_SECONDS,
@@ -22,7 +23,9 @@ from sieve.gui.preferences import (
     DEFAULT_VIEWPORT_LUMA,
     MAX_PROXY_WIDTH,
     MIN_PROXY_WIDTH,
+    MIN_WINDOW_SECONDS,
     PROXY_WIDTH,
+    WINDOW_SECONDS,
     Preferences,
 )
 
@@ -102,6 +105,41 @@ class TestLastVideo:
         preferences.last_video = video
         preferences.restore_defaults()
         assert preferences.last_video == video
+
+
+class TestWindowSeconds:
+    """The working window's length: session state like the last video."""
+
+    def test_an_empty_store_is_the_shipped_default(self, preferences: Preferences) -> None:
+        assert preferences.window_seconds == pytest.approx(DEFAULT_WINDOW_SECONDS)
+
+    def test_a_length_survives_a_new_store_over_the_same_file(
+        self, preferences: Preferences, settings: QSettings
+    ) -> None:
+        preferences.window_seconds = 3.5
+
+        reopened = Preferences(QSettings(settings.fileName(), QSettings.Format.IniFormat))
+        assert reopened.window_seconds == pytest.approx(3.5)
+
+    def test_writing_it_does_not_emit_changed(self, preferences: Preferences) -> None:
+        """Every drag of the timeline bracket writes here; nothing running reads it."""
+        seen: list[int] = []
+        preferences.changed.connect(lambda: seen.append(1))
+        preferences.window_seconds = 3.5
+        assert seen == []
+
+    def test_restore_defaults_leaves_it_alone(self, preferences: Preferences) -> None:
+        preferences.window_seconds = 3.5
+        preferences.restore_defaults()
+        assert preferences.window_seconds == pytest.approx(3.5)
+
+    def test_junk_falls_back_and_absurd_lengths_are_clamped(
+        self, preferences: Preferences, settings: QSettings
+    ) -> None:
+        settings.setValue(WINDOW_SECONDS, "not a number")
+        assert preferences.window_seconds == pytest.approx(DEFAULT_WINDOW_SECONDS)
+        settings.setValue(WINDOW_SECONDS, -5)
+        assert preferences.window_seconds == pytest.approx(MIN_WINDOW_SECONDS)
 
 
 class TestChangeSignal:

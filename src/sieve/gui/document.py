@@ -25,7 +25,14 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QUndoStack
 
-from sieve.core.clip_window import containing, effective_window, ended_at, fitted, moved_to
+from sieve.core.clip_window import (
+    DEFAULT_WINDOW_SECONDS,
+    containing,
+    effective_window,
+    ended_at,
+    fitted,
+    moved_to,
+)
 from sieve.core.pipeline_model import (
     ClipRange,
     CropArtifact,
@@ -154,6 +161,11 @@ class ReplicateDocument(QObject):
         self._source_frames = 0
         self._source_fps = 0.0
         self._clip: ClipRange | None = None
+        #: How long the fallback window below is. The window sets it from the
+        #: remembered preference; a document constructed on its own opens at the
+        #: shipped ten seconds, which is what every test and the CLI-adjacent
+        #: paths want.
+        self._default_window_seconds = DEFAULT_WINDOW_SECONDS
         self._selected: int | None = None
         #: Replicates opened in the filter tab, by id — the geometry lock's
         #: state, saved with the project and *not* on the undo stack. See
@@ -247,7 +259,32 @@ class ReplicateDocument(QObject):
 
         `None` only when nothing is bound.
         """
-        return effective_window(self._clip, self._source_frames, self._source_fps)
+        return effective_window(
+            self._clip, self._source_frames, self._source_fps, self._default_window_seconds
+        )
+
+    @property
+    def default_window_seconds(self) -> float:
+        """How long the fallback window is, in seconds.
+
+        A session setting rather than a document one, which is why it is not on
+        `Project` and not on the undo stack: it says how long a stretch this
+        user works in, not what any project contains. A project whose `clip` is
+        unset still comes back unset — this only changes what the timeline shows
+        while it stays that way.
+        """
+        return self._default_window_seconds
+
+    @default_window_seconds.setter
+    def default_window_seconds(self, seconds: float) -> None:
+        if seconds == self._default_window_seconds:
+            return
+        self._default_window_seconds = seconds
+        # `clip_changed` and not a signal of its own: the fallback *is* the
+        # window while nothing is marked, so everything that has to hear this
+        # is already listening for the window to move.
+        if self._clip is None:
+            self.clip_changed.emit()
 
     @property
     def clip(self) -> ClipRange | None:

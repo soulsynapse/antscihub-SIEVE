@@ -30,30 +30,41 @@ from __future__ import annotations
 
 from sieve.core.pipeline_model import ClipRange
 
-#: How long a window is when nobody has chosen one. VISION step 4 asks the user
-#: to tune against five to ten seconds; ten is the generous end, because a
-#: window that is too long is trimmed by watching it and one that is too short
-#: hides the behaviour the user opened the file to find.
+#: How long a window is when nobody has chosen one *and nobody has worked here
+#: before*. VISION step 4 asks the user to tune against five to ten seconds;
+#: ten is the generous end, because a window that is too long is trimmed by
+#: watching it and one that is too short hides the behaviour the user opened
+#: the file to find. Once they have chosen a length the GUI hands that length
+#: in as `seconds` (`gui/preferences.WINDOW_SECONDS`), so this constant is the
+#: first-launch answer rather than the standing one.
 DEFAULT_WINDOW_SECONDS = 10.0
 
 
-def default_window(frame_count: int, fps: float) -> ClipRange | None:
-    """The window a session opens with: `DEFAULT_WINDOW_SECONDS`, or all of it.
+def default_window(
+    frame_count: int, fps: float, seconds: float = DEFAULT_WINDOW_SECONDS
+) -> ClipRange | None:
+    """The window a session opens with: `seconds` of it, or all of it.
 
     `None` when there is no source. A non-positive `fps` yields the whole asset
     rather than a guessed frame count — the container has not said how long ten
     seconds is, and inventing a number here would put the user in a window whose
-    length means nothing.
+    length means nothing. A non-positive `seconds` is the same statement about
+    the caller and gets the same answer.
     """
     if frame_count <= 0:
         return None
-    if fps <= 0.0:
+    if fps <= 0.0 or seconds <= 0.0:
         return ClipRange(start=0, end=frame_count)
-    length = min(max(round(DEFAULT_WINDOW_SECONDS * fps), 1), frame_count)
+    length = min(max(round(seconds * fps), 1), frame_count)
     return ClipRange(start=0, end=length)
 
 
-def effective_window(clip: ClipRange | None, frame_count: int, fps: float) -> ClipRange | None:
+def effective_window(
+    clip: ClipRange | None,
+    frame_count: int,
+    fps: float,
+    seconds: float = DEFAULT_WINDOW_SECONDS,
+) -> ClipRange | None:
     """What a session shows: the user's choice, or the default until they make one.
 
     The absence is preserved rather than resolved, which is the whole point of
@@ -64,7 +75,7 @@ def effective_window(clip: ClipRange | None, frame_count: int, fps: float) -> Cl
     is one stored window and no second copy to drift from it.
     """
     if clip is None:
-        return default_window(frame_count, fps)
+        return default_window(frame_count, fps, seconds)
     return clip
 
 

@@ -22,6 +22,8 @@ from typing import Final
 
 from PySide6.QtCore import QObject, QSettings, Signal
 
+from sieve.core.clip_window import DEFAULT_WINDOW_SECONDS
+
 #: Switch to coarse seeking when scrubbing cannot keep up. See `scrub_policy`.
 ADAPTIVE_SCRUB: Final = "scrub/adaptive"
 DEFAULT_ADAPTIVE_SCRUB: Final = True
@@ -60,6 +62,17 @@ DEFAULT_RENDER_FED_PLAYBACK: Final = True
 #: state rather than a tunable: it has no entry in the preferences pane and is
 #: written by the window, not by the user.
 LAST_VIDEO: Final = "session/last_video"
+
+#: How long the working window was, the last time the user set its length.
+#: Session state for `LAST_VIDEO`'s reason — no pane entry, written by the
+#: window rather than chosen in a dialog — and stored in seconds rather than
+#: frames because it outlives the video it was set on: the next file may not
+#: share its frame rate, and "ten seconds" is what the user meant either way.
+#: Read by `core/clip_window.default_window` through the document, so it moves
+#: the window a session opens with, never a window a project already names.
+WINDOW_SECONDS: Final = "session/window_seconds"
+MIN_WINDOW_SECONDS: Final = 0.01
+MAX_WINDOW_SECONDS: Final = 24.0 * 60.0 * 60.0
 
 
 class Preferences(QObject):
@@ -169,14 +182,38 @@ class Preferences(QObject):
             notify=False,
         )
 
+    @property
+    def window_seconds(self) -> float:
+        """The window length a new session opens with, in seconds."""
+        return _as_float(
+            self._settings.value(WINDOW_SECONDS),
+            DEFAULT_WINDOW_SECONDS,
+            MIN_WINDOW_SECONDS,
+            MAX_WINDOW_SECONDS,
+        )
+
+    @window_seconds.setter
+    def window_seconds(self, seconds: float) -> None:
+        # Silent, like `last_video`: every window edit passes through here, and
+        # `changed` means "reapply the settings you run on" — a decode pipeline
+        # rebuilt on each drag of the timeline bracket would be the cost of a
+        # key nothing running reads.
+        self._store(
+            WINDOW_SECONDS,
+            _clamp(float(seconds), MIN_WINDOW_SECONDS, MAX_WINDOW_SECONDS),
+            current=self.window_seconds,
+            notify=False,
+        )
+
     # ---- bulk ------------------------------------------------------------
 
     def restore_defaults(self) -> None:
-        """Drop every tunable, emitting one change rather than three.
+        """Drop every tunable, emitting one change rather than one per key.
 
-        `LAST_VIDEO` is deliberately not in the list. Restoring defaults is a
-        statement about how the application should behave, and forgetting which
-        file the user was working on is not one of the things they asked for.
+        The `session/` keys are deliberately not in the list. Restoring defaults
+        is a statement about how the application should behave, and forgetting
+        which file the user was working on — or how long a stretch of it they
+        work in — is not one of the things they asked for.
         """
         for key in (
             ADAPTIVE_SCRUB,

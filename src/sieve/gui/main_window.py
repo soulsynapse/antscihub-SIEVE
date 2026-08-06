@@ -116,6 +116,9 @@ class MainWindow(QMainWindow):
 
         self._player = VideoPlayer(self)
         self._document = ReplicateDocument(self)
+        # Before anything is bound, so the first video opens at the length this
+        # user last worked in rather than at ten seconds and then jumping.
+        self._document.default_window_seconds = self._preferences.window_seconds
         self._replicate_tab = ReplicateTab(self._player, self._document, self)
         self._timeline = TimelineBar(self._player, self._document, self)
 
@@ -922,6 +925,28 @@ class MainWindow(QMainWindow):
     def _on_clip_changed(self) -> None:
         """There is only something to clear once something has been marked."""
         self._clear_clip_action.setEnabled(self._document.clip is not None)
+        self._remember_window_length()
+
+    def _remember_window_length(self) -> None:
+        """Carry the length the user is working in to the next session.
+
+        `clip`, not `window`: the fallback is what this preference *feeds*, so
+        writing it back would be the setting reading itself, and on a source
+        whose frame rate the container never stated the fallback is the whole
+        asset — a length nobody asked for, which would then follow the user to
+        every file they open next.
+
+        Every window edit lands here, including an undo, because they are all
+        `clip_changed`. That is the intended reading: the length on screen when
+        the session ends is the length the next one opens at.
+        """
+        clip = self._document.clip
+        fps = self._document.source_fps
+        if clip is None or fps <= 0.0:
+            return
+        seconds = clip.frame_count / fps
+        self._preferences.window_seconds = seconds
+        self._document.default_window_seconds = seconds
 
     @Slot(bool)
     def _on_clean_changed(self, clean: bool) -> None:

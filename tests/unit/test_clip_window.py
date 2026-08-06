@@ -157,6 +157,20 @@ class TestTheDefaultWindow:
         chosen = ClipRange(start=10, end=20)
         assert effective_window(chosen, SOURCE_FRAMES, 30.0) is chosen
 
+    def test_a_caller_supplied_length_replaces_the_shipped_one(self) -> None:
+        """What makes the length the GUI remembers reach the fallback at all."""
+        assert default_window(SOURCE_FRAMES, 30.0, 4.0) == ClipRange(start=0, end=120)
+        assert effective_window(None, SOURCE_FRAMES, 30.0, 4.0) == ClipRange(start=0, end=120)
+
+    def test_a_remembered_length_does_not_displace_a_chosen_window(self) -> None:
+        """The remembered length is the fallback, never an edit to a project."""
+        chosen = ClipRange(start=10, end=20)
+        assert effective_window(chosen, SOURCE_FRAMES, 30.0, 4.0) is chosen
+
+    def test_a_length_of_nothing_yields_the_whole_asset(self) -> None:
+        """A store hand-edited to zero must not open a session in no frames."""
+        assert default_window(SOURCE_FRAMES, 30.0, 0.0) == ClipRange(start=0, end=SOURCE_FRAMES)
+
 
 class TestFittingOntoTheBoundSource:
     """A saved span against the video actually open, which may be a different one."""

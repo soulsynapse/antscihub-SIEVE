@@ -21,7 +21,7 @@ from sieve.gui.filter_tab import FilterTab
 from sieve.gui.preferences import Preferences
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.transport.player import VideoPlayer
-from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
+from tests.conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_RATE, FIXTURE_WIDTH
 
 pytestmark = pytest.mark.gui
 
@@ -155,7 +155,7 @@ def test_a_knob_burst_mid_render_yields_one_final_recompute_with_the_last_value(
     intermediate render survived, zero would mean the burst deadlocked the
     submission slots.
     """
-    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_FPS)
+    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_RATE)
     updates: list[int] = []
     tab.graphs_updated.connect(lambda: updates.append(1))
 

@@ -27,7 +27,7 @@ from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import FilterTab
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.transport.player import VideoPlayer
-from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
+from tests.conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_RATE, FIXTURE_WIDTH
 
 pytestmark = pytest.mark.gui
 
@@ -76,7 +76,7 @@ def test_the_count_plot_holds_data_before_the_render_has_finished(
     The final `graphs_updated` is deliberately not awaited first — that would
     be asserting the old behaviour with extra steps.
     """
-    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_FPS)
+    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_RATE)
     # Every derivation the detector delivers, partial and final. Private
     # because the claim *is* about internal bookkeeping — that more than one
     # pass happens — and there is no public reading that distinguishes a graph
@@ -132,7 +132,7 @@ def test_a_window_shorter_than_the_settling_distance_gates_nothing_until_it_fini
     them early would be reintroducing exactly the retracting detections the
     frontier exists to prevent.
     """
-    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_FPS)
+    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_RATE)
     settled: list[tuple[bool, int]] = []
 
     def record(result: DetectorResult) -> None:
@@ -167,7 +167,7 @@ def test_the_axis_is_the_working_window_not_the_frames_collected_so_far(
     The window is the document's, so the span is checked against that rather
     than against a number this test invents.
     """
-    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_FPS)
+    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_RATE)
     runner.open(synthetic_video)
     qtbot.waitUntil(lambda: tab.count_plot.filled_frames > 0, timeout=RENDER_TIMEOUT_MS)
 

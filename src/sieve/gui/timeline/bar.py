@@ -609,7 +609,7 @@ class TimelineBar(QWidget):
         """
         frames = self._document.source_frames
         self._strip.set_source_frames(frames)
-        self._strip.set_timebase(self._document.source_fps)
+        self._strip.set_timebase(float(self._document.source_fps))
         enabled = frames > 0
         for widget in (self._play_button, self._start_box, self._length_box, self._strip):
             widget.setEnabled(enabled)
@@ -638,7 +638,7 @@ class TimelineBar(QWidget):
 
     def _write_boxes(self, window: ClipRange | None) -> None:
         """Restate the window in seconds without treating it as a user edit."""
-        fps = self._document.source_fps
+        fps = float(self._document.source_fps)
         frames = self._document.source_frames
         self._updating = True
         try:
@@ -668,7 +668,7 @@ class TimelineBar(QWidget):
 
     def _frames_of(self, seconds: float) -> int:
         """Seconds as a frame index. Frames are authoritative; the boxes are a view."""
-        fps = self._document.source_fps
+        fps = float(self._document.source_fps)
         if fps <= 0.0:
             return 0
         return round(seconds * fps)
@@ -708,7 +708,7 @@ class TimelineBar(QWidget):
             self._timecode.setText("—")
             return
         self._timecode.setText(
-            f"{format_timecode(metadata.timestamp_of(index))} / "
-            f"{format_timecode(metadata.duration_seconds)}   "
+            f"{format_timecode(float(metadata.timestamp_of(index).seconds))} / "
+            f"{format_timecode(float(metadata.duration_seconds.seconds))}   "
             f"frame {index:,} / {metadata.frame_count - 1:,}"
         )

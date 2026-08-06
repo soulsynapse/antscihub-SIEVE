@@ -16,6 +16,7 @@ zoom that moved one layer and not the other would be worse than no zoom.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from fractions import Fraction
 from time import perf_counter
 from types import SimpleNamespace
 
@@ -228,7 +229,7 @@ def test_a_playhead_refresh_never_erases_the_series_or_the_final_derivation(
     issued before the event loop can deliver the detector's queued result, so
     without the guard the final pass is always assassinated.
     """
-    document.bind_source(1000, 800, 40, 20.0)
+    document.bind_source(1000, 800, 40, Fraction(20))
     consumer = stub.consumers[-1]
     assert consumer is not None
     stub.render_started.emit(stub.revision)

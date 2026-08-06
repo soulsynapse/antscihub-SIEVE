@@ -158,8 +158,14 @@ def detect_project(
         with frame_source(resolved.path, workers, luma=luma) as reader:
             fps = reader.metadata.fps
             rows = _collect(plan, resolved.wrap(reader), store, series_node)
-        update = _detect_one(project.detector, target, rows, fps=fps, start=span.start)
-        typer.echo(_report(_label(target), rows, update, fps=fps, element_names=element_names))
+        # `float(fps)` into the detector and the summary, the exact rational
+        # into the export. The wavelet bank is a float computation and the
+        # printed line is two decimals; the CSV is the published number, and
+        # `tables._at_frame` is where the difference is load-bearing.
+        update = _detect_one(project.detector, target, rows, fps=float(fps), start=span.start)
+        typer.echo(
+            _report(_label(target), rows, update, fps=float(fps), element_names=element_names)
+        )
         if csv_dir is not None and update is not None and project.detector is not None:
             exports.append(
                 DetectionExport(

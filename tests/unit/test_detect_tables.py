@@ -10,6 +10,7 @@ to six decimal places is a comparison that can never fail.
 from __future__ import annotations
 
 import csv
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -40,7 +41,7 @@ def _export(name: str, count: np.ndarray, *, start: int, armed: bool) -> Detecti
         replicate=name,
         node_id="n1",
         filter_id="block_signal",
-        fps=20.0,
+        fps=Fraction(20),
         start=start,
         update=_update(count, armed=armed),
         settings=DetectorSettings(count_frac=(0.5, 1.0) if armed else None),

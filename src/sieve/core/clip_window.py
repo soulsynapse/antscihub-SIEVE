@@ -28,7 +28,10 @@ span is what a drag would produce continuously on the way past zero.
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 from sieve.core.pipeline_model import ClipRange
+from sieve.core.types import FrameCount, MediaTime
 
 #: How long a window is when nobody has chosen one *and nobody has worked here
 #: before*. VISION step 4 asks the user to tune against five to ten seconds;
@@ -41,7 +44,7 @@ DEFAULT_WINDOW_SECONDS = 10.0
 
 
 def default_window(
-    frame_count: int, fps: float, seconds: float = DEFAULT_WINDOW_SECONDS
+    frame_count: int, fps: Fraction, seconds: float = DEFAULT_WINDOW_SECONDS
 ) -> ClipRange | None:
     """The window a session opens with: `seconds` of it, or all of it.
 
@@ -50,19 +53,25 @@ def default_window(
     seconds is, and inventing a number here would put the user in a window whose
     length means nothing. A non-positive `seconds` is the same statement about
     the caller and gets the same answer.
+
+    Frames through `FrameCount.spanning`, which truncates where this used to
+    round: a window's length is "how many frames am I certain of", and the
+    half-frame the rounding added was one the user's ten seconds does not
+    cover. The floor is what keeps a rate slower than one frame per `seconds`
+    from opening a window of nothing.
     """
     if frame_count <= 0:
         return None
-    if fps <= 0.0 or seconds <= 0.0:
+    if fps <= 0 or seconds <= 0.0:
         return ClipRange(start=0, end=frame_count)
-    length = min(max(round(seconds * fps), 1), frame_count)
-    return ClipRange(start=0, end=length)
+    spanned = FrameCount.spanning(MediaTime(Fraction(seconds)), fps)
+    return ClipRange(start=0, end=min(max(spanned.frames, 1), frame_count))
 
 
 def effective_window(
     clip: ClipRange | None,
     frame_count: int,
-    fps: float,
+    fps: Fraction,
     seconds: float = DEFAULT_WINDOW_SECONDS,
 ) -> ClipRange | None:
     """What a session shows: the user's choice, or the default until they make one.

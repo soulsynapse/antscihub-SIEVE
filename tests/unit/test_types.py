@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import math
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from sieve.core.types import ROI, ChannelSpec, Frame, VideoMetadata
+from sieve.core.types import ROI, ChannelSpec, Frame, FrameCount, MediaTime, VideoMetadata
+
+#: The rate the whole exactness argument is about — see `test_quantities.py`,
+#: which makes the same point one layer down, on the types alone.
+NTSC = Fraction(30000, 1001)
 
 
 class TestROI:
@@ -48,18 +54,35 @@ class TestROI:
 
 
 class TestVideoMetadata:
-    def _metadata(self, fps: float) -> VideoMetadata:
+    def _metadata(self, fps: Fraction) -> VideoMetadata:
         return VideoMetadata(path=Path("clip.mp4"), width=640, height=480, fps=fps, frame_count=300)
 
     def test_duration_from_frame_count(self) -> None:
-        assert self._metadata(30.0).duration_seconds == pytest.approx(10.0)
+        assert self._metadata(Fraction(30)).duration_seconds == MediaTime(Fraction(10))
 
     def test_unusable_fps_yields_zero_rather_than_dividing(self) -> None:
-        assert self._metadata(0.0).duration_seconds == 0.0
-        assert self._metadata(0.0).timestamp_of(100) == 0.0
+        zero = MediaTime(Fraction(0))
+        assert self._metadata(Fraction(0)).duration_seconds == zero
+        assert self._metadata(Fraction(0)).timestamp_of(100) == zero
 
     def test_timestamp_of_frame(self) -> None:
-        assert self._metadata(50.0).timestamp_of(125) == pytest.approx(2.5)
+        assert self._metadata(Fraction(50)).timestamp_of(125) == MediaTime(Fraction(5, 2))
+
+    def test_a_timestamp_lands_back_on_the_frame_it_came_from(self) -> None:
+        """Frame 15 of an NTSC source, out to time and back. The whole item.
+
+        This is the arithmetic `test_quantities.py` pins on the types, asked of
+        the metadata that actually produces the number — which is where it used
+        to fail, because `fps` was the `double` `CAP_PROP_FPS` returned and no
+        exactness downstream could recover what that division threw away. The
+        second assertion is the old answer: a whole frame, at frame 15, in the
+        first second of footage.
+        """
+        metadata = self._metadata(NTSC)
+
+        assert FrameCount.spanning(metadata.timestamp_of(15), metadata.fps) == FrameCount(15)
+        seconds = float(metadata.timestamp_of(15).seconds)
+        assert math.floor(seconds * float(metadata.fps)) == 14
 
 
 class TestFrame:

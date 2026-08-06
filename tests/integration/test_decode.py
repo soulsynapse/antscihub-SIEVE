@@ -8,15 +8,36 @@ neighbouring frame is invisible until it corrupts a cut.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
 from sieve.core.types import ChannelSpec
 from sieve.decode.identity import decoder_identity
-from sieve.decode.reader import GRAB_FORWARD_LIMIT, VideoDecodeError, VideoReader
-from tests.conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
+from sieve.decode.reader import GRAB_FORWARD_LIMIT, VideoDecodeError, VideoReader, container_rate
+from sieve.storage.crop_writer import write_ffv1
+from tests.conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_RATE, FIXTURE_WIDTH
+
+#: The rate that cannot be written down as a double, and the only reason the
+#: probe exists. `core/types.py` carries the arithmetic.
+NTSC = Fraction(30000, 1001)
+
+
+@pytest.fixture(scope="module")
+def ntsc_video(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A source at exactly 30000/1001, written rather than committed.
+
+    FFV1 in Matroska because that is the one encoder this repo already owns,
+    and because it round-trips the rational exactly — so a failure below is the
+    probe's and not the muxer's.
+    """
+    path = tmp_path_factory.mktemp("ntsc") / "ntsc.mkv"
+    frames = [np.full((16, 16), index * 5, dtype=np.uint8) for index in range(20)]
+    write_ffv1(path, iter(frames), fps=NTSC)
+    return path
 
 
 class TestOpen:
@@ -25,7 +46,7 @@ class TestOpen:
             metadata = reader.metadata
             assert (metadata.width, metadata.height) == (FIXTURE_WIDTH, FIXTURE_HEIGHT)
             assert metadata.frame_count == FIXTURE_FRAMES
-            assert metadata.fps > 0.0
+            assert metadata.fps == FIXTURE_RATE
 
     def test_missing_file_raises(self, tmp_path: Path) -> None:
         with pytest.raises(VideoDecodeError, match="No such video file"):
@@ -178,3 +199,42 @@ class TestLumaPath:
         monkeypatch.setattr(reader, "_capture", PackedCapture())
         with pytest.raises(VideoDecodeError, match="asked for the luma plane"):
             reader.read(0)
+
+
+class TestTheSourceRate:
+    """Where the exact rate comes from, and what it must still be worth as a float."""
+
+    def test_it_arrives_as_the_rational_the_container_declares(self, ntsc_video: Path) -> None:
+        """Not 29.97, not a `limit_denominator` guess that happens to match.
+
+        Every published timestamp is founded on this number, and the failure it
+        closes is one whole frame at frame 15 rather than a rounding in the
+        last decimal place.
+        """
+        with VideoReader(ntsc_video) as reader:
+            assert reader.metadata.fps == NTSC
+
+    def test_its_float_is_the_double_opencv_hands_over(self, ntsc_video: Path) -> None:
+        """The one place the exact rate and the filters' `float fps` may meet.
+
+        `block_signal`, `motion_history` and `temporal_baseline` each hash an
+        `fps` param into `canonical_json`, and `gui/filter_tab._fps` writes it
+        from this metadata. If `float(Fraction(30000, 1001))` were any other
+        double than the one `CAP_PROP_FPS` returned before the probe existed,
+        every cache entry those filters ever produced would be re-keyed by a
+        change that was supposed to touch nothing.
+        """
+        capture = cv2.VideoCapture(str(ntsc_video))
+        try:
+            opencv_double = capture.get(cv2.CAP_PROP_FPS)
+        finally:
+            capture.release()
+
+        with VideoReader(ntsc_video) as reader:
+            assert float(reader.metadata.fps) == opencv_double
+
+    def test_a_file_that_states_no_rate_states_none(self, tmp_path: Path) -> None:
+        """Zero, not a guess — which every consumer already reads as a refusal."""
+        junk = tmp_path / "not-a-video.mkv"
+        junk.write_bytes(b"this is not a video")
+        assert container_rate(junk) == Fraction(0)

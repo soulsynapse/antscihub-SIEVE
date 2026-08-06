@@ -82,6 +82,7 @@ import csv
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Generic, TypeVar
 
@@ -89,6 +90,7 @@ import numpy as np
 
 from sieve.core.filter_base import ElementNames
 from sieve.core.pipeline_model import DetectorSettings
+from sieve.core.types import FrameCount, MediaTime
 from sieve.detect.detector import DetectorUpdate
 
 #: What one row is built from — a frame of a series, or one interval.
@@ -147,7 +149,10 @@ class DetectionExport:
     #: is the correct key and a generated hash, unreadable and not stable
     #: across a rebuild of the node. `block_signal` is what a legend wants.
     filter_id: str
-    fps: float
+    #: The source's rate, exactly as the container declares it. A `float` here
+    #: is what made `start_seconds` a number that floors back onto the wrong
+    #: frame at 30000/1001 — see `_at_frame`.
+    fps: Fraction
     #: The series' first source frame, so `frame` is absolute.
     start: int
     update: DetectorUpdate
@@ -219,8 +224,8 @@ def series_columns(element_names: ElementNames) -> tuple[Column[Frame], ...]:
         Column("frame", "absolute source frame", lambda r: str(r.frame)),
         Column(
             "time_seconds",
-            "`frame / fps`, to the millisecond",
-            lambda r: _seconds(r.frame / r.export.fps),
+            "when `frame` is, to the millisecond; `NA` if the source states no rate",
+            lambda r: _at_frame(r.export, r.frame),
         ),
         Column(
             f"{unit}_total",
@@ -293,17 +298,15 @@ INTERVAL_COLUMNS: tuple[Column[Interval], ...] = (
     ),
     Column("start_frame", "first detected frame, inclusive", lambda r: str(r.first)),
     Column("end_frame_exclusive", "one past the last detected frame", lambda r: str(r.last)),
-    Column("start_seconds", "`start_frame` in time", lambda r: _seconds(r.first / r.export.fps)),
-    Column(
-        "end_seconds", "`end_frame_exclusive` in time", lambda r: _seconds(r.last / r.export.fps)
-    ),
+    Column("start_seconds", "`start_frame` in time", lambda r: _at_frame(r.export, r.first)),
+    Column("end_seconds", "`end_frame_exclusive` in time", lambda r: _at_frame(r.export, r.last)),
     Column(
         "duration_frames", "`end_frame_exclusive - start_frame`", lambda r: str(r.last - r.first)
     ),
     Column(
         "duration_seconds",
         "the same, in time",
-        lambda r: _seconds((r.last - r.first) / r.export.fps),
+        lambda r: _at_frame(r.export, r.last - r.first),
     ),
 )
 
@@ -412,10 +415,36 @@ def _fraction(value: Any, elements: int) -> str:
     return f"{quotient:.{FRACTION_FIGURES}g}"
 
 
-def _seconds(value: float) -> str:
-    if not math.isfinite(value):
-        return _nonfinite(value)
-    return f"{value:.{SECONDS_DECIMALS}f}"
+def _at_frame(export: DetectionExport, frames: int) -> str:
+    """How long `frames` of the source last, to `SECONDS_DECIMALS`.
+
+    Exact, through `MediaTime`, because this is the column somebody takes into
+    R and lines a video up against: `frames / float(fps)` at 30000/1001 floors
+    back onto the previous frame from frame 15 onward, so the published
+    timestamp would name a frame the row is not about.
+
+    `NA` from a source that declares no rate (rule 6): it has not said how long
+    a frame lasts, and a `0.000` here would be a time nothing computed.
+    """
+    if export.fps <= 0:
+        return ABSENT
+    return _seconds(MediaTime.of_frames(FrameCount(frames), export.fps))
+
+
+def _seconds(value: MediaTime) -> str:
+    """A media time as fixed-point seconds, rounded in exact arithmetic.
+
+    The rounding is done on the `Fraction` rather than by handing a double to
+    `%.3f`, because the ties are real and land on the frames people look at:
+    frame 15 at 30000/1001 is 0.5005 s exactly, and which side of the tie a
+    double falls on is a property of the binary approximation rather than of
+    the number. Half-to-even, stated here, is the same rule `%.3f` applies to
+    the value it actually holds.
+    """
+    scale = 10**SECONDS_DECIMALS
+    ticks = round(value.seconds * scale)
+    whole, remainder = divmod(abs(ticks), scale)
+    return f"{'-' if ticks < 0 else ''}{whole}.{remainder:0{SECONDS_DECIMALS}d}"
 
 
 def _nonfinite(value: float) -> str:
@@ -500,7 +529,7 @@ def _readme(
         lines += [
             f"### {export.replicate}",
             "",
-            f"- signal node: `{export.node_id}` (`{export.filter_id}`), {export.fps:g} fps",
+            f"- signal node: `{export.node_id}` (`{export.filter_id}`), {export.fps} fps",
             f"- frequency band: {_band(settings.freq_band)} Hz",
             f"- value band: {_band(settings.value_band)}",
             f"- detection window: {settings.window_frames} frames, "

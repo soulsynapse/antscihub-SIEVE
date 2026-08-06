@@ -336,10 +336,10 @@ class CropToolsPanel(QWidget):
             self.refresh()
             return
 
-        seconds = metadata.duration_seconds
+        seconds = float(metadata.duration_seconds.seconds)
         self._source_label.setText(
             f"{metadata.path.name}\n"
-            f"{metadata.width} x {metadata.height} · {metadata.fps:.2f} fps\n"
+            f"{metadata.width} x {metadata.height} · {float(metadata.fps):.2f} fps\n"
             f"{metadata.frame_count:,} frames · {seconds:.1f} s"
         )
         for field, ceiling in (

@@ -840,7 +840,7 @@ class MainWindow(QMainWindow):
         self._set_video_actions_enabled(True)
         self.statusBar().showMessage(
             f"{metadata.path.name}  ·  {metadata.width}x{metadata.height}  ·  "
-            f"{metadata.fps:.2f} fps  ·  {metadata.frame_count:,} frames"
+            f"{float(metadata.fps):.2f} fps  ·  {metadata.frame_count:,} frames"
         )
 
         # Read and cleared before either branch runs: the neighbour open can
@@ -942,9 +942,9 @@ class MainWindow(QMainWindow):
         """
         clip = self._document.clip
         fps = self._document.source_fps
-        if clip is None or fps <= 0.0:
+        if clip is None or fps <= 0:
             return
-        seconds = clip.frame_count / fps
+        seconds = float(clip.frame_count / fps)
         self._preferences.window_seconds = seconds
         self._document.default_window_seconds = seconds
 

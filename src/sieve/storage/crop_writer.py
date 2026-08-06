@@ -44,7 +44,7 @@ from numpy.typing import NDArray
 #: muxers refuse outright.
 MAX_RATE_DENOMINATOR = 10_000
 
-#: The fallback when a container reports no frame rate. A file that says nothing
+#: The fallback when a source reports no frame rate. A file that says nothing
 #: about its own speed still has to be written at *some* rate, and refusing over
 #: metadata would throw away a decode nobody can get back cheaply.
 FALLBACK_FPS = 30.0
@@ -83,7 +83,7 @@ class _OutputContainer(Protocol):
     def mux(self, packets: object) -> None: ...
 
 
-def write_ffv1(path: Path, frames: Iterable[NDArray[Any]], *, fps: float) -> int:
+def write_ffv1(path: Path, frames: Iterable[NDArray[Any]], *, fps: Fraction) -> int:
     """Encode `frames` to `path` as FFV1 in Matroska. Returns the frame count.
 
     The geometry and pixel format come from the first frame and are then fixed:
@@ -96,13 +96,15 @@ def write_ffv1(path: Path, frames: Iterable[NDArray[Any]], *, fps: float) -> int
         frames: Contiguous 8-bit arrays, `(h, w)` for gray or `(h, w, 3)` BGR.
             Consumed lazily — one frame is resident at a time, which is what
             lets a caller stream a whole clip through here.
-        fps: Container frame rate. Metadata only; see `MAX_RATE_DENOMINATOR`.
+        fps: Container frame rate, as the source declared it. Metadata only;
+            see `MAX_RATE_DENOMINATOR`. Non-positive means the source stated
+            none, and the artifact is written at `FALLBACK_FPS`.
 
     Raises:
         CropWriteError: if `frames` is empty, if a frame is not an 8-bit 2-D or
             3-channel array, or if one disagrees with the first frame's shape.
     """
-    rate = Fraction(fps if fps > 0 else FALLBACK_FPS).limit_denominator(MAX_RATE_DENOMINATOR)
+    rate = (fps if fps > 0 else Fraction(FALLBACK_FPS)).limit_denominator(MAX_RATE_DENOMINATOR)
     written = 0
     with av.open(str(path), mode="w", format="matroska") as opened:
         container = cast(_OutputContainer, opened)

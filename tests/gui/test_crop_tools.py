@@ -17,6 +17,7 @@ widget points mean the same source pixels in both files.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -41,7 +42,9 @@ SCALE = 0.75
 
 BOX = ROI(x=100, y=100, width=200, height=200)
 
-SOURCE = VideoMetadata(path=Path("rack.mp4"), width=1000, height=800, fps=30.0, frame_count=1000)
+SOURCE = VideoMetadata(
+    path=Path("rack.mp4"), width=1000, height=800, fps=Fraction(30), frame_count=1000
+)
 
 
 def _widget_point(source_x: float, source_y: float) -> QPointF:

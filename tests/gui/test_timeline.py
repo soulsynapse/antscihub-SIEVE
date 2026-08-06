@@ -222,7 +222,7 @@ class TestTheStrip:
         qtbot.addWidget(band)
         band.resize(STRIP_WIDTH, band.height())
         band.set_source_frames(SOURCE_FRAMES)
-        band.set_timebase(SOURCE_FPS)
+        band.set_timebase(float(SOURCE_FPS))
         return band
 
     def test_the_band_covers_the_span_it_was_given(self, strip: TimelineStrip) -> None:
@@ -433,7 +433,7 @@ class TestTheHoverBubble:
         qtbot.addWidget(band)
         band.resize(STRIP_WIDTH, band.height())
         band.set_source_frames(SOURCE_FRAMES)
-        band.set_timebase(SOURCE_FPS)
+        band.set_timebase(float(SOURCE_FPS))
         return band
 
     def test_it_names_the_frame_under_the_cursor_in_both_units(self, strip: TimelineStrip) -> None:

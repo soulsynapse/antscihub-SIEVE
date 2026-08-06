@@ -11,6 +11,8 @@ No Qt anywhere: the module is arithmetic, and these are numbers fed to it.
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
 from sieve.core.clip_window import (
@@ -30,6 +32,11 @@ SOURCE_FRAMES = 1000
 
 #: A one-second floor at 30 fps, which is what a handle drag on the strip carries.
 FLOOR = 30
+
+#: A whole rate, so the arithmetic below reads. `NTSC` is the one that has an
+#: opinion about how the conversion is done.
+RATE = Fraction(30)
+NTSC = Fraction(30000, 1001)
 
 
 class TestTheWindowHoldsItsLength:
@@ -132,19 +139,19 @@ class TestContaining:
 
 class TestTheDefaultWindow:
     def test_it_is_ten_seconds_at_the_head(self) -> None:
-        assert default_window(SOURCE_FRAMES, 30.0) == ClipRange(
+        assert default_window(SOURCE_FRAMES, RATE) == ClipRange(
             start=0, end=int(DEFAULT_WINDOW_SECONDS * 30)
         )
 
     def test_a_shorter_asset_is_the_whole_asset(self) -> None:
-        assert default_window(120, 30.0) == ClipRange(start=0, end=120)
+        assert default_window(120, RATE) == ClipRange(start=0, end=120)
 
     def test_an_unusable_frame_rate_yields_the_whole_asset(self) -> None:
         """Ten seconds of nothing is not a length worth putting a user inside."""
-        assert default_window(SOURCE_FRAMES, 0.0) == ClipRange(start=0, end=SOURCE_FRAMES)
+        assert default_window(SOURCE_FRAMES, Fraction(0)) == ClipRange(start=0, end=SOURCE_FRAMES)
 
     def test_no_source_is_no_window(self) -> None:
-        assert default_window(0, 30.0) is None
+        assert default_window(0, RATE) is None
 
     def test_the_absence_of_a_choice_survives_being_displayed(self) -> None:
         """The document keeps `None`; only the *display* falls back.
@@ -153,23 +160,37 @@ class TestTheDefaultWindow:
         make `Project.clip = None` unreachable, and `plan.py`'s whole-video
         fallback along with it.
         """
-        assert effective_window(None, SOURCE_FRAMES, 30.0) == ClipRange(start=0, end=300)
+        assert effective_window(None, SOURCE_FRAMES, RATE) == ClipRange(start=0, end=300)
         chosen = ClipRange(start=10, end=20)
-        assert effective_window(chosen, SOURCE_FRAMES, 30.0) is chosen
+        assert effective_window(chosen, SOURCE_FRAMES, RATE) is chosen
 
     def test_a_caller_supplied_length_replaces_the_shipped_one(self) -> None:
         """What makes the length the GUI remembers reach the fallback at all."""
-        assert default_window(SOURCE_FRAMES, 30.0, 4.0) == ClipRange(start=0, end=120)
-        assert effective_window(None, SOURCE_FRAMES, 30.0, 4.0) == ClipRange(start=0, end=120)
+        assert default_window(SOURCE_FRAMES, RATE, 4.0) == ClipRange(start=0, end=120)
+        assert effective_window(None, SOURCE_FRAMES, RATE, 4.0) == ClipRange(start=0, end=120)
 
     def test_a_remembered_length_does_not_displace_a_chosen_window(self) -> None:
         """The remembered length is the fallback, never an edit to a project."""
         chosen = ClipRange(start=10, end=20)
-        assert effective_window(chosen, SOURCE_FRAMES, 30.0, 4.0) is chosen
+        assert effective_window(chosen, SOURCE_FRAMES, RATE, 4.0) is chosen
 
     def test_a_length_of_nothing_yields_the_whole_asset(self) -> None:
         """A store hand-edited to zero must not open a session in no frames."""
-        assert default_window(SOURCE_FRAMES, 30.0, 0.0) == ClipRange(start=0, end=SOURCE_FRAMES)
+        assert default_window(SOURCE_FRAMES, RATE, 0.0) == ClipRange(start=0, end=SOURCE_FRAMES)
+
+    def test_a_broadcast_rate_gets_the_frames_ten_seconds_covers(self) -> None:
+        """299, not 300: ten seconds at 30000/1001 is 299.7 frames.
+
+        The rounding this used to do handed back a window a frame longer than
+        the length it was asked for, and `FrameCount.spanning` is where the
+        truncation is argued. Exact arithmetic is what makes the answer 299
+        rather than whichever side of 299.7 a double landed on.
+        """
+        assert default_window(SOURCE_FRAMES, NTSC) == ClipRange(start=0, end=299)
+
+    def test_a_rate_too_slow_for_the_length_still_yields_a_frame(self) -> None:
+        """The floor is what stops a truncation opening a window of nothing."""
+        assert default_window(SOURCE_FRAMES, Fraction(1, 60), 10.0) == ClipRange(start=0, end=1)
 
 
 class TestFittingOntoTheBoundSource:

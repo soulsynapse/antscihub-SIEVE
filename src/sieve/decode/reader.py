@@ -12,6 +12,10 @@ rounds to (`docs/findings/2026.07.25-decode-cost-is-colour-conversion.md`,
 `prefetch.py`'s job, one reader per thread; nothing here is thread-safe (see
 `VideoReader`, below).
 
+The one thing here that is not OpenCV's is the frame rate: `container_rate`
+probes the header with PyAV because a `double` cannot carry 30000/1001. It
+reads metadata and no frames — see its docstring for why that boundary matters.
+
 `luma=True` requests the Y plane instead of a BGR convert
 (`CAP_PROP_CONVERT_RGB=0`) — about a third the bytes and cost
 (`docs/completed-todo/2026.07.27-grayscale-and-the-luma-decode.md`) — off by
@@ -26,10 +30,13 @@ only obeys.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
+import av
+import av.error
 import cv2
 from numpy.typing import NDArray
 
@@ -40,6 +47,38 @@ GRAB_FORWARD_LIMIT = 40
 
 class VideoDecodeError(RuntimeError):
     pass
+
+
+def container_rate(path: Path) -> Fraction:
+    """The frame rate the container declares, as the rational it declares it as.
+
+    OpenCV cannot answer this. `CAP_PROP_FPS` is a `double`, and the division
+    that produced it has already thrown the denominator away: 30000/1001
+    recovered from that double floors fifteen frames back to fourteen, in the
+    first second of footage (`core/types.py`'s header carries the arithmetic).
+    PyAV reads `avg_frame_rate` off the stream header — the same field OpenCV
+    divides — before anything divides it.
+
+    Metadata only. Every decoded pixel in SIEVE still comes from the
+    `VideoCapture` below, so this does not make PyAV a second decoder identity;
+    that is the claim `pyproject.toml`'s `av` entry makes and this is the one
+    place it could quietly stop being true.
+
+    Zero for a container that declares no rate, and zero when PyAV cannot open
+    what OpenCV did — which every caller already treats as "the source has not
+    said". Recovering the rational from the double with `limit_denominator` was
+    the alternative: it is right for the NTSC family by luck rather than by
+    construction, silently wrong for any rate whose denominator exceeds the
+    limit, and a guess that is usually right is the worst kind of number to
+    found a published timestamp on.
+    """
+    try:
+        with av.open(str(path)) as container:
+            streams = container.streams.video
+            rate = streams[0].average_rate if streams else None
+    except (av.error.FFmpegError, OSError, ValueError):
+        return Fraction(0)
+    return rate if rate is not None and rate > 0 else Fraction(0)
 
 
 # Not thread-safe: one reader belongs to one thread. The GUI keeps its reader
@@ -73,7 +112,7 @@ class VideoReader:
             path=self._path,
             width=int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
             height=int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            fps=float(self._capture.get(cv2.CAP_PROP_FPS)),
+            fps=container_rate(self._path),
             frame_count=int(self._capture.get(cv2.CAP_PROP_FRAME_COUNT)),
         )
 

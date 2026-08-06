@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from fractions import Fraction
 
 import pytest
 
@@ -24,7 +25,7 @@ SOURCE_FRAMES = 1000
 #: Frame rate the same source is bound at. Named for the same reason: the
 #: default working window is ten *seconds*, so the length of the window a test
 #: starts with is this number times ten.
-SOURCE_FPS = 30.0
+SOURCE_FPS = Fraction(30)
 
 
 def answering(button: QMessageBox.StandardButton) -> Callable[..., QMessageBox.StandardButton]:

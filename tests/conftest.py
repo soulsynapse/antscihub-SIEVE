@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from fractions import Fraction
 from pathlib import Path
 
 import cv2
@@ -26,6 +27,9 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 FIXTURE_FPS = 20.0
+#: The same rate as a container states it, which is what `VideoMetadata.fps`
+#: now carries. Whole here, so the two spellings agree exactly.
+FIXTURE_RATE = Fraction(20)
 FIXTURE_FRAMES = 40
 FIXTURE_WIDTH = 160
 FIXTURE_HEIGHT = 120

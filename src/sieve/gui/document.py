@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -159,7 +160,7 @@ class ReplicateDocument(QObject):
         self._detector: DetectorSettings | None = None
         self._source_size: tuple[int, int] | None = None
         self._source_frames = 0
-        self._source_fps = 0.0
+        self._source_fps = Fraction(0)
         self._clip: ClipRange | None = None
         #: How long the fallback window below is. The window sets it from the
         #: remembered preference; a document constructed on its own opens at the
@@ -236,12 +237,17 @@ class ReplicateDocument(QObject):
         return self._source_frames
 
     @property
-    def source_fps(self) -> float:
-        """Frame rate of the bound source, zero when nothing is bound.
+    def source_fps(self) -> Fraction:
+        """Frame rate of the bound source, exactly; zero when nothing is bound.
 
         Held only so a window has a length before the user has chosen one —
         ten seconds is a count of frames and there is no other way to know how
         many. Nothing else here is in the time domain.
+
+        The container's rational rather than a double, because that is what
+        `clip_window` needs to land ten seconds on the frame the user is
+        actually shown. A widget that wants a float says so at its own edge;
+        `filter_tab._fps` is the one that writes it into a params field.
         """
         return self._source_fps
 
@@ -333,7 +339,7 @@ class ReplicateDocument(QObject):
         state unreachable. "One second of D" needs the frame rate, which is
         why this is a method on the document and not a constant on the model.
         """
-        return self._detector or DetectorSettings.default_for(self._source_fps)
+        return self._detector or DetectorSettings.default_for(float(self._source_fps))
 
     def resolved_node_params(self, node_id: str) -> dict[str, Any]:
         """What `node_id` runs with for the selected replicate.
@@ -514,7 +520,9 @@ class ReplicateDocument(QObject):
         self.pipeline_changed.emit()
         self.grouping_changed.emit()
 
-    def bind_source(self, width: int, height: int, frame_count: int = 0, fps: float = 0.0) -> None:
+    def bind_source(
+        self, width: int, height: int, frame_count: int = 0, fps: Fraction = Fraction(0)
+    ) -> None:
         """Attach to a new source video, discarding replicates and history.
 
         Replicates are geometry in one video's pixel space; carrying them
@@ -539,7 +547,7 @@ class ReplicateDocument(QObject):
         """
         self._source_size = (width, height)
         self._source_frames = max(frame_count, 0)
-        self._source_fps = max(fps, 0.0)
+        self._source_fps = max(fps, Fraction(0))
         self._reset()
         self.source_changed.emit()
         self.structure_changed.emit()
@@ -549,7 +557,7 @@ class ReplicateDocument(QObject):
         """Detach from any source video."""
         self._source_size = None
         self._source_frames = 0
-        self._source_fps = 0.0
+        self._source_fps = Fraction(0)
         self._reset()
         self.source_changed.emit()
         self.structure_changed.emit()

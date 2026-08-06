@@ -18,6 +18,7 @@ non-drag path, which has no release coming to commit it).
 from __future__ import annotations
 
 from collections.abc import Iterator
+from fractions import Fraction
 from typing import Any
 
 import numpy as np
@@ -58,7 +59,7 @@ def tab(
 ) -> Iterator[FilterTab]:
     instance = FilterTab(player, document, runner, metrics=MetricBus())
     qtbot.addWidget(instance)
-    document.bind_source(1000, 800, 1000, 30.0)
+    document.bind_source(1000, 800, 1000, Fraction(30))
     yield instance
     instance.shutdown()
 

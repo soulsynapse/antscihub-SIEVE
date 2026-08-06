@@ -16,6 +16,7 @@ right file, right frame count, wrong pixels.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -126,7 +127,7 @@ class TestAFileThatDoesNotReadBackIsRefused:
         from it would be wrong with no evidence anywhere.
         """
 
-        def inverting_writer(path: Path, frames: Iterable[NDArray[Any]], *, fps: float) -> int:
+        def inverting_writer(path: Path, frames: Iterable[NDArray[Any]], *, fps: Fraction) -> int:
             return write_ffv1(path, (255 - array for array in frames), fps=fps)
 
         monkeypatch.setattr(materialize_module, "write_ffv1", inverting_writer)
@@ -141,7 +142,7 @@ class TestAFileThatDoesNotReadBackIsRefused:
     ) -> None:
         """A truncated encode must not be renamed into place."""
 
-        def short_writer(path: Path, frames: Iterable[NDArray[Any]], *, fps: float) -> int:
+        def short_writer(path: Path, frames: Iterable[NDArray[Any]], *, fps: Fraction) -> int:
             kept = list(frames)[:2]
             return write_ffv1(path, iter(kept), fps=fps)
 

@@ -394,21 +394,26 @@ class VideoMetadata:
     path: Path
     width: int
     height: int
-    fps: float
+    #: The container's own rational, not a double. `decode/reader.py` probes it
+    #: with PyAV because `CAP_PROP_FPS` has already divided the denominator
+    #: away, and 30000/1001 recovered from that double sends frame 15 back as
+    #: frame 14 — see this module's header. Zero when the container states no
+    #: rate at all, which every consumer here treats as a refusal to answer.
+    fps: Fraction
     frame_count: int
 
     @property
-    def duration_seconds(self) -> float:
-        """Wall-clock length, or 0.0 when the container reports no frame rate."""
-        if self.fps <= 0.0:
-            return 0.0
-        return self.frame_count / self.fps
+    def duration_seconds(self) -> MediaTime:
+        """Media length of the whole source, or zero when no rate was stated."""
+        if self.fps <= 0:
+            return MediaTime(Fraction(0))
+        return MediaTime.of_frames(FrameCount(self.frame_count), self.fps)
 
-    def timestamp_of(self, index: int) -> float:
-        """Presentation time in seconds of the frame at `index`."""
-        if self.fps <= 0.0:
-            return 0.0
-        return index / self.fps
+    def timestamp_of(self, index: int) -> MediaTime:
+        """Presentation time of the frame at `index`, exactly."""
+        if self.fps <= 0:
+            return MediaTime(Fraction(0))
+        return MediaTime.of_frames(FrameCount(index), self.fps)
 
 
 @dataclass(frozen=True, slots=True)

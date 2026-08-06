@@ -221,9 +221,9 @@ class VideoPlayer(QObject):
     @property
     def fps(self) -> float:
         """Effective frame rate, substituting a fallback for unusable metadata."""
-        if self._metadata is None or self._metadata.fps <= 0.0:
+        if self._metadata is None or self._metadata.fps <= 0:
             return FALLBACK_FPS
-        return self._metadata.fps
+        return float(self._metadata.fps)
 
     # ---- configuration ---------------------------------------------------
 
@@ -562,7 +562,7 @@ class VideoPlayer(QObject):
     def _on_opened(self, metadata: VideoMetadata) -> None:
         self._metadata = metadata
         self._current_index = 0
-        self._policy.set_fps(metadata.fps)
+        self._policy.set_fps(float(metadata.fps))
         self.opened.emit(metadata)
         self._request(0, RequestKind.EXACT)
 

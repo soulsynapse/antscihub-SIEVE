@@ -24,7 +24,7 @@ from sieve.gui.filter_tab import FilterTab
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.transport.player import VideoPlayer
 from sieve.pipeline.preview import PreviewRender
-from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
+from tests.conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_RATE, FIXTURE_WIDTH
 
 pytestmark = pytest.mark.gui
 
@@ -169,7 +169,7 @@ def test_a_provisional_render_reuses_the_store_above_the_seam(
     from the session's store. If this fails, every hover in the wizard pays
     a cold render — the exact cost the mockup cycle validated away.
     """
-    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_FPS)
+    document.bind_source(FIXTURE_WIDTH, FIXTURE_HEIGHT, FIXTURE_FRAMES, FIXTURE_RATE)
     updates: list[int] = []
     renders: list[PreviewRender] = []
     tab.graphs_updated.connect(lambda: updates.append(1))

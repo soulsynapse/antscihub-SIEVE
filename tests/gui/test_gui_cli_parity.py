@@ -58,6 +58,7 @@ import csv
 import math
 from collections.abc import Iterator
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 
 import cv2
@@ -84,7 +85,14 @@ RENDER_TIMEOUT_MS = 60_000
 #: The fixture's shape, spelled here because the document is bound to it before
 #: any reader has been opened — which is the real ordering: a GUI knows its
 #: source's dimensions from the file dialog's probe, not from a render.
-WIDTH, HEIGHT, FRAMES, FPS = 160, 120, 40, 20.0
+WIDTH, HEIGHT, FRAMES = 160, 120, 40
+#: The source's rate as the container states it, beside the `float` a params
+#: field holds. Two spellings of one number, and the split is the point: the
+#: document and the window arithmetic take the rational, `block_signal`'s
+#: hashed `fps` param takes the double, and `gui/filter_tab._fps` is the only
+#: production code allowed to cross between them.
+FPS = Fraction(20)
+PARAM_FPS = float(FPS)
 
 #: The node the detector's series is taken over on both sides. The CLI finds it
 #: as the graph's one sink; the GUI watches it by id. That those two agree is
@@ -178,7 +186,8 @@ def stirred_clip(tmp_path_factory: pytest.TempPathFactory) -> Path:
     contents of is worse than two fixtures.
     """
     path = tmp_path_factory.mktemp("parity") / "stirred.mp4"
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter.fourcc(*"mp4v"), FPS, (WIDTH, HEIGHT))
+    fourcc = cv2.VideoWriter.fourcc(*"mp4v")
+    writer = cv2.VideoWriter(str(path), fourcc, PARAM_FPS, (WIDTH, HEIGHT))
     if not writer.isOpened():
         pytest.skip("No usable mp4v encoder in this OpenCV build")
     background = np.random.default_rng(7).integers(40, 90, size=(HEIGHT, WIDTH), dtype=np.uint8)
@@ -217,7 +226,7 @@ def tuned(qapp: object) -> Iterator[ReplicateDocument]:
                     node_id=SERIES_NODE,
                     filter_id="block_signal",
                     version="1.0.0",
-                    params={"signal": "change_energy", "block": 16, "scale": 1.0, "fps": FPS},
+                    params={"signal": "change_energy", "block": 16, "scale": 1.0, "fps": PARAM_FPS},
                 ),
             ),
             edges=(Edge(upstream="prep", downstream=SERIES_NODE),),
@@ -316,7 +325,7 @@ def _one_arena(
             revision=runner.revision,
             series=rows.rows,
             start_index=rows.start_index,
-            fps=doc.source_fps,
+            fps=float(doc.source_fps),
             state=DetectorState.from_settings(
                 doc.resolved_detector_for_selection(), solo_block=None
             ),

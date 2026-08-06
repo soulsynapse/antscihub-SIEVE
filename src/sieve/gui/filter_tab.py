@@ -633,7 +633,19 @@ class FilterTab(QWidget):
     # ---- the chain value -------------------------------------------------
 
     def _fps(self) -> float:
-        return self._document.source_fps or 30.0
+        """The chain's rate, as the `float` a filter's params field holds.
+
+        The one place the source's exact rational meets that `float`, and
+        deliberately the only one: `block_signal`, `motion_history` and
+        `temporal_baseline` each hash an `fps` into `canonical_json`, so
+        retyping the field would re-key every entry those filters ever cached
+        — for a kernel that multiplies a window by a number and wants nothing
+        exact. `float(Fraction(30000, 1001))` is the same double `CAP_PROP_FPS`
+        handed over before this conversion existed, so no key moves;
+        `tests/integration/test_decode.py` is where that is asserted rather
+        than assumed.
+        """
+        return float(self._document.source_fps) or 30.0
 
     def _block_step(self):
         steps = self._chain.steps

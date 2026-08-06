@@ -10,6 +10,7 @@ same resolved values per arena would make "remember" mean "until you close".
 from __future__ import annotations
 
 from collections.abc import Iterator
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -51,7 +52,7 @@ def tab(
     # The conftest document was bound before the tab existed, so re-bind with
     # the tab listening — the app's own order — which seeds the fresh chain
     # into the document and gives the first knob edit a baseline to move.
-    document.bind_source(1000, 800, 1000, 30.0)
+    document.bind_source(1000, 800, 1000, Fraction(30))
     yield instance
     instance.shutdown()
 
@@ -139,7 +140,7 @@ def test_saved_tuning_comes_back_per_arena_through_yaml(
     second = FilterTab(player, reopened, runner, metrics=MetricBus())
     qtbot.addWidget(second)
     try:
-        reopened.bind_source(1000, 800, 1000, 30.0)
+        reopened.bind_source(1000, 800, 1000, Fraction(30))
         reopened.load_project(project)
 
         assert [n.node_id for n in reopened.pipeline.nodes] == [

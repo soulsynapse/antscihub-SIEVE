@@ -228,7 +228,9 @@ these rules exist to prevent.
 **A comment earns its place by recording a decision.** Keep the reason, the
 rejected alternative, the non-obvious consequence, and the pointer to a
 finding. Cut anything a reader gets from the signature, the step-by-step
-narration of what the function does, and the second-person aside. One test:
+narration of what the function does, the second-person aside, and history the
+code has already moved past — a comment that describes a previous shape is not
+underivable, it is wrong, and git holds it. One test:
 *could a competent reader derive this sentence from the code?* If yes, delete
 it; if no, it is the whole value of the comment and shortening it is the wrong
 cut. `pipeline/executor.py` on why the backend is the plan's is the shape to

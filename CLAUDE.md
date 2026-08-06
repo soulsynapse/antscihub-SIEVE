@@ -125,11 +125,21 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
    provided it says so and names the measurement that would close it —
    `2026.08.05-render-fed-playback-folds-onto-one-frame.md` is that shape.
 
-   The mirror of this is that **small work does not owe an item.** A
-   `docs/todo/` file earns its place by chaining work through `after:` and by
-   holding a trigger in `gated_on`; a task that can be finished in place has
-   neither, so minting one certifies nothing and costs a file. Take the work,
-   and if it taught you something, that goes in `docs/findings/`.
+   The mirror is **not** that small work never owes an item — it is that an
+   item is minted *in advance* only when something else has to name the work
+   **before it exists**. `after:` resolves against both folders
+   (`tools/doc_index.py` indexes `[*completed, *items]`), so a finished entry
+   is a referenceable slug and work done immediately gets its name from
+   `complete_item.py --new` afterwards. Minting ahead of time buys exactly two
+   things: a name an *open* item can point at while the work is still pending,
+   and a place in the ranked frontier.
+
+   So the test is what the work unblocks, not how big it is. A docstring fix
+   nothing waits on needs no item however long it takes; one slice of a split
+   whose siblings must be ordered against it needs one however short it is,
+   because the ordering is the `after:` edge and the edge needs a slug. When a
+   decision gets made in a session and something later will inherit it, that
+   decision is the item — the work is just what closes it.
 7. **Rebuild the indexes**: `uv run nox -s docs`. Staleness is a test failure —
    which is why the rebuild comes before the gate and not after it.
 8. **Run the gate**: `uv run nox -s checks`. It must pass. Run it as often as

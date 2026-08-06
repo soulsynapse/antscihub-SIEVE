@@ -115,6 +115,8 @@ class TestAnEditReachesDiskWithoutBeingSaved:
         self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         document = _open(qtbot, window, video)
+        status_messages: list[str] = []
+        window.statusBar().messageChanged.connect(status_messages.append)
 
         def refuse(*_args: object, **_kwargs: object) -> None:
             raise OSError("read-only")
@@ -122,7 +124,7 @@ class TestAnEditReachesDiskWithoutBeingSaved:
         monkeypatch.setattr(SnapshotStore, "record", refuse)
         document.add_roi(ROI(x=1, y=1, width=20, height=20))
         qtbot.waitUntil(
-            lambda: HISTORY_FAILED.split("{")[0] in window.statusBar().currentMessage(),
+            lambda: any(HISTORY_FAILED.split("{")[0] in message for message in status_messages),
             timeout=OPEN_TIMEOUT_MS,
         )
         # And it stays off: retrying every keystroke would bury the one message

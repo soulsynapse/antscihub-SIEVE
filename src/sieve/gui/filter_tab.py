@@ -54,11 +54,13 @@ incomplete — see the stack".
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from itertools import count
 from math import isfinite
 from time import perf_counter
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -78,6 +80,9 @@ from PySide6.QtWidgets import (
 
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.ops.wavelet import default_freqs
+from sieve.core.pipeline_model import ClipRange, Node, Pipeline
+from sieve.core.replicates import Replicate
+from sieve.core.types import WallTime
 from sieve.filters.block_signal import BlockSignalParams, resolve_block
 from sieve.filters.block_signal import Signal as BlockSignal
 from sieve.filters.detect import gate_to
@@ -117,12 +122,18 @@ from sieve.gui.materialize_worker import MaterializeRunner
 from sieve.gui.param_form import param_rows
 from sieve.gui.preferences import Preferences
 from sieve.gui.preview_runner import PreviewRunner
+from sieve.gui.rescale_cost import (
+    RescaleCostHistory,
+    RescaleCostSample,
+    format_rescale_cost,
+)
 from sieve.gui.scalogram_plot import ScalogramPlot
 from sieve.gui.source_boundary import SourceBoundary
 from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
 from sieve.gui.wizard_model import catalog, chain_from_pipeline
 from sieve.mutual.pool_meter import PoolMeter
+from sieve.pipeline.preview import PreviewRender
 from sieve.pipeline.series_collector import SeriesCollector
 
 #: The two interaction budgets this tab produces (ARCHITECTURE.md rows).
@@ -141,6 +152,16 @@ DENSITY_BUDGET = "density_rebuild"
 #: the block grid — fixed across the window so a cell's colour holds its
 #: meaning at every playhead position.
 _HEAT_PERCENTILE = 99.5
+
+
+@dataclass(frozen=True, slots=True)
+class _RescaleCostRun:
+    """A window render whose wall clock should become one cost sample."""
+
+    scale: float
+    frames: int
+    context: str
+    started_at: float | None = None
 
 
 def _block_signal_label(signal_id: str) -> str:
@@ -225,6 +246,8 @@ class FilterTab(QWidget):
         #: The summary says "filling" until it does, and the cheap tier reads
         #: it to know whether the frontier it recomputes is still moving.
         self._series_final = False
+        self._rescale_costs = RescaleCostHistory()
+        self._rescale_cost_runs: dict[int, _RescaleCostRun] = {}
         #: When the last upstream knob was edited, or None when nothing is
         #: being timed — the `knob_to_graphs` arm, same shape as the runner's
         #: first-tick arm.
@@ -315,6 +338,7 @@ class FilterTab(QWidget):
         self._sync_widgets_from_chain()
         self._rebuild_stack()
         self._apply()
+        self._refresh_rescale_cost()
 
     # ---- construction ----------------------------------------------------
 
@@ -350,6 +374,13 @@ class FilterTab(QWidget):
         self._downsample.setRange(0.05, 1.0)
         self._downsample.setSingleStep(0.05)
         self._downsample.setDecimals(2)
+        self._rescale_cost_label = QLabel("cost: timing pending")
+        self._rescale_cost_label.setObjectName("rescale-cost")
+        self._rescale_cost_label.setStyleSheet(f"color: {DIM.name()}; font-size: 11px;")
+        self._rescale_cost_label.setToolTip(
+            "Measured from completed window renders in this source, window, replicate, "
+            "and chain context. A numeric cost and knee need at least two scales."
+        )
         self._normalize = CommitCombo()
         self._normalize.addItems(["off", "zscore"])
         self._block = BlockSpinBox()
@@ -366,7 +397,7 @@ class FilterTab(QWidget):
         self._detect_note = QLabel("graph and detection window D live under the video")
         self._detect_note.setStyleSheet(f"color: {DIM.name()};")
 
-        self._rescale_row = _row("Downsample", self._downsample)
+        self._rescale_row = _row("Downsample", self._downsample, self._rescale_cost_label)
         self._normalize_row = _row("Normalize", self._normalize)
         self._block_row = _row("Block", self._block)
         self._signal_row = _row("Signal", *self._signal_buttons.values())
@@ -431,6 +462,7 @@ class FilterTab(QWidget):
         self._document.detector_changed.connect(self._on_detector_changed)
         self._document.pipeline_changed.connect(self._on_pipeline_changed)
         self._runner.opened.connect(self.resubmit)
+        self._runner.render_started.connect(self._on_render_started)
         self._runner.render_started.connect(self._collector_start)
         self._runner.render_started.connect(self._hud_begin)
         self._runner.frame_cost.connect(self._on_frame_cost)
@@ -541,6 +573,11 @@ class FilterTab(QWidget):
     def downsample_knob(self) -> QDoubleSpinBox:
         """The rescale card's spinbox — the knob tests drive bursts through."""
         return self._downsample
+
+    @property
+    def rescale_cost_text(self) -> str:
+        """The measured cost readout beside the rescale knob."""
+        return self._rescale_cost_label.text()
 
     @property
     def summary_text(self) -> str:
@@ -864,6 +901,123 @@ class FilterTab(QWidget):
         self._sync_widgets_from_chain()
         self._stack.update_captions(self._captions())
 
+    # ---- rescale cost ----------------------------------------------------
+
+    def _queue_rescale_cost_run(
+        self, revision: int, pipeline: Pipeline, window: ClipRange, replicate: Replicate | None
+    ) -> None:
+        """Remember the context a window render is about to measure."""
+        context = self._rescale_context(pipeline, window, replicate)
+        self._rescale_costs.prepare(context)
+        self._rescale_cost_runs = {
+            revision: _RescaleCostRun(
+                scale=self._rescale_scale(pipeline),
+                frames=window.frame_count,
+                context=context,
+            )
+        }
+        self._refresh_rescale_cost()
+
+    def _rescale_context(
+        self, pipeline: Pipeline, window: ClipRange, replicate: Replicate | None
+    ) -> str:
+        """Everything except the rescale value that makes two samples comparable."""
+        home = self._document.source_home
+        roi = replicate.roi if replicate is not None else None
+        source_size = self._document.source_size
+        payload: dict[str, Any] = {
+            "source": (
+                home.identity
+                if home is not None
+                else {
+                    "size": source_size,
+                    "frames": self._document.source_frames,
+                    "fps": str(self._document.source_fps),
+                }
+            ),
+            "window": [window.start, window.end],
+            "replicate": None if roi is None else [roi.x, roi.y, roi.width, roi.height],
+            "pipeline": [self._cost_node(node) for node in pipeline.nodes],
+            "edges": [edge.model_dump(mode="json") for edge in pipeline.edges],
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+
+    def _cost_node(self, node: Node) -> dict[str, Any]:
+        """Node identity plus non-scale params, so only the rescale lever varies."""
+        params = {
+            name: value
+            for name, value in sorted(node.params.items())
+            if not (name == "scale" and node.filter_id in {"rescale", "block_signal"})
+        }
+        return {
+            "node_id": node.node_id,
+            "filter_id": node.filter_id,
+            "version": node.version,
+            "params": params,
+        }
+
+    def _rescale_scale(self, pipeline: Pipeline) -> float:
+        """The runnable prefix's rescale factor, or 1.0 when absent."""
+        for node in pipeline.nodes:
+            if node.filter_id == "rescale":
+                try:
+                    return float(node.params.get("scale", 1.0))
+                except (TypeError, ValueError):
+                    return 1.0
+        return 1.0
+
+    def _refresh_rescale_cost(self) -> None:
+        """Show only measured multi-scale costs; provisional fits stay textual."""
+        fit = self._rescale_costs.fit
+        scale = self._rescale_scale(self._chain.pipeline())
+        self._rescale_cost_label.setText(format_rescale_cost(fit, scale))
+        if fit is None:
+            self._rescale_cost_label.setToolTip(
+                "No completed window render has been timed for this source, window, "
+                "replicate, and chain context yet."
+            )
+        elif fit.provisional:
+            self._rescale_cost_label.setToolTip(
+                "One scale has been timed. Another scale is required before SIEVE can "
+                "separate the fixed decode/source floor from scale-sensitive work."
+            )
+        else:
+            knee = fit.knee_scale()
+            knee_text = (
+                "no knee inside the legal scale range"
+                if knee is None
+                else f"knee at {knee:.2f}; below it, less resolution buys less time"
+            )
+            self._rescale_cost_label.setToolTip(
+                f"Fitted from {fit.n_samples} completed window renders on this machine "
+                f"and this footage: fixed {fit.fixed_per_frame.milliseconds:.1f} ms/frame, "
+                f"scale-sensitive {fit.per_pixel_per_frame.milliseconds:.1f} ms/frame at "
+                f"scale 1.0, {knee_text}."
+            )
+
+    @Slot(int)
+    def _on_render_started(self, revision: int) -> None:
+        run = self._rescale_cost_runs.get(revision)
+        if run is not None:
+            self._rescale_cost_runs[revision] = replace(run, started_at=perf_counter())
+
+    def _record_rescale_cost(self, render: object) -> None:
+        run = self._rescale_cost_runs.pop(self._runner.revision, None)
+        if run is None or run.started_at is None:
+            return
+        frames = (
+            render.frames if isinstance(render, PreviewRender) and render.frames > 0 else run.frames
+        )
+        self._rescale_costs.add(
+            RescaleCostSample(
+                scale=run.scale,
+                frames=frames,
+                wall=WallTime(perf_counter() - run.started_at),
+                context=run.context,
+            )
+        )
+        self._refresh_rescale_cost()
+
     # ---- rendering -------------------------------------------------------
 
     @Slot()
@@ -887,6 +1041,7 @@ class FilterTab(QWidget):
         # worker checks before calling it), so a refused submit simply leaves
         # the closure dead.
         expected = self._runner.revision + 1
+        pipeline = self._chain.pipeline()
         grabber = self._grabber(self._chain) if self._wizard is not None else None
         composite = self._composite_grabber()
 
@@ -897,7 +1052,8 @@ class FilterTab(QWidget):
             if composite is not None:
                 composite(result)
 
-        if self._runner.request_render(self._chain.pipeline(), window, replicate, consumer=feed):
+        self._queue_rescale_cost_run(expected, pipeline, window, replicate)
+        if self._runner.request_render(pipeline, window, replicate, consumer=feed):
             self._series_pending = True
             # This render displaces any outstanding refresh, which is abandoned
             # without reporting: holding the slot for it would suppress every
@@ -913,6 +1069,8 @@ class FilterTab(QWidget):
             self._filled = 0
             self._settled = 0
             self._series_final = False
+        else:
+            self._rescale_cost_runs.pop(expected, None)
 
     def _grabber(self, chain: LiveChain):
         """A consumer that catches the wizard's video frame as it flies past.
@@ -1046,7 +1204,7 @@ class FilterTab(QWidget):
 
     @Slot(object)
     def _on_render_finished(self, render: object) -> None:
-        del render
+        self._record_rescale_cost(render)
         self._series_pending = False
         if self._wizard is not None and self._grab:
             self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
@@ -1141,6 +1299,7 @@ class FilterTab(QWidget):
         again for the whole source.
         """
         del message
+        self._rescale_cost_runs.pop(self._runner.revision, None)
         self._series_pending = False
         self._release_composite_slot()
 
@@ -1429,8 +1588,8 @@ class FilterTab(QWidget):
         finally:
             for widget in knobs:
                 widget.blockSignals(False)
-        # After the echo, not inside it: the floor depends on the rescale this
-        # loop just wrote, and it changes no value — only what may be entered.
+        # The readout depends on the scale just echoed, but changes no document value.
+        self._refresh_rescale_cost()
 
     # ---- the step composite ----------------------------------------------
 

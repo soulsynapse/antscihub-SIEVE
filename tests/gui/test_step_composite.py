@@ -323,6 +323,34 @@ def test_a_composite_refresh_leaves_the_hud_series_alone(
     assert tab.hud.costs() == ((3, 25.0),), "the composite refresh touched the HUD"
 
 
+def test_rescale_cost_readout_waits_for_two_scales(
+    tab: FilterTab,
+    stub: _StubRunner,
+    document: ReplicateDocument,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One completed scale is not enough; the second draws the fitted knee."""
+    clock = 0.0
+    monkeypatch.setattr("sieve.gui.filter_tab.perf_counter", lambda: clock)
+
+    document.bind_source(1000, 800, 40, Fraction(20))
+    first_revision = stub.revision
+    stub.render_started.emit(first_revision)
+    clock = 4.0
+    stub.render_finished.emit(SimpleNamespace(frames=40))
+
+    assert tab.rescale_cost_text == "cost: needs another scale"
+
+    tab.downsample_knob.setValue(0.5)
+    second_revision = stub.revision
+    clock = 10.0
+    stub.render_started.emit(second_revision)
+    clock = 11.75
+    stub.render_finished.emit(SimpleNamespace(frames=40))
+
+    assert tab.rescale_cost_text == "cost 43.7 ms/fr; knee 0.58"
+
+
 def test_a_first_step_targets_base_is_the_replicates_crop(
     tab: FilterTab, stub: _StubRunner, document: ReplicateDocument, player: VideoPlayer
 ) -> None:

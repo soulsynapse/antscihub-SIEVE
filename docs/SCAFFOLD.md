@@ -55,9 +55,11 @@ src/sieve/core/replicates.py            # replicate identity, overrides, resolve
 src/sieve/core/clip_window.py           # ClipRange's algebra: which of a window's length or edges survives an edit
 src/sieve/core/ops/detection.py         # windowed_mean + detect_gate, the detection chain tail
 src/sieve/core/ops/wavelet.py           # morlet_band_power, default_freqs (capped at 0.45*fps)
-src/sieve/core/machine.py               # the machine read once: available_cpus, available_memory, process_memory_bytes
-src/sieve/core/pool_meter.py            # busy-time and depth counters a worker pool exposes to a sampler
-src/sieve/core/shares.py                # rule 5's ledger: worker constants, memory shares, sensor lists
+
+src/sieve/mutual/__init__.py            # dependency-shared, not agreement-shared
+src/sieve/mutual/machine.py             # the machine read once: available_cpus, available_memory, process_memory_bytes
+src/sieve/mutual/pool_meter.py          # busy-time and depth counters a worker pool exposes to a sampler
+src/sieve/mutual/shares.py              # rule 5's ledger: worker constants, memory shares, sensor lists
 
 src/sieve/decode/reader.py              # the only path to a frame; OpenCV VideoCapture, pinned
 src/sieve/decode/prefetch.py            # threaded span reads, measured 1.61x and no further
@@ -204,7 +206,6 @@ src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
 src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see docs/SETTLED.md
-src/sieve/mutual/__init__.py            # dependency-shared, not agreement-shared: shares, machine, pool_meter — todo/the-mutual-tier.md
 ```
 
 `.importlinter` declares `(sieve.workers)` in parentheses, so the layer contract

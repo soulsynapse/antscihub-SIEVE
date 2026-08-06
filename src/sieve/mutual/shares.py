@@ -17,7 +17,7 @@ tell those apart.
 holds no row here (`UNBOUNDED`); it gets its bound when
 `docs/todo/materialization.md` lands.
 
-Why this table sits in `core/` while declaring a GUI session's pools, and why
+Why this table sits in `mutual/` while declaring a GUI session's pools, and why
 `detect/detector.py` now imports `DETECTOR_WORKERS` rather than only naming
 it in prose, is argued in
 `docs/completed-todo/2026.07.28-machine-share-policy-is-above-its-consumers.md`
@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sieve.core.machine import available_memory
+from sieve.mutual.machine import available_memory
 
 PLAYER_WORKERS = 1
 

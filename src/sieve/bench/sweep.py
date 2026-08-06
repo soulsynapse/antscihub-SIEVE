@@ -8,14 +8,14 @@ sharp one makes a per-machine constant wrong everywhere it was not measured.
 That is a property of a response surface, and a point measurement cannot state
 it however carefully the point is taken.
 
-**Affinity is the machine axis.** `core/machine.py` reports which CPUs a
+**Affinity is the machine axis.** `mutual/machine.py` reports which CPUs a
 process may use and what class each one is; restricting to a subset synthesizes
 core configurations this hardware does not have, which is what the item's
 "samples from more than one class of machine" was blocked on. It is the cores
 axis only: four cores masked out of a large machine keep that machine's whole
 last-level cache and memory controller, so nothing here samples a genuinely
 low-bandwidth machine, and the constant this is aimed at
-(`core/shares.py` `PREVIEW_WORKERS`) is justified as a *bandwidth* property.
+(`mutual/shares.py` `PREVIEW_WORKERS`) is justified as a *bandwidth* property.
 A sweep that forgot this would report the strongest possible evidence for the
 weakest of its axes.
 
@@ -32,7 +32,7 @@ from statistics import median
 
 import psutil
 
-from sieve.core.machine import cpu_classes
+from sieve.mutual.machine import cpu_classes
 
 
 class AffinityUnavailableError(RuntimeError):

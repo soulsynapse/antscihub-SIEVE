@@ -15,7 +15,7 @@ to hand ``workers`` straight to `scipy.fft` and assume it split the batch. On
 the build this ships against it does not: 1, 2, 8, 16, and 32 workers time
 identically, on the strided ``axis=0`` call the transform actually makes *and*
 on a fully contiguous batch — so the whole ``(T, B)`` pass ran single-threaded
-while `core/shares.py` carefully budgeted threads for it. The block-chunk
+while `mutual/shares.py` carefully budgeted threads for it. The block-chunk
 loop is now run on a `ThreadPoolExecutor` and the inner FFTs are told
 ``workers=1``, which measures 4.9x at eight threads on the reference stress
 workload and cannot silently become 1x again — the pool is ours.
@@ -48,7 +48,7 @@ ComplexArray = NDArray[np.complexfloating[Any, Any]]
 #: Default thread count: every core this process may use. A whole-clip pass, a
 #: CLI run, and a headless parity check all want the whole machine, and `core/`
 #: holds no policy about who else might want it — a caller that must leave room
-#: says so, which is what `core/shares.py` does and the only place in the
+#: says so, which is what `mutual/shares.py` does and the only place in the
 #: tree that needs to.
 ALL_CORES = -1
 
@@ -57,8 +57,8 @@ def _pool_size(workers: int) -> int | None:
     """`workers` as a `ThreadPoolExecutor` size; `None` is the stdlib default.
 
     `ALL_CORES` becomes `None` rather than `os.cpu_count()` on purpose.
-    `core.machine.available_cpus` is importable from here now that the machine
-    reading lives in `core/`, but taking it would still be this module holding
+    `mutual.machine.available_cpus` is importable from here now that the machine
+    reading lives below this module, but taking it would still be this module holding
     a policy about how much of the machine a caller meant — and re-deriving
     "how much do I have" via `os.cpu_count` is exactly the second answer
     `resolve_workers` documents at length as the thing to avoid. The stdlib's
@@ -220,7 +220,7 @@ def morlet_power(
 
     ``workers`` is passed to `scipy.fft` and defaults to every core, which is
     what a batch or headless caller should have. An interactive caller sharing
-    the machine with decode threads passes a cap; see `core/shares.py`. It
+    the machine with decode threads passes a cap; see `mutual/shares.py`. It
     changes only how fast the answer arrives, never the answer.
     """
     x32 = np.asarray(x, np.float32)

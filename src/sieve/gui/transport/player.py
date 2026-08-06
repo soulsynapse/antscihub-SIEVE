@@ -66,9 +66,7 @@ from sieve.bench.retention_trace import (
     TraceRecorder,
 )
 from sieve.core.pipeline_model import ClipRange
-from sieve.core.pool_meter import PoolMeter
 from sieve.core.request_intent import RequestKind
-from sieve.core.shares import PROXY_CACHE_SHARE, resolved_bytes
 from sieve.core.types import VideoMetadata
 from sieve.gui.preferences import Preferences
 from sieve.gui.transport.coalescer import Request, RequestCoalescer
@@ -77,6 +75,8 @@ from sieve.gui.transport.pacing import feed_bounds, playback_step
 from sieve.gui.transport.proxy_cache import ProxyFrameCache
 from sieve.gui.transport.render_ring import RenderFrameRing
 from sieve.gui.transport.scrub_policy import ScrubPolicy
+from sieve.mutual.pool_meter import PoolMeter
+from sieve.mutual.shares import PROXY_CACHE_SHARE, resolved_bytes
 
 #: How often playback re-evaluates which frame the clock is on. Finer than any
 #: source frame rate we expect, so the limit on smoothness is decode, not this.

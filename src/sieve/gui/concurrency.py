@@ -1,7 +1,7 @@
 """The interactive session's slice: which pools it runs, and whether they fit.
 
 The declarations themselves — the three worker constants, the memory shares,
-the sensor lists, and every function over them — are in `core/shares.py`, one
+the sensor lists, and every function over them — are in `mutual/shares.py`, one
 layer below everything that consumes them. What is left here is the part that
 is genuinely about *this* process: an interactive session runs three pools at
 once, they must leave the GUI thread a core, and on a smaller allocation they
@@ -12,7 +12,7 @@ degrade in a stated priority order.
 unless a caller caps it, which is right for a CLI run, a whole-clip pass, or a
 headless parity check on a cluster node, and a module-level cap down there
 would throttle exactly the runs that should saturate a node. That rule is
-unchanged by the constants being reachable: `core/shares.py` is a declaration,
+unchanged by the constants being reachable: `mutual/shares.py` is a declaration,
 and applying it is the caller's act. A required `workers` argument with no
 default (`detect/detector.py`) is what forces the caller to say which it is,
 and it enforces at every call site where a module-level constant enforced at
@@ -21,8 +21,8 @@ none.
 
 from __future__ import annotations
 
-from sieve.core.machine import available_cpus
-from sieve.core.shares import DETECTOR_WORKERS, PLAYER_WORKERS, PREVIEW_WORKERS, WorkerSplit
+from sieve.mutual.machine import available_cpus
+from sieve.mutual.shares import DETECTOR_WORKERS, PLAYER_WORKERS, PREVIEW_WORKERS, WorkerSplit
 
 
 def total_workers() -> int:
@@ -49,7 +49,7 @@ def fits_machine(cpus: int | None = None) -> bool:
 def resolve_worker_split(cpus: int | None = None) -> WorkerSplit:
     """The declared split, degraded to fit this machine's allocation.
 
-    The constants in `core/shares.py` are the split on the reference class of
+    The constants in `mutual/shares.py` are the split on the reference class of
     machine and the *ceiling* everywhere: more cores never scale the pools up,
     because the prefetch worker optimum is a memory-bandwidth property of the
     frame buffer, not a core count — scaling up on a big machine is the exact

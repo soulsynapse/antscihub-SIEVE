@@ -54,11 +54,11 @@ from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 import sieve.filters.detect as detect_filter
-from sieve.core.pool_meter import PoolMeter
 from sieve.filters.detect import DetectorUpdate, DetectParams
 from sieve.gui.chain_model import DetectorState
 from sieve.gui.concurrency import resolve_worker_split
 from sieve.gui.density_plot import DensitySurface, density_surface
+from sieve.mutual.pool_meter import PoolMeter
 
 FloatArray = NDArray[np.floating[Any]]
 

@@ -28,9 +28,9 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QImage
 
-from sieve.core.pool_meter import PoolMeter
 from sieve.core.types import ChannelSpec, VideoMetadata
 from sieve.decode.reader import VideoDecodeError, VideoReader
+from sieve.mutual.pool_meter import PoolMeter
 
 #: Starting proxy width, used until a preference arrives. 1280 is wide enough
 #: that the viewport, not the proxy, is the limit on what a user can see, and
@@ -48,7 +48,7 @@ class DecodeWorker(QObject):
 
     def __init__(self, meter: PoolMeter | None = None) -> None:
         """`meter` is where decode time is accounted — the player pool's row in
-        `core/shares.py` getting the producer it never had. Owned by the
+        `mutual/shares.py` getting the producer it never had. Owned by the
         caller (`VideoPlayer`), which outlives this worker's reader churn."""
         super().__init__()
         self._meter = PoolMeter() if meter is None else meter

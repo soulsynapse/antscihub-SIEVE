@@ -86,14 +86,14 @@ def detect(
     `workers` caps the transform's threads and is **required, with no default**.
     It had one — `ALL_CORES` — and `gui/filter_tab.py` inherited it by omission,
     running a full Morlet transform over every core on the GUI thread beside two
-    decode pools. That is the fourth consumer `core/shares.py` exists to forbid,
+    decode pools. That is the fourth consumer `mutual/shares.py` exists to forbid,
     and `tests/unit/test_concurrency.py` could not see it: a test that sums
     declared constants checks the declaration, not the calls. Deleting the
     default moves enforcement to pyright, which checks every call site.
 
     A headless caller wanting the whole machine passes `ALL_CORES` and says so.
     Anything running beside the interactive pools passes
-    `sieve.core.shares.DETECTOR_WORKERS` — which this module can now name as an
+    `sieve.mutual.shares.DETECTOR_WORKERS` — which this module can now name as an
     import rather than in prose, since the declaration moved below `gui/`.
     """
     freqs = default_freqs(fps)

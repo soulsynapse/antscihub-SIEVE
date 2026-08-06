@@ -23,7 +23,7 @@ from sieve.bench.sweep import (
     sized_core_sets,
     sweep,
 )
-from sieve.core.machine import available_cpu_ids
+from sieve.mutual.machine import available_cpu_ids
 
 
 def _whole_allocation(label: str) -> CoreSet:

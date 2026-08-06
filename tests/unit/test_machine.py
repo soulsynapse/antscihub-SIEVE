@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sieve.core.machine import (
+from sieve.mutual.machine import (
     available_cpu_ids,
     available_cpus,
     available_memory,

@@ -15,11 +15,11 @@ from __future__ import annotations
 import pytest
 from pytestqt.qtbot import QtBot
 
-from sieve.core.machine import MemoryUnreadableError
-from sieve.core.pool_meter import PoolMeter
-from sieve.core.shares import SENSED, WorkerSplit, ledger_ceiling
 from sieve.gui.graph_hud import GraphHud
 from sieve.gui.resource_probe import MODE_PLAYBACK, ResourceProbe, ResourceSample
+from sieve.mutual.machine import MemoryUnreadableError
+from sieve.mutual.pool_meter import PoolMeter
+from sieve.mutual.shares import SENSED, WorkerSplit, ledger_ceiling
 
 pytestmark = pytest.mark.gui
 

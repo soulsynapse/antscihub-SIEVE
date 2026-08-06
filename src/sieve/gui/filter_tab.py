@@ -78,7 +78,6 @@ from PySide6.QtWidgets import (
 
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.ops.wavelet import default_freqs
-from sieve.core.pool_meter import PoolMeter
 from sieve.filters.block_signal import BlockSignalParams, resolve_block
 from sieve.filters.block_signal import Signal as BlockSignal
 from sieve.filters.detect import gate_to
@@ -123,6 +122,7 @@ from sieve.gui.source_boundary import SourceBoundary
 from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
 from sieve.gui.wizard_model import catalog, chain_from_pipeline
+from sieve.mutual.pool_meter import PoolMeter
 from sieve.pipeline.series_collector import SeriesCollector
 
 #: The two interaction budgets this tab produces (ARCHITECTURE.md rows).
@@ -1172,7 +1172,7 @@ class FilterTab(QWidget):
         # The detector's resolved share, not every core: this runs on the GUI
         # thread beside the player's decode thread and the preview's pool, so
         # inheriting the whole machine here is the fourth consumer
-        # `core/shares.py` forbids. The cheap tier reuses `band_power` and
+        # `mutual/shares.py` forbids. The cheap tier reuses `band_power` and
         # runs no transform at all, so this only bites on a frequency commit —
         # which is also the one that used to take every core. Capping it
         # lengthens the stall rather than removing it; routing this through

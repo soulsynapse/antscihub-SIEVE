@@ -6,7 +6,7 @@ priority: normal
 gated_on: nothing
 after: [work-units-have-one-anchor]
 serves: A2
-reads: [src/sieve/bench/budgets.py, src/sieve/core/machine.py]
+reads: [src/sieve/bench/budgets.py, src/sieve/mutual/machine.py]
 ---
 
 # A number says how it was founded, and for which machine

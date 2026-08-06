@@ -37,9 +37,9 @@ measurement taken under it.
 ```mermaid
 flowchart TD
     subgraph declare["1 — What the machine is, and what it may use"]
-        specs["Machine reading<br/>core/machine.py<br/>BUILT — cpus, memory, cpu_classes"]
+        specs["Machine reading<br/>mutual/machine.py<br/>BUILT — cpus, memory, cpu_classes"]
         caps["User caps<br/>cores, RAM, cache bytes, GPU on/off<br/>NOT BUILT — todo/application-config.md"]
-        shares["Declared shares<br/>core/shares.py<br/>BUILT — but denominated in a core count"]
+        shares["Declared shares<br/>mutual/shares.py<br/>BUILT — but denominated in a core count"]
         specs --> shares
         caps --> shares
     end
@@ -168,9 +168,9 @@ indexes exist to prevent.
 
 | Step | Element | Status | Home |
 |---|---|---|---|
-| 1 | machine reading | built | `core/machine.py` |
+| 1 | machine reading | built | `mutual/machine.py` |
 | 1 | user caps (cores, RAM, cache, GPU) | not built | `docs/todo/application-config.md` (deferred) |
-| 1 | declared shares | built, wrong unit | `core/shares.py`, see the core-class finding |
+| 1 | declared shares | built, wrong unit | `mutual/shares.py`, see the core-class finding |
 | 2 | live session sampling | built | `gui/resource_probe.py`, `bench/metrics.py` |
 | 2 | deliberate sweep | built | `cli/sweep_cmd.py`, `bench/sweep.py` |
 | 3 | session log | partial | `bench/retention_trace.py` — scrubs only |
@@ -179,7 +179,7 @@ indexes exist to prevent.
 | 5 | `.state.md` slow flag | not built | `tools/doc_index.py` generates the file |
 | 5 | in-app explanation | not built | rule 6's mirror: a toast must not out-claim its evidence |
 | — | GPU as a togglable resource | not built | `docs/todo/gpu-execution.md` (deferred) |
-| — | cache disk bound | not built | `core/shares.py` `UNBOUNDED`; needs materialization |
+| — | cache disk bound | not built | `mutual/shares.py` `UNBOUNDED`; needs materialization |
 
 Five of thirteen are built. The missing centre is step 4: everything upstream
 of it produces numbers, and nothing yet turns numbers into a claim about what

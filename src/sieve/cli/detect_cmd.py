@@ -35,7 +35,7 @@ they are two; this command's part is refusing the export up front when the
 project has no detector, since there is then no series either and a directory
 of empty files would say the opposite.
 
-**Workers is `ALL_CORES` and says so.** `core/shares.py` is explicit that
+**Workers is `ALL_CORES` and says so.** `mutual/shares.py` is explicit that
 policy about sharing a machine belongs to the process sharing one; a whole-clip
 pass on a node is not that process, and `--workers` here caps decode, which is
 the pool a job step actually contends on.

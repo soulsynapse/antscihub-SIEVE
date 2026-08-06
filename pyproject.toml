@@ -30,7 +30,7 @@ dependencies = [
     # becoming a second decoder identity. That boundary is the whole claim; a
     # `container.decode(...)` anywhere in `sieve` is where it stops holding.
     "av>=13",
-    # core/machine.py: the session RSS producer (ledger-producers item). A
+    # mutual/machine.py: the session RSS producer (ledger-producers item). A
     # declared dependency, decided explicitly: it previously resolved in dev
     # only as a transitive of pytest-benchmark, and a runtime sensor standing
     # on an accident of the dev environment would vanish in any install that

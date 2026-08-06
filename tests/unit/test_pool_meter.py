@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from sieve.core.pool_meter import PoolMeter
+from sieve.mutual.pool_meter import PoolMeter
 
 
 class FakeClock:

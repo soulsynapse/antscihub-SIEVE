@@ -27,7 +27,7 @@ the same serialized DAG the CLI does, which is what rule 2 is for. `hpc/handoff.
 is job-script generation from an artifact that already exists, not a second
 executor, and its size is proportional to how many schedulers it must speak.
 The resource posture follows from that and is recorded where it would be
-violated — `core/machine.py`'s module docstring: the generated script declares
+violated — `mutual/machine.py`'s module docstring: the generated script declares
 resources to the scheduler and nothing to SIEVE.
 
 **The constraint that shapes the sweep later.** VISION's HPC wizard toggles

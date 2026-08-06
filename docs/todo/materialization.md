@@ -81,7 +81,7 @@ accept-casually class the 2026-07-27 notes assumed.
 It was a separate entry and had been reduced to one open question by its own
 updates. The *bound* is not its to pick — that is a declared share of the
 resource ledger's byte budget (docs/completed-todo/2026.07.27-resource-ledger.md,
-`core/shares.py`). Spilling is not its to do — an evicted frame is recomputable
+`mutual/shares.py`). Spilling is not its to do — an evicted frame is recomputable
 by construction, which is what the cache key means, so eviction *discards*, and
 anything worth keeping instead goes through the user-initiated compaction path
 this item builds. What was left is the policy alone: **which** entry goes when

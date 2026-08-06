@@ -278,7 +278,7 @@ higher limit — and never a silent miss.
 
 See *Dividing the machine*, which is the whole of it.
 
-**Enforced by:** `core/shares.py` declares the split — threads and bytes
+**Enforced by:** `mutual/shares.py` declares the split — threads and bytes
 both, since 2026.07.27 — and `tests/unit/test_concurrency.py` asserts the
 thread sum leaves a core for the GUI thread and the byte floors plus the
 reserve fit a 16 GB machine.
@@ -529,7 +529,7 @@ nicety, which is the exact trade rule 5 exists to forbid.
 
 So the rule reads over consumers rather than over regimes, and the arithmetic
 is declared in one place instead of argued in three comments.
-`core/shares.py` holds the split, `gui/concurrency.py` the interactive
+`mutual/shares.py` holds the split, `gui/concurrency.py` the interactive
 session's slice of it, and `tests/unit/test_concurrency.py` asserts the sum
 leaves the machine a core for the GUI thread. A fourth
 consumer, or a raised constant, fails a test rather than degrading a budget
@@ -556,10 +556,10 @@ retention wanted a byte budget, eviction wanted a bound, render-fed playback
 wanted a ring size, and each would have been a number in a different file,
 wrong on most machines, and unaccountable in sum. So the rule's text is taken
 at its word — a bounded slab of memory declares its share exactly as a pool
-of cores does. `core/machine.py` reads the machine once (`available_memory`
+of cores does. `mutual/machine.py` reads the machine once (`available_memory`
 reports the *allocation*: cgroup limit, then scheduler declaration, then
 physical RAM — because exceeding a cgroup is an OOM kill, not a slowdown),
-`core/shares.py` holds the shares as fractions of the post-reserve budget
+`mutual/shares.py` holds the shares as fractions of the post-reserve budget
 with declared floors, and the test asserts the floors fit a 16 GB machine.
 The reserve is provisional until measured (`docs/todo/ledger-measurements.md`),
 `MemoryFrameStore` is the named unbounded gap (`UNBOUNDED`, the same honest
@@ -573,9 +573,10 @@ what to *keep* under a budget stays with the retention and eviction items.
 A CLI run, a whole-clip pass, and a headless parity check on a cluster node
 have nobody to leave room for, and a cap living in `core/` would throttle
 precisely the runs that should saturate a node. Policy about sharing a machine
-belongs to the process that is sharing one. The machine *readings* live in
-`core/machine.py` so the CLI and HPC paths reach them headless — a reading is
-not a policy; the shares declared against it are, and those stay here.
+belongs to the process that is sharing one. The machine *readings* and resource
+declarations live in `mutual/` so the CLI, decode, detector, bench, and GUI
+paths reach them headless; applying the interactive split stays in
+`gui/concurrency.py`.
 
 ---
 
@@ -584,6 +585,9 @@ not a policy; the shares declared against it are, and those stay here.
 - `core/` — no Qt, no Zarr, no subprocess, no imports from upper layers. Holds
   the filter *contract*, never a filter implementation, so it stays free of
   `cv2` and `cupy` without constraining what a kernel may call
+- `mutual/` — dependency-shared resource readings and declarations. Below every
+  consumer that needs them, above `core/`, and still free of Qt, `cv2`, Zarr,
+  subprocess, and multiprocessing
 - `pipeline/`, `bench/`, `cli/`, `decode/`, `filters/`, `backend/` — no Qt. CLI
   and HPC must run headless, and `cli/` needs saying separately because it sits
   on `gui/`'s tier, where the layers contract cannot reach it

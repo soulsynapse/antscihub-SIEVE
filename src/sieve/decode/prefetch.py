@@ -97,14 +97,15 @@ from threading import Condition, Thread
 from types import TracebackType
 from typing import Self
 
-# Re-exported, not just used: callers learned `available_cpus` at this name
-# before it moved to `core/machine.py` beside the memory resolver, and a decode
-# module is still a sensible place to ask how many decode threads a machine
-# supports.
-from sieve.core.machine import available_cpus as available_cpus
-from sieve.core.pool_meter import PoolMeter
 from sieve.core.types import Frame, VideoMetadata
 from sieve.decode.reader import VideoDecodeError, VideoReader
+
+# Re-exported, not just used: callers learned `available_cpus` at this name
+# before it moved to `mutual/machine.py` beside the memory resolver, and a decode
+# module is still a sensible place to ask how many decode threads a machine
+# supports.
+from sieve.mutual.machine import available_cpus as available_cpus
+from sieve.mutual.pool_meter import PoolMeter
 
 #: Ceiling on an *inferred* worker count, and a measured number rather than a
 #: guess about memory: on the reference source, throughput peaks at four workers

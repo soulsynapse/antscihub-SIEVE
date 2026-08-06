@@ -45,10 +45,10 @@ from time import perf_counter_ns
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
 
-from sieve.core.machine import MemoryUnreadableError, process_memory_bytes
-from sieve.core.pool_meter import PoolMeter
-from sieve.core.shares import WorkerSplit, ledger_ceiling
 from sieve.gui.concurrency import resolve_worker_split
+from sieve.mutual.machine import MemoryUnreadableError, process_memory_bytes
+from sieve.mutual.pool_meter import PoolMeter
+from sieve.mutual.shares import WorkerSplit, ledger_ceiling
 
 #: One reading per second. Fast enough that the ledger item's "30-second
 #: reading on small hardware" is thirty samples, slow enough that the GUI-side

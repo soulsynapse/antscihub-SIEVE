@@ -81,13 +81,13 @@ from sieve.backend.dispatch import Backend, KernelRegistry, NoKernelError
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, CropArtifact, Pipeline
-from sieve.core.pool_meter import PoolMeter
 from sieve.core.replicates import Replicate
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.filters import discover
 from sieve.gui.concurrency import resolve_worker_split
 from sieve.gui.transport.render_ring import RenderFrameRing
+from sieve.mutual.pool_meter import PoolMeter
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import FrameResult, UnrunnableNodeError
@@ -675,7 +675,7 @@ class PreviewRunner(QObject):
         bandwidth wall the artifact exists to remove. Rule 5 is why this is a
         *pause* and not a fourth declared consumer: the writer borrows the
         preview's share for the length of the write rather than claiming one of
-        its own, so `core/shares.py` gains no row and the declared sum does
+        its own, so `mutual/shares.py` gains no row and the declared sum does
         not move.
 
         Pausing bumps the revision with nothing issued at it — `close`'s

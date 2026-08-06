@@ -12,13 +12,32 @@ object. An `is_valid()` on an already-constructed graph would make the checked
 and unchecked cases the same type, and the executor would be one forgotten call
 away from walking a cycle.
 
+**One definition of legality, two consumption modes.** `Dag.validate` returns
+every rejection as a `Diagnostic`; `Dag.build` is that walk plus raising the
+first one. Fail-fast is right for the executor and useless for a caller that
+must *render* a graph a removal or a loaded file broke, and the alternative to
+this pair is what the GUI's chain stack actually grew — a second spelling of
+edge legality, in a widget, drifting from this one by construction. It is not
+GUI-private knowledge either: a batch linter over saved chain files wants the
+same list.
+
+`validate` is a classmethod taking a `Pipeline`, not a method on a built `Dag`.
+That is the paragraph above restated rather than contradicted: the thing worth
+validating is precisely the thing no `Dag` exists for, and an instance method
+would be the `is_valid()` that makes the checked and unchecked cases one type.
+A `Diagnostic` carries the `GraphError` itself rather than a re-rendered
+sentence, so the two modes cannot word one rejection differently.
+
 **Five rejections, in a fixed order**, because the first useful message is the
 one to give: an unresolved filter is reported before a cycle, since a graph
 half of whose nodes name nothing has no meaningful cycle to describe; a cycle
 is reported before port wiring, since ordering the later checks needs the sort
 that the cycle check produces; and wiring is reported before an edge's types,
 since an edge feeding a port the filter does not declare has no `accepts` to
-check a type against.
+check a type against. The order is also what makes collecting sound rather than
+merely longer: the first two rejections stop the walk, because there is no
+later check whose inputs survive them, and a node with a wiring verdict has no
+edge verdict for the same reason.
 
 1. Every `(filter_id, version)` resolves against the registry.
 2. The graph is acyclic.
@@ -42,7 +61,7 @@ that *draws* the graph as a stack can host one path and nothing else.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass
 
 from sieve.backend.dispatch import Backend
@@ -142,6 +161,32 @@ class EdgeTypeError(GraphError):
 
 
 @dataclass(frozen=True, slots=True)
+class Diagnostic:
+    """One rejection, addressed to the nodes it is about.
+
+    The collect-all half of `Dag.validate`. It carries the `GraphError` rather
+    than a message built beside it, so that a caller rendering a broken graph
+    and a caller that let `build` raise are reading one sentence — and so that
+    the parts each subclass already exposes as attributes (`EdgeTypeError.port`,
+    `UnresolvedFilterError.missing`) do not have to be re-parsed out of prose.
+    """
+
+    #: Every node this rejection is about, in topological order where one
+    #: exists. One id for a wiring fault, both ends for a mistyped edge — an
+    #: edge is repairable from either side, which is why the error class has
+    #: carried both since before anything collected them, and a caller that
+    #: wants only the receiving end reads `error.downstream`. A cycle names
+    #: every node that could not be ordered.
+    nodes: tuple[str, ...]
+    error: GraphError
+
+    @property
+    def message(self) -> str:
+        """The rejection in words. `str(self.error)`, named for readability."""
+        return str(self.error)
+
+
+@dataclass(frozen=True, slots=True)
 class Dag:
     """A `Pipeline` whose filters resolve, whose edges chain, and which sorts.
 
@@ -201,41 +246,110 @@ class Dag:
                 declared input ports exactly.
             EdgeTypeError: if any edge's endpoints cannot be connected.
         """
-        shelf = REGISTRY if registry is None else registry
-        specs = cls._resolve(pipeline, shelf)
-        upstreams, downstreams, ports = cls._adjacency(pipeline)
-        order = cls._topological(pipeline, upstreams, downstreams)
-        cls._check_ports(order, specs, ports)
-        cls._check_edges(order, specs, ports)
-        return cls(
-            pipeline=pipeline,
-            order=order,
-            specs=specs,
-            upstreams=upstreams,
-            downstreams=downstreams,
-            ports=ports,
-            elements=cls._elements(order, specs, ports),
-            source_indexed=cls._source_indexed(order, specs, ports),
-        )
+        diagnostics, built = cls._walk(pipeline, REGISTRY if registry is None else registry)
+        if built is None:
+            # Non-empty whenever nothing was built — `_walk` returns one or the
+            # other — and the first is the earliest in the fixed order, which is
+            # the message this method has always raised.
+            raise diagnostics[0].error
+        return built
+
+    @classmethod
+    def validate(
+        cls, pipeline: Pipeline, registry: FilterRegistry | None = None
+    ) -> tuple[Diagnostic, ...]:
+        """Every reason `pipeline` cannot be executed, empty when it can be.
+
+        `build` without the raise: same five rejections, same order, same
+        messages. What it buys is the graph that *does not* build — a chain a
+        removal broke, a project opened where half the filters are missing —
+        being describable node by node rather than one message at a time.
+
+        Args:
+            pipeline: The graph, already structurally valid.
+            registry: Where filters are looked up. Defaults to the process-wide
+                shelf.
+
+        Returns:
+            The rejections, earliest first. Empty means `build` will succeed on
+            the same two arguments, which is the property that makes this worth
+            having rather than a second opinion.
+        """
+        return cls._walk(pipeline, REGISTRY if registry is None else registry)[0]
 
     # ---- construction ----------------------------------------------------
 
+    @classmethod
+    def _walk(
+        cls, pipeline: Pipeline, registry: FilterRegistry
+    ) -> tuple[tuple[Diagnostic, ...], Dag | None]:
+        """The one walk both modes read: diagnostics, or the graph, never both.
+
+        Returning a union rather than always building would let a caller hold a
+        `Dag` that had rejections against it, which is the partly-checked object
+        the module docstring refuses. The empty-diagnostics case is the only one
+        that constructs.
+
+        The two early returns are the fixed order made structural. An
+        unresolved filter leaves later checks with no `FilterSpec` to read, and
+        a cycle leaves them with no order to read in — so those two stop the
+        walk, and continuing past either would report faults derived from what
+        is already known to be missing.
+        """
+        specs, unresolved = cls._resolve(pipeline, registry)
+        if unresolved:
+            missing: list[tuple[str, str]] = []
+            for node_id in unresolved:
+                # Deduplicated because twelve nodes of one missing filter is one
+                # thing to install — see `UnresolvedFilterError`.
+                named = (pipeline.node(node_id).filter_id, pipeline.node(node_id).version)
+                if named not in missing:
+                    missing.append(named)
+            return ((Diagnostic(unresolved, UnresolvedFilterError(missing)),), None)
+        upstreams, downstreams, ports = cls._adjacency(pipeline)
+        order, unordered = cls._topological(pipeline, upstreams, downstreams)
+        if unordered:
+            return ((Diagnostic(unordered, CycleError(unordered)),), None)
+        wiring = cls._port_faults(order, specs, ports)
+        # Only the nodes wiring cleared: a port the filter does not declare has
+        # no `accepts` to check an upstream's `emits` against, and an unfilled
+        # one has no upstream at all.
+        edges = cls._edge_faults(order, specs, ports, skip={fault.nodes[0] for fault in wiring})
+        if wiring or edges:
+            return ((*wiring, *edges), None)
+        return (
+            (),
+            cls(
+                pipeline=pipeline,
+                order=order,
+                specs=specs,
+                upstreams=upstreams,
+                downstreams=downstreams,
+                ports=ports,
+                elements=cls._elements(order, specs, ports),
+                source_indexed=cls._source_indexed(order, specs, ports),
+            ),
+        )
+
     @staticmethod
-    def _resolve(pipeline: Pipeline, registry: FilterRegistry) -> dict[str, FilterSpec]:
+    def _resolve(
+        pipeline: Pipeline, registry: FilterRegistry
+    ) -> tuple[dict[str, FilterSpec], tuple[str, ...]]:
+        """Specs for what resolves, and the ids of what does not.
+
+        Node ids rather than the `(filter_id, version)` pairs the error reports,
+        because the two questions have different answers: the user installs a
+        set of filters and a renderer colours a set of *nodes*, and twelve
+        arenas of one missing detector is one install and twelve red cards.
+        """
         specs: dict[str, FilterSpec] = {}
-        missing: list[tuple[str, str]] = []
+        unresolved: list[str] = []
         for node in pipeline.nodes:
             try:
                 specs[node.node_id] = registry.get(node.filter_id, node.version)
             except UnknownFilterError:
-                # Collected rather than re-raised: see UnresolvedFilterError.
-                # Deduplicated by the membership test because twelve nodes of
-                # one missing filter is one thing to install.
-                if (node.filter_id, node.version) not in missing:
-                    missing.append((node.filter_id, node.version))
-        if missing:
-            raise UnresolvedFilterError(missing)
-        return specs
+                unresolved.append(node.node_id)
+        return specs, tuple(unresolved)
 
     @staticmethod
     def _adjacency(
@@ -272,8 +386,13 @@ class Dag:
         pipeline: Pipeline,
         upstreams: Mapping[str, tuple[str, ...]],
         downstreams: Mapping[str, tuple[str, ...]],
-    ) -> tuple[Node, ...]:
+    ) -> tuple[tuple[Node, ...], tuple[str, ...]]:
         """Kahn's algorithm, with declaration order as the tiebreak.
+
+        Returns the order and what could not be ordered. The second is empty
+        exactly when the first is total over the node set, and a caller that
+        gets a non-empty one must not read the partial order beside it: it is
+        every node *outside* the cycle, which is a graph nobody wrote.
 
         A topological order is not unique, and which of the valid orders comes
         out has to be a property of the document rather than of a set's
@@ -308,15 +427,15 @@ class Dag:
             ready = sorted([*ready, *freed], key=lambda candidate: position[candidate])
         if len(ordered) != len(pipeline.nodes):
             placed = {node.node_id for node in ordered}
-            raise CycleError(node_id for node_id in remaining if node_id not in placed)
-        return tuple(ordered)
+            return (), tuple(node_id for node_id in remaining if node_id not in placed)
+        return tuple(ordered), ()
 
     @staticmethod
-    def _check_ports(
+    def _port_faults(
         order: Sequence[Node],
         specs: Mapping[str, FilterSpec],
         ports: Mapping[str, Mapping[str, str]],
-    ) -> None:
+    ) -> tuple[Diagnostic, ...]:
         """Every node's incoming edges against its declared input ports.
 
         Exact agreement, both directions, because both failures are silent at
@@ -327,41 +446,65 @@ class Dag:
         declaring several ports cannot sit there, because the source is one
         stream and choosing which port receives it would be a guess this module
         is not entitled to make.
+
+        **At most one verdict per node**, though a node can trip two of the
+        three shapes at once: an edge into `rigth` leaves `right` unfilled, and
+        those are one typo rather than two faults. Reporting both would be the
+        cascade the fixed order exists to avoid, one node lower down.
         """
+        faults: list[Diagnostic] = []
         for node in order:
             declared = specs[node.node_id].input_ports
             fed = ports[node.node_id]
             if not fed:
                 if len(declared) > 1:
-                    raise PortWiringError(
-                        node.node_id,
-                        f"{node.node_id} declares input ports {sorted(declared)} but has no "
-                        "incoming edge; the source is one stream, so a merging filter cannot "
-                        "be a root",
+                    faults.append(
+                        Diagnostic(
+                            (node.node_id,),
+                            PortWiringError(
+                                node.node_id,
+                                f"{node.node_id} declares input ports {sorted(declared)} but has "
+                                "no incoming edge; the source is one stream, so a merging filter "
+                                "cannot be a root",
+                            ),
+                        )
                     )
                 continue
             unknown = sorted(set(fed) - set(declared))
             if unknown:
-                raise PortWiringError(
-                    node.node_id,
-                    f"{node.node_id} has edges into {unknown}, which "
-                    f"{specs[node.node_id].filter_id} does not declare "
-                    f"(its ports: {sorted(declared)})",
+                faults.append(
+                    Diagnostic(
+                        (node.node_id,),
+                        PortWiringError(
+                            node.node_id,
+                            f"{node.node_id} has edges into {unknown}, which "
+                            f"{specs[node.node_id].filter_id} does not declare "
+                            f"(its ports: {sorted(declared)})",
+                        ),
+                    )
                 )
+                continue
             unfilled = sorted(set(declared) - set(fed))
             if unfilled:
-                raise PortWiringError(
-                    node.node_id,
-                    f"{node.node_id} leaves {unfilled} unfilled; every declared port needs "
-                    "an edge, because the kernel will be called with all of them",
+                faults.append(
+                    Diagnostic(
+                        (node.node_id,),
+                        PortWiringError(
+                            node.node_id,
+                            f"{node.node_id} leaves {unfilled} unfilled; every declared port needs "
+                            "an edge, because the kernel will be called with all of them",
+                        ),
+                    )
                 )
+        return tuple(faults)
 
     @staticmethod
-    def _check_edges(
+    def _edge_faults(
         order: Sequence[Node],
         specs: Mapping[str, FilterSpec],
         ports: Mapping[str, Mapping[str, str]],
-    ) -> None:
+        skip: Set[str],
+    ) -> tuple[Diagnostic, ...]:
         """Every edge, in topological order, against the port it feeds.
 
         The order is not needed for correctness — an edge check is local — but
@@ -375,14 +518,26 @@ class Dag:
         produces. Checking that would mean this module knowing about codecs,
         and the layer contract is what keeps `dag.py` runnable on a machine
         with none.
+
+        `skip` is the nodes whose wiring already has a verdict, where `declared`
+        cannot be indexed by the port an edge names.
         """
+        faults: list[Diagnostic] = []
         for node in order:
+            if node.node_id in skip:
+                continue
             declared = specs[node.node_id].input_ports
             for port, upstream_id in ports[node.node_id].items():
                 accepts = declared[port]
                 emits = specs[upstream_id].emits
                 if not accepts.admits(emits):
-                    raise EdgeTypeError(upstream_id, node.node_id, port, emits, accepts)
+                    faults.append(
+                        Diagnostic(
+                            (upstream_id, node.node_id),
+                            EdgeTypeError(upstream_id, node.node_id, port, emits, accepts),
+                        )
+                    )
+        return tuple(faults)
 
     @staticmethod
     def _elements(

@@ -12,6 +12,7 @@ node with no key takes its descendants with it and nobody else, and that
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import ClassVar
 
 import pytest
 
@@ -267,6 +268,136 @@ class TestRejections:
 
         with pytest.raises(PortWiringError, match="cannot be a root"):
             Dag.build(graph, SHELF)
+
+
+class TestValidate:
+    """The collect-all mode, and that it is the same definition as the raise.
+
+    The thing worth pinning is not that `validate` finds faults — `build`
+    already did — but that the two modes cannot drift: one walk, one order, one
+    sentence. A second spelling of edge legality that agreed on the examples
+    somebody thought to write is exactly what this replaces.
+    """
+
+    #: Every graph `TestRejections` rejects, by the fault it carries. Reused
+    #: rather than rewritten so that a rejection added there is one this class
+    #: checks the collect-all mode against too.
+    BROKEN: ClassVar[dict[str, Pipeline]] = {
+        "cycle": Pipeline(
+            nodes=tuple(node(node_id) for node_id in ("a", "b", "c", "d")),
+            edges=edges("a>b", "b>c", "c>a", "c>d"),
+        ),
+        "unresolved": Pipeline(
+            nodes=(node("a", "wavelet_bands", "2.1.0"), node("b", "blur", "9.0.0")),
+            edges=edges("a>b"),
+        ),
+        "edge type": diamond(b="detect"),
+        "unknown port": Pipeline(
+            nodes=(node("a"), node("b"), node("d", "minus")),
+            edges=edges("a>d:left", "b>d:rigth"),
+        ),
+        "unfilled port": Pipeline(
+            nodes=(node("a"), node("d", "minus")),
+            edges=edges("a>d:left"),
+        ),
+        "merging root": Pipeline(nodes=(node("d", "minus"),)),
+    }
+
+    @pytest.mark.parametrize("broken", BROKEN.values(), ids=list(BROKEN))
+    def test_the_first_diagnostic_is_the_error_build_raises(self, broken: Pipeline) -> None:
+        # The anti-drift claim, and the whole reason `Diagnostic` carries the
+        # error rather than a message assembled beside it. A renderer and the
+        # executor that refuses to run the same graph say one thing about it, in
+        # one wording, and no reviewer has to keep two sentences in step.
+        with pytest.raises(GraphError) as raised:
+            Dag.build(broken, SHELF)
+
+        first = Dag.validate(broken, SHELF)[0]
+        assert type(first.error) is type(raised.value)
+        assert first.message == str(raised.value)
+
+    def test_a_graph_that_validates_clean_is_one_build_accepts(self) -> None:
+        # The other direction, which is what makes an empty list worth acting
+        # on: a caller that renders no fault must not then watch the run refuse.
+        assert Dag.validate(diamond(), SHELF) == ()
+        Dag.build(diamond(), SHELF)
+
+    def test_two_independent_faults_are_both_reported(self) -> None:
+        # The reason the mode exists. `build` names `b` and stops, so a stack
+        # drawing this chain would paint one card red, the user would fix it,
+        # and the second fault would appear only then — which for a loaded file
+        # that broke in three places is three round trips through a rerun.
+        #
+        # Two *unrelated* faults on purpose: `b` leaves a port unfilled and `e`
+        # is a merging filter at a root. Neither is derivable from the other, so
+        # a walk that stopped at the first would be losing information rather
+        # than declining to guess.
+        graph = Pipeline(
+            nodes=(node("a"), node("b", "minus"), node("e", "minus")),
+            edges=edges("a>b:left"),
+        )
+
+        diagnostics = Dag.validate(graph, SHELF)
+
+        assert [each.nodes for each in diagnostics] == [("b",), ("e",)]
+        assert all(isinstance(each.error, PortWiringError) for each in diagnostics)
+
+    def test_an_unresolved_filter_reports_every_node_naming_it(self) -> None:
+        # The information `UnresolvedFilterError` alone cannot give, and the
+        # reason a diagnostic carries nodes beside the error: the user installs
+        # *one* filter and a renderer colours *three* cards. Deduplicating the
+        # install list and enumerating the nodes are different questions with
+        # different right answers, and the error only ever answered the first.
+        graph = Pipeline(
+            nodes=(node("a", "mystery"), node("b", "mystery"), node("c", "mystery")),
+            edges=edges("a>b", "b>c"),
+        )
+
+        (diagnostic,) = Dag.validate(graph, SHELF)
+
+        assert diagnostic.nodes == ("a", "b", "c")
+        assert isinstance(diagnostic.error, UnresolvedFilterError)
+        assert diagnostic.error.missing == (("mystery", "1.0.0"),)
+
+    def test_nothing_is_reported_that_a_missing_spec_would_have_to_be_guessed_from(self) -> None:
+        # Collecting is only sound where the inputs survive. `b` names a filter
+        # nobody has, so its ports are unknown and the edge into `c` has no
+        # `emits` to check — every verdict past the unresolved one would be
+        # invented. `build` stops here for the same reason and this is that
+        # reason made structural rather than a second policy.
+        graph = Pipeline(
+            nodes=(node("a"), node("b", "mystery"), node("c", "minus")),
+            edges=edges("a>c:left", "b>c:right"),
+        )
+
+        diagnostics = Dag.validate(graph, SHELF)
+
+        assert len(diagnostics) == 1
+        assert isinstance(diagnostics[0].error, UnresolvedFilterError)
+
+    def test_a_node_whose_wiring_is_broken_gets_no_second_verdict_about_its_types(self) -> None:
+        # `d` has an edge into `rigth`, which `minus` does not declare — so
+        # there is no `accepts` for that port to check `b`'s `emits` against,
+        # and `left` being genuinely mistyped is a fault about a chain the user
+        # cannot see until the port name is fixed. One card, one repair.
+        graph = Pipeline(
+            nodes=(node("a"), node("b", "detect"), node("d", "minus")),
+            edges=edges("a>b", "b>d:left", "a>d:rigth"),
+        )
+
+        (diagnostic,) = Dag.validate(graph, SHELF)
+
+        assert isinstance(diagnostic.error, PortWiringError)
+        assert diagnostic.nodes == ("d",)
+
+    def test_a_mistyped_edge_names_both_ends_it_could_be_repaired_from(self) -> None:
+        # A renderer asking "which card" reads `error.downstream`; a renderer
+        # drawing the *seam* wants both, and an edge is repairable by changing
+        # either filter. The error class has carried both since before anything
+        # collected them.
+        (diagnostic,) = Dag.validate(diamond(b="detect"), SHELF)
+
+        assert diagnostic.nodes == ("b", "d")
 
 
 class TestOrder:

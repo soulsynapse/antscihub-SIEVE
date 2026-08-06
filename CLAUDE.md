@@ -94,8 +94,7 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 4. **Test the load-bearing claim, not the surface.** Two or three tests that
    would each fail for a distinct real reason. A property or benchmark earns
    its place only when it pins something an example cannot state.
-5. **Run the gate**: `uv run nox -s checks`. It must pass.
-6. **Complete atomically.** `uv run python tools/complete_item.py <slug>`
+5. **Complete atomically.** `uv run python tools/complete_item.py <slug>`
    *moves* the item file to `docs/completed-todo/YYYY.MM.DD-<slug>.md` with the
    completion frontmatter and git-derived file lists scaffolded. Never mark an
    item done in place — a finished item is *moved*. **Fill `summary`, answer
@@ -111,10 +110,21 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
    scaffolded marker left in place fails the gate. The item's own text is not
    copied across — it is in git
    (`git log --diff-filter=D -- docs/todo/<slug>.md`).
-7. **Measurements go to `docs/findings/`**, never into the completed entry. A
+6. **Measurements go to `docs/findings/`**, never into the completed entry. A
    completed entry says what was built; a finding says what is true about the
    system and outlives the code that prompted it.
-8. **Rebuild the indexes**: `uv run nox -s docs`. Staleness is a test failure.
+7. **Rebuild the indexes**: `uv run nox -s docs`. Staleness is a test failure —
+   which is why the rebuild comes before the gate and not after it.
+8. **Run the gate**: `uv run nox -s checks`. It must pass. Run it as often as
+   you like while building; the run that counts is this one, over the tree you
+   are about to commit. It is last because step 5 dirties the indexes the gate
+   tests for staleness, so a gate run before the completion is a gate run again
+   after it — 36.4s and 43.0s, the one time the pair was timed.
+
+   `docs` is deliberately *not* a prerequisite of `checks`. Regenerating inside
+   the gate would leave `tests/docs/test_doc_index.py` comparing fresh output
+   against itself, and CI (`nox -s checks benchmark`, on the committed tree) is
+   the only thing that catches a rebuild somebody skipped.
 9. **Commit, then push.** Commits do not count until pushed. A session that
    ends with work in the tree ends with a commit — the `Stop` hook in
    `tools/session_hooks.py` reports an uncommitted tree and unpushed commits

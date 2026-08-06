@@ -39,7 +39,13 @@ def docs(session: nox.Session) -> None:
     One line, not the report: this session is run for the indexes, after every
     completed item, and forty lines of standing drift advice printed on each of
     those runs is read once and skipped thereafter — it also buries the verdict
-    of whatever was piped after it. The report itself is `nox -s drift`."""
+    of whatever was piped after it. The report itself is `nox -s drift`.
+
+    Run *before* `checks`, not after: the gate tests these files for staleness,
+    so a rebuild that follows it earns a second gate run. It is not folded into
+    `checks` for the reason that check exists — regenerating inside the gate
+    would leave `tests/docs/test_doc_index.py` comparing fresh output against
+    itself, and CI runs on the committed tree."""
     session.run("python", "tools/doc_index.py", *session.posargs)
     session.run("python", "tools/doc_refs.py")
     session.run("python", "tools/guardrail_refs.py")

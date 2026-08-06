@@ -1,8 +1,8 @@
 """Fill a completion entry's `commit:` with the hash of the commit that made it.
 
 An entry is written before the commit that carries it exists, so
-`tools/complete_item.py` writes `commit: "pending"` and step 7 of the work loop
-asks for the hash by hand. It is the one step in the loop that *cannot* be done
+`tools/complete_item.py` writes `commit: "pending"` and the work loop used to
+ask for the hash by hand. It is the one step in the loop that *cannot* be done
 at the time the rest of the entry is written, and measured over the entries on
 disk it is the step most often skipped — `docs/completed-todo/` accumulated
 `pending` rows in an index whose whole job is to point at the commit.

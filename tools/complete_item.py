@@ -76,8 +76,10 @@ Leave the file at that unless a rejected alternative would otherwise be
 re-proposed; then uncomment `decisions:`/`rejected:` and say which. A body
 under the frontmatter is the exception, not the shape.""",
     "If anything was *measured*, it goes to docs/findings/, not this entry.",
-    "uv run nox -s checks",
+    # `docs` first: this call just moved an item, and the gate tests the
+    # indexes for staleness. Gate-then-rebuild is gate-twice.
     "uv run nox -s docs",
+    "uv run nox -s checks",
     """\
 Commit, then push. `commit:` fills itself — the `post-commit` hook stamps it
 and commits the stamp (`uv run nox -s hooks` if this clone has never

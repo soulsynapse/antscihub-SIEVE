@@ -14,7 +14,7 @@ During any given pick up, you can do one of three things:
 
 ## Implementing a step
 1. Assess if what you are doing should be done *before* another structural constraint. Utilize the lookahead document for ideas.
-2. If there is another structural constraint that blocks the planned work or would resut in extensive duplication, you can place a [UNBLOCKED WHEN] statement at the end, and write the new problem statement following the instructions.
+2. If there is another structural constraint that blocks the planned work or would result in extensive duplication, you can place a [UNBLOCKED WHEN] statement at the end, and write the new problem statement following the instructions.
 3. If there isn't a blocker after a cursory glance, you can implement the step. If you finish in under 30 turns, you can do another.
 4. As you complete a step, any findings you did along the way should be logged. If you notice buggy code, small problems should be fixed on the spot, larger problems that aren't structural should be queued with the queue tool before continuing on the big stages plan. Overly verbose comments or docstrings that don't genuinely explain something that can't be inferred from the code itself should be fixed in place.
 5. Before you close you should fix up changes in the plan file as a result of your edits, and queueing the things you need.
@@ -113,9 +113,9 @@ Steps:
   making cache identity depend on user-facing presentation text.
 - [x] Add a graph-layer query that answers which registered operations can attach
   at a seam or port using declarations rather than GUI-only type checks.
-- [ ] Add a synthetic-filter canary that registers a filter at test time and
+- [x] Add a synthetic-filter canary that registers a filter at test time and
   proves it appears in the authoring surface with no GUI catalog edit.
-- [ ] Extend the canary to load a saved graph containing the synthetic filter and
+- [x] Extend the canary to load a saved graph containing the synthetic filter and
   render it without a hand-written `CatalogEntry`.
 - [ ] Move existing filter-backed catalog facts behind the declaration/query
   path, keeping any presentation-only fields out of cache identity.
@@ -183,10 +183,27 @@ The current tests pin array-to-array and array-to-table insertions, including a
 table downstream port that admits `detect` and an array downstream port that
 removes it.
 
+Step 5/6 synthetic filter canaries:
+
+`tests/unit/test_wizard_model.py` now builds a scratch `FilterRegistry`, copies
+the discovered specs into it, registers `synthetic_smooth` only in the test, and
+proves that it appears in both `Dag.attachable_operations(ArraySpec())` and
+`candidates_for_insert(..., registry=...)` without adding a legacy catalog row
+for that filter. Inserting the offer mints a node with default params and keeps
+the chain grade OK.
+
+`chain_from_pipeline(..., registry=...)` resolves the same synthetic filter
+from the registry-derived catalog and preserves loaded node ids while appending
+the current tab-side suffix. The implementation is transitional: explicit
+parity rows still own their special presentation and block-signal hidden state,
+while additional single-default-port streaming filters are projected from
+`FilterSpec.authoring_group` and element declarations. Windowed and multi-input
+filters still wait for the graph editor/protocol work.
+
 Recommended next step:
 
-Add a synthetic-filter canary that registers a filter at test time and proves
-it appears in the authoring surface with no GUI catalog edit.
+Move existing filter-backed catalog facts behind the declaration/query path,
+keeping any presentation-only fields out of cache identity.
 
 Completed when:
 
@@ -197,4 +214,3 @@ in `src/sieve/gui/chain_model.py`, `src/sieve/gui/wizard_model.py`, or
 `src/sieve/gui/filter_tab.py`. Any remaining shell-owned operation is absent
 from the filter catalog by rule rather than mixed into it as a no-`filter_id`
 entry.
-

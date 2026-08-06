@@ -88,9 +88,11 @@ MAX_WARMUP_FRAMES = max(
         peak_bytes_per_input_byte=10.0,
     ),
     authoring_group=AuthoringGroup.DETECTION,
+    authoring_order=10,
     mode=Mode.WINDOWED,
     settling_epsilon=0.0,
     primary_params=("freq_band", "value_band", "count_frac", "window_frames"),
+    authoring_hidden_params=("fps",),
     caption=(
         CaptionPart(label="freq", param="freq_band"),
         CaptionPart(label="value", param="value_band"),

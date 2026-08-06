@@ -86,6 +86,7 @@ class NormalizeMode(StrEnum):
         peak_bytes_per_input_byte=6.0,
     ),
     authoring_group=AuthoringGroup.SPATIAL_PREP,
+    authoring_order=30,
     mode=Mode.STREAMING,
     primary_params=("mode",),
     caption=(CaptionPart(param="mode"),),

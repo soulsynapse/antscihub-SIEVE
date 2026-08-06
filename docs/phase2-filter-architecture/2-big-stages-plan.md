@@ -117,9 +117,9 @@ Steps:
   proves it appears in the authoring surface with no GUI catalog edit.
 - [x] Extend the canary to load a saved graph containing the synthetic filter and
   render it without a hand-written `CatalogEntry`.
-- [ ] Move existing filter-backed catalog facts behind the declaration/query
+- [x] Move existing filter-backed catalog facts behind the declaration/query
   path, keeping any presentation-only fields out of cache identity.
-- [ ] Remove the GUI filter-ID spellings that become redundant and shrink the
+- [x] Remove the GUI filter-ID spellings that become redundant and shrink the
   `SPELLED_AWAY_FROM_HOME` exception set in the same commit.
 - [ ] Preserve or retire each remaining GUI filter-ID spelling with a written R7
   justification: unknown filters may be slower or plainer, but not wrong or
@@ -194,16 +194,32 @@ the chain grade OK.
 
 `chain_from_pipeline(..., registry=...)` resolves the same synthetic filter
 from the registry-derived catalog and preserves loaded node ids while appending
-the current tab-side suffix. The implementation is transitional: explicit
-parity rows still own their special presentation and block-signal hidden state,
-while additional single-default-port streaming filters are projected from
-`FilterSpec.authoring_group` and element declarations. Windowed and multi-input
-filters still wait for the graph editor/protocol work.
+the current tab-side suffix.
+
+Step 7/8 catalog migration:
+
+The remaining filter-backed parity rows left `gui/wizard_model.py`. The wizard
+now projects every single-default-port streaming filter from `FilterSpec`:
+`authoring_group` selects the stack stage, `authoring_order` preserves stable
+workflow ordering inside the stage, `summary` supplies the row blurb, element
+declarations derive the coarse chain handoff, and `authoring_hidden_params`
+supplies the generic settings form's hidden fields. `authoring_order` and
+`authoring_hidden_params` are `Channel.PRESENTATION`, and the cache-key
+presentation sweep proves moving either does not change a node key.
+
+The only explicit catalog rows still in `wizard_model.py` are the no-`filter_id`
+tab-side suffix operations, `morlet_band` and `windowed_count`, which remain
+shell-owned until the graph migration gives them graph identity. The redundant
+wizard catalog literals for `background_ema`, `downsample`, and `normalize`
+were removed from `SPELLED_AWAY_FROM_HOME`; the remaining wizard spellings are
+the `block_signal`/`rescale` bridge that injects chain state into
+`block_signal` params.
 
 Recommended next step:
 
-Move existing filter-backed catalog facts behind the declaration/query path,
-keeping any presentation-only fields out of cache identity.
+Preserve or retire each remaining GUI filter-ID spelling with a written R7
+justification: unknown filters may be slower or plainer, but not wrong or
+unloadable.
 
 Completed when:
 

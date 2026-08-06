@@ -59,6 +59,7 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
         peak_bytes_per_input_byte=2.0,
     ),
     authoring_group=AuthoringGroup.SPATIAL_PREP,
+    authoring_order=10,
     mode=Mode.STREAMING,
     primary_params=("scale",),
     caption=(

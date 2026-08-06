@@ -182,6 +182,10 @@ class TestFilterSpec:
         with pytest.raises(ValueError, match=r"param_value_labels names no such field.*method"):
             make_spec(param_value_labels={"method": {"fast": "fast"}})
 
+    def test_authoring_hidden_params_must_name_real_fields(self) -> None:
+        with pytest.raises(ValueError, match=r"authoring_hidden_params names no such field"):
+            make_spec(authoring_hidden_params=("scale_factor",))
+
     def test_caption_renders_from_declared_presentation(self) -> None:
         spec = make_spec(
             caption=(
@@ -560,6 +564,7 @@ PROBES: dict[str, Any] = {
     "emits": ArraySpec(channels=(ChannelSpec.GRAY,)),
     "cost": CostEstimate(work_per_megapixel=WorkUnits(2.0)),
     "authoring_group": AuthoringGroup.DETECTION,
+    "authoring_order": 7,
     "mode": Mode.WINDOWED,
     "settling_epsilon": 0.25,
     "rate_changing": True,
@@ -568,6 +573,7 @@ PROBES: dict[str, Any] = {
     "stateful": True,
     "backend_agnostic": True,
     "primary_params": ("factor",),
+    "authoring_hidden_params": ("anti_alias",),
     "caption": (CaptionPart(label="factor", param="factor"),),
     "param_value_labels": {"anti_alias": {"True": "averaged"}},
     "element": ElementKind.BLOCK,

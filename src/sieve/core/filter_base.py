@@ -634,6 +634,10 @@ class FilterSpec:
     #: presentation, not identity: labels and ordering belong to the shell, and
     #: moving a card between groups cannot change the filter's result.
     authoring_group: AuthoringGroup
+    #: Stable ordering inside an authoring group. It is presentation, not
+    #: identity: a shell may sort differently without changing the result, but
+    #: the default wizard needs one declared order instead of a GUI-side list.
+    authoring_order: int = 1000
     mode: Mode = Mode.STREAMING
     #: Frames the filter must consume before its output is trustworthy, counted
     #: in this filter's *input* frames — "must consume" is the unit. Warmup
@@ -714,6 +718,9 @@ class FilterSpec:
     #: exist on `params_model`; that is checked below, because the failure mode
     #: of a stale name is a widget that silently stops appearing.
     primary_params: tuple[str, ...] = field(default_factory=tuple)
+    #: Params the generic authoring surface must not offer as user-editable
+    #: controls because the shell supplies them from source or chain state.
+    authoring_hidden_params: tuple[str, ...] = field(default_factory=tuple)
     #: The collapsed caption a front end shows for a configured node.
     caption: tuple[CaptionPart, ...] = field(default_factory=tuple)
     #: Human labels for parameter values, keyed by parameter name then stored
@@ -823,6 +830,12 @@ class FilterSpec:
         if unknown:
             raise ValueError(
                 f"{self.filter_id}: primary_params names no such field: {sorted(unknown)}"
+            )
+        hidden_unknown = [name for name in self.authoring_hidden_params if name not in known]
+        if hidden_unknown:
+            raise ValueError(
+                f"{self.filter_id}: authoring_hidden_params names no such field: "
+                f"{sorted(hidden_unknown)}"
             )
         caption_unknown = [
             part.param
@@ -966,6 +979,7 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     # the same result, which is this channel's whole question.
     "backend_agnostic": Channel.IDENTITY,
     "authoring_group": Channel.PRESENTATION,
+    "authoring_order": Channel.PRESENTATION,
     "mode": Channel.EXECUTION,
     "rate_changing": Channel.EXECUTION,
     # Beside `rate_changing` and for its reason, though what the *parameters*
@@ -980,6 +994,7 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "deterministic": Channel.EXECUTION,
     "cost": Channel.PRESENTATION,
     "primary_params": Channel.PRESENTATION,
+    "authoring_hidden_params": Channel.PRESENTATION,
     "caption": Channel.PRESENTATION,
     "param_value_labels": Channel.PRESENTATION,
     "summary": Channel.PRESENTATION,

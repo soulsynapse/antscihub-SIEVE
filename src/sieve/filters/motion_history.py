@@ -128,6 +128,7 @@ class Couple(StrEnum):
         peak_bytes_per_input_byte=5.0,
     ),
     authoring_group=AuthoringGroup.TEMPORAL_FILTER,
+    authoring_order=10,
     mode=Mode.STREAMING,
     settling_epsilon=SETTLED_EPSILON,
     stateful=True,

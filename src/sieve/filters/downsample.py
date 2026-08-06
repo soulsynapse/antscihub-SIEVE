@@ -64,6 +64,7 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
         peak_bytes_per_input_byte=1.25,
     ),
     authoring_group=AuthoringGroup.SPATIAL_PREP,
+    authoring_order=20,
     mode=Mode.STREAMING,
     primary_params=("factor",),
     caption=(CaptionPart(label="factor", param="factor"),),

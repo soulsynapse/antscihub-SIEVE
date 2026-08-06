@@ -22,7 +22,7 @@ from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import Edge, Node, Pipeline
 from sieve.core.types import WorkUnits
 from sieve.filters import discover
-from sieve.gui.chain_model import Status, grade, parity_chain
+from sieve.gui.chain_model import ChainKind, Stage, Status, grade, parity_chain
 from sieve.gui.wizard_model import (
     BREAKS_BELOW,
     IN_CHAIN,
@@ -124,9 +124,7 @@ def test_registered_filter_appears_in_authoring_without_catalog_edit() -> None:
     graph_offers = Dag.attachable_operations(ArraySpec(), registry=registry)
     assert SYNTHETIC_FILTER_ID in {offer.spec.filter_id for offer in graph_offers}
 
-    candidates = {
-        c.entry.entry_id: c for c in candidates_for_insert(chain, 0, registry=registry)
-    }
+    candidates = {c.entry.entry_id: c for c in candidates_for_insert(chain, 0, registry=registry)}
     offer = candidates[SYNTHETIC_FILTER_ID]
     assert offer.enabled
     assert offer.entry.title == "Synthetic smooth"
@@ -138,6 +136,23 @@ def test_registered_filter_appears_in_authoring_without_catalog_edit() -> None:
     assert inserted.node.filter_id == SYNTHETIC_FILTER_ID
     assert inserted.node.params == {"strength": 2}
     assert all(each.status is Status.OK for each in grade(proposed.steps))
+
+
+def test_existing_filter_entries_are_projected_from_declarations() -> None:
+    """The old parity rows no longer own stack facts in the GUI catalog."""
+    entries = {entry.entry_id: entry for entry in catalog()}
+
+    assert entries["rescale"].title == "Rescale"
+    assert entries["rescale"].kind_in is ChainKind.IMAGE
+    assert entries["rescale"].kind_out is ChainKind.IMAGE
+    assert entries["rescale"].stage is Stage.SPATIAL_PREP
+    assert entries["block_signal"].hidden_params == frozenset({"scale", "fps"})
+    assert [entry.entry_id for entry in catalog() if entry.stage is Stage.SPATIAL_PREP][:4] == [
+        "rescale",
+        "downsample",
+        "normalize",
+        "background_ema",
+    ]
 
 
 def test_chain_from_pipeline_renders_registered_filter_without_catalog_edit() -> None:

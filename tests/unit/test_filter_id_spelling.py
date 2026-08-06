@@ -62,12 +62,9 @@ SPELLED_AWAY_FROM_HOME = frozenset(
         ("gui/filter_tab.py", "block_signal"),
         ("gui/filter_tab.py", "normalize"),
         ("gui/filter_tab.py", "rescale"),
-        # `catalog()` names each node-backed entry twice — as `entry_id` and as
-        # `filter_id` — and `_seed_node` special-cases one of them.
-        ("gui/wizard_model.py", "background_ema"),
+        # State injection for the live stack's bridge params still names the
+        # two parity nodes it reads or fills.
         ("gui/wizard_model.py", "block_signal"),
-        ("gui/wizard_model.py", "downsample"),
-        ("gui/wizard_model.py", "normalize"),
         ("gui/wizard_model.py", "rescale"),
         # The FFmpeg source lowerer recognizes the one root crop/area-scale
         # prefix whose filter semantics it can move into the decoder contract.

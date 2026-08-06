@@ -84,6 +84,7 @@ from sieve.core.types import Frame, WorkUnits
         peak_bytes_per_input_byte=1.0,
     ),
     authoring_group=AuthoringGroup.SOURCE_PREP,
+    authoring_order=60,
     mode=Mode.STREAMING,
     selecting=True,
     primary_params=("start", "end"),

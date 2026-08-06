@@ -153,6 +153,7 @@ class Emit(StrEnum):
         peak_bytes_per_input_byte=14.0,
     ),
     authoring_group=AuthoringGroup.SPATIAL_PREP,
+    authoring_order=40,
     mode=Mode.STREAMING,
     settling_epsilon=SETTLED_EPSILON,
     stateful=True,

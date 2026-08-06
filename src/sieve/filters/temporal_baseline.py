@@ -184,6 +184,7 @@ class Emit(StrEnum):
         peak_bytes_per_input_byte=2.0 * MAX_SAMPLES + 4.0,
     ),
     authoring_group=AuthoringGroup.TEMPORAL_FILTER,
+    authoring_order=20,
     mode=Mode.STREAMING,
     settling_epsilon=0.0,
     stateful=True,

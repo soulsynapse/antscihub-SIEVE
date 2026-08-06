@@ -160,10 +160,12 @@ class Signal(StrEnum):
         peak_bytes_per_input_byte=12.0,
     ),
     authoring_group=AuthoringGroup.SIGNAL_EXTRACTION,
+    authoring_order=10,
     mode=Mode.STREAMING,
     settling_epsilon=0.0,
     stateful=True,
     primary_params=("signal", "block"),
+    authoring_hidden_params=("scale", "fps"),
     caption=(
         CaptionPart(param="signal"),
         CaptionPart(label="block", param="block"),

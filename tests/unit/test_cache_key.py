@@ -197,6 +197,8 @@ class TestIsolation:
         # `primary_params` names are checked against `params_model`.
         substitutes: dict[str, object] = {
             "authoring_group": AuthoringGroup.DETECTION,
+            "authoring_order": 7,
+            "authoring_hidden_params": ("sigma",),
             "caption": (CaptionPart(label="radius", param="radius"),),
             "cost": CostEstimate(work_per_megapixel=WorkUnits(2.0)),
             "param_value_labels": {"radius": {"3": "three pixels"}},

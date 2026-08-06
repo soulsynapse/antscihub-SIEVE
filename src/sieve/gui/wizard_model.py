@@ -5,11 +5,10 @@ grades chains, this module builds the *hypothetical* chains a seam click puts
 on the table and grades those. The wizard widget is a presentation over the
 `Candidate` tuple this returns; nothing here paints and nothing here renders.
 
-**The catalog is transitional.** The remaining parity rows still carry explicit
-stack facts, but newly registered single-port streaming filters are projected
-from `FilterSpec.authoring_group` and element declarations. The two tab-side
-suffix steps stay explicit shell operations until the v6 graph migration gives
-them graph identity.
+**The catalog is transitional.** Filter-backed rows are projected from
+`FilterSpec.authoring_group`, `FilterSpec.authoring_order`, hidden authoring
+params, and element declarations. The two tab-side suffix steps stay explicit
+shell operations until the v6 graph migration gives them graph identity.
 
 **The wizard cannot break the chain** (parity plan § 2). An entry whose input
 kind does not match the seam is not listed at all; an entry that fits but
@@ -38,7 +37,7 @@ from sieve.core.filter_base import (
     Mode,
     TableSpec,
 )
-from sieve.core.filter_registry import REGISTRY, FilterRegistry, UnknownFilterError
+from sieve.core.filter_registry import REGISTRY, FilterRegistry
 from sieve.core.pipeline_model import Node, Pipeline
 from sieve.filters import Guidance, discover
 from sieve.filters import guidance_for as _filter_guidance
@@ -79,6 +78,7 @@ class CatalogEntry:
     blurb: str
     filter_id: str | None = None
     hidden_params: frozenset[str] = frozenset()
+    order: int = 1000
     #: Learning 8's per-filter judgment. Everything defaults to blocking a
     #: second copy; a legitimately repeatable operation flips this when one
     #: exists.
@@ -148,9 +148,9 @@ def catalog(*, registry: FilterRegistry | None = None) -> tuple[CatalogEntry, ..
     populating.
     """
     shelf = _shelf(registry)
-    explicit = _legacy_catalog(shelf)
-    explicit_filter_ids = frozenset(e.filter_id for e in explicit if e.filter_id is not None)
-    return (*explicit, *_declared_catalog_entries(shelf, explicit_filter_ids))
+    return tuple(
+        sorted((*_declared_catalog_entries(shelf), *_shell_catalog()), key=_catalog_entry_key)
+    )
 
 
 def _shelf(registry: FilterRegistry | None) -> FilterRegistry:
@@ -160,55 +160,9 @@ def _shelf(registry: FilterRegistry | None) -> FilterRegistry:
     return registry
 
 
-def _legacy_catalog(registry: FilterRegistry) -> tuple[CatalogEntry, ...]:
-    """The parity rows not yet migrated off their explicit stack facts."""
+def _shell_catalog() -> tuple[CatalogEntry, ...]:
+    """The tab-side operations that still have no graph/filter identity."""
     return (
-        CatalogEntry(
-            entry_id="rescale",
-            title="Rescale",
-            stage=Stage.SPATIAL_PREP,
-            kind_in=ChainKind.IMAGE,
-            kind_out=ChainKind.IMAGE,
-            blurb=_summary("rescale", registry),
-            filter_id="rescale",
-        ),
-        CatalogEntry(
-            entry_id="downsample",
-            title="Downsample",
-            stage=Stage.SPATIAL_PREP,
-            kind_in=ChainKind.IMAGE,
-            kind_out=ChainKind.IMAGE,
-            blurb=_summary("downsample", registry),
-            filter_id="downsample",
-        ),
-        CatalogEntry(
-            entry_id="normalize",
-            title="Normalize",
-            stage=Stage.SPATIAL_PREP,
-            kind_in=ChainKind.IMAGE,
-            kind_out=ChainKind.IMAGE,
-            blurb=_summary("normalize", registry),
-            filter_id="normalize",
-        ),
-        CatalogEntry(
-            entry_id="background_ema",
-            title="Background EMA",
-            stage=Stage.SPATIAL_PREP,
-            kind_in=ChainKind.IMAGE,
-            kind_out=ChainKind.IMAGE,
-            blurb=_summary("background_ema", registry),
-            filter_id="background_ema",
-        ),
-        CatalogEntry(
-            entry_id="block_signal",
-            title="Block signal",
-            stage=Stage.EXTRACTION,
-            kind_in=ChainKind.IMAGE,
-            kind_out=ChainKind.BLOCK_SERIES,
-            blurb=_summary("block_signal", registry),
-            filter_id="block_signal",
-            hidden_params=frozenset({"scale", "fps"}),
-        ),
         CatalogEntry(
             entry_id="morlet_band",
             title="Morlet band",
@@ -216,6 +170,7 @@ def _legacy_catalog(registry: FilterRegistry) -> tuple[CatalogEntry, ...]:
             kind_in=ChainKind.BLOCK_SERIES,
             kind_out=ChainKind.BLOCK_SERIES,
             blurb=_TAB_SIDE_GUIDANCE["morlet_band"].summary,
+            order=10,
         ),
         CatalogEntry(
             entry_id="windowed_count",
@@ -224,23 +179,19 @@ def _legacy_catalog(registry: FilterRegistry) -> tuple[CatalogEntry, ...]:
             kind_in=ChainKind.BLOCK_SERIES,
             kind_out=ChainKind.EVENTS,
             blurb=_TAB_SIDE_GUIDANCE["windowed_count"].summary,
+            order=10,
         ),
     )
 
 
-def _declared_catalog_entries(
-    registry: FilterRegistry,
-    excluded_filter_ids: frozenset[str],
-) -> tuple[CatalogEntry, ...]:
+def _declared_catalog_entries(registry: FilterRegistry) -> tuple[CatalogEntry, ...]:
     entries: list[CatalogEntry] = []
     for filter_id in registry.ids():
-        if filter_id in excluded_filter_ids:
-            continue
         spec = registry.latest(filter_id)
         entry = _entry_from_spec(spec)
         if entry is not None:
             entries.append(entry)
-    return tuple(sorted(entries, key=_catalog_entry_key))
+    return tuple(entries)
 
 
 def _entry_from_spec(spec: FilterSpec) -> CatalogEntry | None:
@@ -261,6 +212,8 @@ def _entry_from_spec(spec: FilterSpec) -> CatalogEntry | None:
         kind_out=kind_out,
         blurb=spec.summary,
         filter_id=spec.filter_id,
+        hidden_params=frozenset(spec.authoring_hidden_params),
+        order=spec.authoring_order,
     )
 
 
@@ -293,15 +246,8 @@ def _title_word(index: int, word: str) -> str:
     return word.capitalize() if index == 0 else word
 
 
-def _catalog_entry_key(entry: CatalogEntry) -> tuple[int, str, str]:
-    return (_STAGE_ORDER[entry.stage], entry.title, entry.entry_id)
-
-
-def _summary(filter_id: str, registry: FilterRegistry) -> str:
-    try:
-        return registry.latest(filter_id).summary
-    except UnknownFilterError:
-        return filter_id
+def _catalog_entry_key(entry: CatalogEntry) -> tuple[int, int, str, str]:
+    return (_STAGE_ORDER[entry.stage], entry.order, entry.title, entry.entry_id)
 
 
 # ---- judging entries against a seam -----------------------------------------

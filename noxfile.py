@@ -5,6 +5,8 @@ their own virtualenvs — there is one environment for this project and `uv sync
 owns it. Invoke as `uv run nox -s checks`.
 """
 
+from collections.abc import Callable, Sequence
+
 import nox
 
 nox.options.default_venv_backend = "none"
@@ -62,13 +64,45 @@ def tests(session: nox.Session) -> None:
     session.run("pytest", "--benchmark-disable", *session.posargs)
 
 
+CHECK_STAGES: Sequence[tuple[str, Callable[[nox.Session], None]]] = (
+    ("lint", lint),
+    ("typecheck", typecheck),
+    ("imports", imports),
+    ("tests", tests),
+)
+
+
+def run_check_stages(
+    session: nox.Session,
+    stages: Sequence[tuple[str, Callable[[nox.Session], None]]],
+    emit: Callable[[str], None],
+) -> None:
+    """Run `stages` in order, emitting exactly one verdict line, last.
+
+    The verdict names the stage because nox's own summary does not: a failure
+    prints `Session checks failed.`, and which of four tools said so is one
+    line further up, mixed into that tool's output."""
+    for name, stage in stages:
+        try:
+            stage(session)
+        except Exception:
+            emit(f"checks: FAIL ({name})")
+            raise
+    emit("checks: pass")
+
+
 @nox.session
 def checks(session: nox.Session) -> None:
-    """The full quality gate — what CI runs."""
-    lint(session)
-    typecheck(session)
-    imports(session)
-    tests(session)
+    """The full quality gate — what CI runs.
+
+    The last thing the session writes to **stdout** is `checks: pass` or
+    `checks: FAIL (<stage>)`. nox reports through its logger, which is stderr,
+    and the output is thousands of lines long, so it gets read through a
+    `| tail -n` or `Select-Object -Last n` that carries stdout alone — and that
+    stream ended on pytest's last progress line, `[ 83%]` and all, saying
+    nothing about whether the gate passed. On a merged stream this verdict is
+    the second-to-last line and nox's own concordant summary follows it."""
+    run_check_stages(session, CHECK_STAGES, lambda line: print(line, flush=True))
 
 
 @nox.session

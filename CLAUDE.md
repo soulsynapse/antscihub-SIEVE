@@ -56,7 +56,8 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 2. **Pipeline is a data structure.** Serializable DAG, no GUI-only state in it —
    and the complete input to rule 1's one path.
 3. **Filter = one module + one markdown.** Discovery is automatic; nothing
-   enumerates filters. Adding one must require no edit to a registry.
+   enumerates filters. If adding one requires editing an existing file, ask
+   what that file owns that belongs to the filter.
 4. **Every budget has a producer, and a miss is visible.**
    `src/sieve/bench/budgets.py` is the table; `WITHOUT_PRODUCER` is the honest
    gap in it. A ceiling nothing publishes is a number, not a budget.
@@ -65,7 +66,7 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 6. **A result must never look better-founded than it is.** Refuse rather than
    approximate. Absent must not render as zero; unexamined must not render as
    quiet. Mirror direction: a control must never look more live than it is —
-   faded must mean frozen.
+   faded must mean frozen, and a refused control must name its reason.
 7. **Everything sits on one side of the identity line.** A field changes *what
    a result is* (hashed) or only *where it lives and how fast it arrives*
    (never hashed). Nothing straddles; `checkpoints` and `outputs` live on

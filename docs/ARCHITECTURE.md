@@ -162,10 +162,10 @@ work cite it instead of re-deriving it per feature.
 |---|---|---|
 |1|One execution path|`pipeline/executor.execute` is the only thing that computes a frame. The GUI is a view over it, never a second implementation.|
 |2|Pipeline is a data structure|Serializable DAG. No GUI-only state in the pipeline artifact. It is the *complete* input to rule 1's one path.|
-|3|Filter = one module + one markdown|Discovery is automatic. No registration elsewhere.|
+|3|Filter = one module + one markdown|Discovery is automatic. If adding a filter requires editing an existing file, ask what that file owns that belongs to the filter.|
 |4|Every budget has a producer, and a miss is visible|A budget nothing publishes is a number, not a ceiling. A miss is a defect unless the degradation that causes it is a user's explicit choice.|
 |5|No consumer starves another|No consumer improves its latency at another's expense. Every path that can take more than one core, or a bounded slab of memory, declares its share. See *Dividing the machine*.|
-|6|A result must never look better-founded than it is|Refuse rather than approximate. Absent must not render as zero, and an unexamined stretch must not render as a quiet one. The mirror direction: a control must never look more live than it is — an edit the system would discard or silently invalidate must be visibly inert.|
+|6|A result must never look better-founded than it is|Refuse rather than approximate. Absent must not render as zero, and an unexamined stretch must not render as a quiet one. The mirror direction: a control must never look more live than it is — a refused control names its reason, and an edit the system would discard or silently invalidate is visibly inert.|
 |7|Everything sits on one side of the identity line|A field either changes *what a result is* — then it is hashed — or only *where it lives and how fast it arrives* — then it is never hashed. Nothing straddles. `checkpoints` and `outputs` live on `Project`, off `Node`, for this reason.|
 |8|Filesystem is truth at rest|What SIEVE writes reads back without SIEVE running, and a writer proves that by reading its own output back before it registers it. An artifact that cannot be verified is deleted, never recorded.|
 
@@ -319,7 +319,8 @@ materialized artifact claims a tunability the system does not intend to honor �
 the edit either silently invalidates the child or is silently ignored, and both
 are this rule's failure arriving through an input instead of an output. So a
 frozen stage must render frozen, and the rendering must bind behaviour: faded
-means read-only, and unlocking is an explicit discard of what lies below.
+means read-only, a refused control names its reason, and unlocking is an
+explicit discard of what lies below.
 
 And the standing obligations it creates, each recorded where the work is:
 
@@ -333,8 +334,9 @@ And the standing obligations it creates, each recorded where the work is:
 - A detection count that grows with clip length for no biological reason is a
   reproducibility bug that looks like a finding.
   `docs/todo/surrogate-calibration.md`.
-- Faded must mean frozen. A dimmed stage whose parameters still accept edits is
-  decoration wearing the costume of a state.
+- Faded must mean frozen, and a refused control must say why. A dimmed stage
+  whose parameters still accept edits, or an ineligible control with no stated
+  reason, is decoration wearing the costume of a state.
   `docs/todo/click-through-navigation.md`.
 
 **Enforced by:** nothing mechanical, and it probably cannot be. It is a rule for

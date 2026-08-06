@@ -53,11 +53,24 @@ take it from a sibling node's params (`block_signal`, `temporal_baseline` and
 30.0, and the default is silently wrong for the whole NTSC family in the
 direction that moves the Morlet bank and therefore what is claimed as an event.
 Reading it out of the graph is correct for every project that exists and is
-correct by luck, not construction. Decide which before writing the synthesis:
-either the upgrade refuses a document with no fps-bearing node, or `fps` stops
-being a params field and becomes something the plan supplies from the bound
-source — and the second is the larger and probably the right answer, since three
-other filters carry the same duplicated fact.
+correct by luck, not construction.
+
+**Both of those options were a false pair** (corrected 2026-08-05): they assume
+the upgrade is document-to-document, and the *reader* is not — it is holding the
+path, the document carries a `SourceRef`, and `pipeline/` sits above `decode/`.
+So the synthesis probes `decode/reader.py` `container_rate`, which is the same
+question `gui/filter_tab.py` `_fps` asks when it writes fps into a node today,
+and `float()` of that rational is the same double already cached against, so no
+key moves. A document whose source has moved refuses by name — a message about
+a missing video, which is rule 6 satisfied rather than dodged. The cost is that
+opening such a project touches the video, which today it does not; scoping the
+probe to documents that carry a detector confines it to the case that needs it.
+
+Whether `fps` should be a params field *at all* is a separate and larger
+question, and this item no longer needs it decided. It collides with
+`block_signal.py`'s own argument that `scale` and `fps` are explicit parameters
+because the kernel must stay pure, and with the 2026-08-05 settled row pinning
+those three floats to avoid re-keying every entry those filters ever cached.
 
 Done looks like: `carry_into_graph` synthesizes a detect node, the two fields
 are off the model, `DetectorState` has nothing left to mirror

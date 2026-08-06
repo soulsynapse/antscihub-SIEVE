@@ -34,14 +34,35 @@ written.md` and it is worth reading before re-proposing either:
   shrink-only list. The upgrade sits in `pipeline/`, which means **the v6
   reader does too**: something above `sieve.filters` has to upgrade the mapping
   before `Project` ever sees it, and both front ends have to go through that
-  one thing. Deciding where that lives is this item's first step and its only
-  genuinely open design question.
-- **Not the detector.** `detect_cpu` is trailing and per-target; a saved
+  one thing. That was this item's open design question and it is answered
+  (2026-08-05): `load_project(path) -> Project` in `pipeline/upgrade.py` beside
+  the transform — not a module of its own, since version dispatch and the
+  transform change in the same commit every time — and `Project.load` is
+  deleted, which is available because `core/history.py` only ever *writes*
+  projects. `from_yaml` stays as the raw parse, `_readable` refuses anything
+  below 6 naming the reader, and two things the flip must not miss:
+  `main_window._read_project` catches `(OSError, YAMLError, ValidationError)`
+  and `UnupgradableDocumentError` is a `ValueError`, and every snapshot beside
+  a v5 project is a v5 document, so restore goes through the same door.
+- **Not a detect *node*.** `detect_cpu` is trailing and per-target; a saved
   `detector` field means centered whole-record semantics, and substituting one
   for the other is exactly what `detection-is-a-filter` settled against. So
   `Project.detector` and `Replicate.detector_overrides` stay on the model
-  through this commit and leave in `the-detector-node-is-centered`, which
-  `carry_into_graph` refuses by name until then.
+  through this commit and leave in `the-detector-node-is-centered`.
+
+  **This commit therefore deletes `_refuse_a_detector`** — corrected
+  2026-08-05, and the correction is the difference between refusing to
+  *synthesize* and refusing the *document*. The fields stay on the model and
+  `carry_into_graph` copies every key but `clip`, so a v5 detector rides
+  through untouched and is still computed by the same adapter as today.
+  Refusing the document instead makes every project anyone has tuned — and
+  every snapshot in its history — unopenable from the day this lands, buying
+  nothing, since a v6 document can still be written with a tuned detector and
+  the later migration must handle one regardless. Carrying a field unchanged
+  satisfies rule 6: a v5 detector still means what it meant. What must stay
+  refused is the synthesis, and nothing synthesizes one — a test asserting no
+  detect node appears in the upgraded graph is the guard, not an exception in
+  the reader.
 
 That splits REWORK.md's "the saved-graph changes land as one schema migration,
 not four" into two, and the split is forced rather than chosen — one of the four

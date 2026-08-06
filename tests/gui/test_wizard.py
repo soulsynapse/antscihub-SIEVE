@@ -1,4 +1,4 @@
-"""Item 7's three claims, each a different way the wizard could betray its plan.
+"""Item 7's claims, each a different way the wizard could betray its plan.
 
 A Cancel that leaves residue makes every experiment in the wizard a
 commitment; a provisional render that recomputes the upstream prefix pays the
@@ -23,6 +23,7 @@ from sieve.gui.document import ReplicateDocument
 from sieve.gui.filter_tab import FilterTab
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.transport.player import VideoPlayer
+from sieve.gui.wizard_lifecycle import WIZARD_LIFECYCLE_SIGNALS, WizardLifecycle
 from sieve.pipeline.preview import PreviewRender
 from tests.conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_RATE, FIXTURE_WIDTH
 
@@ -34,6 +35,24 @@ RENDER_TIMEOUT_MS = 30_000
 #: insertion point every test here uses, chosen because both an enabled offer
 #: (downsample) and both disable reasons are visible from it.
 SEAM_ABOVE_EXTRACTION = 2
+
+EXPECTED_LIFECYCLE_SIGNALS = (
+    "chain_proposed",
+    "hover_preview_requested",
+    "hover_ended",
+    "accepted",
+    "cancelled",
+    "seek_requested",
+    "scrub_requested",
+    "value_band_changed",
+    "value_band_committed",
+    "count_band_changed",
+    "count_band_committed",
+    "d_pressed",
+    "d_released",
+    "window_frames_changed",
+    "centered_toggled",
+)
 
 
 @pytest.fixture
@@ -64,6 +83,19 @@ def tab(
     # this every tab built here leaks a QThread and the suite
     # wedges a few modules later.
     instance.shutdown()
+
+
+def test_wizard_lifecycle_boundary_is_named_signals(qapp: object) -> None:
+    """The extraction boundary is signals, not a hidden tab reference."""
+    del qapp
+    lifecycle = WizardLifecycle()
+    try:
+        assert WIZARD_LIFECYCLE_SIGNALS == EXPECTED_LIFECYCLE_SIGNALS
+        assert all(name in WizardLifecycle.__dict__ for name in EXPECTED_LIFECYCLE_SIGNALS)
+        assert lifecycle.parent() is None
+        assert not {"_tab", "_filter_tab"} & vars(lifecycle).keys()
+    finally:
+        lifecycle.close()
 
 
 def test_cancel_restores_the_exact_prior_state(qtbot: QtBot, tab: FilterTab) -> None:

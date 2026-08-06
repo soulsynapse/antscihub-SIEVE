@@ -130,7 +130,8 @@ from sieve.gui.rescale_cost import (
 from sieve.gui.scalogram_plot import ScalogramPlot
 from sieve.gui.source_boundary import SourceBoundary
 from sieve.gui.transport.player import VideoPlayer
-from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
+from sieve.gui.wizard import StepWizard, frame_to_qimage
+from sieve.gui.wizard_lifecycle import WizardAccepted, WizardCancelled, WizardLifecycle
 from sieve.gui.wizard_model import catalog, chain_from_pipeline
 from sieve.mutual.pool_meter import PoolMeter
 from sieve.pipeline.preview import PreviewRender
@@ -301,18 +302,10 @@ class FilterTab(QWidget):
         #: user stopped at rather than on the one before it.
         self._composite_deferred = False
 
-        # The wizard (plan item 7). One at a time; the snapshot is what
-        # Cancel restores, and the provisional id is what the stack dashes.
-        self._wizard: StepWizard | None = None
-        self._wizard_snapshot: LiveChain | None = None
-        #: The undo stack's index when the wizard opened — Cancel's other half.
-        self._wizard_undo_index: int | None = None
-        self._provisional_id: str | None = None
-        #: One-slot mailbox for the wizard's video frame: the render thread
-        #: drops the grabbed array in, `_on_render_finished` converts it on
-        #: the GUI thread. A list because slot replacement is atomic enough
-        #: under the lock the collector already provides for the series path.
-        self._grab: list[np.ndarray] = []
+        #: The wizard lifecycle: open inset, rollback state, and preview-frame
+        #: mailbox. Its signals are the boundary; the tab keeps rendering and
+        #: document writes.
+        self._wizard_lifecycle = WizardLifecycle()
         #: Card bodies for committed non-parity steps, built from the params
         #: model on first commit and persistent like the hand-built rows.
         self._extra_bodies: dict[str, QWidget] = {}
@@ -475,6 +468,23 @@ class FilterTab(QWidget):
         self._boundary.render_stale.connect(self.resubmit)
         self._boundary.status_message.connect(self.status_message)
 
+        lifecycle = self._wizard_lifecycle
+        lifecycle.chain_proposed.connect(self._adopt_wizard_chain)
+        lifecycle.hover_preview_requested.connect(self._request_wizard_hover_preview)
+        lifecycle.hover_ended.connect(self._restore_wizard_hover_preview)
+        lifecycle.accepted.connect(self._commit_wizard)
+        lifecycle.cancelled.connect(self._restore_wizard_cancel)
+        lifecycle.seek_requested.connect(self._player.seek)
+        lifecycle.scrub_requested.connect(self._player.scrub)
+        lifecycle.value_band_changed.connect(self._on_value_drag)
+        lifecycle.value_band_committed.connect(self._on_value_band)
+        lifecycle.count_band_changed.connect(self._on_count_drag)
+        lifecycle.count_band_committed.connect(self._on_count_band)
+        lifecycle.d_pressed.connect(self._on_d_pressed)
+        lifecycle.d_released.connect(self._on_d_released)
+        lifecycle.window_frames_changed.connect(self._on_window_frames)
+        lifecycle.centered_toggled.connect(self._on_centered)
+
         self._stack.reset_clicked.connect(self._on_reset)
         self._stack.select_requested.connect(self._on_step_selected)
         self._stack.remove_requested.connect(self._on_remove)
@@ -518,6 +528,7 @@ class FilterTab(QWidget):
         carry, for the same reason: a `QThread` still running when Qt tears the
         widget tree down is a crash rather than a leak.
         """
+        self._wizard_lifecycle.close()
         self._detector.shutdown()
         self._boundary.shutdown()
 
@@ -773,7 +784,7 @@ class FilterTab(QWidget):
         The wizard's edits take this same path — tuning is tuning wherever
         the slider lives, and a wizard that kept its own provisional copy left
         the tab's widgets displaying stale values after Add. Cancel's restore
-        is `_on_wizard_cancelled` rolling the session's entries back off the
+        is `_restore_wizard_cancel` rolling the session's entries back off the
         undo stack. Local only while there is no pipeline in the document,
         where there is no baseline for an edit to move.
         """
@@ -1042,7 +1053,7 @@ class FilterTab(QWidget):
         # the closure dead.
         expected = self._runner.revision + 1
         pipeline = self._chain.pipeline()
-        grabber = self._grabber(self._chain) if self._wizard is not None else None
+        grabber = self._wizard_lifecycle.grabber(self._chain, window, self._playhead)
         composite = self._composite_grabber()
 
         def feed(result: object) -> None:
@@ -1071,27 +1082,6 @@ class FilterTab(QWidget):
             self._series_final = False
         else:
             self._rescale_cost_runs.pop(expected, None)
-
-    def _grabber(self, chain: LiveChain):
-        """A consumer that catches the wizard's video frame as it flies past.
-
-        Runs on the render thread inside the window render the tab was
-        submitting anyway — the wizard's video is one of the frames the
-        graphs already paid for, not a second render.
-        """
-        window = self._document.window
-        node_id = last_image_node_id(chain)
-        if window is None or node_id is None:
-            return None
-        want = min(max(self._playhead, window.start), window.end - 1)
-        slot = self._grab
-
-        def grab(result: object) -> None:
-            frame = getattr(result, "outputs", {}).get(node_id)
-            if frame is not None and getattr(result, "index", None) == want:
-                slot[:] = [np.asarray(frame.data)]
-
-        return grab
 
     @Slot(int)
     def _collector_start(self, revision: int) -> None:
@@ -1146,8 +1136,7 @@ class FilterTab(QWidget):
         and a first composite that waited for the window's last frame would
         leave the pane blank for the whole first render of every source.
         """
-        if self._wizard is not None and self._grab:
-            self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
+        self._wizard_lifecycle.show_grabbed_frame()
         if self._composite_grab:
             self._apply_composite(*self._composite_grab.pop())
         if self._runner.revision in self._composite_revisions:
@@ -1206,8 +1195,7 @@ class FilterTab(QWidget):
     def _on_render_finished(self, render: object) -> None:
         self._record_rescale_cost(render)
         self._series_pending = False
-        if self._wizard is not None and self._grab:
-            self._wizard.show_frame(frame_to_qimage(self._grab.pop()))
+        self._wizard_lifecycle.show_grabbed_frame()
         if self._composite_grab:
             self._apply_composite(*self._composite_grab.pop())
         if self._collector.snapshot_rows(self._runner.revision) is not None:
@@ -1497,12 +1485,10 @@ class FilterTab(QWidget):
         either copy lands here through the same handlers, and both copies
         repaint from the one `DetectorUpdate`.
         """
-        if self._wizard is None:
-            return
         # The wizard's density plot is a second view of the same array, so it
         # gets the same surface rather than binning its own — otherwise opening
         # the wizard doubles the one cost this item exists to move.
-        self._wizard.apply_state(
+        self._wizard_lifecycle.apply_state(
             update=update,
             surface=self._density_surface,
             start=start,
@@ -1558,7 +1544,7 @@ class FilterTab(QWidget):
             self._chain.grades(),
             [captions[step.step_id] for step in self._chain.steps],
             bodies,
-            provisional=self._provisional_id,
+            provisional=self._wizard_lifecycle.provisional_step_id,
             selected=self._selected_step,
         )
 
@@ -1838,7 +1824,11 @@ class FilterTab(QWidget):
             self._value_band_memory[old_signal] = detector.value_band
             restored = self._value_band_memory.get(signal_id, DetectorState().value_band)
         node_id = self._node_id_for("block_signal")
-        if node_id is not None and node_id in self._document.pipeline and self._wizard is None:
+        if (
+            node_id is not None
+            and node_id in self._document.pipeline
+            and not self._wizard_lifecycle.is_open
+        ):
             stack = self._document.undo_stack
             stack.beginMacro(f"Switch Signal to {_block_signal_label(signal_id)}")
             try:
@@ -2006,85 +1996,54 @@ class FilterTab(QWidget):
 
     @Slot(str)
     def _on_swap_requested(self, step_id: str) -> None:
-        self._open_wizard(step_id)
+        self._wizard_lifecycle.open(
+            step_id,
+            chain=self._chain,
+            undo_index=self._document.undo_stack.index(),
+            host=self,
+            geometry=self.rect(),
+        )
 
     @Slot(int)
     def _on_insert_requested(self, seam: int) -> None:
-        self._open_wizard(seam)
+        self._wizard_lifecycle.open(
+            seam,
+            chain=self._chain,
+            undo_index=self._document.undo_stack.index(),
+            host=self,
+            geometry=self.rect(),
+        )
 
     # ---- the wizard --------------------------------------------------------
 
     @property
     def wizard(self) -> StepWizard | None:
         """The open wizard, None otherwise. For the window and for tests."""
-        return self._wizard
+        return self._wizard_lifecycle.wizard
 
-    def _open_wizard(self, target: int | str) -> None:
-        """Open the inset helper over this tab for `target` (seam or step id).
-
-        The snapshot taken here is the whole Cancel mechanism: `LiveChain` is
-        frozen all the way down, so restoring it *is* restoring the chain,
-        the detector, and everything the plots render from them.
-        """
-        if self._wizard is not None:
-            return
-        self._wizard_snapshot = self._chain
-        # Detector edits write through the document live, so Cancel's restore
-        # is this index: everything the session pushed is rolled back off the
-        # undo stack, and the snapshot covers only what never reached it —
-        # the provisional step and its params.
-        self._wizard_undo_index = self._document.undo_stack.index()
-        wizard = StepWizard(self._chain, target, parent=self)
-        self._wizard = wizard
-
-        wizard.chain_proposed.connect(self._on_chain_proposed)
-        wizard.hover_preview.connect(self._on_hover_preview)
-        wizard.hover_ended.connect(self._on_hover_ended)
-        wizard.accepted.connect(self._on_wizard_accepted)
-        wizard.cancelled.connect(self._on_wizard_cancelled)
-
-        # The wizard's own plot instances speak the same signals to the same
-        # handlers as the tab's — that is what "bound to shared state" means.
-        for plot in (wizard.density, wizard.count):
-            plot.pressed.connect(self._player.seek)
-            plot.scrubbed.connect(self._player.scrub)
-            plot.committed.connect(self._player.seek)
-        wizard.density.band_changed.connect(self._on_value_drag)
-        wizard.density.band_committed.connect(self._on_value_band)
-        wizard.count.band_changed.connect(self._on_count_drag)
-        wizard.count.band_committed.connect(self._on_count_band)
-        wizard.d_slider.sliderPressed.connect(self._on_d_pressed)
-        wizard.d_slider.sliderReleased.connect(self._on_d_released)
-        wizard.d_slider.valueChanged.connect(self._on_window_frames)
-        wizard.centered.toggled.connect(self._on_centered)
-
-        wizard.setGeometry(self.rect())
-        wizard.show()
-        wizard.raise_()
-        wizard.setFocus()
-        wizard.start()
-
-    def _on_chain_proposed(self, chain: LiveChain, step_id: str) -> None:
+    @Slot(object, str)
+    def _adopt_wizard_chain(self, chain: LiveChain, step_id: str) -> None:
         """The expensive tier: adopt the provisional chain and render it.
 
         The provisional step is really in the chain — dashed card, real
         render, real graphs — which is what makes the preview honest and the
         Add button a formality rather than a leap.
         """
+        del step_id
         self._chain = chain
-        self._provisional_id = step_id
         self._sync_widgets_from_chain()
         self._rebuild_stack()
         self._apply()
         self._knob_armed_at = perf_counter()
         self.resubmit()
 
-    def _on_hover_preview(self, chain: LiveChain) -> None:
+    @Slot(object)
+    def _request_wizard_hover_preview(self, chain: LiveChain) -> None:
         """The cheap tier: one frame of a hypothetical, video pane only."""
         window = self._document.window
         if window is None:
             return
-        grab = self._grabber(chain)
+        grab = self._wizard_lifecycle.grabber(chain, window, self._playhead)
         if grab is None:
             return
         want = min(max(self._playhead, window.start), window.end - 1)
@@ -2104,13 +2063,15 @@ class FilterTab(QWidget):
         else:
             self._composite_revisions.discard(expected)
 
-    def _on_hover_ended(self) -> None:
+    @Slot()
+    def _restore_wizard_hover_preview(self) -> None:
         """The pointer left the candidates: the video returns to the selection."""
-        if self._wizard is None:
+        if not self._wizard_lifecycle.is_open:
             return
-        self._on_hover_preview(self._chain)
+        self._request_wizard_hover_preview(self._chain)
 
-    def _on_wizard_accepted(self) -> None:
+    @Slot(object)
+    def _commit_wizard(self, event: WizardAccepted) -> None:
         """Add: the provisional step solidifies; the chain is already rendered.
 
         Only the structure lands here in the ordinary case. The session's
@@ -2122,9 +2083,8 @@ class FilterTab(QWidget):
         the document, whose detector edits stayed local; when the edits went
         through live it compares equal and writes nothing.
         """
-        step_id = self._provisional_id
-        snapshot = self._wizard_snapshot
-        self._close_wizard()
+        step_id = event.step_id
+        snapshot = event.snapshot
         if step_id is not None:
             self._ensure_body(step_id)
             self.status_message.emit(f"added '{step_id}'")
@@ -2142,7 +2102,8 @@ class FilterTab(QWidget):
         self._refresh_from_document()
         self._rebuild_stack()
 
-    def _on_wizard_cancelled(self) -> None:
+    @Slot(object)
+    def _restore_wizard_cancel(self, event: WizardCancelled) -> None:
         """Cancel/Esc: everything exactly as it was — stack rollback plus snapshot.
 
         Two restores because the session writes to two places: detector (and
@@ -2151,9 +2112,8 @@ class FilterTab(QWidget):
         step and its params never reached the document and come back with the
         chain snapshot.
         """
-        snapshot = self._wizard_snapshot
-        undo_index = self._wizard_undo_index
-        self._close_wizard()
+        snapshot = event.snapshot
+        undo_index = event.undo_index
         if undo_index is not None:
             self._document.undo_stack.setIndex(undo_index)
         if snapshot is not None and snapshot is not self._chain:
@@ -2163,17 +2123,6 @@ class FilterTab(QWidget):
         self._apply()
         self.status_message.emit("wizard cancelled — chain restored")
         self.resubmit()
-
-    def _close_wizard(self) -> None:
-        wizard = self._wizard
-        self._wizard = None
-        self._wizard_snapshot = None
-        self._wizard_undo_index = None
-        self._provisional_id = None
-        self._grab.clear()
-        if wizard is not None:
-            wizard.hide()
-            wizard.deleteLater()
 
     def _ensure_body(self, step_id: str) -> None:
         """A committed non-parity step gets a card body built from its model.
@@ -2268,14 +2217,12 @@ class FilterTab(QWidget):
 
     def resizeEvent(self, event: object) -> None:
         super().resizeEvent(event)  # type: ignore[arg-type]
-        if self._wizard is not None:
-            self._wizard.setGeometry(self.rect())
+        self._wizard_lifecycle.set_geometry(self.rect())
 
     @Slot()
     def _on_source_changed(self) -> None:
         """A new source: fresh chain at its frame rate, everything cleared."""
-        if self._wizard is not None:
-            self._close_wizard()
+        self._wizard_lifecycle.close()
         self._value_band_memory.clear()
         fps = self._fps()
         self._chain = parity_chain(fps)

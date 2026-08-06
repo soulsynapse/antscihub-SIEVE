@@ -119,6 +119,7 @@ src/sieve/gui/commands.py               # QUndoCommands; the only writers of doc
 src/sieve/gui/history_dialog.py         # File > History: the restore list, and age_text that renders it
 src/sieve/gui/wizard.py                 # project creation flow
 src/sieve/gui/wizard_model.py           # its Qt-free half
+src/sieve/gui/wizard_lifecycle.py       # opens/closes the step wizard and relays its tab boundary signals
 src/sieve/gui/replicate_tab.py          # video + tools panel + replicate table
 src/sieve/gui/replicate_table.py        # per-replicate rows, numeric ROI entry
 src/sieve/gui/crop_tools.py             # draw/stamp toggle, stamp size, magnifier reset, parent info

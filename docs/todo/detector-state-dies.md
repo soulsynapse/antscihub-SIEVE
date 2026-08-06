@@ -4,7 +4,7 @@ status: open
 opened: 2026-07-29T12:18:58-07:00
 priority: normal
 gated_on: nothing
-after: [the-graph-carries-the-crop-the-span-and-the-detector, one-definition-of-edge-legality, presentation-is-a-channel-not-a-switch]
+after: [the-detector-node-is-centered, one-definition-of-edge-legality, presentation-is-a-channel-not-a-switch]
 reads: [src/sieve/gui/chain_model.py, src/sieve/gui/filter_tab.py, src/sieve/gui/commands.py]
 ---
 

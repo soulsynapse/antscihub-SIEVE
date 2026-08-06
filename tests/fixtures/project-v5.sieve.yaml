@@ -1,0 +1,61 @@
+# A schema-v5 project, checked in as the input the graph migration upgrades.
+#
+# Hand-written rather than generated, and the tests load it through
+# `Project.from_yaml` first — so it is a real v5 document and not a mapping
+# that happens to look like one. `source.path` names footage that is not in
+# the repo: nothing here resolves it, because what is under test is the
+# transform from document to graph, and the runs are done against the shared
+# `synthetic_video` fixture whose geometry the ROIs below are drawn for.
+#
+# Two replicates with *different* boxes, deliberately. One box is a document
+# every assertion about per-replicate pinning passes over vacuously.
+schema_version: 5
+source:
+  path: arena.mp4
+replicates:
+  - roi:
+      x: 16
+      y: 8
+      width: 64
+      height: 48
+    name: Replicate 1
+    replicate_id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    overrides: {}
+    detector_overrides: {}
+  - roi:
+      x: 80
+      y: 40
+      width: 48
+      height: 32
+    name: Replicate 2
+    replicate_id: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    overrides:
+      down:
+        factor: 4
+    detector_overrides: {}
+clip:
+  start: 22
+  end: 26
+pipeline:
+  nodes:
+    - node_id: down
+      filter_id: downsample
+      version: 1.0.0
+      params:
+        factor: 2
+        anti_alias: true
+    - node_id: ema
+      filter_id: background_ema
+      version: 1.0.0
+      params:
+        alpha: 0.5
+        emit: foreground
+  edges:
+    - upstream: down
+      downstream: ema
+      port: in
+detector: null
+checkpoints: []
+outputs: []
+crops: []
+visited: []

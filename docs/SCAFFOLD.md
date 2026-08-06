@@ -89,6 +89,7 @@ src/sieve/pipeline/materialize.py       # the replicate crop artifact: cut it, v
 src/sieve/pipeline/source_home.py       # what a crop record is read against: video, project dir, parent identity — one value
 src/sieve/pipeline/resolve_source.py    # which file a replicate reads — a crop artifact or the parent — and in whose numbering
 src/sieve/pipeline/crop_binding.py      # its reporting twin: which record backs a replicate, and which clause a stale one missed
+src/sieve/pipeline/upgrade.py           # a saved document's crop and span carried into its graph; above filters, because synthesizing a node names one
 
 src/sieve/storage/crop_writer.py        # FFV1/Matroska encode from arrays; knows no identity
 

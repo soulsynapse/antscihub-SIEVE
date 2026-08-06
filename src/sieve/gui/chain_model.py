@@ -44,15 +44,12 @@ from typing import Any, cast
 import numpy as np
 from numpy.typing import NDArray
 
+import sieve.filters.detect as detect_filter
 from sieve.core.filter_base import ElementNames
 from sieve.core.ops.wavelet import band_indices, default_freqs
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
-
-#: `DetectorUpdate` is re-exported rather than redefined: the type belongs to
-#: `sieve.detect` now, and the tab importing it from here keeps one import line
-#: for a family it uses together.
-from sieve.detect import DetectorUpdate, detect
 from sieve.filters.block_signal import BlockSignalParams, resolve_block
+from sieve.filters.detect import DetectorUpdate, DetectParams
 
 FloatArray = NDArray[np.floating[Any]]
 
@@ -229,12 +226,11 @@ class DetectorState:
     def to_settings(self) -> DetectorSettings:
         """This state as the artifact value, for anything below the GUI.
 
-        The inverse of `from_settings`, and the boundary `sieve.detect` is
-        reached across: everything past it takes a resolved `DetectorSettings`
-        and never learns this type. Distinct from `as_settings_changes` on
-        purpose — that returns a dict because a document edit submits a
-        *subset*, and this returns the whole value because a derivation needs
-        all of it.
+        The inverse of `from_settings`, and the last GUI-owned shape: the
+        filter boundary converts it to `DetectParams` and never learns this
+        type. Distinct from `as_settings_changes` on purpose — that returns a
+        dict because a document edit submits a *subset*, and this returns the
+        whole value because a derivation needs all of it.
         """
         return DetectorSettings(**self.as_settings_changes())
 
@@ -265,18 +261,17 @@ def recompute(
     band_power: NDArray[np.float32] | None = None,
     workers: int,
 ) -> DetectorUpdate:
-    """`sieve.detect.detect` with the live state converted at the boundary.
+    """The detect filter's series adapter with the live state converted at the boundary.
 
-    The derivation itself is not here and must not come back: it is what a
-    saved `DetectorSettings` names, and a document that declares a value only
-    the GUI can compute is `docs/todo/headless-detection.md`'s defect. This is
-    the two-line adapter that keeps `DetectorState` — mutable, carrying a
-    soloed block nothing downstream reads — on this side of the line.
+    The derivation itself is not here and must not come back: this is the
+    schema-v5 adapter that keeps `DetectorState` — mutable, carrying a soloed
+    block nothing downstream reads — on the GUI side while the executable
+    params and computation live on the filter side.
     """
-    return detect(
+    params = DetectParams.from_settings(state.to_settings(), fps=fps)
+    return detect_filter.detect_series(
         series,
-        fps,
-        state.to_settings(),
+        params,
         start_index=start_index,
         band_power=band_power,
         workers=workers,

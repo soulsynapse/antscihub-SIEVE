@@ -79,8 +79,8 @@ from PySide6.QtWidgets import (
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.ops.wavelet import default_freqs
 from sieve.core.pool_meter import PoolMeter
-from sieve.detect import gate_to
 from sieve.filters.block_signal import resolve_block
+from sieve.filters.detect import gate_to
 from sieve.gui.band_plot import DIM
 from sieve.gui.block_spin import BlockSpinBox
 from sieve.gui.chain_model import (

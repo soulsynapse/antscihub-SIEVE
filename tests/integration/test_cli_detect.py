@@ -17,15 +17,20 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
+import numpy as np
+import pytest
+from numpy.typing import NDArray
 from typer.testing import CliRunner
 
+import sieve.filters.detect as detect_filter
 from sieve.cli.app import app
 from sieve.core.filter_base import ElementNames
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline, Project
 from sieve.detect.tables import series_columns
 from sieve.filters.block_signal import BlockSignalParams
+from sieve.filters.detect import DetectorUpdate, DetectParams
 
 runner = CliRunner()
 
@@ -209,6 +214,50 @@ def test_csv_carries_the_series_the_summary_only_counts(
     assert {row[DETECTED] for row in series} <= {"TRUE", "FALSE"}
     intervals = _rows(out / "intervals.csv")
     assert all(int(row["start_frame"]) < int(row["end_frame_exclusive"]) for row in intervals)
+
+
+def test_csv_detection_reaches_the_detect_filter_series_adapter(
+    synthetic_video: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The CSV path reads the filter surface, not the older detector function."""
+    project = _project(
+        synthetic_video,
+        tmp_path,
+        detector=DetectorSettings(count_frac=(0.0, 1.0), window_frames=5, centered=True),
+    )
+    out = tmp_path / "tables"
+    original = detect_filter.detect_series
+    calls: list[DetectParams] = []
+
+    def traced(
+        series_arg: NDArray[np.floating[Any]],
+        params: DetectParams,
+        *,
+        start_index: int = 0,
+        band_power: NDArray[np.float32] | None = None,
+        workers: int,
+    ) -> DetectorUpdate:
+        calls.append(params)
+        return original(
+            series_arg,
+            params,
+            start_index=start_index,
+            band_power=band_power,
+            workers=workers,
+        )
+
+    monkeypatch.setattr(detect_filter, "detect_series", traced)
+
+    result = runner.invoke(app, ["detect", str(project), "--frames", "0:8", "--csv", str(out)])
+
+    assert result.exit_code == 0, result.output
+    assert len(calls) == 1
+    assert calls[0].to_settings() == DetectorSettings(
+        count_frac=(0.0, 1.0), window_frames=5, centered=True
+    )
+    assert (out / "series.csv").is_file()
 
 
 def test_a_disarmed_detector_writes_no_intervals_file(

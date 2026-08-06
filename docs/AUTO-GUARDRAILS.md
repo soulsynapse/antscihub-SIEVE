@@ -261,7 +261,7 @@ deeper).
 `sieve.gui` may not import `sieve.core.ops.wavelet`, `sieve.core.ops.detection`, or
 `sieve.detect`. Indirect imports are allowed for `opencv-containment`'s
 reason: reaching computation *through* `pipeline/` is the supported path; what
-is forbidden is holding it. The seven current violations are the
+is forbidden is holding it. The three current violations are the
 `ignore_imports` exception list, and `unmatched_ignore_imports_alerting =
 error` makes it shrink-only — a stale entry fails the contract, so deleting
 the code and its exception are one edit, and *adding* an entry is a visible

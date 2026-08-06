@@ -53,11 +53,10 @@ import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
-from sieve.core.ops.wavelet import default_freqs, morlet_power
+import sieve.filters.detect as detect_filter
 from sieve.core.pool_meter import PoolMeter
-from sieve.detect import gate_to
-from sieve.detect import settled_for as settled_for_settings
-from sieve.gui.chain_model import DetectorState, DetectorUpdate, recompute
+from sieve.filters.detect import DetectorUpdate, DetectParams
+from sieve.gui.chain_model import DetectorState
 from sieve.gui.concurrency import resolve_worker_split
 from sieve.gui.density_plot import DensitySurface, density_surface
 
@@ -127,14 +126,15 @@ class DetectorResult:
 
 
 def settled_for(frames: int, fps: float, state: DetectorState, *, final: bool) -> int:
-    """`sieve.detect.settled_for` with the live state converted at the boundary.
+    """The detect filter frontier with the live state converted at the boundary.
 
     Kept as a name here because `FilterTab`'s cheap tier calls it with the
     state it is dragging: a D drag over a partial series *moves* this frontier,
     and a tab that kept the frontier the worker last reported would go on
     painting a gate over frames the wider window no longer settles.
     """
-    return settled_for_settings(frames, fps, state.to_settings(), final=final)
+    params = DetectParams.from_settings(state.to_settings(), fps=fps)
+    return detect_filter.settled_for(frames, params, final=final)
 
 
 def derive(request: DetectorRequest) -> DetectorResult:
@@ -151,14 +151,14 @@ def derive(request: DetectorRequest) -> DetectorResult:
     grid = (int(grids.shape[1]), int(grids.shape[2]))
     series2d = grids.reshape(frames, -1)
     fps = request.fps
-    freqs = default_freqs(fps)
     workers = resolve_worker_split().detector
-    update = recompute(
-        series2d, fps, request.state, start_index=request.start_index, workers=workers
+    params = DetectParams.from_settings(request.state.to_settings(), fps=fps)
+    update = detect_filter.detect_series(
+        series2d, params, start_index=request.start_index, workers=workers
     )
-    pooled = morlet_power(series2d.mean(axis=1), fps, freqs, workers=workers)
+    pooled = detect_filter.pooled_scalogram(series2d, params, workers=workers)
 
-    settled = settled_for(frames, fps, request.state, final=request.final)
+    settled = detect_filter.settled_for(frames, params, final=request.final)
 
     # Beside `morlet_power` because this thread already holds the array the
     # binning reads. `gate_to` below rebuilds the update but passes
@@ -170,7 +170,7 @@ def derive(request: DetectorRequest) -> DetectorResult:
 
     return DetectorResult(
         revision=request.revision,
-        update=gate_to(update, settled, request.start_index),
+        update=detect_filter.gate_to(update, settled, request.start_index),
         start_index=request.start_index,
         series2d=series2d,
         grid=grid,

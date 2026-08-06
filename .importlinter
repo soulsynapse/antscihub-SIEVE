@@ -86,11 +86,7 @@ forbidden_modules =
 unmatched_ignore_imports_alerting = error
 ignore_imports =
     sieve.gui.chain_model -> sieve.core.ops.wavelet
-    sieve.gui.chain_model -> sieve.detect
-    sieve.gui.detector_worker -> sieve.core.ops.wavelet
-    sieve.gui.detector_worker -> sieve.detect
     sieve.gui.filter_tab -> sieve.core.ops.wavelet
-    sieve.gui.filter_tab -> sieve.detect
     sieve.gui.scalogram_plot -> sieve.core.ops.wavelet
 
 [importlinter:contract:transport-is-handed-its-work]

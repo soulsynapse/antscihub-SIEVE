@@ -155,7 +155,7 @@ The rules bind through CI or they do not bind.
 
 - **R1, R4 (landed 2026-07-29):** `gui-computes-nothing` in `.importlinter` —
   `gui` imports no computation (`core.ops.wavelet`, `core.ops.detection`,
-  `sieve.detect`) — with the seven current violations as an exception set that
+  `sieve.detect`) — with the three current violations as an exception set that
   only shrinks: `unmatched_ignore_imports_alerting = error` fails a stale
   entry, so deleting the code and deleting its exception are one edit, and
   *adding* an entry is a reviewed widening of the rework itself. **The

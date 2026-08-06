@@ -4,9 +4,10 @@ The saved schema still carries `Project.detector` until the v6 graph migration,
 so this module is the filter-owned spelling of the same parameters rather than
 the destructive flip. It gives the detector an id, a params model, declared
 I/O, a warmup refinement, and a CPU kernel on the normal shelf. The existing
-`sieve.detect` compatibility layer still derives whole-series `DetectorUpdate`
-values for the GUI and CSV path until the executor grows the parity-safe
-non-causal series contract those callers need.
+full-series GUI and CSV derivations come through this module's compatibility
+adapter so the filter owns the boundary without pretending the executor's
+trailing window protocol can represent centered, non-causal whole-record
+semantics.
 
 The emitted product is a per-frame gate channel: one float32 value for the
 target frame, `1` when detected, `0` when not detected, and `NaN` when disarmed.
@@ -17,9 +18,10 @@ the later table-emitter item is where intervals become rows.
 from __future__ import annotations
 
 import math
-from typing import Self
+from typing import Any, Self
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import Field, model_validator
 
 from sieve.backend.dispatch import Backend, windowed_kernel
@@ -38,13 +40,18 @@ from sieve.core.ops.wavelet import (
     band_indices,
     coi_edge_samples,
     default_freqs,
+    morlet_power,
 )
 from sieve.core.pipeline_model import DetectorSettings
 from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan
-from sieve.detect.detector import detect as detect_series
+from sieve.detect.detector import DetectorUpdate
+from sieve.detect.detector import detect as _detect_settings
+from sieve.detect.detector import gate_to as _gate_to
+from sieve.detect.detector import settled_for as _settled_for_settings
 
 MAX_WINDOW_FRAMES = 600
 MAX_FPS = 240.0
+FloatArray = NDArray[np.floating[Any]]
 
 
 def _wavelet_warmup_frames(fps: float, freq_band: tuple[float, float]) -> int:
@@ -118,20 +125,68 @@ class DetectParams(ParamsBase):
         )
 
 
+def detect_series(
+    series: FloatArray,
+    params: DetectParams,
+    *,
+    start_index: int = 0,
+    band_power: NDArray[np.float32] | None = None,
+    workers: int,
+) -> DetectorUpdate:
+    """Derive the detector over a whole collected series through filter params.
+
+    This is the parity-safe bridge for the GUI and `sieve detect --csv`: both
+    callers need the same non-causal whole-record values the old
+    `DetectorSettings` composition produced, while the executor's windowed
+    kernel is intentionally trailing and per-target. Keeping the bridge here
+    makes the filter id, params model, kernel, and compatibility derivation one
+    owned surface.
+    """
+    return _detect_settings(
+        _series2d(series),
+        params.fps,
+        params.to_settings(),
+        start_index=start_index,
+        band_power=band_power,
+        workers=workers,
+    )
+
+
+def pooled_scalogram(
+    series: FloatArray,
+    params: DetectParams,
+    *,
+    workers: int,
+) -> NDArray[np.float32]:
+    """The pooled Morlet surface the GUI plots beside the detector output."""
+    series2d = _series2d(series)
+    freqs = default_freqs(params.fps)
+    return morlet_power(series2d.mean(axis=1), params.fps, freqs, workers=workers)
+
+
+def settled_for(frames: int, params: DetectParams, *, final: bool) -> int:
+    """The safe detection frontier for `params` over `frames` collected rows."""
+    return _settled_for_settings(frames, params.fps, params.to_settings(), final=final)
+
+
+def gate_to(update: DetectorUpdate, settled: int, start_index: int) -> DetectorUpdate:
+    """Truncate a gate through the filter-owned compatibility boundary."""
+    return _gate_to(update, settled, start_index)
+
+
 @windowed_kernel(DetectParams, Backend.CPU)
 def detect_cpu(span: FrameSpan, params: DetectParams) -> Frame:
     """Emit the target frame's gate as a scalar channel.
 
     This is the runnable filter surface for hand-built graphs. It derives over
     the span it was handed, so it is causal/prefix semantics; whole-series GUI
-    and CSV parity continue through `sieve.detect.detector.detect` until the
-    executor has a non-causal series kernel contract.
+    and CSV parity use `detect_series` above until the graph migration can
+    remove schema-v5 detector fields.
     """
     series = np.stack([np.asarray(frame.data, np.float32).reshape(-1) for frame in span])
     update = detect_series(
         series,
-        params.fps,
-        params.to_settings(),
+        params,
         start_index=span.start,
         workers=ALL_CORES,
     )
@@ -142,3 +197,12 @@ def detect_cpu(span: FrameSpan, params: DetectParams) -> Frame:
         index=span.target.index,
         channels=ChannelSpec.GRAY,
     )
+
+
+def _series2d(series: FloatArray) -> NDArray[np.float32]:
+    array = np.asarray(series, dtype=np.float32)
+    if array.ndim != 2:
+        raise ValueError(f"detect expects a 2D (frames, elements) series, got shape {array.shape}")
+    if array.shape[0] == 0:
+        raise ValueError("detect expects at least one frame")
+    return array

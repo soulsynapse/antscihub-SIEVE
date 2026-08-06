@@ -13,9 +13,9 @@ threshold is disarmed.
 It does not emit intervals or coordinates. Those are downstream derivations:
 the current schema-v5 compatibility path still writes interval CSVs from
 `DetectorUpdate`, and the first table-emitting filter belongs to the later sink
-writer work. The registered kernel runs over the span it is handed; the current
-GUI and `sieve detect --csv` path keep using the whole-series compatibility
-derivation until the executor has a parity-safe non-causal series contract.
+writer work. The registered kernel runs over the span it is handed; the GUI and
+`sieve detect --csv` use this module's whole-series adapter so centered windows
+and Morlet edge semantics do not move during the schema-v5 compatibility period.
 
 ## Cost
 

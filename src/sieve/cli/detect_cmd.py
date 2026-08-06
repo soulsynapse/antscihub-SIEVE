@@ -1,10 +1,10 @@
 """`sieve detect` — run a project's graph and print the intervals it claims.
 
 `sieve run` proves the graph executes. This proves the *document* — a project
-carries a `DetectorSettings`, resolved per replicate and hashed into what the
-run is, and until `sieve.detect` existed there was no path from a saved
-project to detected intervals that did not start a Qt application
-(docs/todo/headless-detection.md).
+carries a `DetectorSettings`, resolved per replicate and converted to the
+detect filter's executable params, and until `sieve.detect` existed there was
+no path from a saved project to detected intervals that did not start a Qt
+application (docs/todo/headless-detection.md).
 
 **The series is the sink's output, and the sink is the graph's.** The detector
 runs over a `(T, B)` stack of one node's grids, and the node that produces
@@ -50,6 +50,7 @@ import numpy as np
 import typer
 from numpy.typing import NDArray
 
+import sieve.filters.detect as detect_filter
 from sieve.backend.dispatch import Backend, NoKernelError
 from sieve.cli.common import WORKERS_OPTION, frame_source, load_project, refuse, span_for
 from sieve.core.filter_base import ArraySpec, ElementNames
@@ -57,10 +58,9 @@ from sieve.core.ops.wavelet import ALL_CORES
 from sieve.core.pipeline_model import DetectorSettings, Project, resolved_detector
 from sieve.core.replicates import Replicate
 from sieve.decode.reader import VideoDecodeError
-from sieve.detect import detect
-from sieve.detect.detector import DetectorUpdate
 from sieve.detect.tables import DetectionExport, TableVerificationError, write_tables
 from sieve.filters import discover
+from sieve.filters.detect import DetectorUpdate, DetectParams
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.dag import Dag, GraphError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
@@ -301,9 +301,8 @@ def _detect_one(
     """
     if settings is None:
         return None
-    return detect(
-        series, fps, resolved_detector(settings, target), start_index=start, workers=ALL_CORES
-    )
+    params = DetectParams.from_settings(resolved_detector(settings, target), fps=fps)
+    return detect_filter.detect_series(series, params, start_index=start, workers=ALL_CORES)
 
 
 def _export(directory: Path, exports: list[DetectionExport], element_names: ElementNames) -> str:

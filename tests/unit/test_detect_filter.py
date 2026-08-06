@@ -8,11 +8,12 @@ import numpy as np
 import pytest
 
 from sieve.core.filter_base import ElementKind, ElementNames, Mode, node_warmup_frames
+from sieve.core.ops.wavelet import default_freqs
 from sieve.core.pipeline_model import DetectorSettings
 from sieve.core.types import ChannelSpec, Frame, FrameSpan
 from sieve.detect.detector import detect
 from sieve.filters import discover
-from sieve.filters.detect import DetectParams, detect_cpu
+from sieve.filters.detect import DetectParams, detect_cpu, detect_series, pooled_scalogram
 
 FPS = 20.0
 
@@ -52,6 +53,47 @@ def test_detector_settings_bridge_into_hashable_filter_params() -> None:
         '"freq_band":[0.0,Infinity],"value_band":[5.0,Infinity],"window_frames":5}'
     )
     assert node_warmup_frames((DetectParams.spec(), params)) == params.warmup_frames()
+
+
+def test_series_adapter_preserves_the_whole_record_detector_semantics() -> None:
+    """The GUI/CSV flip reaches the filter boundary without moving the numbers."""
+    series = np.zeros((80, 6), np.float32)
+    series[30:55] = 10.0
+    params = DetectParams(
+        fps=FPS,
+        value_band=(5.0, math.inf),
+        count_frac=(0.5, math.inf),
+        window_frames=5,
+        centered=True,
+    )
+
+    update = detect_series(series, params, start_index=100, workers=1)
+    expected = detect(series, FPS, params.to_settings(), start_index=100, workers=1)
+
+    assert np.array_equal(update.band_power, expected.band_power)
+    assert np.array_equal(update.count, expected.count)
+    assert np.array_equal(update.windowed, expected.windowed)
+    assert update.gate is not None and expected.gate is not None
+    assert np.array_equal(update.gate, expected.gate)
+    assert update.intervals == expected.intervals
+
+
+def test_series_adapter_rejects_a_grid_that_was_not_flattened() -> None:
+    """The compatibility surface takes a collected `(T, B)` series, not frames."""
+    params = DetectParams(fps=FPS)
+
+    with pytest.raises(ValueError, match=r"2D \(frames, elements\) series"):
+        detect_series(np.zeros((4, 2, 3), np.float32), params, workers=1)
+
+
+def test_pooled_scalogram_is_filter_side_work_for_the_gui_plot() -> None:
+    series = np.ones((30, 5), np.float32)
+    params = DetectParams(fps=FPS)
+
+    pooled = pooled_scalogram(series, params, workers=1)
+
+    assert pooled.shape == (default_freqs(FPS).shape[0], series.shape[0])
+    assert pooled.dtype == np.float32
 
 
 def test_detect_kernel_emits_the_same_target_gate_as_the_series_derivation() -> None:

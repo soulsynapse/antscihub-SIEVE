@@ -10,10 +10,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from typing import Any
 
 import numpy as np
+import pytest
+from numpy.typing import NDArray
 
+import sieve.filters.detect as detect_filter
 from sieve.core.ops.wavelet import ALL_CORES
+from sieve.filters.detect import DetectorUpdate, DetectParams
 from sieve.gui.chain_model import (
     ChainKind,
     DetectorState,
@@ -79,6 +84,44 @@ def test_disarmed_detector_produces_no_gate_and_armed_detects() -> None:
     start, end = hot.intervals[0]
     assert start >= 200  # absolute frames, not series offsets
     assert end > start
+
+
+def test_recompute_reaches_the_detect_filter_series_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The GUI model keeps its state local and sends execution through the filter."""
+    series = np.ones((24, 4), np.float32)
+    state = replace(
+        DetectorState.default(FPS),
+        count_frac=(0.25, math.inf),
+        value_band=(0.5, math.inf),
+    )
+    original = detect_filter.detect_series
+    calls: list[DetectParams] = []
+
+    def traced(
+        series_arg: NDArray[np.floating[Any]],
+        params: DetectParams,
+        *,
+        start_index: int = 0,
+        band_power: NDArray[np.float32] | None = None,
+        workers: int,
+    ) -> DetectorUpdate:
+        calls.append(params)
+        return original(
+            series_arg,
+            params,
+            start_index=start_index,
+            band_power=band_power,
+            workers=workers,
+        )
+
+    monkeypatch.setattr(detect_filter, "detect_series", traced)
+
+    update = recompute(series, FPS, state, start_index=10, workers=1)
+
+    assert calls and calls[0].to_settings() == state.to_settings()
+    assert update.count.shape == (24,)
 
 
 def test_reset_restores_knobs_and_disarms_but_keeps_structure() -> None:

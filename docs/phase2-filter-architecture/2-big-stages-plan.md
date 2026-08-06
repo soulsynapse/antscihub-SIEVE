@@ -380,7 +380,7 @@ Addresses:
 
 Steps:
 
-- [ ] Inventory every live reader of `StreamKind`, `StreamSpec`, `ArraySpec`,
+- [x] Inventory every live reader of `StreamKind`, `StreamSpec`, `ArraySpec`,
   `TableSpec`, `spec.accepts`, and `spec.emits`, classifying each as a generic
   compatibility reader, a runtime-exhaustiveness gate, a single-output
   assumption, or a presentation/interop special case.
@@ -406,6 +406,62 @@ Steps:
 - [ ] Report the cycle metric: files touched outside `filters/<name>/` to add
   another GUI-visible filter using a handoff shape already added through the
   extension path.
+
+Step 1 inventory:
+
+Current live contract readers classify as follows:
+
+- Contract definition and forwarding: `src/sieve/core/filter_base.py` owns the
+  closed declaration surface: `StreamKind`, `ArraySpec`, `TableSpec`,
+  `StreamSpec`, `FilterSpec.accepts`, `FilterSpec.emits`, and `input_ports`.
+  Its invariants are also readers: array emitters require `element`, non-array
+  emitters reject it, port mappings are normalized on the input side only, and
+  `emits` is still one stream. `src/sieve/core/filter_registry.py` mirrors the
+  same `accepts` and `emits` annotations in `register_filter`, while
+  `src/sieve/core/__init__.py` only re-exports the names.
+- Generic compatibility readers: `src/sieve/pipeline/dag.py` is already mostly
+  stream-owned. `Dag.attachable_operations()` asks each declared input port's
+  `admits()` and, when supplied, the downstream port's `admits()` against the
+  candidate's `spec.emits`. `_edge_faults()` uses the same relation after an
+  edge exists, and `_port_faults()` reads `input_ports` only to decide whether
+  the downstream port set is filled exactly. `tests/unit/test_dag.py` pins both
+  edge rejection and the authoring offer query.
+- Runtime-exhaustiveness gates: `src/sieve/backend/dispatch.py` is the central
+  gate. `unrunnable_reason()` enumerates accepted and emitted `StreamKind`
+  values with `assert_never`, and the kernel decorators read `input_ports`
+  arity plus `Mode` to keep frame, mapping, and span protocols paired with the
+  declaration. `src/sieve/pipeline/executor.py::_bind()` consumes that single
+  refusal, so it does not repeat stream-family branches. The guardrails are
+  `tests/unit/test_declarable_shapes.py`, which derives the runnable/refused
+  space from `StreamKind`, and `tests/unit/test_backend_dispatch.py`, which pins
+  decorator protocol pairing.
+- Single-output assumptions: `FilterSpec.emits` is one `StreamSpec`, and
+  `src/sieve/core/pipeline_model.py::Edge` names only an upstream node, a
+  downstream node, and the downstream input port. `Dag._edge_faults()` and
+  `Dag.attachable_operations()` therefore read one `spec.emits` per node, and
+  `Dag.node_keys()` folds one output key per node. `src/sieve/gui/wizard_model.py`
+  projects only single-default-port streaming specs into `CatalogEntry`, then
+  gives each node one `ChainStep` on load. `tests/unit/test_wizard_model.py`
+  currently pins that single-output stack reconstruction.
+- Presentation and interop special cases: `wizard_model._input_kind()` and
+  `_output_kind()` branch on `TableSpec`, `authoring_group`, and `element` to
+  recover the current coarse `ChainKind`. `Dag._requires_chroma()` reads
+  concrete `ArraySpec.channels` for decode-format demand, with coverage in
+  `tests/unit/test_decode_format.py`. `src/sieve/cli/detect_cmd.py` requires the
+  selected node to emit an `ArraySpec` before running the per-frame detector
+  collection path; `src/sieve/cli/inspect_cmd.py` prints raw `accepts` and
+  `emits`; and `src/sieve/gui/chain_model.py` documents that `ChainKind` is not
+  `StreamKind`. `tests/property/test_filter_settling.py` is intentionally an
+  array-to-array producer probe, and `tests/unit/test_filter_id_spelling.py`
+  reads `TableSpec.columns` for the column-name duplication guard. The many
+  remaining `ArraySpec()` and `TableSpec()` mentions in tests are ordinary
+  fixture declarations rather than independent contract readers.
+
+The next canary should hit the first generic path before it changes runtime
+support: registration, DAG edge compatibility, and `Dag.attachable_operations()`
+can consume a test stream through `admits()`, while dispatch and current
+presentation surfaces should refuse by the declaration field they cannot
+support rather than by filter id or an opaque payload.
 
 Completed when:
 

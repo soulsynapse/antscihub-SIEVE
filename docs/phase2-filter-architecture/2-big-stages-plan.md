@@ -96,29 +96,52 @@ Addresses:
 
 Steps:
 
-1. Reconcile the current tab-side temporal and detection suffix: decide whether
-   each operation becomes a declared graph/filter operation or an explicitly
-   shell-owned view/action that never appears in the filter catalog.
-2. Define the declared handoff property the authoring surface needs, at the same
-   semantic level as "image frame", "block series", "events", or a successor
-   vocabulary.
-3. Define the stage or grouping property the authoring surface needs without
-   making cache identity depend on user-facing presentation text.
-4. Add a graph-layer query that answers which registered operations can attach
-   at a seam or port using declarations rather than GUI-only type checks.
-5. Add a synthetic-filter canary that registers a filter at test time and proves
-   it appears in the authoring surface with no GUI catalog edit.
-6. Extend the canary to load a saved graph containing the synthetic filter and
-   render it without a hand-written `CatalogEntry`.
-7. Move existing filter-backed catalog facts behind the declaration/query path,
-   keeping any presentation-only fields out of cache identity.
-8. Remove the GUI filter-ID spellings that become redundant and shrink the
-   `SPELLED_AWAY_FROM_HOME` exception set in the same commit.
-9. Preserve or retire each remaining GUI filter-ID spelling with a written R7
-   justification: unknown filters may be slower or plainer, but not wrong or
-   unloadable.
-10. Report the cycle metric: files touched outside `filters/<name>/` to add a
-    GUI-visible filter using an existing handoff shape.
+- [x] Reconcile the current tab-side temporal and detection suffix: decide
+  whether each operation becomes a declared graph/filter operation or an
+  explicitly shell-owned view/action that never appears in the filter catalog.
+- [ ] Define the declared handoff property the authoring surface needs, at the
+  same semantic level as "image frame", "block series", "events", or a successor
+  vocabulary.
+- [ ] Define the stage or grouping property the authoring surface needs without
+  making cache identity depend on user-facing presentation text.
+- [ ] Add a graph-layer query that answers which registered operations can attach
+  at a seam or port using declarations rather than GUI-only type checks.
+- [ ] Add a synthetic-filter canary that registers a filter at test time and
+  proves it appears in the authoring surface with no GUI catalog edit.
+- [ ] Extend the canary to load a saved graph containing the synthetic filter and
+  render it without a hand-written `CatalogEntry`.
+- [ ] Move existing filter-backed catalog facts behind the declaration/query
+  path, keeping any presentation-only fields out of cache identity.
+- [ ] Remove the GUI filter-ID spellings that become redundant and shrink the
+  `SPELLED_AWAY_FROM_HOME` exception set in the same commit.
+- [ ] Preserve or retire each remaining GUI filter-ID spelling with a written R7
+  justification: unknown filters may be slower or plainer, but not wrong or
+  unloadable.
+- [ ] Report the cycle metric: files touched outside `filters/<name>/` to add a
+  GUI-visible filter using an existing handoff shape.
+
+Step 1 reconciliation:
+
+The current tab-side suffix is behavior, not a shell-owned view. The temporal
+band operation and the detection operation must leave the no-`filter_id`
+catalog path and be represented by declared graph/filter operation(s). The shell
+may keep multiple cards, plots, and gestures for editing those parameters, but
+the offer/load/repair catalog cannot list `morlet_band` or `windowed_count` as
+operations that have no graph identity.
+
+The transitional code already points to the ownership boundary: `detect` is a
+registered filter with `DetectParams`, declared I/O, warmup, a windowed CPU
+kernel, and the `detect_series` compatibility adapter; `pooled_scalogram` keeps
+the Morlet plot derivation on the filter side. The v6 graph migration should
+therefore make the detection suffix graph-owned, either as the existing
+composite `detect` operation or, if reusable band power becomes an authored
+handoff, as explicit registered operations split at that handoff. It must not
+preserve the current no-filter catalog entries.
+
+Shell-owned state is limited to presentation and interaction: card grouping,
+focus, handle gestures, plot layout, and inspection-only choices such as
+`solo_block`. Those may render or edit declared operation parameters, but they
+are not catalog operations and are not saved as graph steps.
 
 Completed when:
 
@@ -129,7 +152,6 @@ in `src/sieve/gui/chain_model.py`, `src/sieve/gui/wizard_model.py`, or
 `src/sieve/gui/filter_tab.py`. Any remaining shell-owned operation is absent
 from the filter catalog by rule rather than mixed into it as a no-`filter_id`
 entry.
-
 
 
 

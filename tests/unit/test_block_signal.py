@@ -8,6 +8,7 @@ instead of zero turns "unmeasurable" into "event".
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import cast
 
 import cv2
@@ -15,6 +16,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
+import sieve.filters.block_signal as block_signal_module
 from sieve.core.types import ChannelSpec, Frame, FrameCount
 from sieve.filters.block_signal import (
     BlockSignalParams,
@@ -27,6 +29,9 @@ from sieve.filters.block_signal import (
 )
 
 FPS = 30.0
+RAGGED_BLOCK_MEAN_MAX_DELTA = 3.0517578125e-05
+BlockMean = Callable[[NDArray[np.float32], int, int, int], NDArray[np.float32]]
+block_mean = cast(BlockMean, vars(block_signal_module)["_block_mean"])
 
 
 def run_frames(
@@ -46,6 +51,48 @@ def textured() -> NDArray[np.float32]:
     gen = np.random.default_rng(3)
     rough = gen.uniform(0, 255, (96, 96)).astype(np.float32)
     return cast(NDArray[np.float32], cv2.GaussianBlur(rough, (0, 0), 3.0))
+
+
+def nan_padded_block_mean(field: NDArray[np.float32], block: int) -> NDArray[np.float32]:
+    """The previous ragged reducer, kept as an oracle."""
+    h, w = field.shape
+    ny, nx = grid_shape(h, w, block)
+    padded = np.pad(
+        field.astype(np.float32, copy=False),
+        ((0, ny * block - h), (0, nx * block - w)),
+        constant_values=np.nan,
+    )
+    cells = padded.reshape(ny, block, nx, block).transpose(0, 2, 1, 3)
+    return np.nanmean(cells.reshape(ny, nx, block * block), axis=2).astype(np.float32)
+
+
+def test_ragged_block_mean_matches_the_padded_oracle_with_float32_delta() -> None:
+    field = np.random.default_rng(456).uniform(0.0, 255.0, (349, 321)).astype(np.float32)
+    block = 64
+    h, w = field.shape
+    ny, nx = grid_shape(h, w, block)
+
+    old = nan_padded_block_mean(field, block)
+    new = block_mean(field, block, ny, nx)
+    delta = np.abs(new - old)
+
+    assert new.shape == (6, 6)
+    assert float(delta.max()) <= float(RAGGED_BLOCK_MEAN_MAX_DELTA)
+    np.testing.assert_allclose(new, old, rtol=0.0, atol=RAGGED_BLOCK_MEAN_MAX_DELTA)
+
+
+def test_ragged_block_mean_keeps_nan_skipping_semantics() -> None:
+    field = np.arange(17 * 19, dtype=np.float32).reshape(17, 19)
+    field[3, 4] = np.nan
+    field[15, 18] = np.nan
+    block = 8
+    h, w = field.shape
+    ny, nx = grid_shape(h, w, block)
+
+    old = nan_padded_block_mean(field, block)
+    new = block_mean(field, block, ny, nx)
+
+    np.testing.assert_array_equal(new, old)
 
 
 def test_static_input_is_exactly_zero_for_every_signal() -> None:

@@ -402,14 +402,47 @@ def _coherence(
 def _block_mean(field: FloatArray, block: int, ny: int, nx: int) -> NDArray[np.float32]:
     """Block-mean with partial edge blocks averaged over their true pixels.
 
-    NaN-pad to the grid, then nanmean per cell — v1's `include_partial=True`
-    semantics: an edge block's value is the mean of the pixels it actually
-    covers, not diluted against padding.
+    The full-cell core reduces as a reshape view. Ceiling division can make
+    only the final row and final column short, so the partial edge is three
+    slabs rather than a padded plane. If the input field itself carries NaN,
+    fall back to the old `nanmean` route so NaN-skipping semantics remain.
     """
     h, w = field.shape
     f32 = field.astype(np.float32, copy=False)
-    if ny * block == h and nx * block == w:
-        return f32.reshape(ny, block, nx, block).mean(axis=(1, 3), dtype=np.float32)
-    padded = np.pad(f32, ((0, ny * block - h), (0, nx * block - w)), constant_values=np.nan)
+    out = np.empty((ny, nx), np.float32)
+    full_y, full_x = h // block, w // block
+    rem_y, rem_x = h - full_y * block, w - full_x * block
+    if full_y and full_x:
+        core = f32[: full_y * block, : full_x * block]
+        out[:full_y, :full_x] = core.reshape(full_y, block, full_x, block).mean(
+            axis=(1, 3), dtype=np.float32
+        )
+    if ny > full_y and full_x:
+        out[full_y, :full_x] = (
+            f32[full_y * block :, : full_x * block]
+            .reshape(rem_y, full_x, block)
+            .mean(axis=(0, 2), dtype=np.float32)
+        )
+    if nx > full_x and full_y:
+        out[:full_y, full_x] = (
+            f32[: full_y * block, full_x * block :]
+            .reshape(full_y, block, rem_x)
+            .mean(axis=(1, 2), dtype=np.float32)
+        )
+    if ny > full_y and nx > full_x:
+        out[full_y, full_x] = f32[full_y * block :, full_x * block :].mean(dtype=np.float32)
+    if np.isnan(out).any():
+        return _block_mean_nan_padded(f32, block, ny, nx)
+    return out
+
+
+def _block_mean_nan_padded(
+    field: NDArray[np.float32], block: int, ny: int, nx: int
+) -> NDArray[np.float32]:
+    padded = np.pad(
+        field,
+        ((0, ny * block - field.shape[0]), (0, nx * block - field.shape[1])),
+        constant_values=np.nan,
+    )
     cells = padded.reshape(ny, block, nx, block).transpose(0, 2, 1, 3)
     return np.nanmean(cells.reshape(ny, nx, block * block), axis=2).astype(np.float32)

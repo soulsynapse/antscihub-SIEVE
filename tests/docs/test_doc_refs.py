@@ -21,7 +21,13 @@ from doc_refs import dangling, declared_absent, live_docs, looks_like_a_path, re
 
 def test_no_live_doc_points_at_a_file_that_does_not_exist() -> None:
     missing = dangling(live_docs())
-    assert not missing, "dangling paths:\n" + "\n".join(f"  {d} -> {c}" for d, c in missing)
+    assert not missing, (
+        "dangling paths:\n"
+        + "\n".join(f"  {d} -> {c}" for d, c in missing)
+        + "\nA module that does not exist yet is not a dangling link once it is a"
+        " line in SCAFFOLD.md's Projected section — declared_absent() reads that"
+        " section and accepts what it names."
+    )
 
 
 def test_the_live_set_is_the_live_set() -> None:

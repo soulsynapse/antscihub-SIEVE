@@ -9,8 +9,11 @@ Thus, below is a list of what is reasoned to be **what must be true for SIEVE to
 During any given pick up, you can do one of three things:
 
 1. Implent a single unfinished plan step. If you finish it and are under 30 steps, you can do another.
-2. Add a new problem statement and steps.
+2. Add a new problem statement and steps. See: Working with this plan below.
 3. If no actionable item remains, drain the rest of the queue. This should only be done when there isn't a clear way forward.
+
+## Implementing a step
+1.
 
 ## Working with this plan:
 1. Verify a problem that is structurally blocking to the end goal. You can look to the 1-big-stages-lookahead.md for ideas, and 0-big-stages-identification.
@@ -99,7 +102,7 @@ Steps:
 - [x] Reconcile the current tab-side temporal and detection suffix: decide
   whether each operation becomes a declared graph/filter operation or an
   explicitly shell-owned view/action that never appears in the filter catalog.
-- [ ] Define the declared handoff property the authoring surface needs, at the
+- [x] Define the declared handoff property the authoring surface needs, at the
   same semantic level as "image frame", "block series", "events", or a successor
   vocabulary.
 - [ ] Define the stage or grouping property the authoring surface needs without
@@ -143,6 +146,56 @@ focus, handle gestures, plot layout, and inspection-only choices such as
 `solo_block`. Those may render or edit declared operation parameters, but they
 are not catalog operations and are not saved as graph steps.
 
+Step 2 declared handoff property:
+
+The property the authoring surface needs is a graph-owned semantic handoff role
+on each operation port. It is not `StreamKind` alone and not the dtype/channel
+detail inside `ArraySpec`: it names the user-meaningful product that can be
+offered across a seam, at the level currently approximated by `ChainKind`.
+Minimum current roles are source/image frame, block series, and detection gate;
+`events` is not the registered detector's array output until an operation emits
+interval or table rows. If a later filter introduces coordinates, tracks, masks,
+embeddings, or another product that users can wire independently, it adds a
+role there instead of widening GUI vocabulary.
+
+A handoff role is identity contract data because it decides edge legality,
+authoring availability, saved-graph repair, and whether two outputs can be
+substituted. It must be declared or resolved per port from the filter's spec
+without reading a GUI catalog. The declaration may be concrete ("this output is
+block series") or relational ("preserve the upstream role") the same way element
+meaning is concrete or preserved/aggregated, but after DAG resolution every node
+output and every input port must have a concrete role or be explicitly
+unofferable with a diagnostic.
+
+The role is narrower than presentation and broader than storage shape. It does
+not say where a card is grouped, what icon/title/caption the shell uses, what
+plot slot renders it, or how expensive it is. It also does not replace
+`StreamSpec.admits`: dtype, channel, table-column, and port checks still reject
+impossible graphs before handoff-role compatibility decides semantic
+attachability. The next graph-layer query should require both structural stream
+compatibility and handoff-role compatibility, and the shell should display that
+answer rather than recomputing either half.
+
+Concretely against today's chain:
+
+- source, `rescale`, `downsample`, `normalize`, and `background_ema` preserve or
+  emit an image-frame role;
+- `block_signal` emits a block-series role and must declare that role beside its
+  filter declaration, not in `ChainStep`;
+- `detect` emits a detection-gate/per-frame-state role; the current tab's
+  "events" label is presentation or a future table/interval emitter, not the
+  role of the registered filter's array output;
+- `morlet_band` remains no catalog operation unless it becomes a registered
+  operation with its own declared input and output roles.
+
+Completed this step when:
+
+The plan has one semantic answer for "what travels across a seam" that the next
+code step can implement without asking `gui.chain_model.ChainKind`. It
+deliberately leaves the concrete Python representation open, but forbids any
+representation whose only reader is the GUI catalog or whose values are stage
+names, titles, icons, or other presentation fields.
+
 Completed when:
 
 Registering a synthetic filter with an existing handoff shape and no GUI code
@@ -152,6 +205,3 @@ in `src/sieve/gui/chain_model.py`, `src/sieve/gui/wizard_model.py`, or
 `src/sieve/gui/filter_tab.py`. Any remaining shell-owned operation is absent
 from the filter catalog by rule rather than mixed into it as a no-`filter_id`
 entry.
-
-
-

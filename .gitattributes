@@ -1,4 +1,10 @@
 # `core.autocrlf` is true on this machine, and git's bundled `sh` chokes on a
 # shebang line ending in CR — a hook checked out with CRLF fails as "no such
 # file or directory" and names the interpreter, not the hook.
+.gitattributes text eol=lf
 tools/githooks/* text eol=lf
+
+# Python sources are Ruff's formatted surface. Keep them LF in the working tree
+# so Windows checkout settings cannot reintroduce newline-only formatter drift.
+*.py text eol=lf
+*.pyi text eol=lf

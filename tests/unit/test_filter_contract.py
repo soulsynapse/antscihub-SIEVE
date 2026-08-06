@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from sieve.core.filter_base import (
+    ALL_FRAMES,
     SPEC_CHANNELS,
     ArraySpec,
     CostEstimate,
@@ -71,6 +72,21 @@ class InterpolateParams(ParamsBase):
 
     def output_rate(self) -> Fraction:
         return Fraction(self.numerator, self.denominator)
+
+
+class SpanningParams(ParamsBase):
+    """Keeps a range of the frames it is handed: neither the rate nor the size.
+
+    The third way a filter can emit less than it consumed, and the one that is
+    not arithmetic — the survivors keep their numbering, so nothing in the warmup
+    fold has to cross it.
+    """
+
+    first: int = 10
+    last: int = 20
+
+    def selected_frames(self) -> range:
+        return range(self.first, self.last)
 
 
 class DownsampleParams(ParamsBase):
@@ -233,6 +249,22 @@ class TestRate:
             make_spec(params_model=DecimateParams)
         with pytest.raises(ValueError, match="does not override output_rate"):
             make_spec(rate_changing=True)
+
+    def test_undeclared_selection_is_refused_at_registration(self) -> None:
+        # The same gap for the other way of emitting fewer frames, and it fails
+        # in the quieter direction: a span nobody declared runs over the whole
+        # video and produces frames that are all individually right.
+        with pytest.raises(ValueError, match="overrides selected_frames"):
+            make_spec(params_model=SpanningParams)
+        with pytest.raises(ValueError, match="does not override selected_frames"):
+            make_spec(selecting=True)
+
+    def test_a_filter_that_says_nothing_keeps_every_frame(self) -> None:
+        # `ALL_FRAMES` is a value and not an absence, so the plan's fold is one
+        # intersection over every node rather than a branch on which nodes are
+        # spans — which is what keeps `pipeline` from having to name one.
+        assert SampleParams().selected_frames() == ALL_FRAMES
+        assert SpanningParams().selected_frames() == range(10, 20)
 
 
 class TestElementMeaning:
@@ -452,6 +484,7 @@ PROBES: dict[str, Any] = {
     "mode": Mode.WINDOWED,
     "warmup_frames": FrameCount(7),
     "rate_changing": True,
+    "selecting": True,
     "deterministic": False,
     "stateful": True,
     "backend_agnostic": True,
@@ -491,12 +524,17 @@ class TestDecoratorMatchesSpec:
         class RateProbeParams(DecimateParams):
             pass
 
+        class SelectProbeParams(SpanningParams):
+            pass
+
+        # The two probes that cannot ride on the shared params model: each names
+        # a flag the spec refuses unless the decorated class overrides the
+        # matching method, and refuses the override without.
+        models = {"rate_changing": RateProbeParams, "selecting": SelectProbeParams}
+
         for name, probe in PROBES.items():
             registry = FilterRegistry()
-            # `rate_changing` is the one probe that cannot ride on the shared
-            # params model: the spec refuses the flag unless the decorated class
-            # overrides `output_rate`, and refuses the override without it.
-            model = RateProbeParams if name == "rate_changing" else ProbeParams
+            model = models.get(name, ProbeParams)
             values = {**BASE, name: probe}
             if name == "element":
                 values["element_names"] = ElementNames("block", "blocks")

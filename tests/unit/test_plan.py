@@ -1,11 +1,13 @@
 """What a plan has to get right before anything is decoded.
 
-Three claims, each failing for its own reason. Lead-in is the maximum over a
+Four claims, each failing for its own reason. Lead-in is the maximum over a
 node's paths rather than a sum over its nodes, and the two differ the moment a
 graph forks. Lead-in is counted in *source* frames, so a rate-changing node
 between the source and a warmup multiplies it rather than passing it through.
-And every node's parameters are validated, including the ones `Dag.node_keys`
-never hashes and therefore never checked.
+Which frames are in the answer comes from the graph, and the wider range the
+reader is asked for is an optimization over it rather than a second answer. And
+every node's parameters are validated, including the ones `Dag.node_keys` never
+hashes and therefore never checked.
 """
 
 from __future__ import annotations
@@ -85,6 +87,32 @@ class DecimateParams(ParamsBase):
 
     def output_rate(self) -> Fraction:
         return Fraction(1, self.factor)
+
+
+@register_filter(
+    filter_id="keep",
+    version="1.0.0",
+    summary="Keep a range of the frames it is handed.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
+    cost=COST,
+    selecting=True,
+    registry=SHELF,
+)
+class KeepParams(ParamsBase):
+    """A span, declared here rather than reached for from `sieve.filters`.
+
+    `pipeline` may not import a filter, and a test that named `span` would be
+    asserting against the one filter that exists rather than against the
+    contract — which is the whole of what the plan reads.
+    """
+
+    first: int = 0
+    last: int = 1_000_000
+
+    def selected_frames(self) -> range:
+        return range(self.first, self.last)
 
 
 @register_filter(
@@ -185,6 +213,113 @@ def test_lead_in_crosses_a_rate_change_in_source_frames() -> None:
         edges=edges("d>s"),
     )
     assert plan_for(pipeline).lead_in == FrameCount(50)
+
+
+class TestSelection:
+    """Which frames are in the answer, and why the decode range is free to differ.
+
+    `docs/todo/the-span-is-a-filter.md`. The span used to be an argument to
+    `build` and nothing else, so two runs of one graph over different stretches
+    were the same graph. It is a node now, and these are the things that have to
+    hold for the pushdown underneath it to stay an optimization.
+    """
+
+    def test_a_selecting_node_narrows_what_the_caller_asked_for(self) -> None:
+        # The claim itself: the answer's frames come from the graph. Asserted
+        # against a request that is *wider* on both sides, so a fold that took
+        # either bound from the wrong operand fails here rather than agreeing
+        # by coincidence.
+        plan = plan_for(
+            Pipeline(nodes=(node("k", "keep", first=102, last=108),)),
+            span=ClipRange(start=100, end=110),
+        )
+
+        assert plan.span == ClipRange(start=102, end=108)
+
+    def test_the_decode_range_still_widens_by_the_lead_in(self) -> None:
+        """The pushdown is over the span; it does not swallow the warmup.
+
+        This is the whole of "changes nothing about the result". The reader is
+        asked for frames the answer does not contain — five of them, here — and
+        a fold that had narrowed `decode_range` to the declared span instead
+        would leave `settle5` unsettled for the first five frames of every run
+        while reporting the same frame count and the same `warmed`.
+        """
+        plan = plan_for(
+            Pipeline(
+                nodes=(node("k", "keep", first=102, last=108), node("s", "settle5")),
+                edges=edges("k>s"),
+            ),
+            span=ClipRange(start=100, end=110),
+        )
+
+        assert (plan.span.start, plan.decode_start) == (102, 97)
+        assert plan.decode_range == range(97, 108)
+        assert plan.warmed
+
+    def test_where_the_node_sits_does_not_change_which_frames_are_kept(self) -> None:
+        """One graph has one frame set, so a selection is the run's, not a branch's.
+
+        `span.md` tells a reader to put the node at a leaf, and that advice is
+        purely about which cache entries its parameters reach. If placement
+        moved the answer as well, the advice would be a correctness rule wearing
+        a performance argument's clothes.
+        """
+        first = plan_for(
+            Pipeline(
+                nodes=(node("k", "keep", first=102, last=108), node("s", "settle1")),
+                edges=edges("k>s"),
+            ),
+        )
+        last = plan_for(
+            Pipeline(
+                nodes=(node("s", "settle1"), node("k", "keep", first=102, last=108)),
+                edges=edges("s>k"),
+            ),
+        )
+
+        assert first.span == last.span == ClipRange(start=102, end=108)
+
+    def test_two_selections_intersect_and_an_empty_one_is_refused(self) -> None:
+        # Intersection because every node computes the same frames: a graph
+        # cannot hold one branch that ran over frames another did not. And an
+        # empty result is refused rather than run, because a graph that computes
+        # nothing and reports success is rule 6's failure exactly — the message
+        # names both ranges, which is what a reader needs to know which to move.
+        overlapping = Pipeline(
+            nodes=(node("a", "keep", first=100, last=108), node("b", "keep", first=104, last=120)),
+            edges=edges("a>b"),
+        )
+        assert plan_for(overlapping).span == ClipRange(start=104, end=108)
+
+        disjoint = Pipeline(
+            nodes=(node("a", "keep", first=100, last=104), node("b", "keep", first=106, last=120)),
+            edges=edges("a>b"),
+        )
+        with pytest.raises(ValueError, match=r"nothing is left to compute.*100:110"):
+            plan_for(disjoint)
+
+    def test_a_selecting_node_is_hashed_like_any_other_node(self) -> None:
+        """Which frames are in the answer is what the result is, so it is keyed.
+
+        And the cost `span.md` is made of: the node's own key moves with its
+        bounds, so anything downstream of it moves too. Both halves asserted,
+        because a fold that skipped a selecting filter's params would pass every
+        test above and leave two different answers sharing entries.
+        """
+        pipeline = Pipeline(
+            nodes=(node("k", "keep", first=102, last=108), node("s", "settle1")),
+            edges=edges("k>s"),
+        )
+        wider = Pipeline(
+            nodes=(node("k", "keep", first=101, last=108), node("s", "settle1")),
+            edges=edges("k>s"),
+        )
+
+        narrow, broad = plan_for(pipeline).keys, plan_for(wider).keys
+
+        assert narrow["k"] != broad["k"]
+        assert narrow["s"] != broad["s"]
 
 
 def test_params_are_validated_even_where_no_key_is_derived() -> None:

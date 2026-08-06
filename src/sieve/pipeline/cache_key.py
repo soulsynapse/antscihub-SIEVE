@@ -24,9 +24,22 @@ identity is the opposite: it enters at *every* node, because two nodes in one
 graph can run on different backends, and it drops out only where the filter has
 claimed `backend_agnostic`.
 
-**What is deliberately absent.** The clip range, checkpoints, sink paths, and
-the replicate's display name. A clip changes which frames are computed, never
-what a frame is. A checkpoint changes where a result lives, never what it is —
+**What is deliberately absent.** The requested clip range, checkpoints, sink
+paths, and the replicate's display name. A clip changes which frames are
+computed, never what a frame is — so `ExecutionPlan.span` reaches nothing here,
+and a caller narrowing what it asks for keeps every entry it had.
+
+That is a statement about the *request*, and `filters/span.py` is deliberately
+not an exception to it. A span node is a node: its parameters are hashed like any
+other filter's, because a graph that selects is a different graph and the
+alternative — a field the fold skips — is an input left out, which is this
+module's first paragraph. The price is real and is charged where it can be
+avoided: those parameters land in the key of everything *downstream* of the node,
+so a span at a root re-derives the whole chain when its bounds move, for frames
+whose pixels did not. `span.md` says to put it at a leaf, and that is what the
+advice is made of.
+
+A checkpoint changes where a result lives, never what it is —
 `Project` keeps both off `Node` for this reason, and hashing them here would
 undo that: an HPC handoff empties `checkpoints` (VISION step 6) and must not
 invalidate a single entry. A sink path is where output is written, and two

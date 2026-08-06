@@ -76,6 +76,7 @@ src/sieve/filters/block_signal.py       # change_energy, flow_speed, coherence �
 src/sieve/filters/temporal_baseline.py  # per-cell median/MAD null; the units thresholds are denominated in
 src/sieve/filters/motion_history.py     # MHI: leaky accumulator with dilate/diffuse coupling, declared group delay
 src/sieve/filters/detect.py             # detection emitting a per-frame gate channel
+src/sieve/filters/span.py               # the clip span as a filter; the decode range is the planner's pushdown over it
 
 src/sieve/pipeline/dag.py               # resolve, reject cycles and untypeable edges, one topological order; linear_order for the graphs a stack can host
 src/sieve/pipeline/plan.py              # everything knowable before a frame decodes: params, keys, lead-in
@@ -202,7 +203,6 @@ src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
 src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see docs/SETTLED.md
-src/sieve/filters/span.py               # the clip span as a filter; decode pushdown stays a planner optimization — todo/the-span-is-a-filter.md
 src/sieve/mutual/__init__.py            # dependency-shared, not agreement-shared: shares, machine, pool_meter — todo/the-mutual-tier.md
 ```
 

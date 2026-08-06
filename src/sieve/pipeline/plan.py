@@ -30,6 +30,28 @@ claimed determinism is never hashed — so before this module a filter declaring
 kernel. The plan needs the parsed params anyway to call kernels with, so the
 gap closes for free.
 
+**Which frames are in the answer is the graph's, and the decode range is an
+optimization over it.** `span` is folded here from every `selecting` node's
+declared range intersected with what the caller asked for, and `decode_range`
+then *widens* that by the lead-in and hands it to the reader. The widening is a
+predicate pushdown and nothing more: the frames it adds are exactly the lead-in
+ones the executor already discards, so narrowing what is read changes when a
+result arrives and never what it is. Two consequences worth naming, because
+neither is visible at the fold:
+
+- **The selection is the run's, not a branch's.** `execute` yields one
+  `FrameResult` per frame carrying *every* node's output, so a graph has one
+  frame set and a per-branch selection has nowhere to live. Intersecting over
+  the whole graph is therefore not a simplification — it is the only reading
+  the executor can express, and it is what makes a selecting node's placement
+  irrelevant to the result.
+- **Lead-in flows through a selecting node, and has to.** A selection that
+  genuinely dropped frames at a root would leave everything below it with no
+  frames to warm on, and every stateful filter in the graph would be unsettled
+  for the whole span. The frames are cut once, at the yield, after they have
+  done the warming — which is what the executor has always done and is the half
+  of the span that was never the problem.
+
 **The cache is not consulted here.** A plan says what the run computes, and
 what is already in a store is a property of a machine at a moment, not of the
 run. The executor takes both. The consequence worth naming is that `lead_in` is
@@ -46,7 +68,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import ParamsBase, input_warmup_frames
+from sieve.core.filter_base import ALL_FRAMES, ParamsBase, input_warmup_frames
 from sieve.core.pipeline_model import ClipRange, Node, resolved_params
 from sieve.core.replicates import Replicate
 from sieve.core.types import NO_FRAMES, ROI, FrameCount
@@ -65,7 +87,8 @@ class ExecutionPlan:
     #: The validated graph. Carried rather than copied out of, so a holder of a
     #: plan never needs the `Dag` alongside it.
     dag: Dag
-    #: The frames the caller asked for, half-open, in source indices.
+    #: The frames in the answer, half-open, in source indices: what the caller
+    #: asked for, narrowed by every `selecting` node in the graph.
     span: ClipRange
     #: Resolved and validated parameters per `node_id`. Total over `dag.order`.
     params: Mapping[str, ParamsBase]
@@ -133,9 +156,11 @@ class ExecutionPlan:
                 builds one. A string rather than a `Path` for that function's
                 reason, and because it keeps this buildable against footage
                 that is not mounted.
-            span: The frames wanted, half-open. Required rather than defaulting
-                to the whole video, because "the whole video" is a fact about
-                the container and this module may not open one. A caller with a
+            span: The frames wanted, half-open, before the graph has its say —
+                every `selecting` node narrows it further, and `ExecutionPlan.
+                span` is the result. Required rather than defaulting to the
+                whole video, because "the whole video" is a fact about the
+                container and this module may not open one. A caller with a
                 `Project` whose `clip` is `None` builds the full-length range
                 from the reader's metadata.
             backend: Where each node runs. A single `Backend` assigns all of
@@ -156,7 +181,12 @@ class ExecutionPlan:
         Raises:
             ValidationError: if any node's resolved parameters are not valid for
                 its filter.
-            ValueError: if any node declares a non-positive output rate.
+            ValueError: if any node declares a non-positive output rate, or if
+                the `selecting` nodes and the requested span have no frame in
+                common. Refused rather than run empty: a graph that computes
+                nothing and reports success is a result that looks better
+                founded than it is, and the message names the ranges that
+                disagree so the reader can see which one to move.
             KeyError: if `backend` is a mapping and a node is missing from it.
                 Refused rather than defaulted: a node silently falling to CPU
                 because a caller forgot it would key correctly and run on the
@@ -174,7 +204,7 @@ class ExecutionPlan:
         }
         return cls(
             dag=dag,
-            span=span,
+            span=_selected(dag, params, span),
             params=params,
             keys=dag.node_keys(
                 source=source, backend=backends, replicate=replicate, pre_cropped=pre_cropped
@@ -284,6 +314,43 @@ class ExecutionPlan:
         """
         self.dag.spec(node_id)
         return self.keys.get(node_id)
+
+
+def _selected(dag: Dag, params: Mapping[str, ParamsBase], requested: ClipRange) -> ClipRange:
+    """`requested` intersected with what every node in the graph keeps.
+
+    No node is asked which filter it is and nothing is enumerated: a filter that
+    selects overrides `ParamsBase.selected_frames`, every other filter inherits
+    `ALL_FRAMES`, and the intersection over the whole graph is the same
+    expression either way. That is what keeps the span a *discovered* filter —
+    naming `span` here would make `pipeline` the registry that rule 3 forbids,
+    and `tests/unit/test_filter_id_spelling.py` is what says so out loud.
+
+    Unordered, unlike `_lead_in`: intersection is commutative and associative, so
+    there is nothing for the topological order to contribute. Two selecting nodes
+    on unrelated branches narrow the one answer together, which is
+    `ExecutionPlan`'s docstring on why a graph has one frame set.
+
+    Raises:
+        ValueError: if the intersection is empty. `ClipRange` refuses it anyway —
+            "a clip must cover at least one frame" — and being refused by the
+            type would name neither the nodes nor the ranges, which is the whole
+            of what a reader needs here.
+    """
+    start, end = requested.start, requested.end
+    narrowed: list[str] = []
+    for node in dag.order:
+        kept = params[node.node_id].selected_frames()
+        if kept == ALL_FRAMES:
+            continue
+        narrowed.append(f"{node.node_id} keeps [{kept.start}:{kept.stop})")
+        start, end = max(start, kept.start), min(end, kept.stop)
+    if end <= start:
+        raise ValueError(
+            f"nothing is left to compute: [{requested.start}:{requested.end}) was asked for and "
+            f"{', '.join(narrowed)} — the intersection is empty"
+        )
+    return ClipRange(start=start, end=end)
 
 
 def _lead_in(dag: Dag, params: Mapping[str, ParamsBase]) -> FrameCount:

@@ -36,6 +36,63 @@ ARENA = ROI(x=16, y=8, width=64, height=48)
 FACTOR = 2
 
 
+def test_a_span_node_and_a_requested_clip_produce_the_same_frames(
+    synthetic_video: Path,
+) -> None:
+    """The other half of the flip's equivalence, and the pushdown's whole claim.
+
+    `docs/todo/the-graph-carries-the-crop-the-span-and-the-detector.md` will
+    synthesize a span node from `Project.clip`, and it names the failure: a span
+    node off by the lead-in the decode range absorbs. That mistake produces a run
+    of exactly the right length over frames five earlier than the ones asked for,
+    which reads as plausible everywhere except here.
+
+    So the two paths are compared on the frames' *identities* rather than only on
+    their count, and `background_ema` is in the chain because it is the thing a
+    lead-in mistake actually corrupts — a stateful filter that saw five fewer
+    frames of settling returns different pixels for the same index, and the
+    lengths still match.
+    """
+    assert discover()
+    graph = (
+        Node(node_id="ema", filter_id="background_ema", version="1.0.0", params={}),
+        Node(
+            node_id="span",
+            filter_id="span",
+            version="1.0.0",
+            params={"start": 22, "end": 26},
+        ),
+    )
+    by_request = ExecutionPlan.build(
+        Dag.build(Pipeline(nodes=graph[:1])),
+        source=source_identity(synthetic_video),
+        span=ClipRange(start=22, end=26),
+        backend=Backend.CPU,
+    )
+    by_graph = ExecutionPlan.build(
+        Dag.build(Pipeline(nodes=graph, edges=(Edge(upstream="ema", downstream="span"),))),
+        source=source_identity(synthetic_video),
+        # Deliberately wider than the node's range on both sides: the graph is
+        # what narrows it, and a fold that ignored the node would run 10 frames.
+        span=ClipRange(start=18, end=30),
+        backend=Backend.CPU,
+    )
+
+    assert by_graph.span == by_request.span
+    assert by_graph.decode_range == by_request.decode_range
+
+    with VideoReader(synthetic_video, luma=by_request.luma) as reader:
+        requested = [(r.index, r["ema"].data) for r in execute(by_request, reader)]
+    with VideoReader(synthetic_video, luma=by_graph.luma) as reader:
+        selected = [(r.index, r["span"].data) for r in execute(by_graph, reader)]
+
+    assert [index for index, _ in selected] == [22, 23, 24, 25]
+    assert all(
+        left == right and np.array_equal(pixels, other)
+        for (left, pixels), (right, other) in zip(requested, selected, strict=True)
+    )
+
+
 def test_a_crop_node_and_a_replicate_roi_produce_the_same_pixels(
     synthetic_video: Path,
 ) -> None:

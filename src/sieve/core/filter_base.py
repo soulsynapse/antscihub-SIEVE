@@ -12,25 +12,26 @@ The spec is also the single source of truth for a filter's parameters. GUI
 widgets, CLI flags, YAML, and the cache key all read `params_model`; none of
 them carries a second copy of the field list that could drift from it.
 
-**Three declarations are params-derived rather than constants**, because the
+**Four declarations are params-derived rather than constants**, because the
 quantity they describe *is* a parameter: a decimator's factor, a downsampler's
-scale, a trailing window's length. `output_rate`, `frame_bytes_ratio` and
-`warmup_frames` are therefore methods on `ParamsBase`, not (only) fields on
-`FilterSpec`. They stay pure — data in, exact number out, no kernel, no codec —
-so `dag.py` and the executor can evaluate them on a machine with nothing
-installed, which is the property the whole split exists to preserve.
+scale, a trailing window's length, a span's bounds. `output_rate`,
+`frame_bytes_ratio`, `warmup_frames` and `selected_frames` are therefore methods
+on `ParamsBase`, not (only) fields on `FilterSpec`. They stay pure — data in,
+exact number out, no kernel, no codec — so `dag.py` and the executor can
+evaluate them on a machine with nothing installed, which is the property the
+whole split exists to preserve.
 
-The three are params-derived in three different *shapes*, and the difference is
-about what a wrong answer costs. `output_rate` is cross-checked against a spec
-flag, because forgetting to declare a decimation is silent and wrong.
-`frame_bytes_ratio` is cross-checked against nothing, because it feeds a
-prediction and never a result. `warmup_frames` sits between them: the spec field
-is the *bound* — the worst case over the legal parameter range, which is what
-`sieve inspect` can print without a configuration in hand — and the method is
-this configuration's actual need, which may refine the bound downward but never
-exceed it. `node_warmup_frames` enforces that, and the asymmetry is the point: a
-refinement that is too small under-warms a filter silently, and a bound that is
-too large only wastes decode.
+They are params-derived in three different *shapes*, and the difference is
+about what a wrong answer costs. `output_rate` and `selected_frames` are
+cross-checked against a spec flag, because forgetting to declare a decimation or
+a selection is silent and wrong. `frame_bytes_ratio` is cross-checked against
+nothing, because it feeds a prediction and never a result. `warmup_frames` sits
+between them: the spec field is the *bound* — the worst case over the legal
+parameter range, which is what `sieve inspect` can print without a configuration
+in hand — and the method is this configuration's actual need, which may refine
+the bound downward but never exceed it. `node_warmup_frames` enforces that, and
+the asymmetry is the point: a refinement that is too small under-warms a filter
+silently, and a bound that is too large only wastes decode.
 """
 
 from __future__ import annotations
@@ -261,6 +262,21 @@ def node_element_names(
 #: can share it, and `output_rate() is UNCHANGED_RATE` is a cheap fast path.
 UNCHANGED_RATE = Fraction(1, 1)
 
+#: One past the last frame `ALL_FRAMES` covers. A bound, not a measurement:
+#: 2**32 frames is 207 days at 240 fps, which is unreachable, and it is small
+#: enough that a reader meeting `4294967296` in a saved document can tell it is a
+#: bound. Unbounded rather than the video's own length for `crop.WHOLE_FRAME`'s
+#: reason — a graph is written by things that have not opened the video, and the
+#: length is a fact about the container.
+UNBOUNDED_FRAME = 1 << 32
+
+#: Every frame there could be: the identity of the selection fold, allocated once
+#: for `UNCHANGED_RATE`'s reason. A `range` rather than a range type of its own,
+#: because `ExecutionPlan.decode_range` already made `range` this codebase's
+#: spelling of a half-open frame interval, and a second spelling in `core` would
+#: be REWORK.md R4's one-name-two-homes with nothing to show for it.
+ALL_FRAMES = range(0, UNBOUNDED_FRAME)
+
 
 class ParamsBase(BaseModel):
     """Base for every filter's parameter model.
@@ -330,6 +346,37 @@ class ParamsBase(BaseModel):
         nothing left to warm up.
         """
         return UNCHANGED_RATE
+
+    def selected_frames(self) -> range:
+        """Which frames this configuration keeps, half-open, in its input space.
+
+        `output_rate`'s treatment for the other way a filter can emit fewer
+        frames than it consumed. A rate change is uniform and reindexes — every
+        tenth frame, and the tenth output *is* the hundredth input — so it is
+        arithmetic the warmup fold has to cross. A selection is neither: the
+        frames that survive keep their numbering, and what changes is only which
+        of them are in the answer at all.
+
+        Overriding it obliges the spec to set `selecting=True`, which
+        `FilterSpec` refuses the pair without, for `output_rate`'s reason: a
+        filter that narrows the answer and forgets to say so would be run over
+        the whole video and its declaration would be the only evidence.
+
+        **Denominated in this filter's input space, which is the source's.**
+        `executor._run_node` refuses any node whose output carries a different
+        index from its input, and the one declaration that could legitimately
+        change it — `rate_changing` — has no runnable kernel, so every node in a
+        graph that runs today numbers its frames the way the reader does. That is
+        an argument with an expiry date on it: `a-kernel-that-changes-the-rate`
+        is where a selection downstream of a decimator stops meaning the same
+        thing as one at the root, and `plan._selected` is what has to convert.
+
+        Returns:
+            The kept range. `ALL_FRAMES` — the default, never overridden by most
+            filters — is "all of them", a value rather than an absence, so no
+            `range | None` propagates into the plan (REWORK.md R1).
+        """
+        return ALL_FRAMES
 
     def warmup_frames(self) -> FrameCount:
         """Frames *this configuration* must consume before its output is good.
@@ -546,6 +593,20 @@ class FilterSpec:
     #: preview that renders, is under-warmed by the decimation factor, and
     #: looks entirely plausible.
     rate_changing: bool = False
+    #: This filter keeps only some of the frames it is handed, and its
+    #: `params_model` overrides `selected_frames` to say which. The agreement is
+    #: checked below, and it is `rate_changing`'s flag for `rate_changing`'s
+    #: reason: a filter that narrows the answer and forgets to declare it runs
+    #: over the whole video and nothing contradicts it.
+    #:
+    #: **Not an axis of the declarable shape space.** `Mode`, `rate_changing`,
+    #: and the stream kinds decide which kernel protocol a node needs; this
+    #: decides nothing about the call, because a selecting node's kernel is
+    #: handed exactly the frames every other node is handed. Which of them reach
+    #: the answer is `ExecutionPlan.span`, folded before a frame is read — so
+    #: there is no shape here for `unrunnable_reason` to refuse and none for
+    #: `tests/unit/test_declarable_shapes.py` to walk.
+    selecting: bool = False
     #: Same backend, same input, same output. Gates whether the node may be
     #: cached at all.
     deterministic: bool = True
@@ -682,6 +743,19 @@ class FilterSpec:
                 f"{self.filter_id}: {self.params_model.__name__} overrides output_rate but the "
                 "spec does not declare rate_changing"
             )
+        selects = self.params_model.selected_frames is not ParamsBase.selected_frames
+        if self.selecting and not selects:
+            raise ValueError(
+                f"{self.filter_id}: selecting is set but {self.params_model.__name__} does not "
+                "override selected_frames, so nothing can say which frames it keeps and the node "
+                "would narrow the answer by ALL_FRAMES — that is, not at all"
+            )
+        if selects and not self.selecting:
+            raise ValueError(
+                f"{self.filter_id}: {self.params_model.__name__} overrides selected_frames but "
+                "the spec does not declare selecting, so the plan never asks and the run covers "
+                "the whole video the node was written to cut down"
+            )
 
     @property
     def input_ports(self) -> Mapping[str, StreamSpec]:
@@ -800,6 +874,12 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "backend_agnostic": Channel.IDENTITY,
     "mode": Channel.EXECUTION,
     "rate_changing": Channel.EXECUTION,
+    # Beside `rate_changing` and for its reason, though what the *parameters*
+    # behind it decide — which frames are in the answer — is squarely identity.
+    # Neither flag reaches a digest: each exists so that omitting the override it
+    # names is refused at registration, which is this channel's second sentence
+    # ("or refuse to produce it at all"). The hashed half is `params_model`.
+    "selecting": Channel.EXECUTION,
     "warmup_frames": Channel.EXECUTION,
     "stateful": Channel.EXECUTION,
     "deterministic": Channel.EXECUTION,

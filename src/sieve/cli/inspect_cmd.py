@@ -138,6 +138,7 @@ def _describe(spec: FilterSpec, *, guidance: bool) -> str:
         f"mode              {spec.mode}",
         f"warmup_frames     {spec.warmup_frames.frames}{_warmup_note(spec)}",
         f"rate_changing     {spec.rate_changing}",
+        f"selecting         {spec.selecting}",
         f"deterministic     {spec.deterministic} (cacheable: {spec.cacheable})",
         f"backend_agnostic  {spec.backend_agnostic}",
         f"cost              {spec.cost.seconds_per_megapixel} s/MP, "

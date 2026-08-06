@@ -129,6 +129,46 @@ def test_a_hand_written_crop_node_runs_with_no_replicates(
     )
 
 
+def test_a_hand_written_span_node_narrows_what_the_project_asked_for(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """The span reaches a run from a YAML file, and the graph outranks the clip.
+
+    What `docs/todo/the-span-is-a-filter.md` asks for end to end. The project's
+    own clip is ten frames wide and the node keeps four of them, so the count the
+    command reports is the graph's — which is the observable difference between a
+    span that is a filter and a span that is an argument, and it is visible
+    without opening a single frame.
+    """
+    project = (
+        Project.for_video(synthetic_video, tmp_path)
+        .with_pipeline(
+            Pipeline(
+                nodes=(
+                    Node(node_id="down", filter_id="downsample", version="1.0.0"),
+                    Node(
+                        node_id="span",
+                        filter_id="span",
+                        version="1.0.0",
+                        params={"start": 12, "end": 16},
+                    ),
+                ),
+                edges=(Edge(upstream="down", downstream="span"),),
+            )
+        )
+        .with_clip(ClipRange(start=10, end=20))
+    )
+    path = tmp_path / "spanned.sieve.yaml"
+    project.save(path)
+
+    result = runner.invoke(app, ["run", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[0] == (
+        "baseline: 4 frames, 8 node outputs computed, 0 from cache"
+    )
+
+
 def test_a_dry_run_never_opens_the_video(
     synthetic_video: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

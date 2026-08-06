@@ -8,7 +8,7 @@ Thus, below is a list of what is reasoned to be **what must be true for SIEVE to
 ## Using the MCP to queue tasks
 During any given pick up, you can do one of three things:
 
-1. Implent a single unfinished plan step.
+1. Implent a single unfinished plan step. If you finish it and are under 30 steps, you can do another.
 2. Add a new problem statement and steps.
 3. If no actionable item remains, drain the rest of the queue. This should only be done when there isn't a clear way forward.
 

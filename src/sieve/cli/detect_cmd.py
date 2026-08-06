@@ -43,6 +43,7 @@ the pool a job step actually contends on.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from pathlib import Path
 from typing import Annotated
 
@@ -157,6 +158,7 @@ def detect_project(
         )
         with frame_source(resolved.path, workers, luma=luma) as reader:
             fps = reader.metadata.fps
+            _refuse_detector_without_source_rate(video, fps, armed=project.detector is not None)
             rows = _collect(plan, resolved.wrap(reader), store, series_node)
         # `float(fps)` into the detector and the summary, the exact rational
         # into the export. The wavelet bank is a float computation and the
@@ -311,6 +313,15 @@ def _detect_one(
     return detect_filter.detect_series(series, params, start_index=start, workers=ALL_CORES)
 
 
+def _refuse_detector_without_source_rate(video: Path, fps: Fraction, *, armed: bool) -> None:
+    """Stop before detector params turn missing source metadata into a param error."""
+    if armed and fps <= 0:
+        raise refuse(
+            f"source video states no frame rate: {video}. Detection needs a positive "
+            "source frame rate to interpret detector frequency bands."
+        )
+
+
 def _export(directory: Path, exports: list[DetectionExport], element_names: ElementNames) -> str:
     """Write the tables and say what was written, naming the file left absent.
 
@@ -366,11 +377,19 @@ def _report(
             "(no count threshold placed), so nothing is claimed"
         )
     found = len(update.intervals)
-    lines = [f"{label}: {series.shape[0]} frames, {found} interval{'' if found == 1 else 's'}"]
-    lines.extend(
-        f"  {first}:{last} ({first / fps:.2f}s - {last / fps:.2f}s, {last - first} frames)"
-        for first, last in update.intervals
-    )
+    summary = f"{label}: {series.shape[0]} frames, {found} interval{'' if found == 1 else 's'}"
+    if fps <= 0:
+        summary += " (source states no rate; interval times unavailable)"
+    lines = [summary]
+    if fps > 0:
+        lines.extend(
+            f"  {first}:{last} ({first / fps:.2f}s - {last / fps:.2f}s, {last - first} frames)"
+            for first, last in update.intervals
+        )
+    else:
+        lines.extend(
+            f"  {first}:{last} ({last - first} frames)" for first, last in update.intervals
+        )
     return "\n".join(lines)
 
 

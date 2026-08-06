@@ -16,8 +16,9 @@ that did not go through `sieve.gui`.
 from __future__ import annotations
 
 import csv
+from fractions import Fraction
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 import numpy as np
 import pytest
@@ -25,6 +26,7 @@ from numpy.typing import NDArray
 from typer.testing import CliRunner
 
 import sieve.filters.detect as detect_filter
+from sieve.cli import detect_cmd
 from sieve.cli.app import app
 from sieve.core.filter_base import ElementNames
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline, Project
@@ -33,6 +35,21 @@ from sieve.filters.block_signal import BlockSignalParams
 from sieve.filters.detect import DetectorUpdate, DetectParams
 
 runner = CliRunner()
+
+
+class ReportFn(Protocol):
+    def __call__(
+        self,
+        label: str,
+        series: NDArray[np.float32],
+        update: DetectorUpdate | None,
+        *,
+        fps: float,
+        element_names: ElementNames,
+    ) -> str: ...
+
+
+REPORT = cast(ReportFn, vars(detect_cmd)["_report"])
 
 SERIES_NODE = Node(
     node_id="blocks",
@@ -90,6 +107,28 @@ def test_an_armed_project_prints_intervals_without_a_gui(
     assert "disarmed" not in result.output
 
 
+def test_a_source_with_no_declared_rate_is_refused_as_source_metadata(
+    synthetic_video: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The detector needs source fps, but the error belongs to the source."""
+
+    def no_rate(path: Path) -> Fraction:
+        return Fraction(0)
+
+    monkeypatch.setattr("sieve.decode.reader.container_rate", no_rate)
+    project = _project(
+        synthetic_video,
+        tmp_path,
+        detector=DetectorSettings(count_frac=(0.0, 1.0), window_frames=5, centered=True),
+    )
+
+    result = runner.invoke(app, ["detect", str(project), "--frames", "0:8"])
+
+    assert result.exit_code == 1
+    assert "source video states no frame rate" in result.output
+    assert "Input should be greater than 0" not in result.output
+
+
 def test_an_untuned_project_says_so_rather_than_claiming_nothing(
     synthetic_video: Path, tmp_path: Path
 ) -> None:
@@ -141,6 +180,31 @@ def _rows(path: Path) -> list[dict[str, str]]:
 #: about whether the rename was intended.
 BLOCK_NAMES = cast(ElementNames, BlockSignalParams.spec().element_names)
 DETECTED = series_columns(BLOCK_NAMES)[-1].name
+
+
+def test_the_stdout_report_uses_frame_bounds_when_no_rate_is_available() -> None:
+    """The summary is not the CSV, but it must still never divide by zero."""
+    update = DetectorUpdate(
+        band_power=np.zeros((8, 4), dtype=np.float32),
+        count=np.zeros(8, dtype=np.float32),
+        windowed=np.zeros(8, dtype=np.float32),
+        gate=np.zeros(8, dtype=np.bool_),
+        intervals=((101, 104),),
+        band_rows=(0, 4),
+    )
+
+    report = REPORT(
+        "arena",
+        np.zeros((8, 4), dtype=np.float32),
+        update,
+        fps=0.0,
+        element_names=BLOCK_NAMES,
+    )
+
+    assert report == (
+        "arena: 8 frames, 1 interval (source states no rate; interval times unavailable)\n"
+        "  101:104 (3 frames)"
+    )
 
 
 def test_the_header_is_a_published_interface(synthetic_video: Path, tmp_path: Path) -> None:

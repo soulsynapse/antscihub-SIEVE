@@ -4,14 +4,17 @@ status: deferred
 opened: 2026-08-05T22:56:16-07:00
 priority: high
 gated_on: >
-  a windowed kernel that can be handed a span with frames on both sides of its
-  target. `a-kernel-that-sees-a-span` settled the trailing shape — the executor
-  sizes the span as refined warmup plus the current frame, and `FrameSpan.target`
-  is its last frame — so look-ahead is a widening of that protocol and an item
-  nobody has written. Until it exists, a detect node in the graph computes
-  something the saved field does not mean, and there is nothing to migrate to.
+  `a-kernel-that-sees-past-its-target` landing. That item now exists and is
+  ranked (2026-08-05); this line used to describe it as unwritten, which
+  over-stated the gate — the look-ahead *quantity* was never missing, only the
+  protocol width that delivers it. `core/ops/wavelet.py` and
+  `core/ops/detection.py` both compute how far forward a value must see before
+  it is final, `detect/detector.py` `settled_for` takes the smaller, and
+  nothing hands those frames to a kernel because `FrameSpan.target` is its last
+  frame by definition. Until that widens, a detect node computes something the
+  saved field does not mean.
 reads: [src/sieve/filters/detect.py, src/sieve/pipeline/upgrade.py, src/sieve/gui/detector_worker.py]
-after: [the-graph-carries-the-crop-the-span-and-the-detector]
+after: [the-graph-carries-the-crop-the-span-and-the-detector, a-kernel-that-sees-past-its-target]
 ---
 
 # The detector node is centered, and the graph carries it

@@ -32,13 +32,21 @@ declare nothing and are not asked to.
 Findings need no stamp — their existing `commit:` and `files:` fields are the
 same information, so every non-superseded finding is checked for free.
 
-    uv run python tools/doc_drift.py
+    uv run nox -s drift                        # the full report
+    uv run python tools/doc_drift.py --summary # the one line `nox -s docs` prints
+
+The full report is forty lines that a reader who ran `nox -s docs` for the
+indexes did not ask for, and forty lines of standing advice are read once and
+ignored thereafter. So the two audiences are split: `docs` prints the count,
+which is small enough to notice when it changes, and `drift` prints the report
+for a session that came to act on it.
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Sequence
 from typing import Any, cast
 
 from doc_index import DOCS_ROOT, SPECS, FrontmatterError, collect, parse_frontmatter
@@ -100,7 +108,12 @@ def commits_since(rev: str, paths: list[str]) -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def report_doc(name: str) -> list[str]:
+def report_doc(name: str) -> tuple[bool, list[str]]:
+    """`(wants a revisit, lines)` for one `current` doc.
+
+    Unassessable counts as wanting one: a doc nobody stamped is exactly the
+    doc nobody has checked, so folding it in with the clean ones would let the
+    count go down by removing a stamp."""
     fields = parse_frontmatter(DOCS_ROOT / name)
     reviewed = str(fields.get("reviewed", "")).strip()
     raw_subjects = fields.get("subjects")
@@ -108,18 +121,19 @@ def report_doc(name: str) -> list[str]:
         [str(s) for s in cast(list[Any], raw_subjects)] if isinstance(raw_subjects, list) else []
     )
     if not reviewed or not subjects:
-        return [f"  {name}: no reviewed/subjects stamp — cannot assess"]
+        return True, [f"  {name}: no reviewed/subjects stamp — cannot assess"]
     moved = commits_since(reviewed, subjects)
     if len(moved) < QUIET_BELOW:
-        return [f"  {name}: current (reviewed {reviewed})"]
+        return False, [f"  {name}: current (reviewed {reviewed})"]
     lines = [f"  {name}: {len(moved)} commits touched its subjects since {reviewed}"]
     lines += [f"    {line}" for line in moved[:5]]
     if len(moved) > 5:
         lines.append(f"    … and {len(moved) - 5} more")
-    return lines
+    return True, lines
 
 
-def report_findings() -> list[str]:
+def report_findings() -> tuple[int, list[str]]:
+    """`(count of drifted findings, lines)`."""
     spec = next(spec for spec in SPECS if spec.directory == "findings")
     lines: list[str] = []
     for entry in collect(spec):
@@ -136,21 +150,40 @@ def report_findings() -> list[str]:
                 f"  {entry.path.name}: {len(moved)} commits touched its files "
                 f"since {commit} — verdict may describe a system that moved"
             )
-    return lines or ["  (none with 3+ commits of movement)"]
+    return len(lines), lines or ["  (none with 3+ commits of movement)"]
 
 
-def main() -> int:
-    print("doc_drift: prose docs claiming current truth, by their stamps")
+def report() -> tuple[str, list[str]]:
+    """`(summary line, full report)`, both from the same one pass over git."""
+    doc_lines: list[str] = []
+    drifted = 0
     for name in current_docs():
-        for line in report_doc(name):
-            print(line)
-    print("doc_drift: findings whose measured files moved most")
-    for line in report_findings():
+        wants, lines = report_doc(name)
+        drifted += 1 if wants else 0
+        doc_lines += lines
+    finding_count, finding_lines = report_findings()
+    summary = (
+        f"doc_drift: {drifted} docs and {finding_count} findings want a revisit "
+        f"— `uv run nox -s drift` says which"
+    )
+    full = ["doc_drift: prose docs claiming current truth, by their stamps"]
+    full += doc_lines
+    full.append("doc_drift: findings whose measured files moved most")
+    full += finding_lines
+    full.append("doc_drift: a listed doc wants one targeted revisit, not a rewrite;")
+    full.append("doc_drift: re-stamp `reviewed:` after checking the claims still hold.")
+    return summary, full
+
+
+def main(argv: Sequence[str]) -> int:
+    summary, full = report()
+    if "--summary" in argv:
+        print(summary)
+        return 0
+    for line in full:
         print(line)
-    print("doc_drift: a listed doc wants one targeted revisit, not a rewrite;")
-    print("doc_drift: re-stamp `reviewed:` after checking the claims still hold.")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

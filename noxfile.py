@@ -34,15 +34,26 @@ def imports(session: nox.Session) -> None:
 
 @nox.session
 def docs(session: nox.Session) -> None:
-    """Regenerate the doc indexes and `.state.md`, then report drift.
+    """Regenerate the doc indexes and `.state.md`, and count what has drifted.
 
-    The drift report never fails the session — staleness announces itself
-    here so revisits are targeted, and gating on it would make every code
-    change a doc chore."""
+    One line, not the report: this session is run for the indexes, after every
+    completed item, and forty lines of standing drift advice printed on each of
+    those runs is read once and skipped thereafter — it also buries the verdict
+    of whatever was piped after it. The report itself is `nox -s drift`."""
     session.run("python", "tools/doc_index.py", *session.posargs)
     session.run("python", "tools/doc_refs.py")
     session.run("python", "tools/guardrail_refs.py")
-    session.run("python", "tools/doc_drift.py")
+    session.run("python", "tools/doc_drift.py", "--summary")
+
+
+@nox.session
+def drift(session: nox.Session) -> None:
+    """Which stamped docs and findings have had their subjects move.
+
+    An audit, run when a session came to act on it. It never fails — a drifted
+    doc is a candidate for one targeted revisit, not a broken build, and gating
+    on it would make every code change a doc chore."""
+    session.run("python", "tools/doc_drift.py", *session.posargs)
 
 
 @nox.session

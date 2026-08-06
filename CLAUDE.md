@@ -155,7 +155,8 @@ seconds and leaves nothing behind but a wrong row in `files.added`.
 ```
 uv run nox -s checks      # ruff + ruff format + pyright strict + import-linter + pytest
 uv run nox -s benchmark   # timed budget checks (marker-selected)
-uv run nox -s docs        # regenerate docs/*/.index.md
+uv run nox -s docs        # regenerate docs/*/.index.md; one line of drift count
+uv run nox -s drift       # the drift report itself — an audit, never a gate
 uv run nox -s hooks       # core.hooksPath -> tools/githooks; per-clone, once
 ```
 
@@ -305,7 +306,9 @@ that was taken. Two rules keep that from turning into accretion:
   in it still load-bearing moves to the module or item that owns the claim.
   A `current` doc also carries a `reviewed:`/`subjects:` stamp, and
   `tools/doc_drift.py` *reports* (never gates) when its subjects moved — an
-  unstamped one is listed as unassessable, which is what it is. The generated
+  unstamped one is listed as unassessable, which is what it is. The report is
+  `nox -s drift`, run when you came to act on it; `nox -s docs` prints only how
+  many want a revisit. The generated
   files and the two workbenches declare nothing and are named in
   `doc_drift.UNSTAMPED`. This list used to live here, in prose, where the
   reader of a stale file could not see it.

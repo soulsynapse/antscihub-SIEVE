@@ -39,6 +39,7 @@ uv run pytest                  # test suite
 uv run nox -s checks           # ruff + pyright + import contracts + pytest — the CI gate
 uv run nox -s benchmark        # latency budget checks
 uv run nox -s docs             # regenerate docs/*/.index.md from entry frontmatter
+uv run nox -s drift            # which stamped docs have had their subjects move
 uv run python -c "import sieve"
 ```
 

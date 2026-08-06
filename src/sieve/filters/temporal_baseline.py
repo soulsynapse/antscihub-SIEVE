@@ -94,9 +94,9 @@ from sieve.core.types import Frame, FrameCount, WorkUnits
 #: intuition rather than needing a scale factor in the user's head.
 MAD_TO_SIGMA = 1.4826
 
-#: The longest baseline window, in seconds. Not a preference: it is one of the
-#: two factors in `MAX_WARMUP_FRAMES` below, and 30 s of lead-in at a plausible
-#: frame rate is already the largest decode any filter in this repo asks for.
+#: The longest baseline window, in seconds. Not a preference: it is one factor
+#: in `TemporalBaselineParams.max_warmup_frames`, and 30 s of lead-in at a
+#: plausible frame rate is already the largest decode any filter asks for.
 WINDOW_SECONDS_MAX = 30.0
 
 #: The highest frame rate a window may be denominated against. High-speed insect
@@ -143,14 +143,6 @@ def ring_capacity(frames: int) -> int:
     return min(MAX_SAMPLES, -(-frames // stride))
 
 
-#: The worst case over the legal parameter range, which is what the spec's bound
-#: has to be: a 30 s window at 240 fps spans 7200 frames, of which 7199 precede
-#: the first trustworthy output. No run pays it —
-#: `TemporalBaselineParams.warmup_frames` refines it to the configured window —
-#: and the fact that it is unpayable is what the refinement was built for.
-MAX_WARMUP_FRAMES = FrameCount(window_frames(WINDOW_SECONDS_MAX, FPS_MAX) - 1)
-
-
 class Emit(StrEnum):
     """Which of the two things this filter has computed leaves the node."""
 
@@ -191,8 +183,7 @@ class Emit(StrEnum):
         peak_bytes_per_input_byte=2.0 * MAX_SAMPLES + 4.0,
     ),
     mode=Mode.STREAMING,
-    # The bound, not what a run pays. See MAX_WARMUP_FRAMES.
-    warmup_frames=MAX_WARMUP_FRAMES,
+    settling_epsilon=0.0,
     stateful=True,
     primary_params=("window_seconds", "emit"),
     caption=(
@@ -214,6 +205,11 @@ class TemporalBaselineParams(ParamsBase):
     #: ask the graph what the container's rate was.
     fps: float = Field(default=30.0, gt=0.0, le=FPS_MAX)
     emit: Emit = Emit.DEVIATION
+
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        """The longest legal trailing window, minus the target frame."""
+        return FrameCount(window_frames(WINDOW_SECONDS_MAX, FPS_MAX) - 1)
 
     def frames(self) -> int:
         """This configuration's window, in frames."""

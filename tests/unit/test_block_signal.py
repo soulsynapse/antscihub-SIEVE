@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, FrameCount
 from sieve.filters.block_signal import (
     BlockSignalParams,
     BlockSignalState,
@@ -180,6 +180,13 @@ def test_every_signal_has_a_declared_presentation_label() -> None:
 
     assert set(labels) == {s.value for s in Signal}
     assert all(label for label in labels.values())
+
+
+def test_warmup_is_the_previous_frame_and_settles_exactly() -> None:
+    spec = BlockSignalParams.spec()
+
+    assert spec.warmup_frames == FrameCount(1)
+    assert spec.settling_epsilon == 0.0
 
 
 def test_block_resolution_is_the_one_source_of_grid_truth() -> None:

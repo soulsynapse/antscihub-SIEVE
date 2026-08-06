@@ -153,6 +153,7 @@ def test_the_declared_warmup_is_the_worst_case_over_the_legal_range() -> None:
     than it admits — which `node_warmup_frames` refuses at run time, turning a
     silent under-warm into a crash but only for the user who found it.
     """
+    assert SPEC.settling_epsilon == 0.0
     corner = TemporalBaselineParams(window_seconds=WINDOW_SECONDS_MAX, fps=FPS_MAX)
     assert corner.warmup_frames() == SPEC.warmup_frames
 

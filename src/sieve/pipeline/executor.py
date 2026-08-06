@@ -20,7 +20,7 @@ store is a protocol: a run over materialized frames (VISION step 4) is the same
 executor with a different source, not a mode.
 
 **A stateful node keeps its state in its binding, and is never served a cache
-entry.** The second half is not enforced here — `FilterSpec.cacheable` excludes
+entry.** The second half is not enforced here; `cache_key.is_cacheable` excludes
 `stateful`, so the plan carries no key for such a node and the `key is None`
 branch below already computes it and stores nothing. Why the category is
 excluded is

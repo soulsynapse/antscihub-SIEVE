@@ -134,12 +134,17 @@ def make_spec(**overrides: object) -> FilterSpec:
 #: are about, not part of it.
 DECIMATOR = make_spec(filter_id="decimate", params_model=DecimateParams, rate_changing=True)
 DOWNSAMPLER = make_spec(filter_id="downsample", params_model=DownsampleParams)
-IIR = make_spec(filter_id="iir", warmup_frames=FrameCount(5))
+IIR = make_spec(filter_id="iir", warmup_frames=FrameCount(5), settling_epsilon=0.0)
 INTERPOLATOR = make_spec(
     filter_id="interpolate", params_model=InterpolateParams, rate_changing=True
 )
 #: Declares a bound of 99 and refines it per configuration.
-WINDOWED = make_spec(filter_id="window", params_model=WindowParams, warmup_frames=FrameCount(99))
+WINDOWED = make_spec(
+    filter_id="window",
+    params_model=WindowParams,
+    warmup_frames=FrameCount(99),
+    settling_epsilon=0.0,
+)
 
 
 class TestFilterSpec:
@@ -150,6 +155,17 @@ class TestFilterSpec:
         # filter whose output nothing can reproduce.
         with pytest.raises(ValueError, match="backend_agnostic requires deterministic"):
             make_spec(backend_agnostic=True, deterministic=False)
+
+    def test_nonzero_warmup_declares_the_epsilon_it_settles_to(self) -> None:
+        with pytest.raises(ValueError, match="settling_epsilon must be declared"):
+            make_spec(warmup_frames=FrameCount(1))
+
+        assert make_spec(warmup_frames=FrameCount(1), settling_epsilon=0.0).settling_epsilon == 0.0
+
+    @pytest.mark.parametrize("epsilon", [-0.1, float("inf"), float("nan")])
+    def test_settling_epsilon_must_be_a_finite_non_negative_number(self, epsilon: float) -> None:
+        with pytest.raises(ValueError, match="finite non-negative"):
+            make_spec(settling_epsilon=epsilon)
 
     def test_primary_params_must_name_real_fields(self) -> None:
         # A renamed parameter otherwise leaves the GUI silently short a widget.
@@ -480,13 +496,35 @@ class TestFilterRegistry:
         assert BlurParams.__filter_spec__ is spec
         assert registry.ids() == ("blur",)
 
+    def test_decorator_derives_warmup_bound_from_the_params_model(self) -> None:
+        registry = FilterRegistry()
+
+        @register_filter(
+            filter_id="settling",
+            version="1.0.0",
+            summary="Settles before it speaks.",
+            accepts=ArraySpec(),
+            emits=ArraySpec(),
+            element=ElementRelation.PRESERVED,
+            cost=COST,
+            settling_epsilon=0.0,
+            registry=registry,
+        )
+        class SettlingParams(ParamsBase):
+            @classmethod
+            def max_warmup_frames(cls) -> FrameCount:
+                return FrameCount(7)
+
+        assert SettlingParams.spec().warmup_frames == FrameCount(7)
+
 
 def decorator_keywords() -> set[str]:
     """`register_filter`'s keywords, less `registry`, which is the decorator's own.
 
     `params_model` is the other name the two lists differ by, and it is absent
     here rather than removed: the decorated class supplies it, which is the one
-    field of a spec that cannot be written in the decoration.
+    field of a spec that cannot be written in the decoration. `warmup_frames`
+    is absent because the params model derives the spec bound.
     """
     parameters = inspect.signature(register_filter).parameters.values()
     return {p.name for p in parameters if p.kind is p.KEYWORD_ONLY} - {"registry"}
@@ -517,7 +555,7 @@ PROBES: dict[str, Any] = {
     "emits": ArraySpec(channels=(ChannelSpec.GRAY,)),
     "cost": CostEstimate(work_per_megapixel=WorkUnits(2.0)),
     "mode": Mode.WINDOWED,
-    "warmup_frames": FrameCount(7),
+    "settling_epsilon": 0.25,
     "rate_changing": True,
     "selecting": True,
     "deterministic": False,
@@ -547,7 +585,10 @@ class TestDecoratorMatchesSpec:
         # Set equality, not containment, and each direction catches a different
         # half: the spec growing a field the decorator never learned about, and
         # a keyword left behind after the field it filled was removed.
-        assert decorator_keywords() == {f.name for f in fields(FilterSpec)} - {"params_model"}
+        assert decorator_keywords() == {f.name for f in fields(FilterSpec)} - {
+            "params_model",
+            "warmup_frames",
+        }
 
     def test_every_keyword_reaches_the_field_it_names(self) -> None:
         # The third copy — `decorate`'s body — which the signature test cannot

@@ -42,7 +42,7 @@ warmed, `sieve run` says so, and before this filter existed no graph in this
 repo could produce that warning.
 
 **Uncacheable, and not because it is unreproducible.** The spec declares
-`stateful=True`, so `FilterSpec.cacheable` is False and `dag.py` derives no key
+`stateful=True`, so `cache_key.is_cacheable` is False and `dag.py` derives no key
 for the node. This filter would in fact be safe to cache — the 90 above is the
 claim that its output stops depending on where the run started, and that claim
 is true and tested. What cannot be cached is the *category*: nothing that
@@ -152,10 +152,7 @@ class Emit(StrEnum):
         peak_bytes_per_input_byte=14.0,
     ),
     mode=Mode.STREAMING,
-    # ceil(ln 0.01 / ln (1 - 0.05)) — the worst case over the legal `alpha`
-    # range, which is what a bound stated without a configuration has to be.
-    # `BackgroundEmaParams.warmup_frames` refines it per run.
-    warmup_frames=FrameCount(90),
+    settling_epsilon=SETTLED_EPSILON,
     stateful=True,
     primary_params=("alpha", "emit"),
     caption=(
@@ -174,6 +171,11 @@ class BackgroundEmaParams(ParamsBase):
     #: costs the one frame of lead-in it needs rather than the bound's ninety.
     alpha: float = Field(default=MIN_ALPHA, ge=MIN_ALPHA, le=1.0)
     emit: Emit = Emit.FOREGROUND
+
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        """Worst case over the legal `alpha` range."""
+        return FrameCount(settle_frames(MIN_ALPHA))
 
     def warmup_frames(self) -> FrameCount:
         """`settle_frames(alpha)` — the bound, refined to the configured model.

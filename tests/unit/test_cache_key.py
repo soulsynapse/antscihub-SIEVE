@@ -29,7 +29,7 @@ from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI, WorkUnits
 from sieve.pipeline import cache_key
-from sieve.pipeline.cache_key import NotCacheableError, node_key, source_key
+from sieve.pipeline.cache_key import NotCacheableError, is_cacheable, node_key, source_key
 
 COST = CostEstimate(work_per_megapixel=WorkUnits(1.0))
 
@@ -183,7 +183,7 @@ class TestIsolation:
         #
         # Scoped to presentation and not to every unhashed field, deliberately.
         # `deterministic` and `stateful` are execution, they feed
-        # `spec.cacheable`, and flipping either makes the call raise rather than
+        # cache policy, and flipping either makes the call raise rather than
         # return an unchanged key — a sweep over all non-identity fields would
         # fail on those two and the repair would be to weaken the assertion.
         node = make_node("a", radius=3)
@@ -272,8 +272,11 @@ class TestInputs:
         # the whole subtree is uncacheable without anything computing that.
         with pytest.raises(NotCacheableError, match="not deterministic"):
             node_key(node, spec=make_spec(deterministic=False), upstream={}, backend=Backend.CPU)
+        with pytest.raises(NotCacheableError, match="stateful"):
+            node_key(node, spec=make_spec(stateful=True), upstream={}, backend=Backend.CPU)
         with pytest.raises(NotCacheableError, match="windowed output"):
             node_key(node, spec=make_spec(mode=Mode.WINDOWED), upstream={}, backend=Backend.CPU)
+        assert is_cacheable(SPEC)
         # A spec for the wrong filter would key this node's output under
         # another filter's identity, which is the one mistake that produces a
         # confidently wrong cache hit rather than a miss.

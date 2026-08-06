@@ -643,9 +643,10 @@ directions in its docstring; that is the authority.
 the same two upstream keys and are not the same computation. They are hashed as
 sorted pairs, so edge declaration order still cannot move a key.
 
-**Cacheable is narrower than deterministic.** `spec.cacheable` is
-`deterministic and not stateful`. A stateful node's output depends on every frame
-that preceded it, which a key over params and ancestry does not describe, so it is
+**Cacheable is narrower than deterministic.** `pipeline/cache_key.py` derives
+cache policy from `deterministic`, `stateful`, and `mode`. A stateful node's
+output depends on every frame that preceded it, which the current key over
+params and ancestry does not describe, so it is
 not keyed at all — and its whole downstream subtree drops out of the key map with
 it. All three stateful filters shipped today are therefore uncached. See
 `docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md` before
@@ -712,4 +713,4 @@ Two declarations on the spec are easy to get wrong and expensive to fix later:
   exists to support one.
 
 An IIR filter's warmup is nominally infinite, so the number a filter declares
-is a settled-to-within-epsilon choice, and its docstring says which epsilon.
+is a settled-to-within-epsilon choice, and `settling_epsilon` says which one.

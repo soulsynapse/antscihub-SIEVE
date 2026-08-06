@@ -37,6 +37,7 @@ silently, and a bound that is too large only wastes decode.
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -415,6 +416,17 @@ class ParamsBase(BaseModel):
         """
         return NO_FRAMES
 
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        """Worst-case warmup over this params model's legal range.
+
+        `FilterSpec.warmup_frames` is derived from this class-level answer
+        because the bound changes with the parameter model's own legal range.
+        The instance method above refines the same quantity for one
+        configuration.
+        """
+        return NO_FRAMES
+
     def frame_bytes_ratio(self) -> float:
         """Bytes of one output frame per byte of one input frame.
 
@@ -605,8 +617,8 @@ class FilterSpec:
     #: simply sum: a rate-changing node between two others makes the two speak
     #: different index spaces. `source_warmup_frames` does the conversion, and
     #: is the only thing that should. An IIR's true warmup is infinite, so a
-    #: nonzero value here is a settled-to-within-epsilon choice and the
-    #: filter's docstring says which epsilon.
+    #: nonzero value here is a settled-to-within-epsilon choice, with the
+    #: epsilon declared beside it on the spec.
     #:
     #: **A bound, not necessarily the number a given run uses.** It is the worst
     #: case over the legal parameter range, which is the only thing statable
@@ -620,6 +632,11 @@ class FilterSpec:
     #: kernel state is one way to have such outputs rather than the only one — a
     #: `WINDOWED` filter has them too, and its protocol does not exist yet.
     warmup_frames: FrameCount = NO_FRAMES
+    #: Absolute tolerance for comparing two runs once this filter's warmup has
+    #: elapsed. `None` means the filter has no settling claim; any nonzero
+    #: `warmup_frames` must declare a value here so the generic gate can assert
+    #: against data rather than a docstring sentence.
+    settling_epsilon: float | None = None
     #: This filter's output is not indexed like its input — a decimator. Must
     #: agree with whether `params_model` overrides `output_rate`, and the
     #: agreement is checked below. Declaring it is not redundant with the
@@ -642,13 +659,13 @@ class FilterSpec:
     #: there is no shape here for `unrunnable_reason` to refuse and none for
     #: `tests/unit/test_declarable_shapes.py` to walk.
     selecting: bool = False
-    #: Same backend, same input, same output. Gates whether the node may be
-    #: cached at all.
+    #: Same backend, same input, same output. Cache policy reads this fact, but
+    #: the decision about whether to key the node lives in `pipeline/cache_key.py`.
     deterministic: bool = True
     #: This filter's kernel carries state across frames — a background model, an
     #: IIR, a tracker. Declared here rather than discovered from the kernel
-    #: because the consequence is a *caching* decision and caching is settled by
-    #: `pipeline/dag.py` on a machine that may have no kernels installed.
+    #: because cache policy is decided from declarations on a machine that may
+    #: have no kernels installed.
     #:
     #: What it costs is the cache, and the reason is subtler than it looks. Such
     #: a filter's output at frame `i` depends on every frame from wherever the
@@ -659,7 +676,7 @@ class FilterSpec:
     #: The exclusion is because *nothing can check that*. A key is derived from
     #: declarations, and a filter declaring `warmup_frames=0` over a running sum
     #: is indistinguishable here from one declaring 90 over a settled EMA. So a
-    #: served entry would rest on an unverified number in a decorator, and the
+    #: served entry would rest on an unverified warmup derivation, and the
     #: failure lands exactly where `cache_key.py`'s asymmetry rule says it must
     #: not: well-formed key, plausible frame, no symptom. See
     #: `docs/findings/2026.07.26-stateful-output-is-not-keyed-by-what-it-is.md`.
@@ -721,6 +738,18 @@ class FilterSpec:
             )
         if not SEMVER_PATTERN.match(self.version):
             raise ValueError(f"version must be MAJOR.MINOR.PATCH, got {self.version!r}")
+        if self.settling_epsilon is not None and (
+            not math.isfinite(self.settling_epsilon) or self.settling_epsilon < 0.0
+        ):
+            raise ValueError(
+                f"{self.filter_id}: settling_epsilon must be a finite non-negative number, "
+                f"got {self.settling_epsilon!r}"
+            )
+        if self.warmup_frames.frames > 0 and self.settling_epsilon is None:
+            raise ValueError(
+                f"{self.filter_id}: warmup_frames={self.warmup_frames.frames} declares a "
+                "settling claim, so settling_epsilon must be declared too"
+            )
         if self.backend_agnostic and not self.deterministic:
             # Bit-for-bit agreement across backends is a strictly stronger
             # claim than agreement with itself on one backend. Allowing both
@@ -845,23 +874,6 @@ class FilterSpec:
         """
         return (self.filter_id, self.version)
 
-    @property
-    def cacheable(self) -> bool:
-        """Whether this node's output may be reused from a cache entry.
-
-        Three different disqualifications, and they are not the same one
-        twice. A non-deterministic filter cannot reproduce its own output at
-        all. A stateful one reproduces it exactly, and may well reproduce it
-        across runs too — but only if a number it declared about itself is true,
-        and this property is evaluated where that cannot be checked. A windowed
-        one has the same provisional-frontier problem without private state:
-        lead-in outputs before the span is fully founded depend on where the
-        run began, while the existing cache key is only `(node key, source
-        index)`. See `stateful` above; windowed caching can return when founded
-        spans are part of the execution/cache contract.
-        """
-        return self.deterministic and not self.stateful and self.mode is Mode.STREAMING
-
     @staticmethod
     def stored_bytes_ratio(params: ParamsBase) -> float:
         """Bytes written per byte consumed, if this node were materialized.
@@ -938,6 +950,7 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     # ("or refuse to produce it at all"). The hashed half is `params_model`.
     "selecting": Channel.EXECUTION,
     "warmup_frames": Channel.EXECUTION,
+    "settling_epsilon": Channel.EXECUTION,
     "stateful": Channel.EXECUTION,
     "deterministic": Channel.EXECUTION,
     "cost": Channel.PRESENTATION,

@@ -55,11 +55,12 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
 from sieve.backend.dispatch import Backend
 from sieve.backend.identity import backend_identity
-from sieve.core.filter_base import FilterSpec
+from sieve.core.filter_base import FilterSpec, Mode
 from sieve.core.pipeline_model import Node, resolved_params
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
@@ -96,8 +97,39 @@ class NotCacheableError(ValueError):
     without anything having to compute that fact — which is correct, because a
     downstream result is only reusable if what it was computed from was.
 
-    Callers that can proceed either way check `FilterSpec.cacheable` first.
+    Callers that can proceed either way check `is_cacheable` first.
     """
+
+
+class CachePolicy(StrEnum):
+    """The cache-key layer's decision from spec facts and the cache contract."""
+
+    KEYED = "keyed"
+    NOT_DETERMINISTIC = "not_deterministic"
+    STATEFUL_ORIGIN = "stateful_origin"
+    WINDOWED_FRONTIER = "windowed_frontier"
+
+
+def cache_policy(spec: FilterSpec) -> CachePolicy:
+    """Whether this spec may have a node key under the current cache contract.
+
+    This is policy, not a `FilterSpec` fact. The spec declares whether a filter
+    is deterministic, stateful, and windowed; this layer decides whether the
+    current `(node key, source index)` store can stand behind a hit for that
+    combination.
+    """
+    if not spec.deterministic:
+        return CachePolicy.NOT_DETERMINISTIC
+    if spec.stateful:
+        return CachePolicy.STATEFUL_ORIGIN
+    if spec.mode is not Mode.STREAMING:
+        return CachePolicy.WINDOWED_FRONTIER
+    return CachePolicy.KEYED
+
+
+def is_cacheable(spec: FilterSpec) -> bool:
+    """Whether `node_key` will derive a key for `spec`."""
+    return cache_policy(spec) is CachePolicy.KEYED
 
 
 def _uncacheable_clause(spec: FilterSpec) -> str:
@@ -249,7 +281,7 @@ def node_key(
             f"spec is {spec.filter_id} {spec.version} but node names "
             f"{node.filter_id} {node.version}"
         )
-    if not spec.cacheable:
+    if not is_cacheable(spec):
         raise NotCacheableError(
             f"{spec.filter_id} {spec.version} {_uncacheable_clause(spec)} — nothing that reads "
             "such an entry can know it matches what would be recomputed"

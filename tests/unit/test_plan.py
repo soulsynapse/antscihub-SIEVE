@@ -42,11 +42,13 @@ def _settling(filter_id: str, warmup: FrameCount) -> type[ParamsBase]:
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
         cost=COST,
-        warmup_frames=warmup,
+        settling_epsilon=0.0,
         registry=SHELF,
     )
     class Params(ParamsBase):
-        pass
+        @classmethod
+        def max_warmup_frames(cls) -> FrameCount:
+            return warmup
 
     return Params
 
@@ -64,11 +66,13 @@ _settling("settle5", FrameCount(5))
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    warmup_frames=FrameCount(1),
+    settling_epsilon=0.0,
     registry=SHELF,
 )
 class Join1Params(ParamsBase):
-    pass
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        return FrameCount(1)
 
 
 @register_filter(

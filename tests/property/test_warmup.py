@@ -95,14 +95,16 @@ def _register(warmup: int, rate: Fraction, arity: int) -> type[ParamsBase]:
         "cost": COST,
         # `FrameCount` and not the bare int: `common` is a `dict[str, Any]`, so the
         # splat below erases every argument type and pyright cannot see this one.
-        "warmup_frames": FrameCount(warmup),
+        "settling_epsilon": 0.0,
         "registry": SHELF,
     }
     if rate == 1:
 
         @register_filter(filter_id=_spec_id(warmup, rate, arity), **common)
         class Unchanged(ParamsBase):
-            pass
+            @classmethod
+            def max_warmup_frames(cls) -> FrameCount:
+                return FrameCount(warmup)
 
         return Unchanged
 
@@ -112,6 +114,10 @@ def _register(warmup: int, rate: Fraction, arity: int) -> type[ParamsBase]:
         #: identity, and a field would let a document set it, which would make
         #: two documents naming one filter mean two different conversions.
         RATE: ClassVar[Fraction] = rate
+
+        @classmethod
+        def max_warmup_frames(cls) -> FrameCount:
+            return FrameCount(warmup)
 
         def output_rate(self) -> Fraction:
             return self.RATE

@@ -10,7 +10,7 @@ import pytest
 from sieve.core.filter_base import ElementKind, ElementNames, Mode, node_warmup_frames
 from sieve.core.ops.wavelet import default_freqs
 from sieve.core.pipeline_model import DetectorSettings
-from sieve.core.types import ChannelSpec, Frame, FrameSpan
+from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan
 from sieve.detect.detector import detect
 from sieve.filters import discover
 from sieve.filters.detect import DetectParams, detect_cpu, detect_series, pooled_scalogram
@@ -53,6 +53,15 @@ def test_detector_settings_bridge_into_hashable_filter_params() -> None:
         '"freq_band":[0.0,Infinity],"value_band":[5.0,Infinity],"window_frames":5}'
     )
     assert node_warmup_frames((DetectParams.spec(), params)) == params.warmup_frames()
+
+
+def test_detect_warmup_bound_is_derived_from_the_params_model() -> None:
+    spec = DetectParams.spec()
+    corner = DetectParams(fps=240.0, freq_band=(0.0, math.inf), window_frames=600)
+
+    assert spec.warmup_frames == corner.warmup_frames()
+    assert spec.warmup_frames >= FrameCount(599)
+    assert spec.settling_epsilon == 0.0
 
 
 def test_series_adapter_preserves_the_whole_record_detector_semantics() -> None:

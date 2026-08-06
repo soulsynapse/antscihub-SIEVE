@@ -25,7 +25,6 @@ from sieve.core.filter_base import (
     ParamsBase,
     StreamSpec,
 )
-from sieve.core.types import NO_FRAMES, FrameCount
 
 #: The decorator returns the class it was given, not `ParamsBase` — erasing the
 #: subclass would cost every filter's own fields their static types at the one
@@ -128,7 +127,7 @@ def register_filter(
     emits: StreamSpec,
     cost: CostEstimate,
     mode: Mode = Mode.STREAMING,
-    warmup_frames: FrameCount = NO_FRAMES,
+    settling_epsilon: float | None = None,
     rate_changing: bool = False,
     selecting: bool = False,
     deterministic: bool = True,
@@ -163,7 +162,8 @@ def register_filter(
             emits=emits,
             cost=cost,
             mode=mode,
-            warmup_frames=warmup_frames,
+            warmup_frames=params_model.max_warmup_frames(),
+            settling_epsilon=settling_epsilon,
             rate_changing=rate_changing,
             selecting=selecting,
             deterministic=deterministic,

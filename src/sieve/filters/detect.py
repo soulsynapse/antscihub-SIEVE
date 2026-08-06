@@ -87,7 +87,7 @@ MAX_WARMUP_FRAMES = max(
         peak_bytes_per_input_byte=10.0,
     ),
     mode=Mode.WINDOWED,
-    warmup_frames=FrameCount(MAX_WARMUP_FRAMES),
+    settling_epsilon=0.0,
     primary_params=("freq_band", "value_band", "count_frac", "window_frames"),
     caption=(
         CaptionPart(label="freq", param="freq_band"),
@@ -105,6 +105,11 @@ class DetectParams(ParamsBase):
     count_frac: tuple[float, float] | None = None
     window_frames: int = Field(default=30, ge=1, le=MAX_WINDOW_FRAMES)
     centered: bool = True
+
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        """Worst case over the legal detector window and frequency range."""
+        return FrameCount(MAX_WARMUP_FRAMES)
 
     @model_validator(mode="after")
     def _ordered(self) -> Self:

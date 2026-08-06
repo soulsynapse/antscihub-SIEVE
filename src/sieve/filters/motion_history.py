@@ -106,10 +106,6 @@ def dilate_radius(reach_blocks: float, tau_seconds: float, fps: float) -> int:
     return max(1, math.ceil(reach_blocks / (tau_seconds * fps)))
 
 
-#: Worst case over the legal range; no run pays it.
-MAX_WARMUP_FRAMES = FrameCount(settle_frames(TAU_SECONDS_MAX, FPS_MAX))
-
-
 class Couple(StrEnum):
     DILATE = "dilate"
     DIFFUSE = "diffuse"
@@ -131,8 +127,7 @@ class Couple(StrEnum):
         peak_bytes_per_input_byte=5.0,
     ),
     mode=Mode.STREAMING,
-    # The bound, not what a run pays. See MAX_WARMUP_FRAMES.
-    warmup_frames=MAX_WARMUP_FRAMES,
+    settling_epsilon=SETTLED_EPSILON,
     stateful=True,
     primary_params=("tau_seconds", "reach_blocks", "couple"),
     caption=(
@@ -146,6 +141,11 @@ class MotionHistoryParams(ParamsBase):
     reach_blocks: float = Field(default=1.0, ge=0.0, le=REACH_BLOCKS_MAX)
     couple: Couple = Couple.DILATE
     fps: float = Field(default=30.0, gt=0.0, le=FPS_MAX)
+
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        """Worst case over the legal `tau_seconds` and `fps` range."""
+        return FrameCount(settle_frames(TAU_SECONDS_MAX, FPS_MAX))
 
     def warmup_frames(self) -> FrameCount:
         return FrameCount(settle_frames(self.tau_seconds, self.fps))

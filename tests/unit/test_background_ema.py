@@ -79,7 +79,7 @@ def test_the_model_converges_to_within_the_declared_epsilon_by_the_declared_fram
     """`warmup_frames=90` is a claim about convergence, and this is that claim.
 
     An EMA's warmup is nominally infinite, so the spec declares a
-    settled-to-within-epsilon number and the module docstring says which epsilon.
+    settled-to-within-epsilon number and the epsilon it is judged against.
     Nothing else in the repo checks that the number and the epsilon describe the
     same filter — `test_warmup.py` checks the arithmetic that *propagates* a
     warmup and would be equally happy with a declaration of 3 or 3000.
@@ -90,6 +90,8 @@ def test_the_model_converges_to_within_the_declared_epsilon_by_the_declared_fram
     means.
     """
     gap = 200.0
+    epsilon = SPEC.settling_epsilon
+    assert epsilon == SETTLED_EPSILON
 
     def divergence_after(frames: int) -> float:
         """How far apart two models seeded `gap` apart are after `frames` more."""
@@ -101,12 +103,13 @@ def test_the_model_converges_to_within_the_declared_epsilon_by_the_declared_fram
             from_high = background_ema_cpu(flat(128, index), SETTLED, high)
         return abs(float(from_low.data.mean()) - float(from_high.data.mean()))
 
-    assert divergence_after(SPEC.warmup_frames.frames) <= gap * SETTLED_EPSILON
+    assert epsilon is not None
+    assert divergence_after(SPEC.warmup_frames.frames) <= gap * epsilon
 
     # And the declaration is not slack by an order of magnitude: a tenth of the
     # frames must *not* be enough, or `warmup_frames` would be paying for
     # lead-in nobody needs.
-    assert divergence_after(SPEC.warmup_frames.frames // 10) > gap * SETTLED_EPSILON
+    assert divergence_after(SPEC.warmup_frames.frames // 10) > gap * epsilon
 
 
 def test_the_declared_warmup_is_the_worst_case_over_the_legal_alpha_range() -> None:

@@ -199,12 +199,14 @@ def test_the_declared_warmup_is_a_bound_that_every_run_refines() -> None:
 
     params = MotionHistoryParams(tau_seconds=1.0, reach_blocks=0.0, fps=FPS)
     warmup = params.warmup_frames()
+    epsilon = SPEC.settling_epsilon
+    assert epsilon is not None
     assert warmup == FrameCount(settle_frames(1.0, FPS))
     assert warmup * 70 < SPEC.warmup_frames
 
     settled = run(driven_block(warmup.frames + 1), params)[warmup.frames]
     assert float(settled[CENTRE, CENTRE]) > 1.0 - 2.0 * (1.0 - decay_lambda(1.0, FPS))
-    assert float(settled[CENTRE, CENTRE]) == pytest.approx(1.0, abs=0.01)
+    assert float(settled[CENTRE, CENTRE]) == pytest.approx(1.0, abs=epsilon)
 
 
 def test_a_lull_below_baseline_does_not_erase_the_history() -> None:

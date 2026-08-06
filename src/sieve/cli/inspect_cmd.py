@@ -31,6 +31,7 @@ from sieve.backend.dispatch import KERNELS
 from sieve.core.filter_base import FilterSpec, ParamsBase
 from sieve.core.filter_registry import REGISTRY, UnknownFilterError
 from sieve.filters import discover, guidance_path
+from sieve.pipeline.cache_key import is_cacheable
 
 
 def inspect_filters(
@@ -120,6 +121,11 @@ def _warmup_note(spec: FilterSpec) -> str:
     return "  (worst case; each configuration is charged its own)"
 
 
+def _settling_epsilon(spec: FilterSpec) -> str:
+    """Render the epsilon field without making absence look numeric."""
+    return "none" if spec.settling_epsilon is None else f"{spec.settling_epsilon:g}"
+
+
 def _describe(spec: FilterSpec, *, guidance: bool) -> str:
     """Everything `spec` declares, as text.
 
@@ -137,9 +143,10 @@ def _describe(spec: FilterSpec, *, guidance: bool) -> str:
         f"element           {spec.element}",
         f"mode              {spec.mode}",
         f"warmup_frames     {spec.warmup_frames.frames}{_warmup_note(spec)}",
+        f"settling_epsilon  {_settling_epsilon(spec)}",
         f"rate_changing     {spec.rate_changing}",
         f"selecting         {spec.selecting}",
-        f"deterministic     {spec.deterministic} (cacheable: {spec.cacheable})",
+        f"deterministic     {spec.deterministic} (cacheable: {is_cacheable(spec)})",
         f"backend_agnostic  {spec.backend_agnostic}",
         f"cost              {spec.cost.work_per_megapixel}/MP (uncalibrated)",
         f"work_anchor       {spec.cost.anchor}",

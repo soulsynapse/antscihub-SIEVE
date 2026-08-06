@@ -51,11 +51,15 @@ ARENA = ROI(x=4, y=2, width=10, height=6)
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    warmup_frames=FrameCount(3),
+    settling_epsilon=0.0,
     registry=SHELF,
 )
 class TagParams(ParamsBase):
     amount: int = 1
+
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        return FrameCount(3)
 
 
 #: `(frame index, amount)` for every kernel call. A list rather than a counter
@@ -132,11 +136,13 @@ def minus_cpu(frames: Mapping[str, Frame], params: MinusParams) -> Frame:
     element=ElementRelation.PRESERVED,
     cost=COST,
     mode=Mode.WINDOWED,
-    warmup_frames=FrameCount(2),
+    settling_epsilon=0.0,
     registry=SHELF,
 )
 class SpanParams(ParamsBase):
-    pass
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        return FrameCount(2)
 
 
 @windowed_kernel(SpanParams, Backend.CPU, registry=KERNELS)

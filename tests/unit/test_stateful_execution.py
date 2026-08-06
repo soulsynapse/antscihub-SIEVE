@@ -14,7 +14,7 @@ run is not reproducible and the lead-in the plan decoded was pointless.
 the run began. Whether that dependence has decayed to nothing by the time
 anything is yielded is exactly what `warmup_frames` claims, and nothing that
 derives a key can check the claim — so an entry served across spans would rest
-on a number in a decorator.
+on an unverified warmup derivation.
 
 The last is the one worth spelling out, and two tests below do it from opposite
 sides: the honest filter agrees across spans, the dishonest one does not, and
@@ -51,6 +51,7 @@ from sieve.filters.background_ema import (
     background_ema_cpu,
 )
 from sieve.pipeline.cache import MemoryFrameStore
+from sieve.pipeline.cache_key import is_cacheable
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
 from sieve.pipeline.plan import ExecutionPlan
@@ -219,7 +220,7 @@ def test_a_filter_whose_warmup_is_a_lie_disagrees_with_itself_across_spans() -> 
     assert not np.array_equal(from_five["acc"].data, from_ten["acc"].data)
     # The declaration a key would have been derived from is identical in kind to
     # background_ema's, and this one is wrong. Neither gets a key.
-    assert not spec.cacheable and spec.deterministic
+    assert not is_cacheable(spec) and spec.deterministic
 
 
 def test_the_lead_in_is_what_settles_the_model() -> None:
@@ -343,7 +344,7 @@ def test_a_stateful_kernel_behind_a_spec_that_does_not_declare_it_is_refused() -
     class ForgetfulParams(ParamsBase):
         pass
 
-    assert ForgetfulParams.spec().cacheable
+    assert is_cacheable(ForgetfulParams.spec())
 
     def counter() -> list[int]:
         """A state factory. Its shape is irrelevant; that there is one is not."""

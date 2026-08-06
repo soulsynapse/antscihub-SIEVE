@@ -159,9 +159,7 @@ class Signal(StrEnum):
         peak_bytes_per_input_byte=12.0,
     ),
     mode=Mode.STREAMING,
-    # The first frame has no previous frame and emits an all-zero grid; one
-    # frame of lead-in replaces it with a real measurement.
-    warmup_frames=FrameCount(1),
+    settling_epsilon=0.0,
     stateful=True,
     primary_params=("signal", "block"),
     caption=(
@@ -189,6 +187,11 @@ class BlockSignalParams(ParamsBase):
     #: Source frame rate, used only to express flow_speed in px/s rather than
     #: px/frame. The tab writes it from the video metadata.
     fps: float = Field(default=30.0, gt=0.0)
+
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        """One previous frame is the fixed lead-in for a frame difference."""
+        return FrameCount(1)
 
     def frame_bytes_ratio(self) -> float:
         """One float32 per block against the input frame's pixels.

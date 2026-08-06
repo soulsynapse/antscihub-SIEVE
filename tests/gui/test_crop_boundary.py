@@ -44,6 +44,7 @@ from sieve.gui.filter_tab import FilterTab
 from sieve.gui.materialize_worker import MaterializeRequest
 from sieve.gui.preferences import Preferences
 from sieve.gui.preview_runner import PreviewRunner
+from sieve.gui.source_boundary import SourceBoundary
 from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.video_view import VideoView
 from sieve.pipeline.crop_binding import CropState
@@ -345,6 +346,48 @@ class TestDiscardLetsGoOfTheFile:
 
         assert landings.failures == []
 
+    def test_the_hold_reaches_the_runner_before_the_unlink(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tab: tuple[FilterTab, PreviewRunner],
+        document: ReplicateDocument,
+        backed: CropArtifact,
+        tmp_path: Path,
+    ) -> None:
+        """The ordering the seam has to preserve, asserted as an order.
+
+        `render_hold(True)` crosses from the boundary controller to the tab and
+        has to have *run* by the time the next statement deletes the file. A
+        queued connection would satisfy every other assertion in this file — the
+        record drops, the message is right — and leave the unlink racing the
+        release, which is the bug reported as "discard does nothing".
+        """
+        del backed
+        filter_tab, runner = tab
+        document.select(0)
+        monkeypatch.setattr(QMessageBox, "question", answering(QMessageBox.StandardButton.Discard))
+        order: list[str] = []
+        real_unlink = Path.unlink
+        real_release = runner.release_files
+
+        def watched_release() -> None:
+            order.append(f"release paused={runner.paused}")
+            real_release()
+
+        def watched_unlink(self: Path, **kwargs: object) -> None:
+            order.append("unlink")
+            real_unlink(self, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(runner, "release_files", watched_release)
+        monkeypatch.setattr(Path, "unlink", watched_unlink)
+
+        filter_tab.stack.source_card.buttons()[2].click()
+
+        assert order == ["release paused=True", "unlink"]
+        assert document.crops == ()
+        assert not (tmp_path / "arena-luma-100-400.mkv").exists()
+        assert not runner.paused, "the hold is given back"
+
     def test_the_record_is_dropped_even_when_the_file_cannot_be_deleted(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -377,6 +420,42 @@ class TestDiscardLetsGoOfTheFile:
         assert document.crops == ()
         assert messages and "arena-luma-100-400.mkv" in messages[-1]
         assert (tmp_path / "arena-luma-100-400.mkv").exists()
+
+
+def test_the_boundary_runs_the_discard_with_no_tab_in_the_room(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+    document: ReplicateDocument,
+    backed: CropArtifact,
+    tmp_path: Path,
+) -> None:
+    """The seam, stated as a test rather than left to a reading.
+
+    A `FilterTab` is a player, a runner, a detector thread and 2,100 lines the
+    source boundary has nothing to say about. What this pins is that none of it
+    is reachable from the controller: the whole gesture runs over a document and
+    a card, and what would have been a reach into the tab leaves as a signal.
+    """
+    del backed
+    card = SourceCard()
+    qtbot.addWidget(card)
+    boundary = SourceBoundary(document, card)
+    document.select(0)
+    monkeypatch.setattr(QMessageBox, "question", answering(QMessageBox.StandardButton.Discard))
+    holds: list[bool] = []
+    stale: list[None] = []
+    boundary.render_hold.connect(holds.append)
+    boundary.render_stale.connect(lambda: stale.append(None))
+    try:
+        card.buttons()[2].click()
+    finally:
+        boundary.shutdown()
+
+    assert holds == [True, False]
+    assert len(stale) == 1
+    assert document.crops == ()
+    assert not (tmp_path / "arena-luma-100-400.mkv").exists()
+    assert card.state is CropState.ABSENT, "the card repaints itself, off the document"
 
 
 @pytest.fixture

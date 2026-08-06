@@ -56,7 +56,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import replace
-from datetime import datetime
 from itertools import count
 from math import isfinite
 from time import perf_counter
@@ -70,7 +69,6 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QPushButton,
     QSlider,
     QToolButton,
@@ -80,7 +78,6 @@ from PySide6.QtWidgets import (
 
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.ops.wavelet import default_freqs
-from sieve.core.pipeline_model import ClipRange, CropArtifact
 from sieve.core.pool_meter import PoolMeter
 from sieve.detect import gate_to
 from sieve.filters.block_signal import resolve_block
@@ -100,7 +97,7 @@ from sieve.gui.chain_model import (
     recompute,
     snapped_band_label,
 )
-from sieve.gui.chain_stack import MATERIALIZE_PRICE, ChainStackView
+from sieve.gui.chain_stack import ChainStackView
 from sieve.gui.commit_combo import CommitCombo
 from sieve.gui.composite_view import StepCompositeView
 from sieve.gui.concurrency import resolve_worker_split
@@ -116,15 +113,15 @@ from sieve.gui.detector_worker import (
 from sieve.gui.document import ReplicateDocument
 from sieve.gui.graph_hud import GraphHud
 from sieve.gui.gray_toggle import GrayToggle
-from sieve.gui.materialize_worker import MaterializeRequest, MaterializeRunner
+from sieve.gui.materialize_worker import MaterializeRunner
 from sieve.gui.param_form import param_rows
 from sieve.gui.preferences import Preferences
 from sieve.gui.preview_runner import PreviewRunner
 from sieve.gui.scalogram_plot import ScalogramPlot
+from sieve.gui.source_boundary import SourceBoundary
 from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.wizard import StepWizard, frame_to_qimage, last_image_node_id
 from sieve.gui.wizard_model import catalog, chain_from_pipeline
-from sieve.pipeline.crop_binding import CropBacking, CropState, evidence_for
 from sieve.pipeline.series_collector import SeriesCollector
 
 #: The two interaction budgets this tab produces (ARCHITECTURE.md rows).
@@ -300,23 +297,18 @@ class FilterTab(QWidget):
         self._gestures = count(1)
         self._d_gesture: int | None = None
 
-        #: The write pass, on its own thread. Owned here rather than by the
-        #: window because the gesture is the source card's and the card is the
-        #: stack's — and because pausing the preview around a write is a
-        #: statement about this tab's render, which nothing else submits.
-        self._materializer = MaterializeRunner(self)
-        #: The row a running write belongs to. The card follows the selection,
-        #: so a user who switches arenas mid-write must not see the progress of
-        #: somebody else's crop on this one's card.
-        self._writing_row: int | None = None
-
         self._build_widgets()
         self._build_layout()
+        #: The source boundary — the card above the stack, the write pass behind
+        #: it, and the four states in between. Owned here rather than by the
+        #: window because the gesture is the source card's and the card is the
+        #: stack's, and because holding the preview around a write is a
+        #: statement about this tab's render, which nothing else submits.
+        self._boundary = SourceBoundary(document, self._stack.source_card, self)
         self._connect()
         self._sync_widgets_from_chain()
         self._rebuild_stack()
         self._apply()
-        self._refresh_source_card()
 
     # ---- construction ----------------------------------------------------
 
@@ -437,25 +429,11 @@ class FilterTab(QWidget):
         self._runner.render_finished.connect(self._on_render_finished)
         self._runner.render_failed.connect(self._on_render_failed)
 
-        # The source boundary. Every path that can move one of the four states
-        # is here: a record appearing or going, a box or a graph moving under an
-        # existing one, a different arena being looked at, and the clip moving
-        # past what was cut.
-        card = self._stack.source_card
-        card.materialize_requested.connect(self._on_materialize)
-        card.cancel_requested.connect(self._materializer.cancel)
-        card.discard_requested.connect(self._on_discard_crop)
-        self._materializer.progressed.connect(card.set_progress)
-        self._materializer.written.connect(self._on_crop_written)
-        self._materializer.failed.connect(self._on_crop_failed)
-        self._materializer.cancelled.connect(self._on_crop_cancelled)
-        self._document.crops_changed.connect(self._refresh_source_card)
-        self._document.selection_changed.connect(self._refresh_source_card)
-        self._document.replicate_changed.connect(self._refresh_source_card)
-        self._document.structure_changed.connect(self._refresh_source_card)
-        self._document.clip_changed.connect(self._refresh_source_card)
-        self._document.pipeline_changed.connect(self._refresh_source_card)
-        self._document.source_changed.connect(self._refresh_source_card)
+        # The source boundary, at its three-signal seam. Direct connections, and
+        # `_on_boundary_hold` says what breaks if that ever changes.
+        self._boundary.render_hold.connect(self._on_boundary_hold)
+        self._boundary.render_stale.connect(self.resubmit)
+        self._boundary.status_message.connect(self.status_message)
 
         self._stack.reset_clicked.connect(self._on_reset)
         self._stack.select_requested.connect(self._on_step_selected)
@@ -501,7 +479,28 @@ class FilterTab(QWidget):
         widget tree down is a crash rather than a leak.
         """
         self._detector.shutdown()
-        self._materializer.shutdown()
+        self._boundary.shutdown()
+
+    @Slot(bool)
+    def _on_boundary_hold(self, held: bool) -> None:
+        """Take the render's decode bandwidth and file handles, or give them back.
+
+        Both halves under one signal because the discard needs them in this
+        order and needs the release to have *happened* before its next
+        statement: pausing bumps the revision so the render in flight abandons
+        at its next frame boundary, and `release_files` is a blocking call that
+        would otherwise wait out a whole window render. A queued connection here
+        would let the unlink race the release, and the gesture would regress to
+        doing nothing with no error anywhere.
+
+        A materialize therefore also releases, which it did not before. That
+        costs one reader rebuild on the resume — free on the success path, where
+        a registered record re-roots resolution anyway — and it is what makes
+        the hold mean one thing rather than two the caller must sequence.
+        """
+        self._runner.set_paused(held)
+        if held:
+            self._runner.release_files()
 
     # ---- reading (for the window and for tests) --------------------------
 
@@ -558,7 +557,7 @@ class FilterTab(QWidget):
     @property
     def materializer(self) -> MaterializeRunner:
         """The write pass. Exposed for the window's shutdown order and for tests."""
-        return self._materializer
+        return self._boundary.materializer
 
     @property
     def selected_step(self) -> str | None:
@@ -2077,219 +2076,6 @@ class FilterTab(QWidget):
             "reset — parameters to defaults, bands cleared, disarmed; the chain is kept"
         )
         self._knob_edited()
-
-    # ---- the source boundary ---------------------------------------------
-    # The card above the stack, and the write pass behind it. The *reading* of
-    # which state a replicate's boundary is in belongs to the document
-    # (`crop_backing`, over `pipeline/crop_binding.py`); everything here is the
-    # wording of the four states and the gesture that moves between them.
-
-    @Slot()
-    def _refresh_source_card(self) -> None:
-        """Re-read the boundary and repaint the card.
-
-        Cheap enough to run on every document signal that could move it: the
-        reading is a handful of comparisons plus one `is_file` per record, and
-        a card refreshed only on the signals somebody remembered would be the
-        stale-looks-fresh failure rule 6 is about.
-        """
-        card = self._stack.source_card
-        document = self._document
-        home = document.source_home
-        index = document.selected_index
-        replicate = document.selected_replicate
-        if home is None or index is None or replicate is None:
-            card.setVisible(False)
-            return
-        card.setVisible(True)
-        subject = f"{replicate.name} · {home.video.name}"
-        if self._writing_row == index:
-            card.set_state(
-                CropState.WRITING,
-                subject=subject,
-                detail="cutting the crop — the preview is paused while the write reads the source",
-            )
-            return
-        backing = document.crop_backing(index)
-        card.set_state(backing.state, subject=subject, detail=self._boundary_detail(backing))
-
-    def _boundary_detail(self, backing: CropBacking) -> str:
-        """The one sentence under the title, per state.
-
-        Stale carries `backing.reason` verbatim and then says the file is still
-        there, which is the whole of the absent/stale distinction as the user
-        experiences it: the remedy for a stale record is a discard or a re-cut,
-        and both are cheaper decisions to take knowing the bytes exist.
-        """
-        if backing.state is CropState.ABSENT:
-            return f"recut from the source on every render · {MATERIALIZE_PRICE}"
-        artifact = backing.artifact
-        if backing.state is CropState.STALE:
-            return f"{backing.reason} — the file is still in the folder."
-        if artifact is None:
-            return ""
-        return (
-            f"at rest · {self._artifact_stamp(artifact)} · "
-            "the box and the clip are held while this backs the replicate"
-        )
-
-    def _artifact_stamp(self, artifact: CropArtifact) -> str:
-        """Size, format, span, and when it was written, as the card's one line.
-
-        The reading is `crop_binding.evidence_for`; what is here is the wording.
-        With no home bound there is no directory to resolve against, so the line
-        falls back to what the record itself carries rather than stating a size
-        it has not looked at.
-        """
-        home = self._document.source_home
-        fmt = artifact.format
-        extent = f"frames [{artifact.span.start}:{artifact.span.end})"
-        if home is None:
-            return f"{fmt} · {extent}"
-        evidence = evidence_for(artifact, home.project_dir)
-        if evidence.size_bytes is None or evidence.written_at is None:
-            return f"{fmt} · {extent} · {evidence.path.name} (not readable)"
-        written = datetime.fromtimestamp(evidence.written_at).strftime("%Y-%m-%d %H:%M")
-        return f"{evidence.size_bytes / 1e6:.1f} MB · {fmt} · {extent} · written {written}"
-
-    @Slot()
-    def _on_materialize(self) -> None:
-        """Cut the selected replicate's crop over the whole source.
-
-        The whole source, not the working window, and the difference is the
-        difference between an artifact that survives the user's next gesture and
-        one that does not. `resolve_source` declines a record whose span does not
-        cover what is being asked for, and moving the window is the single most
-        ordinary thing anyone does here — cutting to the window would put a
-        minute of re-encoding behind an action the user reads as scrolling. A
-        full-source cut is asked for once and covers every window afterwards, at
-        the cost of a longer write (`MATERIALIZE_PRICE` says so on the card).
-        """
-        document = self._document
-        home = document.source_home
-        replicate = document.selected_replicate
-        frames = document.source_frames
-        index = document.selected_index
-        if home is None or replicate is None or frames <= 0 or index is None:
-            return
-        span = ClipRange(start=0, end=frames)
-        if self._materializer.busy:
-            self.status_message.emit("a crop is already being written")
-            return
-        # Before the request, not after: the write pass is a sequential decode
-        # of the same footage, and a render still in flight when it starts is
-        # the bandwidth wall the artifact exists to remove.
-        self._runner.set_paused(True)
-        self._writing_row = index
-        started = self._materializer.start(
-            MaterializeRequest(
-                video=home.video,
-                replicate=replicate,
-                span=span,
-                project_dir=home.project_dir,
-                luma=document.decodes_luma(),
-            )
-        )
-        if not started:
-            self._writing_row = None
-            self._runner.set_paused(False)
-            return
-        self._refresh_source_card()
-        self.status_message.emit(f"writing the crop for {replicate.name}…")
-
-    @Slot(object)
-    def _on_crop_written(self, record: object) -> None:
-        """A verified artifact landed: record it, and read from it from now on.
-
-        `object` in the signature because the signal carries `object` — the
-        worker's payload crosses a thread boundary as one — and the narrowing
-        here is what keeps the document's side of it typed.
-        """
-        self._writing_row = None
-        if not isinstance(record, CropArtifact):
-            return
-        self._document.register_crop(record)
-        self._resume_after_write()
-        self.status_message.emit("crop written and at rest — this replicate now reads from it")
-
-    @Slot(str)
-    def _on_crop_failed(self, message: str) -> None:
-        """The write did not produce a usable file. Nothing was recorded."""
-        self._writing_row = None
-        self._resume_after_write()
-        self.status_message.emit(f"the crop was not written: {message}")
-
-    @Slot()
-    def _on_crop_cancelled(self) -> None:
-        self._writing_row = None
-        self._resume_after_write()
-        self.status_message.emit("crop write cancelled — nothing was left on disk")
-
-    def _resume_after_write(self) -> None:
-        """Give the decode bandwidth back and re-render whatever is now true.
-
-        The resubmit is not optional: a registered record re-roots the run on
-        the artifact's own identity, so the frames on screen were produced by a
-        resolution that no longer holds.
-        """
-        self._runner.set_paused(False)
-        self._refresh_source_card()
-        self.resubmit()
-
-    @Slot()
-    def _on_discard_crop(self) -> None:
-        """Drop a record and delete the file behind it, once confirmed.
-
-        The file goes with the record, and the confirmation says so. A record is
-        the only thing that associates a crop file with a replicate — nothing
-        rediscovers an unrecorded file — so keeping the bytes would leave the
-        user a folder of artifacts SIEVE can neither serve nor explain.
-
-        **The render thread is holding the file open, and it has to let go
-        first.** A record that is serving is a file the preview has a pool of
-        captures over, and an open handle is an unlink that fails on Windows —
-        which is how this gesture came to do nothing at all. So the preview is
-        paused (which abandons the render in flight at its next frame boundary)
-        and then told to release, synchronously, before the delete is attempted.
-
-        **The record goes first, and a delete that fails does not take it with
-        it.** The record is what makes the file serve; dropping it is the whole
-        of what the user asked for, and it is exactly the "never registered"
-        state `materialize.py` already treats as safe. A file that survives is
-        reported by name — it is in a folder the user can open — rather than
-        being a reason to refuse the gesture.
-        """
-        document = self._document
-        home = document.source_home
-        index = document.selected_index
-        if home is None or index is None:
-            return
-        artifact = document.crop_backing(index).artifact
-        if artifact is None:
-            return
-        path = artifact.resolve(home.project_dir)
-        answer = QMessageBox.question(
-            self,
-            "Discard crop",
-            f"Discard {path.name}?\n\n"
-            "The file is deleted and this replicate is read from the source again.",
-            QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-        if answer != QMessageBox.StandardButton.Discard:
-            return
-        self._runner.set_paused(True)
-        self._runner.release_files()
-        document.discard_crop(artifact)
-        try:
-            path.unlink(missing_ok=True)
-        except OSError as error:
-            self.status_message.emit(
-                f"the record is dropped, but {path.name} is still on disk: {error}"
-            )
-        self._runner.set_paused(False)
-        self._refresh_source_card()
-        self.resubmit()
 
     # ---- source lifecycle ------------------------------------------------
 

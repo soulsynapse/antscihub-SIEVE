@@ -130,6 +130,7 @@ src/sieve/gui/composite_view.py         # the step composite: output over input,
 src/sieve/gui/preview_runner.py         # holds a PreviewSession on its own thread; emits per-frame cost
 src/sieve/gui/detector_worker.py        # derives the detector off the GUI thread so graphs fill as frames land
 src/sieve/gui/materialize_worker.py     # writes a crop artifact off the GUI thread: progress, cancel, one at a time
+src/sieve/gui/source_boundary.py        # the source card's four states and the write gesture; a controller over document + card
 src/sieve/gui/concurrency.py            # the one declaration of how the session divides the machine
 src/sieve/gui/executor_adapter.py       # the ONLY place that knows both bench/metrics and Qt
 src/sieve/gui/resource_probe.py         # samples RSS and pool utilisation off the GUI thread, mode-tagged
@@ -199,7 +200,6 @@ src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
 src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see docs/SETTLED.md
-src/sieve/gui/source_boundary.py        # the crop card and its write pass, out of filter_tab — todo/the-source-boundary-is-its-own-object.md
 src/sieve/filters/crop.py               # the ROI as a filter, identity crop is full-frame — todo/the-crop-is-a-filter.md
 src/sieve/filters/span.py               # the clip span as a filter; decode pushdown stays a planner optimization — todo/the-span-is-a-filter.md
 src/sieve/filters/detect.py             # detection emitting a per-frame channel — todo/detection-is-a-filter.md

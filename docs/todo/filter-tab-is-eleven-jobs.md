@@ -52,13 +52,12 @@ gathered on 2026-08-04 and then declined to act on. Ordering the seams by
 reading the outline and ordering them by their commit history give opposite
 answers, and the history is the one that has been right twice.
 
-1. **The source boundary** — now `the-source-boundary-is-its-own-object`,
-   taken out of this list because it is the only slice with evidence and
-   because it wants to land before
-   `the-graph-carries-the-crop-the-span-and-the-detector`. It was never on
-   this list, which is the reading-the-outline failure in one line: the
-   section three commits have stayed 85–92% inside is the one the outline
-   made look least like a job.
+1. **The source boundary** — **done**, as `gui/source_boundary.py`. It was
+   never on this list, which is the reading-the-outline failure in one line:
+   the section three commits have stayed 85–92% inside is the one the outline
+   made look least like a job. It went out as `the-source-boundary-is-its-own-object`
+   because it is the only slice with evidence, and it landed at three signals
+   with no back-reference — the seam test below, passed rather than argued.
 2. **The wizard lifecycle** — `_open_wizard`, `_on_chain_proposed`,
    `_on_hover_preview`, `_on_hover_ended`, `_on_wizard_accepted`,
    `_on_wizard_cancelled`, `_close_wizard`, `wizard`. Roughly 150 lines, and

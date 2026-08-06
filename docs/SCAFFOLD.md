@@ -197,6 +197,7 @@ src/sieve/hpc/sweep.py                  # parameter sweeps, immutable fragments
 src/sieve/review/output.py              # VISION step 7 review contract — todo/hpc-handoff-and-review-mode.md
 src/sieve/cli/hpc_cmd.py                # arrives with hpc/handoff.py
 src/sieve/gui/state.py                  # only when UI state has no natural owner; see docs/SETTLED.md
+src/sieve/gui/source_boundary.py        # the crop card and its write pass, out of filter_tab — todo/the-source-boundary-is-its-own-object.md
 src/sieve/filters/crop.py               # the ROI as a filter, identity crop is full-frame — todo/the-crop-is-a-filter.md
 src/sieve/filters/span.py               # the clip span as a filter; decode pushdown stays a planner optimization — todo/the-span-is-a-filter.md
 src/sieve/filters/detect.py             # detection emitting a per-frame channel — todo/detection-is-a-filter.md

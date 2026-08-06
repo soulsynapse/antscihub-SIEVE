@@ -148,6 +148,7 @@ src/sieve/gui/scalogram_plot.py         # morlet scalogram with draggable band h
 src/sieve/gui/count_plot.py             # windowed block count with the detection threshold handle
 src/sieve/gui/density_plot.py           # detection density
 src/sieve/gui/wheel_steps.py            # app-wide one-detent-one-step wheel filter, with run acceleration
+src/sieve/gui/keyboard_handback.py      # app-wide filter: Enter or Esc in a spin box releases the keyboard
 src/sieve/gui/preferences.py            # persisted user preferences
 src/sieve/gui/preferences_dialog.py     # their editor
 src/sieve/gui/toast.py                  # transient notices

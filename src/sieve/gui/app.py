@@ -4,10 +4,10 @@ and resolves which video a launch opens.
 fd 2 is silenced here, before any decoding, rather than in the reader:
 taking it is a process-wide act and `main` is what owns the process (see
 `decode/quiet.py` for why the log level and the environment variable are
-not viable alternatives). The wheel-step event filter is installed on the
+not viable alternatives). The two input filters are installed on the
 `QApplication` for the same reason — every slider and spinbox gets one
-detent per step without each widget configuring it itself (see
-`wheel_steps.py` for the acceleration rules).
+detent per step (`wheel_steps.py`) and hands the keyboard back at Enter or
+Esc (`keyboard_handback.py`) without each widget configuring it itself.
 
 An explicit video path argument wins over the remembered one: the argument
 is what the caller asked for now, the preference is what they did last
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import QApplication
 
 from sieve import __version__
 from sieve.decode.quiet import silence_raw_format_warning
+from sieve.gui.keyboard_handback import KeyboardHandback
 from sieve.gui.main_window import MainWindow
 from sieve.gui.wheel_steps import WheelSteps
 
@@ -38,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationVersion(__version__)
     app.setOrganizationName("AntSciHub")
     app.installEventFilter(WheelSteps(app))
+    app.installEventFilter(KeyboardHandback(app))
 
     window = MainWindow()
     window.show()

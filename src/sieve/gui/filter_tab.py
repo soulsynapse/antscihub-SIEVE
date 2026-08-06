@@ -79,13 +79,13 @@ from PySide6.QtWidgets import (
 from sieve.bench.metrics import METRICS, MetricBus
 from sieve.core.ops.wavelet import default_freqs
 from sieve.core.pool_meter import PoolMeter
-from sieve.filters.block_signal import resolve_block
+from sieve.filters.block_signal import BlockSignalParams, resolve_block
+from sieve.filters.block_signal import Signal as BlockSignal
 from sieve.filters.detect import gate_to
 from sieve.gui.band_plot import DIM
 from sieve.gui.block_spin import BlockSpinBox
 from sieve.gui.chain_model import (
     BLOCK_SIGNAL_ELEMENT_NAMES,
-    SIGNAL_LABELS,
     ChainKind,
     ChainStep,
     DetectorState,
@@ -141,6 +141,11 @@ DENSITY_BUDGET = "density_rebuild"
 #: the block grid — fixed across the window so a cell's colour holds its
 #: meaning at every playhead position.
 _HEAT_PERCENTILE = 99.5
+
+
+def _block_signal_label(signal_id: str) -> str:
+    return BlockSignalParams.spec().param_value_labels.get("signal", {}).get(signal_id, signal_id)
+
 
 _CHAIN_INCOMPLETE = "chain incomplete — see the stack"
 _DISARMED = "disarmed — place the count threshold"
@@ -350,7 +355,9 @@ class FilterTab(QWidget):
         self._block = BlockSpinBox()
         self._block.setRange(0, 256)
         self._signal_buttons: dict[str, QPushButton] = {}
-        for signal_id, label in SIGNAL_LABELS.items():
+        for signal in BlockSignal:
+            signal_id = signal.value
+            label = _block_signal_label(signal_id)
             button = QPushButton(label)
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1365,7 +1372,7 @@ class FilterTab(QWidget):
         if step is None or step.node is None:
             return ""
         signal = str(step.node.params.get("signal", ""))
-        return SIGNAL_LABELS.get(signal, signal)
+        return _block_signal_label(signal)
 
     # ---- the stack -------------------------------------------------------
 
@@ -1674,7 +1681,7 @@ class FilterTab(QWidget):
         node_id = self._node_id_for("block_signal")
         if node_id is not None and node_id in self._document.pipeline and self._wizard is None:
             stack = self._document.undo_stack
-            stack.beginMacro(f"Switch Signal to {SIGNAL_LABELS[signal_id]}")
+            stack.beginMacro(f"Switch Signal to {_block_signal_label(signal_id)}")
             try:
                 if restored != detector.value_band:
                     self._document.edit_detector({"value_band": restored}, "Set Value Band")
@@ -1688,7 +1695,7 @@ class FilterTab(QWidget):
             self._set_node_params("block_signal", signal=signal_id)
             self._knob_edited()
         self.status_message.emit(
-            f"signal → {SIGNAL_LABELS[signal_id]} (value band remembered per signal)"
+            f"signal → {_block_signal_label(signal_id)} (value band remembered per signal)"
         )
 
     # ---- detector edits (tab-side: pure recompute) -----------------------

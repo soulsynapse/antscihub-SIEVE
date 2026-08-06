@@ -172,14 +172,14 @@ def test_flow_agreement_reads_only_the_pixels_that_moved() -> None:
     assert float(out[0, 0]) > 0.8
 
 
-def test_every_signal_has_a_label_on_the_quick_switch() -> None:
-    # The enum is discovered; the labels are hand-written. A signal the kernel
-    # computes but the switcher cannot name is reachable only by editing a
-    # saved file, which is the failure mode rule 3's discovery rule exists to
-    # prevent one layer down.
-    from sieve.gui.chain_model import SIGNAL_LABELS
+def test_every_signal_has_a_declared_presentation_label() -> None:
+    # The enum is discovered from the filter and the labels live on the same
+    # spec presentation channel the GUI reads. A signal the kernel computes but
+    # cannot name now fails in the filter's declaration, not in a widget map.
+    labels = BlockSignalParams.spec().param_value_labels["signal"]
 
-    assert set(SIGNAL_LABELS) == {s.value for s in Signal}
+    assert set(labels) == {s.value for s in Signal}
+    assert all(label for label in labels.values())
 
 
 def test_block_resolution_is_the_one_source_of_grid_truth() -> None:

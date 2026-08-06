@@ -37,6 +37,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementRelation,
     Mode,
@@ -133,6 +134,11 @@ class Couple(StrEnum):
     warmup_frames=MAX_WARMUP_FRAMES,
     stateful=True,
     primary_params=("tau_seconds", "reach_blocks", "couple"),
+    caption=(
+        CaptionPart(label="tau", param="tau_seconds", format_spec=".2f"),
+        CaptionPart(label="reach", param="reach_blocks", format_spec=".1f"),
+        CaptionPart(param="couple"),
+    ),
 )
 class MotionHistoryParams(ParamsBase):
     tau_seconds: float = Field(default=1.0, ge=TAU_SECONDS_MIN, le=TAU_SECONDS_MAX)

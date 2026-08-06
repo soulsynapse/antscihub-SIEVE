@@ -27,6 +27,7 @@ from pydantic import Field, model_validator
 from sieve.backend.dispatch import Backend, windowed_kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementKind,
     ElementNames,
@@ -82,6 +83,12 @@ MAX_WARMUP_FRAMES = max(
     mode=Mode.WINDOWED,
     warmup_frames=FrameCount(MAX_WARMUP_FRAMES),
     primary_params=("freq_band", "value_band", "count_frac", "window_frames"),
+    caption=(
+        CaptionPart(label="freq", param="freq_band"),
+        CaptionPart(label="value", param="value_band"),
+        CaptionPart(label="count", param="count_frac"),
+        CaptionPart(label="D", param="window_frames"),
+    ),
 )
 class DetectParams(ParamsBase):
     """The detector's identity parameters, plus source fps for the wavelet bank."""

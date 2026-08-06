@@ -54,6 +54,11 @@ def test_every_discovered_filter_has_guidance_markdown() -> None:
     assert not missing, f"filters with no guidance markdown: {missing}"
 
 
+def test_every_discovered_filter_declares_a_caption() -> None:
+    missing = [spec.key for spec in discover() if not spec.caption]
+    assert not missing, f"filters with no presentation caption: {missing}"
+
+
 def test_every_guidance_file_answers_the_three_questions() -> None:
     """A file that exists but says nothing passes §3 while failing its reader.
 

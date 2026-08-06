@@ -49,6 +49,7 @@ from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     UNBOUNDED_FRAME,
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementRelation,
     Mode,
@@ -84,6 +85,10 @@ from sieve.core.types import Frame
     mode=Mode.STREAMING,
     selecting=True,
     primary_params=("start", "end"),
+    caption=(
+        CaptionPart(label="start", param="start"),
+        CaptionPart(label="end", param="end"),
+    ),
 )
 class SpanParams(ParamsBase):
     """Which frames survive, half-open, in source indices.

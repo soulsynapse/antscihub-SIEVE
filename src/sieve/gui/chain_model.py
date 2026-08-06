@@ -45,21 +45,15 @@ import numpy as np
 from numpy.typing import NDArray
 
 import sieve.filters.detect as detect_filter
-from sieve.core.filter_base import ElementNames
+from sieve.core.filter_base import ElementNames, caption_for_params
+from sieve.core.filter_registry import REGISTRY, UnknownFilterError
 from sieve.core.ops.wavelet import band_indices, default_freqs
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
-from sieve.filters.block_signal import BlockSignalParams, resolve_block
+from sieve.filters import discover
+from sieve.filters.block_signal import BlockSignalParams
 from sieve.filters.detect import DetectorUpdate, DetectParams
 
 FloatArray = NDArray[np.floating[Any]]
-
-#: How the extraction signals read on their card and quick-switch.
-SIGNAL_LABELS: dict[str, str] = {
-    "change_energy": "change energy (Jtt)",
-    "flow_speed": "LK optical flow",
-    "coherence": "coherence (0-1)",
-    "flow_agreement": "flow agreement (0-1)",
-}
 
 BLOCK_SIGNAL_ELEMENT_NAMES = cast(ElementNames, BlockSignalParams.spec().element_names)
 
@@ -304,18 +298,13 @@ def caption_for(step: ChainStep, detector: DetectorState, fps: float) -> str:
     """
     node = step.node
     if node is not None:
-        if node.filter_id == "rescale":
-            return f"scale {float(node.params['scale']):.2f} · area"
-        if node.filter_id == "normalize":
-            return str(node.params["mode"])
-        if node.filter_id == "block_signal":
-            signal = str(node.params["signal"])
-            label = SIGNAL_LABELS.get(signal, signal)
-            block = int(node.params["block"])
-            scale = float(node.params["scale"])
-            shown = f"auto ({resolve_block(0, scale)})" if block == 0 else str(block)
-            return f"{label} · block {shown}"
-        return node.filter_id
+        discover()
+        try:
+            spec = REGISTRY.get(node.filter_id, node.version)
+        except UnknownFilterError:
+            return node.filter_id
+        params = spec.params_model.model_validate(node.params)
+        return caption_for_params(spec, params) or node.filter_id
     if step.stage is Stage.TEMPORAL_FILTER:
         return snapped_band_label(detector.freq_band, fps)
     if step.stage is Stage.DETECTION:

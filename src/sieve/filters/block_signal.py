@@ -69,6 +69,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementKind,
     ElementNames,
@@ -166,6 +167,18 @@ class Signal(StrEnum):
     warmup_frames=FrameCount(1),
     stateful=True,
     primary_params=("signal", "block"),
+    caption=(
+        CaptionPart(param="signal"),
+        CaptionPart(label="block", param="block"),
+    ),
+    param_value_labels={
+        "signal": {
+            Signal.CHANGE_ENERGY.value: "change energy (Jtt)",
+            Signal.FLOW_SPEED.value: "LK optical flow",
+            Signal.COHERENCE.value: "coherence (0-1)",
+            Signal.FLOW_AGREEMENT.value: "flow agreement (0-1)",
+        }
+    },
 )
 class BlockSignalParams(ParamsBase):
     """Which signal, on what grid, at what time scale."""
@@ -188,6 +201,10 @@ class BlockSignalParams(ParamsBase):
         never a correctness decision.
         """
         return 1.0 / resolve_block(self.block, self.scale) ** 2
+
+    def presentation_values(self) -> dict[str, str]:
+        shown = f"auto ({resolve_block(0, self.scale)})" if self.block == 0 else str(self.block)
+        return {"block": shown}
 
 
 @dataclass(slots=True)

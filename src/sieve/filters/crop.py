@@ -42,6 +42,7 @@ import numpy as np
 from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementRelation,
     Mode,
@@ -86,6 +87,7 @@ WHOLE_FRAME = ROI(x=0, y=0, width=WHOLE_FRAME_EXTENT, height=WHOLE_FRAME_EXTENT)
     ),
     mode=Mode.STREAMING,
     primary_params=("roi",),
+    caption=(CaptionPart(param="roi"),),
 )
 class CropParams(ParamsBase):
     """Which region of the input frame survives.

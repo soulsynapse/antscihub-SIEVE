@@ -17,6 +17,7 @@ from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import (
     SPEC_CHANNELS,
     ArraySpec,
+    CaptionPart,
     Channel,
     CostEstimate,
     ElementRelation,
@@ -187,13 +188,15 @@ class TestIsolation:
         # fail on those two and the repair would be to weaken the assertion.
         node = make_node("a", radius=3)
         keyed = node_key(node, spec=SPEC, upstream={}, backend=Backend.CPU)
-        # A fourth presentation field is covered by the row that declares it:
+        # The next presentation field is covered by the row that declares it:
         # the substitutes are checked against `SPEC_CHANNELS` rather than
-        # against a typed list of three names, so declaring one without a value
+        # against a typed list of names, so declaring one without a value
         # here fails instead of silently going untested. Values stay legal —
         # `primary_params` names are checked against `params_model`.
         substitutes: dict[str, object] = {
+            "caption": (CaptionPart(label="radius", param="radius"),),
             "cost": CostEstimate(seconds_per_megapixel=0.5),
+            "param_value_labels": {"radius": {"3": "three pixels"}},
             "primary_params": ("radius",),
             "summary": "Blurs, described differently.",
         }

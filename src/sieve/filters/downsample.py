@@ -22,6 +22,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementRelation,
     Mode,
@@ -63,6 +64,7 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
     ),
     mode=Mode.STREAMING,
     primary_params=("factor",),
+    caption=(CaptionPart(label="factor", param="factor"),),
 )
 class DownsampleParams(ParamsBase):
     """How far to reduce, and whether to average or to sample."""

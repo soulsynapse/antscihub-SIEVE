@@ -33,6 +33,7 @@ from numpy.typing import NDArray
 from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementRelation,
     Mode,
@@ -86,6 +87,7 @@ class NormalizeMode(StrEnum):
     ),
     mode=Mode.STREAMING,
     primary_params=("mode",),
+    caption=(CaptionPart(param="mode"),),
 )
 class NormalizeParams(ParamsBase):
     """Which normalization, if any."""

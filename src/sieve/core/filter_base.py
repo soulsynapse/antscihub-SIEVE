@@ -326,6 +326,16 @@ class ParamsBase(BaseModel):
         """
         return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
 
+    def presentation_values(self) -> Mapping[str, str]:
+        """Parameter display values that need filter-owned derivation.
+
+        Most parameters render from their stored value, optionally through the
+        spec's `param_value_labels`. A filter overrides this only when the
+        value shown is derived from more than one parameter, such as a block
+        size whose `0` means "auto at the current scale".
+        """
+        return {}
+
     def output_rate(self) -> Fraction:
         """Output frames per input frame, exactly.
 
@@ -548,6 +558,26 @@ class CostEstimate:
 
 
 @dataclass(frozen=True, slots=True)
+class CaptionPart:
+    """One piece of a collapsed filter caption."""
+
+    param: str | None = None
+    label: str = ""
+    text: str = ""
+    format_spec: str = ""
+
+    def __post_init__(self) -> None:
+        if (self.param is None) == (self.text == ""):
+            raise ValueError("a caption part names exactly one of param or text")
+        if self.param is None and (self.label or self.format_spec):
+            raise ValueError("static caption text cannot carry a label or format_spec")
+
+
+def _empty_param_value_labels() -> Mapping[str, Mapping[str, str]]:
+    return {}
+
+
+@dataclass(frozen=True, slots=True)
 class FilterSpec:
     """Everything about a filter that is knowable without running it."""
 
@@ -638,6 +668,14 @@ class FilterSpec:
     #: exist on `params_model`; that is checked below, because the failure mode
     #: of a stale name is a widget that silently stops appearing.
     primary_params: tuple[str, ...] = field(default_factory=tuple)
+    #: The collapsed caption a front end shows for a configured node.
+    caption: tuple[CaptionPart, ...] = field(default_factory=tuple)
+    #: Human labels for parameter values, keyed by parameter name then stored
+    #: value. This is how enum choices read on buttons and captions without a
+    #: GUI-side map of a filter's parameter space.
+    param_value_labels: Mapping[str, Mapping[str, str]] = field(
+        default_factory=_empty_param_value_labels
+    )
     #: What one value of an emitted frame is a value of — a kind outright, or a
     #: relation to what arrived. Required of every array emitter and refused of
     #: every table emitter; `__post_init__` enforces both, which is what makes
@@ -727,6 +765,20 @@ class FilterSpec:
         if unknown:
             raise ValueError(
                 f"{self.filter_id}: primary_params names no such field: {sorted(unknown)}"
+            )
+        caption_unknown = [
+            part.param
+            for part in self.caption
+            if part.param is not None and part.param not in known
+        ]
+        if caption_unknown:
+            raise ValueError(
+                f"{self.filter_id}: caption names no such field: {sorted(caption_unknown)}"
+            )
+        label_unknown = [name for name in self.param_value_labels if name not in known]
+        if label_unknown:
+            raise ValueError(
+                f"{self.filter_id}: param_value_labels names no such field: {sorted(label_unknown)}"
             )
         # Comparing the function objects, not calling them: a params model with
         # required fields cannot be instantiated here, and the question is
@@ -858,7 +910,7 @@ class Channel(StrEnum):
 #:
 #: A dict literal rather than per-field metadata on the dataclass, because the
 #: property being asserted is about the *partition* and a reader checking it
-#: wants the three groups side by side, not fifteen annotations to collate.
+#: wants the three groups side by side, not field annotations to collate.
 SPEC_CHANNELS: Mapping[str, Channel] = {
     "filter_id": Channel.IDENTITY,
     "version": Channel.IDENTITY,
@@ -885,6 +937,8 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "deterministic": Channel.EXECUTION,
     "cost": Channel.PRESENTATION,
     "primary_params": Channel.PRESENTATION,
+    "caption": Channel.PRESENTATION,
+    "param_value_labels": Channel.PRESENTATION,
     "summary": Channel.PRESENTATION,
 }
 
@@ -892,6 +946,37 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
 #: One step of a path: a filter and the parameters it was configured with. The
 #: params are not optional — half of what a step contributes is params-derived.
 PathStep: TypeAlias = "tuple[FilterSpec, ParamsBase]"
+
+
+def presented_param_value(
+    spec: FilterSpec, params: ParamsBase, name: str, *, format_spec: str = ""
+) -> str:
+    """A parameter value as the filter wants it read in presentation."""
+    custom = params.presentation_values()
+    if name in custom:
+        return custom[name]
+    value = getattr(params, name)
+    labels = spec.param_value_labels.get(name, {})
+    key = value.value if isinstance(value, StrEnum) else str(value)
+    label = labels.get(str(key))
+    if label is not None:
+        return label
+    if format_spec:
+        return format(value, format_spec)
+    return str(key)
+
+
+def caption_for_params(spec: FilterSpec, params: ParamsBase) -> str:
+    """The declared collapsed caption for `params` under `spec`."""
+    parts = spec.caption or tuple(CaptionPart(param=name) for name in spec.primary_params)
+    rendered: list[str] = []
+    for part in parts:
+        if part.param is None:
+            rendered.append(part.text)
+            continue
+        value = presented_param_value(spec, params, part.param, format_spec=part.format_spec)
+        rendered.append(f"{part.label} {value}" if part.label else value)
+    return " · ".join(piece for piece in rendered if piece)
 
 
 def node_warmup_frames(step: PathStep) -> FrameCount:

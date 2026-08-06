@@ -65,6 +65,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementRelation,
     Mode,
@@ -160,6 +161,10 @@ class Emit(StrEnum):
     warmup_frames=FrameCount(90),
     stateful=True,
     primary_params=("alpha", "emit"),
+    caption=(
+        CaptionPart(label="alpha", param="alpha", format_spec=".2f"),
+        CaptionPart(param="emit"),
+    ),
 )
 class BackgroundEmaParams(ParamsBase):
     """How fast the background forgets, and which half of the result to emit."""

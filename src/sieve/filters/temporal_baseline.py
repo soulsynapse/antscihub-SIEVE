@@ -78,6 +78,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementRelation,
     Mode,
@@ -197,6 +198,10 @@ class Emit(StrEnum):
     warmup_frames=MAX_WARMUP_FRAMES,
     stateful=True,
     primary_params=("window_seconds", "emit"),
+    caption=(
+        CaptionPart(label="window", param="window_seconds", format_spec=".1f"),
+        CaptionPart(param="emit"),
+    ),
 )
 class TemporalBaselineParams(ParamsBase):
     """How long the null is estimated over, and which half of the result to emit."""

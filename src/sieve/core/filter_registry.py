@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import TypeVar
 
 from sieve.core.filter_base import (
+    CaptionPart,
     CostEstimate,
     ElementDeclaration,
     ElementNames,
@@ -134,6 +135,8 @@ def register_filter(
     stateful: bool = False,
     backend_agnostic: bool = False,
     primary_params: tuple[str, ...] = (),
+    caption: tuple[CaptionPart, ...] = (),
+    param_value_labels: Mapping[str, Mapping[str, str]] | None = None,
     element: ElementDeclaration | None = None,
     element_names: ElementNames | None = None,
     registry: FilterRegistry | None = None,
@@ -167,6 +170,8 @@ def register_filter(
             stateful=stateful,
             backend_agnostic=backend_agnostic,
             primary_params=primary_params,
+            caption=caption,
+            param_value_labels={} if param_value_labels is None else param_value_labels,
             element=element,
             element_names=element_names,
         )

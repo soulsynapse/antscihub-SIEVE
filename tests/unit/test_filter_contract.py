@@ -19,6 +19,7 @@ from sieve.core.filter_base import (
     ALL_FRAMES,
     SPEC_CHANNELS,
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementKind,
     ElementNames,
@@ -27,6 +28,7 @@ from sieve.core.filter_base import (
     Mode,
     ParamsBase,
     TableSpec,
+    caption_for_params,
     input_warmup_frames,
     node_element,
     node_element_names,
@@ -153,6 +155,27 @@ class TestFilterSpec:
         # A renamed parameter otherwise leaves the GUI silently short a widget.
         with pytest.raises(ValueError, match=r"no such field.*scale_factor"):
             make_spec(primary_params=("scale_factor",))
+
+    def test_caption_must_name_real_fields(self) -> None:
+        with pytest.raises(ValueError, match=r"caption names no such field.*scale_factor"):
+            make_spec(caption=(CaptionPart(param="scale_factor"),))
+
+    def test_param_value_labels_must_name_real_fields(self) -> None:
+        with pytest.raises(ValueError, match=r"param_value_labels names no such field.*method"):
+            make_spec(param_value_labels={"method": {"fast": "fast"}})
+
+    def test_caption_renders_from_declared_presentation(self) -> None:
+        spec = make_spec(
+            caption=(
+                CaptionPart(label="factor", param="factor"),
+                CaptionPart(param="anti_alias"),
+            ),
+            param_value_labels={"anti_alias": {"True": "averaged", "False": "sampled"}},
+        )
+
+        assert caption_for_params(spec, SampleParams(factor=4, anti_alias=False)) == (
+            "factor 4 · sampled"
+        )
 
     def test_rejects_non_semver_version(self) -> None:
         with pytest.raises(ValueError, match=r"MAJOR\.MINOR\.PATCH"):
@@ -489,6 +512,8 @@ PROBES: dict[str, Any] = {
     "stateful": True,
     "backend_agnostic": True,
     "primary_params": ("factor",),
+    "caption": (CaptionPart(label="factor", param="factor"),),
+    "param_value_labels": {"anti_alias": {"True": "averaged"}},
     "element": ElementKind.BLOCK,
     "element_names": ElementNames("block", "blocks"),
 }

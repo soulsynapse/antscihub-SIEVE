@@ -27,6 +27,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    CaptionPart,
     CostEstimate,
     ElementRelation,
     Mode,
@@ -59,6 +60,10 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
     ),
     mode=Mode.STREAMING,
     primary_params=("scale",),
+    caption=(
+        CaptionPart(label="scale", param="scale", format_spec=".2f"),
+        CaptionPart(text="area"),
+    ),
 )
 class RescaleParams(ParamsBase):
     """How far to shrink, as a linear factor of both extents."""

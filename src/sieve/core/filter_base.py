@@ -716,14 +716,18 @@ class FilterSpec:
     def cacheable(self) -> bool:
         """Whether this node's output may be reused from a cache entry.
 
-        Two different disqualifications, and they are not the same one twice.
-        A non-deterministic filter cannot reproduce its own output at all. A
-        stateful one reproduces it exactly, and may well reproduce it across
-        runs too — but only if a number it declared about itself is true, and
-        this property is evaluated where that cannot be checked. See `stateful`
-        above.
+        Three different disqualifications, and they are not the same one
+        twice. A non-deterministic filter cannot reproduce its own output at
+        all. A stateful one reproduces it exactly, and may well reproduce it
+        across runs too — but only if a number it declared about itself is true,
+        and this property is evaluated where that cannot be checked. A windowed
+        one has the same provisional-frontier problem without private state:
+        lead-in outputs before the span is fully founded depend on where the
+        run began, while the existing cache key is only `(node key, source
+        index)`. See `stateful` above; windowed caching can return when founded
+        spans are part of the execution/cache contract.
         """
-        return self.deterministic and not self.stateful
+        return self.deterministic and not self.stateful and self.mode is Mode.STREAMING
 
     @staticmethod
     def stored_bytes_ratio(params: ParamsBase) -> float:

@@ -21,6 +21,7 @@ from sieve.core.filter_base import (
     CostEstimate,
     ElementRelation,
     FilterSpec,
+    Mode,
     ParamsBase,
 )
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
@@ -268,6 +269,8 @@ class TestInputs:
         # the whole subtree is uncacheable without anything computing that.
         with pytest.raises(NotCacheableError, match="not deterministic"):
             node_key(node, spec=make_spec(deterministic=False), upstream={}, backend=Backend.CPU)
+        with pytest.raises(NotCacheableError, match="windowed output"):
+            node_key(node, spec=make_spec(mode=Mode.WINDOWED), upstream={}, backend=Backend.CPU)
         # A spec for the wrong filter would key this node's output under
         # another filter's identity, which is the one mistake that produces a
         # confidently wrong cache hit rather than a miss.

@@ -46,6 +46,7 @@ the four lines each of `__add__` are the cheap half.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 from fractions import Fraction
@@ -436,3 +437,52 @@ class Frame:
     def dtype(self) -> np.dtype[Any]:
         """Element type of the underlying array."""
         return self.data.dtype
+
+
+@dataclass(frozen=True, slots=True)
+class FrameSpan:
+    """A consecutive, non-empty run of frames handed to a windowed kernel.
+
+    The span is half-open by index: `start` is the first frame's source index
+    and `end` is one past the last. The final frame is the target the kernel is
+    expected to emit for; `Mode.WINDOWED` is still one output frame per source
+    frame, but the kernel is allowed to inspect the bounded history that founds
+    that output.
+    """
+
+    frames: tuple[Frame, ...]
+
+    def __post_init__(self) -> None:
+        if not self.frames:
+            raise ValueError("a frame span must contain at least one frame")
+        previous = self.frames[0].index
+        for frame in self.frames[1:]:
+            if frame.index != previous + 1:
+                raise ValueError(
+                    f"a frame span must be consecutive, got {previous} then {frame.index}"
+                )
+            previous = frame.index
+
+    def __iter__(self) -> Iterator[Frame]:
+        return iter(self.frames)
+
+    def __len__(self) -> int:
+        return len(self.frames)
+
+    def __getitem__(self, index: int) -> Frame:
+        return self.frames[index]
+
+    @property
+    def start(self) -> int:
+        """The first source frame index in the span."""
+        return self.frames[0].index
+
+    @property
+    def end(self) -> int:
+        """One past the last source frame index in the span."""
+        return self.frames[-1].index + 1
+
+    @property
+    def target(self) -> Frame:
+        """The frame whose source index the windowed kernel must emit."""
+        return self.frames[-1]

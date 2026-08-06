@@ -55,6 +55,7 @@ identity of its own rather than a proxy for the parent.
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
@@ -64,10 +65,12 @@ from sieve.backend.dispatch import (
     Kernel,
     KernelRegistry,
     MergingKernel,
+    WindowedKernel,
     unrunnable_reason,
 )
+from sieve.core.filter_base import Mode, node_warmup_frames
 from sieve.core.pipeline_model import Node
-from sieve.core.types import ROI, ChannelSpec, Frame
+from sieve.core.types import ROI, ChannelSpec, Frame, FrameSpan
 from sieve.pipeline.cache import FrameStore, NullFrameStore
 from sieve.pipeline.plan import ExecutionPlan
 
@@ -165,6 +168,15 @@ class FrameResult:
         return self.outputs[node_id]
 
 
+@dataclass(frozen=True, slots=True)
+class BoundNode:
+    """A selected kernel plus the call shape its spec requires."""
+
+    run: Kernel[Any] | MergingKernel[Any] | WindowedKernel[Any]
+    mode: Mode
+    window: int = 1
+
+
 def execute(
     plan: ExecutionPlan,
     reader: FrameSource,
@@ -210,6 +222,11 @@ def execute(
     # and no crop left to apply. The plan is the one place those two facts are
     # reconciled.
     roi = plan.roi
+    histories: dict[str, deque[Frame]] = {
+        node_id: deque(maxlen=bound.window)
+        for node_id, bound in bindings.items()
+        if bound.mode is Mode.WINDOWED
+    }
 
     for index in plan.decode_range:
         decoded: Frame | None = None
@@ -245,7 +262,7 @@ def execute(
                     _check_format(decoded, plan)
                     source = decoded if roi is None else _crop(decoded, roi)
                 incoming = source
-            produced = _run_node(node, incoming, index, plan, bindings)
+            produced = _run_node(node, incoming, index, plan, bindings, histories)
             outputs[node.node_id] = produced
             if key is not None:
                 keep.put(key, index, produced)
@@ -285,9 +302,7 @@ def _check_format(decoded: Frame, plan: ExecutionPlan) -> None:
     )
 
 
-def _bind(
-    plan: ExecutionPlan, kernels: KernelRegistry
-) -> dict[str, Kernel[Any] | MergingKernel[Any]]:
+def _bind(plan: ExecutionPlan, kernels: KernelRegistry) -> dict[str, BoundNode]:
     """Resolve every node to the callable that implements it, or refuse.
 
     Up front, over the whole graph, before a frame is read. The alternative —
@@ -311,7 +326,7 @@ def _bind(
     lifetime, which is also the right one: a caller that cancels a preview by
     abandoning the iterator drops the half-warmed background model with it.
     """
-    bindings: dict[str, Kernel[Any] | MergingKernel[Any]] = {}
+    bindings: dict[str, BoundNode] = {}
     for node in plan.dag.order:
         spec = plan.dag.spec(node.node_id)
         reason = unrunnable_reason(spec)
@@ -321,7 +336,13 @@ def _bind(
             raise UnrunnableNodeError(f"{node.node_id} ({spec.filter_id} {spec.version}) {reason}")
         # A one-element preference: see the module docstring. A fallback here
         # would write entries keyed on a backend that did not produce them.
-        bindings[node.node_id] = kernels.select(spec, (plan.backend_for(node.node_id),)).start()
+        run = kernels.select(spec, (plan.backend_for(node.node_id),)).start()
+        window = (
+            node_warmup_frames((spec, plan.params[node.node_id])).frames + 1
+            if spec.mode is Mode.WINDOWED
+            else 1
+        )
+        bindings[node.node_id] = BoundNode(run=run, mode=spec.mode, window=window)
     return bindings
 
 
@@ -346,7 +367,8 @@ def _run_node(
     incoming: Frame | Mapping[str, Frame],
     index: int,
     plan: ExecutionPlan,
-    bindings: Mapping[str, Kernel[Any] | MergingKernel[Any]],
+    bindings: Mapping[str, BoundNode],
+    histories: Mapping[str, deque[Frame]],
 ) -> Frame:
     """One kernel call, with the frame index checked on the way out.
 
@@ -367,10 +389,21 @@ def _run_node(
     callable disagrees with that declaration.
     """
     params = plan.params[node.node_id]
-    if isinstance(incoming, Frame):
-        produced = cast("Kernel[Any]", bindings[node.node_id])(incoming, params)
+    bound = bindings[node.node_id]
+    if bound.mode is Mode.WINDOWED:
+        if not isinstance(incoming, Frame):
+            spec = plan.dag.spec(node.node_id)
+            raise UnrunnableNodeError(
+                f"{node.node_id} ({spec.filter_id} {spec.version}) declares mode={spec.mode} "
+                "with multiple inputs, and no windowed merging protocol exists"
+            )
+        history = histories[node.node_id]
+        history.append(incoming)
+        produced = cast("WindowedKernel[Any]", bound.run)(FrameSpan(tuple(history)), params)
+    elif isinstance(incoming, Frame):
+        produced = cast("Kernel[Any]", bound.run)(incoming, params)
     else:
-        produced = cast("MergingKernel[Any]", bindings[node.node_id])(incoming, params)
+        produced = cast("MergingKernel[Any]", bound.run)(incoming, params)
     if produced.index != index:
         spec = plan.dag.spec(node.node_id)
         raise UnrunnableNodeError(

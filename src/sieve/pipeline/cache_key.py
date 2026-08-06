@@ -75,16 +75,24 @@ DIGEST_BYTES = 32
 
 
 class NotCacheableError(ValueError):
-    """A key was requested for a filter that has not claimed determinism.
+    """A key was requested for a filter whose output cannot be safely keyed.
 
     Raising rather than returning a key is what makes non-cacheability
-    propagate. A node with no key gives its downstream no upstream hash to fold
-    in, so the whole subtree below a non-deterministic filter is uncacheable
+    propagate. A node with no key gives its downstream no upstream hash to
+    fold in, so the whole subtree below a non-cacheable filter is uncacheable
     without anything having to compute that fact — which is correct, because a
     downstream result is only reusable if what it was computed from was.
 
     Callers that can proceed either way check `FilterSpec.cacheable` first.
     """
+
+
+def _uncacheable_clause(spec: FilterSpec) -> str:
+    if not spec.deterministic:
+        return "is not deterministic, so its output cannot be keyed"
+    if spec.stateful:
+        return "is stateful, so its output cannot be keyed"
+    return f"declares mode={spec.mode}, so its provisional windowed output cannot be keyed"
 
 
 def _digest(*parts: object) -> str:
@@ -230,9 +238,8 @@ def node_key(
         )
     if not spec.cacheable:
         raise NotCacheableError(
-            f"{spec.filter_id} {spec.version} is not deterministic, so its output cannot be "
-            "keyed — nothing that reads such an entry can know it matches what would be "
-            "recomputed"
+            f"{spec.filter_id} {spec.version} {_uncacheable_clause(spec)} — nothing that reads "
+            "such an entry can know it matches what would be recomputed"
         )
     params = spec.params_model.model_validate(resolved_params(node, replicate))
     return _digest(

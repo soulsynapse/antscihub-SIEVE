@@ -15,12 +15,19 @@ from collections.abc import Mapping
 import numpy as np
 import pytest
 
-from sieve.backend.dispatch import Backend, KernelRegistry, NoKernelError, kernel, merging_kernel
+from sieve.backend.dispatch import (
+    Backend,
+    KernelRegistry,
+    NoKernelError,
+    kernel,
+    merging_kernel,
+    windowed_kernel,
+)
 from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, Mode, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
-from sieve.core.types import ROI, ChannelSpec, Frame, FrameCount
+from sieve.core.types import ROI, ChannelSpec, Frame, FrameCount, FrameSpan
 from sieve.pipeline import cache_key
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
 from sieve.pipeline.dag import Dag
@@ -119,16 +126,43 @@ def minus_cpu(frames: Mapping[str, Frame], params: MinusParams) -> Frame:
 @register_filter(
     filter_id="span",
     version="1.0.0",
-    summary="Needs a window, so nothing can call it.",
+    summary="A trailing three-frame mean.",
     accepts=ArraySpec(),
+    emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
+    cost=COST,
+    mode=Mode.WINDOWED,
+    warmup_frames=FrameCount(2),
+    registry=SHELF,
+)
+class SpanParams(ParamsBase):
+    pass
+
+
+@windowed_kernel(SpanParams, Backend.CPU, registry=KERNELS)
+def span_cpu(span: FrameSpan, params: SpanParams) -> Frame:
+    del params
+    WINDOWS.append(tuple(frame.index for frame in span))
+    data = np.mean([frame.data.astype(np.float32) for frame in span], axis=0).astype(np.uint8)
+    return Frame(data=data, index=span.target.index, channels=span.target.channels)
+
+
+@register_filter(
+    filter_id="windowed_merge",
+    version="1.0.0",
+    summary="Needs a span on two ports, so no protocol can call it yet.",
+    accepts={"left": ArraySpec(), "right": ArraySpec()},
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
     mode=Mode.WINDOWED,
     registry=SHELF,
 )
-class SpanParams(ParamsBase):
+class WindowedMergeParams(ParamsBase):
     pass
+
+
+WINDOWS: list[tuple[int, ...]] = []
 
 
 class ListSource:
@@ -208,6 +242,7 @@ def _pretend_identity(backend: Backend) -> str:
 @pytest.fixture(autouse=True)
 def forget_calls() -> None:
     CALLS.clear()
+    WINDOWS.clear()
 
 
 def run(
@@ -314,19 +349,40 @@ def test_the_decoded_frame_escapes_uncropped_and_only_when_a_decode_happened() -
     assert all(result.source is None for result in second)
 
 
-def test_a_windowed_node_is_refused_before_anything_is_read() -> None:
-    """The message is available statically, so it is given statically.
+def test_a_windowed_node_gets_a_span_ending_at_the_current_frame() -> None:
+    """The window is a bounded history, not one frame smuggled through.
 
-    Resolving kernels lazily would decode the lead-in, run the reachable half
-    of the graph, and then raise — a minute of work to deliver a sentence that
-    was true before the file was opened.
+    `span` asks for two warmup frames. Behind `tag`'s three-frame warmup the
+    existing fold therefore charges five source frames, and the first yielded
+    window is over the settled tag outputs for 18, 19, and 20.
     """
     plan = plan_for(
         Pipeline(nodes=(node("t"), node("w", "span")), edges=(Edge(upstream="t", downstream="w"),))
     )
+
+    results = run(plan, ListSource())
+
+    assert plan.lead_in == FrameCount(5)
+    assert plan.key("w") is None
+    assert WINDOWS[-3:] == [(18, 19, 20), (19, 20, 21), (20, 21, 22)]
+    assert [result.index for result in results] == [20, 21, 22]
+    assert [int(result["w"].data[0, 0]) for result in results] == [20, 21, 22]
+
+
+def test_a_windowed_merging_node_is_still_refused_before_anything_is_read() -> None:
+    """A mapping of ports to spans is a separate protocol, not guessed here."""
+    plan = plan_for(
+        Pipeline(
+            nodes=(node("a"), node("b"), node("w", "windowed_merge")),
+            edges=(
+                Edge(upstream="a", downstream="w", port="left"),
+                Edge(upstream="b", downstream="w", port="right"),
+            ),
+        )
+    )
     source = ListSource()
 
-    with pytest.raises(UnrunnableNodeError, match="windowed filter needs a span"):
+    with pytest.raises(UnrunnableNodeError, match="windowed merging kernel"):
         run(plan, source)
 
     assert not source.reads

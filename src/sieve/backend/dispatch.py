@@ -39,7 +39,7 @@ from importlib.util import find_spec
 from typing import Any, Protocol, TypeVar, assert_never, cast
 
 from sieve.core.filter_base import FilterSpec, Mode, ParamsBase, StreamKind
-from sieve.core.types import Frame
+from sieve.core.types import Frame, FrameSpan
 
 
 class Backend(StrEnum):
@@ -110,6 +110,22 @@ class MergingKernel(Protocol[ParamsT_contra]):
     def __call__(self, frames: Mapping[str, Frame], params: ParamsT_contra, /) -> Frame: ...
 
 
+class WindowedKernel(Protocol[ParamsT_contra]):
+    """A consecutive input span in, one frame-shaped output, on one backend.
+
+    `FrameSpan.target` is the frame whose source index the output must carry.
+    The executor builds the span from the node's own refined `warmup_frames`,
+    so a windowed filter states its temporal reach once in the existing warmup
+    fold rather than in a second decorator argument.
+
+    Single-input only. A mapping of ports to spans is a different calling
+    convention and should arrive with the filter that needs it, just as
+    `MergingKernel` did.
+    """
+
+    def __call__(self, span: FrameSpan, params: ParamsT_contra, /) -> Frame: ...
+
+
 class StatefulKernel(Protocol[ParamsT_contra, StateT_contra]):
     """The same shape, plus somewhere to keep what the last frame taught it.
 
@@ -169,10 +185,11 @@ def unrunnable_reason(spec: FilterSpec) -> str | None:
     if spec.mode is Mode.STREAMING:
         pass
     elif spec.mode is Mode.WINDOWED:
-        return (
-            f"declares mode={spec.mode}, and the kernel protocol is one frame in, one frame out "
-            "— a windowed filter needs a span"
-        )
+        if len(spec.input_ports) > 1:
+            return (
+                f"declares mode={spec.mode} with input ports {sorted(spec.input_ports)}, and no "
+                "windowed merging kernel protocol exists"
+            )
     else:
         assert_never(spec.mode)
     if spec.rate_changing:
@@ -227,11 +244,11 @@ class KernelBinding:
     """
 
     backend: Backend
-    run: Kernel[Any] | StatefulKernel[Any, Any] | MergingKernel[Any]
+    run: Kernel[Any] | StatefulKernel[Any, Any] | MergingKernel[Any] | WindowedKernel[Any]
     #: How to make one run's state, or `None` for a kernel that keeps none.
     state_factory: Callable[[], Any] | None = None
 
-    def start(self) -> Kernel[Any] | MergingKernel[Any]:
+    def start(self) -> Kernel[Any] | MergingKernel[Any] | WindowedKernel[Any]:
         """A callable for exactly one run, with its own state if it needs any.
 
         Called once per `execute`, not once per frame — the state has to see
@@ -245,7 +262,7 @@ class KernelBinding:
         the function it named.
         """
         if self.state_factory is None:
-            return cast("Kernel[Any] | MergingKernel[Any]", self.run)
+            return cast("Kernel[Any] | MergingKernel[Any] | WindowedKernel[Any]", self.run)
         stateful = cast(StatefulKernel[Any, Any], self.run)
         state = self.state_factory()
         return lambda frame, params: stateful(frame, params, state)
@@ -282,7 +299,7 @@ class KernelRegistry:
         self,
         spec: FilterSpec,
         backend: Backend,
-        run: Kernel[Any] | StatefulKernel[Any, Any] | MergingKernel[Any],
+        run: Kernel[Any] | StatefulKernel[Any, Any] | MergingKernel[Any] | WindowedKernel[Any],
         *,
         state_factory: Callable[[], Any] | None = None,
     ) -> None:
@@ -408,6 +425,11 @@ def kernel(
             f"{spec.filter_id} declares input ports {sorted(spec.input_ports)}, so its kernel "
             "is called with a mapping of them — register it with @merging_kernel"
         )
+    if spec.mode is Mode.WINDOWED:
+        raise TypeError(
+            f"{spec.filter_id} declares mode={spec.mode}, so its kernel is called with a frame "
+            "span — register it with @windowed_kernel"
+        )
 
     def decorate(run: Kernel[ParamsT]) -> Kernel[ParamsT]:
         (registry if registry is not None else KERNELS).register(spec, backend, run)
@@ -447,8 +469,54 @@ def merging_kernel(
             f"{spec.filter_id} declares one input port, so its kernel is called with a bare "
             "frame — register it with @kernel"
         )
+    if spec.mode is Mode.WINDOWED:
+        raise TypeError(
+            f"{spec.filter_id} declares mode={spec.mode}, and no windowed merging protocol "
+            "exists yet — the filter that needs one should bring its signature"
+        )
 
     def decorate(run: MergingKernel[ParamsT]) -> MergingKernel[ParamsT]:
+        (registry if registry is not None else KERNELS).register(spec, backend, run)
+        return run
+
+    return decorate
+
+
+def windowed_kernel(
+    params_model: type[ParamsT],
+    backend: Backend,
+    *,
+    registry: KernelRegistry | None = None,
+) -> Callable[[WindowedKernel[ParamsT]], WindowedKernel[ParamsT]]:
+    """Decorate a span-taking function as `params_model`'s kernel on `backend`.
+
+    The window length is not an argument here. It is the filter's refined
+    `warmup_frames` plus the current frame, which keeps the executor's lead-in
+    arithmetic and the kernel's span in the same unit and declaration.
+
+    Raises:
+        TypeError: if `params_model` carries no spec, as `kernel`. Also if the
+            spec is not `Mode.WINDOWED`, or if it declares more than one input
+            port: a mapping of ports to spans is a separate protocol.
+    """
+    spec = params_model.__filter_spec__
+    if spec is None:
+        raise TypeError(
+            f"{params_model.__name__} has no filter spec: @windowed_kernel implements a "
+            "registered filter, so the params class it names must carry @register_filter"
+        )
+    if spec.mode is not Mode.WINDOWED:
+        raise TypeError(
+            f"{spec.filter_id} declares mode={spec.mode}, so its kernel is called with a bare "
+            "frame — register it with @kernel"
+        )
+    if len(spec.input_ports) > 1:
+        raise TypeError(
+            f"{spec.filter_id} declares input ports {sorted(spec.input_ports)}, and no windowed "
+            "merging protocol exists yet — the filter that needs one should bring its signature"
+        )
+
+    def decorate(run: WindowedKernel[ParamsT]) -> WindowedKernel[ParamsT]:
         (registry if registry is not None else KERNELS).register(spec, backend, run)
         return run
 
@@ -495,6 +563,11 @@ def stateful_kernel(
         raise TypeError(
             f"{spec.filter_id} declares input ports {sorted(spec.input_ports)}, and no stateful "
             "merging protocol exists yet — the filter that needs one should bring its signature"
+        )
+    if spec.mode is Mode.WINDOWED:
+        raise TypeError(
+            f"{spec.filter_id} declares mode={spec.mode}, and no stateful windowed protocol "
+            "exists yet — the filter that needs one should bring its signature"
         )
 
     def decorate(run: StatefulKernel[ParamsT, StateT]) -> StatefulKernel[ParamsT, StateT]:

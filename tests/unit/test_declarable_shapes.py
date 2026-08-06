@@ -41,7 +41,7 @@ from sieve.core.filter_base import (
 )
 from sieve.core.filter_registry import FilterRegistry
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, FrameSpan
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan
@@ -105,6 +105,12 @@ def _identity(frame: Frame, params: ParamsBase) -> Frame:
     return frame
 
 
+def _windowed_identity(span: FrameSpan, params: ParamsBase) -> Frame:
+    """The minimal windowed kernel: emit the frame this span founds."""
+    del params
+    return span.target
+
+
 def _shape_id(shape: Shape) -> str:
     """A filter id, and pytest's case id, derived from the shape it names.
 
@@ -141,26 +147,25 @@ SPECS: dict[Shape, FilterSpec] = {}
 for _shape in SHAPES:
     _spec = _spec_for(_shape)
     SHELF.register(_spec)
-    KERNELS.register(_spec, Backend.CPU, _identity)
+    if _shape[0] is Mode.WINDOWED:
+        KERNELS.register(_spec, Backend.CPU, _windowed_identity)
+    else:
+        KERNELS.register(_spec, Backend.CPU, _identity)
     SPECS[_shape] = _spec
 
 
 def _fields_that_cannot_run(shape: Shape) -> frozenset[str]:
     """Which of the shape's own declarations no protocol in `dispatch` takes.
 
-    The specification `unrunnable_reason` is checked against, and stated as data
-    about the shape rather than as the same branches written twice: `Kernel` and
-    `MergingKernel` are both one frame in and one frame out, so a span, a
-    dropped output, rows arriving, and rows leaving are each outside them.
-
-    This shrinks as protocols land — `a-kernel-that-sees-a-span` deletes the
-    first line — and a shrink that is not matched in `dispatch` fails the walk
-    from both directions at once.
+    The specification `unrunnable_reason` is checked against, and stated as
+    data about the shape rather than as the same branches written twice:
+    `Kernel`, `MergingKernel`, and `WindowedKernel` all emit one frame, and all
+    consume arrays. Dropped output, rows arriving, and rows leaving are each
+    still outside them.
     """
     mode, rate_changing, accepts, emits = shape
+    del mode
     named: set[str] = set()
-    if mode is not Mode.STREAMING:
-        named.add("mode")
     if rate_changing:
         named.add("rate_changing")
     if accepts is not StreamKind.ARRAY:
@@ -235,7 +240,7 @@ def test_the_refusal_names_which_node_not_only_which_filter() -> None:
     graph naming one filter at two nodes is the case where losing it leaves a
     message that is true and unactionable.
     """
-    windowed = _shape_id((Mode.WINDOWED, False, StreamKind.ARRAY, StreamKind.ARRAY))
+    windowed = _shape_id((Mode.WINDOWED, True, StreamKind.ARRAY, StreamKind.ARRAY))
     runnable = _shape_id((Mode.STREAMING, False, StreamKind.ARRAY, StreamKind.ARRAY))
     pipeline = Pipeline(
         nodes=(

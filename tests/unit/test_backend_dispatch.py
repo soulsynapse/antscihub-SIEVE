@@ -19,10 +19,18 @@ from sieve.backend.dispatch import (
     KernelRegistry,
     NoKernelError,
     kernel,
+    windowed_kernel,
 )
-from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, FilterSpec, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    CostEstimate,
+    ElementRelation,
+    FilterSpec,
+    Mode,
+    ParamsBase,
+)
 from sieve.core.filter_registry import FilterRegistry, register_filter
-from sieve.core.types import Frame
+from sieve.core.types import Frame, FrameSpan
 
 
 class Registered(NamedTuple):
@@ -104,3 +112,53 @@ def test_kernel_without_a_spec_is_refused() -> None:
 
     with pytest.raises(TypeError, match="has no filter spec"):
         kernel(Unregistered, Backend.CPU)
+
+
+def test_windowed_spec_refuses_single_frame_kernel() -> None:
+    specs = FilterRegistry()
+
+    @register_filter(
+        filter_id="windowed",
+        version="1.0.0",
+        summary="Needs a span.",
+        accepts=ArraySpec(),
+        emits=ArraySpec(),
+        element=ElementRelation.PRESERVED,
+        cost=CostEstimate(seconds_per_megapixel=0.0),
+        mode=Mode.WINDOWED,
+        registry=specs,
+    )
+    class WindowedParams(ParamsBase):
+        pass
+
+    with pytest.raises(TypeError, match="@windowed_kernel"):
+        kernel(WindowedParams, Backend.CPU)
+
+
+def test_windowed_kernel_decorator_registers_a_span_callable() -> None:
+    specs = FilterRegistry()
+    kernels = KernelRegistry()
+
+    @register_filter(
+        filter_id="windowed_passthrough",
+        version="1.0.0",
+        summary="Returns the target frame from a span.",
+        accepts=ArraySpec(),
+        emits=ArraySpec(),
+        element=ElementRelation.PRESERVED,
+        cost=CostEstimate(seconds_per_megapixel=0.0),
+        mode=Mode.WINDOWED,
+        registry=specs,
+    )
+    class WindowedParams(ParamsBase):
+        pass
+
+    def run(span: FrameSpan, params: WindowedParams) -> Frame:
+        del params
+        return span.target
+
+    windowed_kernel(WindowedParams, Backend.CPU, registry=kernels)(run)
+
+    binding = kernels.select(WindowedParams.spec(), preference=(Backend.CPU,))
+
+    assert binding.run is run

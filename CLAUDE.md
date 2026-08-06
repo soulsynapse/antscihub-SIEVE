@@ -113,6 +113,23 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
 6. **Measurements go to `docs/findings/`**, never into the completed entry. A
    completed entry says what was built; a finding says what is true about the
    system and outlives the code that prompted it.
+
+   **A session that built nothing still owes the finding.** A diagnosis that
+   stopped at a decision, a hypothesis a probe killed, a symptom traced to the
+   line that causes it — each is what a finding is *for*, and each is lost
+   completely if the session ends with it stated only in the reply. That is
+   the one thing a session cannot leave behind by accident: code is in git and
+   an item is in `docs/todo/`, but an argument made in a transcript has no
+   home unless somebody gives it one. `status: open` is the honest marker when
+   nothing acted on it yet, and a finding with no timing is still a finding
+   provided it says so and names the measurement that would close it —
+   `2026.08.05-render-fed-playback-folds-onto-one-frame.md` is that shape.
+
+   The mirror of this is that **small work does not owe an item.** A
+   `docs/todo/` file earns its place by chaining work through `after:` and by
+   holding a trigger in `gated_on`; a task that can be finished in place has
+   neither, so minting one certifies nothing and costs a file. Take the work,
+   and if it taught you something, that goes in `docs/findings/`.
 7. **Rebuild the indexes**: `uv run nox -s docs`. Staleness is a test failure —
    which is why the rebuild comes before the gate and not after it.
 8. **Run the gate**: `uv run nox -s checks`. It must pass. Run it as often as

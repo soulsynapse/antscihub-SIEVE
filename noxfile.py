@@ -44,6 +44,18 @@ def docs(session: nox.Session) -> None:
 
 
 @nox.session
+def hooks(session: nox.Session) -> None:
+    """Point git at `tools/githooks`.
+
+    `core.hooksPath` is per-clone and cannot be committed, so this is the one
+    step a fresh clone runs by hand. It is not folded into `checks`: a gate that
+    silently rewires git on every run is a surprise, and a machine that wants
+    the hooks off should be able to leave them off."""
+    session.run("git", "config", "core.hooksPath", "tools/githooks", external=True)
+    session.log("core.hooksPath = tools/githooks")
+
+
+@nox.session
 def tests(session: nox.Session) -> None:
     """Full test suite. `--benchmark-disable` still runs the budget checks —
     it drops the timing rounds, not the assertions."""

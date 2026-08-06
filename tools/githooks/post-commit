@@ -1,0 +1,22 @@
+#!/bin/sh
+# Stamp a just-committed completion entry with its own commit hash.
+#
+# Everything that could be wrong lives in tools/stamp_commit.py, which is typed
+# and tested; this file exists only because git needs an executable at a path.
+# It must never fail a commit that already happened, so the exit code is forced
+# to 0 — git ignores post-commit's status, and a hook that looks like it failed
+# is worse than one that says what went wrong.
+#
+# Install: uv run nox -s hooks  (sets core.hooksPath, which is per-clone).
+
+if [ -n "$SIEVE_NO_STAMP" ]; then
+    exit 0
+fi
+
+if command -v uv >/dev/null 2>&1; then
+    uv run --frozen python tools/stamp_commit.py || echo "post-commit: stamp_commit failed"
+else
+    echo "post-commit: uv not on PATH — entry left pending"
+fi
+
+exit 0

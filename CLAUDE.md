@@ -123,6 +123,13 @@ debt (`bench/budgets.py` `IN_DEBT`) — see rule 4's section there.
    `perf`, `docs`, `test`, `build`, `ci`, `chore`. `scope` is the
    `docs/todo/` slug the commit serves, and is omitted when no item owns it.
 
+   A completed entry's `commit:` is not yours to fill. The `post-commit` hook
+   (`tools/githooks/post-commit` → `tools/stamp_commit.py`) writes the hash of
+   the commit that carried the entry and commits that stamp itself, because it
+   is the one field in the entry that cannot be known when the rest is written.
+   `core.hooksPath` is per-clone: `uv run nox -s hooks` once, and a surviving
+   `commit: "pending"` is how a clone that skipped it announces itself.
+
 Work that is real but not yet timely is a `docs/todo/` file with
 `status: deferred` and its trigger in `gated_on` — promotion is a one-line
 `status:` flip when the trigger fires, not a rewrite. `priority` is the other
@@ -141,6 +148,7 @@ and the wall-clock is the one field an agent cannot type accurately.
 uv run nox -s checks      # ruff + ruff format + pyright strict + import-linter + pytest
 uv run nox -s benchmark   # timed budget checks (marker-selected)
 uv run nox -s docs        # regenerate docs/*/.index.md
+uv run nox -s hooks       # core.hooksPath -> tools/githooks; per-clone, once
 ```
 
 `checks` is the default session and is exactly what CI runs

@@ -58,10 +58,10 @@ Still yours to do, in order:
   4. If anything was *measured*, it goes to docs/findings/, not this entry.
   5. uv run nox -s checks
   6. uv run nox -s docs
-  7. Commit, then `git rev-parse --short HEAD` into `commit:`, keeping the
-     quotes — an unquoted all-digit hash is read as a YAML integer, and one
-     beginning with a zero as an *octal* one (`0707005` indexed as 232965).
-     Then push.
+  7. Commit, then push. `commit:` fills itself — the `post-commit` hook stamps
+     it and commits the stamp (`uv run nox -s hooks` if this clone has never
+     installed it; `commit: "pending"` surviving a commit is how you find out
+     it has not).
 """
 
 
@@ -142,10 +142,10 @@ def render(
     # The completion moment, to the second and with its offset. Day precision
     # put twenty entries a day in one bucket and left the order inside it to
     # the filename, which is alphabetical and says nothing. Not the commit's
-    # own timestamp: `commit:` is `pending` here and is filled in after the
-    # commit exists, so deriving the order from it would make the order depend
-    # on a field that is routinely left unfilled — and on hashes surviving a
-    # history rewrite, which this repo has already had one of.
+    # own timestamp: `commit:` is `pending` here and is filled in by the
+    # `post-commit` hook once the commit exists, so deriving the order from it
+    # would make the order depend on hashes surviving a history rewrite, which
+    # this repo has already had one of.
     stamp = datetime.now().astimezone().replace(microsecond=0)
     return f"""\
 ---

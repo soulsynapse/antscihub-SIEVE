@@ -34,6 +34,8 @@ CLAUDE.md                               # agent routing doc — the only doc loa
 tools/doc_index.py                      # generates docs/*/.index.md and docs/.state.md from frontmatter
 tools/complete_item.py                  # scaffolds a completed-todo entry; git-derived file lists
 tools/new_item.py                       # mints a docs/todo/ item; stamps `opened` to the minute
+tools/stamp_commit.py                   # fills a completed entry's `commit:` from the commit that carried it
+tools/githooks/post-commit              # runs it; `nox -s hooks` points core.hooksPath here
 tools/transcript_stats.py               # mines session transcripts: where agent wall-clock went
 tools/doc_drift.py                      # reports stamped prose docs whose subject paths moved
 tools/doc_refs.py                       # every path a live doc names must resolve; symbols reported

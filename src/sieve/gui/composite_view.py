@@ -77,7 +77,7 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from PySide6.QtCore import QEvent, QObject, QPointF, QRect, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QImage,
@@ -98,7 +98,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui.band_plot import ACCENT, DIM, PANEL, TEXT, plot_font
+from sieve.gui.band_plot import ACCENT, DIM, PANEL, TEXT, argb_to_qimage, plot_font, ramp_lut
 from sieve.gui.zoom import Magnifier
 
 FloatArray = NDArray[np.floating[Any]]
@@ -141,17 +141,21 @@ _FOOTER = 26
 _MARGIN = 6
 
 
-def heat_color(t: float) -> QColor:
-    """The heatmap color for a normalized value in [0, 1], cold to hot."""
-    t = min(max(t, 0.0), 1.0) * (len(HEAT_STOPS) - 1)
-    low = min(int(t), len(HEAT_STOPS) - 2)
-    frac = t - low
-    a, b = HEAT_STOPS[low], HEAT_STOPS[low + 1]
-    return QColor(
-        round(a[0] + (b[0] - a[0]) * frac),
-        round(a[1] + (b[1] - a[1]) * frac),
-        round(a[2] + (b[2] - a[2]) * frac),
-    )
+#: The heat ramp as a 256-entry ARGB table, built once at import. The layer is
+#: the unconditional one — every cell is coloured on every repaint, where a
+#: ring is drawn only for the detected minority — so its cost is the block
+#: count times whatever one cell costs, and per-cell colour arithmetic made
+#: that 34 ms at the reference B = 16,384: a repaint slower than the frame it
+#: draws over. The table is the same answer `ramp_lut` already gives the plots
+#: that index through one.
+_HEAT_LUT = ramp_lut(HEAT_STOPS)
+
+
+def _cell_span(edges: list[int], low: int, high: int, count: int) -> tuple[int, int]:
+    """The inclusive range of cells whose pixels intersect `low..high`."""
+    first = min(max(bisect_right(edges, low) - 1, 0), count - 1)
+    last = min(max(bisect_right(edges, high) - 1, 0), count - 1)
+    return first, last
 
 
 class _CompositePane(QWidget):
@@ -445,10 +449,7 @@ class _CompositePane(QWidget):
             return b < blocks and bool(self.in_band[b])
 
         if self.heat_alpha > 0.0:
-            for b in range(blocks):
-                heat = heat_color(float(self.values[b]) / max(self.scale_max, 1e-12))
-                heat.setAlphaF(self.heat_alpha)
-                painter.fillRect(cell_rect(b), heat)
+            self._paint_heat(painter, xs, ys, blocks)
 
         if self.fill_alpha > 0.0 or self.line_alpha > 0.0:
             fill = QColor(ACCENT)
@@ -491,6 +492,46 @@ class _CompositePane(QWidget):
             painter.setPen(QPen(TEXT, 1.8))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(cell_rect(self.solo).adjusted(1, 1, -1, -1))
+
+    def _paint_heat(self, painter: QPainter, xs: list[int], ys: list[int], blocks: int) -> None:
+        """The heat layer, as one image rather than a filled rect per cell.
+
+        The pixels are the ones the per-cell loop drew, and they have to be:
+        cell colours expand to pixels by `np.repeat` over the *same*
+        `grid_edges` widths the ring reads, so heat and ring cannot land on
+        different boundaries. The cheaper-looking alternative — a
+        cell-resolution image scaled up by Qt — re-rounds every edge under a
+        rule of Qt's own, and the two layers drift a pixel apart wherever it
+        disagrees with `grid_edges`.
+
+        Only the cells the fit can show are built. Magnified, the grid runs far
+        outside the widget and the clip throws that away anyway, so the array
+        is bounded by the pane rather than by the zoom.
+        """
+        if blocks <= 0:
+            return
+        ny, nx = self.grid
+        clip = self._content_rect().toAlignedRect().intersected(self.rect())
+        col0, col1 = _cell_span(xs, clip.left(), clip.right(), nx)
+        row0, row1 = _cell_span(ys, clip.top(), clip.bottom(), ny)
+        widths = np.diff(np.asarray(xs[col0 : col1 + 2], np.intp))
+        heights = np.diff(np.asarray(ys[row0 : row1 + 2], np.intp))
+        if widths.sum() <= 0 or heights.sum() <= 0:
+            return
+
+        ids = np.arange(row0, row1 + 1)[:, None] * nx + np.arange(col0, col1 + 1)[None, :]
+        # A NaN band power would index the table out of bounds, which is a
+        # crash inside a paint event rather than a wrong colour.
+        values = np.nan_to_num(self.values[np.clip(ids, 0, blocks - 1)], nan=0.0)
+        level = np.clip(values / max(self.scale_max, 1e-12), 0.0, 1.0)
+        cells = (_HEAT_LUT[np.rint(level * 255.0).astype(np.intp)] & np.uint32(0x00FFFFFF)) | (
+            np.uint32(round(self.heat_alpha * 255)) << np.uint32(24)
+        )
+        # The tail of the last row, where the grid has more cells than the
+        # playhead has values: unpainted, as the loop left it.
+        cells[ids >= blocks] = np.uint32(0)
+        pixels = np.repeat(np.repeat(cells, heights, axis=0), widths, axis=1)
+        painter.drawImage(QPoint(xs[col0], ys[row0]), argb_to_qimage(pixels))
 
 
 class StepCompositeView(QWidget):

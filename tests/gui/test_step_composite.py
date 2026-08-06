@@ -16,6 +16,7 @@ zoom that moved one layer and not the other would be worse than no zoom.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from time import perf_counter
 from types import SimpleNamespace
 
 import numpy as np
@@ -579,6 +580,99 @@ def test_the_heatmap_tiles_with_no_uncovered_row_at_any_pane_height(qtbot: QtBot
             if image.pixelColor(column, y) == PANEL
         ]
         assert not gaps, f"unblended row(s) {gaps} through the heatmap at height {height}"
+
+
+def test_the_heat_layer_registers_with_the_grid_while_magnified(qtbot: QtBot) -> None:
+    """The heat image is built from the cells the *fit* can show, not all of them.
+
+    Magnified, the grid runs off under the letterbox, and the layer skips the
+    cells out there rather than expanding a picture the clip throws away. That
+    makes the first drawn cell an index into the grid rather than cell zero,
+    and an off-by-one there shifts every colour one cell sideways — a heatmap
+    that describes the neighbour of the pixels under it, which no state test
+    can see. Cold left, hot right: the boundary between them must still be the
+    grid line the ring layer reads.
+    """
+    view = _grid_view(qtbot, 1, 2, (400, 220))
+    view.set_scale_max(10.0)
+    view.set_block_state(np.array([0.0, 10.0], np.float32), np.zeros(2, bool), None)
+    view.heat_slider.setValue(GRID_STEPS)
+    view.fill_slider.setValue(0)
+    view.line_slider.setValue(0)
+
+    pane = view.pane
+    wheel(pane, pane.grid_rect().center(), 3)
+    QApplication.processEvents()
+    assert pane.magnifier.magnified, "the wheel did not magnify"
+
+    xs, ys = pane.grid_edges()
+    row_y = (max(ys[0], 0) + min(ys[1], pane.height())) // 2
+    image = pane.grab().toImage()
+    left, right = image.pixelColor(xs[1] - 1, row_y), image.pixelColor(xs[1], row_y)
+    assert left.blue() > left.red(), "the last pixel of the cold cell is not cold"
+    assert right.red() > right.blue(), "the first pixel of the hot cell is not hot"
+
+
+def test_a_grid_larger_than_the_playhead_row_leaves_its_tail_unpainted(qtbot: QtBot) -> None:
+    """Rule 6: a cell with no value must not be coloured as if it had one.
+
+    The grid shape and the block row arrive from different calls, so a row can
+    be short of the shape for a repaint — and the heat layer covers every cell
+    unconditionally, which is exactly where a missing value would be rendered
+    as the bottom of the scale (cold, and indistinguishable from a real cold
+    cell) if the tail were not left bare.
+    """
+    view = _grid_view(qtbot, 2, 2, (400, 400))
+    view.set_scale_max(10.0)
+    view.set_block_state(np.full(3, 10.0, np.float32), np.zeros(3, bool), None)
+    view.heat_slider.setValue(GRID_STEPS)
+
+    pane = view.pane
+    xs, ys = pane.grid_edges()
+    image = pane.grab().toImage()
+    painted = image.pixelColor((xs[0] + xs[1]) // 2, (ys[0] + ys[1]) // 2)
+    tail = image.pixelColor((xs[1] + xs[2]) // 2, (ys[1] + ys[2]) // 2)
+    assert painted != PANEL, "the cells that do have a value went unpainted"
+    assert tail == PANEL, "a cell with no value was coloured"
+
+
+def test_the_heat_layer_costs_pixels_not_blocks(qtbot: QtBot) -> None:
+    """The layer is drawn once, not once per cell.
+
+    Not a budget — no ceiling in `bench/budgets.py` covers a repaint, and a
+    wall-clock number here would only measure this machine. The claim is the
+    *shape* of the cost: the heat layer covers the same pane whatever the grid
+    is, so 256 times the cells must not cost 256 times the paint. A `QColor`
+    and a `fillRect` per cell made it 34 ms at the reference B = 16,384 and the
+    pane repainted per frame and per hover crossing, which is the lag this
+    pins. Min of five, because the floor of a repeated measurement is the one
+    statistic a loaded machine cannot inflate.
+    """
+    view = _grid_view(qtbot, 8, 8, (400, 400))
+    view.set_scale_max(10.0)
+    view.heat_slider.setValue(GRID_STEPS)
+    view.fill_slider.setValue(0)
+    view.line_slider.setValue(0)
+    pane = view.pane
+
+    def paint_ms(cells: int) -> float:
+        view.set_grid(cells, cells)
+        view.set_block_state(
+            np.full(cells * cells, 5.0, np.float32), np.zeros(cells * cells, bool), None
+        )
+        QApplication.processEvents()
+        samples: list[float] = []
+        for _ in range(5):
+            started = perf_counter()
+            pane.grab()
+            samples.append((perf_counter() - started) * 1000.0)
+        return min(samples)
+
+    small, large = paint_ms(16), paint_ms(256)
+    assert large < small * 5.0 + 5.0, (
+        f"256x more cells cost {large:.1f} ms against {small:.1f} ms — "
+        "the layer is being drawn per cell again"
+    )
 
 
 class TestMagnifier:

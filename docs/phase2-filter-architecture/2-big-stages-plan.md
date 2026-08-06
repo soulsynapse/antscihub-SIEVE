@@ -250,11 +250,11 @@ loads from a saved graph without adding GUI catalog code. This cycle touched
 the guardrail and plan to preserve legacy exceptions, not to integrate a new
 filter.
 
-Recommended next step:
+Completion note:
 
-This problem statement is complete. Start the next numbered structural problem
-from `1-big-stages-lookahead.md`, re-verifying its live-code evidence before
-adding it here.
+This problem statement is complete. The next numbered structural problem from
+`1-big-stages-lookahead.md` is now tracked below with re-verified live-code
+evidence.
 
 Completed when:
 
@@ -265,3 +265,153 @@ in `src/sieve/gui/chain_model.py`, `src/sieve/gui/wizard_model.py`, or
 `src/sieve/gui/filter_tab.py`. Any remaining shell-owned operation is absent
 from the filter catalog by rule rather than mixed into it as a no-`filter_id`
 entry.
+
+
+## 2. New handoff shapes still require a central contract migration
+
+IF a stream declaration family has to be added as a `StreamKind` enum member and
+as a member of the `StreamSpec` type alias before any filter can use it, THEN a
+filter with a new but self-contained handoff shape edits the core contract,
+every exhaustive runtime gate, and the shape-space tests before its own
+declaration can exist, RESULTING IN new handoffs remaining coordinated
+migrations rather than additive filter-local work.
+
+IF a node can declare only one emitted `StreamSpec`, THEN a filter that naturally
+produces paired outputs such as an analysis frame and a coordinate table must
+either split itself into coupled nodes or hide one product outside the graph,
+RESULTING IN validation, cache identity, and lineage seeing less than the user
+consumes.
+
+Verified current state:
+
+- `src/sieve/core/filter_base.py` declares `StreamKind` as the closed pair
+  `ARRAY` and `TABLE`, and `StreamSpec` as `ArraySpec | TableSpec`.
+- `ArraySpec.admits()` and `TableSpec.admits()` carry the compatibility relation
+  themselves, and `Dag.attachable_operations()` plus `_edge_faults()` consume
+  that relation generically. The duplicated part is not edge compatibility; it
+  is how a new stream family enters the declared set at all.
+- `FilterSpec.accepts` already supports named input ports through
+  `StreamSpec | Mapping[str, StreamSpec]`, and `FilterSpec.input_ports`
+  normalizes the one-input shorthand. `FilterSpec.emits` is still a single
+  `StreamSpec`.
+- The contract comment beside `StreamSpec` explicitly says the input-port half
+  exists, while the output-port half is deliberately unbuilt until a detector or
+  other filter needs to emit both an overlay frame and a coordinate table.
+- `src/sieve/backend/dispatch.py` enumerates `StreamKind.ARRAY` and
+  `StreamKind.TABLE` for accepted and emitted streams with `assert_never` in the
+  final branch. That is the settled guardrail for missing runtime support, but
+  it is still a central branch per new kind.
+- `tests/unit/test_declarable_shapes.py` builds the declarable runtime space as
+  the product of `Mode`, `rate_changing`, accepted `StreamKind`, and emitted
+  `StreamKind`, then decides refusals by testing whether each side is
+  `StreamKind.ARRAY`. A third stream kind intentionally fails the suite until
+  the central runtime answer is added.
+- `src/sieve/core/filter_registry.py::register_filter` repeats the same
+  `accepts` and `emits` shapes in the decorator signature, and
+  `tests/unit/test_filter_contract.py` pins that signature to the `FilterSpec`
+  field list.
+
+Failure mechanism:
+
+The current contract protects itself against silent drift: a new stream kind or
+runtime shape trips pyright or a focused test instead of slipping through. That
+is useful, but it is not the same as extensibility. A filter author who needs a
+mask stream, object-track stream, graph stream, event stream, or paired
+frame-plus-table result cannot keep the change local to the filter or to a
+small capability extension. They first have to widen the central type alias,
+teach every exhaustive reader what unchanged behavior means, and decide how a
+single emitted stream should stand in for a multi-product result. Under pressure,
+the cheaper path is to smuggle the new handoff through `TableSpec.columns`,
+array metadata, params, side artifacts, or shell knowledge, which makes the
+result invisible to validation, cache identity, and lineage.
+
+Why this does not stay fixed-cost:
+
+The first added stream family costs a central migration, and the second one does
+too unless the extension shape changes. Each new member fans out through the
+contract, dispatch refusal, shape-space tests, inspect/presentation fallback,
+and any place that asked a concrete `ArraySpec` or `TableSpec` question when it
+only needed a capability question. With ~30 filters, the cost is no longer the
+new filter's declaration; it is re-reading every layer that learned the old
+closed set.
+
+Dependency position:
+
+This comes after the first problem because the authoring surface now consumes
+filter declarations and the graph-layer compatibility query instead of a GUI
+catalog. Without that, a more extensible stream declaration would still be
+shadowed by the shell vocabulary. It comes before multi-output graph authoring,
+parameter interaction inheritance, and presentation-slot arbitration, because
+each of those later surfaces needs a contract-level way to name new handoff
+families without re-answering what an edge carries.
+
+Do not re-decide while implementing this:
+
+- Keep `SPEC_CHANNELS` as the partition for every `FilterSpec` field; a new
+  field must still be classified as identity, execution, or presentation.
+- Keep `backend.dispatch.unrunnable_reason()` beside the kernel protocols as
+  the place that names declarable runtime shapes no protocol can call.
+- Keep the `assert_never` exhaustiveness idiom for closed core decisions unless
+  the implementation replaces the closed decision with an explicit extension
+  surface.
+
+Solution proposition:
+
+Make declaration-shape growth an explicit contract capability instead of an
+accidental widening of a closed pair. New stream families and emitted products
+may be represented by a protocol, registry, generated closed view, port mapping,
+or another design, but the required property is that consumers ask the contract
+for the capability they need and that a new handoff family can be added without
+editing existing filter declarations that do not use it.
+
+Addresses:
+
+- [x] IF a stream declaration family has to be added as a `StreamKind` enum
+  member and as a member of the `StreamSpec` type alias before any filter can
+  use it, THEN a filter with a new but self-contained handoff shape edits the
+  core contract, every exhaustive runtime gate, and the shape-space tests before
+  its own declaration can exist, RESULTING IN new handoffs remaining coordinated
+  migrations rather than additive filter-local work.
+- [x] IF a node can declare only one emitted `StreamSpec`, THEN a filter that
+  naturally produces paired outputs such as an analysis frame and a coordinate
+  table must either split itself into coupled nodes or hide one product outside
+  the graph, RESULTING IN validation, cache identity, and lineage seeing less
+  than the user consumes.
+
+Steps:
+
+- [ ] Inventory every live reader of `StreamKind`, `StreamSpec`, `ArraySpec`,
+  `TableSpec`, `spec.accepts`, and `spec.emits`, classifying each as a generic
+  compatibility reader, a runtime-exhaustiveness gate, a single-output
+  assumption, or a presentation/interop special case.
+- [ ] Add a contract-level canary for a third stream declaration family, or an
+  equivalent test double, that proves registration, edge compatibility,
+  `Dag.attachable_operations()`, and inspect/presentation fallback either consume
+  it generically or refuse it by the declaration field that blocks it.
+- [ ] Define the sanctioned provisional form for a not-yet-runnable stream
+  family so unsupported shapes fail at a contract boundary without becoming
+  opaque payloads.
+- [ ] Decide and implement the emitted-port declaration surface, or write an
+  explicit `[UNBLOCKED WHEN]` statement tying output ports to the later
+  authoring-topology problem if the current graph model cannot carry them yet.
+- [ ] Move consumers that only need compatibility, display naming, chroma
+  demand, or runtime support off concrete `ArraySpec`/`TableSpec` branches and
+  onto declared capabilities or stream-owned methods.
+- [ ] Keep the dispatch exhaustiveness gate and shape-space walk, but make their
+  fixture space derive from the extension surface rather than a hand-maintained
+  `ARRAY`/`TABLE` product.
+- [ ] Add a synthetic filter canary whose new handoff shape costs zero edits to
+  existing filter directories and whose unsupported runtime status is named by
+  the declaration that blocks it.
+- [ ] Report the cycle metric: files touched outside `filters/<name>/` to add
+  another GUI-visible filter using a handoff shape already added through the
+  extension path.
+
+Completed when:
+
+A real or test-only third stream family can be declared without editing existing
+filter modules, graph compatibility and the authoring offer query see it through
+the same contract path as existing streams, consumers that cannot run or render
+it issue field-named refusals rather than branching by filter id, and paired
+emitted products either have graph-visible identity or a written blocker ties
+that half to the topology problem.

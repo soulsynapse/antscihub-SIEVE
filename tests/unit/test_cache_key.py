@@ -9,10 +9,20 @@ separates two things that are the same recomputes work it had.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, FilterSpec, ParamsBase
+from sieve.core.filter_base import (
+    SPEC_CHANNELS,
+    ArraySpec,
+    Channel,
+    CostEstimate,
+    ElementRelation,
+    FilterSpec,
+    ParamsBase,
+)
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
@@ -160,6 +170,39 @@ class TestIsolation:
 
         assert locked.visited == (arena.replicate_id,)
         assert keys_for(locked, locked.replicate(arena.replicate_id)) == before
+
+    def test_a_presentation_edit_moves_no_key(self) -> None:
+        # Rule 7's own named gap, generalized: nothing else asserts that the
+        # non-identity side of the *spec* stays out of the digest. It passes on
+        # day one for a structural reason — `node_key` never reaches `cost`,
+        # `primary_params`, or `summary` — so this is a tripwire on a whole
+        # `FilterSpec` being handed to a key function, against the day somebody
+        # keys on cost. Not a discovery.
+        #
+        # Scoped to presentation and not to every unhashed field, deliberately.
+        # `deterministic` and `stateful` are execution, they feed
+        # `spec.cacheable`, and flipping either makes the call raise rather than
+        # return an unchanged key — a sweep over all non-identity fields would
+        # fail on those two and the repair would be to weaken the assertion.
+        node = make_node("a", radius=3)
+        keyed = node_key(node, spec=SPEC, upstream={}, backend=Backend.CPU)
+        # A fourth presentation field is covered by the row that declares it:
+        # the substitutes are checked against `SPEC_CHANNELS` rather than
+        # against a typed list of three names, so declaring one without a value
+        # here fails instead of silently going untested. Values stay legal —
+        # `primary_params` names are checked against `params_model`.
+        substitutes: dict[str, object] = {
+            "cost": CostEstimate(seconds_per_megapixel=0.5),
+            "primary_params": ("radius",),
+            "summary": "Blurs, described differently.",
+        }
+        presentation = {n for n, c in SPEC_CHANNELS.items() if c is Channel.PRESENTATION}
+        assert set(substitutes) == presentation
+
+        for name, value in substitutes.items():
+            edited = dataclasses.replace(SPEC, **{name: value})
+            assert getattr(edited, name) != getattr(SPEC, name)
+            assert node_key(node, spec=edited, upstream={}, backend=Backend.CPU) == keyed
 
 
 class TestInputs:

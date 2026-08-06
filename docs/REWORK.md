@@ -178,9 +178,10 @@ The rules bind through CI or they do not bind.
   R4's Gate line for why). Its exception list lives in the test rather than in
   `src/` — the one place `WITHOUT_PRODUCER`'s shape does not carry over, since a
   list of filter ids under `src/sieve/` would be eleven foreign spellings of its
-  own. **The exception list is the work list.** The column half is vacuous today
-  and is written against a planted tree, so it governs the first table emitter
-  instead of arriving after it.
+  own. **The exception list is the work list.** The column half now includes
+  `TableSpec.columns` and the detection columns generated from emitted element
+  names; the planted-tree case remains to prove the duplicate-package mechanism
+  fires.
 - **R5, R6:** pyright, once the buckets and the four quantity types exist.
 
 The GUI needs no rule of its own: with every transform a filter (R1), every

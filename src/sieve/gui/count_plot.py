@@ -1,4 +1,4 @@
-"""Blocks in band, windowed over D: the graph where detection becomes visible.
+"""Elements in band, windowed over D: the graph where detection becomes visible.
 
 This is the only plot that paints green, and only when the detector is armed
 — green is a status color, never a data series (parity plan § 2). The gate
@@ -12,7 +12,7 @@ conversion back. The widget never learns the fraction, which is the point:
 re-denomination on a block-size change is the state's problem, not a
 repaint's (the v1 foot-gun this design deletes).
 
-**The axis is the data, not the region.** A count of 30 blocks out of 4096 on
+**The axis is the data, not the region.** A count of 30 elements out of 4096 on
 a 0..B axis is a line on the bottom pixel row with no handle travel above it,
 so the top comes from the tallest thing actually on the plot: the series peak,
 or a band edge above it. Unioning in the band is what keeps a threshold placed
@@ -56,6 +56,7 @@ from PySide6.QtCore import QPointF, QRect, Qt
 from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
+from sieve.core.filter_base import ElementNames
 from sieve.gui.band_plot import DETECT, DIM, BandPlot, plot_font
 
 FloatArray = NDArray[np.floating[Any]]
@@ -67,15 +68,16 @@ _HEADROOM = 1.06
 
 
 class CountPlot(BandPlot):
-    """Windowed # blocks in band, gate spans, one draggable count threshold."""
+    """Windowed element count in band, gate spans, one draggable threshold."""
 
-    title = "blocks in band"
+    title = "elements in band"
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._windowed: NDArray[np.float32] | None = None
         self._armed = False
-        self._blocks = 1
+        self._elements = 1
+        self._element_names = ElementNames("element", "elements")
         self._notice = ""
         # The series peak, kept rather than recomputed: `_range` is called once
         # per point per repaint (`y_of`), so a scan there would be quadratic in
@@ -86,8 +88,15 @@ class CountPlot(BandPlot):
 
     # ---- data ---------------------------------------------------------------
 
-    def set_series(self, windowed: FloatArray, *, region_blocks: int, armed: bool) -> None:
-        """The `(T,)` windowed count over a region of `region_blocks` blocks.
+    def set_series(
+        self,
+        windowed: FloatArray,
+        *,
+        region_elements: int,
+        element_names: ElementNames,
+        armed: bool,
+    ) -> None:
+        """The `(T,)` windowed count over a region of `region_elements`.
 
         `armed` decides the line's color, not its presence — a disarmed
         detector still shows the signal it would count, in a data color.
@@ -95,7 +104,9 @@ class CountPlot(BandPlot):
         self._windowed = np.asarray(windowed, np.float32)
         finite = self._windowed[np.isfinite(self._windowed)]
         self._peak = float(finite.max()) if finite.size > 0 else 0.0
-        self._blocks = max(region_blocks, 1)
+        self._elements = max(region_elements, 1)
+        self._element_names = element_names
+        self.title = f"{element_names.plural} in band"
         self._armed = armed
         self.update()
 
@@ -116,11 +127,11 @@ class CountPlot(BandPlot):
     # ---- the value axis -------------------------------------------------
 
     def _range(self) -> tuple[float, float]:
-        """0 up to the tallest thing on the plot, capped at the region's blocks.
+        """0 up to the tallest thing on the plot, capped at the region's elements.
 
         Zero is the floor rather than the series minimum: with no tick labels
         the bottom of the frame is read as none, and a floor of 20 would draw
-        twenty blocks in band as nothing at all (rule 6).
+        twenty elements in band as nothing at all (rule 6).
         """
         if self._frozen is not None:
             return self._frozen
@@ -129,8 +140,8 @@ class CountPlot(BandPlot):
             for edge in self._band:
                 if math.isfinite(edge):
                     top = max(top, edge)
-        top = min(top * _HEADROOM, float(self._blocks))
-        return 0.0, top if top > 0.0 else min(1.0, float(self._blocks))
+        top = min(top * _HEADROOM, float(self._elements))
+        return 0.0, top if top > 0.0 else min(1.0, float(self._elements))
 
     def scale_label(self) -> str:
         """The ceiling in force and the region it is a fraction of.
@@ -144,8 +155,8 @@ class CountPlot(BandPlot):
         which is the cost the fixed 0..B axis was paying to avoid.
         """
         top = self._range()[1]
-        full = " · full" if top >= float(self._blocks) else ""
-        return f"0-{top:.0f} of {self._blocks} blocks{full}"
+        full = " · full" if top >= float(self._elements) else ""
+        return f"0-{top:.0f} of {self._elements} {self._element_names.plural}{full}"
 
     def readout_text(self) -> str:
         """The scale label is this plot's truth line, derived rather than told."""

@@ -21,6 +21,7 @@ from sieve.core.filter_base import (
     ArraySpec,
     CostEstimate,
     ElementKind,
+    ElementNames,
     ElementRelation,
     ParamsBase,
     TableSpec,
@@ -113,6 +114,7 @@ class JitterParams(ParamsBase):
     accepts=ArraySpec(),
     emits=ArraySpec(),
     element=ElementKind.BLOCK,
+    element_names=ElementNames("block", "blocks"),
     cost=COST,
     registry=SHELF,
 )
@@ -514,7 +516,9 @@ class TestElementMeaning:
         # preserving filters resolves to nothing.
         graph = Pipeline(nodes=(node("a"),))
 
-        assert Dag.build(graph, SHELF).elements == {"a": ElementKind.PIXEL}
+        dag = Dag.build(graph, SHELF)
+        assert dag.elements == {"a": ElementKind.PIXEL}
+        assert dag.element_names == {"a": ElementNames("pixel", "pixels")}
 
     def test_meaning_carries_through_every_preserving_node_after_a_redefinition(self) -> None:
         # The real chain, and the reason `PRESERVED` exists at all:
@@ -527,11 +531,18 @@ class TestElementMeaning:
             edges=edges("a>b", "b>c", "c>d"),
         )
 
-        assert Dag.build(graph, SHELF).elements == {
+        dag = Dag.build(graph, SHELF)
+        assert dag.elements == {
             "a": ElementKind.PIXEL,
             "b": ElementKind.BLOCK,
             "c": ElementKind.BLOCK,
             "d": ElementKind.BLOCK,
+        }
+        assert dag.element_names == {
+            "a": ElementNames("pixel", "pixels"),
+            "b": ElementNames("block", "blocks"),
+            "c": ElementNames("block", "blocks"),
+            "d": ElementNames("block", "blocks"),
         }
 
     def test_aggregating_blocks_loses_the_meaning_and_it_never_returns(self) -> None:
@@ -544,9 +555,16 @@ class TestElementMeaning:
             edges=edges("a>b", "b>c", "c>d"),
         )
 
-        assert Dag.build(graph, SHELF).elements == {
+        dag = Dag.build(graph, SHELF)
+        assert dag.elements == {
             "a": ElementKind.PIXEL,
             "b": ElementKind.BLOCK,
+            "c": None,
+            "d": None,
+        }
+        assert dag.element_names == {
+            "a": ElementNames("pixel", "pixels"),
+            "b": ElementNames("block", "blocks"),
             "c": None,
             "d": None,
         }
@@ -560,7 +578,9 @@ class TestElementMeaning:
             edges=edges("a>b", "a>c", "b>d:left", "c>d:right"),
         )
 
-        assert Dag.build(graph, SHELF).elements["d"] is None
+        dag = Dag.build(graph, SHELF)
+        assert dag.elements["d"] is None
+        assert dag.element_names["d"] is None
 
     def test_a_table_emitter_has_no_element_at_all(self) -> None:
         graph = Pipeline(nodes=(node("a"), node("b", "detect")), edges=edges("a>b"))

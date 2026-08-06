@@ -20,6 +20,7 @@ from sieve.core.filter_base import (
     ArraySpec,
     CostEstimate,
     ElementKind,
+    ElementNames,
     ElementRelation,
     FilterSpec,
     Mode,
@@ -27,6 +28,7 @@ from sieve.core.filter_base import (
     TableSpec,
     input_warmup_frames,
     node_element,
+    node_element_names,
     source_warmup_frames,
 )
 from sieve.core.filter_registry import (
@@ -268,6 +270,37 @@ class TestElementMeaning:
     def test_a_kind_overrides_whatever_arrived(self) -> None:
         assert node_element(ElementKind.BLOCK, ElementKind.PIXEL) is ElementKind.BLOCK
 
+    def test_names_follow_the_same_preserve_and_aggregate_rules(self) -> None:
+        pixels = ElementNames("pixel", "pixels")
+        blocks = ElementNames("block", "blocks")
+        assert node_element_names(ElementKind.BLOCK, blocks, ElementKind.PIXEL, pixels) is blocks
+        assert (
+            node_element_names(ElementRelation.PRESERVED, None, ElementKind.BLOCK, blocks) is blocks
+        )
+        assert (
+            node_element_names(ElementRelation.AGGREGATED, None, ElementKind.PIXEL, pixels)
+            is pixels
+        )
+        assert (
+            node_element_names(ElementRelation.AGGREGATED, None, ElementKind.BLOCK, blocks) is None
+        )
+
+    def test_an_element_redefinition_without_names_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="no element_names"):
+            make_spec(element=ElementKind.BLOCK)
+
+    def test_relation_declarations_cannot_introduce_names(self) -> None:
+        with pytest.raises(ValueError, match="relation declarations read names"):
+            make_spec(element_names=ElementNames("block", "blocks"))
+
+    def test_a_table_emitter_declaring_names_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="a table has columns"):
+            make_spec(
+                emits=TableSpec(columns=("x",)),
+                element=None,
+                element_names=ElementNames("point", "points"),
+            )
+
 
 class TestStoredBytes:
     def test_stored_size_multiplies_rate_by_frame_size(self) -> None:
@@ -424,6 +457,7 @@ PROBES: dict[str, Any] = {
     "backend_agnostic": True,
     "primary_params": ("factor",),
     "element": ElementKind.BLOCK,
+    "element_names": ElementNames("block", "blocks"),
 }
 
 
@@ -463,7 +497,12 @@ class TestDecoratorMatchesSpec:
             # params model: the spec refuses the flag unless the decorated class
             # overrides `output_rate`, and refuses the override without it.
             model = RateProbeParams if name == "rate_changing" else ProbeParams
-            decorated = register_filter(**{**BASE, name: probe}, registry=registry)(model)
+            values = {**BASE, name: probe}
+            if name == "element":
+                values["element_names"] = ElementNames("block", "blocks")
+            elif name == "element_names":
+                values["element"] = ElementKind.BLOCK
+            decorated = register_filter(**values, registry=registry)(model)
 
             spec = decorated.__filter_spec__
             assert spec is not None

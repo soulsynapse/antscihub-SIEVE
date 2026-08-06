@@ -14,10 +14,12 @@ from pathlib import Path
 
 import numpy as np
 
-from sieve.core.filter_base import ElementKind
+from sieve.core.filter_base import ElementNames
 from sieve.core.pipeline_model import DetectorSettings
 from sieve.detect.detector import DetectorUpdate
 from sieve.detect.tables import DetectionExport, write_tables
+
+BLOCK_NAMES = ElementNames("block", "blocks")
 
 
 def _update(count: np.ndarray, *, armed: bool) -> DetectorUpdate:
@@ -62,7 +64,7 @@ def test_every_measured_value_reads_back_bit_identical_and_stays_short(
     whose expansion does not terminate.
     """
     count = np.array([0.1, 1234.56789, 1e-7, 1 / 3], dtype=np.float32)
-    write_tables(tmp_path, [_export("a", count, start=0, armed=True)], element=ElementKind.BLOCK)
+    write_tables(tmp_path, [_export("a", count, start=0, armed=True)], element_names=BLOCK_NAMES)
 
     with (tmp_path / "series.csv").open(encoding="utf-8", newline="") as handle:
         written = [row["blocks_in_band"] for row in csv.DictReader(handle)]
@@ -78,7 +80,7 @@ def test_an_armed_run_that_found_nothing_still_writes_the_file(tmp_path: Path) -
     no rows — would make "found nothing" and "never looked" the same artifact.
     """
     count = np.zeros(8, dtype=np.float32)
-    write_tables(tmp_path, [_export("a", count, start=0, armed=True)], element=ElementKind.BLOCK)
+    write_tables(tmp_path, [_export("a", count, start=0, armed=True)], element_names=BLOCK_NAMES)
 
     with (tmp_path / "intervals.csv").open(encoding="utf-8", newline="") as handle:
         assert list(csv.DictReader(handle)) == []
@@ -97,7 +99,7 @@ def test_replicates_share_one_file_in_long_form(tmp_path: Path) -> None:
             _export("left", count, start=0, armed=True),
             _export("right", count, start=100, armed=True),
         ],
-        element=ElementKind.BLOCK,
+        element_names=BLOCK_NAMES,
     )
 
     with (tmp_path / "series.csv").open(encoding="utf-8", newline="") as handle:
@@ -116,7 +118,7 @@ def test_the_readme_documents_exactly_the_columns_written(tmp_path: Path) -> Non
     would pass through any drift at all.
     """
     count = np.arange(4, dtype=np.float32)
-    write_tables(tmp_path, [_export("a", count, start=0, armed=True)], element=ElementKind.BLOCK)
+    write_tables(tmp_path, [_export("a", count, start=0, armed=True)], element_names=BLOCK_NAMES)
 
     readme = (tmp_path / "README.md").read_text(encoding="utf-8")
     for path in ("series.csv", "intervals.csv"):

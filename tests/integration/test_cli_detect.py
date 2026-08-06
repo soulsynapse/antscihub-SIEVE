@@ -17,13 +17,15 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+from typing import cast
 
 from typer.testing import CliRunner
 
 from sieve.cli.app import app
-from sieve.core.filter_base import ElementKind
+from sieve.core.filter_base import ElementNames
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline, Project
 from sieve.detect.tables import series_columns
+from sieve.filters.block_signal import BlockSignalParams
 
 runner = CliRunner()
 
@@ -132,7 +134,8 @@ def _rows(path: Path) -> list[dict[str, str]]:
 #: else — one deliberate diff naming exactly what a downstream script must
 #: change, rather than five tests failing on a `KeyError` that says nothing
 #: about whether the rename was intended.
-DETECTED = series_columns(ElementKind.BLOCK)[-1].name
+BLOCK_NAMES = cast(ElementNames, BlockSignalParams.spec().element_names)
+DETECTED = series_columns(BLOCK_NAMES)[-1].name
 
 
 def test_the_header_is_a_published_interface(synthetic_video: Path, tmp_path: Path) -> None:

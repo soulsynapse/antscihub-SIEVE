@@ -23,14 +23,14 @@ carries, and `README.md` beside the tables carries the rest — the value band
 these counts were taken inside is not derivable from any column, so the file
 records the settings the run resolved.
 
-**And the something comes from the pipeline, not from here.** `blocks_in_band`
-was a literal in this module until the element declaration existed, which made
-it an assumption about the series node written down as a noun: `sieve detect
---node` at a `downsample` node wrote a pixel count under it, no refusal and no
-warning, and shipped the invented noun to disk where it outlived the session.
-`series_columns` takes the `ElementKind` the graph resolved and names four
-columns from it; a node whose elements have no declared meaning never reaches
-here, because `cli/detect_cmd.py` refuses it instead. Renaming these to
+**And the something comes from the pipeline, not from here.** The in-band count
+column used to be a literal in this module, which made it an assumption about
+the series node written down as a noun: `sieve detect --node` at a `downsample`
+node wrote a pixel count under a block name, no refusal and no warning, and
+shipped the invented noun to disk where it outlived the session.
+`series_columns` takes the `ElementNames` the graph resolved and names four
+columns from it; a node whose elements have no declared meaning or names never
+reaches here, because `cli/detect_cmd.py` refuses it instead. Renaming these to
 something shape-neutral was the alternative and is worse than either:
 `units_in_band` is honest and unreadable, which is the trade rule 6 exists to
 refuse rather than to make.
@@ -87,7 +87,7 @@ from typing import Any, Generic, TypeVar
 
 import numpy as np
 
-from sieve.core.filter_base import ElementKind
+from sieve.core.filter_base import ElementNames
 from sieve.core.pipeline_model import DetectorSettings
 from sieve.detect.detector import DetectorUpdate
 
@@ -188,21 +188,18 @@ class Interval:
     last: int
 
 
-def series_columns(element: ElementKind) -> tuple[Column[Frame], ...]:
+def series_columns(element_names: ElementNames) -> tuple[Column[Frame], ...]:
     """`series.csv`'s columns, four of them named for what was counted.
 
-    A function rather than a constant because the noun is the graph's:
-    `blocks_total` over a `block_signal` node, `pixels_total` over a
-    per-pixel one, and a node that could not say which never gets here. The
-    plural is the enum's value plus `s` — `ElementKind` members are chosen to
-    read that way, and a table of exceptions would be a second place to
-    forget one.
+    A function rather than a constant because the noun is the graph's: the
+    block-signal filter declares block names, the source declares pixel names,
+    and a node that could not say which never gets here.
 
     Args:
-        element: What one value of the series node's output is a value of, as
-            `pipeline/dag.py`'s `Dag.elements` resolved it.
+        element_names: What one value of the series node's output is called,
+            as `pipeline/dag.py`'s `Dag.element_names` resolved it.
     """
-    unit = f"{element.value}s"
+    unit = element_names.plural
     return (
         Column(
             "replicate",
@@ -258,6 +255,26 @@ def series_columns(element: ElementKind) -> tuple[Column[Frame], ...]:
     )
 
 
+def series_column_names(element_names: ElementNames) -> tuple[str, ...]:
+    """The header names generated for `element_names`.
+
+    The full header. Tests that intentionally assert the published interface
+    use this rather than reverse-engineering the column list.
+    """
+    return tuple(column.name for column in series_columns(element_names))
+
+
+def element_series_column_names(element_names: ElementNames) -> tuple[str, ...]:
+    """The series columns whose names depend on the emitted element noun."""
+    unit = element_names.plural
+    return (
+        f"{unit}_total",
+        f"{unit}_in_band",
+        f"{unit}_in_band_fraction",
+        f"windowed_mean_{unit}",
+    )
+
+
 INTERVAL_COLUMNS: tuple[Column[Interval], ...] = (
     Column(
         "replicate",
@@ -292,7 +309,7 @@ INTERVAL_COLUMNS: tuple[Column[Interval], ...] = (
 
 
 def write_tables(
-    directory: Path, exports: Sequence[DetectionExport], *, element: ElementKind
+    directory: Path, exports: Sequence[DetectionExport], *, element_names: ElementNames
 ) -> tuple[Path, ...]:
     """Write `series.csv`, `README.md`, and `intervals.csv` when armed.
 
@@ -302,7 +319,7 @@ def write_tables(
     Args:
         directory: Where the three files go.
         exports: One per replicate detected in this run.
-        element: What one value of the series node emits is a value of. A
+        element_names: What one value of the series node emits is called. A
             keyword on the call rather than a field on `DetectionExport`
             because every export in one run is taken over *one* node, so a
             per-export copy could disagree with itself and the writer would
@@ -315,7 +332,7 @@ def write_tables(
         OSError: if the directory cannot be made or written.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    columns = series_columns(element)
+    columns = series_columns(element_names)
     written = [write_table(directory / "series.csv", columns, _series_rows(exports))]
     # On armed-ness, never on row count. The two collapse for every input a
     # first implementation is tried against and come apart on the one that
@@ -326,7 +343,7 @@ def write_tables(
             write_table(directory / "intervals.csv", INTERVAL_COLUMNS, _interval_rows(exports))
         )
     readme = directory / "README.md"
-    readme.write_text(_readme(exports, written, columns, element), encoding="utf-8")
+    readme.write_text(_readme(exports, written, columns, element_names), encoding="utf-8")
     return (*written, readme)
 
 
@@ -438,7 +455,7 @@ def _readme(
     exports: Sequence[DetectionExport],
     written: Sequence[Path],
     columns: Sequence[Column[Frame]],
-    element: ElementKind,
+    element_names: ElementNames,
 ) -> str:
     """A data dictionary, and the settings the columns cannot carry.
 
@@ -454,7 +471,7 @@ def _readme(
         "# What is in this folder",
         "",
         "Written by `sieve detect --csv`. Every row is one replicate's detection over",
-        f"one node's per-frame signal, whose values are {element.value}s. Frames are",
+        f"one node's per-frame signal, whose values are {element_names.plural}. Frames are",
         "absolute source frames.",
         "",
         "## series.csv — what was measured, one row per frame",
@@ -492,7 +509,7 @@ def _readme(
             + (
                 "not placed — the detector is disarmed"
                 if settings.count_frac is None
-                else f"{_band(settings.count_frac)} of `{element.value}s_total`"
+                else f"{_band(settings.count_frac)} of `{element_names.plural}_total`"
             ),
             "",
         ]

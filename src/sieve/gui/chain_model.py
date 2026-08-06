@@ -39,11 +39,12 @@ import itertools
 import math
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
 
+from sieve.core.filter_base import ElementNames
 from sieve.core.ops.wavelet import band_indices, default_freqs
 from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
 
@@ -51,7 +52,7 @@ from sieve.core.pipeline_model import DetectorSettings, Edge, Node, Pipeline
 #: `sieve.detect` now, and the tab importing it from here keeps one import line
 #: for a family it uses together.
 from sieve.detect import DetectorUpdate, detect
-from sieve.filters.block_signal import resolve_block
+from sieve.filters.block_signal import BlockSignalParams, resolve_block
 
 FloatArray = NDArray[np.floating[Any]]
 
@@ -62,6 +63,8 @@ SIGNAL_LABELS: dict[str, str] = {
     "coherence": "coherence (0-1)",
     "flow_agreement": "flow agreement (0-1)",
 }
+
+BLOCK_SIGNAL_ELEMENT_NAMES = cast(ElementNames, BlockSignalParams.spec().element_names)
 
 
 class ChainKind(StrEnum):
@@ -333,10 +336,10 @@ def _threshold_caption(detector: DetectorState) -> str:
         return "threshold off"
     lo, hi = detector.count_frac
     if math.isinf(hi):
-        return f"threshold ≥ {lo:.0%} of blocks"
+        return f"threshold ≥ {lo:.0%} of {BLOCK_SIGNAL_ELEMENT_NAMES.plural}"
     if math.isinf(lo) or lo <= 0.0:
-        return f"threshold ≤ {hi:.0%} of blocks"
-    return f"threshold {lo:.0%}-{hi:.0%} of blocks"
+        return f"threshold ≤ {hi:.0%} of {BLOCK_SIGNAL_ELEMENT_NAMES.plural}"
+    return f"threshold {lo:.0%}-{hi:.0%} of {BLOCK_SIGNAL_ELEMENT_NAMES.plural}"
 
 
 # ---- the parity chain -------------------------------------------------------

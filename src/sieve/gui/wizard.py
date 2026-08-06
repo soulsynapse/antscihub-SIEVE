@@ -55,6 +55,7 @@ from PySide6.QtWidgets import (
 
 from sieve.gui.band_plot import DIM, LINE, PANEL, TEXT, plot_font
 from sieve.gui.chain_model import (
+    BLOCK_SIGNAL_ELEMENT_NAMES,
     ChainKind,
     DetectorState,
     DetectorUpdate,
@@ -508,7 +509,12 @@ class StepWizard(QWidget):
             widget.blockSignals(False)
 
         if update is None:
-            self.count.set_series(np.zeros(0, np.float32), region_blocks=1, armed=False)
+            self.count.set_series(
+                np.zeros(0, np.float32),
+                region_elements=1,
+                element_names=BLOCK_SIGNAL_ELEMENT_NAMES,
+                armed=False,
+            )
             self.count.set_gate(None)
             self.count.set_notice(
                 "no reachable temporal filter step" if not temporal_ok else "no series yet"
@@ -527,7 +533,10 @@ class StepWizard(QWidget):
         self.count.set_span(start, frames)
         self.count.set_playhead(playhead)
         self.count.set_series(
-            update.windowed, region_blocks=blocks, armed=detector.armed and detection_ok
+            update.windowed,
+            region_elements=blocks,
+            element_names=BLOCK_SIGNAL_ELEMENT_NAMES,
+            armed=detector.armed and detection_ok,
         )
         self.count.set_gate(update.gate if detection_ok else None)
         if detector.count_frac is None:

@@ -84,6 +84,7 @@ from sieve.filters.block_signal import resolve_block
 from sieve.gui.band_plot import DIM
 from sieve.gui.block_spin import BlockSpinBox
 from sieve.gui.chain_model import (
+    BLOCK_SIGNAL_ELEMENT_NAMES,
     SIGNAL_LABELS,
     ChainKind,
     ChainStep,
@@ -1202,7 +1203,12 @@ class FilterTab(QWidget):
         self._d_label.setText(f"D {detector.window_frames} fr ({seconds:.2f} s)")
 
         if update is None or self._series_start is None:
-            self._count.set_series(np.zeros(0, np.float32), region_blocks=1, armed=False)
+            self._count.set_series(
+                np.zeros(0, np.float32),
+                region_elements=1,
+                element_names=BLOCK_SIGNAL_ELEMENT_NAMES,
+                armed=False,
+            )
             self._count.set_gate(None)
             if self._derive_failure is not None:
                 self._count.set_notice(f"the graphs did not derive — {self._derive_failure}")
@@ -1258,7 +1264,10 @@ class FilterTab(QWidget):
         self._count.set_filled(frames, self._settled)
         self._count.set_playhead(self._playhead)
         self._count.set_series(
-            update.windowed, region_blocks=blocks, armed=detector.armed and detection_ok
+            update.windowed,
+            region_elements=blocks,
+            element_names=BLOCK_SIGNAL_ELEMENT_NAMES,
+            armed=detector.armed and detection_ok,
         )
         self._count.set_gate(update.gate if detection_ok else None)
         if detector.count_frac is None:

@@ -18,6 +18,7 @@ from typing import TypeVar
 from sieve.core.filter_base import (
     CostEstimate,
     ElementDeclaration,
+    ElementNames,
     FilterSpec,
     Mode,
     ParamsBase,
@@ -133,6 +134,7 @@ def register_filter(
     backend_agnostic: bool = False,
     primary_params: tuple[str, ...] = (),
     element: ElementDeclaration | None = None,
+    element_names: ElementNames | None = None,
     registry: FilterRegistry | None = None,
 ) -> Callable[[type[ParamsT]], type[ParamsT]]:
     """Decorate a `ParamsBase` subclass to build and register its spec.
@@ -164,6 +166,7 @@ def register_filter(
             backend_agnostic=backend_agnostic,
             primary_params=primary_params,
             element=element,
+            element_names=element_names,
         )
         (registry if registry is not None else REGISTRY).register(spec)
         params_model.__filter_spec__ = spec

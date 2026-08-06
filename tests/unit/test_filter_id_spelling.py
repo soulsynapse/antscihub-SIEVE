@@ -22,11 +22,9 @@ two-layer duplicate-literal detector would seed an exception list the size of th
 codebase — `"in"`, `"array"`, every StrEnum value — which is enumeration rot
 re-encoded in Python. REWORK.md R4's Gate line records the rejection.
 
-The second check is vacuous today: no filter declares a `TableSpec` with columns.
-It is written now because the first table emitter is the moment a column name
-starts being typed in two places, and a check that arrives after the duplication
-arrives as an exception list. The parenthesized-layer idiom in `.importlinter`,
-which governs layers before they exist, is the precedent.
+The second check covers declared table columns and the element-dependent
+detection columns generated from emitted element names. The first table emitter
+will add to the same set; it will not invent a second guardrail shape.
 """
 
 from __future__ import annotations
@@ -39,7 +37,8 @@ from pathlib import Path
 import pytest
 
 import sieve
-from sieve.core.filter_base import FilterSpec, TableSpec
+from sieve.core.filter_base import SOURCE_ELEMENT_NAMES, ElementNames, FilterSpec, TableSpec
+from sieve.detect.tables import element_series_column_names
 from sieve.filters import discover
 
 SRC = Path(str(sieve.__file__)).resolve().parent
@@ -168,11 +167,16 @@ def _packages(root: Path) -> tuple[Path, ...]:
 
 def _declared_columns() -> set[str]:
     names: set[str] = set()
+    element_names: set[ElementNames] = {SOURCE_ELEMENT_NAMES}
     for spec in discover():
         accepts = spec.accepts.values() if isinstance(spec.accepts, dict) else [spec.accepts]
         for stream in (*accepts, spec.emits):
             if isinstance(stream, TableSpec):
                 names.update(stream.columns)
+        if spec.element_names is not None:
+            element_names.add(spec.element_names)
+    for emitted in element_names:
+        names.update(element_series_column_names(emitted))
     return names
 
 
@@ -194,10 +198,8 @@ def test_no_declared_column_name_is_spelled_in_two_packages() -> None:
     )
 
 
-def test_the_column_check_would_fire_if_a_column_were_declared(tmp_path: Path) -> None:
-    """Vacuous until the first table emitter, so the mechanism is pinned against
-    a planted tree instead. Without this, the check above passes on a `discover()`
-    that returns nothing and on a `_packages` that finds none."""
+def test_the_column_check_fires_on_two_package_spellings(tmp_path: Path) -> None:
+    """A planted tree pins the duplicate-spelling mechanism directly."""
     for package, body in (("alpha", 'COLUMN = "centroid_x"\n'), ("beta", 'X = "centroid_x"\n')):
         (tmp_path / package).mkdir()
         (tmp_path / package / "__init__.py").write_text("", encoding="utf-8")

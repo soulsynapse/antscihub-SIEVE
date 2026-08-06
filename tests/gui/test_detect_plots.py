@@ -26,6 +26,7 @@ import pytest
 from PySide6.QtCore import QPointF
 from pytestqt.qtbot import QtBot
 
+from sieve.core.filter_base import ElementNames
 from sieve.core.ops.wavelet import default_freqs
 from sieve.gui.band_plot import GRAB_PX
 from sieve.gui.composite_view import StepCompositeView
@@ -48,6 +49,8 @@ def _capture(dest: list[tuple[float, float]]) -> Callable[[float, float], None]:
 
 FPS = 30.0
 FRAMES = 600
+BLOCK_NAMES = ElementNames("block", "blocks")
+PIXEL_NAMES = ElementNames("pixel", "pixels")
 BLOCKS = 64
 
 
@@ -145,7 +148,7 @@ def _count(qtbot: QtBot, peak: float = PEAK) -> CountPlot:
     plot.set_span(0, FRAMES)
     series = np.zeros(FRAMES, np.float32)
     series[FRAMES // 2] = peak
-    plot.set_series(series, region_blocks=BLOCKS, armed=True)
+    plot.set_series(series, region_elements=BLOCKS, element_names=BLOCK_NAMES, armed=True)
     return plot
 
 
@@ -210,6 +213,15 @@ class TestTheAxisSaysWhichCeiling:
         assert plot.scale_label() == f"0-{round(PEAK * 1.06)} of {BLOCKS} blocks"
         assert "full" not in plot.scale_label()
 
+    def test_the_label_reads_the_declared_element_names(self, qtbot: QtBot) -> None:
+        plot = _count(qtbot)
+        series = np.full(FRAMES, 3.0, np.float32)
+
+        plot.set_series(series, region_elements=BLOCKS, element_names=PIXEL_NAMES, armed=True)
+
+        assert plot.title == "pixels in band"
+        assert plot.scale_label() == f"0-{round(3.0 * 1.06)} of {BLOCKS} pixels"
+
     def test_a_peak_at_the_region_size_reads_as_full(self, qtbot: QtBot) -> None:
         """Capped at B, the label says so — the regime the fixed axis always had."""
         plot = _count(qtbot, peak=float(BLOCKS))
@@ -246,7 +258,12 @@ class TestTheGateFloor:
         qtbot.addWidget(plot)
         plot.resize(width, 150)
         plot.set_span(0, FRAMES)
-        plot.set_series(np.zeros(FRAMES, np.float32), region_blocks=BLOCKS, armed=True)
+        plot.set_series(
+            np.zeros(FRAMES, np.float32),
+            region_elements=BLOCKS,
+            element_names=BLOCK_NAMES,
+            armed=True,
+        )
         gate = np.zeros(FRAMES, bool)
         gate[300] = True
         plot.set_gate(gate)

@@ -66,11 +66,14 @@ from dataclasses import dataclass
 
 from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import (
+    SOURCE_ELEMENT_NAMES,
     ArraySpec,
     ElementKind,
+    ElementNames,
     FilterSpec,
     StreamSpec,
     node_element,
+    node_element_names,
 )
 from sieve.core.filter_registry import REGISTRY, FilterRegistry, UnknownFilterError
 from sieve.core.pipeline_model import Node, Pipeline
@@ -219,6 +222,10 @@ class Dag:
     #: *counts* elements rather than moving them — `sieve detect --csv` names
     #: its columns from this, and refuses the node when it is `None`.
     elements: Mapping[str, ElementKind | None]
+    #: Column-safe names for the elements above. The kind answers whether a
+    #: count is admissible; these names answer what that count is called once
+    #: it crosses into CSVs and plot axes.
+    element_names: Mapping[str, ElementNames | None]
     #: Whether each node's output is still indexed in source frames. Total over
     #: `order`. False from the first `rate_changing` node onward, and a
     #: separate question from `elements`: one says what a *column* is, this says
@@ -327,6 +334,7 @@ class Dag:
                 downstreams=downstreams,
                 ports=ports,
                 elements=cls._elements(order, specs, ports),
+                element_names=cls._element_names(order, specs, ports),
                 source_indexed=cls._source_indexed(order, specs, ports),
             ),
         )
@@ -572,6 +580,40 @@ class Dag:
                 upstream = arriving.pop() if len(arriving) == 1 else None
             resolved[node.node_id] = node_element(specs[node.node_id].element, upstream)
         return resolved
+
+    @staticmethod
+    def _element_names(
+        order: Sequence[Node],
+        specs: Mapping[str, FilterSpec],
+        ports: Mapping[str, Mapping[str, str]],
+    ) -> dict[str, ElementNames | None]:
+        """Element names, folded forward beside `_elements`.
+
+        The source starts as pixels. A kind-redefining filter introduces its
+        own names; a relation filter preserves or loses names by the same rule
+        as the element meaning. A merge with different names has no one honest
+        downstream column name, even if its element kind still matches.
+        """
+        elements: dict[str, ElementKind | None] = {}
+        names: dict[str, ElementNames | None] = {}
+        for node in order:
+            fed = ports[node.node_id]
+            if not fed:
+                upstream: ElementKind | None = ElementKind.PIXEL
+                upstream_names: ElementNames | None = SOURCE_ELEMENT_NAMES
+            else:
+                arriving_elements = {elements[parent] for parent in fed.values()}
+                arriving_names = {names[parent] for parent in fed.values()}
+                upstream = arriving_elements.pop() if len(arriving_elements) == 1 else None
+                upstream_names = arriving_names.pop() if len(arriving_names) == 1 else None
+                if upstream is None:
+                    upstream_names = None
+            spec = specs[node.node_id]
+            elements[node.node_id] = node_element(spec.element, upstream)
+            names[node.node_id] = node_element_names(
+                spec.element, spec.element_names, upstream, upstream_names
+            )
+        return names
 
     @staticmethod
     def _source_indexed(

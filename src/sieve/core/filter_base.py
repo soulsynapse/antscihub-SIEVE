@@ -125,6 +125,37 @@ class ElementKind(StrEnum):
     BLOCK = "block"
 
 
+@dataclass(frozen=True, slots=True)
+class ElementNames:
+    """Column-safe names for one emitted array element.
+
+    `ElementKind` is a type-level answer: a count over blocks is different from
+    a count over pixels. `ElementNames` is the interop vocabulary that leaves
+    the process: CSV headers, README dictionaries, and count axes all read it
+    instead of deriving English from the enum or from a widget's local copy.
+
+    Both forms are required because singular and plural are not a rule the
+    writer can safely invent. They follow the filter-id spelling rule so a name
+    can be composed into a stable column without quoting or case folding.
+    """
+
+    singular: str
+    plural: str
+
+    def __post_init__(self) -> None:
+        bad = [name for name in (self.singular, self.plural) if not FILTER_ID_PATTERN.match(name)]
+        if bad:
+            raise ValueError(
+                f"element names must match {FILTER_ID_PATTERN.pattern!r}, got {sorted(bad)}"
+            )
+
+
+#: What the decoded source contributes before any filter has redefined it.
+#: Roots that preserve their input read this value; filters that redefine
+#: elements declare their own `element_names`.
+SOURCE_ELEMENT_NAMES = ElementNames("pixel", "pixels")
+
+
 class ElementRelation(StrEnum):
     """What a filter does to the element meaning it was handed.
 
@@ -199,6 +230,29 @@ def node_element(
     if declaration is ElementRelation.AGGREGATED:
         return upstream if upstream is ElementKind.PIXEL else None
     return upstream
+
+
+def node_element_names(
+    declaration: ElementDeclaration | None,
+    declared: ElementNames | None,
+    upstream: ElementKind | None,
+    upstream_names: ElementNames | None,
+) -> ElementNames | None:
+    """One node's emitted element names, given its input's.
+
+    A filter that declares a concrete `ElementKind` introduces the noun beside
+    that declaration. A preserving filter preserves the noun it was handed. An
+    aggregating filter keeps names only in the same case `node_element` keeps
+    meaning: pixels stay pixels, while blocks aggregate into a value no count
+    threshold has an honest name for.
+    """
+    if declaration is None:
+        return None
+    if isinstance(declaration, ElementKind):
+        return declared
+    if declaration is ElementRelation.AGGREGATED:
+        return upstream_names if upstream is ElementKind.PIXEL else None
+    return upstream_names
 
 
 #: Rate `1`, allocated once. `Fraction` is immutable, so every unchanged filter
@@ -536,6 +590,11 @@ class FilterSpec:
     #: admissible at all, so forgetting it must be an error at registration
     #: rather than a plausible number nobody checks.
     element: ElementDeclaration | None = None
+    #: Column-safe nouns for `element`, required exactly when `element` is a
+    #: concrete `ElementKind`. Relation declarations preserve or lose their
+    #: upstream names, so a constant here would be wrong on at least one legal
+    #: input. Table emitters already name their columns in `TableSpec`.
+    element_names: ElementNames | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.accepts, Mapping):
@@ -583,6 +642,22 @@ class FilterSpec:
             raise ValueError(
                 f"{self.filter_id}: emits rows and declares element {self.element!r} — a table "
                 "has columns, not elements"
+            )
+        if isinstance(self.element, ElementKind) and self.element_names is None:
+            raise ValueError(
+                f"{self.filter_id}: declares element {self.element!r} but no element_names — "
+                "a filter that redefines what one value is must also declare the noun that "
+                "CSV columns and plot axes use for counts over it"
+            )
+        if not isinstance(self.element, ElementKind) and self.element_names is not None:
+            if self.element is None:
+                raise ValueError(
+                    f"{self.filter_id}: emits rows and declares element_names "
+                    f"{self.element_names!r} — a table has columns, not element names"
+                )
+            raise ValueError(
+                f"{self.filter_id}: declares element_names {self.element_names!r} for "
+                f"{self.element!r} — relation declarations read names from their upstream"
             )
         known = set(self.params_model.model_fields)
         unknown = [name for name in self.primary_params if name not in known]
@@ -711,6 +786,7 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "accepts": Channel.IDENTITY,
     "emits": Channel.IDENTITY,
     "element": Channel.IDENTITY,
+    "element_names": Channel.IDENTITY,
     # Identity rather than execution, and it is the one placement worth arguing.
     # It reads as a fact about kernels, but what it decides is whether backend
     # identity leaves the digest — so it is a claim about when two results are

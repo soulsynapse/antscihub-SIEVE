@@ -114,13 +114,12 @@ exception are one edit. The owning module is asked of the registered params
 class rather than assumed to be `filters/<id>.py`, so the check does not quietly
 stop working for the first filter that breaks the convention.
 
-A second check in the same module is **vacuous today and deliberately so**: no
-name declared in a `TableSpec.columns` may be spelled in two top-level packages,
-with the package list read off the tree. Nothing declares columns yet, so it is
-pinned against a planted tree instead — the `.importlinter` idiom of governing a
-layer before it exists. The first table emitter is the moment a column name
-starts being typed twice, and a check written after that arrives as an exception
-list rather than as a rule.
+A second check in the same module is no longer vacuous: `TableSpec.columns` and
+the element-dependent detection columns generated from discovered
+`element_names` may not be spelled in two top-level packages, with the package
+list read off the tree. The planted-tree test stays as the fixture guard. The
+first table emitter adds to the same declared-column set instead of arriving
+with a new exception-list shape.
 
 ## 4. Latency budgets — ENFORCED for the table and the producers, PARTIAL for the timings
 

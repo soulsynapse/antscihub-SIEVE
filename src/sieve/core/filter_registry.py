@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import TypeVar
 
 from sieve.core.filter_base import (
+    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementDeclaration,
@@ -126,6 +127,7 @@ def register_filter(
     accepts: StreamSpec | Mapping[str, StreamSpec],
     emits: StreamSpec,
     cost: CostEstimate,
+    authoring_group: AuthoringGroup,
     mode: Mode = Mode.STREAMING,
     settling_epsilon: float | None = None,
     rate_changing: bool = False,
@@ -161,6 +163,7 @@ def register_filter(
             accepts=accepts,
             emits=emits,
             cost=cost,
+            authoring_group=authoring_group,
             mode=mode,
             warmup_frames=params_model.max_warmup_frames(),
             settling_epsilon=settling_epsilon,

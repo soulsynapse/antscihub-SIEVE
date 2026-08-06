@@ -16,8 +16,8 @@ During any given pick up, you can do one of three things:
 1. Assess if what you are doing should be done *before* another structural constraint. Utilize the lookahead document for ideas.
 2. If there is another structural constraint that blocks the planned work or would resut in extensive duplication, you can place a [UNBLOCKED WHEN] statement at the end, and write the new problem statement following the instructions.
 3. If there isn't a blocker after a cursory glance, you can implement the step. If you finish in under 30 turns, you can do another.
-4. Any findings you did along the way should be logged.
-5. Before you close you should fix up changes in the plan file as a result of your edits, replacing the "Recommended next step" section, and queueing the things you need.
+4. As you complete a step, any findings you did along the way should be logged. If you notice buggy code, small problems should be fixed on the spot, larger problems that aren't structural should be queued with the queue tool before continuing on the big stages plan. Overly verbose comments or docstrings that don't genuinely explain something that can't be inferred from the code itself should be fixed in place.
+5. Before you close you should fix up changes in the plan file as a result of your edits, and queueing the things you need.
 
 ## Adding a new problem statement:
 1. Verify a problem that is structurally blocking to the end goal. You can look to the 1-big-stages-lookahead.md for ideas, and 0-big-stages-identification.
@@ -109,9 +109,9 @@ Steps:
 - [x] Define the declared handoff property the authoring surface needs, at the
   same semantic level as "image frame", "block series", "events", or a successor
   vocabulary.
-- [ ] Define the stage or grouping property the authoring surface needs without
+- [x] Define the stage or grouping property the authoring surface needs without
   making cache identity depend on user-facing presentation text.
-- [ ] Add a graph-layer query that answers which registered operations can attach
+- [x] Add a graph-layer query that answers which registered operations can attach
   at a seam or port using declarations rather than GUI-only type checks.
 - [ ] Add a synthetic-filter canary that registers a filter at test time and
   proves it appears in the authoring surface with no GUI catalog edit.
@@ -150,6 +150,44 @@ focus, handle gestures, plot layout, and inspection-only choices such as
 `solo_block`. Those may render or edit declared operation parameters, but they
 are not catalog operations and are not saved as graph steps.
 
+Step 3 grouping property:
+
+The authoring grouping is now `FilterSpec.authoring_group`, whose value is a
+stable `AuthoringGroup` slug rather than the stack header text. The field is
+required at filter registration, forwarded by `register_filter`, and assigned
+for every current filter. It lives in `SPEC_CHANNELS` as
+`Channel.PRESENTATION`, and the cache-key presentation sweep proves moving a
+filter between groups does not change a node key.
+
+Current assignments are intentionally workflow buckets, not labels:
+`crop` and `span` are `source_prep`; `rescale`, `downsample`, `normalize`, and
+`background_ema` are `spatial_prep`; `block_signal` is `signal_extraction`;
+`motion_history` and `temporal_baseline` are `temporal_filter`; `detect` is
+`detection`. The GUI may render different titles or orderings, but the first
+declared grouping answer now lives with the filter declaration rather than in
+`gui/wizard_model.py`.
+
+Step 4 graph-layer attachment query:
+
+`Dag.attachable_operations()` now answers the authoring question before a node
+exists: given the stream present at a seam, it returns the latest registered
+filter specs and input ports whose declarations admit that stream. Supplying a
+`downstream_port` constrains the same candidate by what it emits, using the
+same `StreamSpec.admits` relation as `Dag._edge_faults`. Multi-input filters
+are returned per compatible port, leaving the authoring surface to decide
+whether the remaining ports can be filled.
+
+The query is deliberately still declaration-only. It does not read `ChainKind`,
+`Stage`, or `CatalogEntry`, and it does not construct a provisional GUI chain.
+The current tests pin array-to-array and array-to-table insertions, including a
+table downstream port that admits `detect` and an array downstream port that
+removes it.
+
+Recommended next step:
+
+Add a synthetic-filter canary that registers a filter at test time and proves
+it appears in the authoring surface with no GUI catalog edit.
+
 Completed when:
 
 Registering a synthetic filter with an existing handoff shape and no GUI code
@@ -159,6 +197,4 @@ in `src/sieve/gui/chain_model.py`, `src/sieve/gui/wizard_model.py`, or
 `src/sieve/gui/filter_tab.py`. Any remaining shell-owned operation is absent
 from the filter catalog by rule rather than mixed into it as a no-`filter_id`
 entry.
-
-
 

@@ -37,6 +37,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementRelation,
@@ -126,6 +127,7 @@ class Couple(StrEnum):
         work_per_megapixel=WorkUnits(4.0),
         peak_bytes_per_input_byte=5.0,
     ),
+    authoring_group=AuthoringGroup.TEMPORAL_FILTER,
     mode=Mode.STREAMING,
     settling_epsilon=SETTLED_EPSILON,
     stateful=True,

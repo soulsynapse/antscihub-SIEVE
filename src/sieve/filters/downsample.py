@@ -22,6 +22,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementRelation,
@@ -62,6 +63,7 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
         # Static, so it takes the largest value any legal `factor` produces.
         peak_bytes_per_input_byte=1.25,
     ),
+    authoring_group=AuthoringGroup.SPATIAL_PREP,
     mode=Mode.STREAMING,
     primary_params=("factor",),
     caption=(CaptionPart(label="factor", param="factor"),),

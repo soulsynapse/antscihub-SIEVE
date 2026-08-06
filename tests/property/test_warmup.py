@@ -27,6 +27,7 @@ from hypothesis import strategies as st
 from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import (
     ArraySpec,
+    AuthoringGroup,
     CostEstimate,
     ElementRelation,
     ParamsBase,
@@ -93,6 +94,7 @@ def _register(warmup: int, rate: Fraction, arity: int) -> type[ParamsBase]:
         "emits": ArraySpec(),
         "element": ElementRelation.PRESERVED,
         "cost": COST,
+        "authoring_group": AuthoringGroup.SPATIAL_PREP,
         # `FrameCount` and not the bare int: `common` is a `dict[str, Any]`, so the
         # splat below erases every argument type and pyright cannot see this one.
         "settling_epsilon": 0.0,

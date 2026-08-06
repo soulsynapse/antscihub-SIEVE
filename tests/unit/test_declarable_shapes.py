@@ -31,6 +31,7 @@ import pytest
 from sieve.backend.dispatch import Backend, KernelRegistry, unrunnable_reason
 from sieve.core.filter_base import (
     ArraySpec,
+    AuthoringGroup,
     CostEstimate,
     ElementRelation,
     FilterSpec,
@@ -133,6 +134,7 @@ def _spec_for(shape: Shape) -> FilterSpec:
         accepts=ArraySpec() if accepts is StreamKind.ARRAY else TableSpec(),
         emits=ArraySpec() if emits is StreamKind.ARRAY else TableSpec(),
         cost=COST,
+        authoring_group=AuthoringGroup.SPATIAL_PREP,
         mode=mode,
         rate_changing=rate_changing,
         # Required of an array emitter and refused of a table one, so this is

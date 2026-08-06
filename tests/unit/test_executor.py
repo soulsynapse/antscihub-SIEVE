@@ -23,7 +23,14 @@ from sieve.backend.dispatch import (
     merging_kernel,
     windowed_kernel,
 )
-from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, Mode, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    AuthoringGroup,
+    CostEstimate,
+    ElementRelation,
+    Mode,
+    ParamsBase,
+)
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
@@ -51,6 +58,7 @@ ARENA = ROI(x=4, y=2, width=10, height=6)
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
+    authoring_group=AuthoringGroup.SPATIAL_PREP,
     settling_epsilon=0.0,
     registry=SHELF,
 )
@@ -86,6 +94,7 @@ def tag_cpu(frame: Frame, params: TagParams) -> Frame:
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
+    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class CpuOnlyParams(ParamsBase):
@@ -111,6 +120,7 @@ def cpu_only_cpu(frame: Frame, params: CpuOnlyParams) -> Frame:
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
+    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class MinusParams(ParamsBase):
@@ -135,6 +145,7 @@ def minus_cpu(frames: Mapping[str, Frame], params: MinusParams) -> Frame:
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
+    authoring_group=AuthoringGroup.SPATIAL_PREP,
     mode=Mode.WINDOWED,
     settling_epsilon=0.0,
     registry=SHELF,
@@ -161,6 +172,7 @@ def span_cpu(span: FrameSpan, params: SpanParams) -> Frame:
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
+    authoring_group=AuthoringGroup.SPATIAL_PREP,
     mode=Mode.WINDOWED,
     registry=SHELF,
 )

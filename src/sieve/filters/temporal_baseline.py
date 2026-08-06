@@ -78,6 +78,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementRelation,
@@ -182,6 +183,7 @@ class Emit(StrEnum):
         # honest number is the one that goes here.
         peak_bytes_per_input_byte=2.0 * MAX_SAMPLES + 4.0,
     ),
+    authoring_group=AuthoringGroup.TEMPORAL_FILTER,
     mode=Mode.STREAMING,
     settling_epsilon=0.0,
     stateful=True,

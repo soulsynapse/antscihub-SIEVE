@@ -49,6 +49,7 @@ from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     UNBOUNDED_FRAME,
     ArraySpec,
+    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementRelation,
@@ -82,6 +83,7 @@ from sieve.core.types import Frame, WorkUnits
         # The output *is* the input. No copy, no scratch.
         peak_bytes_per_input_byte=1.0,
     ),
+    authoring_group=AuthoringGroup.SOURCE_PREP,
     mode=Mode.STREAMING,
     selecting=True,
     primary_params=("start", "end"),

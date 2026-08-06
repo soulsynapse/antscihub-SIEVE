@@ -19,6 +19,7 @@ from sieve.core.filter_base import (
     ALL_FRAMES,
     SPEC_CHANNELS,
     ArraySpec,
+    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementKind,
@@ -124,6 +125,7 @@ def make_spec(**overrides: object) -> FilterSpec:
         "emits": ArraySpec(),
         "element": ElementRelation.PRESERVED,
         "cost": COST,
+        "authoring_group": AuthoringGroup.SPATIAL_PREP,
     }
     fields.update(overrides)
     return FilterSpec(**fields)  # pyright: ignore[reportArgumentType]
@@ -485,6 +487,7 @@ class TestFilterRegistry:
             emits=ArraySpec(),
             element=ElementRelation.PRESERVED,
             cost=COST,
+            authoring_group=AuthoringGroup.SPATIAL_PREP,
             primary_params=("factor",),
             registry=registry,
         )
@@ -507,6 +510,7 @@ class TestFilterRegistry:
             emits=ArraySpec(),
             element=ElementRelation.PRESERVED,
             cost=COST,
+            authoring_group=AuthoringGroup.SPATIAL_PREP,
             settling_epsilon=0.0,
             registry=registry,
         )
@@ -540,6 +544,7 @@ BASE: dict[str, Any] = {
     "emits": ArraySpec(),
     "cost": COST,
     "element": ElementRelation.PRESERVED,
+    "authoring_group": AuthoringGroup.SPATIAL_PREP,
 }
 
 #: One legal value per keyword, differing from both that parameter's default
@@ -554,6 +559,7 @@ PROBES: dict[str, Any] = {
     "accepts": ArraySpec(dtypes=("float32",)),
     "emits": ArraySpec(channels=(ChannelSpec.GRAY,)),
     "cost": CostEstimate(work_per_megapixel=WorkUnits(2.0)),
+    "authoring_group": AuthoringGroup.DETECTION,
     "mode": Mode.WINDOWED,
     "settling_epsilon": 0.25,
     "rate_changing": True,

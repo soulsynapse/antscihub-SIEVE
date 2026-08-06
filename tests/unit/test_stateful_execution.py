@@ -41,7 +41,13 @@ from sieve.backend.dispatch import (
     KernelRegistry,
     stateful_kernel,
 )
-from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    AuthoringGroup,
+    CostEstimate,
+    ElementRelation,
+    ParamsBase,
+)
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
 from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, WorkUnits
@@ -179,6 +185,7 @@ def test_a_filter_whose_warmup_is_a_lie_disagrees_with_itself_across_spans() -> 
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
         cost=CostEstimate(work_per_megapixel=WorkUnits(1.0)),
+        authoring_group=AuthoringGroup.SPATIAL_PREP,
         stateful=True,
         registry=scratch,
     )
@@ -339,6 +346,7 @@ def test_a_stateful_kernel_behind_a_spec_that_does_not_declare_it_is_refused() -
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
         cost=CostEstimate(work_per_megapixel=WorkUnits(1.0)),
+        authoring_group=AuthoringGroup.SPATIAL_PREP,
         registry=scratch,
     )
     class ForgetfulParams(ParamsBase):

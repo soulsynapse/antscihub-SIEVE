@@ -10,7 +10,13 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QSettings
 
 from sieve.backend.dispatch import Backend, KernelRegistry, kernel
-from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    AuthoringGroup,
+    CostEstimate,
+    ElementRelation,
+    ParamsBase,
+)
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
 from sieve.core.types import ChannelSpec, Frame, WorkUnits
@@ -40,6 +46,7 @@ RunSignature = tuple[dict[str, str], tuple[FrameSignature, ...]]
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
+    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class PreferenceProbeParams(ParamsBase):

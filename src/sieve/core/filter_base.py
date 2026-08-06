@@ -574,6 +574,26 @@ class CostEstimate:
     peak_bytes_per_input_byte: float = 2.0
 
 
+class AuthoringGroup(StrEnum):
+    """Stable buckets a front end can use to group operation offers.
+
+    This is not the visible header text. The values are cache-stable slugs that
+    say where an operation belongs in an authoring workflow; a GUI may translate
+    or reorder them without changing what a filter computes.
+    """
+
+    #: Operations that narrow which source pixels or frames the graph sees.
+    SOURCE_PREP = "source_prep"
+    #: Frame-preserving image preparation before a signal is extracted.
+    SPATIAL_PREP = "spatial_prep"
+    #: Operations that turn image frames into measured signal streams.
+    SIGNAL_EXTRACTION = "signal_extraction"
+    #: Operations that shape an already-extracted signal over time.
+    TEMPORAL_FILTER = "temporal_filter"
+    #: Operations that turn tuned signals into event or gate products.
+    DETECTION = "detection"
+
+
 @dataclass(frozen=True, slots=True)
 class CaptionPart:
     """One piece of a collapsed filter caption."""
@@ -610,6 +630,10 @@ class FilterSpec:
     accepts: StreamSpec | Mapping[str, StreamSpec]
     emits: StreamSpec
     cost: CostEstimate
+    #: The stable authoring bucket that should offer this operation. It is
+    #: presentation, not identity: labels and ordering belong to the shell, and
+    #: moving a card between groups cannot change the filter's result.
+    authoring_group: AuthoringGroup
     mode: Mode = Mode.STREAMING
     #: Frames the filter must consume before its output is trustworthy, counted
     #: in this filter's *input* frames — "must consume" is the unit. Warmup
@@ -917,7 +941,7 @@ class Channel(StrEnum):
     EXECUTION = "execution"
     #: What a front end shows about it. Never hashed, never read by the
     #: executor, and the declared home for the hints decided 2026-07-29 —
-    #: captions, signal labels, `primary_params`, `cost`.
+    #: authoring groups, captions, signal labels, `primary_params`, `cost`.
     PRESENTATION = "presentation"
 
 
@@ -941,6 +965,7 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     # identity leaves the digest — so it is a claim about when two results are
     # the same result, which is this channel's whole question.
     "backend_agnostic": Channel.IDENTITY,
+    "authoring_group": Channel.PRESENTATION,
     "mode": Channel.EXECUTION,
     "rate_changing": Channel.EXECUTION,
     # Beside `rate_changing` and for its reason, though what the *parameters*

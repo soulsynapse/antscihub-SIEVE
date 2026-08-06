@@ -35,7 +35,13 @@ import pytest
 
 from sieve.backend.dispatch import Backend, KernelRegistry, kernel
 from sieve.bench.budgets import BUDGETS
-from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
+from sieve.core.filter_base import (
+    ArraySpec,
+    AuthoringGroup,
+    CostEstimate,
+    ElementRelation,
+    ParamsBase,
+)
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.types import ChannelSpec, Frame, WorkUnits
@@ -109,6 +115,7 @@ def shelves() -> Iterator[tuple[FilterRegistry, KernelRegistry]]:
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
         cost=CostEstimate(work_per_megapixel=WorkUnits(1.0)),
+        authoring_group=AuthoringGroup.SPATIAL_PREP,
         registry=filters,
     )
     class BiasParams(ParamsBase):

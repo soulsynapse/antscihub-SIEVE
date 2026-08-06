@@ -27,6 +27,7 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     ArraySpec,
+    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementRelation,
@@ -57,6 +58,7 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
         # Input plus an output no larger than it, no scratch.
         peak_bytes_per_input_byte=2.0,
     ),
+    authoring_group=AuthoringGroup.SPATIAL_PREP,
     mode=Mode.STREAMING,
     primary_params=("scale",),
     caption=(

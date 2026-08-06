@@ -369,13 +369,28 @@ insert a `rescale` changes what every downstream result is, partially discards
 tuning already done, and is a decision about the analysis. A UI that presents
 the two classes in one visual register violates rule 6 through rule 7.
 
-**Enforced by:** structure more than test. The cache key derives from `Node`
-plus the source and root replicate geometry (`pipeline/cache_key.py`);
+The pricing is what makes the boundary obeyable. Misfiling a preference as a
+parameter costs a visible recomputation, watched in seconds, and the answer is
+still correct. Misfiling a parameter as a preference costs a silent wrong
+number, paid by whoever cites it. No threshold makes the second the better bet,
+so ambiguous fields go on the hashed side until evidence splits them.
+
+**Enforced by:** structure plus tests. The cache key derives from `Node` plus
+the source and root replicate geometry (`pipeline/cache_key.py`);
 `Project.checkpoints` is not an input to it, so hashing a checkpoint would
-require moving a field across the schema, not forgetting a clause. What is *not*
-checked: no test toggles a checkpoint and asserts every key survives. That test
-is one function, and it would pin this rule the way `test_budget_table.py` pins
-rule 4.
+require moving a field across the schema, not forgetting a clause. The artifact
+side is pinned by
+`tests/unit/test_pipeline_model.py::TestPurity::test_node_carries_identity_and_nothing_else`
+and by the cache-key mutation tests in `tests/unit/test_cache_key.py`. The
+preference side is pinned by
+`tests/gui/test_preference_boundary.py::test_preferences_have_one_qsettings_home`
+and
+`tests/gui/test_preference_boundary.py::test_scrambling_every_preference_leaves_results_and_cache_keys_unchanged`:
+the guard scrambles every persisted `Preferences` property, runs the same pipeline
+twice from cold, and requires the computed frames and cache keys to be identical.
+It detects reachability, not intent: a preference that reaches an answer or a
+key fails, but a genuine parameter hard-coded as a constant is not a preference
+channel and this test cannot see it.
 
 **Serves:** O2 and O3 — the cache can only be trusted, and the wizard can only
 strip placement for a cluster, because the line is absolute. **Wrong when:** a

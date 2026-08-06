@@ -1,7 +1,13 @@
 ---
 status: current
 reviewed: 07c379e
-subjects: [noxfile.py, .github/workflows/, pyproject.toml, tests/docs/, .importlinter]
+subjects:
+  - noxfile.py
+  - .github/workflows/
+  - pyproject.toml
+  - tests/docs/
+  - tests/gui/test_preference_boundary.py
+  - .importlinter
 ---
 
 # AUTO-GUARDRAILS
@@ -158,13 +164,30 @@ remaining gap is a count this section states, so the counts above are the thing
 to correct when it moves; before this audit they read "7 of the 11" and "2 of
 the 11", against a table of twelve.
 
-## 5. Cache isolation — ENFORCED
+## 5. Cache isolation and preference reachability — ENFORCED
 
 Changing a parameter on one DAG branch does not invalidate sibling branches.
 
 **Enforced by:** `tests/unit/test_cache_key.py::TestIsolation` — the described
 mutation test on an a→{b,c} graph, plus
 `tests/unit/test_cache_key.py::test_a_pinned_replicate_ignores_the_default_moving_under_it`.
+
+Rule 7's preference side is also executable now: preferences may change where
+the user is looking, how much machine resource the view spends, and when the
+project artifact is written; they must not change an executor result or cache
+identity.
+
+**Enforced by:**
+`tests/gui/test_preference_boundary.py::test_preferences_have_one_qsettings_home`
+and
+`tests/gui/test_preference_boundary.py::test_scrambling_every_preference_leaves_results_and_cache_keys_unchanged`.
+The first check keeps `QSettings` owned by `src/sieve/gui/preferences.py`; the
+second points ambient `Preferences()` reads at a temporary store, scrambles
+every persisted `Preferences` property, builds and runs the same pipeline twice
+from cold, and requires both the computed frames and the node cache key to be
+identical. This detects preference reachability, not author intent: it catches a
+preference laundered into a result, but not a real parameter hard-coded as a
+constant.
 
 ## 6. Documentation that asserts facts about the code — ENFORCED
 

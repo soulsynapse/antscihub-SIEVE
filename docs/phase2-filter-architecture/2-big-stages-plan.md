@@ -121,10 +121,10 @@ Steps:
   path, keeping any presentation-only fields out of cache identity.
 - [x] Remove the GUI filter-ID spellings that become redundant and shrink the
   `SPELLED_AWAY_FROM_HOME` exception set in the same commit.
-- [ ] Preserve or retire each remaining GUI filter-ID spelling with a written R7
+- [x] Preserve or retire each remaining GUI filter-ID spelling with a written R7
   justification: unknown filters may be slower or plainer, but not wrong or
   unloadable.
-- [ ] Report the cycle metric: files touched outside `filters/<name>/` to add a
+- [x] Report the cycle metric: files touched outside `filters/<name>/` to add a
   GUI-visible filter using an existing handoff shape.
 
 Step 1 reconciliation:
@@ -215,11 +215,46 @@ were removed from `SPELLED_AWAY_FROM_HOME`; the remaining wizard spellings are
 the `block_signal`/`rescale` bridge that injects chain state into
 `block_signal` params.
 
+Step 9 R7 preservation:
+
+No remaining GUI filter-ID spelling retired in this pass. The live stack still
+has three preserved legacy-coupling sites, all now checked in
+`tests/unit/test_filter_id_spelling.py` as `GUI_R7_JUSTIFICATIONS`.
+
+- `gui/chain_model.py` keeps `rescale`, `normalize`, and `block_signal` for the
+  default parity chain and step IDs. That names the hand-built starting stack,
+  not the authoring rule: registry-projected filters still offer and load
+  through the catalog and saved-graph path without a `ChainStep` literal.
+- `gui/filter_tab.py` keeps `rescale`, `normalize`, and `block_signal` for the
+  hand-built parity card bodies, parameter routing, and rescale-cost fast path.
+  A registry-projected filter that lacks those bespoke controls is plainer, or
+  may miss that optimization, but committed non-parity steps receive generated
+  parameter rows and keep routing edits by node id.
+- `gui/wizard_model.py` keeps `block_signal` and `rescale` only for the live
+  bridge that injects `fps` and the current scale into `block_signal`'s hidden
+  params. Other filters get params from their own model defaults; a missing
+  rescale step falls back to scale `1.0` rather than refusing the filter.
+
+This preserves the current GUI exceptions by R7's rule: they may buy a
+hand-written default, body, or fast path, but a registered filter unknown to
+those cases is still offerable, loadable, and correct.
+
+Step 10 cycle metric:
+
+Files touched outside `filters/<name>/` to add a GUI-visible filter using an
+existing handoff shape: **0**. The evidence remains the `synthetic_smooth`
+canary in `tests/unit/test_wizard_model.py`: it registers only in a scratch
+registry, appears in the authoring surface, validates through
+`Dag.attachable_operations(ArraySpec())`, inserts with default params, and
+loads from a saved graph without adding GUI catalog code. This cycle touched
+the guardrail and plan to preserve legacy exceptions, not to integrate a new
+filter.
+
 Recommended next step:
 
-Preserve or retire each remaining GUI filter-ID spelling with a written R7
-justification: unknown filters may be slower or plainer, but not wrong or
-unloadable.
+This problem statement is complete. Start the next numbered structural problem
+from `1-big-stages-lookahead.md`, re-verifying its live-code evidence before
+adding it here.
 
 Completed when:
 

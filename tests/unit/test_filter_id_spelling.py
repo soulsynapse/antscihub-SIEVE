@@ -3,18 +3,21 @@
 Rule 3 says nothing enumerates filters, and `test_filter_discovery.py` enforces
 it for *imports* — a manifest cannot be added without failing that check. It is
 blind to the other way the enumeration comes back: `"block_signal"` typed into a
-widget. Eleven `(module, filter_id)` pairs are typed today, and every one of them
-is a place the discovery contract cannot see, so adding a filter means editing
-those modules after all.
+widget. Each `(module, filter_id)` pair typed today is a place the discovery
+contract cannot see, so adding a filter means editing those modules after all.
 
 The exception set is the work list, in `gui-computes-nothing`'s shape and
 `WITHOUT_PRODUCER`'s: an undeclared spelling fails, and so does a declared one
 that has gone — deleting the literal and deleting its entry are one edit, and
 *adding* an entry is a visible widening.
 
+GUI entries also carry the Phase 2 R7 justification beside this list: a legacy
+identity check may buy a hand-built body or fast path, but a registered filter
+unknown to that legacy path must still be offerable, loadable, and correct.
+
 It lives here rather than in `src/` — the one place `WITHOUT_PRODUCER`'s shape
 does not carry over. A list of filter ids in a module under `src/sieve/` would
-be eleven foreign spellings of its own, so the declaration would trip the check
+be foreign spellings of its own, so the declaration would trip the check
 it declares.
 
 Deliberately narrow: registered ids, and declared column names. A generic
@@ -74,6 +77,45 @@ SPELLED_AWAY_FROM_HOME = frozenset(
     }
 )
 
+#: One-line R7 justification for every GUI filter-id spelling left in the
+#: shrink-only set. The key equality test below makes a preserved spelling
+#: explain why unknown registered filters become plainer or slower, not wrong
+#: or unloadable.
+GUI_R7_JUSTIFICATIONS: dict[tuple[str, str], str] = {
+    ("gui/chain_model.py", "block_signal"): (
+        "Legacy parity_chain default extraction; registry-projected filters still "
+        "offer and load, so this names only the hand-built starting stack."
+    ),
+    ("gui/chain_model.py", "normalize"): (
+        "Legacy parity_chain default image step; registry-projected filters still "
+        "offer and load outside this fixed starting stack."
+    ),
+    ("gui/chain_model.py", "rescale"): (
+        "Legacy parity_chain default image step; registry-projected filters still "
+        "offer and load outside this fixed starting stack."
+    ),
+    ("gui/filter_tab.py", "block_signal"): (
+        "Hand-built extraction controls and signal memory; other committed filters "
+        "use generated rows or no custom body, so they stay loadable but plainer."
+    ),
+    ("gui/filter_tab.py", "normalize"): (
+        "Hand-built normalize combo; other committed filters bypass this body table "
+        "and use generated parameter rows when their fields are expressible."
+    ),
+    ("gui/filter_tab.py", "rescale"): (
+        "Hand-built scale knob and rescale-cost fast path; other filters bypass "
+        "that optimization and still route parameter edits by node id."
+    ),
+    ("gui/wizard_model.py", "block_signal"): (
+        "The live-stack bridge injects fps and scale into this legacy node; filters "
+        "without those hidden params keep model defaults and still load."
+    ),
+    ("gui/wizard_model.py", "rescale"): (
+        "Read only to mirror scale into block_signal; absence falls back to 1.0 "
+        "and registry-projected filters are not refused by this lookup."
+    ),
+}
+
 
 def _string_constants(path: Path) -> Iterator[str]:
     """Every string literal in `path`, docstrings and f-string parts included.
@@ -91,9 +133,9 @@ def _string_constants(path: Path) -> Iterator[str]:
 def _home(spec: FilterSpec) -> Path:
     """The module that registered `spec`, asked of the class rather than assumed.
 
-    Not `filters/<filter_id>.py`: that convention holds for all seven filters
-    today and is not a rule anything enforces, so deriving the path from it
-    would make this check quietly wrong for the first filter that breaks it.
+    Not `filters/<filter_id>.py`: that convention holds today and is not a rule
+    anything enforces, so deriving the path from it would make this check quietly
+    wrong for the first filter that breaks it.
     """
     return Path(inspect.getfile(spec.params_model)).resolve()
 
@@ -145,6 +187,18 @@ def test_the_declared_spellings_name_real_filters_and_real_modules(
     assert unknown == set(), f"not registered filter ids: {sorted(unknown)}"
     missing = {pair for pair in SPELLED_AWAY_FROM_HOME if not (SRC / pair[0]).is_file()}
     assert missing == set(), f"no such module: {sorted(missing)}"
+
+
+def test_gui_spellings_have_r7_justifications() -> None:
+    """Every preserved GUI spelling says why unknown filters still work."""
+    gui_spellings = {pair for pair in SPELLED_AWAY_FROM_HOME if pair[0].startswith("gui/")}
+    assert set(GUI_R7_JUSTIFICATIONS) == gui_spellings
+    malformed = {
+        pair: text
+        for pair, text in GUI_R7_JUSTIFICATIONS.items()
+        if not text.strip() or "\n" in text or "TODO" in text.upper() or len(text) > 240
+    }
+    assert malformed == {}
 
 
 def test_the_walk_sees_a_spelling_and_is_not_fooled_by_a_near_miss(

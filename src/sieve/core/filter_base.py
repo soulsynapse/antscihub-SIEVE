@@ -668,6 +668,65 @@ class FilterSpec:
         return float(params.output_rate()) * params.frame_bytes_ratio()
 
 
+class Channel(StrEnum):
+    """Which of three questions a `FilterSpec` field answers.
+
+    REWORK.md R5 at the spec. ARCHITECTURE.md rule 7 draws one line — hashed or
+    not — and that line alone cannot say why `mode` is unhashed: it is not
+    *placement*, it is how the one path runs. So the non-identity side splits in
+    two, and the split is what makes "core carries no GUI policy" checkable at
+    all. `primary_params` is a field and not an import, so no `.importlinter`
+    contract can see it; a declared partition can.
+    """
+
+    #: What the result *is*. Rule 7's hashed side. Only `filter_id` and
+    #: `version` reach the digest literally — `version` stands proxy for the
+    #: rest, since a filter that changes what it accepts, emits, or means by an
+    #: element and keeps its version is already a defect `register_filter`
+    #: cannot catch. The channel is the claim; the digest is one enforcement of
+    #: it.
+    IDENTITY = "identity"
+    #: How the one path runs it — scheduling, lead-in, whether the answer may be
+    #: reused. Never hashed, and not placement either: two builds that disagreed
+    #: here would produce the same result at different cost, or refuse to
+    #: produce it at all.
+    EXECUTION = "execution"
+    #: What a front end shows about it. Never hashed, never read by the
+    #: executor, and the declared home for the hints decided 2026-07-29 —
+    #: captions, signal labels, `primary_params`, `cost`.
+    PRESENTATION = "presentation"
+
+
+#: Every `FilterSpec` field, in exactly one channel. Totality and exactness are
+#: both tested, in both directions, so a field added without a row here fails at
+#: the moment it is written — which is what catches the next `primary_params`.
+#:
+#: A dict literal rather than per-field metadata on the dataclass, because the
+#: property being asserted is about the *partition* and a reader checking it
+#: wants the three groups side by side, not fifteen annotations to collate.
+SPEC_CHANNELS: Mapping[str, Channel] = {
+    "filter_id": Channel.IDENTITY,
+    "version": Channel.IDENTITY,
+    "params_model": Channel.IDENTITY,
+    "accepts": Channel.IDENTITY,
+    "emits": Channel.IDENTITY,
+    "element": Channel.IDENTITY,
+    # Identity rather than execution, and it is the one placement worth arguing.
+    # It reads as a fact about kernels, but what it decides is whether backend
+    # identity leaves the digest — so it is a claim about when two results are
+    # the same result, which is this channel's whole question.
+    "backend_agnostic": Channel.IDENTITY,
+    "mode": Channel.EXECUTION,
+    "rate_changing": Channel.EXECUTION,
+    "warmup_frames": Channel.EXECUTION,
+    "stateful": Channel.EXECUTION,
+    "deterministic": Channel.EXECUTION,
+    "cost": Channel.PRESENTATION,
+    "primary_params": Channel.PRESENTATION,
+    "summary": Channel.PRESENTATION,
+}
+
+
 #: One step of a path: a filter and the parameters it was configured with. The
 #: params are not optional — half of what a step contributes is params-derived.
 PathStep: TypeAlias = "tuple[FilterSpec, ParamsBase]"

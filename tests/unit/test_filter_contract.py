@@ -8,11 +8,13 @@ wrong version of a filter an old pipeline named.
 
 from __future__ import annotations
 
+from dataclasses import fields
 from fractions import Fraction
 
 import pytest
 
 from sieve.core.filter_base import (
+    SPEC_CHANNELS,
     ArraySpec,
     CostEstimate,
     ElementKind,
@@ -146,6 +148,16 @@ class TestFilterSpec:
             True,
             Mode.STREAMING,
         )
+
+    def test_every_field_is_in_exactly_one_channel(self) -> None:
+        # The direction that earns the test is the first: a field added without
+        # a row fails at the moment it is written, so the next `primary_params`
+        # cannot arrive as GUI policy in core unclassified. The second direction
+        # keeps the mapping from outliving a field it names, which would make
+        # the partition read total while covering something gone.
+        declared = {f.name for f in fields(FilterSpec)}
+        assert declared - set(SPEC_CHANNELS) == set()
+        assert set(SPEC_CHANNELS) - declared == set()
 
 
 class TestRate:

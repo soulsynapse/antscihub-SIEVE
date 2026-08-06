@@ -123,6 +123,8 @@ class ElementKind(StrEnum):
     PIXEL = "pixel"
     #: One value per block of a grid the frame was divided into.
     BLOCK = "block"
+    #: One value describing the source frame as a whole.
+    FRAME = "frame"
 
 
 @dataclass(frozen=True, slots=True)

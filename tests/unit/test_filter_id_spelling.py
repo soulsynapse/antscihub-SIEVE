@@ -47,6 +47,11 @@ SRC = Path(str(sieve.__file__)).resolve().parent
 #: is registered somewhere else. Shrink-only; see this module's docstring.
 SPELLED_AWAY_FROM_HOME = frozenset(
     {
+        # The CLI command name and the compatibility package's exported
+        # function predate the filter id. They are homonyms, not a filter
+        # enumeration, and stay until `sieve detect` collapses into `sieve run`.
+        ("cli/app.py", "detect"),
+        ("detect/__init__.py", "detect"),
         # Step ids that happen to equal filter ids, plus `node.filter_id ==`
         # comparisons in the caption builder and in `parity_chain`.
         ("gui/chain_model.py", "block_signal"),

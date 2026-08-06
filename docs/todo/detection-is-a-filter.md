@@ -34,3 +34,14 @@ migration. (The old draft's step 12 records the same instruction.)
 Schema untouched — `Project.detector` keeps working until the flip. The GUI
 copies (`DetectorState` and friends) die in `detector-state-dies`, after the
 flip, not here.
+
+Chunk landed 2026-08-06: `src/sieve/filters/detect.py` now registers the
+detector's `DetectParams`, declares a windowed array output, ships guidance,
+and has a CPU kernel that emits a per-frame gate channel for the span it is
+handed. The compatibility GUI/CSV path still derives over the whole series via
+`sieve.detect.detector.detect`. Do not route centered or Morlet full-series
+detection through the current executor windowed protocol yet: it is
+trailing-history only, while this detector's existing semantics are non-causal
+at both the wavelet edge and a centered D window. The remaining chunk is the
+parity-safe execution contract or adapter that lets `detector_worker.derive`
+and `sieve detect` call the filter path without moving those numbers.

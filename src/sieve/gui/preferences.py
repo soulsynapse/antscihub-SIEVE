@@ -58,6 +58,12 @@ DEFAULT_VIEWPORT_LUMA: Final = False
 RENDER_FED_PLAYBACK: Final = "playback/render_fed"
 DEFAULT_RENDER_FED_PLAYBACK: Final = True
 
+#: Write the project artifact itself after each undoable edit. This is a GUI
+#: behaviour preference, not project state: it decides whether this session has
+#: an explicit commit point or whether the artifact follows the screen.
+WRITE_THROUGH_PROJECT: Final = "project/write_through"
+DEFAULT_WRITE_THROUGH_PROJECT: Final = True
+
 #: The last video successfully opened, reoffered at the next launch. Session
 #: state rather than a tunable: it has no entry in the preferences pane and is
 #: written by the window, not by the user.
@@ -157,6 +163,15 @@ class Preferences(QObject):
         self._store(RENDER_FED_PLAYBACK, bool(enabled), current=self.render_fed_playback)
 
     @property
+    def write_through_project(self) -> bool:
+        """Whether the project file follows undoable edits automatically."""
+        return _as_bool(self._settings.value(WRITE_THROUGH_PROJECT), DEFAULT_WRITE_THROUGH_PROJECT)
+
+    @write_through_project.setter
+    def write_through_project(self, enabled: bool) -> None:
+        self._store(WRITE_THROUGH_PROJECT, bool(enabled), current=self.write_through_project)
+
+    @property
     def last_video(self) -> Path | None:
         """The video to reoffer at launch, or `None` if there is nothing to offer.
 
@@ -221,6 +236,7 @@ class Preferences(QObject):
             PROXY_WIDTH,
             VIEWPORT_LUMA,
             RENDER_FED_PLAYBACK,
+            WRITE_THROUGH_PROJECT,
         ):
             self._settings.remove(key)
         self._settings.sync()

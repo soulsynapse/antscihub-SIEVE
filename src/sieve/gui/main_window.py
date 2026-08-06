@@ -87,6 +87,11 @@ COARSE_SCRUB_NOTICE = (
 #: to be told which state they are in before they trust it.
 HISTORY_FAILED = "History is not being kept: {error}"
 
+#: Said once when write-through cannot update the project file. Explicit Save
+#: still warns modally; the automatic path follows history's rule and stops
+#: retrying in the background until the target changes or the user saves.
+WRITE_THROUGH_FAILED = "Project file is not being kept current: {error}"
+
 #: Said when a rollback lands, because nothing else on screen announces it — the
 #: replicates and the graph simply become what they were.
 RESTORED = "Rolled back to {text}  ·  Ctrl+Z to change your mind"
@@ -149,6 +154,7 @@ class MainWindow(QMainWindow):
         # first — the project has to wait for the clear it would otherwise be
         # erased by.
         self._pending_project: tuple[Project, Path] | None = None
+        self._write_through_failed = False
 
         # Automatic rollback history. The store is retargeted whenever the
         # project's home moves, and set to None when there is nothing open or
@@ -163,7 +169,7 @@ class MainWindow(QMainWindow):
         self._history_timer = QTimer(self)
         self._history_timer.setInterval(0)
         self._history_timer.setSingleShot(True)
-        self._history_timer.timeout.connect(self._write_snapshot)
+        self._history_timer.timeout.connect(self._write_automatic_state)
 
         # Kept as an attribute because accepting a replicate navigates: the
         # click on a box in the replicate tab lands the user on the filter tab,
@@ -543,6 +549,7 @@ class MainWindow(QMainWindow):
         self._document.load_project(project)
         self._project = project
         self._project_path = path
+        self._write_through_failed = False
         # Where the loaded records point, declared before anything reads them:
         # `load_project` deliberately emits nothing for the crops precisely so
         # that the home and the set arrive together.
@@ -557,34 +564,57 @@ class MainWindow(QMainWindow):
 
     def _write_project(self, path: Path) -> bool:
         """Assemble the document into a project file at `path`."""
+        try:
+            project = self._write_project_to(path)
+        except (OSError, ValidationError) as error:
+            self._warn(f"Cannot save {path.name}:\n{error}")
+            return False
+        if project is None:
+            return False
+
+        self._accept_project_write(project, path, retarget_history=True)
+        self.statusBar().showMessage(f"Saved {path.name}")
+        return True
+
+    def _write_project_to(self, path: Path) -> Project | None:
+        """Write the current document to `path`, returning the model written."""
+        project = self._project_for_write(path)
+        if project is None:
+            return None
+        project.save(path)
+        return project
+
+    def _project_for_write(self, path: Path) -> Project | None:
+        """Assemble the current document as it should sit at `path`."""
         metadata = self._player.metadata
         if metadata is None:
-            return False
+            return None
 
         base = self._project
         home = self._document.source_home
         if base is None:
             base = Project.for_video(metadata.path, home.project_dir if home else path.parent)
 
-        try:
-            # Assemble first, rebase second — the reverse of the order this used
-            # to run in, and the crops are why. The document is the live set now
-            # (`apply_to` writes it wholesale), and its records are relative to
-            # `source_home.project_dir`; relocating the base before the document
-            # overwrote it left a Save As rebasing records that were then thrown
-            # away and storing ones that were not. One relocation over the
-            # assembled project rebases source, sinks, and crops together, from
-            # the one directory they are all actually relative to.
-            project = self._document.apply_to(base)
-            if home is not None and home.project_dir != path.parent:
-                project = project.relocated(home.project_dir, path.parent)
-            project.save(path)
-        except (OSError, ValidationError) as error:
-            self._warn(f"Cannot save {path.name}:\n{error}")
-            return False
+        # Assemble first, rebase second — the reverse of the order this used
+        # to run in, and the crops are why. The document is the live set now
+        # (`apply_to` writes it wholesale), and its records are relative to
+        # `source_home.project_dir`; relocating the base before the document
+        # overwrote it left a Save As rebasing records that were then thrown
+        # away and storing ones that were not. One relocation over the
+        # assembled project rebases source, sinks, and crops together, from
+        # the one directory they are all actually relative to.
+        project = self._document.apply_to(base)
+        if home is not None and home.project_dir != path.parent:
+            project = project.relocated(home.project_dir, path.parent)
+        return project
 
+    def _accept_project_write(
+        self, project: Project, path: Path, *, retarget_history: bool
+    ) -> None:
+        """Adopt a project write that has already reached disk."""
         self._project = project
         self._project_path = path
+        self._write_through_failed = False
         # A Save As rebases every relative path in the document, `CropArtifact`
         # included, so the document's records and the worker's copy are both
         # re-declared against the new home rather than left pointing through the
@@ -599,9 +629,8 @@ class MainWindow(QMainWindow):
         # do not migrate: they are anchored to the directory they were written
         # in, and copying them would produce two histories claiming the same
         # sequence numbers.
-        self._retarget_history()
-        self.statusBar().showMessage(f"Saved {path.name}")
-        return True
+        if retarget_history:
+            self._retarget_history()
 
     def _declare_source_home(self) -> None:
         """Tell the document where its footage is and what its crops sit beside.
@@ -693,8 +722,45 @@ class MainWindow(QMainWindow):
         # load — and none of them is an edit worth a snapshot of an empty
         # document. The count is what tells them apart from an undo back to the
         # start, which is a real state to be able to return to.
-        if self._history is not None and self._document.undo_stack.count() > 0:
+        if self._document.undo_stack.count() > 0 and (
+            self._history is not None
+            or (self._preferences.write_through_project and not self._write_through_failed)
+        ):
             self._history_timer.start()
+
+    @Slot()
+    def _write_automatic_state(self) -> None:
+        """Flush every automatic write keyed to an undo-stack edit."""
+        self._write_snapshot()
+        self._write_project_through()
+
+    def _write_through_path(self) -> Path | None:
+        """The project path write-through should update, if anything is open."""
+        metadata = self._player.metadata
+        if metadata is None:
+            return None
+        return self._project_path or project_path_for(metadata.path)
+
+    def _write_project_through(self) -> None:
+        """Quietly keep the project file current with the screen."""
+        if (
+            not self._preferences.write_through_project
+            or self._write_through_failed
+            or not self.isWindowModified()
+        ):
+            return
+        path = self._write_through_path()
+        if path is None:
+            return
+        try:
+            project = self._write_project_to(path)
+        except (OSError, ValidationError) as error:
+            self._write_through_failed = True
+            self.statusBar().showMessage(WRITE_THROUGH_FAILED.format(error=error))
+            return
+        if project is None:
+            return
+        self._accept_project_write(project, path, retarget_history=False)
 
     @Slot()
     def _write_snapshot(self) -> None:
@@ -801,7 +867,7 @@ class MainWindow(QMainWindow):
         """
         if self._history_timer.isActive():
             self._history_timer.stop()
-            self._write_snapshot()
+            self._write_automatic_state()
         self._player.close()
         self._preview.close()
         self._document.unbind_source()
@@ -812,6 +878,7 @@ class MainWindow(QMainWindow):
         self._project = None
         self._project_path = None
         self._pending_project = None
+        self._write_through_failed = False
         # The pending write goes with the document it was about. Letting it fire
         # would snapshot the emptiness the close just produced.
         self._history_timer.stop()
@@ -853,6 +920,7 @@ class MainWindow(QMainWindow):
         else:
             self._project = None
             self._project_path = None
+            self._write_through_failed = False
             self._update_title()
             self._open_neighbour_project(metadata.path)
 
@@ -920,6 +988,8 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_preferences_changed(self) -> None:
         self._player.apply_preferences(self._preferences)
+        if self._preferences.write_through_project and self.isWindowModified():
+            self._write_project_through()
 
     @Slot()
     def _on_clip_changed(self) -> None:
@@ -1014,7 +1084,7 @@ class MainWindow(QMainWindow):
         # fire — the event loop this window is leaving is what would have run it.
         if self._history_timer.isActive():
             self._history_timer.stop()
-            self._write_snapshot()
+            self._write_automatic_state()
         # The probe first: its tick reads the player's and the tab's meters,
         # and its mode callable reads the player, so it must stop looking
         # before what it looks at goes away.

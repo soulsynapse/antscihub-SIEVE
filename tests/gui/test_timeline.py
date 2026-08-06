@@ -13,6 +13,7 @@ leaves the user a frame or two from where they let go.
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -519,10 +520,12 @@ class TestWindowWiring:
     @pytest.fixture
     def window(self, qtbot: QtBot, tmp_path: Path, synthetic_video: Path) -> Iterator[MainWindow]:
         settings = QSettings(str(tmp_path / "sieve.ini"), QSettings.Format.IniFormat)
+        video = tmp_path / "timeline.mp4"
+        shutil.copy(synthetic_video, video)
         main = MainWindow(Preferences(settings))
         qtbot.addWidget(main)
         main.show()
-        main.open_video(synthetic_video)
+        main.open_video(video)
         qtbot.waitUntil(lambda: main.windowTitle() != "SIEVE", timeout=OPEN_TIMEOUT_MS)
         yield main
         main.close()
@@ -594,7 +597,9 @@ class TestTheLengthOutlivesTheSession:
         self, qtbot: QtBot, settings_file: str, video: Path
     ) -> Generator[tuple[MainWindow, ReplicateDocument]]:
         """One launch of the application over `settings_file`, with `video` open."""
-        main = MainWindow(Preferences(QSettings(settings_file, QSettings.Format.IniFormat)))
+        preferences = Preferences(QSettings(settings_file, QSettings.Format.IniFormat))
+        preferences.write_through_project = False
+        main = MainWindow(preferences)
         qtbot.addWidget(main)
         try:
             main.open_video(video)
@@ -608,11 +613,13 @@ class TestTheLengthOutlivesTheSession:
     def test_a_length_set_in_one_session_is_what_the_next_opens_at(
         self, qtbot: QtBot, settings_file: str, synthetic_video: Path
     ) -> None:
-        with self._session(qtbot, settings_file, synthetic_video) as (_, document):
+        video = Path(settings_file).with_name("timeline.mp4")
+        shutil.copy(synthetic_video, video)
+        with self._session(qtbot, settings_file, video) as (_, document):
             document.set_window_length(self.REMEMBERED_FRAMES)
             assert document.window == ClipRange(start=0, end=self.REMEMBERED_FRAMES)
 
-        with self._session(qtbot, settings_file, synthetic_video) as (_, reopened):
+        with self._session(qtbot, settings_file, video) as (_, reopened):
             assert reopened.window == ClipRange(start=0, end=self.REMEMBERED_FRAMES)
             # The *choice* did not come back with it. A remembered length that
             # arrived as a marked clip would make `Project.clip = None`
@@ -627,5 +634,7 @@ class TestTheLengthOutlivesTheSession:
         asset. Writing that back would teach every later session that two
         seconds is the length this user works in, on the strength of a video
         they never touched the window on."""
-        with self._session(qtbot, settings_file, synthetic_video) as (window, _):
+        video = Path(settings_file).with_name("timeline.mp4")
+        shutil.copy(synthetic_video, video)
+        with self._session(qtbot, settings_file, video) as (window, _):
             assert window.preferences.window_seconds == pytest.approx(DEFAULT_WINDOW_SECONDS)

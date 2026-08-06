@@ -21,11 +21,13 @@ from sieve.gui.preferences import (
     DEFAULT_COARSE_INTERVAL_SECONDS,
     DEFAULT_PROXY_WIDTH,
     DEFAULT_VIEWPORT_LUMA,
+    DEFAULT_WRITE_THROUGH_PROJECT,
     MAX_PROXY_WIDTH,
     MIN_PROXY_WIDTH,
     MIN_WINDOW_SECONDS,
     PROXY_WIDTH,
     WINDOW_SECONDS,
+    WRITE_THROUGH_PROJECT,
     Preferences,
 )
 
@@ -49,6 +51,7 @@ class TestDefaults:
         assert preferences.coarse_interval_seconds == DEFAULT_COARSE_INTERVAL_SECONDS
         assert preferences.proxy_width == DEFAULT_PROXY_WIDTH
         assert preferences.viewport_luma is DEFAULT_VIEWPORT_LUMA
+        assert preferences.write_through_project is DEFAULT_WRITE_THROUGH_PROJECT
 
 
 class TestRoundTrip:
@@ -59,12 +62,14 @@ class TestRoundTrip:
         preferences.coarse_interval_seconds = 2.5
         preferences.proxy_width = 1920
         preferences.viewport_luma = True
+        preferences.write_through_project = False
 
         reopened = Preferences(QSettings(settings.fileName(), QSettings.Format.IniFormat))
         assert reopened.adaptive_scrub is False
         assert reopened.coarse_interval_seconds == pytest.approx(2.5)
         assert reopened.proxy_width == 1920
         assert reopened.viewport_luma is True
+        assert reopened.write_through_project is False
 
 
 class TestLastVideo:
@@ -158,7 +163,12 @@ class TestChangeSignal:
 
     @pytest.mark.parametrize(
         ("attribute", "value"),
-        [("adaptive_scrub", True), ("proxy_width", 1920), ("coarse_interval_seconds", 2.5)],
+        [
+            ("adaptive_scrub", True),
+            ("proxy_width", 1920),
+            ("coarse_interval_seconds", 2.5),
+            ("write_through_project", True),
+        ],
     )
     def test_writing_the_same_value_is_silent_over_a_file_qt_did_not_write(
         self, qapp: object, tmp_path: Path, attribute: str, value: object
@@ -176,7 +186,9 @@ class TestChangeSignal:
         del qapp
         ini = tmp_path / "prior-session.ini"
         ini.write_text(
-            "[decode]\nproxy_width=1920\n\n[scrub]\nadaptive=true\ncoarse_interval_seconds=2.5\n",
+            "[decode]\nproxy_width=1920\n\n"
+            "[project]\nwrite_through=true\n\n"
+            "[scrub]\nadaptive=true\ncoarse_interval_seconds=2.5\n",
             encoding="utf-8",
         )
 
@@ -192,6 +204,7 @@ class TestChangeSignal:
     ) -> None:
         preferences.adaptive_scrub = False
         preferences.proxy_width = 1920
+        preferences.write_through_project = False
         seen: list[int] = []
         preferences.changed.connect(lambda: seen.append(1))
 
@@ -200,6 +213,7 @@ class TestChangeSignal:
         assert len(seen) == 1
         assert preferences.adaptive_scrub is DEFAULT_ADAPTIVE_SCRUB
         assert preferences.proxy_width == DEFAULT_PROXY_WIDTH
+        assert preferences.write_through_project is DEFAULT_WRITE_THROUGH_PROJECT
 
 
 class TestCoercion:
@@ -212,6 +226,8 @@ class TestCoercion:
         assert preferences.adaptive_scrub is False
         settings.setValue(ADAPTIVE_SCRUB, "true")
         assert preferences.adaptive_scrub is True
+        settings.setValue(WRITE_THROUGH_PROJECT, "false")
+        assert preferences.write_through_project is False
 
     def test_string_numbers_are_understood(
         self, preferences: Preferences, settings: QSettings

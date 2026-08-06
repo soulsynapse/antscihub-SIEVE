@@ -59,6 +59,12 @@ _PROXY_HELP = (
     "Frames are decoded down to this width for display only. Lower is faster "
     "to scrub; higher shows more detail. Never affects analysis output."
 )
+_WRITE_THROUGH_LABEL = "Keep the project file current while editing"
+_WRITE_THROUGH_HELP = (
+    "Each undoable edit writes the project file automatically, so a CLI run sees "
+    "the same project the window shows. Turn this off to keep Ctrl+S as the "
+    "explicit commit point for the file."
+)
 
 
 class PreferencesDialog(QDialog):
@@ -71,6 +77,7 @@ class PreferencesDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_scrubbing_group())
         layout.addWidget(self._build_playback_group())
+        layout.addWidget(self._build_project_group())
         layout.addWidget(self._build_display_group())
         layout.addStretch(1)
 
@@ -124,6 +131,19 @@ class PreferencesDialog(QDialog):
 
         return group
 
+    def _build_project_group(self) -> QGroupBox:
+        group = QGroupBox("Project")
+        form = QFormLayout(group)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+
+        self._write_through_check = QCheckBox(_WRITE_THROUGH_LABEL)
+        self._write_through_check.setToolTip(_WRITE_THROUGH_HELP)
+        self._write_through_check.toggled.connect(self._on_write_through_toggled)
+        form.addRow(self._write_through_check)
+        form.addRow(_help_label(_WRITE_THROUGH_HELP))
+
+        return group
+
     def _build_display_group(self) -> QGroupBox:
         group = QGroupBox("Display")
         form = QFormLayout(group)
@@ -148,12 +168,14 @@ class PreferencesDialog(QDialog):
             self._adaptive_check,
             self._interval_spin,
             self._render_fed_check,
+            self._write_through_check,
             self._proxy_spin,
         )
         blockers = [QSignalBlocker(widget) for widget in widgets]
         self._adaptive_check.setChecked(self._preferences.adaptive_scrub)
         self._interval_spin.setValue(self._preferences.coarse_interval_seconds)
         self._render_fed_check.setChecked(self._preferences.render_fed_playback)
+        self._write_through_check.setChecked(self._preferences.write_through_project)
         self._proxy_spin.setValue(self._preferences.proxy_width)
         del blockers
         self._interval_spin.setEnabled(self._adaptive_check.isChecked())
@@ -167,6 +189,10 @@ class PreferencesDialog(QDialog):
     @Slot(bool)
     def _on_render_fed_toggled(self, enabled: bool) -> None:
         self._preferences.render_fed_playback = enabled
+
+    @Slot(bool)
+    def _on_write_through_toggled(self, enabled: bool) -> None:
+        self._preferences.write_through_project = enabled
 
     @Slot(float)
     def _on_interval_changed(self, seconds: float) -> None:

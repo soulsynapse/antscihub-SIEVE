@@ -44,7 +44,7 @@ from sieve.core.pipeline_model import (
 from sieve.core.replicates import Replicate
 from sieve.core.types import ROI
 from sieve.gui.document import ReplicateDocument
-from sieve.gui.main_window import MainWindow
+from sieve.gui.main_window import WRITE_THROUGH_FAILED, MainWindow
 from sieve.gui.preferences import Preferences
 
 pytestmark = pytest.mark.gui
@@ -385,6 +385,80 @@ class TestUnsavedChanges:
         assert window.save_project_as() is False
         assert window.isWindowModified() is True
         assert not project_path_for(video).exists()
+
+
+class TestWriteThrough:
+    def test_an_edit_updates_the_project_file_by_default(
+        self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The project artifact follows the screen without an explicit Save."""
+        asked: list[object] = []
+        saved_messages: list[str] = []
+        monkeypatch.setattr(QMessageBox, "warning", _recording(asked))
+        window.statusBar().messageChanged.connect(saved_messages.append)
+        _open(qtbot, window, video)
+
+        _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
+        path = project_path_for(video)
+        qtbot.waitUntil(
+            lambda: path.is_file() and not window.isWindowModified(),
+            timeout=OPEN_TIMEOUT_MS,
+        )
+
+        saved = Project.load(path)
+        assert len(saved.replicates) == 1
+        assert asked == []
+        assert not any(message.startswith("Saved ") for message in saved_messages)
+
+    def test_the_preference_off_keeps_ctrl_s_as_the_commit_point(
+        self, qtbot: QtBot, window: MainWindow, video: Path
+    ) -> None:
+        """Write-through off leaves the project file at the last explicit save."""
+        window.preferences.write_through_project = False
+        _open(qtbot, window, video)
+
+        _document(window).add_roi(ROI(x=1, y=1, width=20, height=20))
+        qtbot.waitUntil(lambda: bool(_history_texts(video)), timeout=OPEN_TIMEOUT_MS)
+
+        assert not project_path_for(video).exists()
+        assert window.isWindowModified() is True
+
+    def test_a_write_through_failure_is_status_only_and_not_retried(
+        self, qtbot: QtBot, window: MainWindow, video: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A background write failure does not turn each edit into a modal."""
+        asked: list[object] = []
+        status_messages: list[str] = []
+        calls: list[Path] = []
+        project_path = project_path_for(video)
+        original_save = Project.save
+
+        def sometimes_refuse(project: Project, path: Path) -> None:
+            if path == project_path:
+                calls.append(path)
+                raise OSError("read-only")
+            original_save(project, path)
+
+        monkeypatch.setattr(Project, "save", sometimes_refuse)
+        monkeypatch.setattr(QMessageBox, "warning", _recording(asked))
+        window.statusBar().messageChanged.connect(status_messages.append)
+        _open(qtbot, window, video)
+
+        document = _document(window)
+        document.add_roi(ROI(x=1, y=1, width=20, height=20))
+        qtbot.waitUntil(
+            lambda: any(
+                WRITE_THROUGH_FAILED.split("{")[0] in message for message in status_messages
+            ),
+            timeout=OPEN_TIMEOUT_MS,
+        )
+        document.add_roi(ROI(x=40, y=40, width=20, height=20))
+        qtbot.waitUntil(lambda: len(_history_texts(video)) == 2, timeout=OPEN_TIMEOUT_MS)
+
+        assert calls == [project_path]
+        assert asked == []
+        assert not project_path.exists()
+        assert window.isWindowModified() is True
 
 
 class TestNeighbourOpen:

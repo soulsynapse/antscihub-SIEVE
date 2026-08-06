@@ -279,13 +279,17 @@ class ChannelSpec(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ROI:
-    """An axis-aligned region in *source-pixel* coordinates.
+    """An axis-aligned region in integer pixels of the array it indexes.
 
-    Source pixels rather than normalized floats: this is what a downstream
-    crop actually needs, it is what a user reads off the replicate table, and
-    it survives a round trip through the pipeline artifact without accumulating
-    float error. The display resolution a user happened to draw at is a GUI
-    concern and never reaches here.
+    This type does not choose a global coordinate space. The field that carries
+    an ROI decides that: `Replicate.roi` indexes the decoded source frame, while
+    `CropParams.roi` indexes that crop node's input frame.
+
+    Integer pixels rather than normalized floats: this is what a crop slice
+    actually needs, it is what a user reads off the replicate table when editing
+    replicate geometry, and it survives a round trip through the pipeline
+    artifact without accumulating float error. The display resolution a user
+    happened to draw at is a GUI concern and never reaches here.
     """
 
     x: int

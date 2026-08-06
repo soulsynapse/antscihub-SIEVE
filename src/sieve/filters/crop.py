@@ -7,12 +7,13 @@ cache key could see it and no graph could place it. This module is the same
 operation declared as a filter, discovered like every other.
 
 **The region is denominated in this filter's *input* space, not in source
-pixels.** `ROI`'s own docstring is written for `Replicate.roi`, which indexes
-the decoded source frame; a crop node placed after a `rescale` indexes the
+pixels.** `ROI` only promises integer pixel coordinates; this field chooses
+which array those pixels index. A crop node placed after a `rescale` indexes the
 rescaled frame, and there is nothing here that could convert between the two.
 That is the migration's named risk (`docs/todo/the-crop-is-a-filter.md`) stated
 where the parameter is declared: whoever synthesizes a crop node from a
-replicate's box must put it at the *root*, where the two spaces coincide.
+replicate's box must put it at the *root*, where the crop input space and
+`Replicate.roi`'s source space coincide.
 `test_crop.py::test_a_second_crop_is_denominated_in_the_first_s_output` is what
 fails if anything starts assuming otherwise.
 

@@ -1,7 +1,7 @@
 ---
 title: Discovery is a scan, once there is a shelf to scan
 step: "03.7.1"
-status: awaiting-review
+status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_discovery.py -q"
 opened: 2026-08-07
@@ -35,3 +35,23 @@ the two `ParamsBase` cases.
 This lands before 03.8 rather than in a pool because `sieve run` names a tool
 by id in YAML and the registry has to be populated by then, and the one thing
 the registry's docstring forbids is a manifest that adding a tool must edit.
+
+## Reopened at review of a686d13
+
+The four cases landed and the AST half of the first one discriminates, but
+nothing in the file can fail when the scan does nothing: delete the
+`import_module` call from `discover()` and all four still pass, because the
+file's own `from sieve.tools.downsample import DownsampleParams` — needed as
+the fixture for the two `ParamsBase` cases — registers the spec that
+`assert "downsample" in {spec.tool_id for spec in discover()}` then finds. The
+same mutant prints `()` outside pytest. Measurements in
+`findings/loop/2026.08.07-the-test-modules-own-import-registers-what-the-scan-was-meant-to-register.md`;
+the defect is inherited from v2's file, so fixing it here is a divergence to
+state rather than a port to correct.
+
+What is needed is an assertion about the scan that holds in an interpreter the
+fixture import has not touched. Two lesser mutants survive alongside it and are
+in scope if they can be covered without contrivance: `discover()`'s declared
+`(tool_id, version)` ordering (untestable while one tool is on the shelf — say
+so rather than faking a second), and the `_`-prefixed skip, whose subject does
+not exist in `sieve/tools/`.

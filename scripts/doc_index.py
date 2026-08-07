@@ -4,11 +4,12 @@ Work items: one file each, YAML frontmatter, two shapes. A *sequenced* item
 carries `step:` — dotted numbers whose first component is the phase, so
 "02.3.1" is an aside inserted between "02.3" and "02.4" without renumbering
 anything. A *pool* item carries `priority:` instead — noticed work that can
-wait, attached to a phase or to none, and the priority is when it stops
-waiting rather than a label (`next_takeable` has the rule). Between them the
-number and the priority are the ordering, which is what lets `--next` be the
-whole selection rule: the queue that runs the work never has to encode an
-order, the repo holds it.
+wait for the end of its phase, which is when the phase's pool is drained and
+what the priority orders (`next_takeable` has the rule). Work that cannot wait
+that long is not a pool item at all: it is minted as a decimal step in the
+phase's own list. Between them the number and the priority are the ordering,
+which is what lets `--next` be the whole selection rule: the queue that runs
+the work never has to encode an order, the repo holds it.
 
 Findings: one file per measurement, newest first, `verdict` standing alone as
 the row a reader triages from. `docs/findings/loop/` holds the same shape for
@@ -269,12 +270,12 @@ def render(items: list[Item], titles: dict[int, str]) -> str:
         "# Work items",
         "",
         "One file per item; phases are `PLAN.md`'s. A sequenced item's `step` is",
-        "its order — asides inserted with a decimal keep their place. A pool",
-        "item's `priority` is its schedule: `--next` answers with an open",
-        "`high` first, then a `normal` left behind by an earlier phase when the",
-        "next step would open a new one, then the lowest open step. `low` is",
-        "adopted or it expires. A pool item is reachable only once it carries a",
-        "`done_when`. A worker moves an item to `awaiting-review`, a review to",
+        "its order — an aside worth doing before the next planned step is",
+        "inserted with a decimal and keeps its place in the list. Anything that",
+        "can wait is a pool item on the phase it belongs to, and a phase's pool",
+        "is drained before the next phase opens; `priority` orders that drain.",
+        "An owed item with no `done_when` holds the boundary rather than being",
+        "stepped over. A worker moves an item to `awaiting-review`, a review to",
         "`done`.",
         "",
     ]
@@ -697,10 +698,12 @@ def render_scaffold(modules: list[tuple[str, str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _pool_order(item: Item) -> tuple[int, int, str]:
-    #: Unattached last: a pool item with no phase is repo-wide, so it has no
-    #: place among the phases and only a name to order it by.
-    return (1, 0, item.path.name) if item.phase is None else (0, item.phase, item.path.name)
+def _pool_order(item: Item) -> tuple[int, int, int, str]:
+    #: Phase first because the drain is per boundary, then `priority`, which is
+    #: the only thing it decides. Unattached last: a pool item with no phase is
+    #: repo-wide, so it has no place among the phases.
+    loose = item.phase is None
+    return (int(loose), 0 if loose else (item.phase or 0), item.priority_rank, item.path.name)
 
 
 def phase_started(items: list[Item], phase: int | None) -> bool:
@@ -708,74 +711,67 @@ def phase_started(items: list[Item], phase: int | None) -> bool:
     return any(i.phase == phase and i.step_key is not None and i.status != "open" for i in items)
 
 
-def unreachable_highs(items: list[Item]) -> list[str]:
-    """The open `high` pool items `next_takeable` must skip for want of a
-    criterion, named so the skip is visible where it happens."""
-    return [
-        i.path.name
-        for i in sorted(
-            (
-                i
-                for i in items
-                if i.status == "open"
-                and i.step_key is None
-                and i.fields.get("priority") == "high"
-                and not str(i.fields.get("done_when", "")).strip()
-            ),
-            key=_pool_order,
-        )
-    ]
+def owed_pool(items: list[Item], before_phase: int | None) -> list[Item]:
+    """The open pool items a phase boundary owes, earliest phase first.
+
+    Unattached items are owed at every boundary: repo-wide work belongs to no
+    phase, so no later boundary is more its own than this one."""
+    if before_phase is None:
+        return []
+    return sorted(
+        (
+            i
+            for i in items
+            if i.status == "open"
+            and i.step_key is None
+            and (i.phase is None or i.phase < before_phase)
+        ),
+        key=_pool_order,
+    )
+
+
+def unspecified(pool: list[Item]) -> list[str]:
+    """Owed items that cannot be worked as written, for want of a criterion."""
+    return [i.path.name for i in pool if not str(i.fields.get("done_when", "")).strip()]
 
 
 def next_takeable(items: list[Item]) -> Item | None:
-    """The next item, in three tiers. `awaiting-review` is not takeable in any
-    of them — its next session is a review, and the review queue entry names
-    itself.
+    """The lowest open step, except that a phase's pool is paid before the next
+    phase opens. `awaiting-review` is takeable in neither place — its next
+    session is a review, and the review queue entry names itself.
 
-    A pool item's `priority` is its schedule, which is the whole reason the
-    pool is reachable at all: selecting only on `step` made a priority a label
-    nothing read, and forty-five asides accumulated against five closed. So
-    `high` — a defect in code that already landed — preempts the next planned
-    step wherever it sits, on the argument that the review which found it had
-    the subject loaded and no later session will. `normal` is paid at a phase
-    boundary, where the evidence is still fresh and the schedule has a seam:
-    only a phase that has not begun is held up, and only by phases before it,
-    so a normal minted against work the phase has not done yet never blocks
-    the step that would do it. `low` is never takeable on its own — it is
-    adopted by an item that touches the same file, or it expires.
+    Urgency does not live here any more. An aside worth doing before the next
+    planned step is minted as a decimal step in the phase's own list, where the
+    number orders it and the schema makes it carry a `done_when` — so the pool
+    holds only what can wait for the boundary, and `priority` orders the drain
+    rather than deciding whether one happens. That is the correction to a rule
+    that selected on `step` alone: a pool nothing could reach took forty-five
+    asides against five closed, and a priority nothing read was a label.
 
-    Takeability requires `done_when` either way. A pool item without one is
-    skipped rather than served, because a session handed an item with no
-    criterion writes its own, which is the one thing the open ->
-    awaiting-review -> done protocol exists to make impossible."""
+    A phase already under way is not held up retroactively, or resuming a loop
+    that predates this rule would stall mid-phase behind a backlog its own
+    steps never owed. The debt is paid at the next boundary instead.
+
+    An owed item with no `done_when` holds the boundary rather than being
+    skipped: a session handed an item with no criterion writes its own, which
+    is what the open -> awaiting-review -> done protocol exists to prevent, and
+    a drain that steps over exactly those items is drainable by ignoring the
+    work that needs specifying. The specified ones are served first so the
+    drain makes progress; when only unspecified ones remain, `--next` answers
+    with nothing and names them, and the phase stays shut."""
     open_items = [i for i in items if i.status == "open"]
     step = min(
         (i for i in open_items if i.step_key is not None),
         key=lambda i: i.step_key or (),
         default=None,
     )
-    pool = [
-        i for i in open_items if i.step_key is None and str(i.fields.get("done_when", "")).strip()
-    ]
-
-    high = sorted((i for i in pool if i.fields.get("priority") == "high"), key=_pool_order)
-    if high:
-        return high[0]
-    if step is None:
-        return None
-    if not phase_started(items, step.phase):
-        stranded = sorted(
-            (
-                i
-                for i in pool
-                if i.fields.get("priority") == "normal"
-                and (i.phase is None or i.phase < (step.phase or 0))
-            ),
-            key=_pool_order,
-        )
-        if stranded:
-            return stranded[0]
-    return step
+    if step is None or phase_started(items, step.phase):
+        return step
+    owed = owed_pool(items, step.phase)
+    specified = [i for i in owed if str(i.fields.get("done_when", "")).strip()]
+    if specified:
+        return specified[0]
+    return None if owed else step
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -813,13 +809,26 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.next:
-        # A high the selector had to skip is the failure this rule was written
-        # to end, so it is named on stderr rather than left to be inferred from
-        # a queue that quietly moved on. stdout stays the path alone: the queue
-        # reads it.
-        for name in unreachable_highs(items):
-            print(f"doc_index: {name} is high and has no `done_when`", file=sys.stderr)
         item = next_takeable(items)
+        # A boundary that is shut says which items shut it. Without this the
+        # loop reads "nothing takeable" as drained and stops, which is the same
+        # silence the pool already produced once. stdout stays the path alone:
+        # the queue reads it.
+        if item is None:
+            step = min(
+                (i for i in items if i.step_key is not None and i.status == "open"),
+                key=lambda i: i.step_key or (),
+                default=None,
+            )
+            owed = owed_pool(items, step.phase) if step is not None else []
+            for name in unspecified(owed):
+                print(f"doc_index: {name} is owed and has no `done_when`", file=sys.stderr)
+            if owed and step is not None:
+                print(
+                    f"doc_index: phase {step.phase} stays shut until they are "
+                    f"specified or dropped",
+                    file=sys.stderr,
+                )
         print(item.path.relative_to(REPO).as_posix() if item else "nothing takeable")
         return 0
 

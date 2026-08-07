@@ -1,7 +1,7 @@
 ---
 title: background_ema lands
 step: "04.6"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_background_ema.py -q"
 opened: 2026-08-06

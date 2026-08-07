@@ -1,7 +1,7 @@
 ---
 title: Discovery is a scan, once there is a shelf to scan
 step: "03.7.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_discovery.py -q"
 opened: 2026-08-07

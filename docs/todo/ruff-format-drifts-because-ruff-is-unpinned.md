@@ -21,4 +21,13 @@ again. Pin ruff to a version in the dev dependency list and reformat against
 that pin in the same commit, so the check means "this tree matches the
 formatter we chose" rather than "this tree matches whatever resolved".
 
-Found during 03.7.1, which touched neither file.
+A pin is only half of it: nothing in v3 runs `format --check` at all, which is
+why this went unnoticed for two commits while `ruff check` stayed green — the
+two commands disagree and only the second one gets run by habit. v2 gated the
+formatter in its `lint` nox session, which v3 has deliberately not ported.
+This is the first thing that has needed it, so the porting decision belongs
+with whoever takes this.
+
+Found during 03.7.1, which touched neither file. Minted twice by that item's
+two attempts, under two slugs — see
+`docs/findings/loop/2026.08.07-the-pool-is-not-read-before-an-item-is-minted-into-it.md`.

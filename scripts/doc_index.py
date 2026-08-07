@@ -50,6 +50,13 @@ describes — v2's discipline, cut to the subset v3 uses (no primer, no settled
 table, no `after:` graph; the step numbers are the ordering those existed to
 compute).
 
+The four have four separate sources and share only the list in `derived`, so a
+run writes every target that renders and reports every one that does not. What
+this refuses is the shape where they were rendered together: one docstring over
+the annotation limit refused SCAFFOLD.md and left the other three stale, and
+`--next` — which reads the items and no docstring at all — stopped answering
+with them, so the loop could not take the item that would have recorded it.
+
     uv run python scripts/doc_index.py           # rewrite everything generated
     uv run python scripts/doc_index.py --check   # exit 1 if anything is stale
     uv run python scripts/doc_index.py --next    # the next role and its item
@@ -68,6 +75,7 @@ import ast
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -1029,55 +1037,91 @@ def next_action(items: list[Item]) -> tuple[str, Item | None]:
     return (("work" if str(item.fields.get("done_when", "")).strip() else "specify"), item)
 
 
-def main(argv: list[str] | None = None) -> int:
+def gates(repo: Path = REPO) -> list[str]:
+    """Refusals about the tree rather than about any one derived file.
+
+    Every one runs and every one is reported, for the same reason the targets
+    render independently: the session that has to fix these should see all of
+    them from one run rather than one per run. None of them stops a target
+    being written — a tree with a problem in it is exactly the tree whose
+    indexes most need to be current, because the item recording the problem
+    goes in one of them.
+    """
+    problems: list[str] = []
+    lost = tracked_drift(repo / "docs" / "todo", repo)
+    if lost:
+        problems.append("items have been overwritten or removed: " + "; ".join(lost))
+    built = forbidden_present(repo)
+    if built:
+        problems.append(f"absent-by-decision paths exist: {', '.join(built)}")
+    strays = core_strays(repo)
+    if strays:
+        problems.append(
+            f"core has children ADR-6 does not admit: {', '.join(strays)} — "
+            f"revise adr/core-membership-is-closed.md first"
+        )
+    dead = dead_language(repo)
+    if dead:
+        problems.append("dead language: " + "; ".join(dead))
+    return problems
+
+
+def _architecture(adr_dir: Path) -> str:
+    groups = parse_groups(adr_dir / "_GROUPS.md")
+    return render_architecture(collect_adrs(adr_dir, groups), groups)
+
+
+def derived(items: list[Item], repo: Path = REPO) -> list[tuple[Path, Callable[[], str]]]:
+    """The four generated files, each with the thunk that renders it.
+
+    A thunk rather than the text, because rendering is where the failures are
+    and one target's failure must not be the other three's: the derived docs
+    have four independent sources and share only this list.
+    """
+    docs = repo / "docs"
+    findings, adr_dir = docs / "findings", docs / "adr"
+    return [
+        (docs / "todo" / INDEX_NAME, lambda: render(items, phase_titles(docs / "PLAN.md"))),
+        (
+            findings / INDEX_NAME,
+            lambda: render_findings(
+                collect_findings(findings), collect_findings(findings / "loop")
+            ),
+        ),
+        (docs / "SCAFFOLD.md", lambda: render_scaffold(collect_modules(repo))),
+        (docs / "ARCHITECTURE.md", lambda: _architecture(adr_dir)),
+    ]
+
+
+def main(argv: list[str] | None = None, repo: Path = REPO) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="exit 1 if the index is stale")
     parser.add_argument("--next", action="store_true", help="print the next takeable item's path")
     parser.add_argument("--mint", metavar="SLUG", help="start a new item, refusing a taken slug")
     args = parser.parse_args(argv)
+    todo_dir = repo / "docs" / "todo"
 
     # Before `collect`, deliberately: a folder holding one item that will not
     # parse must still be able to accept a new one, or the way to record a
     # problem is shut by the problem.
     if args.mint:
         try:
-            print(f"doc_index: minted {mint(args.mint).relative_to(REPO).as_posix()}")
+            print(f"doc_index: minted {mint(args.mint, todo_dir).relative_to(repo).as_posix()}")
         except ItemError as error:
             print(f"doc_index: {error}", file=sys.stderr)
             return 1
         return 0
 
     try:
-        items = collect()
-        lost = tracked_drift()
-        if lost:
-            raise ItemError("items have been overwritten or removed: " + "; ".join(lost))
-        built = forbidden_present()
-        if built:
-            raise ItemError(f"absent-by-decision paths exist: {', '.join(built)}")
-        strays = core_strays()
-        if strays:
-            raise ItemError(
-                f"core has children ADR-6 does not admit: {', '.join(strays)} — "
-                f"revise adr/core-membership-is-closed.md first"
-            )
-        dead = dead_language()
-        if dead:
-            raise ItemError("dead language: " + "; ".join(dead))
-        targets = [
-            (TODO_DIR / INDEX_NAME, render(items, phase_titles())),
-            (
-                FINDINGS_DIR / INDEX_NAME,
-                render_findings(collect_findings(FINDINGS_DIR), collect_findings(LOOP_DIR)),
-            ),
-            (SCAFFOLD, render_scaffold(collect_modules())),
-        ]
-        groups = parse_groups()
-        targets.append((ARCHITECTURE, render_architecture(collect_adrs(ADR_DIR, groups), groups)))
+        items = collect(todo_dir)
     except ItemError as error:
         print(f"doc_index: {error}", file=sys.stderr)
         return 1
 
+    # Answered here, ahead of every gate and every render: selection reads the
+    # items and nothing else, and when it sat behind the four targets a single
+    # over-limit docstring stopped the loop choosing at all — which is the one
+    # state where an item cannot be taken to record the blocker.
     if args.next:
         role, item = next_action(items)
         # A `specify` run sees one item and would otherwise have no way to tell
@@ -1087,23 +1131,31 @@ def main(argv: list[str] | None = None) -> int:
             print(f"doc_index: {behind} open items have no `done_when`", file=sys.stderr)
         # stdout is the role and the path, in that order, one line: the queue
         # reads the role to pick which prompt starts and never has to infer it.
-        print(f"{role} {item.path.relative_to(REPO).as_posix()}" if item else role)
+        print(f"{role} {item.path.relative_to(repo).as_posix()}" if item else role)
         return 0
 
-    stale = False
-    for index, content in targets:
+    problems = gates(repo)
+    for index, build in derived(items, repo):
+        relative = index.relative_to(repo)
+        try:
+            content = build()
+        except ItemError as error:
+            # Named by target rather than by cause alone: what the reader needs
+            # first is which of the four is now stale, and the module the
+            # message goes on to name is one input to one of them.
+            problems.append(f"{relative}: {error}")
+            continue
         current = index.read_text(encoding="utf-8") if index.exists() else None
         if current == content:
             continue
         if args.check:
-            stale = True
-            print(
-                f"doc_index: {index.relative_to(REPO)} is stale — rerun the tool", file=sys.stderr
-            )
+            problems.append(f"{relative} is stale — rerun the tool")
         else:
             index.write_text(content, encoding="utf-8")
-            print(f"doc_index: wrote {index.relative_to(REPO)}")
-    return 1 if stale else 0
+            print(f"doc_index: wrote {relative}")
+    for problem in problems:
+        print(f"doc_index: {problem}", file=sys.stderr)
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":

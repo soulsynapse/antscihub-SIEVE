@@ -2,7 +2,7 @@
 title: doc_index writes what it can, and `--next` never reads a docstring
 priority: high
 phase: 0
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/docs -q"
 opened: 2026-08-06

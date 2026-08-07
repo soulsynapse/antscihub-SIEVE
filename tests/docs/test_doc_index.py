@@ -700,6 +700,56 @@ def test_findings_speak_the_language_of_what_they_measured(tmp_path):
     assert doc_index.dead_language(tmp_path) == []
 
 
+# A broken module tree is one target's problem, not four — and never the
+# selection rule's, which reads no docstring.
+
+
+def _tree_with_a_bad_docstring(tmp_path: Path) -> Path:
+    """A repo whose items are clean and whose one module is over the limit.
+
+    The shape that motivated the split: only SCAFFOLD.md is derived from a
+    docstring, and the annotation limit is the one gate a module trips by
+    being written normally rather than by being wrong.
+    """
+    todo = tmp_path / "docs" / "todo"
+    todo.mkdir(parents=True)
+    (tmp_path / "docs" / "findings").mkdir()
+    write_item(todo, "step", SEQUENCED)
+    module = tmp_path / "src" / "thing.py"
+    module.parent.mkdir(parents=True)
+    module.write_text(
+        '"""Owns ' + "the one thing " * 8 + 'and nothing else."""\n', encoding="utf-8"
+    )
+    return tmp_path
+
+
+def test_next_is_answered_from_the_items_while_the_module_tree_is_broken(tmp_path, capsys):
+    # The loop's selection rule has no dependency on a docstring, so a bad one
+    # must not be able to stop the queue — least of all when the item that
+    # would record it is in the tree it blocked.
+    repo = _tree_with_a_bad_docstring(tmp_path)
+
+    code = doc_index.main(["--next"], repo=repo)
+
+    assert code == 0
+    assert capsys.readouterr().out.strip() == "work docs/todo/step.md"
+
+
+def test_the_three_targets_that_render_are_written_and_only_the_scaffold_is_refused(
+    tmp_path, capsys
+):
+    repo = _tree_with_a_bad_docstring(tmp_path)
+
+    code = doc_index.main([], repo=repo)
+
+    assert code == 1
+    assert "SCAFFOLD.md" in capsys.readouterr().err
+    assert not (repo / "docs" / "SCAFFOLD.md").exists()
+    assert "A step" in (repo / "docs" / "todo" / ".index.md").read_text(encoding="utf-8")
+    assert (repo / "docs" / "findings" / ".index.md").is_file()
+    assert (repo / "docs" / "ARCHITECTURE.md").is_file()
+
+
 # The live gate: the repo's own folders parse, and the checked-in indexes are
 # exactly what the tool would write — a stale index fails here, not in review.
 
@@ -710,30 +760,14 @@ def test_the_repos_own_items_are_hygienic():
     collect_findings(doc_index.LOOP_DIR)
     collect_modules(doc_index.REPO)
     collect_adrs(doc_index.ADR_DIR)
-    assert forbidden_present(doc_index.REPO) == []
-    assert doc_index.core_strays(doc_index.REPO) == []
-    assert doc_index.dead_language(doc_index.REPO) == []
+    assert doc_index.gates() == []
 
 
 def test_the_checked_in_indexes_are_current():
-    for index, expected in (
-        (
-            doc_index.TODO_DIR / doc_index.INDEX_NAME,
-            render(collect(doc_index.TODO_DIR), phase_titles()),
-        ),
-        (
-            doc_index.FINDINGS_DIR / doc_index.INDEX_NAME,
-            render_findings(
-                collect_findings(doc_index.FINDINGS_DIR), collect_findings(doc_index.LOOP_DIR)
-            ),
-        ),
-        (doc_index.SCAFFOLD, render_scaffold(collect_modules(doc_index.REPO))),
-        (
-            doc_index.ARCHITECTURE,
-            render_architecture(collect_adrs(doc_index.ADR_DIR), parse_groups()),
-        ),
-    ):
+    # Over `derived` rather than a second list of the four, which would let a
+    # target added to the tool arrive here untested and look covered.
+    for index, build in doc_index.derived(collect(doc_index.TODO_DIR)):
         assert index.is_file(), f"{index.name} missing — run `uv run python scripts/doc_index.py`"
-        assert index.read_text(encoding="utf-8") == expected, (
+        assert index.read_text(encoding="utf-8") == build(), (
             f"stale {index} — run `uv run python scripts/doc_index.py`"
         )

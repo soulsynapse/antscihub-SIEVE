@@ -20,6 +20,7 @@ src/sieve/pipeline/cache.py           # Where a computed frame is kept so it is 
 src/sieve/pipeline/cache_key.py       # What makes two computations the same computation.
 src/sieve/pipeline/dag.py             # The graph, resolved: what runs, in what order, and whether it can run at all.
 src/sieve/pipeline/executor.py        # The single shared execution path: a plan, a reader, and a store go in.
+src/sieve/pipeline/materialize.py     # Cut one replicate's crop to a file, and refuse to register one that lies.
 src/sieve/pipeline/plan.py            # Everything about a run that is knowable before a frame is decoded.
 src/sieve/tools/__init__.py           # One module per tool: a ToolSpec and one plain run function.
 src/sieve/tools/background_ema.py     # An exponential moving-average background model, and the difference from it.

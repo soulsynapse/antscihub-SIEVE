@@ -1,7 +1,7 @@
 ---
 title: Schema v1 is re-derived with nodes
 step: "02.1"
-status: awaiting-review
+status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_replicates.py -q"
 opened: 2026-08-06
@@ -154,3 +154,25 @@ $ uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_replicates.py 
 
 `ruff check`, `lint-imports` (5 contracts kept) and the full `pytest -q` (179
 passed) are green with it.
+
+## Reopened at review, 2026-08-07
+
+The table above and the criterion both stand; the module has two defects the
+criterion cannot see, and both are in the mechanism this item introduced.
+
+`frozen=True` is one level deep. `override_for`, `with_override` and
+`resolved_params` all copy the outer mapping and alias the inner one, so
+`params_for(crop, r1)["region"]["x"] = 999` writes into the frozen document —
+and the crop node's region is a mapping precisely because
+`adr/detector-is-a-node.md` moved the geometry there. Measured in
+`findings/2026.08.07-frozen-is-one-level-deep-and-the-region-is-two.md`;
+`test_an_override_read_out_cannot_be_written_back_in` misses it because its
+value is a scalar while `make_project`'s representative override is not.
+
+Ten of the module's eleven refusals survive being replaced with `pass` with the
+criterion green — the stale-sink check, four duplicate-id checks, three
+non-empty checks, the sink format pattern, and the negative-span-start check.
+None had a v2 row, which is why the table did not surface them
+(`findings/loop/2026.08.07-a-re-derivation-table-certifies-v2s-coverage-not-v3s.md`).
+`test_replacing_the_graph_catches_stale_checkpoints_and_sinks` names sinks and
+asserts nothing about them.

@@ -1,7 +1,7 @@
 ---
 title: The stirred clip leaves the GUI test and becomes a fixture
 step: "05.5"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_stirred_clip.py -q"
 opened: 2026-08-07

@@ -13,4 +13,4 @@ opened: 2026-08-06
 (`adr/no-kernel-apparatus.md`). The optical flow it computes stays private
 to the module — a second tool wanting it is `ops/`'s first admission
 question, answered then, not now (`adr/ops-admission-is-two-tools.md`).
-Parity per 02.4; kernel ports from v2 (PLAN.md, porting discipline).
+Parity per 03.7; kernel ports from v2 (PLAN.md, porting discipline).

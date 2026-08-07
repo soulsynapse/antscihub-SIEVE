@@ -11,5 +11,5 @@ opened: 2026-08-06
 
 `tools/background_ema.py` in the ADR-2 shape, stateful, factory declared —
 state minted per run by the executor, never closed over
-(`adr/no-kernel-apparatus.md`). Parity per 02.4; kernel ports from v2
+(`adr/no-kernel-apparatus.md`). Parity per 03.7; kernel ports from v2
 (PLAN.md, porting discipline).

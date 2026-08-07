@@ -11,6 +11,6 @@ opened: 2026-08-06
 
 `tools/rescale.py` and `tools/normalize.py`, two modules in the ADR-2 shape;
 v2 covered both in one test file and that pairing ports as-is. Parity per
-02.4's golden mechanism; kernels port from v2 (PLAN.md, porting discipline).
+03.7's golden mechanism; kernels port from v2 (PLAN.md, porting discipline).
 cv2 calls stay inside each tool module — duplication of a one-liner between
 tools is the accepted cost (`adr/ops-admission-is-two-tools.md`).

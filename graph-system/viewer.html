@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SIEVE graph-system</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --panel2: #20242c; --line: #2c313a;
+    --fg: #cfd6e0; --dim: #7d8590; --accent: #6ab0f3; --pkg: #8fd0a0;
+    --amber: #e0a83c; --red: #e5534b; --ghost: #59616e;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: grid; grid-template-rows: auto 1fr;
+    grid-template-columns: 270px 1fr 320px; height: 100vh; overflow: hidden;
+  }
+  code, .mono { font-family: Consolas, "Cascadia Mono", monospace; }
+
+  header {
+    grid-column: 1 / 4; display: flex; align-items: center; gap: 14px;
+    padding: 7px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  #crumb { font-family: Consolas, monospace; font-size: 14px; }
+  #crumb span { cursor: pointer; color: var(--accent); }
+  #crumb span:hover { text-decoration: underline; }
+  #crumb .leaf { color: var(--fg); cursor: default; }
+  #crumb .sep { color: var(--dim); cursor: default; }
+  #tabs { display: flex; gap: 2px; margin-left: auto; }
+  #tabs button {
+    background: var(--panel2); color: var(--dim); border: 1px solid var(--line);
+    padding: 5px 14px; cursor: pointer; font-size: 13px;
+  }
+  #tabs button.on { color: var(--fg); background: var(--bg); border-bottom-color: var(--accent); }
+  #stats { color: var(--dim); font-size: 12px; }
+
+  #side {
+    background: var(--panel); border-right: 1px solid var(--line);
+    overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 12px;
+  }
+  #search {
+    width: 100%; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--line); padding: 6px 8px; font-family: Consolas, monospace;
+  }
+  #search:focus { outline: none; border-color: var(--accent); }
+  .dials { display: flex; flex-direction: column; gap: 7px; }
+  .dials h3, #side h3 {
+    margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--dim); border-bottom: 1px solid var(--line); padding-bottom: 3px;
+  }
+  .dial { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; }
+  .dial label { color: var(--fg); }
+  .dial .val { color: var(--accent); font-family: Consolas, monospace; min-width: 24px; text-align: right; }
+  .dial input[type=range] { grid-column: 1 / 3; width: 100%; accent-color: var(--accent); margin: 0; }
+  .dial select {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--line); padding: 2px 4px;
+  }
+  .check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .check input { accent-color: var(--accent); }
+  #bands .check { font-family: Consolas, monospace; font-size: 12px; }
+
+  #tree { font-family: Consolas, monospace; font-size: 12px; }
+  #tree details { margin-left: 10px; }
+  #tree > details { margin-left: 0; }
+  #tree summary { cursor: pointer; color: var(--pkg); list-style: none; }
+  #tree summary::before { content: "▸ "; color: var(--dim); }
+  #tree details[open] > summary::before { content: "▾ "; }
+  #tree .mod { margin-left: 24px; cursor: pointer; color: var(--fg); white-space: nowrap; }
+  #tree .mod.ghostly, #tree summary.ghostly { color: var(--ghost); font-style: italic; }
+  #tree .mod:hover, #tree summary:hover { color: var(--accent); }
+  #tree .here { background: #26436b; }
+  #tree .hit { color: var(--amber); }
+
+  #main { position: relative; overflow: hidden; background: var(--bg); }
+  #canvas { width: 100%; height: 100%; display: block; }
+  #cards { position: absolute; inset: 0; overflow-y: auto; padding: 16px; display: none; }
+  #cards.on { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); padding: 9px 11px;
+    cursor: pointer; border-left: 3px solid var(--line);
+  }
+  .card:hover { border-color: var(--accent); }
+  .card.sel { background: var(--panel2); border-left-color: var(--accent); }
+  .card .name { font-family: Consolas, monospace; font-size: 13px; }
+  .card .note { color: var(--dim); font-size: 12px; margin-top: 3px; }
+  .card .meta { color: var(--dim); font-size: 11px; margin-top: 5px; font-family: Consolas, monospace; }
+  .card.ghostly { border-style: dashed; opacity: .65; }
+  .kindtag { font-size: 10px; padding: 0 5px; border-radius: 3px; margin-right: 6px; }
+  .k-package { background: #274332; color: var(--pkg); }
+  .k-module  { background: #23364d; color: var(--accent); }
+  .k-class   { background: #3d2e4d; color: #c792ea; }
+  .k-function{ background: #45381f; color: #d9b96a; }
+
+  #hint {
+    position: absolute; left: 12px; bottom: 10px; color: var(--dim); font-size: 11px;
+    pointer-events: none;
+  }
+  #tip {
+    position: absolute; pointer-events: none; display: none; max-width: 380px;
+    background: #0d0f12; border: 1px solid var(--line); padding: 6px 9px;
+    font-family: Consolas, monospace; font-size: 11.5px; z-index: 5; color: var(--fg);
+  }
+  #tip .t { color: var(--accent); }
+
+  #detail {
+    background: var(--panel); border-left: 1px solid var(--line);
+    overflow-y: auto; padding: 12px; font-size: 12.5px;
+  }
+  #detail h2 { font-size: 14px; margin: 0 0 2px; font-family: Consolas, monospace; word-break: break-all; }
+  #detail h4 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--dim);
+    margin: 14px 0 4px; border-bottom: 1px solid var(--line); padding-bottom: 2px;
+  }
+  #detail .row {
+    display: grid; grid-template-columns: auto 1fr; gap: 8px; padding: 1px 0;
+    font-family: Consolas, monospace; font-size: 12px;
+  }
+  #detail .row .n { color: var(--dim); text-align: right; overflow-wrap: anywhere; }
+  #detail .row a, #detail .lnk { color: var(--accent); cursor: pointer; text-decoration: none; white-space: nowrap; }
+  #detail .row a:hover, #detail .lnk:hover { text-decoration: underline; }
+  #detail .note { color: var(--dim); }
+  #detail .st-exception { color: var(--amber); }
+  #detail .st-up { color: var(--red); }
+
+  /* svg */
+  .link { fill: none; stroke: #3d4450; stroke-width: 1.2px; }
+  .link.st-exception { stroke: var(--amber); stroke-width: 1.6px; }
+  .link.st-up { stroke: var(--red); stroke-width: 2px; }
+  .link.hushed { stroke-opacity: .06; }
+  .link.lit { stroke: var(--accent); stroke-opacity: 1; }
+  .node { cursor: pointer; }
+  .node text { fill: var(--fg); font: 11.5px Consolas, monospace; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+  .node.hushed { opacity: .12; }
+  .node.sel circle, .node.sel rect { stroke: #fff; stroke-width: 2px; }
+  .node.ghostly circle, .node.ghostly rect { stroke-dasharray: 4 3; fill-opacity: .25; }
+  .node.ghostly text { fill: var(--ghost); }
+  .node.hub circle { fill-opacity: .35; }
+  .node.hub text { fill: var(--dim); font-size: 10px; }
+  .terminal rect { fill: var(--panel2); stroke: var(--line); }
+  .terminal text { fill: var(--dim); }
+  .wlabel { fill: var(--dim); font: 10px Consolas, monospace; }
+  .bandline { stroke: var(--line); stroke-dasharray: 2 6; }
+  .bandname { fill: #3a4150; font: 10px Consolas, monospace; text-transform: uppercase; letter-spacing: .1em; }
+</style>
+</head>
+<body>
+<header>
+  <div id="crumb"></div>
+  <div id="stats"></div>
+  <div id="tabs">
+    <button data-v="internals">Internals</button>
+    <button data-v="interior">Interior</button>
+    <button data-v="boundary">Boundary</button>
+  </div>
+</header>
+
+<div id="side">
+  <input id="search" placeholder="search modules / symbols…" spellcheck="false">
+  <div class="dials">
+    <h3>Dials</h3>
+    <div class="dial"><label>Upstream depth</label><span class="val" id="upVal"></span>
+      <input type="range" id="up" min="0" max="8" step="1"></div>
+    <div class="dial"><label>Downstream depth</label><span class="val" id="downVal"></span>
+      <input type="range" id="down" min="0" max="8" step="1"></div>
+    <div class="dial"><label>Edge lens</label>
+      <select id="lens">
+        <option value="both">both directions</option>
+        <option value="out">imports (→)</option>
+        <option value="in">imported-by (←)</option>
+      </select></div>
+    <div class="dial"><label>Outside grain</label>
+      <select id="grain">
+        <option value="package">package</option>
+        <option value="module">module</option>
+      </select></div>
+    <div class="dial"><label>Hub fade over °</label><span class="val" id="hubVal"></span>
+      <input type="range" id="hub" min="0" max="60" step="1"></div>
+    <div class="dial"><label>Min edge weight</label><span class="val" id="wminVal"></span>
+      <input type="range" id="wmin" min="1" max="20" step="1"></div>
+    <label class="check"><input type="checkbox" id="hideInit"> hide __init__ modules</label>
+    <label class="check"><input type="checkbox" id="ghosts"> show projected (ghost) modules</label>
+  </div>
+  <div class="dials"><h3>Layer bands</h3><div id="bands"></div></div>
+  <div><h3>Tree</h3><div id="tree"></div></div>
+</div>
+
+<div id="main">
+  <svg id="canvas"></svg>
+  <div id="cards"></div>
+  <div id="tip"></div>
+  <div id="hint">click: inspect · double-click: enter · scroll: zoom · drag: pan</div>
+</div>
+
+<div id="detail"></div>
+
+<script src="vendor/d3.v7.min.js"></script>
+<script src="data.js"></script>
+<script>
+"use strict";
+const G = window.GRAPH_DATA;
+const BAND_COLORS = ["#e06c75", "#d19a66", "#61afef", "#e5c07b", "#56b6c2", "#c678dd", "#98c379"];
+const $ = (s) => document.querySelector(s);
+
+// ---------- state (mirrored in the URL hash) ----------
+const DEFAULTS = { scope: "sieve", view: "interior", sel: "", up: 2, down: 2, lens: "both",
+  grain: "package", hub: 0, wmin: 1, hideInit: 0, ghosts: 0, hidden: "" };
+let state = { ...DEFAULTS };
+let applyingHash = false;
+
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const s = { ...DEFAULTS };
+  for (const k of Object.keys(DEFAULTS)) {
+    if (p.has(k)) s[k] = typeof DEFAULTS[k] === "number" ? +p.get(k) : p.get(k);
+  }
+  return s;
+}
+function writeHash(push) {
+  const p = new URLSearchParams();
+  for (const k of Object.keys(DEFAULTS)) if (state[k] !== DEFAULTS[k]) p.set(k, state[k]);
+  applyingHash = true;
+  const h = "#" + p.toString();
+  if (push) location.hash = h; else history.replaceState(null, "", h);
+  applyingHash = false;
+}
+function set(patch, push) {
+  Object.assign(state, patch);
+  writeHash(push);
+  render();
+}
+
+// ---------- indexes ----------
+const bandsFlat = G.meta.bands.map((b, i) => b.map((p) => ({ pkg: p, band: i }))).flat();
+function activeModules() {
+  const m = { ...G.modules };
+  if (+state.ghosts) Object.assign(m, G.ghosts);
+  return m;
+}
+let MODS = activeModules();
+let PKGS = new Set();           // all package ids incl. "sieve"
+let CHILDREN = new Map();       // package -> [child ids] (subpackages first)
+let OUT = new Map(), INN = new Map(); // moduleId -> raw edges
+let DEGREE = new Map();
+let EXPORTS = new Map();        // moduleId -> Map(symbolName -> [importer modules])
+
+function buildIndexes() {
+  MODS = activeModules();
+  PKGS = new Set(["sieve"]);
+  for (const id of Object.keys(MODS)) {
+    const parts = id.split(".");
+    for (let i = 1; i < parts.length; i++) PKGS.add(parts.slice(0, i).join("."));
+  }
+  CHILDREN = new Map();
+  for (const p of PKGS) CHILDREN.set(p, new Set());
+  for (const id of Object.keys(MODS)) CHILDREN.get(MODS[id].package)?.add(id);
+  for (const p of PKGS) if (p !== "sieve") {
+    const parent = p.split(".").slice(0, -1).join(".");
+    CHILDREN.get(parent)?.add(p);
+  }
+  for (const [p, kids] of CHILDREN) {
+    CHILDREN.set(p, [...kids].sort((a, b) =>
+      (PKGS.has(b) - PKGS.has(a)) || a.localeCompare(b)));
+  }
+  OUT = new Map(); INN = new Map(); DEGREE = new Map(); EXPORTS = new Map();
+  for (const e of G.edges) {
+    if (!MODS[e.src] || !MODS[e.dst]) continue;
+    if (!OUT.has(e.src)) OUT.set(e.src, []);
+    if (!INN.has(e.dst)) INN.set(e.dst, []);
+    OUT.get(e.src).push(e); INN.get(e.dst).push(e);
+    DEGREE.set(e.src, (DEGREE.get(e.src) || 0) + 1);
+    DEGREE.set(e.dst, (DEGREE.get(e.dst) || 0) + 1);
+    const syms = new Set((MODS[e.dst].symbols || []).map((s) => s.name));
+    for (const n of e.names) if (syms.has(n)) {
+      if (!EXPORTS.has(e.dst)) EXPORTS.set(e.dst, new Map());
+      const m = EXPORTS.get(e.dst);
+      if (!m.has(n)) m.set(n, []);
+      m.get(n).push(e.src);
+    }
+  }
+}
+
+const isPackage = (id) => PKGS.has(id);
+const isModule = (id) => !!MODS[id];
+const short = (id) => id.replace(/^sieve\./, "").replace(/\.__init__$/, "/");
+const hiddenSet = () => new Set(state.hidden ? state.hidden.split(",") : []);
+const bandOf = (id) => MODS[id] ? MODS[id].band : null;
+const layerPkgOf = (id) => MODS[id] ? (MODS[id].layerPackage || id.split(".").slice(0, 2).join(".")) : null;
+
+function moduleVisible(id) {
+  const m = MODS[id];
+  if (!m) return false;
+  if (+state.hideInit && m.isInit) return false;
+  if (hiddenSet().has(layerPkgOf(id))) return false;
+  return true;
+}
+function underScope(mod, scope) { return mod === scope || mod.startsWith(scope + "."); }
+function scopeModules(scope) {
+  if (isModule(scope)) return [scope];
+  return Object.keys(MODS).filter((m) => underScope(m, scope));
+}
+// display id after the hide-__init__ reroute (init edges read as package edges)
+function dispId(mod) {
+  return +state.hideInit && mod.endsWith(".__init__") ? mod.replace(/\.__init__$/, "") : mod;
+}
+
+// aggregate raw module edges by a mapping fn; fn returns null to drop an endpoint
+function aggregate(mapFn) {
+  const acc = new Map();
+  for (const e of G.edges) {
+    if (!MODS[e.src] || !MODS[e.dst]) continue;
+    const s = mapFn(e.src), d = mapFn(e.dst);
+    if (!s || !d || s === d) continue;
+    const k = s + " " + d;
+    if (!acc.has(k)) acc.set(k, { src: s, dst: d, weight: 0, names: [], statuses: new Set(), pairs: [] });
+    const a = acc.get(k);
+    a.weight += e.names.length;
+    a.names.push(...e.names);
+    a.statuses.add(e.status);
+    a.pairs.push(e);
+  }
+  for (const a of acc.values()) {
+    a.status = a.statuses.has("up") ? "up" : a.statuses.has("exception") ? "exception" : "ok";
+  }
+  return [...acc.values()];
+}
+
+// ---------- chrome: breadcrumb, tabs, stats, dials, bands, tree ----------
+function renderCrumb() {
+  const el = $("#crumb");
+  el.innerHTML = "";
+  const parts = state.scope.split(".");
+  parts.forEach((p, i) => {
+    const id = parts.slice(0, i + 1).join(".");
+    const sp = document.createElement("span");
+    sp.textContent = p;
+    if (i === parts.length - 1) sp.className = "leaf";
+    else sp.onclick = () => set({ scope: id, sel: "" }, true);
+    el.appendChild(sp);
+    if (i < parts.length - 1) {
+      const s = document.createElement("span");
+      s.className = "sep"; s.textContent = " ▸ ";
+      el.appendChild(s);
+    }
+  });
+  document.querySelectorAll("#tabs button").forEach((b) =>
+    b.classList.toggle("on", b.dataset.v === state.view));
+  $("#stats").textContent =
+    `${G.meta.moduleCount} modules · ${G.meta.edgeCount} edges · ${G.meta.ghostCount} projected`;
+}
+
+function syncDials() {
+  $("#up").value = state.up; $("#upVal").textContent = state.up >= 8 ? "∞" : state.up;
+  $("#down").value = state.down; $("#downVal").textContent = state.down >= 8 ? "∞" : state.down;
+  $("#lens").value = state.lens; $("#grain").value = state.grain;
+  $("#hub").value = state.hub; $("#hubVal").textContent = +state.hub === 0 ? "off" : state.hub;
+  $("#wmin").value = state.wmin; $("#wminVal").textContent = state.wmin;
+  $("#hideInit").checked = !!+state.hideInit;
+  $("#ghosts").checked = !!+state.ghosts;
+  const hid = hiddenSet();
+  document.querySelectorAll("#bands input").forEach((c) => { c.checked = !hid.has(c.value); });
+}
+
+function buildBandChecks() {
+  const el = $("#bands");
+  el.innerHTML = "";
+  for (const { pkg, band } of bandsFlat) {
+    const lab = document.createElement("label");
+    lab.className = "check";
+    const c = document.createElement("input");
+    c.type = "checkbox"; c.value = pkg; c.checked = true;
+    c.onchange = () => {
+      const hid = hiddenSet();
+      c.checked ? hid.delete(pkg) : hid.add(pkg);
+      set({ hidden: [...hid].join(",") });
+    };
+    const dot = document.createElement("span");
+    dot.style.cssText = `width:8px;height:8px;border-radius:50%;background:${BAND_COLORS[band]};display:inline-block`;
+    lab.append(c, dot, document.createTextNode(" " + pkg.replace("sieve.", "")));
+    el.appendChild(lab);
+  }
+}
+
+function renderTree(query) {
+  const el = $("#tree");
+  el.innerHTML = "";
+  const q = (query || "").toLowerCase();
+  const build = (pkg, depth) => {
+    const det = document.createElement("details");
+    det.open = depth < 2 || underScope(state.scope, pkg) || underScope(pkg, state.scope) || !!q;
+    const sum = document.createElement("summary");
+    sum.textContent = pkg.split(".").pop() + "/";
+    if (pkg === state.scope) sum.classList.add("here");
+    sum.onclick = (ev) => {
+      if (ev.offsetX > 14) { ev.preventDefault(); set({ scope: pkg, sel: "" }, true); }
+    };
+    det.appendChild(sum);
+    for (const kid of CHILDREN.get(pkg) || []) {
+      if (isPackage(kid)) { det.appendChild(build(kid, depth + 1)); continue; }
+      if (+state.hideInit && MODS[kid].isInit) continue;
+      const hit = q && kid.toLowerCase().includes(q);
+      if (q && !hit) continue;
+      const d = document.createElement("div");
+      d.className = "mod" + (MODS[kid].ghost ? " ghostly" : "") + (kid === state.scope ? " here" : "") + (hit ? " hit" : "");
+      d.textContent = kid.split(".").pop();
+      d.onclick = () => set({ scope: kid, sel: "" }, true);
+      det.appendChild(d);
+    }
+    return det;
+  };
+  el.appendChild(build("sieve", 0));
+}
+
+// ---------- detail panel ----------
+function row(name, right, cls) {
+  const r = document.createElement("div");
+  r.className = "row";
+  const a = document.createElement("a");
+  a.textContent = short(name);
+  a.onclick = () => set({ scope: name, sel: "" }, true);
+  const n = document.createElement("span");
+  n.className = "n" + (cls ? " " + cls : "");
+  n.textContent = right;
+  r.append(a, n);
+  return r;
+}
+function renderDetail() {
+  const el = $("#detail");
+  el.innerHTML = "";
+  const id = state.sel || state.scope;
+  const h4 = (t) => { const h = document.createElement("h4"); h.textContent = t; el.appendChild(h); };
+  const note = (t) => { const p = document.createElement("div"); p.className = "note"; p.textContent = t; el.appendChild(p); };
+
+  if (id.includes("::")) {  // a symbol inside a module
+    const [mid, sname] = id.split("::");
+    const m = MODS[mid]; if (!m) return;
+    const sym = (m.symbols || []).find((s) => s.name === sname); if (!sym) return;
+    el.innerHTML = `<h2>${sname}</h2>`;
+    note(`${sym.kind} · ${short(mid)}:${sym.line} · ${sym.loc} loc`);
+    if (sym.doc) note(sym.doc);
+    const calls = m.calls.filter(([a]) => a === sname).map(([, b]) => b);
+    const calledBy = m.calls.filter(([, b]) => b === sname).map(([a]) => a);
+    const uses = m.uses.filter(([a]) => a === sname);
+    const importers = EXPORTS.get(mid)?.get(sname) || [];
+    if (calls.length) { h4(`calls (${calls.length})`); calls.forEach((c) => {
+      const d = document.createElement("div"); d.className = "lnk mono";
+      d.textContent = c; d.onclick = () => set({ sel: mid + "::" + c }); el.appendChild(d); }); }
+    if (calledBy.length) { h4(`called by (${calledBy.length})`); calledBy.forEach((c) => {
+      const d = document.createElement("div"); d.className = "lnk mono";
+      d.textContent = c; d.onclick = () => set({ sel: mid + "::" + c }); el.appendChild(d); }); }
+    if (uses.length) { h4(`uses from imports (${uses.length})`);
+      uses.forEach(([, tm, n]) => el.appendChild(row(tm, n))); }
+    if (importers.length) { h4(`imported by (${importers.length})`);
+      importers.forEach((im) => el.appendChild(row(im, "")));  }
+    return;
+  }
+
+  if (isModule(id)) {
+    const m = MODS[id];
+    el.innerHTML = `<h2>${short(id)}</h2>`;
+    note(m.ghost ? "projected — not built" :
+      `${m.loc} loc · band ${m.band ?? "?"} (${(m.layerPackage || "?").replace("sieve.", "")}) · °${DEGREE.get(id) || 0}`);
+    if (m.annotation) note(m.annotation);
+    else if (m.doc) note(m.doc);
+    const outs = OUT.get(id) || [], inns = INN.get(id) || [];
+    if (outs.length) { h4(`imports (${outs.length} modules)`);
+      outs.forEach((e) => el.appendChild(row(e.dst, e.names.join(", "),
+        e.status !== "ok" ? "st-" + e.status : ""))); }
+    if (inns.length) { h4(`imported by (${inns.length} modules)`);
+      inns.forEach((e) => el.appendChild(row(e.src, e.names.join(", "),
+        e.status !== "ok" ? "st-" + e.status : ""))); }
+    if (m.external.length) { h4("external"); note(m.external.join(", ")); }
+    if ((m.symbols || []).length) { h4(`symbols (${m.symbols.length})`);
+      m.symbols.forEach((s) => {
+        const d = document.createElement("div"); d.className = "row";
+        const a = document.createElement("a"); a.textContent = s.name;
+        a.onclick = () => set({ scope: id, sel: id + "::" + s.name }, true);
+        const n = document.createElement("span"); n.className = "n"; n.textContent = s.kind;
+        d.append(a, n); el.appendChild(d);
+      }); }
+    return;
+  }
+
+  // package
+  const mods = scopeModules(id);
+  el.innerHTML = `<h2>${id === "sieve" ? "sieve" : short(id) + "/"}</h2>`;
+  note(`package · ${mods.length} modules · ${mods.reduce((a, m) => a + MODS[m].loc, 0)} loc`);
+  const inNames = new Map(), outNames = new Map();
+  for (const e of G.edges) {
+    if (!MODS[e.src] || !MODS[e.dst]) continue;
+    const si = underScope(e.src, id), di = underScope(e.dst, id);
+    if (si && !di) outNames.set(e.dst, (outNames.get(e.dst) || 0) + e.names.length);
+    if (!si && di) inNames.set(e.src, (inNames.get(e.src) || 0) + e.names.length);
+  }
+  if (outNames.size) { h4(`imports from outside (${outNames.size} modules)`);
+    [...outNames].sort((a, b) => b[1] - a[1]).forEach(([m, w]) => el.appendChild(row(m, w + " names"))); }
+  if (inNames.size) { h4(`imported from outside by (${inNames.size} modules)`);
+    [...inNames].sort((a, b) => b[1] - a[1]).forEach(([m, w]) => el.appendChild(row(m, w + " names"))); }
+}
+
+// ---------- svg scaffolding ----------
+const svg = d3.select("#canvas");
+const zoomG = svg.append("g");
+svg.append("defs").html(`
+  <marker id="arr" viewBox="0 -4 8 8" refX="8" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,-3.5L8,0L0,3.5" fill="#3d4450"></path></marker>
+  <marker id="arr-lit" viewBox="0 -4 8 8" refX="8" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,-3.5L8,0L0,3.5" fill="#6ab0f3"></path></marker>
+  <marker id="arr-up" viewBox="0 -4 8 8" refX="8" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,-3.5L8,0L0,3.5" fill="#e5534b"></path></marker>
+  <marker id="arr-exc" viewBox="0 -4 8 8" refX="8" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,-3.5L8,0L0,3.5" fill="#e0a83c"></path></marker>`);
+const zoom = d3.zoom().scaleExtent([0.15, 4]).on("zoom", (ev) => zoomG.attr("transform", ev.transform));
+svg.call(zoom).on("dblclick.zoom", null);
+let sim = null;
+
+function clearCanvas() {
+  if (sim) { sim.stop(); sim = null; }
+  zoomG.selectAll("*").remove();
+  $("#tip").style.display = "none";
+}
+function canvasSize() {
+  const r = $("#main").getBoundingClientRect();
+  return [r.width, r.height];
+}
+function tip(html, ev) {
+  const t = $("#tip");
+  if (!html) { t.style.display = "none"; return; }
+  t.innerHTML = html;
+  t.style.display = "block";
+  const r = $("#main").getBoundingClientRect();
+  t.style.left = Math.min(ev.clientX - r.left + 14, r.width - 390) + "px";
+  t.style.top = (ev.clientY - r.top + 10) + "px";
+}
+function nodeColor(d) {
+  if (d.ghost) return "#3a4150";
+  if (d.band == null) return "#8a93a2";
+  return BAND_COLORS[d.band];
+}
+function edgeMarker(e, lit) {
+  if (lit) return "url(#arr-lit)";
+  if (e.status === "up") return "url(#arr-up)";
+  if (e.status === "exception") return "url(#arr-exc)";
+  return "url(#arr)";
+}
+function highlight(nodesSel, linksSel, id) {
+  if (!id) {
+    nodesSel.classed("hushed", false);
+    linksSel.classed("hushed", (e) => e.hub && +state.hub > 0).classed("lit", false)
+      .attr("marker-end", (e) => edgeMarker(e, false));
+    return;
+  }
+  const near = new Set([id]);
+  linksSel.each((e) => {
+    const s = e.src.id ?? e.src, d = e.dst.id ?? e.dst;
+    if (s === id && state.lens !== "in") near.add(d);
+    if (d === id && state.lens !== "out") near.add(s);
+  });
+  nodesSel.classed("hushed", (d) => !near.has(d.id));
+  linksSel
+    .classed("lit", (e) => {
+      const s = e.src.id ?? e.src, d = e.dst.id ?? e.dst;
+      return (s === id && state.lens !== "in") || (d === id && state.lens !== "out");
+    })
+    .classed("hushed", (e) => {
+      const s = e.src.id ?? e.src, d = e.dst.id ?? e.dst;
+      const on = (s === id && state.lens !== "in") || (d === id && state.lens !== "out");
+      return !on;
+    })
+    .attr("marker-end", function (e) {
+      return edgeMarker(e, d3.select(this).classed("lit"));
+    });
+}
+
+// ---------- view: internals ----------
+function renderInternals() {
+  $("#cards").classList.add("on");
+  const wrap = $("#cards");
+  wrap.innerHTML = "";
+  const grid = document.createElement("div");
+  grid.className = "grid";
+  wrap.appendChild(grid);
+  const mk = (id, kind, name, noteTxt, metaTxt, ghost) => {
+    const c = document.createElement("div");
+    c.className = "card" + (ghost ? " ghostly" : "") + (state.sel === id ? " sel" : "");
+    c.innerHTML = `<div class="name"><span class="kindtag k-${kind}">${kind}</span>${name}</div>` +
+      (noteTxt ? `<div class="note"></div>` : "") + `<div class="meta">${metaTxt}</div>`;
+    if (noteTxt) c.querySelector(".note").textContent = noteTxt;
+    c.onclick = () => set({ sel: id });
+    c.ondblclick = () => {
+      if (id.includes("::")) return;
+      set({ scope: id, sel: "" }, true);
+    };
+    grid.appendChild(c);
+  };
+  if (isModule(state.scope)) {
+    const m = MODS[state.scope];
+    for (const s of m.symbols) {
+      const calls = m.calls.filter(([a]) => a === s.name).length;
+      const calledBy = m.calls.filter(([, b]) => b === s.name).length;
+      const importers = EXPORTS.get(state.scope)?.get(s.name)?.length || 0;
+      mk(state.scope + "::" + s.name, s.kind, s.name, s.doc,
+        `${s.loc} loc · :${s.line} · calls ${calls} · called-by ${calledBy} · imported-by ${importers}`, false);
+    }
+    if (!m.symbols.length) grid.innerHTML = "<div class='note'>no top-level defs</div>";
+  } else {
+    for (const kid of CHILDREN.get(state.scope) || []) {
+      if (isPackage(kid)) {
+        const mods = scopeModules(kid).filter((x) => !(+state.hideInit && MODS[x].isInit));
+        const ghost = mods.every((x) => MODS[x].ghost);
+        mk(kid, "package", short(kid) + "/", "",
+          `${mods.length} modules · ${mods.reduce((a, x) => a + MODS[x].loc, 0)} loc`, ghost);
+      } else {
+        if (+state.hideInit && MODS[kid].isInit) continue;
+        if (hiddenSet().has(layerPkgOf(kid))) continue;
+        const m = MODS[kid];
+        mk(kid, "module", kid.split(".").pop(), m.annotation || m.doc,
+          m.ghost ? "projected" : `${m.loc} loc · in ${(INN.get(kid) || []).length} · out ${(OUT.get(kid) || []).length}`,
+          m.ghost);
+      }
+    }
+  }
+}
+
+// ---------- view: interior ----------
+function renderInterior() {
+  const [W, H] = canvasSize();
+  const hid = hiddenSet();
+  let nodes = [], links = [];
+
+  if (isModule(state.scope)) {
+    const m = MODS[state.scope];
+    nodes = m.symbols.map((s) => ({
+      id: state.scope + "::" + s.name, label: s.name, kind: s.kind,
+      band: m.band, loc: s.loc, sym: s,
+    }));
+    const have = new Set(nodes.map((n) => n.id));
+    links = m.calls
+      .map(([a, b]) => ({ src: state.scope + "::" + a, dst: state.scope + "::" + b, weight: 1, status: "ok", names: [b] }))
+      .filter((l) => have.has(l.src) && have.has(l.dst));
+    // boundary terminals: what comes in (used imports) and what leaves (exported symbols)
+    const usesBySym = new Map();
+    for (const [s, tm, n] of m.uses) {
+      const k = state.scope + "::" + s;
+      if (!have.has(k)) continue;
+      if (!usesBySym.has(k)) usesBySym.set(k, []);
+      usesBySym.get(k).push(short(tm) + "." + n);
+    }
+    const exp = EXPORTS.get(state.scope) || new Map();
+    if (usesBySym.size) nodes.push({ id: " IN", label: "outside ▸ imports used", terminal: true });
+    if (exp.size) nodes.push({ id: " OUT", label: "exported ▸ outside", terminal: true });
+    for (const [k, list] of usesBySym)
+      links.push({ src: " IN", dst: k, weight: list.length, status: "ok", names: list });
+    for (const [sname, importers] of exp) {
+      const k = state.scope + "::" + sname;
+      if (have.has(k))
+        links.push({ src: k, dst: " OUT", weight: importers.length, status: "ok", names: importers.map(short) });
+    }
+  } else {
+    const scope = state.scope;
+    const childOf = (mod) => {
+      const rest = mod.slice(scope.length + 1);
+      const kid = scope + "." + rest.split(".")[0];
+      return dispId(kid) === scope ? null : (isPackage(kid) || isModule(kid) ? kid : null);
+    };
+    const mapFn = (mod) => {
+      if (!moduleVisible(mod) && underScope(mod, scope) && +state.hideInit && MODS[mod].isInit) {
+        // init reroute: its edges read as the package's
+        const r = dispId(mod);
+        return underScope(r, scope) && r !== scope ? childOf(mod) ?? null : (r === scope ? null : " X");
+      }
+      if (!moduleVisible(mod)) return null;
+      if (underScope(mod, scope)) return childOf(mod);
+      return " X";  // outside world
+    };
+    const agg = aggregate(mapFn).filter((a) => a.weight >= +state.wmin || a.src === " X" || a.dst === " X");
+    const ids = new Set();
+    agg.forEach((a) => { ids.add(a.src); ids.add(a.dst); });
+    // children with no edges at all still deserve a node
+    for (const kid of CHILDREN.get(scope) || []) {
+      if (isModule(kid) && !moduleVisible(kid)) continue;
+      ids.add(kid);
+    }
+    ids.delete(" X");
+    nodes = [...ids].map((id) => {
+      const m = MODS[id];
+      const mods = m ? [id] : scopeModules(id);
+      return {
+        id, label: m ? id.split(".").pop() : short(id) + "/", pkg: !m,
+        band: m ? m.band : (MODS[mods[0]]?.band ?? null),
+        ghost: m ? m.ghost : mods.length > 0 && mods.every((x) => MODS[x].ghost),
+        loc: mods.reduce((a, x) => a + (MODS[x]?.loc || 0), 0),
+      };
+    });
+    const inX = agg.filter((a) => a.src === " X" && a.dst !== " X");
+    const outX = agg.filter((a) => a.dst === " X" && a.src !== " X");
+    links = agg.filter((a) => a.src !== " X" && a.dst !== " X");
+    if (inX.length && scope !== "sieve") nodes.push({ id: " IN", label: "outside ▸ in", terminal: true });
+    if (outX.length && scope !== "sieve") nodes.push({ id: " OUT", label: "out ▸ outside", terminal: true });
+    if (scope !== "sieve") {
+      inX.forEach((a) => links.push({ ...a, src: " IN" }));
+      outX.forEach((a) => links.push({ ...a, dst: " OUT" }));
+    }
+  }
+
+  drawForce(nodes, links, W, H);
+}
+
+function drawForce(nodes, links, W, H) {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const simLinks = links.map((l) => ({ ...l, source: l.src, target: l.dst }));
+  nodes.forEach((n) => {
+    if (n.id === " IN") { n.fx = 80; n.fy = H / 2; }
+    if (n.id === " OUT") { n.fx = W - 80; n.fy = H / 2; }
+  });
+  const r = (d) => d.terminal ? 10 : Math.max(6, Math.min(24, 3 + Math.sqrt(d.loc || 30)));
+
+  const linkSel = zoomG.append("g").selectAll("path").data(simLinks).join("path")
+    .attr("class", (e) => "link st-" + e.status)
+    .attr("stroke-width", (e) => Math.min(6, 0.8 + Math.sqrt(e.weight || 1)))
+    .attr("marker-end", (e) => edgeMarker(e, false))
+    .on("mousemove", (ev, e) => tip(
+      `<span class="t">${short(e.src.id ?? e.src)} → ${short(e.dst.id ?? e.dst)}</span> · ${e.weight || 1}<br>` +
+      (e.names || []).slice(0, 24).join(", ") + ((e.names || []).length > 24 ? " …" : ""), ev))
+    .on("mouseout", () => tip(null));
+
+  const nodeSel = zoomG.append("g").selectAll("g").data(nodes).join("g")
+    .attr("class", (d) => "node" + (d.terminal ? " terminal" : "") + (d.ghost ? " ghostly" : "")
+      + (d.id === state.sel ? " sel" : ""))
+    .call(d3.drag()
+      .on("start", (ev, d) => { if (!ev.active && sim) sim.alphaTarget(0.25).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+      .on("end", (ev, d) => { if (!ev.active && sim) sim.alphaTarget(0); if (!d.terminal) { d.fx = null; d.fy = null; } }));
+
+  nodeSel.each(function (d) {
+    const g = d3.select(this);
+    if (d.terminal) {
+      g.append("rect").attr("x", -60).attr("y", -12).attr("width", 120).attr("height", 24).attr("rx", 4);
+      g.append("text").attr("text-anchor", "middle").attr("dy", 4).text(d.label);
+    } else {
+      g.append("circle").attr("r", r(d)).attr("fill", nodeColor(d)).attr("fill-opacity", 0.8)
+        .attr("stroke", nodeColor(d));
+      if (d.pkg) g.append("circle").attr("r", r(d) + 3.5).attr("fill", "none")
+        .attr("stroke", nodeColor(d)).attr("stroke-opacity", 0.5);
+      g.append("text").attr("dx", r(d) + 5).attr("dy", 4).text(d.label);
+    }
+  });
+
+  nodeSel
+    .on("click", (ev, d) => { if (!d.terminal) set({ sel: d.id }); })
+    .on("dblclick", (ev, d) => {
+      if (d.terminal || d.id.includes("::")) return;
+      ev.stopPropagation();
+      set({ scope: d.id, sel: "" }, true);
+    })
+    .on("mouseover", (ev, d) => { if (!d.terminal) highlight(nodeSel, linkSel, d.id); })
+    .on("mouseout", () => highlight(nodeSel, linkSel, state.sel && byId.has(state.sel) ? state.sel : null))
+    .on("mousemove", (ev, d) => {
+      if (d.terminal) return;
+      const m = MODS[d.id];
+      const txt = m ? (m.annotation || m.doc || "") : (d.sym ? d.sym.doc : "");
+      tip(`<span class="t">${d.label}</span>${txt ? "<br>" + txt : ""}`, ev);
+    });
+
+  sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(simLinks).id((d) => d.id).distance(95).strength(0.5))
+    .force("charge", d3.forceManyBody().strength(-320))
+    .force("x", d3.forceX(W / 2).strength(0.05))
+    .force("y", d3.forceY(H / 2).strength(0.07))
+    .force("collide", d3.forceCollide().radius((d) => r(d) + 14))
+    .on("tick", () => {
+      linkSel.attr("d", (e) => {
+        const dx = e.target.x - e.source.x, dy = e.target.y - e.source.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const sr = r(e.source) + 2, tr = r(e.target) + 6;
+        const sx = e.source.x + dx / len * sr, sy = e.source.y + dy / len * sr;
+        const tx = e.target.x - dx / len * tr, ty = e.target.y - dy / len * tr;
+        return `M${sx},${sy}L${tx},${ty}`;
+      });
+      nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    });
+  if (state.sel && byId.has(state.sel)) highlight(nodeSel, linkSel, state.sel);
+  svg.call(zoom.transform, d3.zoomIdentity);
+}
+
+// ---------- view: boundary ----------
+function walkCone(seeds, adj, endKey, maxDepth) {
+  // BFS over raw module edges; returns Map(moduleId -> depth)
+  const depth = new Map();
+  let frontier = new Set(seeds);
+  for (let d = 1; d <= maxDepth; d++) {
+    const next = new Set();
+    for (const mod of frontier) {
+      for (const e of adj.get(mod) || []) {
+        const other = e[endKey];
+        if (seeds.has(other) || depth.has(other) || !moduleVisible(other)) continue;
+        depth.set(other, d);
+        next.add(other);
+      }
+    }
+    if (!next.size) break;
+    frontier = next;
+  }
+  return depth;
+}
+
+function renderBoundary() {
+  const [W, H] = canvasSize();
+  const seeds = new Set(scopeModules(state.scope));
+  const upMax = +state.up >= 8 ? 99 : +state.up;
+  const downMax = +state.down >= 8 ? 99 : +state.down;
+  const upDepth = walkCone(seeds, INN, "src", upMax);     // who feeds in
+  const downDepth = walkCone(seeds, OUT, "dst", downMax); // who is fed
+
+  const groupOf = (mod) => {
+    if (seeds.has(mod)) return " SCOPE";
+    if (!upDepth.has(mod) && !downDepth.has(mod)) return null;
+    if (state.grain === "package") return layerPkgOf(mod) || mod;
+    return dispId(mod);
+  };
+  const agg = aggregate(groupOf);
+
+  // group -> side/depth (min member depth; upstream wins ties)
+  const groups = new Map();
+  const place = (mod, side, d) => {
+    const g = groupOf(mod);
+    if (!g || g === " SCOPE") return;
+    const cur = groups.get(g);
+    if (!cur || d < cur.depth || (cur.side !== "up" && side === "up" && d <= cur.depth)) {
+      groups.set(g, { side, depth: d });
+    }
+    if (cur) {
+      cur.mods = cur.mods || new Set();
+    }
+  };
+  for (const [m, d] of upDepth) place(m, "up", d);
+  for (const [m, d] of downDepth) place(m, "down", d);
+  const members = new Map();
+  for (const m of [...upDepth.keys(), ...downDepth.keys()]) {
+    const g = groupOf(m);
+    if (!g) continue;
+    if (!members.has(g)) members.set(g, new Set());
+    members.get(g).add(m);
+  }
+
+  const deg = (g) => [...(members.get(g) || [])].reduce((a, m) => Math.max(a, DEGREE.get(m) || 0), 0);
+  const isHub = (g) => +state.hub > 0 && g !== " SCOPE" && deg(g) > +state.hub;
+
+  const shown = agg.filter((a) => {
+    const hubEdge = isHub(a.src) || isHub(a.dst);
+    if (hubEdge) a.hub = true;
+    return (a.weight >= +state.wmin || a.src === " SCOPE" || a.dst === " SCOPE");
+  });
+  const used = new Set([" SCOPE"]);
+  shown.forEach((a) => { used.add(a.src); used.add(a.dst); });
+
+  // layout: columns by depth
+  const cols = new Map(); // colIndex -> [group ids]; scope at 0, upstream negative
+  const colKey = (g) => {
+    if (g === " SCOPE") return 0;
+    const info = groups.get(g);
+    return info.side === "up" ? -info.depth : info.depth;
+  };
+  for (const g of used) {
+    if (!groups.has(g) && g !== " SCOPE") continue;
+    const c = colKey(g);
+    if (!cols.has(c)) cols.set(c, []);
+    cols.get(c).push(g);
+  }
+  for (const arr of cols.values()) {
+    arr.sort((a, b) => {
+      const ba = MODS[[...(members.get(a) || [])][0]]?.band ?? 9;
+      const bb = MODS[[...(members.get(b) || [])][0]]?.band ?? 9;
+      return ba - bb || a.localeCompare(b);
+    });
+  }
+  const colIdx = [...cols.keys()].sort((a, b) => a - b);
+  const colW = Math.max(190, Math.min(280, (W - 80) / Math.max(colIdx.length, 1)));
+  const x0 = W / 2 - colKey(" SCOPE") * colW;
+  const nodes = [];
+  for (const c of colIdx) {
+    const arr = cols.get(c);
+    const rowH = Math.min(34, (H - 60) / Math.max(arr.length, 1));
+    arr.forEach((g, i) => {
+      nodes.push({
+        id: g,
+        label: g === " SCOPE" ? short(state.scope) || "sieve"
+          : (state.grain === "package" && !MODS[g] ? short(g) + "/" : short(g)),
+        x: x0 + c * colW,
+        y: H / 2 + (i - (arr.length - 1) / 2) * rowH,
+        scopeNode: g === " SCOPE",
+        hub: isHub(g),
+        band: g === " SCOPE" ? null : (MODS[[...(members.get(g) || [g])][0]]?.band ?? MODS[g]?.band ?? null),
+        count: (members.get(g) || new Set()).size,
+      });
+    });
+  }
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const links = shown.filter((a) => byId.has(a.src) && byId.has(a.dst));
+
+  const linkSel = zoomG.append("g").selectAll("path").data(links).join("path")
+    .attr("class", (e) => "link st-" + e.status + (e.hub ? " hushed" : ""))
+    .attr("stroke-width", (e) => Math.min(6, 0.8 + Math.sqrt(e.weight)))
+    .attr("marker-end", (e) => edgeMarker(e, false))
+    .attr("d", (e) => {
+      const s = byId.get(e.src), t = byId.get(e.dst);
+      const sx = s.x + 8, tx = t.x - 12;
+      const mx = (sx + tx) / 2;
+      return `M${sx},${s.y}C${mx},${s.y} ${mx},${t.y} ${tx},${t.y}`;
+    })
+    .on("mousemove", (ev, e) => tip(
+      `<span class="t">${short(e.src === " SCOPE" ? state.scope : e.src)} → ` +
+      `${short(e.dst === " SCOPE" ? state.scope : e.dst)}</span> · ${e.weight} names<br>` +
+      [...new Set(e.names)].slice(0, 24).join(", ") + (e.names.length > 24 ? " …" : ""), ev))
+    .on("mouseout", () => tip(null));
+
+  const wl = zoomG.append("g");
+  links.filter((e) => !e.hub && e.weight >= 3).forEach((e) => {
+    const s = byId.get(e.src), t = byId.get(e.dst);
+    wl.append("text").attr("class", "wlabel")
+      .attr("x", (s.x + t.x) / 2).attr("y", (s.y + t.y) / 2 - 4)
+      .attr("text-anchor", "middle").text(e.weight);
+  });
+
+  const nodeSel = zoomG.append("g").selectAll("g").data(nodes).join("g")
+    .attr("class", (d) => "node" + (d.hub ? " hub" : "") + (d.id === state.sel ? " sel" : ""))
+    .attr("transform", (d) => `translate(${d.x},${d.y})`);
+  nodeSel.each(function (d) {
+    const g = d3.select(this);
+    if (d.scopeNode) {
+      const w = Math.max(90, d.label.length * 7.5 + 22);
+      g.append("rect").attr("x", -w / 2).attr("y", -16).attr("width", w).attr("height", 32)
+        .attr("rx", 5).attr("fill", "#26436b").attr("stroke", "#6ab0f3");
+      g.append("text").attr("text-anchor", "middle").attr("dy", 4).text(d.label);
+    } else {
+      g.append("circle").attr("r", d.hub ? 4 : 7).attr("fill", nodeColor(d)).attr("fill-opacity", 0.8);
+      g.append("text").attr("dx", 10).attr("dy", 4)
+        .text(d.label + (d.count > 1 ? ` (${d.count})` : ""));
+    }
+  });
+  nodeSel
+    .on("click", (ev, d) => { if (!d.scopeNode) set({ sel: MODS[d.id] || PKGS.has(d.id) ? d.id : "" }); })
+    .on("dblclick", (ev, d) => {
+      if (d.scopeNode) return;
+      const target = MODS[d.id] ? d.id : (PKGS.has(d.id) ? d.id : null);
+      if (target) { ev.stopPropagation(); set({ scope: target, sel: "" }, true); }
+    })
+    .on("mouseover", function (ev, d) {
+      if (d.hub) linkSel.classed("hushed", (e) => !(e.src === d.id || e.dst === d.id) && e.hub);
+    })
+    .on("mouseout", () => linkSel.classed("hushed", (e) => e.hub))
+    .on("mousemove", (ev, d) => {
+      if (d.scopeNode) return;
+      const mems = [...(members.get(d.id) || [])];
+      tip(`<span class="t">${d.label}</span> · max °${deg(d.id)}` +
+        (mems.length > 1 ? `<br>${mems.map(short).slice(0, 18).join(", ")}${mems.length > 18 ? " …" : ""}` : ""), ev);
+    })
+    .on("mouseout.tip", () => tip(null));
+
+  svg.call(zoom.transform, d3.zoomIdentity);
+}
+
+// ---------- render root ----------
+function render() {
+  buildIndexes();
+  if (!isModule(state.scope) && !isPackage(state.scope)) state.scope = "sieve";
+  renderCrumb();
+  syncDials();
+  renderTree($("#search").value);
+  renderDetail();
+  clearCanvas();
+  $("#cards").classList.remove("on");
+  if (state.view === "internals") renderInternals();
+  else if (state.view === "boundary") renderBoundary();
+  else renderInterior();
+}
+
+// ---------- wiring ----------
+document.querySelectorAll("#tabs button").forEach((b) =>
+  b.onclick = () => set({ view: b.dataset.v }, true));
+$("#up").oninput = (e) => set({ up: +e.target.value });
+$("#down").oninput = (e) => set({ down: +e.target.value });
+$("#lens").onchange = (e) => set({ lens: e.target.value });
+$("#grain").onchange = (e) => set({ grain: e.target.value });
+$("#hub").oninput = (e) => set({ hub: +e.target.value });
+$("#wmin").oninput = (e) => set({ wmin: +e.target.value });
+$("#hideInit").onchange = (e) => set({ hideInit: e.target.checked ? 1 : 0 });
+$("#ghosts").onchange = (e) => set({ ghosts: e.target.checked ? 1 : 0 });
+$("#search").oninput = () => renderTree($("#search").value);
+$("#search").onkeydown = (e) => {
+  if (e.key !== "Enter") return;
+  const q = $("#search").value.toLowerCase();
+  if (!q) return;
+  const hit = Object.keys(MODS).find((m) => m.toLowerCase().includes(q));
+  if (hit) set({ scope: hit, sel: "" }, true);
+};
+window.addEventListener("hashchange", () => {
+  if (applyingHash) return;
+  state = readHash();
+  render();
+});
+window.addEventListener("resize", () => render());
+
+state = readHash();
+buildBandChecks();
+render();
+</script>
+</body>
+</html>

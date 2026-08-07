@@ -16,7 +16,6 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import TypeVar
 
 from sieve.core.filter_base import (
-    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementDeclaration,
@@ -127,8 +126,6 @@ def register_filter(
     accepts: StreamSpec | Mapping[str, StreamSpec],
     emits: StreamSpec,
     cost: CostEstimate,
-    authoring_group: AuthoringGroup,
-    authoring_order: int = 1000,
     mode: Mode = Mode.STREAMING,
     settling_epsilon: float | None = None,
     rate_changing: bool = False,
@@ -137,7 +134,6 @@ def register_filter(
     stateful: bool = False,
     backend_agnostic: bool = False,
     primary_params: tuple[str, ...] = (),
-    authoring_hidden_params: tuple[str, ...] = (),
     caption: tuple[CaptionPart, ...] = (),
     param_value_labels: Mapping[str, Mapping[str, str]] | None = None,
     element: ElementDeclaration | None = None,
@@ -165,8 +161,6 @@ def register_filter(
             accepts=accepts,
             emits=emits,
             cost=cost,
-            authoring_group=authoring_group,
-            authoring_order=authoring_order,
             mode=mode,
             warmup_frames=params_model.max_warmup_frames(),
             settling_epsilon=settling_epsilon,
@@ -176,7 +170,6 @@ def register_filter(
             stateful=stateful,
             backend_agnostic=backend_agnostic,
             primary_params=primary_params,
-            authoring_hidden_params=authoring_hidden_params,
             caption=caption,
             param_value_labels={} if param_value_labels is None else param_value_labels,
             element=element,

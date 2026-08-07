@@ -13,14 +13,7 @@ import numpy as np
 import pytest
 
 from sieve.backend.dispatch import Backend, KernelRegistry, kernel
-from sieve.core.filter_base import (
-    ArraySpec,
-    AuthoringGroup,
-    CostEstimate,
-    ElementRelation,
-    ParamsBase,
-    TableSpec,
-)
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase, TableSpec
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.types import ChannelSpec, Frame, WorkUnits
@@ -42,7 +35,6 @@ SHELF = FilterRegistry()
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class AgnosticParams(ParamsBase):
@@ -57,7 +49,6 @@ class AgnosticParams(ParamsBase):
     emits=ArraySpec(channels=(ChannelSpec.GRAY,)),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class GrayOnlyParams(ParamsBase):
@@ -72,7 +63,6 @@ class GrayOnlyParams(ParamsBase):
     emits=ArraySpec(channels=(ChannelSpec.GRAY,)),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class HueParams(ParamsBase):
@@ -87,7 +77,6 @@ class HueParams(ParamsBase):
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class EitherParams(ParamsBase):
@@ -101,7 +90,6 @@ class EitherParams(ParamsBase):
     accepts=TableSpec(columns=("x",)),
     emits=TableSpec(columns=("x",)),
     cost=COST,
-    authoring_group=AuthoringGroup.DETECTION,
     registry=SHELF,
 )
 class RowsParams(ParamsBase):

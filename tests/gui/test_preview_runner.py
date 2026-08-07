@@ -40,13 +40,7 @@ from pytestqt.qtbot import QtBot
 
 from sieve.backend.dispatch import Backend, KernelRegistry, kernel
 from sieve.bench.metrics import MetricBus, Recorder
-from sieve.core.filter_base import (
-    ArraySpec,
-    AuthoringGroup,
-    CostEstimate,
-    ElementRelation,
-    ParamsBase,
-)
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Node, Pipeline
 from sieve.core.types import Frame, WorkUnits
@@ -205,7 +199,6 @@ class TestSuperseding:
             emits=ArraySpec(),
             element=ElementRelation.PRESERVED,
             cost=CostEstimate(work_per_megapixel=WorkUnits(1.0)),
-            authoring_group=AuthoringGroup.SPATIAL_PREP,
             registry=filters,
         )
         class SlowParams(ParamsBase):

@@ -68,7 +68,6 @@ from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import (
     SOURCE_ELEMENT_NAMES,
     ArraySpec,
-    AuthoringGroup,
     ElementKind,
     ElementNames,
     FilterSpec,
@@ -192,25 +191,6 @@ class Diagnostic:
 
 
 @dataclass(frozen=True, slots=True)
-class AttachmentOffer:
-    """One registered operation port that can be attached at an authoring seam.
-
-    The operation is a `FilterSpec`; `port` is the input port that can consume
-    the stream at the seam. Multi-input filters therefore appear once per
-    compatible port, and the caller still owns whether the remaining ports are
-    fillable in its authoring surface.
-    """
-
-    spec: FilterSpec
-    port: str
-
-
-_AUTHORING_GROUP_ORDER: Mapping[AuthoringGroup, int] = {
-    group: index for index, group in enumerate(AuthoringGroup)
-}
-
-
-@dataclass(frozen=True, slots=True)
 class Dag:
     """A `Pipeline` whose filters resolve, whose edges chain, and which sorts.
 
@@ -304,38 +284,6 @@ class Dag:
             having rather than a second opinion.
         """
         return cls._walk(pipeline, REGISTRY if registry is None else registry)[0]
-
-    @staticmethod
-    def attachable_operations(
-        upstream: StreamSpec,
-        *,
-        downstream_port: StreamSpec | None = None,
-        registry: FilterRegistry | None = None,
-    ) -> tuple[AttachmentOffer, ...]:
-        """Registered latest-version operations that fit an authoring seam.
-
-        `upstream` is the stream currently present at the seam. Each returned
-        offer names a filter spec and the input port whose declaration admits
-        that stream. If `downstream_port` is supplied, the filter's emitted
-        stream must also be admitted by the downstream port the insertion would
-        feed. This is the authoring version of edge legality: it reads the same
-        `StreamSpec.admits` relation as `_edge_faults`, but asks before a node is
-        minted rather than after an edge exists.
-
-        The query offers the latest registered version of each filter id, which
-        is the authoring case. Loading an old saved graph remains exact-version
-        resolution through `Dag.build`.
-        """
-        shelf = REGISTRY if registry is None else registry
-        offers: list[AttachmentOffer] = []
-        for filter_id in shelf.ids():
-            spec = shelf.latest(filter_id)
-            if downstream_port is not None and not downstream_port.admits(spec.emits):
-                continue
-            for port, accepts in spec.input_ports.items():
-                if accepts.admits(upstream):
-                    offers.append(AttachmentOffer(spec=spec, port=port))
-        return tuple(sorted(offers, key=_attachment_offer_key))
 
     # ---- construction ----------------------------------------------------
 
@@ -939,16 +887,6 @@ def graph_needs_chroma(pipeline: Pipeline, registry: FilterRegistry | None = Non
         return Dag.build(pipeline, registry).needs_chroma
     except GraphError:
         return True
-
-
-def _attachment_offer_key(offer: AttachmentOffer) -> tuple[int, str, tuple[int, int, int], str]:
-    spec = offer.spec
-    return (
-        _AUTHORING_GROUP_ORDER[spec.authoring_group],
-        spec.filter_id,
-        spec.version_tuple,
-        offer.port,
-    )
 
 
 def _requires_chroma(spec: FilterSpec) -> bool:

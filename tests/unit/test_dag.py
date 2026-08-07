@@ -18,9 +18,7 @@ import pytest
 
 from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import (
-    DEFAULT_PORT,
     ArraySpec,
-    AuthoringGroup,
     CostEstimate,
     ElementKind,
     ElementNames,
@@ -61,7 +59,6 @@ SHELF = FilterRegistry()
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class BlurParams(ParamsBase):
@@ -75,7 +72,6 @@ class BlurParams(ParamsBase):
     accepts=ArraySpec(),
     emits=TableSpec(columns=("x", "y")),
     cost=COST,
-    authoring_group=AuthoringGroup.DETECTION,
     registry=SHELF,
 )
 class DetectParams(ParamsBase):
@@ -90,7 +86,6 @@ class DetectParams(ParamsBase):
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class MinusParams(ParamsBase):
@@ -105,7 +100,6 @@ class MinusParams(ParamsBase):
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     deterministic=False,
     registry=SHELF,
 )
@@ -122,7 +116,6 @@ class JitterParams(ParamsBase):
     element=ElementKind.BLOCK,
     element_names=ElementNames("block", "blocks"),
     cost=COST,
-    authoring_group=AuthoringGroup.SIGNAL_EXTRACTION,
     registry=SHELF,
 )
 class GridifyParams(ParamsBase):
@@ -137,7 +130,6 @@ class GridifyParams(ParamsBase):
     emits=ArraySpec(),
     element=ElementRelation.AGGREGATED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     registry=SHELF,
 )
 class ShrinkParams(ParamsBase):
@@ -152,7 +144,6 @@ class ShrinkParams(ParamsBase):
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     rate_changing=True,
     registry=SHELF,
 )
@@ -409,42 +400,6 @@ class TestValidate:
         (diagnostic,) = Dag.validate(diamond(b="detect"), SHELF)
 
         assert diagnostic.nodes == ("b", "d")
-
-
-class TestAttachmentOffers:
-    def test_a_stream_query_returns_registered_ports_that_can_accept_it(self) -> None:
-        # This is the authoring side of `_edge_faults`: before a node exists,
-        # the graph layer can still ask the same declarations which operation
-        # ports could consume the stream at a seam. A multi-input filter appears
-        # once per compatible port; filling the other port is a later authoring
-        # decision rather than a type guess here.
-        offers = Dag.attachable_operations(ArraySpec(), registry=SHELF)
-
-        named = {(offer.spec.filter_id, offer.port) for offer in offers}
-
-        assert ("blur", DEFAULT_PORT) in named
-        assert ("detect", DEFAULT_PORT) in named
-        assert ("minus", "left") in named
-        assert ("minus", "right") in named
-
-    def test_a_downstream_port_constraint_filters_by_declared_emits(self) -> None:
-        # Inserting between two graph endpoints has two checks: the candidate
-        # must accept what is above the seam and emit what the downstream port
-        # accepts. The table-emitting detector fits a table port and is removed
-        # by an array port, with no `ChainKind` or GUI catalogue involved.
-        to_table = Dag.attachable_operations(
-            ArraySpec(),
-            downstream_port=TableSpec(columns=("x", "y")),
-            registry=SHELF,
-        )
-        to_array = Dag.attachable_operations(
-            ArraySpec(),
-            downstream_port=ArraySpec(),
-            registry=SHELF,
-        )
-
-        assert [offer.spec.filter_id for offer in to_table] == ["detect"]
-        assert "detect" not in {offer.spec.filter_id for offer in to_array}
 
 
 class TestOrder:

@@ -5,10 +5,14 @@ grades chains, this module builds the *hypothetical* chains a seam click puts
 on the table and grades those. The wizard widget is a presentation over the
 `Candidate` tuple this returns; nothing here paints and nothing here renders.
 
-**The catalog is transitional.** Filter-backed rows are projected from
-`FilterSpec.authoring_group`, `FilterSpec.authoring_order`, hidden authoring
-params, and element declarations. The two tab-side suffix steps stay explicit
-shell operations until the v6 graph migration gives them graph identity.
+**The catalog is a chain-model concept, not registry metadata.** The registry
+knows every filter's spec, but a spec cannot say what travels between steps —
+`ArraySpec` cannot tell an image from a block grid (see
+`docs/findings/2026.07.25-the-filter-contract-cannot-type-vision.md`) — and it
+knows nothing of the two tab-side steps at all. So each catalog entry carries
+its own kinds and stage, exactly as `parity_chain`'s steps do, and the two
+suffix steps sit in the same list as the five node-backed operations because
+a chain that lost one needs a way to get it back.
 
 **The wizard cannot break the chain** (parity plan § 2). An entry whose input
 kind does not match the seam is not listed at all; an entry that fits but
@@ -29,17 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from sieve.core.filter_base import (
-    DEFAULT_PORT,
-    ArraySpec,
-    AuthoringGroup,
-    ElementKind,
-    FilterSpec,
-    Mode,
-    TableSpec,
-    stream_kind_label,
-)
-from sieve.core.filter_registry import REGISTRY, FilterRegistry, UnknownFilterError
+from sieve.core.filter_registry import REGISTRY, UnknownFilterError
 from sieve.core.pipeline_model import Node, Pipeline
 from sieve.filters import Guidance, discover
 from sieve.filters import guidance_for as _filter_guidance
@@ -80,7 +74,6 @@ class CatalogEntry:
     blurb: str
     filter_id: str | None = None
     hidden_params: frozenset[str] = frozenset()
-    order: int = 1000
     #: Learning 8's per-filter judgment. Everything defaults to blocking a
     #: second copy; a legitimately repeatable operation flips this when one
     #: exists.
@@ -129,18 +122,7 @@ _TAB_SIDE_GUIDANCE: dict[str, Guidance] = {
 }
 
 
-_GROUP_TO_STAGE: dict[AuthoringGroup, Stage] = {
-    AuthoringGroup.SOURCE_PREP: Stage.SPATIAL_PREP,
-    AuthoringGroup.SPATIAL_PREP: Stage.SPATIAL_PREP,
-    AuthoringGroup.SIGNAL_EXTRACTION: Stage.EXTRACTION,
-    AuthoringGroup.TEMPORAL_FILTER: Stage.TEMPORAL_FILTER,
-    AuthoringGroup.DETECTION: Stage.DETECTION,
-}
-_STAGE_ORDER = {stage: index for index, stage in enumerate(Stage)}
-_TITLE_ACRONYMS = frozenset({"ema"})
-
-
-def catalog(*, registry: FilterRegistry | None = None) -> tuple[CatalogEntry, ...]:
+def catalog() -> tuple[CatalogEntry, ...]:
     """Every operation the wizard can offer, in stage order.
 
     Node-backed entries take their blurb from the registered spec's summary —
@@ -149,22 +131,54 @@ def catalog(*, registry: FilterRegistry | None = None) -> tuple[CatalogEntry, ..
     `PreviewRunner` does: a caller should not have to know the shelf needed
     populating.
     """
-    shelf = _shelf(registry)
-    return tuple(
-        sorted((*_declared_catalog_entries(shelf), *_shell_catalog()), key=_catalog_entry_key)
-    )
-
-
-def _shelf(registry: FilterRegistry | None) -> FilterRegistry:
-    if registry is None:
-        discover()
-        return REGISTRY
-    return registry
-
-
-def _shell_catalog() -> tuple[CatalogEntry, ...]:
-    """The tab-side operations that still have no graph/filter identity."""
+    discover()
     return (
+        CatalogEntry(
+            entry_id="rescale",
+            title="Rescale",
+            stage=Stage.SPATIAL_PREP,
+            kind_in=ChainKind.IMAGE,
+            kind_out=ChainKind.IMAGE,
+            blurb=_summary("rescale"),
+            filter_id="rescale",
+        ),
+        CatalogEntry(
+            entry_id="downsample",
+            title="Downsample",
+            stage=Stage.SPATIAL_PREP,
+            kind_in=ChainKind.IMAGE,
+            kind_out=ChainKind.IMAGE,
+            blurb=_summary("downsample"),
+            filter_id="downsample",
+        ),
+        CatalogEntry(
+            entry_id="normalize",
+            title="Normalize",
+            stage=Stage.SPATIAL_PREP,
+            kind_in=ChainKind.IMAGE,
+            kind_out=ChainKind.IMAGE,
+            blurb=_summary("normalize"),
+            filter_id="normalize",
+        ),
+        CatalogEntry(
+            entry_id="background_ema",
+            title="Background EMA",
+            stage=Stage.SPATIAL_PREP,
+            kind_in=ChainKind.IMAGE,
+            kind_out=ChainKind.IMAGE,
+            blurb=_summary("background_ema"),
+            filter_id="background_ema",
+        ),
+        CatalogEntry(
+            entry_id="block_signal",
+            title="Block signal",
+            stage=Stage.EXTRACTION,
+            kind_in=ChainKind.IMAGE,
+            kind_out=ChainKind.BLOCK_SERIES,
+            blurb=_summary("block_signal"),
+            filter_id="block_signal",
+            hidden_params=frozenset({"scale", "fps"}),
+        ),
         CatalogEntry(
             entry_id="morlet_band",
             title="Morlet band",
@@ -172,7 +186,6 @@ def _shell_catalog() -> tuple[CatalogEntry, ...]:
             kind_in=ChainKind.BLOCK_SERIES,
             kind_out=ChainKind.BLOCK_SERIES,
             blurb=_TAB_SIDE_GUIDANCE["morlet_band"].summary,
-            order=10,
         ),
         CatalogEntry(
             entry_id="windowed_count",
@@ -181,112 +194,15 @@ def _shell_catalog() -> tuple[CatalogEntry, ...]:
             kind_in=ChainKind.BLOCK_SERIES,
             kind_out=ChainKind.EVENTS,
             blurb=_TAB_SIDE_GUIDANCE["windowed_count"].summary,
-            order=10,
         ),
     )
 
 
-def _declared_catalog_entries(registry: FilterRegistry) -> tuple[CatalogEntry, ...]:
-    entries: list[CatalogEntry] = []
-    for filter_id in registry.ids():
-        spec = registry.latest(filter_id)
-        entry = _entry_from_spec(spec)
-        if entry is not None:
-            entries.append(entry)
-    return tuple(entries)
-
-
-def _entry_from_spec(spec: FilterSpec) -> CatalogEntry | None:
-    ports = spec.input_ports
-    if tuple(ports) != (DEFAULT_PORT,):
-        return None
-    # The live stack can commit only the node-backed prefix the current
-    # executor path can preview; the graph editor owns wider protocols.
-    if spec.mode is not Mode.STREAMING:
-        return None
-    kind_in = _input_kind(spec)
-    if kind_in is None:
-        return None
-    kind_out = _output_kind(spec, kind_in)
-    if kind_out is None:
-        return None
-    return CatalogEntry(
-        entry_id=spec.filter_id,
-        title=_title_for(spec.filter_id),
-        stage=_GROUP_TO_STAGE[spec.authoring_group],
-        kind_in=kind_in,
-        kind_out=kind_out,
-        blurb=spec.summary,
-        filter_id=spec.filter_id,
-        hidden_params=frozenset(spec.authoring_hidden_params),
-        order=spec.authoring_order,
-    )
-
-
-def _runtime_stream(stream: object) -> object:
-    """Erase the closed `StreamSpec` union for runtime projection guards."""
-    return stream
-
-
-def _input_kind(spec: FilterSpec) -> ChainKind | None:
-    accepted = _runtime_stream(spec.input_ports[DEFAULT_PORT])
-    if isinstance(accepted, TableSpec):
-        return ChainKind.EVENTS
-    if not isinstance(accepted, ArraySpec):
-        return None
-    if spec.authoring_group in {AuthoringGroup.TEMPORAL_FILTER, AuthoringGroup.DETECTION}:
-        return ChainKind.BLOCK_SERIES
-    return ChainKind.IMAGE
-
-
-def _output_kind(spec: FilterSpec, kind_in: ChainKind) -> ChainKind | None:
-    emitted = _runtime_stream(spec.emits)
-    if isinstance(emitted, TableSpec):
-        return ChainKind.EVENTS
-    if not isinstance(emitted, ArraySpec):
-        return None
-    if spec.authoring_group is AuthoringGroup.DETECTION:
-        return ChainKind.EVENTS
-    if spec.element is ElementKind.BLOCK or kind_in is ChainKind.BLOCK_SERIES:
-        return ChainKind.BLOCK_SERIES
-    return ChainKind.IMAGE
-
-
-def _catalog_refusal(spec: FilterSpec) -> str | None:
-    ports = spec.input_ports
-    if tuple(ports) != (DEFAULT_PORT,):
-        return (
-            f"declares input ports {sorted(ports)}, and the stack can render only the default "
-            "input port"
-        )
-    if spec.mode is not Mode.STREAMING:
-        return f"declares mode={spec.mode}, and the stack can render only streaming filters"
-    accepted = ports[DEFAULT_PORT]
-    if _input_kind(spec) is None:
-        return (
-            f"declares accepts={stream_kind_label(accepted)}, and the stack has no chain kind "
-            "for that stream family"
-        )
-    if _output_kind(spec, ChainKind.IMAGE) is None:
-        return (
-            f"declares emits={stream_kind_label(spec.emits)}, and the stack has no chain kind "
-            "for that stream family"
-        )
-    return None
-
-
-def _title_for(filter_id: str) -> str:
-    return " ".join(_title_word(index, word) for index, word in enumerate(filter_id.split("_")))
-
-
-def _title_word(index: int, word: str) -> str:
-    if word in _TITLE_ACRONYMS:
-        return word.upper()
-    return word.capitalize() if index == 0 else word
-
-
-def _catalog_entry_key(entry: CatalogEntry) -> tuple[int, int, str, str]:
-    return (_STAGE_ORDER[entry.stage], entry.order, entry.title, entry.entry_id)
+def _summary(filter_id: str) -> str:
+    try:
+        return REGISTRY.latest(filter_id).summary
+    except UnknownFilterError:
+        return filter_id
 
 
 # ---- judging entries against a seam -----------------------------------------
@@ -307,12 +223,7 @@ def incoming_kind(steps: tuple[ChainStep, ...], position: int) -> ChainKind | No
     return current
 
 
-def candidates_for_insert(
-    chain: LiveChain,
-    seam: int,
-    *,
-    registry: FilterRegistry | None = None,
-) -> tuple[Candidate, ...]:
+def candidates_for_insert(chain: LiveChain, seam: int) -> tuple[Candidate, ...]:
     """Every offer for inserting at `seam`, suggested stage first.
 
     Listed: entries whose input kind matches what the seam carries. Enabled:
@@ -323,28 +234,17 @@ def candidates_for_insert(
     kind = incoming_kind(chain.steps, seam)
     suggested = _seam_stage(chain.steps, seam)
     offers: list[Candidate] = []
-    for entry in _stage_ordered(suggested, registry):
+    for entry in _stage_ordered(suggested):
         if kind is None:
             offers.append(Candidate(entry, enabled=False, reason=CONFLICT_ABOVE))
             continue
         if entry.kind_in is not kind:
             continue
-        offers.append(
-            _judge(
-                entry,
-                chain,
-                insert_step(chain, seam, entry, registry=registry)[0].steps,
-            )
-        )
+        offers.append(_judge(entry, chain, insert_step(chain, seam, entry)[0].steps))
     return tuple(offers)
 
 
-def candidates_for_swap(
-    chain: LiveChain,
-    step_id: str,
-    *,
-    registry: FilterRegistry | None = None,
-) -> tuple[Candidate, ...]:
+def candidates_for_swap(chain: LiveChain, step_id: str) -> tuple[Candidate, ...]:
     """Every offer for replacing `step_id`, its own stage first.
 
     The replaced step is exempt from the duplicate rule — offering the
@@ -356,19 +256,14 @@ def candidates_for_swap(
     current = chain.steps[position]
     kind = incoming_kind(chain.steps, position)
     offers: list[Candidate] = []
-    for entry in _stage_ordered(current.stage, registry):
+    for entry in _stage_ordered(current.stage):
         if kind is None:
             offers.append(Candidate(entry, enabled=False, reason=CONFLICT_ABOVE))
             continue
         if entry.kind_in is not kind:
             continue
         offers.append(
-            _judge(
-                entry,
-                chain,
-                swap_step(chain, step_id, entry, registry=registry)[0].steps,
-                exempt=step_id,
-            )
+            _judge(entry, chain, swap_step(chain, step_id, entry)[0].steps, exempt=step_id)
         )
     return tuple(offers)
 
@@ -389,12 +284,9 @@ def _judge(
     return Candidate(entry, enabled=True)
 
 
-def _stage_ordered(
-    suggested: Stage,
-    registry: FilterRegistry | None = None,
-) -> tuple[CatalogEntry, ...]:
+def _stage_ordered(suggested: Stage) -> tuple[CatalogEntry, ...]:
     """The catalog grouped by stage with `suggested`'s group first."""
-    entries = catalog(registry=registry)
+    entries = catalog()
     lead = tuple(e for e in entries if e.stage is suggested)
     rest = tuple(e for e in entries if e.stage is not suggested)
     return lead + rest
@@ -423,8 +315,6 @@ def build_step(
     entry: CatalogEntry,
     chain: LiveChain,
     params: dict[str, object] | None = None,
-    *,
-    registry: FilterRegistry | None = None,
 ) -> ChainStep:
     """One fresh step from `entry`, its node minted with defaults plus `params`.
 
@@ -435,7 +325,7 @@ def build_step(
     """
     node = None
     if entry.filter_id is not None:
-        spec = _shelf(registry).latest(entry.filter_id)
+        spec = REGISTRY.latest(entry.filter_id)
         values: dict[str, object] = spec.params_model().model_dump(mode="json")
         if entry.filter_id == "block_signal":
             values["fps"] = chain.fps
@@ -464,11 +354,9 @@ def insert_step(
     seam: int,
     entry: CatalogEntry,
     params: dict[str, object] | None = None,
-    *,
-    registry: FilterRegistry | None = None,
 ) -> tuple[LiveChain, str]:
     """The chain with `entry` inserted at `seam`, and the minted step id."""
-    step = build_step(entry, chain, params, registry=registry)
+    step = build_step(entry, chain, params)
     steps = (*chain.steps[:seam], step, *chain.steps[seam:])
     return replace(chain, steps=steps), step.step_id
 
@@ -478,8 +366,6 @@ def swap_step(
     step_id: str,
     entry: CatalogEntry,
     params: dict[str, object] | None = None,
-    *,
-    registry: FilterRegistry | None = None,
 ) -> tuple[LiveChain, str]:
     """The chain with `step_id` replaced by `entry`, and the minted step id.
 
@@ -497,17 +383,12 @@ def swap_step(
     ):
         carried = dict(outgoing.node.params)
     carried.update(params or {})
-    step = build_step(entry, chain, carried or None, registry=registry)
+    step = build_step(entry, chain, carried or None)
     steps = (*chain.steps[:position], step, *chain.steps[position + 1 :])
     return replace(chain, steps=steps), step.step_id
 
 
-def chain_from_pipeline(
-    pipeline: Pipeline,
-    fps: float,
-    *,
-    registry: FilterRegistry | None = None,
-) -> LiveChain:
+def chain_from_pipeline(pipeline: Pipeline, fps: float) -> LiveChain:
     """The `LiveChain` a saved graph renders as: its nodes, plus the tab-side suffix.
 
     `runnable_prefix`'s inverse, for the load path — a project carries the
@@ -526,14 +407,12 @@ def chain_from_pipeline(
             rather than approximated: a stack silently missing a loaded step
             would look better-founded than it is.
     """
-    shelf = _shelf(registry)
-    entries = catalog(registry=shelf)
-    by_filter = {e.filter_id: e for e in entries if e.filter_id is not None}
+    by_filter = {e.filter_id: e for e in catalog() if e.filter_id is not None}
     steps: list[ChainStep] = []
     for node in linear_order(pipeline):
         entry = by_filter.get(node.filter_id)
         if entry is None:
-            raise ValueError(_missing_catalog_entry_message(node, shelf))
+            raise ValueError(f"no catalog entry for filter {node.filter_id!r}")
         steps.append(
             ChainStep(
                 step_id=entry.entry_id,
@@ -544,7 +423,7 @@ def chain_from_pipeline(
                 node=node,
             )
         )
-    for entry in entries:
+    for entry in catalog():
         if entry.filter_id is None:
             steps.append(
                 ChainStep(
@@ -561,22 +440,11 @@ def chain_from_pipeline(
     return LiveChain(steps=tuple(steps), detector=DetectorState.default(fps), fps=fps)
 
 
-def _missing_catalog_entry_message(node: Node, registry: FilterRegistry) -> str:
-    try:
-        spec = registry.get(node.filter_id, node.version)
-    except UnknownFilterError:
-        return f"no catalog entry for filter {node.filter_id!r}"
-    reason = _catalog_refusal(spec)
-    if reason is not None:
-        return f"no catalog entry for filter {node.filter_id!r}: {reason}"
-    return f"no catalog entry for filter {node.filter_id!r}"
-
-
 # ---- guidance -----------------------------------------------------------------
 
 
-def guidance_for(entry: CatalogEntry, *, registry: FilterRegistry | None = None) -> Guidance:
+def guidance_for(entry: CatalogEntry) -> Guidance:
     """The pane's sections for `entry`: its filter's `.md`, or the inline text."""
     if entry.filter_id is None:
         return _TAB_SIDE_GUIDANCE[entry.entry_id]
-    return _filter_guidance(_shelf(registry).latest(entry.filter_id))
+    return _filter_guidance(REGISTRY.latest(entry.filter_id))

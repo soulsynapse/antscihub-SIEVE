@@ -7,7 +7,7 @@ This list of assessments is a *naive* agent assessment, who was only given a hig
 
 You can leave links to findings that either invalidate or support the assessment. If you do the assessment and it was done, you can point to the completed todo list item as well.
 
-Order should not be assumed to be correct. This list is meant for inspiration only; validity must be checked.
+
 
 ## INITIAL ASSESSMENT
 

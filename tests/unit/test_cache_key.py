@@ -17,7 +17,6 @@ from sieve.backend.dispatch import Backend
 from sieve.core.filter_base import (
     SPEC_CHANNELS,
     ArraySpec,
-    AuthoringGroup,
     CaptionPart,
     Channel,
     CostEstimate,
@@ -52,7 +51,6 @@ def make_spec(**overrides: object) -> FilterSpec:
         "emits": ArraySpec(),
         "element": ElementRelation.PRESERVED,
         "cost": COST,
-        "authoring_group": AuthoringGroup.SPATIAL_PREP,
     }
     fields.update(overrides)
     return FilterSpec(**fields)  # pyright: ignore[reportArgumentType]
@@ -196,9 +194,6 @@ class TestIsolation:
         # here fails instead of silently going untested. Values stay legal —
         # `primary_params` names are checked against `params_model`.
         substitutes: dict[str, object] = {
-            "authoring_group": AuthoringGroup.DETECTION,
-            "authoring_order": 7,
-            "authoring_hidden_params": ("sigma",),
             "caption": (CaptionPart(label="radius", param="radius"),),
             "cost": CostEstimate(work_per_megapixel=WorkUnits(2.0)),
             "param_value_labels": {"radius": {"3": "three pixels"}},

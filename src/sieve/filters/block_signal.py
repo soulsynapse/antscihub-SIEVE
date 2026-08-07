@@ -69,7 +69,6 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import (
     ArraySpec,
-    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementKind,
@@ -159,13 +158,10 @@ class Signal(StrEnum):
         # product planes and their blurs reusing storage, plus u/v/speed.
         peak_bytes_per_input_byte=12.0,
     ),
-    authoring_group=AuthoringGroup.SIGNAL_EXTRACTION,
-    authoring_order=10,
     mode=Mode.STREAMING,
     settling_epsilon=0.0,
     stateful=True,
     primary_params=("signal", "block"),
-    authoring_hidden_params=("scale", "fps"),
     caption=(
         CaptionPart(param="signal"),
         CaptionPart(label="block", param="block"),

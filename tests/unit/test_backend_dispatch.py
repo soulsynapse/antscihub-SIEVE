@@ -23,7 +23,6 @@ from sieve.backend.dispatch import (
 )
 from sieve.core.filter_base import (
     ArraySpec,
-    AuthoringGroup,
     CostEstimate,
     ElementRelation,
     FilterSpec,
@@ -56,7 +55,6 @@ def cpu_only() -> Registered:
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
         cost=CostEstimate(work_per_megapixel=WorkUnits(0.0)),
-        authoring_group=AuthoringGroup.SPATIAL_PREP,
         registry=specs,
     )
     class PassthroughParams(ParamsBase):
@@ -127,7 +125,6 @@ def test_windowed_spec_refuses_single_frame_kernel() -> None:
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
         cost=CostEstimate(work_per_megapixel=WorkUnits(0.0)),
-        authoring_group=AuthoringGroup.SPATIAL_PREP,
         mode=Mode.WINDOWED,
         registry=specs,
     )
@@ -150,7 +147,6 @@ def test_windowed_kernel_decorator_registers_a_span_callable() -> None:
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
         cost=CostEstimate(work_per_megapixel=WorkUnits(0.0)),
-        authoring_group=AuthoringGroup.SPATIAL_PREP,
         mode=Mode.WINDOWED,
         registry=specs,
     )

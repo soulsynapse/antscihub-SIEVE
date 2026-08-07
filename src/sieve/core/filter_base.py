@@ -543,14 +543,6 @@ class TableSpec:
 StreamSpec: TypeAlias = ArraySpec | TableSpec
 
 
-def stream_kind_label(stream: object) -> str:
-    """Human-readable stream family name from a declaration object."""
-    kind: object = getattr(stream, "kind", type(stream).__name__)
-    if isinstance(kind, StrEnum):
-        return kind.value
-    return str(kind)
-
-
 @dataclass(frozen=True, slots=True)
 class CostEstimate:
     """Order-of-magnitude cost, for predicting a run before making it.
@@ -580,26 +572,6 @@ class CostEstimate:
     #: Peak working set as a multiple of one input frame's bytes. 1.0 is an
     #: in-place kernel; 3.0 is one that holds input, output, and a scratch.
     peak_bytes_per_input_byte: float = 2.0
-
-
-class AuthoringGroup(StrEnum):
-    """Stable buckets a front end can use to group operation offers.
-
-    This is not the visible header text. The values are cache-stable slugs that
-    say where an operation belongs in an authoring workflow; a GUI may translate
-    or reorder them without changing what a filter computes.
-    """
-
-    #: Operations that narrow which source pixels or frames the graph sees.
-    SOURCE_PREP = "source_prep"
-    #: Frame-preserving image preparation before a signal is extracted.
-    SPATIAL_PREP = "spatial_prep"
-    #: Operations that turn image frames into measured signal streams.
-    SIGNAL_EXTRACTION = "signal_extraction"
-    #: Operations that shape an already-extracted signal over time.
-    TEMPORAL_FILTER = "temporal_filter"
-    #: Operations that turn tuned signals into event or gate products.
-    DETECTION = "detection"
 
 
 @dataclass(frozen=True, slots=True)
@@ -638,14 +610,6 @@ class FilterSpec:
     accepts: StreamSpec | Mapping[str, StreamSpec]
     emits: StreamSpec
     cost: CostEstimate
-    #: The stable authoring bucket that should offer this operation. It is
-    #: presentation, not identity: labels and ordering belong to the shell, and
-    #: moving a card between groups cannot change the filter's result.
-    authoring_group: AuthoringGroup
-    #: Stable ordering inside an authoring group. It is presentation, not
-    #: identity: a shell may sort differently without changing the result, but
-    #: the default wizard needs one declared order instead of a GUI-side list.
-    authoring_order: int = 1000
     mode: Mode = Mode.STREAMING
     #: Frames the filter must consume before its output is trustworthy, counted
     #: in this filter's *input* frames — "must consume" is the unit. Warmup
@@ -726,9 +690,6 @@ class FilterSpec:
     #: exist on `params_model`; that is checked below, because the failure mode
     #: of a stale name is a widget that silently stops appearing.
     primary_params: tuple[str, ...] = field(default_factory=tuple)
-    #: Params the generic authoring surface must not offer as user-editable
-    #: controls because the shell supplies them from source or chain state.
-    authoring_hidden_params: tuple[str, ...] = field(default_factory=tuple)
     #: The collapsed caption a front end shows for a configured node.
     caption: tuple[CaptionPart, ...] = field(default_factory=tuple)
     #: Human labels for parameter values, keyed by parameter name then stored
@@ -838,12 +799,6 @@ class FilterSpec:
         if unknown:
             raise ValueError(
                 f"{self.filter_id}: primary_params names no such field: {sorted(unknown)}"
-            )
-        hidden_unknown = [name for name in self.authoring_hidden_params if name not in known]
-        if hidden_unknown:
-            raise ValueError(
-                f"{self.filter_id}: authoring_hidden_params names no such field: "
-                f"{sorted(hidden_unknown)}"
             )
         caption_unknown = [
             part.param
@@ -962,7 +917,7 @@ class Channel(StrEnum):
     EXECUTION = "execution"
     #: What a front end shows about it. Never hashed, never read by the
     #: executor, and the declared home for the hints decided 2026-07-29 —
-    #: authoring groups, captions, signal labels, `primary_params`, `cost`.
+    #: captions, signal labels, `primary_params`, `cost`.
     PRESENTATION = "presentation"
 
 
@@ -986,8 +941,6 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     # identity leaves the digest — so it is a claim about when two results are
     # the same result, which is this channel's whole question.
     "backend_agnostic": Channel.IDENTITY,
-    "authoring_group": Channel.PRESENTATION,
-    "authoring_order": Channel.PRESENTATION,
     "mode": Channel.EXECUTION,
     "rate_changing": Channel.EXECUTION,
     # Beside `rate_changing` and for its reason, though what the *parameters*
@@ -1002,7 +955,6 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "deterministic": Channel.EXECUTION,
     "cost": Channel.PRESENTATION,
     "primary_params": Channel.PRESENTATION,
-    "authoring_hidden_params": Channel.PRESENTATION,
     "caption": Channel.PRESENTATION,
     "param_value_labels": Channel.PRESENTATION,
     "summary": Channel.PRESENTATION,

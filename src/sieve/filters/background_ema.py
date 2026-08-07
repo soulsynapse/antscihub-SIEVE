@@ -65,7 +65,6 @@ from pydantic import Field
 from sieve.backend.dispatch import Backend, stateful_kernel
 from sieve.core.filter_base import (
     ArraySpec,
-    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementRelation,
@@ -152,8 +151,6 @@ class Emit(StrEnum):
         # graph rather than a tuning trick.
         peak_bytes_per_input_byte=14.0,
     ),
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
-    authoring_order=40,
     mode=Mode.STREAMING,
     settling_epsilon=SETTLED_EPSILON,
     stateful=True,

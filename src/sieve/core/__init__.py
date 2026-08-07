@@ -8,7 +8,6 @@ Zarr, or subprocess. That is machine-checked by the import contracts in
 from sieve.core.filter_base import (
     UNCHANGED_RATE,
     ArraySpec,
-    AuthoringGroup,
     CostEstimate,
     FilterSpec,
     Mode,
@@ -65,7 +64,6 @@ __all__ = [
     "UNCHANGED_RATE",
     "WORK_UNIT_ANCHOR",
     "ArraySpec",
-    "AuthoringGroup",
     "ChannelSpec",
     "ClipRange",
     "CostEstimate",

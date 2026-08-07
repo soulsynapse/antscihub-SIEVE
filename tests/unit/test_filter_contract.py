@@ -19,7 +19,6 @@ from sieve.core.filter_base import (
     ALL_FRAMES,
     SPEC_CHANNELS,
     ArraySpec,
-    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementKind,
@@ -125,7 +124,6 @@ def make_spec(**overrides: object) -> FilterSpec:
         "emits": ArraySpec(),
         "element": ElementRelation.PRESERVED,
         "cost": COST,
-        "authoring_group": AuthoringGroup.SPATIAL_PREP,
     }
     fields.update(overrides)
     return FilterSpec(**fields)  # pyright: ignore[reportArgumentType]
@@ -181,10 +179,6 @@ class TestFilterSpec:
     def test_param_value_labels_must_name_real_fields(self) -> None:
         with pytest.raises(ValueError, match=r"param_value_labels names no such field.*method"):
             make_spec(param_value_labels={"method": {"fast": "fast"}})
-
-    def test_authoring_hidden_params_must_name_real_fields(self) -> None:
-        with pytest.raises(ValueError, match=r"authoring_hidden_params names no such field"):
-            make_spec(authoring_hidden_params=("scale_factor",))
 
     def test_caption_renders_from_declared_presentation(self) -> None:
         spec = make_spec(
@@ -491,7 +485,6 @@ class TestFilterRegistry:
             emits=ArraySpec(),
             element=ElementRelation.PRESERVED,
             cost=COST,
-            authoring_group=AuthoringGroup.SPATIAL_PREP,
             primary_params=("factor",),
             registry=registry,
         )
@@ -514,7 +507,6 @@ class TestFilterRegistry:
             emits=ArraySpec(),
             element=ElementRelation.PRESERVED,
             cost=COST,
-            authoring_group=AuthoringGroup.SPATIAL_PREP,
             settling_epsilon=0.0,
             registry=registry,
         )
@@ -548,7 +540,6 @@ BASE: dict[str, Any] = {
     "emits": ArraySpec(),
     "cost": COST,
     "element": ElementRelation.PRESERVED,
-    "authoring_group": AuthoringGroup.SPATIAL_PREP,
 }
 
 #: One legal value per keyword, differing from both that parameter's default
@@ -563,8 +554,6 @@ PROBES: dict[str, Any] = {
     "accepts": ArraySpec(dtypes=("float32",)),
     "emits": ArraySpec(channels=(ChannelSpec.GRAY,)),
     "cost": CostEstimate(work_per_megapixel=WorkUnits(2.0)),
-    "authoring_group": AuthoringGroup.DETECTION,
-    "authoring_order": 7,
     "mode": Mode.WINDOWED,
     "settling_epsilon": 0.25,
     "rate_changing": True,
@@ -573,7 +562,6 @@ PROBES: dict[str, Any] = {
     "stateful": True,
     "backend_agnostic": True,
     "primary_params": ("factor",),
-    "authoring_hidden_params": ("anti_alias",),
     "caption": (CaptionPart(label="factor", param="factor"),),
     "param_value_labels": {"anti_alias": {"True": "averaged"}},
     "element": ElementKind.BLOCK,

@@ -43,7 +43,6 @@ import numpy as np
 from sieve.backend.dispatch import Backend, kernel
 from sieve.core.filter_base import (
     ArraySpec,
-    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementRelation,
@@ -85,8 +84,6 @@ WHOLE_FRAME = ROI(x=0, y=0, width=WHOLE_FRAME_EXTENT, height=WHOLE_FRAME_EXTENT)
         # Input plus an output no larger than it, no scratch.
         peak_bytes_per_input_byte=2.0,
     ),
-    authoring_group=AuthoringGroup.SOURCE_PREP,
-    authoring_order=50,
     mode=Mode.STREAMING,
     primary_params=("roi",),
     caption=(CaptionPart(param="roi"),),

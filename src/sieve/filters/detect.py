@@ -27,7 +27,6 @@ from pydantic import Field, model_validator
 from sieve.backend.dispatch import Backend, windowed_kernel
 from sieve.core.filter_base import (
     ArraySpec,
-    AuthoringGroup,
     CaptionPart,
     CostEstimate,
     ElementKind,
@@ -87,12 +86,9 @@ MAX_WARMUP_FRAMES = max(
         work_per_megapixel=WorkUnits(float(MAX_WINDOW_FRAMES)),
         peak_bytes_per_input_byte=10.0,
     ),
-    authoring_group=AuthoringGroup.DETECTION,
-    authoring_order=10,
     mode=Mode.WINDOWED,
     settling_epsilon=0.0,
     primary_params=("freq_band", "value_band", "count_frac", "window_frames"),
-    authoring_hidden_params=("fps",),
     caption=(
         CaptionPart(label="freq", param="freq_band"),
         CaptionPart(label="value", param="value_band"),

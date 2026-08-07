@@ -19,13 +19,7 @@ import pytest
 from pydantic import Field, ValidationError
 
 from sieve.backend.dispatch import Backend
-from sieve.core.filter_base import (
-    ArraySpec,
-    AuthoringGroup,
-    CostEstimate,
-    ElementRelation,
-    ParamsBase,
-)
+from sieve.core.filter_base import ArraySpec, CostEstimate, ElementRelation, ParamsBase
 from sieve.core.filter_registry import FilterRegistry, register_filter
 from sieve.core.pipeline_model import ClipRange, Edge, Node, Pipeline
 from sieve.core.replicates import Replicate
@@ -49,7 +43,6 @@ def _settling(filter_id: str, warmup: FrameCount) -> type[ParamsBase]:
         emits=ArraySpec(),
         element=ElementRelation.PRESERVED,
         cost=COST,
-        authoring_group=AuthoringGroup.SPATIAL_PREP,
         settling_epsilon=0.0,
         registry=SHELF,
     )
@@ -74,7 +67,6 @@ _settling("settle5", FrameCount(5))
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     settling_epsilon=0.0,
     registry=SHELF,
 )
@@ -92,7 +84,6 @@ class Join1Params(ParamsBase):
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     rate_changing=True,
     registry=SHELF,
 )
@@ -111,7 +102,6 @@ class DecimateParams(ParamsBase):
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     selecting=True,
     registry=SHELF,
 )
@@ -138,7 +128,6 @@ class KeepParams(ParamsBase):
     emits=ArraySpec(),
     element=ElementRelation.PRESERVED,
     cost=COST,
-    authoring_group=AuthoringGroup.SPATIAL_PREP,
     deterministic=False,
     registry=SHELF,
 )

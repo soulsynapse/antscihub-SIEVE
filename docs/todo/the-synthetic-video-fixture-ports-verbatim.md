@@ -1,7 +1,7 @@
 ---
 title: The synthetic video fixture ports verbatim
 step: "00.4"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/test_fixture.py -q"
 opened: 2026-08-06

@@ -25,6 +25,7 @@ src/sieve/tools/__init__.py           # One module per tool: a ToolSpec and one 
 src/sieve/tools/background_ema.py     # An exponential moving-average background model, and the difference from it.
 src/sieve/tools/block_signal.py       # Per-block motion signals from the structure tensor of consecutive frames.
 src/sieve/tools/crop.py               # Take a region of every frame, with the whole frame as the identity value.
+src/sieve/tools/detect.py             # Morlet band power, an in-band block count, and a centred detection gate.
 src/sieve/tools/downsample.py         # Reduce spatial resolution by an integer factor.
 src/sieve/tools/motion_history.py     # A causal leaky accumulator of per-block activity, with its neighbours.
 src/sieve/tools/normalize.py          # Per-frame contrast normalization: `off` or `zscore`.

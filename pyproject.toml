@@ -61,6 +61,20 @@ dependencies = [
     # throughout, and 0.12 is where that became the only supported spelling
     # rather than one of two that disagreed about where the default lives.
     "typer>=0.12",
+    # `tools/detect.py`'s Morlet transform runs on `scipy.fft`, and the three
+    # properties it is chosen for are all load-bearing rather than incidental:
+    # it keeps a float32 series in single precision (complex64, half the memory
+    # traffic), `next_fast_len` pads a prime frame count away from Bluestein,
+    # and the transform's zero-pad length is derived from it. `numpy.fft` has
+    # none of the three and v1 measured the difference at ~10x on a `(T, B)`
+    # series — and switching would move every band-power value, which is what
+    # the detect goldens pin.
+    #
+    # Floored where v2 floors it. The version is not in a cache key: unlike
+    # OpenCV, whose major bump changes what a decoded frame *is*, this is
+    # arithmetic over an array the graph already produced, and the pin that
+    # matters for it is the tool's declared version.
+    "scipy>=1.14",
 ]
 
 # One command, and the console script exists from the first one: `sieve run`

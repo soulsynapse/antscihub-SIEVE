@@ -1,7 +1,7 @@
 ---
 title: The live column holds one spelling per dead word
 step: "03.2.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_id_spelling.py -q"
 opened: 2026-08-07

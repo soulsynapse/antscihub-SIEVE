@@ -1,9 +1,12 @@
 ---
 title: The tool contract ports with its rename
 step: "01.2"
-status: awaiting-review
+status: done
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_tool_contract.py tests/unit/test_tool_discovery.py -q"
+# Amended at review, 2026-08-07: `tests/unit/test_tool_discovery.py` struck.
+# Every case in v2's `test_filter_discovery.py` needs a shelf this item does
+# not build; the file moves to 02.4.1. See the reviewer note below.
+done_when: "uv run pytest tests/unit/test_tool_contract.py -q"
 opened: 2026-08-06
 ---
 
@@ -81,3 +84,38 @@ Two smaller deviations from the v2 blob, both forced rather than chosen.
 default rules here — unlike v2's — reject `TypeAlias` and `range(0, N)`, so
 the three type aliases use the `type` keyword and `ALL_FRAMES` drops its
 explicit start; neither changes what the names mean.
+
+## Reviewer note, 2026-08-07
+
+Contradiction confirmed and `done_when` amended; the item is done on the
+amended criterion, which passes. v2's `test_filter_discovery.py` imports
+`discover`, `guidance_path`, `guidance_for`, `GUIDANCE_SECTIONS` and
+`DownsampleParams` — a scan module, a guidance reader, a guidance file format
+PLAN.md lists as an open question, and a tool. This item builds two modules in
+`core` and no shelf, so no case in that file has a subject here. The file is
+struck and 02.4.1 owns it.
+
+The three judgment calls, ruled:
+
+- **Cut list binding: yes.** The keep list omits `emits` and `summary`, and no
+  spec is constructible without either, so it cannot be the enumeration; "the
+  cut list is exhaustive" is. Reading the item the other way would have made
+  the item unbuildable rather than merely narrow, which settles it.
+- **`run` off the spec: yes for 01.2, but it leaves a hole.** ADR-2 says the
+  spec points at `run`, and nothing in 01.3–02.2 restores it, so 02.3's text
+  now names the field explicitly — the executor is its reader and a spec that
+  cannot be asked for `run` sends the executor back to keying on `tool_id`,
+  which is the thing ADR-2 exists to prevent.
+- **One-directional refusal: yes, and it is not a judgment call.** ADR-2 states
+  the direction — "a factory on a spec not declaring `stateful` is refused at
+  registration" — and only that direction. The other way round costs a node its
+  cache key and nothing else; the paired flags are checked both ways because
+  both of *their* directions produce a wrong answer.
+
+Verified beyond the criterion: `tool_base.py`, `tool_registry.py` and
+`test_tool_contract.py` diff against their v2 blobs as rename-plus-the-named-cuts
+and nothing else, and the three cases with no v2 ancestor
+(`test_the_id_keeps_v2s_spelling_rule`,
+`test_a_state_factory_without_stateful_is_refused`,
+`test_an_undecorated_params_model_refuses_to_name_a_spec`) each go red when
+their guard is stubbed out.

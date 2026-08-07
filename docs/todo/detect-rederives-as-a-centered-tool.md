@@ -1,7 +1,7 @@
 ---
 title: detect re-derives as a centered tool
 step: "04.8"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_detect_tool.py tests/unit/test_detection.py tests/unit/test_wavelet.py -q"
 opened: 2026-08-06

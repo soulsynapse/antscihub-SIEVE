@@ -8,9 +8,17 @@ out of both lists silently.
 
 from pathlib import Path
 
+import doc_index
 import pytest
-import todo_index
-from todo_index import ItemError, collect, next_takeable, phase_titles, render
+from doc_index import (
+    ItemError,
+    collect,
+    collect_findings,
+    next_takeable,
+    phase_titles,
+    render,
+    render_findings,
+)
 
 
 def write_item(folder: Path, name: str, front: str, body: str = "words") -> Path:
@@ -125,18 +133,79 @@ def test_the_index_sections_by_phase_and_pools_the_asides(tmp_path):
     assert "An aside that can wait" in text
 
 
-# The live gate: the repo's own folder parses, and the checked-in index is
+# Findings.
+
+FINDING = """title: The seek is irreducible
+date: 2026-08-05
+status: open
+verdict: the seek is ~70% of the cost and has no knob"""
+
+
+def test_findings_index_newest_first(tmp_path):
+    write_item(tmp_path, "2026.08.05-seek", FINDING)
+    write_item(tmp_path, "2026.08.06-later", FINDING.replace("2026-08-05", "2026-08-06"))
+
+    dates = [str(finding.fields["date"]) for finding in collect_findings(tmp_path)]
+
+    assert dates == ["2026-08-06", "2026-08-05"]
+
+
+def test_a_finding_without_a_verdict_is_refused(tmp_path):
+    """A row with no verdict cannot be triaged from the table, which defeats
+    the table."""
+    write_item(tmp_path, "2026.08.05-seek", FINDING.replace("verdict: the seek", "note: the seek"))
+
+    with pytest.raises(ItemError, match="verdict"):
+        collect_findings(tmp_path)
+
+
+def test_a_finding_status_outside_the_vocabulary_is_refused(tmp_path):
+    write_item(tmp_path, "2026.08.05-seek", FINDING.replace("status: open", "status: pending"))
+
+    with pytest.raises(ItemError, match="pending"):
+        collect_findings(tmp_path)
+
+
+def test_loop_findings_render_as_their_own_section(tmp_path):
+    (tmp_path / "loop").mkdir()
+    write_item(tmp_path, "2026.08.05-seek", FINDING)
+    write_item(tmp_path / "loop", "2026.08.06-vacuity", FINDING.replace("seek is", "test was"))
+
+    text = render_findings(collect_findings(tmp_path), collect_findings(tmp_path / "loop"))
+
+    assert "## Loop" in text
+    assert "loop/2026.08.06-vacuity.md" in text
+    assert text.index("irreducible") < text.index("## Loop")
+
+
+def test_a_missing_findings_folder_is_an_empty_list_not_an_error(tmp_path):
+    assert collect_findings(tmp_path / "loop") == []
+
+
+# The live gate: the repo's own folders parse, and the checked-in indexes are
 # exactly what the tool would write — a stale index fails here, not in review.
 
 
 def test_the_repos_own_items_are_hygienic():
-    collect(todo_index.TODO_DIR)
+    collect(doc_index.TODO_DIR)
+    collect_findings(doc_index.FINDINGS_DIR)
+    collect_findings(doc_index.LOOP_DIR)
 
 
-def test_the_checked_in_index_is_current():
-    index = todo_index.TODO_DIR / todo_index.INDEX_NAME
-    assert index.is_file(), "no index — run `uv run python tools/todo_index.py`"
-    expected = render(collect(todo_index.TODO_DIR), phase_titles())
-    assert index.read_text(encoding="utf-8") == expected, (
-        "stale index — run `uv run python tools/todo_index.py`"
-    )
+def test_the_checked_in_indexes_are_current():
+    for index, expected in (
+        (
+            doc_index.TODO_DIR / doc_index.INDEX_NAME,
+            render(collect(doc_index.TODO_DIR), phase_titles()),
+        ),
+        (
+            doc_index.FINDINGS_DIR / doc_index.INDEX_NAME,
+            render_findings(
+                collect_findings(doc_index.FINDINGS_DIR), collect_findings(doc_index.LOOP_DIR)
+            ),
+        ),
+    ):
+        assert index.is_file(), f"{index.name} missing — run `uv run python tools/doc_index.py`"
+        assert index.read_text(encoding="utf-8") == expected, (
+            f"stale {index} — run `uv run python tools/doc_index.py`"
+        )

@@ -82,10 +82,20 @@ FORBIDDEN = (
 )
 
 #: The stack top-down, so the scaffold reads in import order: a package may
-#: reach only what is listed below it. Once `.importlinter` lands (item 00.2)
-#: its layers contract is the authority and this tuple must follow it; until
-#: then this is the order's only home.
-LAYER_ORDER = ("gui", "cli", "bench", "pipeline", "tools", "decode", "storage", "core")
+#: reach only what is listed below it. `.importlinter`'s layers contract is the
+#: authority and this tuple follows it — a package added there is added here in
+#: the same commit, or the scaffold renders an order the linter does not check.
+LAYER_ORDER = (
+    "gui",
+    "cli",
+    "bench",
+    "pipeline",
+    "tools",
+    "decode",
+    "storage",
+    "mutual",
+    "core",
+)
 
 #: ADR-6 (`adr/core-membership-is-closed.md`): core owns exactly these, and a
 #: new direct child is a revision of that ADR — refused here until it is made.

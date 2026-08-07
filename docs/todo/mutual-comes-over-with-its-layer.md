@@ -1,7 +1,7 @@
 ---
 title: mutual/ comes over with its layer
 step: "02.0.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_machine.py tests/unit/test_pool_meter.py tests/unit/test_ledger_sensors.py -q && uv run lint-imports"
 opened: 2026-08-07
@@ -34,3 +34,26 @@ that is not a copy:
 The three test files are v2's own and port unchanged. `test_concurrency.py`
 is not among them: it imports `sieve.gui.concurrency`, so its subject is a
 consumer that does not exist here.
+
+## The blocker (2026-08-07)
+
+Everything above landed and diffs byte-identical against the v2 blobs. The
+`done_when` invocation still fails on one assertion, and the porting
+discipline forbids the edit that would clear it, so this stops here for the
+reviewer.
+
+`test_machine.py`'s `test_the_session_rss_reading_is_real_and_monotone_in_
+allocation` opens with `assert before > 64 * MIB`. That number measures the
+pytest session's import footprint, not the resolver: the same test passes
+under `uv run pytest -q` over the whole v3 suite and fails under the
+three-file selection `done_when` names, and v2's own bare session cleared the
+threshold by 20 KB. The measurements are in
+`findings/2026.08.07-the-rss-floor-measures-the-test-session-not-the-resolver.md`.
+
+The question: the floor is a sanity guard against a fabricated constant, and
+the monotonicity assertion three lines below it — allocate 64 MB, touch every
+page, the reading must move by 32 MB — carries that claim on its own and
+passes. Does the floor come out, drop to something v3's environment can
+actually meet, or does `done_when` name the whole suite instead? Any of the
+three is an edit to a ported test or to a criterion, which is the reviewer's
+to make and not this run's.

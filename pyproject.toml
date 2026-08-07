@@ -17,6 +17,14 @@ dependencies = [
     # `model_fields`, `model_dump(mode="json")` and `ConfigDict` are the v2
     # spellings and all three are 2.x-only.
     "pydantic>=2",
+    # `mutual/machine.py` reads CPU affinity and per-process RSS through it, on
+    # the shipped path rather than in a test: every consumer that declares a
+    # share of the machine declares it against that reading. Not a dev-group
+    # entry for that reason. Unpinned beyond a floor because the two calls used
+    # — `Process.cpu_affinity` and `memory_info().rss` — predate 5.x and the
+    # module already treats a platform that refuses either as a fallthrough
+    # rather than an error.
+    "psutil>=5.9",
 ]
 
 [build-system]

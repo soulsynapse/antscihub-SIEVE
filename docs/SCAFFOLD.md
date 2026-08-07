@@ -17,6 +17,10 @@ src/sieve/pipeline/__init__.py   # The DAG, the plan, the cache key, and the one
 src/sieve/tools/__init__.py      # One module per tool: a ToolSpec and one plain run function.
 src/sieve/decode/__init__.py     # Decode, prefetch, and lowering into ffmpeg.
 src/sieve/storage/__init__.py    # Sink writers: how results leave the pipeline for disk.
+src/sieve/mutual/__init__.py     # Dependency-shared resource readings and declarations.
+src/sieve/mutual/machine.py      # The machine is read once. Both resources, one home, importable headless.
+src/sieve/mutual/pool_meter.py   # The counters a worker pool exposes so its utilisation stops being a guess.
+src/sieve/mutual/shares.py       # How a session divides the machine among threads and bytes: one table,
 src/sieve/core/__init__.py       # The dimensioned types, the tool contract, and spec-free array math.
 src/sieve/core/tool_base.py      # The tool contract, as data: `ToolSpec`, `ParamsBase`, `ArraySpec`, `Mode`.
 src/sieve/core/tool_registry.py  # The shelf tools put themselves on: a container keyed by `(id, version)`.

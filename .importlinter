@@ -15,24 +15,32 @@ include_external_packages = True
 [importlinter:contract:layers]
 name = Layered architecture
 type = layers
-# `sieve.mutual` has no line here: whether it ports at all is Phase 5's
-# question, and a layer declared for a package that may never exist is a
-# decision made by omission. There is no `compat` layer — v2 projects do not
-# import (adr/v2-does-not-import.md) — and no `backend` or `detect`, both
-# dissolved (adr/no-kernel-apparatus.md, adr/detector-is-a-node.md).
+# `sieve.mutual` sits below the decode row and above `core` because that is
+# where a reading of the machine has to live to be shared: `decode/` and the
+# front ends all size themselves against it, and a copy of the reading in each
+# is two answers to "how much of this machine do I have". There is no `compat`
+# layer — v2 projects do not import (adr/v2-does-not-import.md) — and no
+# `backend` or `detect`, both dissolved (adr/no-kernel-apparatus.md,
+# adr/detector-is-a-node.md).
 layers =
     sieve.gui | sieve.cli
     sieve.bench
     sieve.pipeline
     sieve.tools
     sieve.decode | sieve.storage
+    sieve.mutual
     sieve.core
 
 [importlinter:contract:core-purity]
-name = core imports no toolkit, no codec, no processes
+name = core and mutual import no toolkit, no codec, no processes
 type = forbidden
+# `mutual` is named here for the reason it is a layer of its own rather than a
+# corner of `core`: it reads the machine, so it holds the one import — `psutil`
+# — that a pure package may not, and the price of that permission is being held
+# to the same five refusals `core` is.
 source_modules =
     sieve.core
+    sieve.mutual
 forbidden_modules =
     PySide6
     cv2

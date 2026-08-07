@@ -10,11 +10,14 @@ listed below it.
 
 ```tree
 src/sieve/__init__.py           # Signal isolation for ethological video events.
+src/sieve/gui/__init__.py       # Renders values and emits intents; computes nothing.
 src/sieve/cli/__init__.py       # The command-line surface over the pipeline.
 src/sieve/compat/__init__.py    # The one-way v2 importer; the only place that spells v2 field names.
+src/sieve/bench/__init__.py     # The performance budgets and the metric bus.
 src/sieve/pipeline/__init__.py  # The DAG, the plan, the cache key, and the one execution loop.
 src/sieve/tools/__init__.py     # One module per tool: a ToolSpec and one plain run function.
 src/sieve/decode/__init__.py    # Decode, prefetch, and lowering into ffmpeg.
+src/sieve/storage/__init__.py   # Sink writers: how results leave the pipeline for disk.
 src/sieve/core/__init__.py      # The dimensioned types, the tool contract, and spec-free array math.
 scripts/doc_index.py            # The derived docs: indexes, ARCHITECTURE, the scaffold, and `--next`.
 ```

@@ -24,3 +24,9 @@ verbatim survives to, not a fix. The two ways out are to widen the anchor's
 terms deliberately or to leave the guard at the declaration boundaries and say
 so — either is fine, neither should happen by reflex. Whichever wins,
 `_whole_lookahead` collapses into it.
+
+Carry the `isinstance(count.frames, bool)` clause across when it does. It is
+there because `bool` subclasses `int`, so `FrameCount(True)` passes the int
+check alone; 01.3's review found that deleting the clause leaves all 57
+contract tests green, which makes it the one line of the guard nothing
+distinguishes. Whether `True` is worth refusing is part of the same decision.

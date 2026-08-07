@@ -1,7 +1,7 @@
 ---
 title: Declared lookahead joins the window contract
 step: "01.3"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -k lookahead -q"
 opened: 2026-08-06

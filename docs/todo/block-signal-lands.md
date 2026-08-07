@@ -1,7 +1,7 @@
 ---
 title: block_signal lands
 step: "04.4"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_block_signal.py -q"
 opened: 2026-08-06

@@ -11,9 +11,9 @@ The spec is also the single source of truth for a tool's parameters. GUI
 widgets, CLI flags, YAML, and the cache key all read `params_model`; none of
 them carries a second copy of the field list that could drift from it.
 
-**Three declarations are params-derived rather than constants**, because the
-quantity they describe *is* a parameter: a decimator's factor, a trailing
-window's length, a span's bounds. `output_rate`, `warmup_frames` and
+**Four declarations are params-derived rather than constants**, because the
+quantity they describe *is* a parameter: a decimator's factor, a window's
+length, a span's bounds. `output_rate`, `warmup_frames`, `lookahead_frames` and
 `selected_frames` are therefore methods on `ParamsBase`, not (only) fields on
 `ToolSpec`. They stay pure — data in, exact number out, no kernel, no codec —
 so `dag.py` and the executor can evaluate them on a machine with nothing
@@ -29,6 +29,16 @@ actual need, which may refine the bound downward but never exceed it.
 `node_warmup_frames` enforces that, and the asymmetry is the point: a refinement
 that is too small under-warms a tool silently, and a bound that is too large
 only wastes decode.
+
+`lookahead_frames` is `warmup_frames`' shape on the other side of the frame
+being emitted, and the two together are the first statement of a window this
+contract can make: a centred window of length `2k+1` is `k` of lead-in and `k`
+of lookahead. v2 could say only the first half, which is why the detector —
+tuned against a centred result — could not be a node at all
+(`adr/detector-is-a-node.md`). It carries `warmup_frames`' bound/refinement
+discipline through `node_lookahead_frames`, plus one cross-check warmup does not
+need: `Mode.STREAMING` and a nonzero lookahead contradict each other outright,
+since a node that emits on consumption has no later frame to have read.
 
 v2's fourth params-derived declaration, `frame_bytes_ratio`, is cut here with
 `CostEstimate` and `backend_agnostic`: each fed machinery v3 has not built, and
@@ -417,6 +427,36 @@ class ParamsBase(BaseModel):
         """
         return NO_FRAMES
 
+    def lookahead_frames(self) -> FrameCount:
+        """Frames *after* its target this configuration must have in hand.
+
+        `warmup_frames` on the other side of the frame being emitted, and the
+        two together are the whole of a window's shape: a centred window of
+        length `2k+1` is `k` of lead-in and `k` of lookahead, which is what
+        v2's trailing-only contract had no way to say. The detector was tuned
+        against the centred result (`adr/detector-is-a-node.md`), so the
+        missing half was not a refinement of the contract but the thing that
+        kept the tool out of the graph.
+
+        Refines `ToolSpec.lookahead_frames` exactly as `warmup_frames` refines
+        its bound, and `node_lookahead_frames` picks between the two. Costs
+        latency rather than decode: the executor cannot emit the frame at `i`
+        until it has read `i + lookahead`, so a bound charged to every run
+        would delay every preview by the widest window the model admits.
+        """
+        return NO_FRAMES
+
+    @classmethod
+    def max_lookahead_frames(cls) -> FrameCount:
+        """Worst-case lookahead over this params model's legal range.
+
+        `max_warmup_frames`' treatment for the other half of the window, and
+        for its reason: the bound is a fact about the parameter model's legal
+        range, so the model states it and the decorator reads it rather than a
+        tool author writing it a second time in the decoration.
+        """
+        return NO_FRAMES
+
 
 @dataclass(frozen=True, slots=True)
 class ArraySpec:
@@ -568,6 +608,19 @@ class ToolSpec:
     #: `warmup_frames` must declare a value here so the generic gate can assert
     #: against data rather than a docstring sentence.
     settling_epsilon: float | None = None
+    #: Frames past its target this tool must have in hand before it may emit,
+    #: counted in this tool's *input* frames — `warmup_frames`' unit, on the
+    #: other side of the frame. A bound over the legal parameter range for
+    #: `warmup_frames`' reason, refined per configuration by
+    #: `ParamsBase.lookahead_frames`, and chosen between by
+    #: `node_lookahead_frames`.
+    #:
+    #: Refused below on a spec whose `mode` has no window. A `STREAMING` node
+    #: emits a frame as soon as it has consumed one, so there is no later frame
+    #: it could have read and nothing for the executor to delay — the pair
+    #: would declare a centred window and run trailing, which is precisely the
+    #: silence this field was added to break.
+    lookahead_frames: FrameCount = NO_FRAMES
     #: This tool's output is not indexed like its input — a decimator. Must
     #: agree with whether `params_model` overrides `output_rate`, and the
     #: agreement is checked below. Declaring it is not redundant with the
@@ -673,6 +726,14 @@ class ToolSpec:
             raise ValueError(
                 f"{self.tool_id}: warmup_frames={self.warmup_frames.frames} declares a "
                 "settling claim, so settling_epsilon must be declared too"
+            )
+        _whole_lookahead(self.tool_id, self.lookahead_frames, "lookahead_frames")
+        if self.lookahead_frames.frames > 0 and self.mode is not Mode.WINDOWED:
+            raise ValueError(
+                f"{self.tool_id}: declares lookahead_frames={self.lookahead_frames.frames} but "
+                f"mode is {self.mode.value} — a streaming node emits a frame as soon as it has "
+                "consumed one, so there is no later frame it could have read; declare "
+                "mode=Mode.WINDOWED if this tool's output at a frame depends on frames after it"
             )
         if self.state_factory is not None and not self.stateful:
             raise ValueError(
@@ -831,6 +892,7 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     # ("or refuse to produce it at all"). The hashed half is `params_model`.
     "selecting": Channel.EXECUTION,
     "warmup_frames": Channel.EXECUTION,
+    "lookahead_frames": Channel.EXECUTION,
     "settling_epsilon": Channel.EXECUTION,
     "stateful": Channel.EXECUTION,
     # Execution rather than identity, and it is the one placement worth arguing.
@@ -920,6 +982,60 @@ def node_warmup_frames(step: PathStep) -> FrameCount:
             f"which exceeds the spec's declared bound of {spec.warmup_frames} — the bound is the "
             "worst case over the legal parameter range and a configuration may only refine it "
             "downward"
+        )
+    return refined
+
+
+def _whole_lookahead(tool_id: str, count: FrameCount, source: str) -> FrameCount:
+    """`count`, or refuse it for not being a whole number of frames.
+
+    `FrameCount` annotates `frames: int` and enforces only the sign, so half a
+    frame arrives here intact — a window length divided by two is the obvious
+    way to produce one. It cannot be honored downstream: emission is delayed by
+    whole frames or not at all, so rounding it wherever the delay is applied
+    would leave the declared window and the window actually read differing by a
+    frame, with the declaration still reading exact.
+
+    `TypeError` where every other refusal in this file raises `ValueError`, and
+    the split is the honest one: the neighbours refuse a value that is in range
+    for its type and wrong for the tool, while this refuses a value that is not
+    a `FrameCount`'s declared `int` at all.
+    """
+    if isinstance(count.frames, bool) or not isinstance(count.frames, int):
+        raise TypeError(
+            f"{tool_id}: {source} must be whole frames, got {count.frames!r} — a window "
+            "boundary lands between two frames or on one, and only one of those is a frame "
+            "the executor can wait for"
+        )
+    return count
+
+
+def node_lookahead_frames(step: PathStep) -> FrameCount:
+    """One node's read-ahead: the refinement if it has one, else the bound.
+
+    `node_warmup_frames` for the other half of the window, sharing its
+    override-by-identity detection and its one-directional refusal. Kept a
+    separate function rather than a second return value because the two
+    quantities are consumed by different things — warmup by the decode range
+    the plan folds, lookahead by the emission delay the executor applies
+    (02.3) — and a caller wanting one has no use for the other.
+
+    Raises:
+        ValueError: if the refinement exceeds the spec's bound.
+        TypeError: if the refinement is not a whole count of frames.
+    """
+    spec, params = step
+    if type(params).lookahead_frames is ParamsBase.lookahead_frames:
+        return spec.lookahead_frames
+    refined = _whole_lookahead(
+        spec.tool_id, params.lookahead_frames(), f"{type(params).__name__}.lookahead_frames()"
+    )
+    if refined > spec.lookahead_frames:
+        raise ValueError(
+            f"{spec.tool_id}: {type(params).__name__}.lookahead_frames() returned {refined}, "
+            f"which exceeds the spec's declared lookahead bound of {spec.lookahead_frames} — the "
+            "bound is the worst case over the legal parameter range and a configuration may only "
+            "refine it downward"
         )
     return refined
 

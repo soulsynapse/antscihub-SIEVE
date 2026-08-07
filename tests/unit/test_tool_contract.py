@@ -20,6 +20,7 @@ from sieve.core.tool_base import (
     SPEC_CHANNELS,
     ArraySpec,
     CaptionPart,
+    Channel,
     ElementKind,
     ElementNames,
     ElementRelation,
@@ -31,6 +32,7 @@ from sieve.core.tool_base import (
     input_warmup_frames,
     node_element,
     node_element_names,
+    node_lookahead_frames,
     source_warmup_frames,
 )
 from sieve.core.tool_registry import (
@@ -102,6 +104,33 @@ class WindowParams(ParamsBase):
         return FrameCount(self.length - 1)
 
 
+class CenteredWindowParams(ParamsBase):
+    """A window centred on its target: half behind it, half in front.
+
+    `detect`'s shape (`adr/detector-is-a-node.md`) and the reason lookahead is
+    params-derived for `WindowParams`' reason — the widest window this model
+    admits would otherwise be charged to every run whatever length it asked
+    for. Both halves refine from the same parameter, which is what makes a
+    configuration's warmup and lookahead move together.
+    """
+
+    length: int = 5
+
+    def warmup_frames(self) -> FrameCount:
+        return FrameCount((self.length - 1) // 2)
+
+    def lookahead_frames(self) -> FrameCount:
+        return FrameCount((self.length - 1) // 2)
+
+    @classmethod
+    def max_warmup_frames(cls) -> FrameCount:
+        return FrameCount(50)
+
+    @classmethod
+    def max_lookahead_frames(cls) -> FrameCount:
+        return FrameCount(50)
+
+
 def make_spec(**overrides: object) -> ToolSpec:
     fields: dict[str, object] = {
         "tool_id": "downsample",
@@ -128,6 +157,16 @@ WINDOWED = make_spec(
     params_model=WindowParams,
     warmup_frames=FrameCount(99),
     settling_epsilon=0.0,
+)
+#: Declares both halves of a centred window as bounds of 50, and refines each
+#: from `length`.
+CENTERED = make_spec(
+    tool_id="detect",
+    params_model=CenteredWindowParams,
+    mode=Mode.WINDOWED,
+    warmup_frames=FrameCount(50),
+    settling_epsilon=0.0,
+    lookahead_frames=FrameCount(50),
 )
 
 
@@ -297,6 +336,134 @@ class TestRate:
         # spans — which is what keeps `pipeline` from having to name one.
         assert SampleParams().selected_frames() == ALL_FRAMES
         assert SpanningParams().selected_frames() == range(10, 20)
+
+
+class TestLookahead:
+    """The other half of a window, which v2's contract could not state.
+
+    Every test name carries `lookahead` because the item's gate selects on it.
+    """
+
+    def test_a_lookahead_bound_needs_a_mode_with_a_window(self) -> None:
+        # The cross-check that makes the declaration mean something. A
+        # streaming node emits a frame as soon as it has consumed one, so
+        # there is no later frame it could have read and nothing for the
+        # executor to delay — a lookahead declared there is a claim about a
+        # window the node does not have, and the tool would run trailing while
+        # its declaration said centred.
+        with pytest.raises(ValueError, match="lookahead_frames.*mode is"):
+            make_spec(lookahead_frames=FrameCount(1))
+
+        windowed = make_spec(mode=Mode.WINDOWED, lookahead_frames=FrameCount(1))
+        assert windowed.lookahead_frames == FrameCount(1)
+
+    def test_a_windowed_tool_may_still_declare_no_lookahead(self) -> None:
+        # One-directional, like the `state_factory` refusal: v2's trailing
+        # windows are windowed and read nothing ahead, and requiring the pair
+        # would make every one of them declare a zero.
+        assert make_spec(mode=Mode.WINDOWED).lookahead_frames == NO_FRAMES
+
+    def test_a_negative_lookahead_cannot_be_declared_at_all(self) -> None:
+        # Refused by `FrameCount` at the return inside the tool that computed
+        # it, which is a better place to meet it than a check here that could
+        # only see the number once it already had a home.
+        class BackwardsParams(ParamsBase):
+            def lookahead_frames(self) -> FrameCount:
+                return FrameCount(-1)
+
+        with pytest.raises(ValueError, match="non-negative"):
+            node_lookahead_frames((CENTERED, BackwardsParams()))
+
+    def test_a_fractional_lookahead_is_refused_as_bound_and_as_refinement(self) -> None:
+        # `FrameCount` annotates `frames: int` and enforces only the sign, so
+        # half a frame reaches here intact — dividing a window length by two is
+        # the obvious way to produce one. It cannot be honored: the executor
+        # delays emission by whole frames or not at all, and `ceil`-ing it
+        # somewhere downstream would make the declared window and the window
+        # actually read differ by a frame with nothing to say so.
+        class HalfParams(CenteredWindowParams):
+            def lookahead_frames(self) -> FrameCount:
+                return FrameCount(2.5)  # pyright: ignore[reportArgumentType]
+
+        with pytest.raises(TypeError, match="whole frames"):
+            make_spec(mode=Mode.WINDOWED, lookahead_frames=FrameCount(2.5))
+        with pytest.raises(TypeError, match="whole frames"):
+            node_lookahead_frames((CENTERED, HalfParams()))
+
+    def test_a_configured_lookahead_is_charged_instead_of_the_bound(self) -> None:
+        # Warmup's refinement argument on the other side of the target: a
+        # centred detector whose window is a parameter would otherwise delay
+        # every emission by the widest window the model admits.
+        assert node_lookahead_frames((CENTERED, CenteredWindowParams(length=11))) == FrameCount(5)
+        assert CENTERED.lookahead_frames == FrameCount(50)
+
+    def test_a_lookahead_refinement_above_the_bound_is_refused(self) -> None:
+        # `node_warmup_frames`' silent direction, and it is silent here too:
+        # the bound is what `sieve inspect` prints, and a configuration
+        # quietly reading further ahead than the declaration admits is a
+        # window the plan never decoded the tail of.
+        with pytest.raises(ValueError, match="exceeds the spec's declared lookahead bound"):
+            node_lookahead_frames((CENTERED, CenteredWindowParams(length=201)))
+
+        at_bound = (CENTERED, CenteredWindowParams(length=101))
+        assert node_lookahead_frames(at_bound) == FrameCount(50)
+
+    def test_a_tool_with_no_lookahead_override_is_charged_the_specs_bound(self) -> None:
+        # The half of `node_lookahead_frames` that keeps a constant lookahead
+        # declarable once, on the spec, exactly as a constant warmup is.
+        constant = make_spec(mode=Mode.WINDOWED, lookahead_frames=FrameCount(3))
+        assert node_lookahead_frames((constant, SampleParams())) == FrameCount(3)
+        assert node_lookahead_frames((IIR, SampleParams())) == NO_FRAMES
+
+    def test_the_decorator_derives_the_lookahead_bound_from_the_params_model(self) -> None:
+        # `max_warmup_frames`' treatment, and for its reason: the bound is a
+        # fact about the parameter model's legal range, so writing it a second
+        # time in the decoration is a copy that can disagree with the model
+        # that owns it.
+        registry = ToolRegistry()
+
+        @register_tool(
+            tool_id="centered",
+            version="1.0.0",
+            summary="Reads a window centred on its target.",
+            accepts=ArraySpec(),
+            emits=ArraySpec(),
+            element=ElementRelation.PRESERVED,
+            mode=Mode.WINDOWED,
+            settling_epsilon=0.0,
+            registry=registry,
+        )
+        class DecoratedCentered(CenteredWindowParams):
+            pass
+
+        assert DecoratedCentered.spec().lookahead_frames == FrameCount(50)
+
+    def test_a_streaming_tool_whose_params_claim_lookahead_is_refused(self) -> None:
+        # The mode cross-check reached through the decorator, which is where
+        # every real tool meets it — the bound arrives from the params model,
+        # so a centred kernel that forgot to say `WINDOWED` is caught by the
+        # declaration it did make rather than by the one it omitted.
+        with pytest.raises(ValueError, match="lookahead_frames.*mode is"):
+
+            @register_tool(
+                tool_id="centered",
+                version="1.0.0",
+                summary="Reads ahead without admitting to a window.",
+                accepts=ArraySpec(),
+                emits=ArraySpec(),
+                element=ElementRelation.PRESERVED,
+                settling_epsilon=0.0,
+                registry=ToolRegistry(),
+            )
+            class StreamingCentered(CenteredWindowParams):
+                pass
+
+    def test_lookahead_is_an_execution_channel_declaration(self) -> None:
+        # Beside `warmup_frames` and for its reason: it decides what the one
+        # path decodes and when it emits, and two builds disagreeing about it
+        # would produce the same frames at different cost rather than
+        # different frames.
+        assert SPEC_CHANNELS["lookahead_frames"] is Channel.EXECUTION
 
 
 class TestElementMeaning:
@@ -493,7 +660,8 @@ def decorator_keywords() -> set[str]:
     `params_model` is the other name the two lists differ by, and it is absent
     here rather than removed: the decorated class supplies it, which is the one
     field of a spec that cannot be written in the decoration. `warmup_frames`
-    is absent because the params model derives the spec bound.
+    and `lookahead_frames` are absent because the params model derives both
+    bounds.
     """
     parameters = inspect.signature(register_tool).parameters.values()
     return {p.name for p in parameters if p.kind is p.KEYWORD_ONLY} - {"registry"}
@@ -555,6 +723,7 @@ class TestDecoratorMatchesSpec:
         assert decorator_keywords() == {f.name for f in fields(ToolSpec)} - {
             "params_model",
             "warmup_frames",
+            "lookahead_frames",
         }
 
     def test_every_keyword_reaches_the_field_it_names(self) -> None:

@@ -160,6 +160,7 @@ def register_tool(
             emits=emits,
             mode=mode,
             warmup_frames=params_model.max_warmup_frames(),
+            lookahead_frames=params_model.max_lookahead_frames(),
             settling_epsilon=settling_epsilon,
             rate_changing=rate_changing,
             selecting=selecting,

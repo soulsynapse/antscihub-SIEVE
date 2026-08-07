@@ -178,9 +178,6 @@ regimes measured through the GUI; the exception list still empty.
 
 ## Open questions
 
-- VISION.md is mid-edit and does not yet hold the component list with
-  never-lists that CLAUDE.md attributes to it; finishing it from this plan's
-  phase and disposition tables should precede Phase 1 code.
 - Detect parity target: confirm centered whole-record (`detect/` package
   output) and abandon the trailing kernel as a target.
 - Per-tool `.md` files: hand-written like v2, generated from `ToolSpec`, or

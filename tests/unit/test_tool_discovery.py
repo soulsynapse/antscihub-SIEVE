@@ -31,6 +31,10 @@ def test_discovery_imports_no_tool_module() -> None:
     dead. Only the import list can tell the two apart, and it is read as an AST
     rather than as text so that the prose above it — which has to be allowed to
     name the mistake it is warning about — does not trip the check.
+
+    That the scan then finds anything is the *next* test's claim, and it cannot
+    be this one's: this module imports `DownsampleParams` at file scope as a
+    fixture, so the registry is stocked here whatever `discover()` does.
     """
     package = Path(str(sieve.tools.__file__))
     modules = {path.stem for path in package.parent.glob("*.py") if path.stem != "__init__"}
@@ -47,7 +51,28 @@ def test_discovery_imports_no_tool_module() -> None:
     assert not (imported & modules), (
         f"sieve/tools/__init__.py imports tool modules: {sorted(imported & modules)}"
     )
-    assert "downsample" in {spec.tool_id for spec in discover()}
+
+
+def test_the_scan_stocks_a_shelf_no_one_else_touched() -> None:
+    """`discover()` has to be the thing that puts a tool on the shelf.
+
+    In a fresh interpreter, because inside this one it cannot be shown: the
+    fixture import at the top of this file registers `downsample` before any
+    test runs, so a `discover()` whose body did nothing but return `REGISTRY`
+    would still satisfy an in-process assertion — it did, for the whole of
+    a686d13, and the mutant printed `()` outside pytest. The subprocess is the
+    only place the two routes to a populated registry come apart.
+
+    Asserts containment rather than equality so that the second tool to land
+    does not fail this; the claim is that the scan found one nobody named, not
+    that it found exactly one.
+    """
+    script = "from sieve.tools import discover;print(sorted(s.tool_id for s in discover()))"
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=True
+    )
+
+    assert "downsample" in ast.literal_eval(result.stdout.strip())
 
 
 def test_every_discovered_tool_declares_a_caption() -> None:

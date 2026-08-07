@@ -7,8 +7,9 @@ title: One sentence naming the outcome
 # optionally, `phase`, and it lives in the phase's pool instead.
 step: "00.1"
 status: open          # open | awaiting-review | deferred | done
-# A worker moves open -> awaiting-review, never further. Only a review sets
-# done. `deferred` requires a real trigger in gated_on.
+# A worker moves open -> awaiting-review, or -> deferred when the criterion
+# contradicts the tree. Only a review sets done or edits done_when.
+# `deferred` requires a real trigger in gated_on.
 gated_on: nothing
 # Sequenced items only, and required there: the executable completion
 # criterion, written when the item is written and never edited by the session

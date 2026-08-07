@@ -80,6 +80,112 @@ def test_with_every_step_taken_or_done_there_is_nothing_takeable(tmp_path):
     assert next_takeable(collect(tmp_path)) is None
 
 
+#: The pool tiers. `phase: 5` puts an aside behind the phase-6 step in
+#: SEQUENCED_6, which is what makes "an earlier phase's normal" a case at all.
+HIGH = """title: A defect in code that landed
+priority: high
+phase: 5
+status: open
+gated_on: nothing
+done_when: "true"
+opened: 2026-08-07"""
+
+SEQUENCED_6 = SEQUENCED.replace('"02.3"', '"06.3"')
+
+
+def test_a_high_preempts_the_next_planned_step(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    write_item(tmp_path, "defect", HIGH)
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "defect.md"
+
+
+def test_a_high_without_a_criterion_is_skipped_and_named(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    write_item(tmp_path, "defect", HIGH.replace('done_when: "true"\n', ""))
+
+    items = collect(tmp_path)
+
+    assert next_takeable(items) is not None
+    assert next_takeable(items).path.name == "step.md"
+    assert doc_index.unreachable_highs(items) == ["defect.md"]
+
+
+def test_an_earlier_phases_normal_is_paid_before_a_phase_opens(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    write_item(tmp_path, "stranded", HIGH.replace("priority: high", "priority: normal"))
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "stranded.md"
+
+
+def test_a_phase_under_way_is_not_held_up_by_an_earlier_normal(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    begun = SEQUENCED.replace('"02.3"', '"06.1"').replace("status: open", "status: done")
+    write_item(tmp_path, "begun", begun)
+    write_item(tmp_path, "stranded", HIGH.replace("priority: high", "priority: normal"))
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "step.md"
+
+
+def test_a_normal_of_the_phase_about_to_open_does_not_block_it(tmp_path):
+    # The boundary is `<`, not `<=`: an aside minted against phase 6's work
+    # cannot be a defect in phase 6's code, because none of it has run.
+    write_item(tmp_path, "step", SEQUENCED_6)
+    own = HIGH.replace("priority: high", "priority: normal").replace("phase: 5", "phase: 6")
+    write_item(tmp_path, "own", own)
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "step.md"
+
+
+def test_a_claim_awaiting_review_has_started_its_phase(tmp_path):
+    # The live case when this rule landed: 06.2 sat at `awaiting-review`, so
+    # whether Phase 6 counted as begun decided whether 06.3 ran at all.
+    write_item(tmp_path, "step", SEQUENCED_6)
+    claimed = SEQUENCED.replace('"02.3"', '"06.2"').replace(
+        "status: open", "status: awaiting-review"
+    )
+    write_item(tmp_path, "claimed", claimed)
+    write_item(tmp_path, "stranded", HIGH.replace("priority: high", "priority: normal"))
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "step.md"
+
+
+def test_an_unattached_normal_is_paid_at_a_boundary_like_an_earlier_phases(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    loose = HIGH.replace("priority: high", "priority: normal").replace("phase: 5\n", "")
+    write_item(tmp_path, "loose", loose)
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "loose.md"
+
+
+def test_highs_are_served_earliest_phase_first(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    write_item(tmp_path, "later", HIGH.replace("phase: 5", "phase: 6"))
+    write_item(tmp_path, "earlier", HIGH.replace("phase: 5", "phase: 3"))
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "earlier.md"
+
+
+def test_a_low_is_never_takeable_on_its_own(tmp_path):
+    write_item(tmp_path, "cosmetic", HIGH.replace("priority: high", "priority: low"))
+
+    assert next_takeable(collect(tmp_path)) is None
+
+
 def test_a_status_outside_the_vocabulary_is_refused(tmp_path):
     write_item(tmp_path, "bad", SEQUENCED.replace("status: open", "status: in-progress"))
 

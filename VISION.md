@@ -9,3 +9,6 @@ v2.5 of SIEVE was me planning and planning and planning in circles. It lives in 
 
 ## v3 difference
 
+1. Designing for the tools, from the very start.
+2. Not overbuilt.
+3. No extra features until they're needed.

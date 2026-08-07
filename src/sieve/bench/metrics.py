@@ -6,10 +6,10 @@ and a budget nothing can miss is not a budget. This is the one place a duration
 is published and the one place a consumer subscribes, so that adding a check
 means adding a subscriber rather than threading a callback through the executor.
 
-All twelve still have no publisher anywhere in `src/`. That gap is declared in
-`budgets.WITHOUT_PRODUCER` and held to a list that only shrinks by
-`tests/bench/test_budget_producers.py`, because a ceiling nothing measures reads
-as a ceiling being met.
+Ten of the twelve still have no publisher anywhere in `src/` — the two that do
+are the preview session's. That gap is declared in `budgets.WITHOUT_PRODUCER`
+and held to a list that only shrinks by `tests/bench/test_budget_producers.py`,
+because a ceiling nothing measures reads as a ceiling being met.
 
 Qt-free, and the `headless` contract in `.importlinter` enforces it. A QObject
 re-emitting these as signals belongs one layer up in `gui/`, and it would be

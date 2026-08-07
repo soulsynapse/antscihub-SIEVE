@@ -7,10 +7,10 @@ drift away from what the code enforces, in either direction.
 
 **A ceiling nothing publishes is a number, not a budget**, which is the half of
 the claim this table cannot state by itself. It is stated by `WITHOUT_PRODUCER`
-below and checked by `tests/bench/test_budget_producers.py`. Right now that set
-holds every key: nothing in `src/` outside this package measures anything, and
-the set is where that fact is written down rather than left to be inferred from
-the absence of a call.
+below and checked by `tests/bench/test_budget_producers.py`. Two of the twelve
+have left that set — `pipeline/preview.py` publishes both sides of a render —
+and the set is where the remaining ten are written down rather than left to be
+inferred from the absence of a call.
 
 Every limit carries an **anchor** comment saying which perceptual band the
 number came from (~100 ms reads as instantaneous, ~1 s holds the flow of
@@ -211,13 +211,17 @@ BUDGETS: dict[str, Budget] = _table(
 #: `tests/bench/test_budget_producers.py` fails both on a budget missing from
 #: here that has no producer *and* on one listed here that has since grown one.
 #:
-#: It is currently the whole table, and that is the honest reading of a repo
-#: with no preview session and no GUI: twelve ceilings, nothing measuring any
-#: of them. The set is the ledger the next two items pay down — 06.2 gives the
-#: in-pipeline keys a publisher, 06.3 gives two of them a clock — and each
-#: payment is a deletion here rather than a silently truer tree. Spelled out
-#: rather than derived from `BUDGETS` for that reason: a set that says "all of
-#: them" stays true through the first publisher and names nothing to delete.
+#: The set is the ledger the items of this phase pay down, and each payment is
+#: a deletion here rather than a silently truer tree. Spelled out rather than
+#: derived from `BUDGETS` for that reason: a set that says "all of them" stays
+#: true through the first publisher and names nothing to delete.
+#:
+#: 06.2 took the first two out. `pipeline/preview.py` publishes
+#: `slider_to_preview` around a render's first frame and `full_preview_render`
+#: around a whole window, as string literals — it sits below `bench` and may not
+#: import this table — so those two ceilings can now be missed by something a
+#: user runs. The other ten are the honest reading of a repo with no GUI and no
+#: graph plotting: nothing under `src/` outside this package names them.
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
     {
         "open_to_first_frame",
@@ -225,9 +229,7 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
         "scrub_settle",
         "cut_to_ready",
         "tool_to_first_tick",
-        "slider_to_preview",
         "slider_to_graph",
-        "full_preview_render",
         "band_drag_repaint",
         "knob_to_graphs",
         "density_rebuild",

@@ -1,7 +1,7 @@
 ---
 title: The preview session and its command land
 step: "06.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_preview.py tests/integration/test_cli_preview.py -q"
 opened: 2026-08-07

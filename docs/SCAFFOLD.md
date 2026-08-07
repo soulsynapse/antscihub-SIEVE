@@ -14,6 +14,7 @@ src/sieve/gui/__init__.py               # Renders values and emits intents; comp
 src/sieve/cli/__init__.py               # The command-line surface over the pipeline.
 src/sieve/cli/app.py                    # The `sieve` command: argument parsing and nothing else.
 src/sieve/cli/inspect_cmd.py            # `sieve inspect` — what is on the shelf, read off the declarations.
+src/sieve/cli/preview_cmd.py            # `sieve preview` — the tuning loop's inner step, with the timings printed.
 src/sieve/cli/run_cmd.py                # `sieve run` — execute a saved project through the one executor.
 src/sieve/bench/__init__.py             # The performance budgets and the metric bus.
 src/sieve/bench/budgets.py              # The latency budget table. Source of truth in code for both speed regimes.
@@ -26,6 +27,7 @@ src/sieve/pipeline/dag.py               # The graph, resolved: what runs, in wha
 src/sieve/pipeline/executor.py          # The single shared execution path: a plan, a reader, and a store go in.
 src/sieve/pipeline/materialize.py       # Cut one replicate's crop to a file, and refuse to register one that lies.
 src/sieve/pipeline/plan.py              # Everything about a run that is knowable before a frame is decoded.
+src/sieve/pipeline/preview.py           # The preview session: one working window, one replicate, many revisions.
 src/sieve/pipeline/resolve_source.py    # Which file a run opens, and in whose frame numbering.
 src/sieve/pipeline/source_home.py       # The frame of reference a crop record is read against: three facts, one value.
 src/sieve/tools/__init__.py             # One module per tool: a ToolSpec and one plain run function.

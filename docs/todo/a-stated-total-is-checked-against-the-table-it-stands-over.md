@@ -26,3 +26,13 @@ for numbers. Deciding which is part of the item.
 Low rather than a decimal step because nothing downstream reads these totals;
 what they cost is a reviewer's time re-doing the arithmetic, and 03.4 and 03.5
 each carry a table that will need it.
+
+03.6 is the third instance and the first where the sentence claimed to have
+*checked*: "13 and 8 … which are the counts the item states and the counts the
+two files have", over v3 files holding 13 and 7. The two readings — v2's counts,
+which is what PLAN.md means, and the v3 files the paths name — differ by one, and
+the run wrote the clause that asserts they do not. That is the argument for the
+frontmatter field over parsing English: a `case_count:` checked against the row
+count would also have had nothing to say here, because the wrong number is the
+*v3* total, which no row count reaches. Whatever this item builds has to reach
+the count the criterion reports, not only the table's height.

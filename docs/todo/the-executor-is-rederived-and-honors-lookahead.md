@@ -1,7 +1,7 @@
 ---
 title: The executor is re-derived and honors lookahead
 step: "03.6"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_executor.py tests/unit/test_stateful_execution.py -q"
 opened: 2026-08-06
@@ -43,9 +43,11 @@ what changed.
 
 ## The case table
 
-21 rows, one per v2 case: 13 in `tests/unit/test_executor.py` and 8 in
-`tests/unit/test_stateful_execution.py`, which are the counts the item states
-and the counts the two files have. Three verdicts, as 03.3, 03.4 and 03.5 used
+21 rows, one per v2 case: 13 in v2's `test_executor.py` and 8 in v2's
+`test_stateful_execution.py`, which are the counts this item states up front as
+PLAN.md's re-derivation clause asks. The v3 files are a different count and it
+is the one `done_when` reports: **13 and 7**, being 21 rows less the 6 dropped
+plus the 5 delay cases below, so 20. Three verdicts, as 03.3, 03.4 and 03.5 used
 them: *survives* — same claim, only the fixture rewritten into v3's vocabulary;
 *replaced* — the claim survives but is aimed at a different subject, and the v3
 case is named; *dropped* — the subject is gone, citing what removed it.

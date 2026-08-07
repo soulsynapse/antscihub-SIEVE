@@ -1,7 +1,7 @@
 ---
 title: core/types.py ports verbatim
 step: "01.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_types.py tests/unit/test_quantities.py -q"
 opened: 2026-08-06
@@ -52,7 +52,27 @@ The scaffold now carries the module's 76-character annotation, in bounds
 under the new limit — the first evidence that the derived-docs run survives a
 real module.
 
-Two things for the reviewer. The landing commit's message is the ADR's, not
-the port's: a concurrent session committed this staged tree under its own
-subject, and 883ec97's diff is the port while its message describes ADR-16.
-And `scratch/core-types-port` (e515bf7) is now redundant.
+## Reviewed 2026-08-07: done
+
+The three hashes above were recomputed from `HEAD`, not read back from this
+file, and all three still equal v2's. Identity is the stronger claim than the
+one the item set for itself — "a diff that shows anything but import lines is
+the item failing" admits import-line drift, and there is none, so the file
+carries `sieve.core.types` unrenamed as the body says. `e515bf7`'s blobs are
+the same three, which is what "relanded unmodified" has to mean; the scratch
+branch holds nothing `v3` lacks. The gate passes at 27, and the whole gate —
+`ruff check && lint-imports && pytest` — is green at 5 contracts and 66 tests,
+so the ported module does not owe v3's own lint or layering anything. The
+scaffold annotation measures 76 against ADR-16's 97.
+
+The message on 883ec97 is left wrong on purpose. Its diff is this port; its
+subject and body describe ADR-16, which actually landed in 3cc9a99 — a
+concurrent session committed a staged tree that was not its own. So
+`git log -- src/sieve/core/types.py` answers with an ADR, and a search for the
+ADR answers with two commits, one of which never touched it. That is a real
+cost here specifically, because this repo deletes an item's text on completion
+and names git as where it is recovered from. But the fix is a history rewrite,
+and whether an unpushed branch's history is worth rewriting is Kendrick's call,
+not a reviewer's. Raised rather than done: two commits from the tip, nothing
+pushed, so it is cheap if he wants it. Until then this paragraph is the record
+that the diff and the message disagree.

@@ -32,10 +32,11 @@ and its file in `docs/adr/` but leaves this index.
 - [One execution path](adr/one-execution-path.md) — Preview and production are one executor over one plan; a preview is the same pipeline with a span or resolution cut prepended, so what the user tuned against cannot diverge from what the run produces.
 - [Correctness is the default; performance is opt-in](adr/correctness-is-the-default.md) — The naive path is the product surface, not a fallback: every tool runs correct-but-slow on any machine, and a fast path lands only on a measured budget violation, at parity with what it replaces.
 - [Cache admission is a bounded warmup, not a stateless tool](adr/cache-admission-is-bounded-warmup.md) — A tool is keyed when its warmup is **bounded**, stateful or not, and a run entering a cached range re-settles its state over that warmup first. An epsilon warmup is refused.
+- [An input is a keyed frame provider](adr/an-input-is-a-keyed-frame-provider.md) — A node's input is a keyed frame provider; whether it names an upstream node or a file the user chose changes only how its key is derived, never what the executor does with it.
 
 ## 05 — The GUI
 
 - [The GUI knows kinds, never tools](adr/gui-knows-kinds-not-tools.md) — `gui` reads spec data — param kinds, presentation stereotypes, window shape — and never branches on `tool_id`; widgets and overlays are generated per kind.
 - [The GUI's base is the v2.5 spike, not v2's gui](adr/gui-base-is-the-v25-spike.md) — `gui/` starts from the v2.5 spike's skeleton — `proto_sieve`'s `gui` and `session` — not v2's `gui/`; v2 components port into it where they held, and the layout operates as VISION describes.
 
-*16 settled, 1 superseded.*
+*17 settled, 1 superseded.*

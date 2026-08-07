@@ -21,6 +21,29 @@ apparatus, one plain `run` per tool module (`adr/no-kernel-apparatus.md`).
 Work is chunked into `docs/todo/` items attached to these phases;
 `scripts/doc_index.py` generates the index and answers what to take next.
 
+## Porting discipline
+
+Every port item runs under these rules; items cite this section instead of
+restating it.
+
+- Read v2 through `git -C ../antscihub-SIEVE-v2 show main:<path>` — the
+  worktree can hold uncommitted edits.
+- Verbatim means identical modulo import paths and ADR-1's renames. Diff the
+  ported file against the v2 blob before claiming done; any other difference
+  is a decision, and a decision never rides along with a port.
+- The ported v2 tests are the spec. Port the test file first and do not
+  rewrite it: a test that must *change* to pass is a decision — stop and
+  write the question at the bottom of the item. Deleting a case whose subject
+  the item's cut list names is in scope; adapting one is not.
+- A v2 declaration the item's cut list does not name and no v3 machinery
+  consumes is refused, not carried (`adr/declared-means-verified.md`).
+- No files beyond what the item names — no per-tool `.md` (an open question
+  below), no helper modules (`adr/a-tool-is-one-file.md`,
+  `adr/ops-admission-is-two-tools.md`).
+- When the item cannot be done as written, it stays `awaiting-review` with
+  the blocker written at the bottom. Wrong-but-green is the one outcome the
+  loop cannot detect; a stopped item is cheap.
+
 ## Phase 0 — Skeleton and enforcement
 
 Before any logic: the package tree (`core`, `tools`, `pipeline`, `decode`,
@@ -184,7 +207,5 @@ regimes measured through the GUI; the exception list still empty.
   output) and abandon the trailing kernel as a target.
 - Per-tool `.md` files: hand-written like v2, generated from `ToolSpec`, or
   dropped.
-- Goldens: checked into v3 (recommended, with the regeneration command
-  recorded in the test) vs regenerated from the v2 worktree in CI.
 - First GUI cut: which v2 surfaces (wizard, replicate tab, history dialog,
   sweep) are in Phase 7 vs later.

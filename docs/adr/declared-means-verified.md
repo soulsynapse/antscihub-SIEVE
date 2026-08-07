@@ -18,4 +18,8 @@ layer (`docs/archive/DESIGN-SESSION.md`, Exchanges 5 and 8). v2 shipped the
 quieter half of the lesson: declarations serving deferred machinery — cost
 estimates, `backend_agnostic`, `frame_bytes_ratio` — sat unread, anchoring
 readers to paths that did not exist. The registration gate refuses both:
-declarable means runnable, or refused by name.
+declarable means runnable, or refused by name. One licensed shape: a
+declaration whose consumer is scheduled by the plan (presentation
+stereotypes, read first in Phase 7) is admitted early only with a
+registration-time validity check — a closed vocabulary, refusal by name —
+standing in as the consumer until the real one lands.

@@ -12,14 +12,18 @@ import doc_index
 import pytest
 from doc_index import (
     ItemError,
+    adr_summary,
     collect,
+    collect_adrs,
     collect_findings,
     collect_modules,
     forbidden_present,
     module_annotation,
     next_takeable,
+    parse_groups,
     phase_titles,
     render,
+    render_architecture,
     render_findings,
     render_scaffold,
 )
@@ -186,6 +190,96 @@ def test_a_missing_findings_folder_is_an_empty_list_not_an_error(tmp_path):
     assert collect_findings(tmp_path / "loop") == []
 
 
+# ADRs: fixed number as identity, position as placement, the body's first
+# paragraph as the index line.
+
+ADR = """title: No kernel apparatus
+adr: 2
+position: "01.02"
+status: settled
+decided: 2026-08-06"""
+
+GROUPS = {1: "The tool contract"}
+
+
+def test_the_index_line_is_the_first_paragraph_joined_across_wraps(tmp_path):
+    path = write_item(tmp_path, "adr", ADR, body="One plain run per\ntool module.\n\nWhy: prose.")
+
+    assert adr_summary(path) == "One plain run per tool module."
+
+
+def test_a_superseded_adr_keeps_its_number_but_leaves_the_index(tmp_path):
+    write_item(tmp_path, "kernel-registry", ADR + "\nsuperseded_by: no-kernel-apparatus")
+    old = tmp_path / "kernel-registry.md"
+    old.write_text(
+        old.read_text(encoding="utf-8")
+        .replace("status: settled", "status: superseded")
+        .replace('position: "01.02"\n', ""),
+        encoding="utf-8",
+    )
+    write_item(tmp_path, "no-kernel-apparatus", ADR.replace("adr: 2", "adr: 3"), body="The one.")
+
+    text = render_architecture(collect_adrs(tmp_path, GROUPS), GROUPS)
+
+    assert "no-kernel-apparatus.md" in text
+    assert "kernel-registry" not in text
+    assert "*1 settled, 1 superseded.*" in text
+
+
+def test_a_superseded_adr_holding_a_position_is_refused(tmp_path):
+    bad = ADR.replace("status: settled", "status: superseded") + "\nsuperseded_by: successor"
+    write_item(tmp_path, "successor", ADR.replace("adr: 2", "adr: 3").replace("01.02", "01.03"))
+    write_item(tmp_path, "old", bad)
+
+    with pytest.raises(ItemError, match="no `position`"):
+        collect_adrs(tmp_path, GROUPS)
+
+
+def test_a_minted_number_is_never_reused(tmp_path):
+    write_item(tmp_path, "first", ADR)
+    write_item(tmp_path, "second", ADR.replace("01.02", "01.03"))
+
+    with pytest.raises(ItemError, match="already"):
+        collect_adrs(tmp_path, GROUPS)
+
+
+def test_two_adrs_on_one_shelf_position_are_refused(tmp_path):
+    write_item(tmp_path, "first", ADR)
+    write_item(tmp_path, "second", ADR.replace("adr: 2", "adr: 3"))
+
+    with pytest.raises(ItemError, match="position 01.02"):
+        collect_adrs(tmp_path, GROUPS)
+
+
+def test_a_position_outside_the_named_groups_is_refused(tmp_path):
+    write_item(tmp_path, "adr", ADR.replace("01.02", "09.01"))
+
+    with pytest.raises(ItemError, match="_GROUPS.md"):
+        collect_adrs(tmp_path, GROUPS)
+
+
+def test_each_further_position_pair_indents_one_level(tmp_path):
+    write_item(tmp_path, "parent", ADR, body="The parent.")
+    write_item(
+        tmp_path,
+        "child",
+        ADR.replace("adr: 2", "adr: 3").replace("01.02", "01.02.01"),
+        body="The child.",
+    )
+
+    text = render_architecture(collect_adrs(tmp_path, GROUPS), GROUPS)
+
+    assert "\n- [No kernel apparatus](adr/parent.md) — The parent." in text
+    assert "\n  - [No kernel apparatus](adr/child.md) — The child." in text
+
+
+def test_group_titles_come_from_the_groups_file(tmp_path):
+    groups = tmp_path / "_GROUPS.md"
+    groups.write_text("<!-- prose -->\n01 — The tool contract\n", encoding="utf-8")
+
+    assert parse_groups(groups) == {1: "The tool contract"}
+
+
 # The scaffold: derived from docstring first lines, with the rules that make
 # a first line an annotation.
 
@@ -263,6 +357,7 @@ def test_the_repos_own_items_are_hygienic():
     collect_findings(doc_index.FINDINGS_DIR)
     collect_findings(doc_index.LOOP_DIR)
     collect_modules(doc_index.REPO)
+    collect_adrs(doc_index.ADR_DIR)
     assert forbidden_present(doc_index.REPO) == []
 
 
@@ -279,6 +374,10 @@ def test_the_checked_in_indexes_are_current():
             ),
         ),
         (doc_index.SCAFFOLD, render_scaffold(collect_modules(doc_index.REPO))),
+        (
+            doc_index.ARCHITECTURE,
+            render_architecture(collect_adrs(doc_index.ADR_DIR), parse_groups()),
+        ),
     ):
         assert index.is_file(), f"{index.name} missing — run `uv run python scripts/doc_index.py`"
         assert index.read_text(encoding="utf-8") == expected, (

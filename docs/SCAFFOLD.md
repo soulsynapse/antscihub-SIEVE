@@ -16,7 +16,7 @@ src/sieve/pipeline/__init__.py  # The DAG, the plan, the cache key, and the one 
 src/sieve/tools/__init__.py     # One module per tool: a ToolSpec and one plain run function.
 src/sieve/decode/__init__.py    # Decode, prefetch, and lowering into ffmpeg.
 src/sieve/core/__init__.py      # The dimensioned types, the tool contract, and spec-free array math.
-scripts/doc_index.py            # The derived docs: item index, findings index, scaffold, and `--next`.
+scripts/doc_index.py            # The derived docs: indexes, ARCHITECTURE, the scaffold, and `--next`.
 ```
 
 ## Absent by decision

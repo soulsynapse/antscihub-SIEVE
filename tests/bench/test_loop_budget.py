@@ -8,8 +8,8 @@ a widget exists, because a measurement taken through the GUI can no longer tell
 a slow pipeline from a slow paint.
 
 **The workload is the oracle's, imported and not respelled.** VISION's scope
-note promises these ceilings for a reference workload â€” the stirred clip through
-the chain the preview session runs â€” and `tests/integration/test_v2_oracle.py`
+note promises these ceilings for a reference workload — the stirred clip through
+the chain the preview session runs — and `tests/integration/test_v2_oracle.py`
 already holds that chain: `crop -> block_signal -> detect` over `stirred_clip`,
 the graph both repos' CLIs were compared on. A second spelling here would be a
 second reference workload, and the first symptom would be a budget that held
@@ -18,7 +18,7 @@ What is *not* imported is its replicates and checkpoints: those are about a run
 leaving files behind, and a preview is one viewport that writes nothing.
 
 **Both regimes, and only one of them has a pipeline in it.** The in-pipeline
-pair is the preview session's own â€” `full_preview_render` around a window and
+pair is the preview session's own — `full_preview_render` around a window and
 `slider_to_preview` around the single frame a drag asks for. The pre-pipeline
 budgets are measured through `decode/reader.py` and not through a session,
 because *pre-pipeline means before a pipeline exists*: opening a file and
@@ -35,7 +35,7 @@ headless is not built
 `Recorder.median_ms` argues the median: one page fault should not fail a gate.
 But a series whose median passes while a sample misses by 400 ms is the preview
 a user calls janky, so `test_no_single_sample_missed_its_ceiling` asserts the
-bus's own per-sample verdict as well â€” the same verdict `preview_cmd` prints as
+bus's own per-sample verdict as well — the same verdict `preview_cmd` prints as
 `MISS by`. Two readings of one series, not two statistics for one gate.
 
 **A gate over an empty series passes and means nothing**, which is the failure
@@ -44,7 +44,7 @@ therefore carries a sample count assertion, and the samples come from the metric
 bus rather than from local `perf_counter` arithmetic, so a key the session
 stopped publishing is an empty series and a red test rather than a silent one.
 
-The numbers themselves do not live here â€” a passing budget test tells the next
+The numbers themselves do not live here — a passing budget test tells the next
 reader nothing about the margin, and margin is what says whether the GUI has
 room to spend. They are in
 `docs/findings/2026.08.07-the-loop-budget-is-met-headless.md`, with the machine
@@ -81,10 +81,12 @@ from tests.integration.test_v2_oracle import DETECTOR, SPAN, graph
 #: rather than the gesture.
 OPENS = 5
 
-#: Where a scrub lands, as source indices in the order they are visited. Chosen
-#: to cross `reader.GRAB_FORWARD_LIMIT` in both directions â€” a backward jump can
-#: only seek, a short forward one grabs â€” so the median is over both halves of
-#: the reader's strategy rather than over whichever one a monotone sweep hits.
+#: Where a scrub lands, as source indices in the order they are visited. They
+#: alternate direction so the median is over both of the reader's strategies
+#: rather than over whichever one a monotone sweep hits: a backward jump can
+#: only seek, a forward one grabs. The third path is unreachable on this
+#: fixture — `reader.GRAB_FORWARD_LIMIT` is 40 and the clip is 40 frames, so no
+#: forward jump here is long enough to fall back to a seek.
 SCRUB_STOPS = (30, 3, 25, 8, 19, 1, 35, 12, 27, 5, 33, 16)
 
 #: A scrub *release*, as (where the drag was when the user let go, the frame
@@ -94,7 +96,7 @@ SCRUB_STOPS = (30, 3, 25, 8, 19, 1, 35, 12, 27, 5, 33, 16)
 SETTLES = ((30, 28), (3, 5), (25, 22), (8, 10), (19, 17), (35, 31))
 
 #: Detection windows dragged through, in order. The first is the graph's own, so
-#: the first render is the cold one and every render after it follows an edit â€”
+#: the first render is the cold one and every render after it follows an edit —
 #: which is the interval the loop is about. On the detector because it is the
 #: graph's last node: an edit there must leave the two nodes above it keyed
 #: exactly as they were, and a session that re-ran the graph would show up here
@@ -116,7 +118,7 @@ def within_budget(key: str, elapsed_ms: float) -> None:
     """Fail unless `elapsed_ms` meets `key`'s ceiling, or xfail if it is in debt.
 
     The one call site shape `budgets.TIMED` is derived from, so a benchmark that
-    measures a key without judging it cannot be mistaken for one that does â€”
+    measures a key without judging it cannot be mistaken for one that does —
     `tests/bench/test_budget_producers.py` scans for exactly this call and fails
     in both directions.
 
@@ -170,7 +172,7 @@ class Reading:
 
 
 def _edited(pipeline: Pipeline, window_frames: int) -> Pipeline:
-    """`pipeline` with the detector's window moved â€” one slider, one value.
+    """`pipeline` with the detector's window moved — one slider, one value.
 
     Through `model_copy` on the node rather than through `Project.with_param_edit`
     because there is no replicate here to pin it on: a preview of the baseline
@@ -222,7 +224,7 @@ def reading(stirred_clip: Path) -> Iterator[Reading]:
     """One pass over the reference workload: open, scrub, render, drag.
 
     Module-scoped and run once. Each gate below reads one key out of it, so the
-    file measures the loop a single time and then asks it several questions â€”
+    file measures the loop a single time and then asks it several questions —
     rather than re-decoding the clip per assertion, which would make the gates
     disagree about which run they were judging.
 
@@ -230,7 +232,7 @@ def reading(stirred_clip: Path) -> Iterator[Reading]:
     is not tidiness: `render_window` publishes `slider_to_preview` around its own
     first frame, which is the cold decode of a window and not a drag. Pooled with
     the drags it would raise the median of the ceiling that decides whether
-    direct manipulation is direct â€” by exactly the interval the store exists to
+    direct manipulation is direct — by exactly the interval the store exists to
     keep out of it.
     """
     discover()
@@ -271,7 +273,7 @@ def test_opening_the_clip_shows_its_first_frame(reading: Reading) -> None:
     """The one pre-pipeline budget that is not a per-gesture ceiling.
 
     500 ms is a "something is happening" latency, and what fills it is the
-    container open rather than the decode â€” which is why the sample covers both
+    container open rather than the decode — which is why the sample covers both
     and cannot be met by a faster tool.
     """
     assert len(reading["open_to_first_frame"]) == OPENS
@@ -279,10 +281,10 @@ def test_opening_the_clip_shows_its_first_frame(reading: Reading) -> None:
 
 
 def test_a_scrub_repaints_inside_the_perceptual_threshold(reading: Reading) -> None:
-    """100 ms, over jumps that cross the reader's grab-versus-seek boundary.
+    """100 ms, over jumps that take the reader's grab path and its seek path.
 
     v2 measured ~68 ms for a random seek into 5.3K H.264, of which ~47 ms was
-    the container seek â€” so this passing on the reference clip is a statement
+    the container seek — so this passing on the reference clip is a statement
     about the reference clip, and the finding says so.
     """
     assert len(reading["scrub_to_repaint"]) == len(SCRUB_STOPS)
@@ -340,7 +342,7 @@ def test_the_measurement_ran_with_no_qt_in_the_process(reading: Reading) -> None
     """The claim the phase is named for, and the only one a later run can lose.
 
     Phase 7 measures these same ceilings through the GUI. If Qt were resident
-    here, a regression that appeared then could not be attributed to it â€” which
+    here, a regression that appeared then could not be attributed to it — which
     is the entire reason this number is taken before a widget exists.
     """
     del reading

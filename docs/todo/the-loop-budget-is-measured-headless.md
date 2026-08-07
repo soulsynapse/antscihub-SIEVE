@@ -1,7 +1,7 @@
 ---
 title: The loop budget is measured headless
 step: "06.3"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/bench/test_loop_budget.py -q"
 opened: 2026-08-07

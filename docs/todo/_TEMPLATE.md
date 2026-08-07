@@ -5,6 +5,14 @@ title: One sentence naming the outcome
 # ("02.3.1" runs between "02.3" and "02.4"); an aside that can wait gets no
 # step at all — give it `priority` (high | normal | low | unassessed) and,
 # optionally, `phase`, and it lives in the phase's pool instead.
+# A phase whose steps all read `done` is not shut, and reopening one is the
+# design rather than an exception: the number is the ordering, not a record of
+# what is finished. So the phase is the one the work belongs to, which is
+# behind the current phase as often as ahead of it — an item is filed forward
+# when a later phase is what makes a regression visible, and filed back when
+# it is groundwork the later phases stand on. A step minted into a closed
+# phase is taken before the current phase's next; the doc-index tests assert
+# that, so it is a property of the selector and not a promise made here.
 step: "00.1"
 status: open          # open | awaiting-review | deferred | done
 # A worker moves open -> awaiting-review, or -> deferred when the criterion

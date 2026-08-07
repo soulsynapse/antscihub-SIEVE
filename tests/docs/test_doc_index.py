@@ -165,6 +165,25 @@ def test_a_phase_under_way_is_not_held_up_retroactively(tmp_path):
     assert item is not None and item.path.name == "step.md"
 
 
+def test_a_step_minted_into_a_completed_phase_outranks_the_current_one(tmp_path):
+    # The reading this refuses: a phase whose steps all say `done` looks shut,
+    # so an item belonging to it gets filed forward onto whatever phase is
+    # running. The number is the ordering and not a record of what is
+    # finished, so `min` takes the earlier phase and the later one waits.
+    # Phase 6 is genuinely under way here, not merely next: without a closed
+    # 06.3 the case would pass against a selector that only ever prefers the
+    # furthest-along phase, and that is the selector it exists to refuse.
+    write_item(tmp_path, "started", SEQUENCED_6.replace("status: open", "status: done"))
+    write_item(tmp_path, "current", SEQUENCED_6.replace('"06.3"', '"06.4"'))
+    closed = SEQUENCED.replace('"02.3"', '"05.8"').replace("status: open", "status: done")
+    write_item(tmp_path, "closed", closed)
+    write_item(tmp_path, "reopened", SEQUENCED.replace('"02.3"', '"05.9"'))
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "reopened.md"
+
+
 def test_a_claim_awaiting_review_has_started_its_phase(tmp_path):
     # The live case when this rule landed: 06.2 sat at `awaiting-review`, so
     # whether Phase 6 counted as begun decided whether 06.3 ran at all.

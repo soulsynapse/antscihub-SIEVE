@@ -1,7 +1,7 @@
 ---
 title: The key walk rejoins the graph
 step: "03.4.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_dag.py -q -k KeyWalk"
 opened: 2026-08-07

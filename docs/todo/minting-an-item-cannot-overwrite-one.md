@@ -1,8 +1,9 @@
 ---
 title: Minting an item cannot overwrite one
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
+done_when: "uv run pytest tests/docs/test_doc_index.py -q"
 opened: 2026-08-07
 ---
 
@@ -26,3 +27,16 @@ This is the same shape as the ADR identity rule already enforced here: `adr:`
 is minted once and never reused, and `collect_adrs` raises when two files
 claim one number. Items got the ordering half of that discipline and not the
 identity half.
+
+**Two things for the review, because one session did both roles here.** The
+criterion above was written by the session that then met it, which is the
+independence the open -> awaiting-review -> done protocol exists to keep, so
+it is worth re-deriving rather than re-running.
+
+And the text above says `opened` "moves backwards", which is the wrong
+direction: a mint over an occupied slug stamps *today*, so the date it writes
+goes forward, and a check reading only backwards would miss the accident the
+finding recorded. What landed refuses a move either way, on the grounds that
+`opened` is written once and never edited, so any move is the same evidence.
+If the original wording meant something this reading loses, that is the thing
+to say no to.

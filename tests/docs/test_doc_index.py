@@ -6,6 +6,7 @@ different edits, and a value outside the vocabulary would let an item slip
 out of both lists silently.
 """
 
+import subprocess
 from pathlib import Path
 
 import doc_index
@@ -400,6 +401,97 @@ def test_the_template_is_machinery_not_an_entry(tmp_path):
     write_item(tmp_path, "_TEMPLATE", "not: frontmatter the collector should read")
 
     assert collect(tmp_path) == []
+
+
+def _repo_with_items(tmp_path, *names: str):
+    """A git repo whose `docs/todo` holds `names`, committed.
+
+    A real repository rather than a stubbed `_git`, because what is being
+    checked is the reading of `ls-files` and `git grep` output — a stub would
+    assert that the parser matches the fixture's idea of the format, which is
+    the half that was never in doubt.
+    """
+    todo = tmp_path / "docs" / "todo"
+    todo.mkdir(parents=True)
+    for name in names:
+        write_item(todo, name, POOLED)
+    # Identity and signing are pinned on the command rather than inherited:
+    # a fixture that borrowed the developer's git config would pass or fail by
+    # whether they sign their commits.
+    git = ["git", "-C", str(tmp_path)]
+    identity = ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false"]
+    for command in (["init", "-q"], ["add", "-A"], [*identity, "commit", "-q", "-m", "items"]):
+        subprocess.run([*git, *command], check=True, capture_output=True)
+    return todo
+
+
+def test_minting_over_a_taken_slug_is_refused(tmp_path):
+    # The accident this exists for: the write succeeds, the item is gone, and
+    # the index is exactly as consistent as it was before.
+    write_item(tmp_path, "_TEMPLATE", "title: t")
+    write_item(tmp_path, "taken", POOLED, body="the item that would be deleted")
+
+    with pytest.raises(ItemError, match="already exists"):
+        doc_index.mint("taken", tmp_path)
+
+    assert "would be deleted" in (tmp_path / "taken.md").read_text(encoding="utf-8")
+
+
+def test_a_file_whose_name_differs_only_in_case_still_holds_the_slug(tmp_path):
+    # The listing is case-folded rather than trusting `exists()`, because NTFS
+    # and the index disagree about whether these are one file — and a rule that
+    # is right only on the machine that wrote it is the wrong kind of guard.
+    write_item(tmp_path, "_TEMPLATE", "title: t")
+    write_item(tmp_path, "Taken", POOLED)
+
+    with pytest.raises(ItemError, match="already exists"):
+        doc_index.mint("taken", tmp_path)
+
+
+def test_a_slug_with_capitals_or_underscores_is_refused(tmp_path):
+    write_item(tmp_path, "_TEMPLATE", "title: t")
+
+    with pytest.raises(ItemError, match="not a slug"):
+        doc_index.mint("Two_Words", tmp_path)
+
+
+def test_minting_a_free_slug_starts_from_the_template(tmp_path):
+    write_item(tmp_path, "_TEMPLATE", "title: t", body="what should be different")
+
+    path = doc_index.mint("a-new-item", tmp_path)
+
+    assert path.name == "a-new-item.md"
+    assert "what should be different" in path.read_text(encoding="utf-8")
+
+
+def test_an_item_gone_since_the_commit_is_named_with_where_it_still_is(tmp_path):
+    todo = _repo_with_items(tmp_path, "kept", "lost")
+    (todo / "lost.md").unlink()
+
+    problems = doc_index.tracked_drift(todo, tmp_path)
+
+    assert len(problems) == 1
+    assert "lost.md" in problems[0] and "HEAD" in problems[0]
+
+
+def test_an_opened_date_that_moved_means_the_slug_was_written_over(tmp_path):
+    # Forward, which is the direction a collision actually moves it: the run
+    # that overwrites stamps today. The finding this closes says "backwards".
+    todo = _repo_with_items(tmp_path, "hit")
+    written_over = POOLED.replace("opened: 2026-08-06", "opened: 2026-08-09")
+    write_item(todo, "hit", written_over)
+
+    problems = doc_index.tracked_drift(todo, tmp_path)
+
+    assert len(problems) == 1
+    assert "2026-08-06 -> 2026-08-09" in problems[0]
+
+
+def test_an_untracked_folder_has_nothing_to_have_drifted_from(tmp_path):
+    # The check may never be the reason the index will not build.
+    write_item(tmp_path, "loose", POOLED)
+
+    assert doc_index.tracked_drift(tmp_path, tmp_path) == []
 
 
 def test_phase_titles_come_from_the_plan(tmp_path):

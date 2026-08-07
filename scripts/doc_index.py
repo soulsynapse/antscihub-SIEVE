@@ -45,6 +45,12 @@ compute).
     uv run python scripts/doc_index.py           # rewrite everything generated
     uv run python scripts/doc_index.py --check   # exit 1 if anything is stale
     uv run python scripts/doc_index.py --next    # the next role and its item
+    uv run python scripts/doc_index.py --mint X  # start item X, refusing a taken slug
+
+Minting goes through the tool because a slug is an identity and writing one
+directly is how an item gets deleted: the write succeeds, the index rebuilds
+from whatever files exist, and nothing is red. `tracked_drift` catches the
+sessions that write anyway, by the `opened` date a replaced item cannot keep.
 """
 
 from __future__ import annotations
@@ -52,6 +58,7 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -173,6 +180,17 @@ PHASE_HEADING = re.compile(r"^## Phase (\d+) — (.+?)\s*$", re.MULTILINE)
 #: a decision somebody made, not a field somebody skipped.
 UNGATED = "nothing"
 
+#: What a slug may be made of. Narrow on purpose: the folder is the identity
+#: space, and two spellings differing only by case are one file on Windows, so
+#: a rule admitting them would let a mint collide on one platform and not on
+#: the machine that wrote the check.
+SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+
+#: The one frontmatter field written at mint and never edited afterwards, which
+#: is what makes it the witness that a slug was reused: everything else about an
+#: item is expected to move.
+OPENED = re.compile(r"^opened:\s*(\S+)\s*$", re.MULTILINE)
+
 
 class ItemError(ValueError):
     """An item file that cannot be indexed as written."""
@@ -265,6 +283,121 @@ def collect(todo_dir: Path = TODO_DIR) -> list[Item]:
         validate(path, fields)
         items.append(Item(path=path, fields=fields))
     return items
+
+
+def mint(slug: str, todo_dir: Path = TODO_DIR) -> Path:
+    """Start `<slug>.md` from the template, refusing a name already taken.
+
+    What this closes is not a wrong item but a *missing* one. A session mints by
+    writing a slug, and a write to a slug something already holds replaces that
+    item's body wholesale with nothing going red, because the index is rebuilt
+    from whatever files exist — a replaced item is exactly as consistent with
+    the index as an untouched one. The repo keeps one copy of its memory of
+    noticed work.
+
+    Refusing at mint time is the half that fixes the class rather than
+    reporting it: a session that has to ask for a name cannot take one by
+    accident. `tracked_drift` is the net under the sessions that do not ask.
+
+    Existence is tested against the folder listing case-folded as well as
+    through the path, because NTFS answers this one way and the index another.
+
+    Raises:
+        ItemError: if `slug` is not a slug, or the folder already holds it.
+    """
+    if not SLUG.match(slug):
+        raise ItemError(f"{slug!r} is not a slug: lowercase words joined by single hyphens")
+    taken = {path.name.casefold(): path.name for path in todo_dir.glob("*.md")}
+    clash = taken.get(f"{slug}.md".casefold())
+    if clash is not None:
+        raise ItemError(
+            f"{clash} already exists — minting over it would delete an item and leave the index "
+            f"consistent. Pick another slug, or edit that item if it is the same work."
+        )
+    path = todo_dir / f"{slug}.md"
+    path.write_text((todo_dir / "_TEMPLATE.md").read_text(encoding="utf-8"), encoding="utf-8")
+    return path
+
+
+def _git(*args: str, repo: Path = REPO) -> str | None:
+    """`git` in `repo`, or `None` when it cannot answer.
+
+    `None` rather than an exception for every way the question is unavailable —
+    no git on PATH, no commits yet, a tree unpacked from an archive — so that a
+    check meant to catch a lost item never becomes the reason the index will
+    not build.
+    """
+    try:
+        finished = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return finished.stdout
+
+
+def tracked_drift(todo_dir: Path = TODO_DIR, repo: Path = REPO) -> list[str]:
+    """Items the folder has lost or overwritten since the last commit.
+
+    Two symptoms of one accident. A tracked item whose file is gone is the
+    plain case; a tracked item whose `opened` has moved is the case that
+    motivated this, because a mint over an occupied slug leaves behind a file
+    that is perfectly valid and is a different item than the one committed.
+
+    The finding says "moves backwards" and this checks for a move in either
+    direction, which is a correction rather than a widening: a collision stamps
+    *today*, so the date it writes goes forward, and a rule reading one
+    direction would miss the accident that actually happened. `opened` is
+    written once and never edited, so any move is the same evidence.
+
+    Both messages name the recovery, because both are survivable until someone
+    commits over them: the body that was replaced is still in `HEAD`.
+    """
+    try:
+        folder = todo_dir.resolve().relative_to(repo.resolve()).as_posix()
+    except ValueError:
+        # A folder outside the repo has no committed half to have drifted from.
+        return []
+    listing = _git("ls-files", "-z", "--", folder, repo=repo)
+    if not listing:
+        return []
+    # One `git grep` for every committed `opened:` rather than a `git show` per
+    # item: the second shape is a subprocess per file, which on this platform
+    # costs most of a second for a folder this size, paid by every session.
+    blobs = _git(
+        "grep", "-I", "-n", "--no-color", "-e", "^opened:", "HEAD", "--", folder, repo=repo
+    )
+    was: dict[str, str] = {}
+    for line in (blobs or "").splitlines():
+        # `HEAD:docs/todo/<slug>.md:<lineno>:opened: <date>`. The first hit in a
+        # file is the frontmatter's; a later one would be prose quoting it.
+        _, _, rest = line.partition(":")
+        relative, _, tail = rest.partition(":")
+        _, _, value = tail.partition("opened:")
+        was.setdefault(relative, value.strip())
+
+    problems: list[str] = []
+    for relative in sorted(filter(None, listing.split("\0"))):
+        name = relative.rsplit("/", 1)[-1]
+        if not name.endswith(".md") or name.startswith(SKIP_PREFIXES):
+            continue
+        path = repo / relative
+        if not path.exists():
+            problems.append(f"{name} is tracked and gone from the folder; it is still in HEAD")
+            continue
+        before = was.get(relative)
+        found = OPENED.search(path.read_text(encoding="utf-8"))
+        after = found.group(1) if found else None
+        if before and after and before != after:
+            problems.append(
+                f"{name}: `opened` moved {before} -> {after}, which it never does — the slug was "
+                f"written over. `git show HEAD:{relative}` is the item that was there"
+            )
+    return problems
 
 
 def phase_titles(plan: Path = PLAN) -> dict[int, str]:
@@ -917,10 +1050,25 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="exit 1 if the index is stale")
     parser.add_argument("--next", action="store_true", help="print the next takeable item's path")
+    parser.add_argument("--mint", metavar="SLUG", help="start a new item, refusing a taken slug")
     args = parser.parse_args(argv)
+
+    # Before `collect`, deliberately: a folder holding one item that will not
+    # parse must still be able to accept a new one, or the way to record a
+    # problem is shut by the problem.
+    if args.mint:
+        try:
+            print(f"doc_index: minted {mint(args.mint).relative_to(REPO).as_posix()}")
+        except ItemError as error:
+            print(f"doc_index: {error}", file=sys.stderr)
+            return 1
+        return 0
 
     try:
         items = collect()
+        lost = tracked_drift()
+        if lost:
+            raise ItemError("items have been overwritten or removed: " + "; ".join(lost))
         built = forbidden_present()
         if built:
             raise ItemError(f"absent-by-decision paths exist: {', '.join(built)}")

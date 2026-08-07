@@ -33,7 +33,7 @@ The never-lines are the forbidden edge set. None of them is enforced by this tab
 | `cli` | the headless front end; with the saved file it is the cluster handoff | Qt (`headless`); cv2 — a frame is reached through `decode`, never by a second seek strategy |
 | `gui` | rendering values, emitting intents, holding view state | computing anything — the `gui-computes-nothing` exception list is empty from commit one; a `tool_id` branch ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)); cv2 |
 | `bench` | the budget table and the metric bus — the loop's claims as numbers | Qt; sitting in the execution path it measures |
-| `storage` | sink writers (`crop_writer`) | a second output format before someone asks ([PLAN.md](PLAN.md), revival table) |
+| `storage` | sink writers (`crop_writer`, `checkpoint_writer`) | a second output format before someone asks ([PLAN.md](PLAN.md), revival table) |
 
 ## Vision
 

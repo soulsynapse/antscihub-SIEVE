@@ -204,8 +204,11 @@ validates both and then only *prints* the sink list from `run_cmd`. So this
 is built, not ported: a run writes each checkpointed node's output to the
 project folder, and `adr/declared-means-verified.md` is what makes it
 mandatory rather than optional, since v3 does not carry a field nothing
-consumes. The array format is a decision this phase makes and records; the
-revival table holds zarr and a result-store API against a measured need.
+consumes. The array format is decided — one `.npy` per checkpointed node per
+replicate, shaped `(frames, *frame shape)`, beside a `manifest.yaml` naming
+each file's node, cache key and source span, with the reasoning in
+`storage/checkpoint_writer.py` — and the revival table holds zarr and a
+result-store API against the measured need that would replace it.
 `storage`'s never-line reads "a second output format *before someone asks*"
 (VISION's component table) — this is the ask, and the second writer is the
 answer to it rather than an exception to the line.

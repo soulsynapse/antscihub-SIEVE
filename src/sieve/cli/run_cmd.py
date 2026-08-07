@@ -13,11 +13,19 @@ entries and computes nothing. A store per replicate would make that saving
 unreachable while reporting exactly the same results, which is the kind of
 difference nobody notices until a cluster bill arrives.
 
-**Declared sinks are refused rather than ignored.** No writer exists yet
-(`PLAN.md` builds them in Phase 5), and a `run` that computed every frame,
-reported success, and wrote none of the outputs the project declares would be a
-silent wrong answer of exactly the kind `cache_key.py`'s asymmetry rule spends
-effort avoiding. It refuses with the sinks named.
+**Declared sinks are refused rather than ignored.** No writer for a *declared*
+`Sink` exists yet, and a `run` that computed every frame, reported success, and
+wrote none of the outputs the project declares would be a silent wrong answer of
+exactly the kind `cache_key.py`'s asymmetry rule spends effort avoiding. It
+refuses with the sinks named. `Project.checkpoints` is the other half of that
+field pair and is not refused, because this command now writes them
+(`storage/checkpoint_writer.py`) — which is the whole difference between a
+declaration with machinery under it and one without.
+
+**A checkpoint is written per replicate and reported.** The writer is fed from
+the result stream this loop already consumes, so nothing about the executor knows
+what a checkpoint is; and a run that cannot write one refuses rather than
+finishing, for `_refuse_sinks`' reason.
 
 **`--dry-run` opens no video.** It stats the footage — a cache key is a fact
 about which file, and a plan that omitted it would be a plan for a different
@@ -49,7 +57,7 @@ from typing import Annotated
 import typer
 from pydantic import ValidationError
 
-from sieve.core.pipeline_model import Project, Replicate, SourceSpan
+from sieve.core.pipeline_model import Project, Replicate, Sink, SourceSpan
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
@@ -57,6 +65,7 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag, GraphError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan
+from sieve.storage.checkpoint_writer import CheckpointWriteError, CheckpointWriter
 from sieve.tools import discover
 
 
@@ -110,14 +119,23 @@ def run_project(
         return
 
     store: FrameStore = MemoryFrameStore()
+    # Before the container opens, for `_bind`'s reason: everything that can refuse
+    # a checkpoint refuses on declarations alone, and discovering after a minute
+    # of decoding that a node id cannot be a file name is a message that was
+    # available immediately.
+    try:
+        writers = [_checkpoints(project, video, project_path, plan) for plan in plans]
+    except CheckpointWriteError as error:
+        raise refuse(str(error)) from error
+
     # One reader for the whole invocation, where v2 reopened per replicate: it
     # had to, because a replicate could be backed by its own crop file, and
     # under schema v1 every run here reads the project's source. A reader is a
     # pool of decode threads, so opening one per plan would pay for a pool build
     # per arena to read the same file.
     with frame_source(video, luma=not dag.needs_chroma) as reader:
-        for plan in plans:
-            _execute_one(plan, reader, store)
+        for plan, writer in zip(plans, writers, strict=True):
+            _execute_one(plan, reader, store, writer)
 
 
 def frame_source(video: Path, *, luma: bool) -> PrefetchFrameSource:
@@ -130,17 +148,45 @@ def frame_source(video: Path, *, luma: bool) -> PrefetchFrameSource:
     return PrefetchFrameSource(video, luma=luma)
 
 
-def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) -> None:
-    """Run one replicate's plan and print what it did.
+def _checkpoints(
+    project: Project, video: Path, project_path: Path, plan: ExecutionPlan
+) -> CheckpointWriter | None:
+    """The writer for this plan's checkpoints, or `None` if none are declared.
+
+    The keys come from the plan rather than being recomputed, which is what makes
+    the manifest's key the key this run actually looked entries up under. A node
+    the cache may not hold is carried with a `None` key rather than dropped: it
+    is still a result someone asked to keep.
+    """
+    if not project.checkpoints:
+        return None
+    return CheckpointWriter(
+        video,
+        project_dir=project_path.parent,
+        keys={node_id: plan.key(node_id) for node_id in project.checkpoints},
+        span=plan.span,
+        replicate=plan.replicate,
+    )
+
+
+def _execute_one(
+    plan: ExecutionPlan,
+    reader: FrameSource,
+    store: FrameStore,
+    checkpoints: CheckpointWriter | None = None,
+) -> None:
+    """Run one replicate's plan, write its checkpoints, and print what it did.
 
     Counted rather than collected: the executor yields a `FrameResult` per frame
     holding every node's output, and a list of them is the whole run resident in
-    memory for no reason a count does not serve. What the caller wants written is
-    in `store` already.
+    memory for no reason a count does not serve. A checkpoint is fed from that
+    same stream frame by frame for the same reason — see
+    `storage/checkpoint_writer.py` on why it is not accumulated.
 
     Raises:
         typer.Exit: code 1 if the graph holds a node this executor cannot call,
-            or if the footage cannot supply a frame the plan asked for.
+            if the footage cannot supply a frame the plan asked for, or if a
+            declared checkpoint cannot be written whole.
     """
     label = "baseline" if plan.replicate is None else plan.replicate.name
     if not plan.warmed:
@@ -151,18 +197,34 @@ def _execute_one(plan: ExecutionPlan, reader: FrameSource, store: FrameStore) ->
         )
     computed = 0
     hits = 0
+    written: tuple[Sink, ...] = ()
     try:
         for result in execute(plan, reader, store=store):
             computed += 1
             hits += len(result.from_cache)
+            if checkpoints is not None:
+                checkpoints.record(int(result.index), result.outputs)
+        if checkpoints is not None:
+            written = checkpoints.close()
     except UnrunnableNodeError as error:
         raise refuse(str(error)) from error
     except VideoDecodeError as error:
         raise refuse(f"{label}: {error}") from error
+    except CheckpointWriteError as error:
+        raise refuse(f"{label}: {error}") from error
+    finally:
+        # After `close` this is a no-op, so the one call covers every way out —
+        # a decode failure, a cancelled iterator, and the refusals above, each of
+        # which would otherwise leave a part file sized for a span that never
+        # arrived.
+        if checkpoints is not None:
+            checkpoints.abandon()
     nodes = computed * len(plan.dag.order)
     typer.echo(
         f"{label}: {computed} frames, {nodes - hits} node outputs computed, {hits} from cache"
     )
+    for sink in written:
+        typer.echo(f"{label}: checkpointed {sink.node_id} as {sink.format} in {sink.path}")
 
 
 def _refuse_sinks(project: Project) -> None:
@@ -174,8 +236,9 @@ def _refuse_sinks(project: Project) -> None:
     if project.outputs:
         listed = ", ".join(f"{sink.format} -> {sink.path}" for sink in project.outputs)
         raise refuse(
-            f"this project declares outputs ({listed}) and no writer exists yet, so a run would "
-            "compute every frame and write none of them. Remove them to run the graph anyway."
+            f"this project declares outputs ({listed}) and nothing resolves a declared sink format "
+            "to a writer yet, so a run would compute every frame and write none of them. Remove "
+            "them to run the graph anyway, or checkpoint the node instead."
         )
 
 

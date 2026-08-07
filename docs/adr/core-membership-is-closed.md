@@ -12,8 +12,9 @@ ADR, refused by the gate until the revision is made.
 
 Why: core's only intrinsic claim is purity — importable by everything,
 importing nothing heavy — and a constraint admits anything shared, which is
-how dumping grounds grow. The name stays because every split strands
-`types.py`: the four residents are the language the rest of the system
-speaks, and that shared roof is a function, not looseness. What prevents
-dumping is the closed door, not a better label. The same treatment lands on
-`gui` at Phase 7, when its subpackage set is enumerated.
+how dumping grounds grow. What prevents dumping is the closed door, not a
+better label, so no top-level split: the residents already have an inside
+path — one that outgrows its module becomes a subfolder here, `types.py` a
+sister beside it — and the enumeration absorbs that as a rename, not a
+relayering. The same treatment lands on `gui` at Phase 7, when its
+subpackage set is enumerated.

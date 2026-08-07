@@ -1,7 +1,7 @@
 ---
 title: core/types.py ports verbatim
 step: "01.1"
-status: awaiting-review
+status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_types.py tests/unit/test_quantities.py -q"
 opened: 2026-08-06
@@ -31,39 +31,12 @@ $ uv run pytest tests/unit/test_types.py tests/unit/test_quantities.py -q
 27 passed in 0.04s
 ```
 
-It is on a scratch branch and not on `v3` for the reason below. Landing it is
-`git checkout scratch/core-types-port -- src/sieve/core/types.py tests/unit
-pyproject.toml` once the scaffold question is answered.
-
-## Blocker — the criterion passes and the gate does not
-
-`uv run pytest -q` is red on two `tests/docs/test_doc_index.py` cases, neither
-about the port: `collect_modules` raises `types.py: docstring first line is 76
-chars; the scaffold column holds 72`. The ported docstring opens *"Frame, ROI,
-quantities, and metadata value objects shared across all layers."*
-
-The refusal is not confined to SCAFFOLD.md. `scripts/doc_index.py` collects
-modules before it writes anything, so one over-limit docstring stops the run
-and `docs/todo/.index.md` and `docs/findings/.index.md` go stale too — this
-item's own `awaiting-review` and the finding below could not reach their
-indexes. That is why the port is not on `v3`: it would have to arrive with a
-red gate *and* two derived files asserting a tree that no longer exists, and a
-repo that lies is worse than an item that stopped.
-
-Both rules in the collision are v3's, and both are load-bearing, so a worker
-cannot pick one:
-
-- Shortening the line satisfies `ANNOTATION_LIMIT` and breaks the sentence
-  above that calls any non-import difference the item failing.
-- Raising the limit, or taking the annotation from the docstring's first
-  *sentence* rather than its first *line*, satisfies the port and changes
-  `scripts/doc_index.py` — a decision about the scaffold rule, which is not
-  this item's to make and which governs every port item after it.
-
-`findings/2026.08.06-the-scaffold-annotation-does-not-fit-a-ported-module.md`
-has the census that makes this a decision rather than a typo: 46 of v2's 124
-module docstrings are over 72, five more open with a wrapped fragment that is
-not a sentence, and 72 renders a 106-column tree line so it was never the
-100-column budget's number. `decode-ports-verbatim.md`,
-`the-graph-ports-verbatim-the-plan-renames.md` and
-`the-tool-contract-ports-with-its-rename.md` hit the same wall.
+It is on the scratch branch because it collided with the old
+`ANNOTATION_LIMIT = 72`. That collision is settled —
+`adr/annotation-limit-is-the-source-line-budget.md` derives the limit from the
+source line's own budget (97) and binds the annotation rules at edit time, not
+at the moment of port — so the port relands unmodified: `git checkout
+scratch/core-types-port -- src/sieve/core/types.py tests/unit pyproject.toml`,
+plus the `uv.lock` the numpy promotion regenerates. Diff against the v2 blobs
+before claiming done, same as any port; the docstring's 76-character first
+line is now in bounds and no line of the port may change on the way over.

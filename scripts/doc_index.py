@@ -98,9 +98,11 @@ CORE_CHILDREN = (
     "ops",
 )
 
-#: The docstring's first line is the scaffold annotation, so it has to say
-#: what the module owns and fit the tree column.
-ANNOTATION_LIMIT = 72
+#: ADR-16 (`adr/annotation-limit-is-the-source-line-budget.md`): the limit is
+#: the docstring line's own budget — ruff's 100 columns less the opening
+#: `"""` — so any first line that fits v3 source fits here, and what the gate
+#: still refuses is a paragraph in the cell.
+ANNOTATION_LIMIT = 97
 BANNED_IN_ANNOTATION = ("helper", "utils", "utility", "various", "miscellaneous", "this module")
 
 #: `_TEMPLATE.md` and the generated index itself are machinery, not entries.

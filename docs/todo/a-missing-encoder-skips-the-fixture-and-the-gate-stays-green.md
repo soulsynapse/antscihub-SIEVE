@@ -1,10 +1,10 @@
 ---
 title: A missing encoder skips the fixture and the gate stays green
-status: awaiting-review
+status: open
 priority: low
 phase: 0
 gated_on: nothing
-done_when: "uv run pytest \"tests/test_fixture_gate.py::test_skipping_synthetic_video_fails_the_run\" \"tests/test_fixture_gate.py::test_skipping_stirred_clip_fails_the_run\" \"tests/test_fixture_gate.py::test_a_run_with_no_fixture_skip_stays_green\" \"tests/test_fixture_gate.py::test_an_unguarded_fixture_skip_stays_a_skip\" \"tests/test_fixture_gate.py::test_the_nested_runner_pins_the_child_encoding\" -q"
+done_when: "uv run pytest \"tests/test_fixture_gate.py::test_skipping_synthetic_video_fails_the_run\" \"tests/test_fixture_gate.py::test_skipping_stirred_clip_fails_the_run\" \"tests/test_fixture_gate.py::test_a_run_with_no_fixture_skip_stays_green\" \"tests/test_fixture_gate.py::test_an_unguarded_fixture_skip_stays_a_skip\" \"tests/test_fixture_gate.py::test_the_nested_runner_overrides_the_parents_encoding\" -q"
 opened: 2026-08-07
 ---
 
@@ -76,3 +76,33 @@ the `setenv` removed, `test_skipping_stirred_clip_fails_the_run` and
 `test_the_nested_runner_pins_the_child_encoding` both fail in a shell that
 exports nothing; with the membership test replaced by `if False:`,
 `test_an_unguarded_fixture_skip_stays_a_skip` fails while the other four pass.
+
+## Reopened after review of 0aec785
+
+The gate itself is now sound: four independent mutants of `tests/conftest.py`
+— the membership test deleted, the membership test inverted, and each of the
+two names dropped from `FATAL_FIXTURE_SKIPS` — are all killed, and the wide-gate
+defect the previous review found is closed.
+
+What sent it back is the encoding half. `test_the_nested_runner_pins_the_child_encoding`
+clears `PYTHONIOENCODING` in the parent and then asserts the child writes utf-8,
+so it distinguishes a runner that pins from one that inherits *only where the
+child's fallback disagrees* — the locale. On this Windows shell the fallback is
+cp1252 and the test has teeth; under a utf-8 interpreter default it does not,
+and `runs-on: ubuntu-latest` is exactly that interpreter. Removing
+`monkeypatch.setenv("PYTHONIOENCODING", "utf-8")` from `_nested_run` gives
+`2 failed, 3 passed` here and `5 passed` with `PYTHONUTF8=1` set, which is the
+same mutant surviving on the only machine that gates a merge
+(`docs/findings/loop/2026.08.07-a-test-that-clears-an-environment-variable-is-vacuous-where-the-platform-default-already-agrees.md`).
+
+The same misreading is written into the test's docstring, which says the child
+is "launched with the variable cleared". It is not: `_nested_run` sets it a line
+later, and that is the whole point of the assertion. What the `delenv` clears is
+the *parent's* value, and clearing is the weak version of the control.
+
+`test_the_nested_runner_overrides_the_parents_encoding` replaces it in the
+criterion. The parent must be given a `PYTHONIOENCODING` the child would fail
+under — any non-utf-8 codec — rather than none, so that a child which inherits
+is wrong on every platform and only a child which is *overridden* passes. That
+is the version whose failure does not depend on what the runner's locale
+happens to be. The other four node ids are unchanged and green.

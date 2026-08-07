@@ -1,0 +1,3 @@
+replicate,node_id,filter,start_frame,end_frame_exclusive,start_seconds,end_seconds,duration_frames,duration_seconds
+arena-1,blocks,block_signal,8,22,0.400,1.100,14,0.700
+arena-2,blocks,block_signal,21,35,1.050,1.750,14,0.700

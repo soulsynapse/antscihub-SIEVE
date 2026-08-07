@@ -1,0 +1,12 @@
+# A golden is checked by regenerating it and comparing bytes, so the bytes in
+# the working tree have to be the bytes the recorded command writes. `core.
+# autocrlf` is on for this checkout, and v2's table writer sets
+# `lineterminator="\n"` explicitly — without this, every reproduction of
+# `tests/goldens/oracle_stirred/*.csv` differs from the committed copy on every
+# line, on Windows only, for a reason that has nothing to do with what was
+# measured.
+#
+# Only the tables. The README beside them is written through `Path.write_text`,
+# which does translate, so it wants exactly the default treatment and pinning it
+# here would break the comparison in the other direction.
+tests/goldens/**/*.csv text eol=lf

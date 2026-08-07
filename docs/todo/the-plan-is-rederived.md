@@ -1,7 +1,7 @@
 ---
 title: The execution plan is re-derived
 step: "03.5"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_plan.py -q && uv run pytest tests/unit/test_plan.py -q -k two_roots && uv run pytest tests/unit/test_plan.py -q -k output_rate"
 opened: 2026-08-07
@@ -100,11 +100,19 @@ assert (`findings/loop/2026.08.07-a-k-selector-and-the-prose-name-beside-it-are-
 
 - A case whose name contains **`two_roots`**: two roots with unequal windows —
   `Pipeline(nodes=(node("a", "settle1"), node("b", "settle5")))` builds with no
-  edges and has both — asserting the graph's `lead_in` is the larger. It should
-  fail under `min` and under a fold that ranged over `dag.order`, which means
-  the two roots must also be the two extremes of `need`.
+  edges and has both — asserting the graph's `lead_in` is the larger. That kills
+  `min` and *not* a fold ranged over `dag.order`, so the case needs a second
+  pipeline: the clause once written here — "the two roots must also be the two
+  extremes of `need`" — is the condition under which the `dag.order` mutant is
+  equivalent rather than dead, since `need` is non-decreasing towards a root
+  while every rate is at or below 1. A root emitting *more* than it consumes is
+  what separates the two collections
+  ([findings/loop/2026.08.07-the-two-root-fixture-kills-one-mutant-of-two-and-the-second-needs-a-rate-above-one.md](../findings/loop/2026.08.07-the-two-root-fixture-kills-one-mutant-of-two-and-the-second-needs-a-rate-above-one.md)).
 - A case whose name contains **`output_rate`**: a node whose `output_rate()`
   returns zero or less, reaching the *lookahead* fold, refused with the
-  `ValueError` `build` declares. The warmup twin in `core/tool_base.py` carries
-  the identical guard and is untested too, but it is outside this item —
+  `ValueError` `build` declares — and asserted against `_input_lookahead_frames`
+  itself, because the warmup twin carries character-identical text and is folded
+  first, so a refusal asserted only through `build` is answered by the twin and
+  survives its own deletion (same finding). The twin in `core/tool_base.py` is
+  untested too and is outside this item —
   `todo/a-declared-refusal-that-only-the-lookahead-side-proves.md` holds it.

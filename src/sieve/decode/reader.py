@@ -132,7 +132,7 @@ class VideoReader:
         return self._luma
 
     # `max_width` is decode-side proxy media for display only — downscaled,
-    # never a pipeline filter — so it must never enter the DAG or a cache key.
+    # never a pipeline tool — so it must never enter the DAG or a cache key.
     def read(self, index: int | FrameIndex, max_width: int | None = None) -> Frame:
         index = int(index)
         if not 0 <= index < self._metadata.frame_count:

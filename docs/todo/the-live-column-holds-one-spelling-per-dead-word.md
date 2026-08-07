@@ -1,7 +1,7 @@
 ---
 title: The live column holds one spelling per dead word
 step: "03.2.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_id_spelling.py -q"
 opened: 2026-08-07
@@ -61,6 +61,26 @@ Those lines are FFmpeg's, PyAV's, and English's word rather than v2's, and no
 row edit reaches them — `-filter_threads` and `ffmpeg_roi` carry the dead word
 as a morpheme, so a word-boundary match fails them too. What the shape has to
 express is which vocabulary a line is speaking, and `decode/` speaks two.
+
+## 2026-08-07: the shape is two tables, and eleven lines needed it, not twenty-seven
+
+Sixteen of the twenty-seven are v2's word after all, and the classification
+above is where this item was wrong: a dead spelling inside a compound whose
+other half is foreign reads as foreign, but `ffmpeg_roi` is not FFmpeg's name
+for a rectangle — it is `Replicate.roi` with its consumer prefixed on, and v3
+already spells that thing `region`. Those, `roi_parts`, the four locals off
+them, the two cache-key strings, and `LoweredScale.filter_id` (which had no
+foreign half at all) rename under the same license as `reader.py:135`. See the
+finding for the line-by-line split.
+
+The eleven that remain got the shape. Five are tokens FFmpeg owns whole, and
+the live column became a tuple to hold them beside the ADR slug — a token
+excuses one spelling and leaves the rest of the file readable. Six are prose in
+a module whose subject is the foreign sense, which no token reaches, and those
+are declared per `(module, word)` in `SPEAKS_A_FOREIGN_VOCABULARY` with a
+staleness assertion so a module that stops speaking FFmpeg loses its waiver.
+Both tables are needed because `lowered.py` held FFmpeg's `filtergraph` and
+v2's `filter_id` at once: a module-wide waiver would have buried the second.
 
 `src/sieve/` is the walked tree, so nothing about this is confined to
 `decode/`: the ported files are simply the first ones written in a vocabulary

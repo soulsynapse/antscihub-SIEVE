@@ -245,10 +245,10 @@ def _metadata(path: Path) -> VideoMetadata:
 
 
 def _check_prefix_fits(prefix: LoweredPrefix, metadata: VideoMetadata) -> None:
-    roi = prefix.ffmpeg_roi
-    if roi.right > metadata.width or roi.bottom > metadata.height:
+    region = prefix.ffmpeg_region
+    if region.right > metadata.width or region.bottom > metadata.height:
         raise VideoDecodeError(
-            f"lowered crop {roi.width}x{roi.height}+{roi.x}+{roi.y} exceeds "
+            f"lowered crop {region.width}x{region.height}+{region.x}+{region.y} exceeds "
             f"{metadata.width}x{metadata.height}"
         )
 

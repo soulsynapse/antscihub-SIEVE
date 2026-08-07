@@ -18,9 +18,9 @@ LOWERED_SOURCE_POLICY_VERSION = 1
 FFMPEG_GRAY8_ROUTE = "ffmpeg-lowered-gray8"
 
 
-def roi_parts(roi: ROI) -> tuple[int, int, int, int]:
-    """`roi` in the only order FFmpeg and the cache key both use."""
-    return (roi.x, roi.y, roi.width, roi.height)
+def region_parts(region: ROI) -> tuple[int, int, int, int]:
+    """`region` in the only order FFmpeg and the cache key both use."""
+    return (region.x, region.y, region.width, region.height)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +39,7 @@ class LoweredStep:
 class LoweredScale:
     """The one spatial scale operation FFmpeg will apply."""
 
-    filter_id: str
+    tool_id: str
     version: str
     params_json: str
     output_width: int
@@ -47,7 +47,7 @@ class LoweredScale:
 
     def cache_parts(self) -> tuple[str, str, str, int, int]:
         return (
-            self.filter_id,
+            self.tool_id,
             self.version,
             self.params_json,
             self.output_width,
@@ -60,8 +60,8 @@ class LoweredPrefix:
     """The source-side crop and scale now owned by the decoder route."""
 
     decoder_identity: str
-    source_roi: ROI
-    ffmpeg_roi: ROI
+    source_region: ROI
+    ffmpeg_region: ROI
     scale: LoweredScale
     steps: tuple[LoweredStep, ...]
     route: str = FFMPEG_GRAY8_ROUTE
@@ -82,10 +82,10 @@ class LoweredPrefix:
 
     @property
     def filtergraph(self) -> str:
-        """The FFmpeg filter graph, including the odd-origin crop guard."""
-        roi = self.ffmpeg_roi
+        """The FFmpeg filtergraph, including the odd-origin crop guard."""
+        region = self.ffmpeg_region
         return (
-            f"crop={roi.width}:{roi.height}:{roi.x}:{roi.y}:exact=1,"
+            f"crop={region.width}:{region.height}:{region.x}:{region.y}:exact=1,"
             f"scale={self.output_width}:{self.output_height}:flags=area,"
             "format=gray"
         )
@@ -98,15 +98,15 @@ class LoweredPrefix:
             "crop_exact": True,
             "scale_flags": "area",
             "pixel_format": "gray8",
-            "source_roi": roi_parts(self.source_roi),
-            "ffmpeg_roi": roi_parts(self.ffmpeg_roi),
+            "source_region": region_parts(self.source_region),
+            "ffmpeg_region": region_parts(self.ffmpeg_region),
             "scale": self.scale.cache_parts(),
             "steps": tuple(step.cache_parts() for step in self.steps),
         }
 
     def description(self) -> str:
-        roi = self.source_roi
+        region = self.source_region
         return (
-            f"{self.route} crop {roi.width}x{roi.height}+{roi.x}+{roi.y} "
+            f"{self.route} crop {region.width}x{region.height}+{region.x}+{region.y} "
             f"-> {self.output_width}x{self.output_height}"
         )

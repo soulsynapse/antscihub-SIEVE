@@ -28,6 +28,13 @@ formatter in its `lint` nox session, which v3 has deliberately not ported.
 This is the first thing that has needed it, so the porting decision belongs
 with whoever takes this.
 
-Found during 03.7.1, which touched neither file. Minted twice by that item's
-two attempts, under two slugs — see
+One more thing whoever takes this has to reconcile: `.github/workflows/ci.yml`
+runs `ruff check`, `lint-imports`, and `pytest`, and its own comment calls that
+list "character-for-character what a commit is checked against locally". Adding
+`format --check` in one place and not the other makes that comment false, so
+either it moves into both or the comment has to stop claiming one list covers
+everything.
+
+Found during 03.7.1, which touched neither file. Minted three times now, under
+three slugs, by 03.7.1's two attempts and by 04.3 — see
 `docs/findings/loop/2026.08.07-the-pool-is-not-read-before-an-item-is-minted-into-it.md`.

@@ -1,0 +1,113 @@
+# Machine-checked layer boundaries — the forbidden edge set of VISION.md's
+# component table, made checkable.
+#
+# A violation here is a product regression, not a style problem: the moment
+# `pipeline/` imports Qt, headless CLI and cluster parity stops being real.
+# These bind before the packages have contents (adapted from v2's
+# `.importlinter`, whose four bespoke contracts existed because the plain
+# layers contract could not say what mattered) so that no boundary is ever
+# widened to accommodate code already written against it.
+
+[importlinter]
+root_package = sieve
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = Layered architecture
+type = layers
+# `sieve.mutual` has no line here: whether it ports at all is Phase 5's
+# question, and a layer declared for a package that may never exist is a
+# decision made by omission. There is no `compat` layer — v2 projects do not
+# import (adr/v2-does-not-import.md) — and no `backend` or `detect`, both
+# dissolved (adr/no-kernel-apparatus.md, adr/detector-is-a-node.md).
+layers =
+    sieve.gui | sieve.cli
+    sieve.bench
+    sieve.pipeline
+    sieve.tools
+    sieve.decode | sieve.storage
+    sieve.core
+
+[importlinter:contract:core-purity]
+name = core imports no toolkit, no codec, no processes
+type = forbidden
+source_modules =
+    sieve.core
+forbidden_modules =
+    PySide6
+    cv2
+    zarr
+    subprocess
+    multiprocessing
+
+[importlinter:contract:headless]
+name = the CLI, pipeline, bench, decode, storage, and tools run without a GUI toolkit
+type = forbidden
+source_modules =
+    # The CLI is the front end whose whole point is being usable where Qt is
+    # not installed — a cluster node, a container, a login shell. It sits at the
+    # same layer as `sieve.gui` and so the layers contract cannot say this.
+    sieve.cli
+    sieve.pipeline
+    sieve.bench
+    sieve.decode
+    sieve.storage
+    sieve.tools
+forbidden_modules =
+    PySide6
+
+[importlinter:contract:gui-computes-nothing]
+name = the GUI renders values and emits intents; it computes nothing
+type = forbidden
+# The layers contract governs direction of dependency and so could never say
+# this: `gui` sits above `tools` and `core`, which makes importing a tool's
+# `run` into a widget legal under every other contract here while being
+# exactly the second implementation path that adr/one-execution-path.md
+# forbids.
+#
+# Direct imports only. `gui -> pipeline -> tools` is the supported path — the
+# one execution path, reached from above. What this forbids is `gui/`
+# *holding* a computation, which is only ever a direct import.
+#
+# Importing `sieve.tools` is also how a renderer learns tool identity, so this
+# line doubles as adr/gui-knows-kinds-not-tools.md's gate: the generator reads
+# spec data out of the registry in `core`, and a widget that needs the tool
+# module itself is a `tool_id` branch that has not been written yet.
+# `sieve.core.ops` does not exist yet (adr/ops-admission-is-two-tools.md) and
+# is named anyway, to refuse the sideways move the day it does.
+allow_indirect_imports = True
+source_modules =
+    sieve.gui
+forbidden_modules =
+    sieve.tools
+    sieve.core.ops
+# No exceptions, and the `error` alerting is what keeps it that way: the list
+# is empty from commit one because there is no v2 GUI code to grandfather, so
+# any entry added later is a reviewed widening rather than a debt inherited.
+unmatched_ignore_imports_alerting = error
+
+[importlinter:contract:opencv-containment]
+name = OpenCV stays out of core, bench, and the front ends
+type = forbidden
+# Direct imports only: reaching a decoded frame *through* `sieve.decode` is
+# the supported path. What this forbids is a second module learning to drive
+# VideoCapture itself, which is how decoder identity stops being one string
+# and cache keys stop meaning anything.
+#
+# `sieve.tools` is deliberately absent from the sources below — it is the one
+# place outside `decode` where cv2 is legal. A tool calling
+# `cv2.calcOpticalFlowFarneback` never touches a container, a seek, or decoder
+# identity, so the rationale above does not reach it. What keeps such a tool
+# honest is its spec: a declared version that enters the cache key.
+allow_indirect_imports = True
+source_modules =
+    sieve.core
+    sieve.bench
+    sieve.gui
+    # Both front ends, for one reason: reaching a frame goes through
+    # `sieve.decode`, so a `cv2` import here would be a command that had started
+    # driving `VideoCapture` on its own — a second seek strategy, and a second
+    # decoder identity that no cache key would know about.
+    sieve.cli
+forbidden_modules =
+    cv2

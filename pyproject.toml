@@ -19,6 +19,7 @@ dev = [
     # scripts/doc_index.py reads item frontmatter; the first dependency, and it
     # arrives with the machinery that needs it.
     "pyyaml",
+    "import-linter>=2.13",
 ]
 
 [tool.ruff]

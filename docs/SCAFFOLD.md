@@ -22,6 +22,7 @@ src/sieve/pipeline/dag.py         # The graph, resolved: what runs, in what orde
 src/sieve/pipeline/executor.py    # The single shared execution path: a plan, a reader, and a store go in.
 src/sieve/pipeline/plan.py        # Everything about a run that is knowable before a frame is decoded.
 src/sieve/tools/__init__.py       # One module per tool: a ToolSpec and one plain run function.
+src/sieve/tools/block_signal.py   # Per-block motion signals from the structure tensor of consecutive frames.
 src/sieve/tools/crop.py           # Take a region of every frame, with the whole frame as the identity value.
 src/sieve/tools/downsample.py     # Reduce spatial resolution by an integer factor.
 src/sieve/tools/normalize.py      # Per-frame contrast normalization: `off` or `zscore`.

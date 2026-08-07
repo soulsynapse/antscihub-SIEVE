@@ -1,7 +1,7 @@
 ---
 title: A tool declares what it can emit
 step: "05.4"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py tests/unit/test_cli_inspect.py -q"
 opened: 2026-08-07

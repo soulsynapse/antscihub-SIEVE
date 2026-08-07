@@ -14,7 +14,7 @@ build")` when `VideoWriter.isOpened()` is false. That line came over verbatim
 with the v2 port, and it reintroduces at runtime the exact shape the fixture's
 own module docstring argues against — "a decoder test that skips is
 indistinguishable from one that passes." Today one test consumes the fixture;
-by Phase 2 every decode test will, and a runner whose OpenCV wheel loses mp4v
+by Phase 3 every decode test will, and a runner whose OpenCV wheel loses mp4v
 turns the whole of that coverage into a green gate with nothing behind it.
 
 The fix is not in the fixture — the port is verbatim by decision. It belongs

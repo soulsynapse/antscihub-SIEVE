@@ -31,7 +31,7 @@ The fixture body and its docstring are byte-identical to
   Qt suite, not part of the fixture; v3 has neither PySide6 nor a GUI test.
 - **OpenCV and numpy enter the dev group, not `dependencies`.** The fixture
   cannot exist without an encoder, and no shipped component decodes anything
-  until Phase 2 promotes them. This also falsified a claim in `ci.yml`'s
+  until Phase 3 promotes them. This also falsified a claim in `ci.yml`'s
   comment that OpenCV is never installed in CI; the comment is corrected to
   say what actually keeps the contracts honest, which is that grimp reads
   source and not the environment.

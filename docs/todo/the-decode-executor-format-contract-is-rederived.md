@@ -21,7 +21,7 @@ It cannot be moved by editing another item's criterion, which is why it is an
 item. Four of its imports do not survive the port: `sieve.backend.dispatch`
 (PLAN.md drops `backend/`), `core.filter_base` and `core.filter_registry`
 under their v2 names (01.2 renamed them and cut fields), and
-`core.pipeline_model`, which is re-derived as schema v1 in Phase 3 and which
+`core.pipeline_model`, which is re-derived as schema v1 in Phase 2 and which
 `adr/v2-does-not-import.md` forbids any v3 module from spelling in v2's
 vocabulary. The `Pipeline`/`Node`/`Edge` graphs its cases build are therefore
 rewritten against schema v1, not translated — hence phase 3, after the schema

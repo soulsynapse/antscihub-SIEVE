@@ -9,7 +9,7 @@ opened: 2026-08-07
 
 # The v2 field names join the spelling gate
 
-Phase 3's gate is two claims and 03.1 only carries one. "A v2 field name
+Phase 2's gate is two claims and 02.1 only carries one. "A v2 field name
 appears nowhere in `src/`" is not something `test_pipeline_model.py` can
 check — a re-derived model passes its own round-trip tests while spelling
 whatever it likes — so it lands where the other half of ADR-1's rename

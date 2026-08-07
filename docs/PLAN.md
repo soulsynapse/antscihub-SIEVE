@@ -298,7 +298,7 @@ regimes measured through the GUI; the exception list still empty.
 | GPU execution, `backend/` type system | a kernel measured over budget on CPU on target hardware, and a second backend actually written |
 | `detect/` as a package | never — dissolved into `tools/detect.py` |
 | Process isolation / workers | a measured stall prefetch cannot hide |
-| HPC handoff | a real cluster target |
+| Job templates and chunking across nodes | a real cluster target — the handoff itself is built, being the saved file plus `sieve run` executed headless (VISION) |
 | A result store API / zarr as the on-disk format | a result too large or too random-access for a file per checkpoint — the folder of files is the format until then |
 | Sink writers beyond FFV1 video and the array format Phase 5 picks | a third output format someone asks for |
 | Rate-changing kernels | a tool that needs one |

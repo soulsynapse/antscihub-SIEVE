@@ -1,6 +1,7 @@
 ---
 title: A merge keys its inputs by port, and swapping them moves one key
 status: deferred
+deferred_for: subject
 gated_on: the first two-input tool, which is what gives `a - b` and `b - a` a subject
 priority: normal
 phase: "03"

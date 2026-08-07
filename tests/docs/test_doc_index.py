@@ -200,6 +200,75 @@ def test_an_unattached_item_is_owed_at_every_boundary(tmp_path):
     assert item is not None and item.path.name == "loose.md"
 
 
+def test_with_no_step_left_every_phases_pool_has_come_due(tmp_path):
+    # Not "drained": a plan whose next phase has no steps minted yet would
+    # otherwise report itself finished with the whole pool outstanding.
+    write_item(tmp_path, "done", SEQUENCED_6.replace("status: open", "status: done"))
+    write_item(tmp_path, "owed", OWED)
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "owed.md"
+
+
+def test_with_no_step_and_an_empty_pool_the_plan_is_drained(tmp_path):
+    write_item(tmp_path, "done", SEQUENCED_6.replace("status: open", "status: done"))
+
+    assert next_takeable(collect(tmp_path)) is None
+
+
+DEFERRED = """title: An item nothing can clear
+priority: normal
+phase: 5
+status: deferred
+deferred_for: decision
+gated_on: whether the formatter is in the gate
+opened: 2026-08-07"""
+
+
+def test_a_deferral_is_owed_by_no_boundary(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    write_item(tmp_path, "parked", DEFERRED)
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "step.md"
+
+
+def test_a_deferral_without_a_typed_reason_is_refused(tmp_path):
+    write_item(tmp_path, "bad", DEFERRED.replace("deferred_for: decision\n", ""))
+
+    with pytest.raises(ItemError, match="deferred_for"):
+        collect(tmp_path)
+
+
+def test_a_reason_outside_the_vocabulary_is_refused(tmp_path):
+    write_item(tmp_path, "bad", DEFERRED.replace("deferred_for: decision", "deferred_for: later"))
+
+    with pytest.raises(ItemError, match="deferred_for"):
+        collect(tmp_path)
+
+
+def test_a_reason_on_an_item_that_is_not_deferred_is_refused(tmp_path):
+    # There is no `deferred_for: criterion`, and this is what stops one being
+    # smuggled onto an open item to excuse a missing `done_when`.
+    write_item(tmp_path, "bad", OWED + "\ndeferred_for: decision")
+
+    with pytest.raises(ItemError, match="not deferred"):
+        collect(tmp_path)
+
+
+def test_the_waiting_section_separates_a_deferral_from_an_unspecified_item(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    write_item(tmp_path, "parked", DEFERRED)
+    write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
+
+    deferred, unspecified_items = doc_index.waiting_on_kendrick(collect(tmp_path))
+
+    assert [i.path.name for i in deferred] == ["parked.md"]
+    assert [i.path.name for i in unspecified_items] == ["vague.md"]
+
+
 def test_the_drain_takes_the_earliest_phase_first(tmp_path):
     write_item(tmp_path, "step", SEQUENCED_6)
     write_item(tmp_path, "later", OWED)

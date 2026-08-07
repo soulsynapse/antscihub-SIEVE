@@ -1,10 +1,16 @@
 """What a cache key is required to separate, and what it is required to conflate.
 
 Every test here is a way a key stops meaning "this exact result has been
-produced before". Two of them cover the direction that is silent when it fails:
-a key that conflates two computations serves a wrong frame and the run still
+produced before". Some cover the direction that is silent when it fails: a key
+that conflates two computations serves a wrong frame and the run still
 completes. The rest cover the direction that merely costs time — a key that
 separates two things that are the same recomputes work it had.
+
+Isolation and propagation are asserted as a pair, and the pair is the point.
+"An edit here does not reach there" is three equalities over keys that did not
+move, and a `node_key` that ignored its `upstream` argument satisfies all three
+— which is how it was found (`findings/loop/`,
+`2026.08.07-a-declared-layout-and-an-isolation-test-both-pass-with-the-ancestry-dropped.md`).
 
 Schema v1 moved one of v2's cases without weakening it. A replicate's geometry
 is a per-replicate override on the crop node's region parameter
@@ -155,6 +161,27 @@ class TestIsolation:
         assert after["a"] == before["a"]
         assert after["c"] == before["c"]
 
+    def test_an_edit_to_an_ancestor_moves_every_key_below_it(self) -> None:
+        # The complement of the case above, and the direction that fails
+        # silently: `b` and `c` are computed from `a`'s output, so an edit to
+        # `a` that left their keys standing would serve frames blurred at the
+        # old radius for the rest of the store's life. Isolation alone does not
+        # get this — a `node_key` that ignored its `upstream` argument passes
+        # every equality the sibling case asserts
+        # (`findings/loop/2026.08.07-a-declared-layout-and-an-isolation-test-both-pass-with-the-ancestry-dropped.md`),
+        # and so does the layout pin, which certifies that a position named
+        # `upstream` exists and never what fills it.
+        arena = Replicate(name="Replicate 1")
+        project = make_project(arena)
+        before = keys_for(project, arena)
+
+        edited = project.with_param_edit("a", arena.replicate_id, {"radius": 11})
+        after = keys_for(edited, edited.replicate(arena.replicate_id))
+
+        assert after["a"] != before["a"]
+        assert after["b"] != before["b"]
+        assert after["c"] != before["c"]
+
     def test_a_pinned_replicate_ignores_the_default_moving_under_it(self) -> None:
         # The failure this closes is silent. `with_param_edit` moves
         # `Node.params` to the last configured value on *every* edit, so a key
@@ -212,6 +239,28 @@ class TestIsolation:
 
         assert checkpointed.checkpoints == ("b",)
         assert keys_for(checkpointed, checkpointed.replicate(arena.replicate_id)) == before
+
+    def test_a_replicate_rename_moves_no_key(self) -> None:
+        # What separates two replicates is what they resolve their parameters
+        # to, so neither the display name nor `replicate_id` may reach the
+        # digest — `Replicate` carries a generated id exactly so that "a rename
+        # must not invalidate an entry keyed on it", and twelve arenas retyped
+        # after a run is the cost of getting this wrong. The layout pin cannot
+        # state it: it says `upstream` is the second position and not that the
+        # position holds an upstream key and nothing else, which is why
+        # `f"{upstream}{replicate.name}"` passed every other case in this file.
+        arena = Replicate(name="Replicate 1")
+        project = make_project(arena).with_param_edit("a", arena.replicate_id, {"radius": 9})
+        configured = project.replicate(arena.replicate_id)
+        before = keys_for(project, configured)
+
+        assert keys_for(project, configured.renamed("Dish B")) == before
+        # And identity itself is out, not merely stable under renaming: a second
+        # replicate with its own `replicate_id` that resolves to the same
+        # parameters over the same pixels *is* the same computation.
+        twin = Replicate(name="Replicate 2", overrides=dict(configured.overrides))
+        assert twin.replicate_id != configured.replicate_id
+        assert keys_for(project, twin) == before
 
     def test_a_presentation_edit_moves_no_key(self) -> None:
         # Nothing else asserts that the non-identity side of the *spec* stays

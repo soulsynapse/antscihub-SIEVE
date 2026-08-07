@@ -1,7 +1,7 @@
 ---
 title: The cache key is re-derived and its layout pinned
 step: "03.4"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_key.py -q && uv run pytest tests/unit/test_cache_key.py -q -k ancestor && uv run pytest tests/unit/test_cache_key.py -q -k rename"
 opened: 2026-08-07

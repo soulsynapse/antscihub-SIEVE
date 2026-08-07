@@ -91,6 +91,20 @@ delaying emission (a centered window is warmup + lookahead); `plan.py`
 port-with-rename. One tool (`tools/downsample.py`) and a minimal `sieve run`
 over an inline/YAML pipeline.
 
+Two files arrive here that an earlier draft of this plan put later, because
+`decode/`'s port reaches them and a verbatim port may not be trimmed to fit
+its phase. `mutual/` — all four modules, 682 lines whose only outside
+dependency is `psutil` — comes first: `decode/ffmpeg.py` and `prefetch.py`
+import `available_cpus`, `PoolMeter` and the share constants, and
+`test_decode_workers.py` is entirely about `resolve_workers`, so the caps are
+its subject and not an incidental import. It brings its layer with it (v2
+seats `sieve.mutual` between the decode row and `core`, with `core-purity`
+covering both), which is a Phase-0 artifact edited under a Phase-2 step.
+`storage/crop_writer.py` comes with `decode/` for one reason: `write_ffv1`
+synthesizes the NTSC-rate file `test_decode.py` reads, and rewriting a ported
+test's fixture is the decision the porting discipline refuses. Its first
+consumer is therefore a test, and `crop` in Phase 4 lands only the tool.
+
 Gate: `sieve run` on `synthetic_video` produces output; first per-tool parity
 test — v3 output equals v2 golden arrays.
 
@@ -107,7 +121,7 @@ Gate: v3 save/load round-trip; a v2 field name appears nowhere in `src/`.
 
 ## Phase 4 — Tools, one at a time
 
-Order: `crop` (with `storage/crop_writer.py` verbatim), `span`, `normalize`,
+Order: `crop` (its writer landed in Phase 2), `span`, `normalize`,
 `rescale`, `block_signal`, `temporal_baseline`, `background_ema`,
 `motion_history`, then **`detect` last** — re-derived as a centered windowed
 tool on the Phase-1 lookahead contract, absorbing `detect/`'s composition.
@@ -123,10 +137,15 @@ tuned against), not the trailing `filters/detect.py` kernel.
 
 ## Phase 5 — Full CLI and the oracle in CI
 
-`cli/` port-with-rename (run, preview, inspect, sweep; `detect_cmd` folds into
-run/inspect — detection is a node now). `mutual/` ports only if a command
-reads it. The stirred-clip fixture (the one that can disagree with itself)
-extracted from v2's parity test into shared fixtures.
+`cli/` port-with-rename (inspect and sweep; `detect_cmd` folds into
+run/inspect — detection is a node now). `preview` is not here: every module
+`preview_cmd.py` stands on — `bench/budgets.py`, `bench/metrics.py`,
+`pipeline/preview.py` — is Phase 6, and the command is the headless surface
+Phase 6's gate measures through, so it lands there with them. The
+stirred-clip fixture (the one that
+can disagree with itself) extracted from v2's parity test into shared
+fixtures — in v2 it lives inside `tests/gui/test_gui_cli_parity.py`, which is
+why the oracle could not run before the GUI did.
 
 Gate: build the equivalent pipeline by hand in v2 (sibling worktree) and v3
 — the frozen identity values make the correspondence mechanical — run both
@@ -135,7 +154,7 @@ CLIs, diff outputs at the product level, never the resolved plan.
 ## Phase 6 — Bench and the headless loop budget
 
 `bench/budgets.py` + `metrics.py` verbatim (two-regime table, character-exact
-pin test); `pipeline/preview.py` port-with-rename.
+pin test); `pipeline/preview.py` and `cli/preview_cmd.py` port-with-rename.
 
 Gate: in-pipeline budgets (<100 ms slider→preview, <200 ms slider→graph)
 measured headless through the preview session — the value proposition proven
@@ -185,9 +204,10 @@ regimes measured through the GUI; the exception list still empty.
 
 ## Port disposition
 
-**Verbatim:** `core/types.py`, `decode/*`, `pipeline/dag.py`, `cache_key.py`,
-`executor.py` (+ lookahead extension), `storage/crop_writer.py`,
-`bench/budgets.py`+`metrics.py`, `tests/conftest.py` fixture, most kernels.
+**Verbatim:** `core/types.py`, `decode/*`, `mutual/*`, `pipeline/dag.py`,
+`cache_key.py`, `executor.py` (+ lookahead extension),
+`storage/crop_writer.py`, `bench/budgets.py`+`metrics.py`,
+`tests/conftest.py` fixture, most kernels.
 
 **Port-with-rename:** `core/filter_base.py`, `filter_registry.py`,
 `filters/*`, `cli/*`, `pipeline/plan.py`, `preview.py`, `gui/transport/`,
@@ -203,9 +223,22 @@ regimes measured through the GUI; the exception list still empty.
 
 ## Open questions
 
+Each carries a decision item in `docs/todo/`, so a question blocking a step
+is visible in the index rather than only here.
+
 - Detect parity target: confirm centered whole-record (`detect/` package
   output) and abandon the trailing kernel as a target.
 - Per-tool `.md` files: hand-written like v2, generated from `ToolSpec`, or
   dropped.
 - First GUI cut: which v2 surfaces (wizard, replicate tab, history dialog,
   sweep) are in Phase 7 vs later.
+- The disposition above covers six of v2's fourteen `pipeline/` modules. The
+  other six — `cache.py`, `crop_binding.py`, `lowering.py`,
+  `resolve_source.py`, `series_collector.py`, `source_home.py` — plus
+  `core/replicates.py` and `bench/sweep.py` have no verdict in either
+  direction, and `sieve run` reaches four of them. A module with no verdict
+  is the one thing this plan is supposed to prevent.
+- `core/replicates.py` cannot come over as it stands:
+  `adr/core-membership-is-closed.md` enumerates core's children and does not
+  admit it, while VISION's project pane is built on replicates. Either the
+  ADR is revised or replicates live somewhere else.

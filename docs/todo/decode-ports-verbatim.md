@@ -1,8 +1,8 @@
 ---
 title: decode/ ports verbatim
 step: "02.1"
-status: deferred
-gated_on: "a ruling on two phase-order questions: whether mutual/ comes over with decode/, and where write_ffv1 lands for test_decode.py's NTSC fixture"
+status: open
+gated_on: nothing
 done_when: "uv run pytest tests/integration/test_decode.py tests/unit/test_decode_workers.py -q"
 opened: 2026-08-06
 ---
@@ -14,6 +14,12 @@ discipline); the test files above port with them and run on
 `synthetic_video` (00.4). ffmpeg presence is the environment's problem, not
 the port's — if it is missing, that is a blocker note at the bottom of this
 item, never a softened test.
+
+`storage/crop_writer.py` ports verbatim as part of this item, and this is the
+only file beyond `decode/` that it may write: `write_ffv1` is what
+`test_decode.py` synthesizes its NTSC-rate file with, and the file has no
+`sieve` imports at all, so verbatim here means byte-identical. It arrives
+with no tool of its own using it — 04.1 is where that happens.
 
 ## Deferred 2026-08-07: the criterion reaches past `decode/` three ways
 
@@ -77,3 +83,21 @@ to PLAN.md's order — the reviewer may edit a criterion, not the plan. The
 underlying tension is in PLAN.md itself: the port disposition lists `decode/*`
 as verbatim while Phase 5 holds `mutual/` "only if a command reads it", and
 `decode/ffmpeg.py` reads it. One of those two sentences has to give.
+
+## Ruled 2026-08-07: the plan gave, and both files land before this item
+
+Phase 5's clause is struck. `mutual/` is four modules and 682 lines with
+`psutil` as its only outside dependency, so "only if a command reads it" was
+protecting a remainder that does not exist, and `test_decode_workers.py` is
+entirely `resolve_workers` — the caps are its subject. Stubbing
+`available_cpus` instead would be a decision taken inside a file the plan
+calls verbatim, which is the one thing the porting discipline refuses. It is
+now 02.0.1, with the layer edit that comes with it.
+
+`crop_writer.py` moves into this item rather than a step of its own: v2 has
+no test that is about it, so a separate step would have no criterion but the
+next step's. Phase 4's `crop` item drops it.
+
+Both rulings are PLAN.md edits, made by Kendrick — the reviewer was right
+that neither was a criterion defect. This item is `open` again with its
+criterion unchanged.

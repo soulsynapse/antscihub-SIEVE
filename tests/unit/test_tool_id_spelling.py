@@ -28,10 +28,30 @@ import sieve
 
 SRC = Path(str(sieve.__file__)).resolve().parent
 
-#: `(the dead word, the one live spelling that contains it, the verdict)`.
-#: The ADR slug is the rename naming itself; every other occurrence of the word
-#: is the rename unfinished. Grows a row per buried word.
-DEAD_IDENTIFIERS = (("filter", "tools-not-filters", "adr/tools-not-filters.md"),)
+#: `(the dead word, the one live spelling that contains it or `None`, the
+#: verdict)`. The ADR slug is the rename naming itself; every other occurrence
+#: of the word is the rename unfinished. Grows a row per buried word.
+#:
+#: The `adr/v2-does-not-import.md` rows are the three `Project`/`Replicate`
+#: fields ADR-3 turned into graph nodes, read off v2's `pipeline_model.py` at
+#: `main`. Two of them bury a whole word; the third cannot, because `detector`
+#: is *alive* — ADR-3 names the detector a node, `mutual/shares.py` budgets one,
+#: and Phase 4 builds one — so what is buried is the pair of spellings only v2's
+#: document has, its settings type and its per-replicate deviation map. A name
+#: schema v1 keeps because it is the right name gets no row: this is a gate on
+#: names v3 would inherit without deciding to, not a vocabulary ban.
+#:
+#: `DetectorSettings`' own field names are deliberately absent. The detect tool
+#: is Phase 4 and owns its parameter names; a row here would settle that naming
+#: now, in a spelling test, for a tool nobody has designed.
+DEAD_IDENTIFIERS: tuple[tuple[str, str | None, str], ...] = (
+    ("filter", "tools-not-filters", "adr/tools-not-filters.md"),
+    ("clip", None, "adr/v2-does-not-import.md"),
+    # `ROI` is the live type a region is written in; `roi` was the field name.
+    ("roi", "ROI", "adr/v2-does-not-import.md"),
+    ("DetectorSettings", None, "adr/v2-does-not-import.md"),
+    ("detector_overrides", None, "adr/v2-does-not-import.md"),
+)
 
 #: `(module relative to src/sieve, dead word)` for a spelling something licenses.
 #: Empty, and `test_the_exception_list_is_empty` is what keeps it that way.
@@ -48,7 +68,7 @@ def _hits(modules: Iterable[Path], root: Path) -> Iterator[tuple[str, str, int]]
         relative = path.relative_to(root).as_posix()
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for word, live, _ in DEAD_IDENTIFIERS:
-                bare = line.replace(live, "")
+                bare = line if live is None else line.replace(live, "")
                 if re.search(re.escape(word), bare, re.IGNORECASE):
                     yield (relative, word, lineno)
 
@@ -108,3 +128,40 @@ def test_a_frozen_identity_value_is_not_a_dead_word(tmp_path: Path) -> None:
     values.write_text('IDS = ("crop", "detect", "block_signal")\n', encoding="utf-8")
 
     assert list(_hits([values], tmp_path)) == []
+
+
+def test_a_v2_field_the_graph_absorbed_is_a_spelling(tmp_path: Path) -> None:
+    """The three fields ADR-3 turned into nodes, spelt as v2's document spelt them."""
+    ported = tmp_path / "ported.py"
+    ported.write_text(
+        "clip: ClipRange | None = None\n"
+        "roi: ROI\n"
+        "detector: DetectorSettings | None = None\n"
+        "detector_overrides: dict[str, Any]\n",
+        encoding="utf-8",
+    )
+
+    assert list(_hits([ported], tmp_path)) == [
+        ("ported.py", "clip", 1),
+        ("ported.py", "roi", 2),
+        ("ported.py", "DetectorSettings", 3),
+        ("ported.py", "detector_overrides", 4),
+    ]
+
+
+def test_the_geometry_type_survived_its_field(tmp_path: Path) -> None:
+    """`Replicate.roi` is dead and `ROI` is what the live region is typed as."""
+    region = tmp_path / "region.py"
+    region.write_text("    region: ROI\n    def clamped_to(self) -> ROI: ...\n", encoding="utf-8")
+
+    assert list(_hits([region], tmp_path)) == []
+
+
+def test_the_word_detector_is_alive(tmp_path: Path) -> None:
+    """ADR-3 made the detector a node; `mutual/` budgets one. The *field* is dead."""
+    share = tmp_path / "share.py"
+    share.write_text(
+        "DETECTOR_WORKERS = 2\n    detector: int\nSENSED = {'detector'}\n", encoding="utf-8"
+    )
+
+    assert list(_hits([share], tmp_path)) == []

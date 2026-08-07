@@ -1,7 +1,7 @@
 ---
 title: The v2 field names join the spelling gate
 step: "02.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_id_spelling.py -q"
 opened: 2026-08-07

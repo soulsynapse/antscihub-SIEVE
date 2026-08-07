@@ -10,7 +10,7 @@ requires editing this file, which is the review the rule exists to force.
 
 **Everything a pipeline does is a node.** There is no `Project` field for the
 cut, the tuning span, or the detector: cropping is the `crop` tool, the
-representative clip is the `span` tool, and detection is a node whose settings
+representative stretch is the `span` tool, and detection is a node whose settings
 are that node's params (`adr/detector-is-a-node.md`). v2 grew a bespoke field
 for each thing that could not be a graph step and bespoke carry logic behind
 each one; a replicate's geometry is now a per-replicate override on the crop

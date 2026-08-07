@@ -1191,7 +1191,7 @@ def source_warmup_frames(path: Sequence[PathStep]) -> FrameCount:
             inclusive. An empty path needs no lead-in.
 
     Returns:
-        Frames to decode before `clip_start`.
+        Frames to decode ahead of the first source frame the run asks for.
 
     Raises:
         ValueError: if any node reports a non-positive output rate, which would

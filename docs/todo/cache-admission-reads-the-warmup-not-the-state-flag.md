@@ -44,3 +44,26 @@ drawn from are both refused a key. Re-run that measurement afterwards — if the
 recomputed count does not fall, the admission did not reach the path the
 preview actually takes, and the item is not done however green the criterion
 is.
+
+## Reopened by review, 2026-08-07 (`7111b18`)
+
+The criterion is green, the re-run measurement lands (30 of 87, re-derived
+independently), and the contract, the policy and `_resettle` are right. What
+is not right is the third mechanism, the guard that decides when the store may
+be touched. `executor.execute` admits an entry once `answers_for - first >=
+bound.warmup`, which is the node's *own* warmup — but a node's output equals
+its cold value only once every ancestor has filled its warmup too, and that is
+the accumulated input warmup along the path. `block_signal -> normalize`
+reproduces the consequence: `normalize`'s frame 59 comes back from the store
+differing from its cold run
+([findings/2026.08.07-the-write-guard-reads-a-nodes-own-warmup-and-the-lead-in-is-its-ancestors.md](../findings/2026.08.07-the-write-guard-reads-a-nodes-own-warmup-and-the-lead-in-is-its-ancestors.md)
+has the probe, and shows the shape is unreachable at the parent commit).
+
+So the module docstring's first bullet — "an entry is never a lead-in frame's
+under-warmed output" — is a claim the loop does not have, and two tests pin the
+boundary one ancestor-warmup too early rather than catching it. The re-take
+fixes the guard, corrects those two tests, and adds a case the existing gate
+cannot reach: two runs whose `span.start` *differ*, so the second decodes
+further back than the first and asks the store for a frame the first filed from
+its own lead-in. Both runs in the current gate share a `span.start`, which is
+why it agrees with itself here.

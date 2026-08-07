@@ -1,6 +1,6 @@
 ---
 title: A package's ownership line answers to the component table
-status: awaiting-review
+status: done
 phase: 0
 priority: normal
 gated_on: nothing

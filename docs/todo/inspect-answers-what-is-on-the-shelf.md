@@ -1,7 +1,7 @@
 ---
 title: inspect answers what is on the shelf
 step: "05.6"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cli_inspect.py tests/integration/test_cli_help.py -q"
 opened: 2026-08-07

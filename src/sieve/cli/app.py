@@ -11,9 +11,7 @@ Exit codes are Typer's: 0 for success, 2 for a usage error it raises itself, and
 empty graph, and a caller that cares about output counts reads them rather than
 a status.
 
-`inspect` is here for one declaration — what a tool can emit — and gains the
-rest of what it prints in v2 when that port lands (`cli/inspect_cmd.py`). The
-rest of v2's surface is not missing so much as not yet standing on anything:
+The rest of v2's surface is not missing so much as not yet standing on anything:
 `materialize` and the full `run` land in Phase 5 with results at rest,
 `preview` and `sweep` in Phase 6 with `bench` (`PLAN.md`). `detect` never
 lands — detection is a node (`adr/detector-is-a-node.md`).
@@ -51,7 +49,7 @@ app = typer.Typer(
 # whole docstring in, so a `Raises:` block reaches the terminal as if it were
 # guidance.
 app.command("run", help="Run a project's pipeline over a span of its source video.")(run_project)
-app.command("inspect", help="List the registered tools and what each one can emit.")(inspect_tools)
+app.command("inspect", help="Describe the registered tools, or one of them.")(inspect_tools)
 
 
 @app.callback()

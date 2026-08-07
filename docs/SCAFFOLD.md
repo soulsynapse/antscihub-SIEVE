@@ -14,8 +14,10 @@ src/sieve/gui/__init__.py         # Renders values and emits intents; computes n
 src/sieve/cli/__init__.py         # The command-line surface over the pipeline.
 src/sieve/bench/__init__.py       # The performance budgets and the metric bus.
 src/sieve/pipeline/__init__.py    # The DAG, the plan, the cache key, and the one execution loop.
+src/sieve/pipeline/cache.py       # Where a computed frame is kept so it is not computed twice.
 src/sieve/pipeline/cache_key.py   # What makes two computations the same computation.
 src/sieve/pipeline/dag.py         # The graph, resolved: what runs, in what order, and whether it can run at all.
+src/sieve/pipeline/executor.py    # The single shared execution path: a plan, a reader, and a store go in.
 src/sieve/pipeline/plan.py        # Everything about a run that is knowable before a frame is decoded.
 src/sieve/tools/__init__.py       # One module per tool: a ToolSpec and one plain run function.
 src/sieve/decode/__init__.py      # Decode, prefetch, and lowering into ffmpeg.

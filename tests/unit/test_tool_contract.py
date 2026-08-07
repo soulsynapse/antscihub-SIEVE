@@ -42,7 +42,7 @@ from sieve.core.tool_registry import (
     UnknownToolError,
     register_tool,
 )
-from sieve.core.types import NO_FRAMES, ChannelSpec, FrameCount
+from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, FrameSpan
 
 
 class SampleParams(ParamsBase):
@@ -748,6 +748,17 @@ BASE: dict[str, Any] = {
     "element": ElementRelation.PRESERVED,
 }
 
+def probe_run(params: ParamsBase, window: FrameSpan, state: None) -> Frame:
+    """A `ToolRun` that does nothing, for the `run` probe below.
+
+    The spec stores the pointer and asks nothing of it, so what this returns is
+    never reached; what the probe checks is that the keyword arrives at the
+    field, which a shared `None` default cannot show.
+    """
+    del params, state
+    return window.target
+
+
 #: One legal value per keyword, differing from both that parameter's default
 #: and `BASE`'s value — so a keyword the decorator accepts and never forwards
 #: leaves the spec holding the other one. Applied one at a time rather than all
@@ -759,6 +770,9 @@ PROBES: dict[str, Any] = {
     "summary": "Something else entirely.",
     "accepts": ArraySpec(dtypes=("float32",)),
     "emits": ArraySpec(channels=(ChannelSpec.GRAY,)),
+    # Any callable: the spec stores the pointer and checks nothing about it, and
+    # what may call it is `pipeline/executor.py`'s question.
+    "run": probe_run,
     "mode": Mode.WINDOWED,
     "settling_epsilon": 0.25,
     "rate_changing": True,

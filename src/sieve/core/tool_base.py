@@ -5,7 +5,11 @@ pipeline names tools by id and version; validating its structure — that the
 graph is acyclic, that each edge's types chain, that every parameter is known —
 must work on a machine with no codec and none of the tools installed. Splitting
 the spec from the kernels is what buys that: a tool's `run` lives beside its
-spec in `sieve.tools`, free to import cv2, while this layer stays pure.
+spec in `sieve.tools`, free to import cv2, while this layer stays pure. The
+spec *points* at that function (`ToolSpec.run`, `adr/no-kernel-apparatus.md`)
+and this module imports none of them — a pointer set by the tool module on its
+way onto the shelf costs this layer nothing, and it is what lets the executor
+call a node without knowing which tool it is.
 
 The spec is also the single source of truth for a tool's parameters. GUI
 widgets, CLI flags, YAML, and the cache key all read `params_model`; none of
@@ -64,11 +68,11 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from fractions import Fraction
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
-from sieve.core.types import NO_FRAMES, ChannelSpec, FrameCount
+from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, FrameSpan
 
 #: `MAJOR.MINOR.PATCH`, no pre-release or build metadata. A tool version is
 #: an input to a cache key before it is a human-facing label, and `1.0.0-rc1`
@@ -604,6 +608,53 @@ class ParamStereotype(StrEnum):
     POINT = "point"
 
 
+#: Contravariant because a `run` is *consumed* with params: a function written
+#: against `DownsampleParams` is a legal `ToolRun` wherever one taking a narrower
+#: params type is expected, and a spec stores them all as `ToolRun[Any, Any]`.
+ParamsT_contra = TypeVar("ParamsT_contra", bound=ParamsBase, contravariant=True)
+
+#: Whatever a stateful tool's factory returns. Unbounded on purpose: nothing
+#: outside the tool inspects it, and requiring a base class would make every
+#: tool's private scratch space a public type in this module.
+StateT_contra = TypeVar("StateT_contra", contravariant=True)
+
+
+class ToolRun(Protocol[ParamsT_contra, StateT_contra]):
+    """The one signature (`adr/no-kernel-apparatus.md`): params, window, state.
+
+    One shape for every tool, so that which shape a node gets is not a thing the
+    executor decides per tool. v2 had four protocols and used three of them, and
+    the three differ only in which of these three arguments they read
+    (`findings/2026.08.06-v2-kernel-shape-census.md`); the variability was
+    designed capacity rather than observed need, and what it cost was a dispatch
+    layer between the spec and the call.
+
+    `window` is a `FrameSpan` even where it holds one frame. A streaming tool
+    reads `window.target` and is handed exactly that; a windowed tool is handed
+    the frames its declared window reaches, oldest first.
+
+    **The frame a windowed tool emits for is not always `window.target`.** With
+    a declared `lookahead_frames` of `k` the executor hands over a window whose
+    last `k` frames are *past* the target, so the target sits at
+    `window[len(window) - 1 - k]` — the tool knows `k`, because `params` is the
+    configuration it was derived from. `target` stays the last frame because a
+    span is also what a trailing window is, and the executor checks the index
+    that comes back either way.
+
+    `state` is `None` for a tool that keeps none, and otherwise whatever
+    `ToolSpec.state_factory` made for *this run* — never something the tool
+    closes over, since two concurrent previews of one node are two runs.
+
+    Positional-only: the executor calls every tool identically, and parameter
+    *names* would otherwise become part of a contract every tool author has to
+    match.
+    """
+
+    def __call__(
+        self, params: ParamsT_contra, window: FrameSpan, state: StateT_contra, /
+    ) -> Frame: ...
+
+
 def _empty_param_value_labels() -> Mapping[str, Mapping[str, str]]:
     return {}
 
@@ -622,6 +673,26 @@ class ToolSpec:
     params_model: type[ParamsBase]
     accepts: StreamSpec
     emits: StreamSpec
+    #: What computes this tool's output, or `None` for a spec nothing can run.
+    #: The spec points at the function and the executor calls it, which is what
+    #: keeps the executor from growing a branch per tool
+    #: (`adr/no-kernel-apparatus.md`).
+    #:
+    #: Optional because a spec is legitimately declarable without one — every
+    #: graph test in this repo builds specs it never executes, and `sieve
+    #: inspect` reads a shelf on a machine where the reason to have loaded a
+    #: `run` does not exist. What makes that safe rather than silent is that the
+    #: executor refuses the node by name before it reads a frame: a spec with no
+    #: `run` is unrunnable in exactly the way a table emitter is, and both are
+    #: answered up front.
+    #:
+    #: 01.2 cut this field and was right to on its own terms — its only reader
+    #: is the executor, and `adr/declared-means-verified.md` refuses a
+    #: declaration whose consumer is two phases out. The reader exists now, and
+    #: the alternative to the field is the executor finding a tool's `run` by
+    #: its id, which is the file-that-grows-with-the-tool-count ADR-2 exists to
+    #: prevent.
+    run: ToolRun[Any, Any] | None = None
     mode: Mode = Mode.STREAMING
     #: Frames the tool must consume before its output is trustworthy, counted
     #: in this tool's *input* frames — "must consume" is the unit. Warmup
@@ -967,6 +1038,12 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "emits": Channel.IDENTITY,
     "element": Channel.IDENTITY,
     "element_names": Channel.IDENTITY,
+    # The channel's own sentence names it: a tool that changes what it *computes*
+    # and keeps its version is a defect `register_tool` cannot catch. So `run` is
+    # what the result is, and `version` is the position that stands proxy for it
+    # in the digest — hashing the function would key a run on a build's memory
+    # layout and miss the edit that matters.
+    "run": Channel.IDENTITY,
     "mode": Channel.EXECUTION,
     "rate_changing": Channel.EXECUTION,
     # Beside `rate_changing` and for its reason, though what the *parameters*

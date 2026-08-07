@@ -32,3 +32,18 @@ video untunable — which is `decode_start`'s argument, and if it holds here the
 what is missing is only the *report*.
 
 Gated on nothing, but 03.6 is where it will first be met.
+
+## Met at 03.6, and it is not a shortfall
+
+The reader does not return fewer frames than the range named: `VideoReader.read`
+refuses an index at or past `frame_count` outright, and the loop reads every
+frame of `decode_range` with no branch for a reader that cannot supply one. So
+the run raises rather than running short
+([findings/2026.08.07-a-lookahead-at-the-end-of-a-video-is-a-decode-error.md](../findings/2026.08.07-a-lookahead-at-the-end-of-a-video-is-a-decode-error.md)).
+
+That prices the third candidate. "The answer is only the *report*" was the
+cheapest of the three and it is not free: nothing currently runs short, so
+somebody has to stop the loop at what the reader has before there is anything to
+report. It also sharpens the symmetry argument — `decode_start` clamps because
+refusing would make the opening seconds of every video untunable, and refusing
+is exactly what happens at the other end today.

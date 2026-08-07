@@ -23,6 +23,7 @@ from sieve.core.tool_base import (
     ParamsBase,
     ParamStereotype,
     StreamSpec,
+    ToolRun,
     ToolSpec,
 )
 
@@ -125,6 +126,7 @@ def register_tool(
     summary: str,
     accepts: StreamSpec,
     emits: StreamSpec,
+    run: ToolRun[Any, Any] | None = None,
     mode: Mode = Mode.STREAMING,
     settling_epsilon: float | None = None,
     rate_changing: bool = False,
@@ -148,6 +150,11 @@ def register_tool(
     `__tool_spec__`, which is how a tool module reaches its own declaration
     without a second lookup.
 
+    `run` is a keyword rather than a second decorator, which puts one ordering
+    constraint on a tool module: the function is written above the params class
+    that decorates itself with it. Its own annotations may still name that class,
+    since `from __future__ import annotations` leaves them unevaluated.
+
     `registry` exists so a test can register into a scratch registry instead of
     the process-wide one. Tool modules omit it.
     """
@@ -160,6 +167,7 @@ def register_tool(
             params_model=params_model,
             accepts=accepts,
             emits=emits,
+            run=run,
             mode=mode,
             warmup_frames=params_model.max_warmup_frames(),
             lookahead_frames=params_model.max_lookahead_frames(),

@@ -100,6 +100,11 @@ SPEAKS_A_FOREIGN_VOCABULARY: frozenset[tuple[str, str, str]] = frozenset(
             "clip",
             "English's noun for a video, in the docs for streaming one through",
         ),
+        (
+            "pipeline/cache.py",
+            "clip",
+            "English's noun again, for the stretch a preview covers and a batch does not",
+        ),
     }
 )
 

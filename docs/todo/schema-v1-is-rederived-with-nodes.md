@@ -1,7 +1,7 @@
 ---
 title: Schema v1 is re-derived with nodes
 step: "02.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_replicates.py -q"
 opened: 2026-08-06
@@ -210,8 +210,16 @@ span start beside the empty-span case.
 `checkpoints` and `outputs` in one step, so nothing depended on the sink check
 existing; it now clears them one at a time and asserts the refusal between.
 
-Verified by mutation rather than by reading: each of the module's 22 `raise`
-statements replaced with `pass` in turn, criterion re-run, tree restored with
-`git checkout --`. All 22 are now caught; before this work, ten were not.
-The commit that ran the sweep was made first, because `git checkout --` restores
-to `HEAD` and takes uncommitted work with it.
+Verified by mutation rather than by reading: each `raise` in the module replaced
+with `pass` in turn, criterion re-run, tree restored with `git checkout --`. The
+commit that ran the sweep was made first, because `git checkout --` restores to
+`HEAD` and takes uncommitted work with it.
+
+The review re-ran the sweep from a script over every line matching `^\s*raise `
+and found 24, not the 22 the rework counted: `Pipeline.node` and
+`Project.replicate` both document `Raises: KeyError` and both survive being
+replaced with `pass`. They are lookups rather than refusals, they were not among
+the eleven this item was reopened for, and no v3 caller yet depends on the
+KeyError, so they are carried as `todo/a-lookup-that-declares-a-keyerror-proves-it.md`
+rather than reopening this item. All 22 refusals are caught; before this work,
+ten were not.

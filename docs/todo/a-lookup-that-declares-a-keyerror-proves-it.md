@@ -2,7 +2,7 @@
 title: A lookup that declares a KeyError proves it
 priority: low
 phase: 0
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_pipeline_model.py::TestLookup::test_a_node_lookup_for_an_absent_id_raises_keyerror tests/unit/test_replicates.py::TestLookup::test_a_replicate_lookup_for_an_absent_id_raises_keyerror -q"
 opened: 2026-08-07

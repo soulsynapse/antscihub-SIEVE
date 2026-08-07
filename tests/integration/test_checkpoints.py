@@ -22,6 +22,7 @@ the loop, which is exactly the seam a direct call to `execute` skips.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +105,26 @@ def _run(project_path: Path, span: SourceSpan = SPAN) -> str:
     return result.output
 
 
+def _dry_run(project_path: Path, span: SourceSpan = SPAN) -> str:
+    """What `sieve run --dry-run` prints for this document, decoding nothing."""
+    result = runner.invoke(
+        app, ["run", str(project_path), "--frames", f"{span.start}:{span.end}", "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    return result.output
+
+
+def _with_checkpoints(project_path: Path, checkpoints: tuple[str, ...]) -> None:
+    """Rewrite the document in place with a different checkpoint list.
+
+    In place, and revalidated, so that the two invocations compared below differ
+    in the list and in nothing else — not in the folder, not in the file name,
+    and not in a second `Project.for_video` call's idea of the source path.
+    """
+    edited = Project.load(project_path).model_copy(update={"checkpoints": checkpoints})
+    Project.model_validate(edited).save(project_path)
+
+
 def _plan(project_path: Path, replicate: Replicate | None) -> ExecutionPlan:
     """The plan `sieve run` builds for this document, rebuilt outside it."""
     discover()
@@ -133,20 +154,31 @@ class TestTheCheckpointListIsNotAnInput:
         A cluster handoff empties the list, because the node with the memory to
         skip persisting should; if that moved a key, every entry the tuning
         session earned would be recomputed there and the two runs would stop
-        being one run. Fails for any derivation that folds the list — or its
-        length, or its emptiness — into `source_key` or a node digest.
+        being one run.
+
+        Read from `--dry-run`'s output rather than from a plan this file builds.
+        The predecessor of this case called `ExecutionPlan.build` itself, and
+        `build` takes no checkpoint list, so the assertion was decided by that
+        signature and no implementation could fail it: a mutant that perturbed
+        `source` from inside `run_cmd` survived the whole suite
+        (`findings/loop/2026.08.07-a-test-that-rebuilds-the-derivation-cannot-see-the-command-that-made-it.md`).
+        Only the command holds both the document and the constructor, so the
+        keys have to be the ones the command printed. `--dry-run` opens no
+        video, so this costs a stat and no decode.
         """
         target = _replicate("Arena 1", "a", x=17)
-        plain = _project(synthetic_video, tmp_path / "plain", replicates=(target,))
-        kept = _project(
-            synthetic_video, tmp_path / "kept", checkpoints=(CUT, DOWN), replicates=(target,)
+        project_path = _project(
+            synthetic_video, tmp_path, checkpoints=(CUT, DOWN), replicates=(target,)
         )
-        assert Project.load(plain).checkpoints != Project.load(kept).checkpoints
 
-        keys = [_plan(path, target).keys for path in (plain, kept)]
+        kept = _dry_run(project_path)
+        _with_checkpoints(project_path, ())
+        emptied = _dry_run(project_path)
 
-        assert keys[0] == keys[1]
-        assert set(keys[0]) == {CUT, DOWN}, "a graph with no keys would pass this vacuously"
+        assert Project.load(project_path).checkpoints == ()
+        keys = re.findall(r"\bkey ([0-9a-f]+)", kept)
+        assert len(set(keys)) == 2, f"two distinct keys, or the comparison is vacuous: {kept}"
+        assert emptied == kept
 
 
 class TestAPersistedRunComputesWhatAnUnpersistedOneDoes:

@@ -1,7 +1,7 @@
 ---
 title: A checkpoint writes its node's output to the project folder
 step: "05.3"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_checkpoints.py -q"
 opened: 2026-08-07

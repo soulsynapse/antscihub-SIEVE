@@ -553,7 +553,7 @@ class TableSpec:
 #: which is what a type checker can follow.
 #:
 #: One input stream and one output stream per node. v2 grew input *ports* for a
-#: merging filter; that protocol is cut here and returns with the first two-input
+#: merging step; that protocol is cut here and returns with the first two-input
 #: tool, which is also when the artifact has to learn which port an edge feeds.
 type StreamSpec = ArraySpec | TableSpec
 

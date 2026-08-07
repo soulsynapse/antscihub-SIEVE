@@ -1,7 +1,7 @@
 """Frame, ROI, quantities, and metadata value objects shared across all layers.
 
 These are the vocabulary every other layer pattern-matches on. Metadata is
-typed, never stringly-typed: a filter that needs to know the channel layout
+typed, never stringly-typed: a tool that needs to know the channel layout
 reads `ChannelSpec`, not a `str` it has to parse.
 
 **The four quantities.** `MediaTime`, `WallTime`, `WorkUnits` and `FrameCount`
@@ -14,7 +14,7 @@ it is written rather than leaving a plausible number to be read later.
 The distinctions that are load-bearing, in the order they cost something:
 
 - **A frame count is node-relative, and is not a duration.** Warmup is counted
-  in a filter's own *input* frames, and a rate-changing node between two others
+  in a tool's own *input* frames, and a rate-changing node between two others
   makes them speak different index spaces — `at_input_of` is that conversion and
   the reason folding frames into media time would erase the arithmetic
   `source_warmup_frames` exists to get right. Turning frames into seconds needs
@@ -180,7 +180,7 @@ class WorkUnits:
 
 
 #: The single operation against which all `WorkUnits` are denominated.
-#: Calibration measures this operation on a target profile; filter declarations
+#: Calibration measures this operation on a target profile; tool declarations
 #: remain relative to it and therefore do not smuggle a reference CPU into the
 #: spec.
 #:
@@ -206,7 +206,7 @@ class FrameCount:
     Non-negative, unlike the other three. A negative count is not a direction,
     it is a mistake — a warmup refinement that came back below zero, a shortfall
     subtracted the wrong way round — and refusing it here is what makes
-    `FilterSpec.warmup_frames` unable to be declared negative in the first
+    `ToolSpec.warmup_frames` unable to be declared negative in the first
     place, at the decorator where somebody wrote it.
     """
 
@@ -261,7 +261,7 @@ class FrameCount:
 
 
 #: No lead-in, no window, nothing to warm. Allocated once: it is the default on
-#: `FilterSpec.warmup_frames` and the identity of the warmup fold, so it is
+#: `ToolSpec.warmup_frames` and the identity of the warmup fold, so it is
 #: written more often than any other value of the type.
 NO_FRAMES = FrameCount(0)
 

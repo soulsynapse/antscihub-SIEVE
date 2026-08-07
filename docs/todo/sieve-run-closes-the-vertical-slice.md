@@ -1,7 +1,7 @@
 ---
 title: sieve run closes the vertical slice
 step: "03.8"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_cli_run.py -q"
 opened: 2026-08-06

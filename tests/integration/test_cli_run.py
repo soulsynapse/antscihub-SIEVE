@@ -9,9 +9,9 @@ seams it can catch are the ones between a document on disk and a plan — a
 source path resolved against the wrong directory, a span that never reaches the
 executor, a replicate set that fans out into one run instead of two.
 
-Every invocation passes `--frames`, and that is schema v1 rather than an
-oversight: there is no `Project.clip` (`adr/detector-is-a-node.md`), so the span
-is the flag or it is the whole video.
+Schema v1 records no clip of its own (`adr/detector-is-a-node.md`), so the span
+is the flag or it is the whole video, and both halves of that sentence are
+invocations here.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from typer.testing import CliRunner
 
 from sieve.cli.app import app
 from sieve.core.pipeline_model import Node, Pipeline, Project, Replicate, Sink
+from tests.conftest import FIXTURE_FRAMES
 
 runner = CliRunner()
 
@@ -78,6 +79,46 @@ def test_two_replicates_run_and_the_second_reuses_the_first(
     lines = result.output.splitlines()
     assert lines[0] == "arena 1: 4 frames, 4 node outputs computed, 0 from cache"
     assert lines[1] == "arena 2: 4 frames, 0 node outputs computed, 4 from cache"
+
+
+def test_a_project_with_no_replicates_runs_its_graph_once(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """No fan-out is one run, not zero, and it says `baseline`.
+
+    A replicate is a deviation from the graph, so a project holding none has a
+    graph to run all the same — `_targets` spells that `(None,)` and `plan.py`
+    already carries `replicate=None`. Fails if the target list is taken straight
+    from `project.replicates`, which for this project runs nothing, prints
+    nothing, and still exits 0: a user's whole run silently doing nothing.
+    """
+    project = _project(synthetic_video, tmp_path)
+
+    result = runner.invoke(app, ["run", str(project), "--frames", "10:14"])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        "baseline: 4 frames, 4 node outputs computed, 0 from cache"
+    ]
+
+
+def test_a_run_with_no_frames_covers_the_whole_video(synthetic_video: Path, tmp_path: Path) -> None:
+    """The other half of "the flag or the whole video".
+
+    `span_for` falls back to the container's frame count, and every other case
+    here passes `--frames`, so the fallback's only reader of record is this one.
+    Fails for any fallback that is a fixed or truncated range rather than the
+    footage's own length — which decodes a prefix, reports success over it, and
+    leaves the rest of the video unprocessed without saying so.
+    """
+    project = _project(synthetic_video, tmp_path, replicates=(Replicate(name="arena 1"),))
+
+    result = runner.invoke(app, ["run", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        f"arena 1: {FIXTURE_FRAMES} frames, {FIXTURE_FRAMES} node outputs computed, 0 from cache"
+    ]
 
 
 def test_a_dry_run_never_opens_the_video(

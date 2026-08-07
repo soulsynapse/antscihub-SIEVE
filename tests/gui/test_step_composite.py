@@ -337,7 +337,7 @@ def test_rescale_cost_readout_waits_for_two_scales(
     first_revision = stub.revision
     stub.render_started.emit(first_revision)
     clock = 4.0
-    stub.render_finished.emit(SimpleNamespace(frames=40))
+    stub.render_finished.emit(SimpleNamespace(frames=40, reuse=0.0))
 
     assert tab.rescale_cost_text == "cost: needs another scale"
 
@@ -346,9 +346,34 @@ def test_rescale_cost_readout_waits_for_two_scales(
     clock = 10.0
     stub.render_started.emit(second_revision)
     clock = 11.75
-    stub.render_finished.emit(SimpleNamespace(frames=40))
+    stub.render_finished.emit(SimpleNamespace(frames=40, reuse=0.0))
 
-    assert tab.rescale_cost_text == "cost 43.7 ms/fr; knee 0.58"
+    # Two scales fit exactly, so the projection is marked as an estimate.
+    assert tab.rescale_cost_text == "cost ~43.7 ms/fr; knee 0.58"
+
+
+def test_a_warm_render_does_not_join_a_cold_one_in_the_rescale_fit(
+    tab: FilterTab,
+    stub: _StubRunner,
+    document: ReplicateDocument,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The second scale reused the prefix, so its wall time skipped the decode."""
+    clock = 0.0
+    monkeypatch.setattr("sieve.gui.filter_tab.perf_counter", lambda: clock)
+
+    document.bind_source(1000, 800, 40, Fraction(20))
+    stub.render_started.emit(stub.revision)
+    clock = 4.0
+    stub.render_finished.emit(SimpleNamespace(frames=40, reuse=0.0))
+
+    tab.downsample_knob.setValue(0.5)
+    clock = 10.0
+    stub.render_started.emit(stub.revision)
+    clock = 11.75
+    stub.render_finished.emit(SimpleNamespace(frames=40, reuse=0.8))
+
+    assert tab.rescale_cost_text == "cost: cache reuse differs between scales"
 
 
 def test_a_first_step_targets_base_is_the_replicates_crop(

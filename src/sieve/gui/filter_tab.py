@@ -987,11 +987,10 @@ class FilterTab(QWidget):
                 "No completed window render has been timed for this source, window, "
                 "replicate, and chain context yet."
             )
-        elif fit.provisional:
-            self._rescale_cost_label.setToolTip(
-                "One scale has been timed. Another scale is required before SIEVE can "
-                "separate the fixed decode/source floor from scale-sensitive work."
-            )
+        elif fit.provisional is not None:
+            # The refusal carries its own reason so the label and the tooltip
+            # cannot drift into disagreeing about why no curve is shown.
+            self._rescale_cost_label.setToolTip(fit.provisional.detail)
         else:
             knee = fit.knee_scale()
             knee_text = (
@@ -999,11 +998,17 @@ class FilterTab(QWidget):
                 if knee is None
                 else f"knee at {knee:.2f}; below it, less resolution buys less time"
             )
+            standing = (
+                "Two scales fit the two parameters exactly, so nothing yet tests "
+                "the curve; a third scale would."
+                if not fit.validated
+                else "A third scale left a residual the curve had to survive."
+            )
             self._rescale_cost_label.setToolTip(
                 f"Fitted from {fit.n_samples} completed window renders on this machine "
                 f"and this footage: fixed {fit.fixed_per_frame.milliseconds:.1f} ms/frame, "
                 f"scale-sensitive {fit.per_pixel_per_frame.milliseconds:.1f} ms/frame at "
-                f"scale 1.0, {knee_text}."
+                f"scale 1.0, {knee_text}. {standing}"
             )
 
     @Slot(int)
@@ -1016,6 +1021,13 @@ class FilterTab(QWidget):
         run = self._rescale_cost_runs.pop(self._runner.revision, None)
         if run is None or run.started_at is None:
             return
+        reuse = getattr(render, "reuse", None)
+        if not isinstance(reuse, float):
+            # A render that cannot say how much of the chain it served from the
+            # store is not a timing of any particular amount of work. Dropping
+            # it keeps the sample set comparable rather than silently widening
+            # the reuse spread the fit is allowed to ignore.
+            return
         frames = (
             render.frames if isinstance(render, PreviewRender) and render.frames > 0 else run.frames
         )
@@ -1025,6 +1037,7 @@ class FilterTab(QWidget):
                 frames=frames,
                 wall=WallTime(perf_counter() - run.started_at),
                 context=run.context,
+                reuse=reuse,
             )
         )
         self._refresh_rescale_cost()

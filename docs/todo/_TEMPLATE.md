@@ -26,12 +26,13 @@ gated_on: nothing
 # criterion, written when the item is written and never edited by the session
 # doing the work. The worker runs it and pastes its output; the reviewer
 # re-runs it.
-# Name the claim, not the file. A criterion pointing at a whole test module is
-# met by any weak case added to it, which is how a green command certifies work
-# that was not done — so name the test, or the count the module goes to, or the
-# mutation that has to die. Whether it is red today is a smell and not a rule:
-# a criterion can be red only because the file it names does not exist yet, and
-# for a refactor "the suite still passes" is the entire claim.
+# Name the claim, not the file, and prove it red. A criterion pointing at a
+# whole test module passes today and is met by any weak case added to it, which
+# is how a green command certifies work that was not done — so name the test
+# the work will add, with `-k` or a node id, even though it does not exist yet.
+# Red because nothing matches is red for the right reason. Run it when you
+# write it and paste the output; `sieve-v3-specify` holds the same rule for the
+# criteria written later, and this is the same sentence at minting time.
 done_when: "uv run pytest tests/... -q"
 opened: 2026-08-06
 ---

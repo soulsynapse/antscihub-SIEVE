@@ -3,7 +3,7 @@ title: A served run reads past what its record was checked for
 step: "05.9"
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/integration/test_crop_serving.py -q"
+done_when: "uv run pytest tests/integration/test_crop_serving.py -q -k lead_in && uv run pytest tests/integration/test_crop_serving.py -q -k lookahead && uv run pytest tests/integration/test_crop_serving.py -q"
 opened: 2026-08-07
 ---
 

@@ -20,5 +20,6 @@ and its file in `docs/adr/` but leaves this index.
 ## 03 — The repo itself
 
 - [The product owns the word "tools"](adr/the-product-owns-the-word-tools.md) — "Tools" means pipeline steps and nothing else; repo machinery lives in `scripts/`, which is not a package and must not become one.
+- [core's membership is closed](adr/core-membership-is-closed.md) — `core` owns exactly: the dimensioned types, the tool contract and its registry, schema v1, and `ops/`. A new direct child is a revision of this ADR, refused by the gate until the revision is made.
 
-*5 settled, 0 superseded.*
+*6 settled, 0 superseded.*

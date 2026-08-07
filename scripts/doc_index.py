@@ -82,11 +82,21 @@ FORBIDDEN = (
 )
 
 #: The stack top-down, so the scaffold reads in import order: a package may
-#: reach only what is listed below it. Declared packages without a directory
-#: (`gui`, `bench`, `storage`) hold their place for when one appears. Once
-#: `.importlinter` lands (item 00.2) its layers contract is the authority and
-#: this tuple must follow it; until then this is the order's only home.
+#: reach only what is listed below it. Once `.importlinter` lands (item 00.2)
+#: its layers contract is the authority and this tuple must follow it; until
+#: then this is the order's only home.
 LAYER_ORDER = ("gui", "cli", "compat", "bench", "pipeline", "tools", "decode", "storage", "core")
+
+#: ADR-6 (`adr/core-membership-is-closed.md`): core owns exactly these, and a
+#: new direct child is a revision of that ADR — refused here until it is made.
+CORE_CHILDREN = (
+    "__init__.py",
+    "types.py",
+    "tool_base.py",
+    "tool_registry.py",
+    "pipeline_model.py",
+    "ops",
+)
 
 #: The docstring's first line is the scaffold annotation, so it has to say
 #: what the module owns and fit the tree column.
@@ -584,6 +594,18 @@ def forbidden_present(repo: Path = REPO) -> list[str]:
     return [entry for entry in FORBIDDEN if (repo / entry).exists()]
 
 
+def core_strays(repo: Path = REPO) -> list[str]:
+    """Direct children of `core/` that ADR-6's enumeration does not admit."""
+    folder = repo / "src" / "sieve" / "core"
+    if not folder.is_dir():
+        return []
+    return sorted(
+        path.name
+        for path in folder.iterdir()
+        if path.name not in CORE_CHILDREN and path.name != "__pycache__"
+    )
+
+
 def render_scaffold(modules: list[tuple[str, str]]) -> str:
     lines = [
         NOTICE,
@@ -636,6 +658,12 @@ def main(argv: list[str] | None = None) -> int:
         built = forbidden_present()
         if built:
             raise ItemError(f"absent-by-decision paths exist: {', '.join(built)}")
+        strays = core_strays()
+        if strays:
+            raise ItemError(
+                f"core has children ADR-6 does not admit: {', '.join(strays)} — "
+                f"revise adr/core-membership-is-closed.md first"
+            )
         targets = [
             (TODO_DIR / INDEX_NAME, render(items, phase_titles())),
             (

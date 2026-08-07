@@ -333,6 +333,19 @@ def test_an_annotation_that_dodges_ownership_is_refused():
         module_annotation(Path("thing.py"), '"""Helpers for the pipeline."""')
 
 
+def test_a_child_of_core_outside_the_adr_enumeration_is_a_stray(tmp_path):
+    """ADR-6: core's membership is closed — a new resident revises the ADR
+    before the gate admits it."""
+    core = tmp_path / "src" / "sieve" / "core"
+    (core / "ops").mkdir(parents=True)
+    (core / "__pycache__").mkdir()
+    (core / "types.py").touch()
+    (core / "convenience.py").touch()
+
+    assert doc_index.core_strays(tmp_path) == ["convenience.py"]
+    assert doc_index.core_strays(tmp_path / "empty") == []
+
+
 def test_a_dropped_path_that_gets_built_is_caught(tmp_path):
     (tmp_path / "src" / "sieve" / "backend").mkdir(parents=True)
 
@@ -359,6 +372,7 @@ def test_the_repos_own_items_are_hygienic():
     collect_modules(doc_index.REPO)
     collect_adrs(doc_index.ADR_DIR)
     assert forbidden_present(doc_index.REPO) == []
+    assert doc_index.core_strays(doc_index.REPO) == []
 
 
 def test_the_checked_in_indexes_are_current():

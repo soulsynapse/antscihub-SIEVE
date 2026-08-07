@@ -232,6 +232,14 @@ is visible in the index rather than only here.
   dropped.
 - First GUI cut: which v2 surfaces (wizard, replicate tab, history dialog,
   sweep) are in Phase 7 vs later.
+- Phase 2 before Phase 3, which 02.2's deferral says cannot stand:
+  `dag.py`, `cache_key.py` and `plan.py` take `Node`, `Pipeline` and
+  `ClipRange` in their signatures, so "verbatim in Phase 2" and "the schema is
+  re-derived in Phase 3" cannot both be true of them
+  (`findings/2026.08.07-v2s-pipeline-does-not-separate-from-its-schema.md`).
+  Either schema v1 moves ahead of the graph, or those three modules stop being
+  verbatim ports. Dropping `backend/` already moves every node digest, so the
+  second reading is closer to the truth than the disposition admits.
 - The disposition above covers six of v2's fourteen `pipeline/` modules. The
   other six — `cache.py`, `crop_binding.py`, `lowering.py`,
   `resolve_source.py`, `series_collector.py`, `source_home.py` — plus

@@ -18,6 +18,7 @@ src/sieve/tools/__init__.py     # One module per tool: a ToolSpec and one plain 
 src/sieve/decode/__init__.py    # Decode, prefetch, and lowering into ffmpeg.
 src/sieve/storage/__init__.py   # Sink writers: how results leave the pipeline for disk.
 src/sieve/core/__init__.py      # The dimensioned types, the tool contract, and spec-free array math.
+src/sieve/core/types.py         # Frame, ROI, quantities, and metadata value objects shared across all layers.
 scripts/doc_index.py            # The derived docs: indexes, ARCHITECTURE, the scaffold, and `--next`.
 ```
 

@@ -26,6 +26,7 @@ src/sieve/tools/background_ema.py     # An exponential moving-average background
 src/sieve/tools/block_signal.py       # Per-block motion signals from the structure tensor of consecutive frames.
 src/sieve/tools/crop.py               # Take a region of every frame, with the whole frame as the identity value.
 src/sieve/tools/downsample.py         # Reduce spatial resolution by an integer factor.
+src/sieve/tools/motion_history.py     # A causal leaky accumulator of per-block activity, with its neighbours.
 src/sieve/tools/normalize.py          # Per-frame contrast normalization: `off` or `zscore`.
 src/sieve/tools/rescale.py            # Reduce spatial resolution by a float linear scale factor.
 src/sieve/tools/span.py               # Keep a range of frames, with every frame there could be as the identity value.

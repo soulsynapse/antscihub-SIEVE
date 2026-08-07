@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  # `main` is v2's branch in this same repository, and a workflow runs from the
+  # tree it was pushed with — so listing main here would never fire this file,
+  # only v2's own.
+  push:
+    branches:
+      - v3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+
+      # No Python version here: .python-version already pins it, and a second
+      # copy is a second thing to keep in step.
+      - name: Sync the uv environment
+        run: uv sync --locked
+
+      # Character-for-character what a commit is checked against locally, so
+      # there is one gate and not two lists to keep in step. Qt and OpenCV are
+      # forbidden by contract and never installed here — grimp reads import
+      # statements, not the environment
+      # (findings/2026.08.06-every-contract-goes-red-on-one-line.md).
+      - name: Run the gate
+        run: uv run ruff check . && uv run lint-imports && uv run pytest -q

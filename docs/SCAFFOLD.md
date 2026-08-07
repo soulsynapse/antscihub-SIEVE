@@ -16,6 +16,8 @@ src/sieve/cli/app.py                    # The `sieve` command: argument parsing 
 src/sieve/cli/inspect_cmd.py            # `sieve inspect` — what is on the shelf, read off the declarations.
 src/sieve/cli/run_cmd.py                # `sieve run` — execute a saved project through the one executor.
 src/sieve/bench/__init__.py             # The performance budgets and the metric bus.
+src/sieve/bench/budgets.py              # The latency budget table. Source of truth in code for both speed regimes.
+src/sieve/bench/metrics.py              # The metric collection bus: where a timed interval goes and who hears it.
 src/sieve/pipeline/__init__.py          # The DAG, the plan, the cache key, and the one execution loop.
 src/sieve/pipeline/cache.py             # Where a computed frame is kept so it is not computed twice.
 src/sieve/pipeline/cache_key.py         # What makes two computations the same computation.

@@ -110,6 +110,11 @@ SPEAKS_A_FOREIGN_VOCABULARY: frozenset[tuple[str, str, str]] = frozenset(
             "clip",
             "English's noun again, for the stretch a preview covers and a batch does not",
         ),
+        (
+            "bench/budgets.py",
+            "clip",
+            "English's noun, inside a budget label VISION.md is pinned against character for character",
+        ),
     }
 )
 

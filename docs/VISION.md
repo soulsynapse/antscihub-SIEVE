@@ -6,7 +6,33 @@ The ideal case: v2's evidence decides what comes over, one decision at a time, w
 
 ## The loop
 
-SIEVE turns video into behavioral measurements using interpretable signal-processing tools. The user builds a pipeline; SIEVE runs it. Its value is the speed of the tuning loop: drag a slider, watch the graphs refill faster than the video plays. Architecture that does not serve that loop does not belong. Two settled rules guard it: preview and production are one execution path, so what you tuned against is what the run produces ([adr/one-execution-path.md](adr/one-execution-path.md)), and the naive path is the product surface — every tool runs correct-but-slow on any machine, and fast paths land only on a measured budget violation ([adr/correctness-is-the-default.md](adr/correctness-is-the-default.md)). The budget numbers live in `bench/` and are measured headless before a single widget exists.
+SIEVE turns video into behavioral measurements using interpretable signal-processing tools. The user builds a pipeline; SIEVE runs it. Its value is the speed of the tuning loop: drag a slider, watch the graphs refill faster than the video plays. Architecture that does not serve that loop does not belong. Two settled rules guard it: preview and production are one execution path, so what you tuned against is what the run produces ([adr/one-execution-path.md](adr/one-execution-path.md)), and the naive path is the product surface — every tool runs correct-but-slow on any machine, and fast paths land only on a measured budget violation ([adr/correctness-is-the-default.md](adr/correctness-is-the-default.md)). The numbers are below, enforced from `bench/budgets.py`, and measured headless before a single widget exists.
+
+## Two speed regimes
+
+Both are load-bearing and improving one at the cost of the other is a defect. Pre-pipeline runs from opening a video to having replicates cut and a stretch selected; the intended feel is a video editor. In-pipeline runs from dragging a slider to seeing the graph update; the intended feel is direct manipulation, not job submission.
+
+```
+PRE-PIPELINE (feels like a video editor)
+  Open file → first frame:        < 500 ms
+  Scrub/seek → frame repaint:     < 100 ms
+  Scrub release → exact frame:    < 250 ms
+  Cut confirmed → ready:          < 200 ms
+
+IN-PIPELINE (feels like direct manipulation)
+  First tool → first graph tick:  < 2 s
+  Slider drag → preview repaint:   < 100 ms
+  Slider drag → graph update:      < 200 ms
+  Full preview render (5–10s clip): < 3 s
+  Band drag → graphs repaint:      < 50 ms
+  Band power arrives → density rebuilt: < 100 ms
+  Knob settle → graphs rebuilt:    < 3 s
+  Knob settle → graphs start filling: < 500 ms
+```
+
+Every limit is anchored to a perceptual response band rather than to a measurement — ~100 ms reads as instantaneous, ~1 s holds the flow of thought, ~10 s holds attention (Card, Moran & Newell). `bench/budgets.py` carries the anchor for each row, and `tests/bench/test_budget_table.py` parses this block and fails if the two ever disagree, so neither side can be edited alone. A budget anchored to perception outlives the hardware that first met it; one anchored to what was achieved once is history wearing a rule's costume.
+
+**Scope: these ceilings are promised for the reference workload** — the stirred clip through the chain the preview session runs, not any graph a user can construct. That is how a service-level objective is stated everywhere it works: a promise conditioned on a workload, not a wish about all workloads. Outside the scope, what survives is the honesty half — input never blocks, progress is visible, and a stale frame is labeled stale. A miss inside the scope is a defect, or a debt declared in `budgets.IN_DEBT` against the `docs/todo/` item that repays it; widening the scope is a decision about the product, made here, not conceded one alarm at a time.
 
 ## Features, and why I want them:
 

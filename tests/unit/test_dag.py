@@ -21,7 +21,7 @@ from typing import ClassVar
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Replicate
 from sieve.core.tool_base import (
     ArraySpec,
     ElementKind,
@@ -33,6 +33,7 @@ from sieve.core.tool_base import (
 )
 from sieve.core.tool_registry import ToolRegistry, register_tool
 from sieve.core.types import ChannelSpec
+from sieve.pipeline.cache_key import node_key, source_key
 from sieve.pipeline.dag import (
     CycleError,
     Dag,
@@ -155,6 +156,20 @@ class HueBandParams(ParamsBase):
     registry=SHELF,
 )
 class EitherWayParams(ParamsBase):
+    pass
+
+
+@register_tool(
+    tool_id="jitter",
+    version="1.0.0",
+    summary="Does not claim determinism, so nothing downstream of it may be keyed.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
+    deterministic=False,
+    registry=SHELF,
+)
+class JitterParams(ParamsBase):
     pass
 
 
@@ -584,6 +599,88 @@ class TestDecodeFormat:
         graph = Pipeline(nodes=(node("a", "mystery"),))
 
         assert graph_needs_chroma(graph, SHELF) is True
+
+
+class TestKeyWalk:
+    """The traversal `cache_key.py` names and declines to own.
+
+    `test_cache_key.py` writes its own three-node walk by hand precisely because
+    that module carries none; the claim here is that this one agrees with such a
+    walk, which is what stops the graph growing a second idea of what a key is.
+    Everything a key separates is asserted there — this class asserts only what
+    the *walk* adds: the source key reaching the roots, the format coming from
+    the graph, the replicate reaching every node, and a refusal propagating by
+    absence.
+    """
+
+    #: What `cache_key.source_identity` would have produced. Taken as a string
+    #: by the walk, so no file has to exist for the keys to be derivable.
+    SOURCE = "arena.mp4|4096|17"
+
+    def test_the_walk_is_the_hand_walk(self) -> None:
+        # The anti-drift claim. A traversal that chained the keys in some other
+        # order, or handed a root something other than the source key, would
+        # still produce a stable dict of distinct-looking hashes — every
+        # property short of this one survives getting the chaining wrong.
+        dag = Dag.build(fan_out(), SHELF)
+        root = source_key(self.SOURCE, decode_format="luma")
+
+        def key(node_id: str, upstream: str) -> str:
+            return node_key(dag.pipeline.node(node_id), spec=dag.spec(node_id), upstream=upstream)
+
+        by_hand = {"a": key("a", root)}
+        by_hand["b"] = key("b", by_hand["a"])
+        by_hand["c"] = key("c", by_hand["a"])
+        by_hand["d"] = key("d", by_hand["c"])
+
+        assert dag.node_keys(source=self.SOURCE) == by_hand
+
+    def test_the_format_the_reader_will_open_is_the_format_in_the_key(self) -> None:
+        # `needs_chroma` is derived here rather than passed in so that the key
+        # and the reader cannot disagree about what was decoded. `a` is upstream
+        # of the node that demands colour and its own tool is unchanged, so its
+        # key can only move through the source key — which is the position under
+        # test. Getting this wrong serves a luma-decoded frame to a colour graph
+        # from cache, and the run completes.
+        luma = Dag.build(fan_out(), SHELF)
+        colour = Dag.build(fan_out(d="hue_band"), SHELF)
+        assert (luma.needs_chroma, colour.needs_chroma) == (False, True)
+
+        assert colour.node_keys(source=self.SOURCE)["a"] != luma.node_keys(source=self.SOURCE)["a"]
+
+    def test_an_uncacheable_node_takes_its_descendants_and_nobody_else(self) -> None:
+        # A node absent from the result is a node that must be computed, and
+        # neither cause is an error. `NotCacheableError` is swallowed at exactly
+        # the node that raises it and then propagates for free — `d` has no
+        # upstream key to fold in, so it drops without anything computing that
+        # fact. Raising out of the walk instead would make one non-deterministic
+        # node cost every other node in the graph its cache entries.
+        dag = Dag.build(fan_out(c="jitter"), SHELF)
+
+        keys = dag.node_keys(source=self.SOURCE)
+
+        assert set(keys) == {"a", "b"}
+        # And the survivors are unchanged by the refusal beside them, rather
+        # than merely present.
+        intact = Dag.build(fan_out(), SHELF).node_keys(source=self.SOURCE)
+        assert {node_id: keys[node_id] for node_id in ("a", "b")} == {
+            node_id: intact[node_id] for node_id in ("a", "b")
+        }
+
+    def test_a_replicate_deviation_reaches_the_node_it_names_and_its_descendants(self) -> None:
+        # The walk threads `replicate` into every `node_key` call, and a walk
+        # that dropped it would pass both cases above: the hand walk keys the
+        # baseline, and a refusal propagates regardless. What would then break
+        # is silent and total — twelve arenas sharing one set of keys, each
+        # served the frames of whichever ran first.
+        dag = Dag.build(fan_out(), SHELF)
+        baseline = dag.node_keys(source=self.SOURCE)
+
+        arena = Replicate(name="Replicate 1").with_override("c", {"radius": 11})
+        deviated = dag.node_keys(source=self.SOURCE, replicate=arena)
+
+        assert (deviated["c"], deviated["d"]) != (baseline["c"], baseline["d"])
+        assert (deviated["a"], deviated["b"]) == (baseline["a"], baseline["b"])
 
 
 class TestLookups:

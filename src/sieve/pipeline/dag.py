@@ -52,11 +52,13 @@ merging protocol until the first two-input tool — so a node has one input, and
 graph. The rejection did not move layers because it was weakened; it moved
 because the distinction it policed is one nothing can express.
 
-**The walk lives here.** `linear_order` is the second walk and not a second
-answer: it refuses every graph `order` tolerates, because a caller that *draws*
-the graph as a stack can host one path and nothing else. The third — one node
-key per node, folded from its upstreams' — is not here yet: it needs the cache
-key, and it arrives with it rather than being written twice.
+**The walk lives here.** `cache_key.py` computes one node's key given its
+upstream's and declines to say which nodes those are; `node_keys` below is the
+traversal that answers it, and it is the only one. Anything else that needs an
+order — the executor, a cost prediction — takes `order` from here rather than
+sorting again. `linear_order` is the second walk and not a second answer: it
+refuses every graph `order` tolerates, because a caller that *draws* the graph
+as a stack can host one path and nothing else.
 """
 
 from __future__ import annotations
@@ -64,7 +66,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from sieve.core.pipeline_model import Node, Pipeline
+from sieve.core.pipeline_model import Node, Pipeline, Replicate
 from sieve.core.tool_base import (
     SOURCE_ELEMENT_NAMES,
     ArraySpec,
@@ -77,6 +79,7 @@ from sieve.core.tool_base import (
 )
 from sieve.core.tool_registry import REGISTRY, ToolRegistry, UnknownToolError
 from sieve.core.types import ChannelSpec
+from sieve.pipeline.cache_key import NotCacheableError, node_key, source_key
 
 
 class GraphError(ValueError):
@@ -602,6 +605,80 @@ class Dag:
         GRAY, so silence is never read as a demand for colour.
         """
         return any(_requires_chroma(spec) for spec in self.specs.values())
+
+    def node_keys(self, *, source: str, replicate: Replicate | None = None) -> dict[str, str]:
+        """Every cacheable node's key, for one replicate.
+
+        The traversal `cache_key.py` names and declines to own. One pass in
+        topological order, so each node's upstream is already keyed when it is
+        reached — which is the whole reason the sort happens before this rather
+        than a second walk happening after it.
+
+        **A node absent from the result is a node that must be computed.** Two
+        causes, and neither is an error: the tool has not claimed determinism,
+        or something upstream of it has not. `NotCacheableError` is swallowed at
+        exactly the node that raises it and then propagates for free, because a
+        downstream that cannot find its upstream's key has no key of its own to
+        build. The alternative — raising out of the walk — would make one
+        non-deterministic node in a twelve-node graph cost the cache entries of
+        the eleven that are fine.
+
+        v2 took a `backend` here, and a `lowered_prefix` for the decode chain it
+        had lowered into ffmpeg. The first has no referent
+        (`adr/no-kernel-apparatus.md`); the second arrives with the lowering that
+        produces one, which `PLAN.md` does not build until a budget is missed.
+
+        Args:
+            source: What identifies the footage — `cache_key.source_identity`
+                builds one. Taken as a string rather than a `Path` so that a
+                caller that already computed it does not stat the file twice,
+                and so this stays runnable against footage that is not present.
+                A replicate whose frames were already cut to a written crop is
+                passed a *different* source, computed from that artifact; there
+                is no flag here for it, because a crop of a crop is a different
+                footage rather than a different key derivation.
+            replicate: The replicate being processed, whose geometry is an
+                ordinary override on the crop node's region
+                (`adr/detector-is-a-node.md`) and so reaches the keys through
+                `resolved_params` like any other deviation. `None` is the
+                baseline a project with no fan-out runs.
+
+        Returns:
+            `node_id` to key, for the cacheable nodes only.
+
+        Raises:
+            ValidationError: if a node's resolved parameters are not valid for
+                its tool — the one check this module does not do up front, done
+                here because this is where they would enter a hash.
+        """
+        # Derived here rather than passed in, so the key and the reader cannot
+        # disagree about what was decoded: whoever opens the reader asks this
+        # same graph the same question.
+        root_key = source_key(source, decode_format="bgr" if self.needs_chroma else "luma")
+        keys: dict[str, str] = {}
+        for node in self.order:
+            fed = self.upstreams[node.node_id]
+            if fed:
+                # Unpacked rather than indexed: schema v1 gives a node one
+                # input, and the day a second one lands is the day `node_key`
+                # takes port-bound pairs — silently keying on the first of two
+                # is the failure that would otherwise be waiting there.
+                (parent,) = fed
+                if parent not in keys:
+                    continue
+                upstream = keys[parent]
+            else:
+                upstream = root_key
+            try:
+                keys[node.node_id] = node_key(
+                    node,
+                    spec=self.specs[node.node_id],
+                    upstream=upstream,
+                    replicate=replicate,
+                )
+            except NotCacheableError:
+                continue
+        return keys
 
 
 def linear_order(pipeline: Pipeline) -> tuple[Node, ...]:

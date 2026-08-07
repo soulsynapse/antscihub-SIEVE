@@ -67,6 +67,20 @@ but `source` is close to mandatory in practice — a measurement whose hardware,
 footage, and build are unrecorded cannot be compared to the next one, and
 comparison is the entire reason to keep it.
 
+### A value that opens with a code span
+
+Quote it, or lead with a word. ``probe: `set(POS_FRAMES)` on 500 frames`` is
+not valid YAML: a backtick opening a plain scalar is reserved, so the scanner
+stops on the character and the file never reaches doc_index as a finding at
+all. This is YAML's rule, not a house one — quoting the whole value
+(``probe: "`set(POS_FRAMES)` on 500 frames"``) or writing
+`probe: the set(POS_FRAMES) call on 500 frames` both satisfy it,
+and so does any block scalar, since `>` moves the backtick off the front. An
+opening quote is reserved the same way, for the same reason.
+
+`probe` and `result` are where this lands, because a probe is usually named in
+code. `verdict` and `question` are folded above and already safe.
+
 ### `status`
 
 - `closed` — the question is settled and the code reflects it

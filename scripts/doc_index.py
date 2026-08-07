@@ -228,6 +228,12 @@ SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 OPENED = re.compile(r"^opened:\s*(\S+)\s*$", re.MULTILINE)
 
 
+#: The nearest mapping key at or above a scanner stop, which is the field whose
+#: value it was in the middle of. Leading `-` so a key inside a list entry
+#: (`- probe:`) answers as itself rather than as the list it is in.
+YAML_KEY = re.compile(r"^\s*(?:-\s+)?(?P<key>[A-Za-z_][\w-]*)\s*:")
+
+
 class ItemError(ValueError):
     """An item file that cannot be indexed as written."""
 
@@ -262,6 +268,32 @@ class Item:
         return PRIORITIES.index(value) if value in PRIORITIES else len(PRIORITIES)
 
 
+def _yaml_blame(body: list[str], error: yaml.YAMLError) -> str:
+    """Why the frontmatter would not parse, as a line in the file and a field.
+
+    PyYAML reports the stop as a position inside the string it was handed, in a
+    stream it calls `<unicode string>`, so an author is told which character
+    offended and left to find it — and the commonest way to reach here is a
+    value opening with a code span, where the character named is a backtick the
+    file is full of. Both halves are recoverable: the frontmatter body starts at
+    file line 2, and the field is the nearest key at or above the stop.
+    """
+    mark = getattr(error, "problem_mark", None)
+    if mark is None:
+        return f"frontmatter is not valid YAML — {error}"
+    where = f"line {mark.line + 2}"
+    for line in reversed(body[: mark.line + 1]):
+        key = YAML_KEY.match(line)
+        if key:
+            where += f", `{key['key']}`"
+            break
+    problem = getattr(error, "problem", None) or "will not parse"
+    context = getattr(error, "context", None)
+    return f"frontmatter is not valid YAML at {where} — " + (
+        f"{context}, {problem}" if context else problem
+    )
+
+
 def parse_frontmatter(path: Path) -> dict[str, Any]:
     lines = path.read_text(encoding="utf-8").splitlines()
     if not lines or lines[0].strip() != "---":
@@ -273,7 +305,7 @@ def parse_frontmatter(path: Path) -> dict[str, Any]:
     try:
         loaded: object = yaml.safe_load("\n".join(lines[1:end]))
     except yaml.YAMLError as error:
-        raise ItemError(f"{path.name}: frontmatter is not valid YAML — {error}") from error
+        raise ItemError(f"{path.name}: {_yaml_blame(lines[1:end], error)}") from error
     if not isinstance(loaded, dict):
         raise ItemError(f"{path.name}: frontmatter must be a mapping")
     return {str(key): value for key, value in loaded.items()}

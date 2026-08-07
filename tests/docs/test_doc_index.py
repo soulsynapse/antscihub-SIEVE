@@ -12,6 +12,7 @@ from pathlib import Path
 
 import doc_index
 import pytest
+import yaml
 from doc_index import (
     ItemError,
     adr_summary,
@@ -324,6 +325,33 @@ def test_a_pool_item_without_a_priority_is_refused(tmp_path):
 
     with pytest.raises(ItemError, match="priority"):
         collect(tmp_path)
+
+
+def test_a_value_opening_with_a_code_span_names_its_line_and_its_field(tmp_path):
+    """The commonest way to write invalid frontmatter here, because the fields
+    are prose about code: YAML reserves a leading backtick, and the scanner's
+    own message names that character in a file full of them."""
+    write_item(tmp_path, "bad", SEQUENCED.replace("nothing", "`ruff` being pinned"))
+
+    with pytest.raises(ItemError, match=r"line 5, `gated_on`"):
+        collect(tmp_path)
+
+
+def test_the_field_named_is_the_key_inside_the_list_entry_not_the_list(tmp_path):
+    write_item(
+        tmp_path,
+        "bad",
+        SEQUENCED + "\nmeasurements:\n  - probe: a run\n    result: `n=3` frames",
+    )
+
+    with pytest.raises(ItemError, match=r"line 10, `result`"):
+        collect(tmp_path)
+
+
+def test_frontmatter_that_stops_nowhere_in_particular_still_reports(tmp_path):
+    """A `YAMLError` carrying no mark — the message degrades to the plain one
+    rather than the blame becoming the thing that raises."""
+    assert "not valid YAML" in doc_index._yaml_blame([], yaml.YAMLError("no mark on this"))
 
 
 def test_the_template_is_machinery_not_an_entry(tmp_path):

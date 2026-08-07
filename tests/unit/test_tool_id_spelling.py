@@ -96,6 +96,11 @@ SPEAKS_A_FOREIGN_VOCABULARY: frozenset[tuple[str, str, str]] = frozenset(
             "a stderr line filter, down to the pump thread's name",
         ),
         (
+            "tools/temporal_baseline.py",
+            "filter",
+            "spike sorting's *filtered* trace — the literature its k*MAD threshold comes from",
+        ),
+        (
             "storage/crop_writer.py",
             "clip",
             "English's noun for a video, in the docs for streaming one through",

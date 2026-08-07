@@ -1,7 +1,7 @@
 ---
 priority: high
 phase: 5
-status: open
+status: done
 gated_on: nothing
 opened: 2026-08-07
 title: Two items name the same crop artifact test file

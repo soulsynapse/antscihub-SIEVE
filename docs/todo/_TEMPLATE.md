@@ -26,6 +26,12 @@ gated_on: nothing
 # criterion, written when the item is written and never edited by the session
 # doing the work. The worker runs it and pastes its output; the reviewer
 # re-runs it.
+# Name the claim, not the file. A criterion pointing at a whole test module is
+# met by any weak case added to it, which is how a green command certifies work
+# that was not done — so name the test, or the count the module goes to, or the
+# mutation that has to die. Whether it is red today is a smell and not a rule:
+# a criterion can be red only because the file it names does not exist yet, and
+# for a refactor "the suite still passes" is the entire claim.
 done_when: "uv run pytest tests/... -q"
 opened: 2026-08-06
 ---

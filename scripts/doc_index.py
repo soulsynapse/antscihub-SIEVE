@@ -3,13 +3,21 @@
 Work items: one file each, YAML frontmatter, two shapes. A *sequenced* item
 carries `step:` — dotted numbers whose first component is the phase, so
 "02.3.1" is an aside inserted between "02.3" and "02.4" without renumbering
-anything. A *pool* item carries `priority:` instead — noticed work that can
-wait for the end of its phase, which is when the phase's pool is drained and
-what the priority orders (`next_takeable` has the rule). Work that cannot wait
-that long is not a pool item at all: it is minted as a decimal step in the
-phase's own list. Between them the number and the priority are the ordering,
-which is what lets `--next` be the whole selection rule: the queue that runs
-the work never has to encode an order, the repo holds it.
+anything. A *pool* item carries `priority:` instead — work noticed while doing
+the phase rather than committed to by it.
+
+The order over both is one sort key (`queue_key`) and there is no state in it:
+phase, then a step before a pool item, then the number or the priority, then
+the name. So `--next` is the first `open` row of `docs/todo/.index.md` read top
+to bottom, and a reader who scrolls to it lands on the item the loop is about
+to take — asserted, not promised. The queue that runs the work never has to
+encode an order; the repo holds it.
+
+Phase outranks urgency, which is the whole of what makes it simple: an earlier
+phase is groundwork the later ones stand on, so a `low` in phase 0 precedes a
+`high` in phase 5. Work that cannot wait for its phase is not a pool item at
+all — it is minted as a decimal step in the phase's own list, and a phase whose
+steps all read `done` is still a place to file one.
 
 Findings: one file per measurement, newest first, `verdict` standing alone as
 the row a reader triages from. `docs/findings/loop/` holds the same shape for
@@ -139,13 +147,13 @@ PRIORITIES = ("high", "normal", "low", "unassessed")
 #: Why a deferral is a deferral, typed so the set can be triaged by machine
 #: while `gated_on` keeps the sentence saying which decision, which subject,
 #: which phase. All three are blocks outside the item: no session can clear
-#: one, which is why a deferred item is owed by no boundary.
+#: one, which is why a deferred item is not in the queue at all.
 #:
 #: There is deliberately no reason for "has no `done_when` yet". That is not a
-#: block, it is minting the session did not finish — and a legal deferral for
-#: it is where every item anybody found hard would go, which is the pool this
-#: rule replaced wearing better paperwork. Unspecified is derived from the
-#: absent field (`unspecified`), never declared, and it shuts a boundary.
+#: block, it is minting the session did not finish, and a legal deferral for it
+#: is where every item anybody found hard would go. Unspecified is derived from
+#: the absent field (`unspecified`), never declared, and it costs a `specify`
+#: run at the head of the queue rather than a place outside it.
 DEFER_REASONS = (
     "decision",  # only Kendrick can settle it
     "subject",   # the thing it would be about does not exist yet
@@ -175,6 +183,12 @@ FINDING_STATUSES = ("closed", "open", "superseded")
 #: item claiming a phase and no place in it.
 STEP = re.compile(r"^\d+(\.\d+)+$")
 PHASE_HEADING = re.compile(r"^## Phase (\d+) — (.+?)\s*$", re.MULTILINE)
+
+#: Where an item with no phase sorts: after every phase there is. Chosen rather
+#: than derived, and it is the open question in
+#: `todo/an-unattached-item-is-owed-everywhere-and-ordered-last.md` — repo-wide
+#: work is owed everywhere, which is as good an argument for first as for last.
+UNPHASED = 1 << 16
 
 #: The literal for "not gated". Spelled out and required so an ungated item is
 #: a decision somebody made, not a field somebody skipped.
@@ -423,14 +437,17 @@ def render(items: list[Item], titles: dict[int, str]) -> str:
         "",
         "# Work items",
         "",
-        "One file per item; phases are `PLAN.md`'s. A sequenced item's `step` is",
-        "its order — an aside worth doing before the next planned step is",
-        "inserted with a decimal and keeps its place in the list. Anything that",
-        "can wait is a pool item on the phase it belongs to, and a phase's pool",
-        "is drained before the next phase opens; `priority` orders that drain.",
-        "An owed item with no `done_when` holds the boundary rather than being",
-        "stepped over. A worker moves an item to `awaiting-review`, a review to",
-        "`done`.",
+        "One file per item; phases are `PLAN.md`'s. **The next thing the loop",
+        "does is the first `open` row on this page, read top to bottom** — the",
+        "tables below are laid out in the order `--next` selects in, and",
+        "`tests/docs/test_doc_index.py` fails if the two ever disagree.",
+        "",
+        "So the order is: earlier phase before later, a `step` before an aside",
+        "in the same phase, then the step number or the `priority`. An aside",
+        "worth doing before the next planned step is not an aside — mint it as",
+        "a decimal step. An open row with no `done_when` is the next session",
+        "too; it is a `specify` run rather than a `work` one. A worker moves an",
+        "item to `awaiting-review`, a review to `done`.",
         "",
     ]
     if not items:
@@ -507,10 +524,16 @@ def render(items: list[Item], titles: dict[int, str]) -> str:
 
 
 def waiting_on_kendrick(items: list[Item]) -> tuple[list[Item], list[Item]]:
-    """The two errands no worker can run: deferrals, and items nobody can take
-    because they have no criterion. Grouped together because from the outside
-    they are one question — what is waiting on a person rather than a session."""
-    deferred = sorted((i for i in items if i.status == "deferred"), key=_pool_order)
+    """A deferral nothing can clear, and a pool item with no criterion yet.
+
+    Grouped because from the outside they are one question — what is not going
+    to move on its own. They differ in who moves them, and only the first is
+    strictly a person: an unspecified item is the head of the queue's problem
+    the moment it reaches the front, and `next_action` sends a `specify` run at
+    it. What the table is for is the count, which is the size of the debt
+    between here and a queue that runs without stopping to define itself.
+    """
+    deferred = sorted((i for i in items if i.status == "deferred"), key=queue_key)
     unspecified_items = sorted(
         (
             i
@@ -519,7 +542,7 @@ def waiting_on_kendrick(items: list[Item]) -> tuple[list[Item], list[Item]]:
             and i.step_key is None
             and not str(i.fields.get("done_when", "")).strip()
         ),
-        key=_pool_order,
+        key=queue_key,
     )
     return deferred, unspecified_items
 
@@ -531,10 +554,11 @@ def _render_waiting(items: list[Item]) -> list[str]:
     lines = [
         "## Waiting on a person",
         "",
-        "Neither half is takeable by a session. A deferral is blocked outside",
-        "the item and is owed by no boundary; an unspecified item is blocked",
-        "only on somebody writing its `done_when`, and shuts its phase until",
-        "one exists.",
+        "A deferral is blocked outside the item and no session can clear it.",
+        "An unspecified item is not blocked — it becomes a `specify` run when",
+        "it reaches the head of the queue — but it costs a session before it",
+        "costs any work, so the length of the second table is how far the",
+        "queue is from running without stopping to define itself.",
         "",
     ]
     if deferred:
@@ -552,7 +576,7 @@ def _render_waiting(items: list[Item]) -> list[str]:
         )
         lines.append("")
     if unspecified_items:
-        lines += ["No `done_when`, so nothing can take them:", ""]
+        lines += ["No `done_when`, so each costs a `specify` run first:", ""]
         lines += _table(
             ("Priority", "Phase", "Item"),
             [
@@ -916,104 +940,66 @@ def render_scaffold(modules: list[tuple[str, str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _pool_order(item: Item) -> tuple[int, int, int, str]:
-    #: Phase first because the drain is per boundary, then `priority`, which is
-    #: the only thing it decides. Unattached last: a pool item with no phase is
-    #: repo-wide, so it has no place among the phases.
-    loose = item.phase is None
-    return (int(loose), 0 if loose else (item.phase or 0), item.priority_rank, item.path.name)
+def queue_key(item: Item) -> tuple[int, int, tuple[int, ...], str]:
+    """The whole priority order, as one sort key.
 
+    Phase, then a step before a pool item, then the number or the priority,
+    then the name. Three comparisons and no state: what runs next is a fact
+    about the folder, so a queue reading it never has to know what ran before.
 
-def phase_started(items: list[Item], phase: int | None) -> bool:
-    """A phase is under way once one of its steps has left `open`."""
-    return any(i.phase == phase and i.step_key is not None and i.status != "open" for i in items)
+    **Phase outranks everything, including urgency.** An earlier phase is
+    groundwork the later ones stand on, so a `low` in phase 0 precedes a `high`
+    in phase 5 — the number already carries the claim that one must hold before
+    the other is worth doing, and a priority that could jump it would be a
+    second ordering laid over the first.
 
+    **A step outranks a pool item in its own phase.** A step is what the phase
+    committed to; a pool item is what got noticed while doing it.
 
-def owed_pool(items: list[Item], before_phase: int | None) -> list[Item]:
-    """The open pool items a phase boundary owes, earliest phase first.
+    A step and a pool item never reach the third position together, so the two
+    shapes it can hold — a dotted step and a bare priority rank — are never
+    compared with each other.
 
-    Unattached items are owed at every boundary: repo-wide work belongs to no
-    phase, so no later boundary is more its own than this one.
-
-    `before_phase` of None is the last boundary rather than no boundary — no
-    step is left to open a phase, so every phase's pool has come due at once.
-    Keying the drain to the next step alone would let a plan that has not
-    minted its next phase yet report itself drained with the whole pool open,
-    which is the failure this rule was written against wearing a hat."""
-    if before_phase is None:
-        return sorted(
-            (i for i in items if i.status == "open" and i.step_key is None),
-            key=_pool_order,
-        )
-    return sorted(
-        (
-            i
-            for i in items
-            if i.status == "open"
-            and i.step_key is None
-            and (i.phase is None or i.phase < before_phase)
-        ),
-        key=_pool_order,
+    What this replaced: a boundary rule where a phase's pool was paid only when
+    the next phase opened, plus an exemption for a phase already under way. Two
+    pieces of state, and between them a pool nothing could reach — forty-nine
+    owed items against a plan in its sixth phase, and a `priority` that ordered
+    a drain that had never once run.
+    """
+    pooled = item.step_key is None
+    return (
+        UNPHASED if item.phase is None else item.phase,
+        int(pooled),
+        item.step_key or (item.priority_rank,),
+        item.path.name,
     )
 
 
-def unspecified(pool: list[Item]) -> list[str]:
-    """Owed items that cannot be worked as written, for want of a criterion."""
-    return [i.path.name for i in pool if not str(i.fields.get("done_when", "")).strip()]
+def queue(items: list[Item]) -> list[Item]:
+    """Every open item, in the order the loop takes them.
+
+    `awaiting-review` is absent by construction rather than by a filter that
+    reads as an oversight: its next session is a review, and `next_action`
+    reaches those first.
+    """
+    return sorted((i for i in items if i.status == "open"), key=queue_key)
+
+
+def unspecified(items: list[Item]) -> list[str]:
+    """Those that cannot be worked as written, for want of a criterion."""
+    return [i.path.name for i in items if not str(i.fields.get("done_when", "")).strip()]
 
 
 def next_takeable(items: list[Item]) -> Item | None:
-    """The lowest open step, except that a phase's pool is paid before the next
-    phase opens. `awaiting-review` is takeable in neither place — its next
-    session is a review, and the review queue entry names itself.
+    """The first open item in the order, whether or not it can be worked yet.
 
-    Urgency does not live here any more. An aside worth doing before the next
-    planned step is minted as a decimal step in the phase's own list, where the
-    number orders it and the schema makes it carry a `done_when` — so the pool
-    holds only what can wait for the boundary, and `priority` orders the drain
-    rather than deciding whether one happens. That is the correction to a rule
-    that selected on `step` alone: a pool nothing could reach took forty-five
-    asides against five closed, and a priority nothing read was a label.
-
-    A phase already under way is not held up retroactively, or resuming a loop
-    that predates this rule would stall mid-phase behind a backlog its own
-    steps never owed. The debt is paid at the next boundary instead.
-
-    An owed item with no `done_when` holds the boundary rather than being
-    skipped: a session handed an item with no criterion writes its own, which
-    is what the open -> awaiting-review -> done protocol exists to prevent, and
-    a drain that steps over exactly those items is drainable by ignoring the
-    work that needs specifying. The specified ones are served first so the
-    drain makes progress; when only unspecified ones remain there is no work
-    to take, and `next_action` turns that into a `specify` run rather than a
-    stall."""
-    open_items = [i for i in items if i.status == "open"]
-    step = min(
-        (i for i in open_items if i.step_key is not None),
-        key=lambda i: i.step_key or (),
-        default=None,
-    )
-    if step is not None and phase_started(items, step.phase):
-        return step
-    owed = owed_pool(items, step.phase if step is not None else None)
-    specified = [i for i in owed if str(i.fields.get("done_when", "")).strip()]
-    if specified:
-        return specified[0]
-    return None if owed else step
-
-
-def _queue_order(item: Item) -> tuple[int, tuple[int, ...] | tuple[int, int, int, str]]:
-    return (0, item.step_key) if item.step_key is not None else (1, _pool_order(item))
-
-
-def current_owed(items: list[Item]) -> list[Item]:
-    """The pool the boundary in front of the loop owes, whichever one that is."""
-    step = min(
-        (i for i in items if i.step_key is not None and i.status == "open"),
-        key=lambda i: i.step_key or (),
-        default=None,
-    )
-    return owed_pool(items, step.phase if step is not None else None)
+    Not filtered by `done_when`. Serving the first *specified* item instead
+    would step over exactly the items that need specifying, which makes the
+    queue drainable by ignoring them; and under a strict order it would let a
+    `low` in a later phase outrank a `high` in an earlier one purely by having
+    a criterion, which is a second ordering nobody wrote down.
+    """
+    return next(iter(queue(items)), None)
 
 
 def next_action(items: list[Item]) -> tuple[str, Item | None]:
@@ -1022,28 +1008,25 @@ def next_action(items: list[Item]) -> tuple[str, Item | None]:
     The role is the half `--next` used to leave to convention. A path alone can
     only start a work run, so an item at `awaiting-review` was indistinguishable
     from one that did not exist
-    (`findings/loop/2026.08.07-awaiting-review-leaves-the-selection-rule-and-never-returns.md`),
-    and a shut boundary read as a drained plan. Naming the role is also what
-    keeps a worker off its own verdict: the queue starts the session the role
-    belongs to, so no one session is ever offered both.
+    (`findings/loop/2026.08.07-awaiting-review-leaves-the-selection-rule-and-never-returns.md`).
+    Naming the role is also what keeps a worker off its own verdict: the queue
+    starts the session the role belongs to, so no one session is ever offered
+    both.
 
     A pending review comes first — the item is finished and unadjudicated, and
     everything behind it is ordered on a status only the review can set. Then
-    takeable work. Then `specify`: a boundary shut for want of criteria is
-    work for the one role permitted to write one, so the loop clears it instead
-    of waiting. `drained` is the only answer that means stop."""
-    pending = sorted((i for i in items if i.status == "awaiting-review"), key=_queue_order)
+    the head of the queue, as `work` when it carries a criterion and `specify`
+    when it does not: an item with no `done_when` is not skipped and does not
+    shut anything, it is simply the same item handed to the one role permitted
+    to write one. `drained` is the only answer that means stop.
+    """
+    pending = sorted((i for i in items if i.status == "awaiting-review"), key=queue_key)
     if pending:
         return ("review", pending[0])
     item = next_takeable(items)
-    if item is not None:
-        return ("work", item)
-    # No filtering for a missing criterion here: `next_takeable` returns None
-    # with a non-empty pool only when it found nothing specified in it, so the
-    # first owed item is unspecified by construction. Re-checking would read as
-    # a guard whose false branch is reachable, and it is not.
-    owed = current_owed(items)
-    return ("specify", owed[0]) if owed else ("drained", None)
+    if item is None:
+        return ("drained", None)
+    return (("work" if str(item.fields.get("done_when", "")).strip() else "specify"), item)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1097,12 +1080,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.next:
         role, item = next_action(items)
-        # How many criteria stand between here and the next phase. A `specify`
-        # run sees one item and would otherwise have no way to tell a last
-        # straggler from a boundary with fifty behind it.
+        # A `specify` run sees one item and would otherwise have no way to tell
+        # a last straggler from a queue with fifty of these in front of it.
         if role == "specify":
-            behind = len(unspecified(current_owed(items)))
-            print(f"doc_index: {behind} owed items have no `done_when`", file=sys.stderr)
+            behind = len(unspecified(queue(items)))
+            print(f"doc_index: {behind} open items have no `done_when`", file=sys.stderr)
         # stdout is the role and the path, in that order, one line: the queue
         # reads the role to pick which prompt starts and never has to infer it.
         print(f"{role} {item.path.relative_to(REPO).as_posix()}" if item else role)

@@ -5,6 +5,9 @@ title: One sentence naming the outcome
 # ("02.3.1" runs between "02.3" and "02.4"); an aside that can wait gets no
 # step at all — give it `priority` (high | normal | low | unassessed) and,
 # optionally, `phase`, and it lives in the phase's pool instead.
+# The phase is the decision that matters and `priority` only breaks ties
+# inside one: an earlier phase outranks a later phase's steps and its `high`
+# alike, so a `high` filed a phase too late runs after everything.
 # A phase whose steps all read `done` is not shut, and reopening one is the
 # design rather than an exception: the number is the ordering, not a record of
 # what is finished. So the phase is the one the work belongs to, which is

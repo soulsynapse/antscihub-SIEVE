@@ -6,6 +6,7 @@ different edits, and a value outside the vocabulary would let an item slip
 out of both lists silently.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -49,6 +50,18 @@ status: open
 gated_on: nothing
 opened: 2026-08-06"""
 
+#: A pool item on phase 5, against the phase-6 step in SEQUENCED_6 — the pair
+#: most of the ordering cases are built from.
+OWED = """title: An aside phase 5 holds
+priority: normal
+phase: 5
+status: open
+gated_on: nothing
+done_when: "true"
+opened: 2026-08-07"""
+
+SEQUENCED_6 = SEQUENCED.replace('"02.3"', '"06.3"')
+
 
 def test_a_decimal_aside_orders_between_its_neighbours(tmp_path):
     write_item(tmp_path, "third", SEQUENCED)
@@ -62,118 +75,62 @@ def test_a_decimal_aside_orders_between_its_neighbours(tmp_path):
     assert [item.fields["step"] for item in ordered] == ["02.3", "02.3.1", "02.4"]
 
 
-def test_next_is_the_lowest_open_step_and_skips_claims_awaiting_review(tmp_path):
-    early = SEQUENCED.replace('"02.3"', '"01.1"').replace("status: open", "status: done")
-    write_item(tmp_path, "early", early)
-    write_item(tmp_path, "claimed", SEQUENCED.replace("status: open", "status: awaiting-review"))
-    write_item(tmp_path, "takeable", SEQUENCED.replace('"02.3"', '"02.4"'))
-    write_item(tmp_path, "pooled", POOLED)
-
-    item = next_takeable(collect(tmp_path))
-
-    assert item is not None and item.path.name == "takeable.md"
-
-
-def test_with_every_step_taken_or_done_there_is_nothing_takeable(tmp_path):
-    write_item(tmp_path, "done", SEQUENCED.replace("status: open", "status: done"))
-    write_item(tmp_path, "pooled", POOLED)
-
-    assert next_takeable(collect(tmp_path)) is None
-
-
-#: An aside owed by phase 5, against the phase-6 step in SEQUENCED_6: the
-#: boundary between them is the only place a pool item is ever served.
-OWED = """title: An aside phase 5 owes
-priority: normal
-phase: 5
-status: open
-gated_on: nothing
-done_when: "true"
-opened: 2026-08-07"""
-
-SEQUENCED_6 = SEQUENCED.replace('"02.3"', '"06.3"')
-
-
-def test_a_phases_pool_is_drained_before_the_next_phase_opens(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
-    write_item(tmp_path, "owed", OWED)
-
-    item = next_takeable(collect(tmp_path))
-
-    assert item is not None and item.path.name == "owed.md"
-
-
-def test_the_drain_runs_by_priority_not_by_name(tmp_path):
-    # Named against the alphabet on purpose: sorting on the filename alone
-    # would put `a-low` first and pass a test that checks nothing.
-    write_item(tmp_path, "step", SEQUENCED_6)
-    write_item(tmp_path, "a-low", OWED.replace("priority: normal", "priority: low"))
-    write_item(tmp_path, "b-urgent", OWED.replace("priority: normal", "priority: high"))
-
-    order = [i.path.name for i in doc_index.owed_pool(collect(tmp_path), 6)]
-
-    assert order == ["b-urgent.md", "a-low.md"]
-
-
-def test_an_unattached_item_drains_after_every_phase_that_has_one(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
-    write_item(tmp_path, "a-loose", OWED.replace("phase: 5\n", ""))
-    write_item(tmp_path, "z-phased", OWED)
-
-    order = [i.path.name for i in doc_index.owed_pool(collect(tmp_path), 6)]
-
-    assert order == ["z-phased.md", "a-loose.md"]
-
-
-def test_a_low_is_owed_like_anything_else_in_the_pool(tmp_path):
-    # The pool is drained, not filtered: a `low` orders last and still runs.
-    write_item(tmp_path, "step", SEQUENCED_6)
-    write_item(tmp_path, "cosmetic", OWED.replace("priority: normal", "priority: low"))
-
-    item = next_takeable(collect(tmp_path))
-
-    assert item is not None and item.path.name == "cosmetic.md"
-
-
-def test_an_owed_item_with_no_criterion_shuts_the_phase(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
-    write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
-
-    items = collect(tmp_path)
-
-    assert next_takeable(items) is None
-    assert doc_index.unspecified(doc_index.owed_pool(items, 6)) == ["vague.md"]
-
-
-def test_the_specified_half_of_a_drain_runs_before_the_boundary_shuts(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
-    write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
-    write_item(tmp_path, "ready", OWED)
-
-    item = next_takeable(collect(tmp_path))
-
-    assert item is not None and item.path.name == "ready.md"
-
-
-def test_a_phase_under_way_is_not_held_up_retroactively(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
-    begun = SEQUENCED.replace('"02.3"', '"06.1"').replace("status: open", "status: done")
-    write_item(tmp_path, "begun", begun)
-    write_item(tmp_path, "owed", OWED)
+def test_a_step_outranks_a_pool_item_in_its_own_phase(tmp_path):
+    write_item(tmp_path, "aside", OWED.replace("phase: 5", "phase: 2"))
+    write_item(tmp_path, "step", SEQUENCED)
 
     item = next_takeable(collect(tmp_path))
 
     assert item is not None and item.path.name == "step.md"
 
 
+def test_an_earlier_phase_outranks_everything_in_a_later_one(tmp_path):
+    # Including its steps and including its urgency: the number already claims
+    # that one must hold before the other is worth doing, so a priority able to
+    # jump it would be a second ordering laid over the first.
+    write_item(tmp_path, "later-step", SEQUENCED_6)
+    urgent = OWED.replace("phase: 5", "phase: 6").replace("priority: normal", "priority: high")
+    write_item(tmp_path, "later-urgent", urgent)
+    write_item(tmp_path, "earlier", OWED.replace("priority: normal", "priority: low"))
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "earlier.md"
+
+
+def test_a_claim_awaiting_review_is_not_in_the_queue(tmp_path):
+    write_item(tmp_path, "claimed", SEQUENCED.replace("status: open", "status: awaiting-review"))
+    write_item(tmp_path, "takeable", SEQUENCED.replace('"02.3"', '"02.4"'))
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "takeable.md"
+
+
+def test_the_pool_runs_by_priority_and_then_by_name(tmp_path):
+    # Named against the alphabet on purpose: sorting on the filename alone
+    # would put `a-low` first and pass a test that checks nothing.
+    write_item(tmp_path, "a-low", OWED.replace("priority: normal", "priority: low"))
+    write_item(tmp_path, "b-urgent", OWED.replace("priority: normal", "priority: high"))
+
+    order = [i.path.name for i in doc_index.queue(collect(tmp_path))]
+
+    assert order == ["b-urgent.md", "a-low.md"]
+
+
+def test_an_unattached_item_sorts_after_every_phase(tmp_path):
+    write_item(tmp_path, "a-loose", OWED.replace("phase: 5\n", ""))
+    write_item(tmp_path, "z-phased", OWED)
+
+    order = [i.path.name for i in doc_index.queue(collect(tmp_path))]
+
+    assert order == ["z-phased.md", "a-loose.md"]
+
+
 def test_a_step_minted_into_a_completed_phase_outranks_the_current_one(tmp_path):
     # The reading this refuses: a phase whose steps all say `done` looks shut,
     # so an item belonging to it gets filed forward onto whatever phase is
-    # running. The number is the ordering and not a record of what is
-    # finished, so `min` takes the earlier phase and the later one waits.
-    # Phase 6 is genuinely under way here, not merely next: without a closed
-    # 06.3 the case would pass against a selector that only ever prefers the
-    # furthest-along phase, and that is the selector it exists to refuse.
+    # running. The number is the ordering, not a record of what is finished.
     write_item(tmp_path, "started", SEQUENCED_6.replace("status: open", "status: done"))
     write_item(tmp_path, "current", SEQUENCED_6.replace('"06.3"', '"06.4"'))
     closed = SEQUENCED.replace('"02.3"', '"05.8"').replace("status: open", "status: done")
@@ -185,64 +142,36 @@ def test_a_step_minted_into_a_completed_phase_outranks_the_current_one(tmp_path)
     assert item is not None and item.path.name == "reopened.md"
 
 
-def test_a_claim_awaiting_review_has_started_its_phase(tmp_path):
-    # The live case when this rule landed: 06.2 sat at `awaiting-review`, so
-    # whether Phase 6 counted as begun decided whether 06.3 ran at all.
-    write_item(tmp_path, "step", SEQUENCED_6)
-    claimed = SEQUENCED.replace('"02.3"', '"06.2"').replace(
-        "status: open", "status: awaiting-review"
-    )
-    write_item(tmp_path, "claimed", claimed)
-    write_item(tmp_path, "owed", OWED)
+def test_next_is_the_first_open_item_reading_the_index_top_to_bottom(tmp_path):
+    """The invariant that makes the generated index the authority.
 
-    item = next_takeable(collect(tmp_path))
-
-    assert item is not None and item.path.name == "step.md"
-
-
-def test_the_pool_of_the_phase_about_to_open_is_not_owed_yet(tmp_path):
-    # The boundary is `<`, not `<=`: phase 6's own pool is drained after
-    # phase 6's steps, not before the first of them.
-    write_item(tmp_path, "step", SEQUENCED_6)
-    write_item(tmp_path, "own", OWED.replace("phase: 5", "phase: 6"))
-
-    item = next_takeable(collect(tmp_path))
-
-    assert item is not None and item.path.name == "step.md"
-
-
-def test_an_unattached_item_is_owed_at_every_boundary(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
+    Two orderings — the one `queue_key` sorts by and the one `render` lays its
+    tables out in — and a reader who scrolls to the first `open` row has to
+    land on the item the loop is about to take. Asserted against the rendered
+    text rather than a second sort, because a test that re-derived the order
+    would agree with the selector while the page disagreed with both.
+    """
+    write_item(tmp_path, "shut", SEQUENCED.replace("status: open", "status: done"))
+    write_item(tmp_path, "step", SEQUENCED.replace('"02.3"', '"02.4"'))
+    write_item(tmp_path, "aside", OWED.replace("phase: 5", "phase: 2"))
+    write_item(tmp_path, "later", SEQUENCED_6)
     write_item(tmp_path, "loose", OWED.replace("phase: 5\n", ""))
+    items = collect(tmp_path)
 
-    item = next_takeable(collect(tmp_path))
+    seen: list[str] = []
+    for match in re.finditer(r"\]\((?P<name>[a-z0-9-]+\.md)\)", render(items, {})):
+        if match["name"] not in seen:
+            seen.append(match["name"])
+    status = {i.path.name: i.status for i in items}
 
-    assert item is not None and item.path.name == "loose.md"
-
-
-def test_with_no_step_left_every_phases_pool_has_come_due(tmp_path):
-    # Not "drained": a plan whose next phase has no steps minted yet would
-    # otherwise report itself finished with the whole pool outstanding.
-    write_item(tmp_path, "done", SEQUENCED_6.replace("status: open", "status: done"))
-    write_item(tmp_path, "owed", OWED)
-
-    item = next_takeable(collect(tmp_path))
-
-    assert item is not None and item.path.name == "owed.md"
-
-
-def test_with_no_step_and_an_empty_pool_the_plan_is_drained(tmp_path):
-    write_item(tmp_path, "done", SEQUENCED_6.replace("status: open", "status: done"))
-
-    assert next_takeable(collect(tmp_path)) is None
+    head = next_takeable(items)
+    assert head is not None
+    assert head.path.name == next(name for name in seen if status[name] == "open")
 
 
 def test_a_pending_review_outranks_every_other_role(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
-    claimed = SEQUENCED.replace('"02.3"', '"06.2"').replace(
-        "status: open", "status: awaiting-review"
-    )
-    write_item(tmp_path, "claimed", claimed)
+    write_item(tmp_path, "claimed", SEQUENCED.replace("status: open", "status: awaiting-review"))
+    write_item(tmp_path, "takeable", SEQUENCED.replace('"02.3"', '"02.4"'))
 
     role, item = doc_index.next_action(collect(tmp_path))
 
@@ -250,46 +179,44 @@ def test_a_pending_review_outranks_every_other_role(tmp_path):
 
 
 def test_reviews_queue_by_step_not_by_filename(tmp_path):
-    # Named against the alphabet: ordering on the path would take `a-later`.
-    write_item(tmp_path, "step", SEQUENCED_6)
-    for name, step in (("a-later", '"06.2"'), ("z-earlier", '"06.1"')):
-        front = SEQUENCED.replace('"02.3"', step).replace(
-            "status: open", "status: awaiting-review"
-        )
-        write_item(tmp_path, name, front)
+    claimed = SEQUENCED.replace("status: open", "status: awaiting-review")
+    write_item(tmp_path, "z-early", claimed.replace('"02.3"', '"02.1"'))
+    write_item(tmp_path, "a-late", claimed.replace('"02.3"', '"02.9"'))
 
     role, item = doc_index.next_action(collect(tmp_path))
 
-    assert (role, item.path.name) == ("review", "z-earlier.md")
+    assert (role, item.path.name) == ("review", "z-early.md")
 
 
-def test_takeable_work_is_the_role_when_no_review_is_pending(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
+def test_work_is_the_role_when_the_head_carries_a_criterion(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED)
 
     role, item = doc_index.next_action(collect(tmp_path))
 
     assert (role, item.path.name) == ("work", "step.md")
 
 
-def test_a_boundary_shut_for_want_of_criteria_dispatches_a_specify_run(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
+def test_a_head_with_no_criterion_is_a_specify_run_on_that_same_item(tmp_path):
+    # It is not skipped and it shuts nothing: the item that would have been
+    # worked is handed to the one role permitted to write a `done_when`.
     write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
+    write_item(tmp_path, "ready", OWED.replace("phase: 5", "phase: 6"))
 
     role, item = doc_index.next_action(collect(tmp_path))
 
     assert (role, item.path.name) == ("specify", "vague.md")
 
 
-def test_specify_yields_to_the_work_it_unblocks(tmp_path):
-    # The specified half of a drain runs first, so `specify` fires only when
-    # nothing else can move — otherwise it would starve the drain it exists for.
-    write_item(tmp_path, "step", SEQUENCED_6)
+def test_a_later_item_does_not_jump_the_queue_by_having_a_criterion(tmp_path):
+    # The rule this refuses is the one the boundary drain had. Serving the
+    # first *specified* item makes the queue drainable by ignoring exactly the
+    # work that needs specifying, and lets a criterion act as a priority.
     write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
-    write_item(tmp_path, "ready", OWED)
+    write_item(tmp_path, "ready", OWED.replace("priority: normal", "priority: low"))
 
-    role, item = doc_index.next_action(collect(tmp_path))
+    item = next_takeable(collect(tmp_path))
 
-    assert (role, item.path.name) == ("work", "ready.md")
+    assert item is not None and item.path.name == "vague.md"
 
 
 def test_drained_is_the_only_answer_with_no_item(tmp_path):
@@ -307,9 +234,11 @@ gated_on: whether the formatter is in the gate
 opened: 2026-08-07"""
 
 
-def test_a_deferral_is_owed_by_no_boundary(tmp_path):
+def test_a_deferral_is_not_in_the_queue_at_all(tmp_path):
+    # From an earlier phase, which under a phase-first order is the only way
+    # to tell "not queued" from "queued behind everything".
     write_item(tmp_path, "step", SEQUENCED_6)
-    write_item(tmp_path, "parked", DEFERRED)
+    write_item(tmp_path, "parked", DEFERRED.replace("phase: 5", "phase: 1"))
 
     item = next_takeable(collect(tmp_path))
 
@@ -350,7 +279,7 @@ def test_the_waiting_section_separates_a_deferral_from_an_unspecified_item(tmp_p
     assert [i.path.name for i in unspecified_items] == ["vague.md"]
 
 
-def test_the_drain_takes_the_earliest_phase_first(tmp_path):
+def test_the_pool_takes_the_earliest_phase_first(tmp_path):
     write_item(tmp_path, "step", SEQUENCED_6)
     write_item(tmp_path, "later", OWED)
     write_item(tmp_path, "earlier", OWED.replace("phase: 5", "phase: 3"))

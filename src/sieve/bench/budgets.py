@@ -246,9 +246,26 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
 #: `tests/bench/test_budget_producers.py` scans every `within_budget("...")`
 #: call site and fails in both directions.
 #:
-#: Empty until 06.3, which is the first thing in this repo that measures rather
-#: than declares.
-TIMED: frozenset[str] = frozenset()
+#: 06.3 put a clock on five of the twelve, in `tests/bench/test_loop_budget.py`:
+#: three pre-pipeline ceilings through the decode boundary and both of the
+#: preview session's. It is the first thing in this repo that measures rather
+#: than declares, and the two gaps deliberately do not line up — a pre-pipeline
+#: ceiling is timed by a benchmark while nothing in `src/` publishes it, because
+#: what publishes a scrub's latency is a player and there is no player yet.
+#:
+#: The seven absent from this set are absent for one of two reasons, neither of
+#: them oversight: `cut_to_ready` has no headless referent
+#: (`docs/todo/cut-to-ready-gets-a-headless-referent.md`), and the other six are
+#: graph-drawing and tool-adding intervals whose subject arrives with the GUI.
+TIMED: frozenset[str] = frozenset(
+    {
+        "open_to_first_frame",
+        "scrub_to_repaint",
+        "scrub_settle",
+        "slider_to_preview",
+        "full_preview_render",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)

@@ -11,7 +11,10 @@ published budget shows a session it was missed, a timed one catches the miss
 before it ships. Both are declared as sets and both are checked in both
 directions, so paying either down is a deletion here rather than a silently
 truer tree — 06.2 deleted the preview session's two from `WITHOUT_PRODUCER`, and
-`TIMED` is still empty until 06.3's benchmark puts a clock on them.
+06.3's `test_loop_budget.py` put five keys into `TIMED`. The two gaps do not
+line up, which is the point of keeping them apart: three of those five are
+pre-pipeline ceilings that a benchmark times through `decode/reader.py` while
+nothing in `src/` publishes them, so they are timed and producerless at once.
 
 Checks, one per direction a key can go wrong:
 
@@ -146,7 +149,7 @@ def test_timed_names_only_real_budgets() -> None:
 
 
 def test_the_call_site_pattern_matches_a_call_and_not_a_mention() -> None:
-    """`TIMED` is empty, so the pattern's own sight is the only thing holding it up.
+    """A pattern that matched nothing would agree with a `TIMED` naming nothing.
 
     The positive case is assembled rather than written out because the
     `asserted` fixture scans this file too: a literal call site here would be a

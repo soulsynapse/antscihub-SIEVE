@@ -117,7 +117,8 @@ that difference is the whole argument.
 omitted when nothing owns the change. `docs: order the docs by when things
 happened, not by the alphabet` is the shape — `docs: update docs` is not.
 
-You may push when given permission, but not otherwise.
+Commit your work and push it — a session ends with the branch synced, not with
+work sitting only in this checkout.
 
 ## Platform
 

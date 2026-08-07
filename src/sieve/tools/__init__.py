@@ -1,4 +1,4 @@
-"""One module per tool: a ToolSpec and one plain run function.
+"""Every pipeline step, one module each: a ToolSpec and one plain run function.
 
 Every tool is found by scanning this package, not by listing it. This module is
 therefore deliberately empty of tool names — a single `from sieve.tools import

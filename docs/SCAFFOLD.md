@@ -10,16 +10,16 @@ listed below it.
 
 ```tree
 src/sieve/__init__.py                   # Signal isolation for ethological video events.
-src/sieve/gui/__init__.py               # Renders values and emits intents; computes nothing.
-src/sieve/cli/__init__.py               # The command-line surface over the pipeline.
+src/sieve/gui/__init__.py               # Rendering values, emitting intents, holding view state; computes nothing.
+src/sieve/cli/__init__.py               # The headless front end; with the saved file, the cluster handoff.
 src/sieve/cli/app.py                    # The `sieve` command: argument parsing and nothing else.
 src/sieve/cli/inspect_cmd.py            # `sieve inspect` — what is on the shelf, read off the declarations.
 src/sieve/cli/preview_cmd.py            # `sieve preview` — the tuning loop's inner step, with the timings printed.
 src/sieve/cli/run_cmd.py                # `sieve run` — execute a saved project through the one executor.
-src/sieve/bench/__init__.py             # The performance budgets and the metric bus.
+src/sieve/bench/__init__.py             # The budget table and the metric bus: the loop's claims as numbers.
 src/sieve/bench/budgets.py              # The latency budget table. Source of truth in code for both speed regimes.
 src/sieve/bench/metrics.py              # The metric collection bus: where a timed interval goes and who hears it.
-src/sieve/pipeline/__init__.py          # The DAG, the plan, the cache key, and the one execution loop.
+src/sieve/pipeline/__init__.py          # The DAG, the plan, cache keys, and the one executor.
 src/sieve/pipeline/cache.py             # Where a computed frame is kept so it is not computed twice.
 src/sieve/pipeline/cache_key.py         # What makes two computations the same computation.
 src/sieve/pipeline/crop_binding.py      # Which record backs a box right now, and why one stopped.
@@ -30,7 +30,7 @@ src/sieve/pipeline/plan.py              # Everything about a run that is knowabl
 src/sieve/pipeline/preview.py           # The preview session: one working window, one replicate, many revisions.
 src/sieve/pipeline/resolve_source.py    # Which file a run opens, and in whose frame numbering.
 src/sieve/pipeline/source_home.py       # The frame of reference a crop record is read against: three facts, one value.
-src/sieve/tools/__init__.py             # One module per tool: a ToolSpec and one plain run function.
+src/sieve/tools/__init__.py             # Every pipeline step, one module each: a ToolSpec and one plain run function.
 src/sieve/tools/background_ema.py       # An exponential moving-average background model, and the difference from it.
 src/sieve/tools/block_signal.py         # Per-block motion signals from the structure tensor of consecutive frames.
 src/sieve/tools/crop.py                 # Take a region of every frame, with the whole frame as the identity value.
@@ -41,7 +41,7 @@ src/sieve/tools/normalize.py            # Per-frame contrast normalization: `off
 src/sieve/tools/rescale.py              # Reduce spatial resolution by a float linear scale factor.
 src/sieve/tools/span.py                 # Keep a range of frames, with every frame there could be as the identity value.
 src/sieve/tools/temporal_baseline.py    # Each cell's own null distribution over time, and the signal in units of it.
-src/sieve/decode/__init__.py            # Decode, prefetch, and lowering into ffmpeg.
+src/sieve/decode/__init__.py            # The codec boundary: lowering into ffmpeg, prefetch, decoder identity.
 src/sieve/decode/ffmpeg.py              # FFmpeg rawvideo source for a crop/scale prefix lowered out of the graph.
 src/sieve/decode/identity.py            # Decoder identity string for cache key derivation.
 src/sieve/decode/lowered.py             # Pure value objects for source prefixes that have been lowered into decode.
@@ -55,7 +55,7 @@ src/sieve/mutual/__init__.py            # Dependency-shared resource readings an
 src/sieve/mutual/machine.py             # The machine is read once. Both resources, one home, importable headless.
 src/sieve/mutual/pool_meter.py          # The counters a worker pool exposes so its utilisation stops being a guess.
 src/sieve/mutual/shares.py              # How a session divides the machine among threads and bytes: one table,
-src/sieve/core/__init__.py              # The dimensioned types, the tool contract, and spec-free array math.
+src/sieve/core/__init__.py              # The dimensioned types, the tool contract and registry, schema v1, spec-free `ops/`.
 src/sieve/core/pipeline_model.py        # Schema v1: the saved document a run is reproducible from.
 src/sieve/core/tool_base.py             # The tool contract, as data: `ToolSpec`, `ParamsBase`, `ArraySpec`, `Mode`.
 src/sieve/core/tool_registry.py         # The shelf tools put themselves on: a container keyed by `(id, version)`.

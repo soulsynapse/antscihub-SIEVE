@@ -1,1 +1,1 @@
-"""The dimensioned types, the tool contract, and spec-free array math."""
+"""The dimensioned types, the tool contract and registry, schema v1, spec-free `ops/`."""

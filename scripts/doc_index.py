@@ -42,7 +42,10 @@ v2's SCAFFOLD annotation was a hand-kept copy of exactly that line, and a
 declared copy of derivable state drifts. The one half that cannot be derived
 is intent: `FORBIDDEN` names the paths the plan dropped, checked must-not-
 exist, because a dropped module that quietly gets built is the drift the
-scaffold exists to catch.
+scaffold exists to catch. Deriving proves the annotation reached the tree
+intact and cannot prove it says what VISION.md's component table gives the
+package, so `annotation_gaps` checks that second link against the bold spans
+in the table's "Owns" cells.
 
 Everything generated here is derived, never edited, and
 `tests/docs/test_doc_index.py` fails when any of it drifts from the files it
@@ -133,6 +136,17 @@ CORE_CHILDREN = (
     "pipeline_model.py",
     "ops",
 )
+
+#: VISION.md's component table is where a package's ownership is decided, and
+#: the `__init__.py` first line is where it is stated. The cell is prose with
+#: links and qualifications in it and stays prose; what makes it readable is
+#: that the *enumeration* inside it is marked — every `**bold**` span is a
+#: thing the package owns and has to name. Marking is a person's call when the
+#: row is written, so what the gate proves is that the line names everything
+#: marked, not that the row marked everything the sentence meant.
+COMPONENT_HEADING = "## Components, and what each must never own"
+COMPONENT_ROW = re.compile(r"^\|\s*`(?P<package>[a-z_]+)`\s*\|(?P<owns>[^|]*)\|")
+OWNED = re.compile(r"\*\*(.+?)\*\*")
 
 #: ADR-16 (`adr/annotation-limit-is-the-source-line-budget.md`): the limit is
 #: the docstring line's own budget — ruff's 100 columns less the opening
@@ -914,6 +928,71 @@ def core_strays(repo: Path = REPO) -> list[str]:
     )
 
 
+def _spoken(text: str) -> str:
+    """A phrase reduced to what two sentences have to share to say the same thing."""
+    return " ".join(text.replace("`", "").lower().split())
+
+
+def annotation_gaps(repo: Path = REPO) -> list[str]:
+    """Ownership the component table assigns and the package's own line omits.
+
+    The link SCAFFOLD's derivation does not weld. Deriving the annotation from
+    the docstring makes it impossible for the tree to disagree with the
+    docstring; the docstring is still a person typing a sentence the day the
+    directory appears, and the decisions enumerating what the package owns land
+    after — which is exactly when nothing rereads the line
+    (`findings/2026.08.06-derived-docs-prove-the-copy-not-the-decision.md`).
+
+    Containment, one direction, and only over the marked phrases. The line may
+    say more than the row and may say it in its own words; what it may not do
+    is leave one of them out. The weaker check available here — every package
+    named in the table has a directory and vice versa — would have passed the
+    three misses that prompted this.
+
+    A missing table is a problem rather than a pass: a gate whose input can be
+    deleted into silence is worse than none, because the next reader believes
+    the lines were checked.
+    """
+    vision = repo / "docs" / "VISION.md"
+    if not vision.is_file():
+        return []
+    text = vision.read_text(encoding="utf-8")
+    if COMPONENT_HEADING not in text:
+        return [f"docs/VISION.md has no component table under {COMPONENT_HEADING!r}"]
+    section = text.split(COMPONENT_HEADING, 1)[1].split("\n## ", 1)[0]
+
+    problems: list[str] = []
+    rows = 0
+    for line in section.splitlines():
+        row = COMPONENT_ROW.match(line)
+        if not row:
+            continue
+        rows += 1
+        package = row["package"]
+        phrases = [_spoken(phrase) for phrase in OWNED.findall(row["owns"])]
+        if not phrases:
+            problems.append(f"`{package}`'s row marks nothing it owns — the enumeration is bold")
+            continue
+        init = repo / "src" / "sieve" / package / "__init__.py"
+        if not init.is_file():
+            problems.append(f"`{package}` has a row and no src/sieve/{package}/__init__.py")
+            continue
+        try:
+            line_ = _spoken(module_annotation(init, init.read_text(encoding="utf-8")))
+        except ItemError as error:
+            problems.append(str(error))
+            continue
+        missing = [phrase for phrase in phrases if phrase not in line_]
+        if missing:
+            problems.append(
+                f"src/sieve/{package}/__init__.py does not name "
+                + ", ".join(repr(phrase) for phrase in missing)
+            )
+    if not rows:
+        problems.append("docs/VISION.md's component table has no rows the gate can read")
+    return problems
+
+
 def render_scaffold(modules: list[tuple[str, str]]) -> str:
     lines = [
         NOTICE,
@@ -1063,6 +1142,9 @@ def gates(repo: Path = REPO) -> list[str]:
     dead = dead_language(repo)
     if dead:
         problems.append("dead language: " + "; ".join(dead))
+    gaps = annotation_gaps(repo)
+    if gaps:
+        problems.append("the component table and a package's own line disagree: " + "; ".join(gaps))
     return problems
 
 

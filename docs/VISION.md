@@ -50,16 +50,18 @@ Done correctly, I will be able to rework the GUI in an afternoon with the help o
 
 The never-lines are the forbidden edge set. None of them is enforced by this table: each is an import contract (`docs/todo/the-import-contracts-bind-before-any-code.md`) or an ADR gate, and the layer order gives every package its first never for free — nothing imports upward.
 
+The **bold** spans in "Owns" are the enumeration inside the prose, and each one is a phrase the package's `__init__.py` first line has to say — checked, since that line is where a reader arrives and the SCAFFOLD annotation it feeds could only ever prove it was copied faithfully.
+
 | Package | Owns | Never |
 |---|---|---|
-| `core` | the dimensioned types, the tool contract and registry, schema v1, `ops/` — membership closed ([adr/core-membership-is-closed.md](adr/core-membership-is-closed.md)), and `ops/` waits for its second caller ([adr/ops-admission-is-two-tools.md](adr/ops-admission-is-two-tools.md)) | Qt, cv2, codecs, processes (`core-purity`); a v2 field name; a new child without revising the ADR |
-| `tools` | every pipeline step, one module each ([adr/a-tool-is-one-file.md](adr/a-tool-is-one-file.md)); the one place outside `decode` where cv2 is legal | a second file per tool; reaching the runtime — `run` is a plain function handed its inputs |
-| `pipeline` | the DAG, the plan, cache keys, the one executor | a `tool_id` branch ([adr/no-kernel-apparatus.md](adr/no-kernel-apparatus.md)); reaching into `ops/`; Qt (`headless`) |
-| `decode` | the codec boundary — ffmpeg lowering, prefetch, decoder identity; v2 verbatim | Qt; knowing what a tool or a schema is |
-| `cli` | the headless front end; with the saved file it is the cluster handoff | Qt (`headless`); cv2 — a frame is reached through `decode`, never by a second seek strategy |
-| `gui` | rendering values, emitting intents, holding view state | computing anything — the `gui-computes-nothing` exception list is empty from commit one; a `tool_id` branch ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)); cv2 |
-| `bench` | the budget table and the metric bus — the loop's claims as numbers | Qt; sitting in the execution path it measures |
-| `storage` | sink writers (`crop_writer`, `checkpoint_writer`) | a second output format before someone asks ([PLAN.md](PLAN.md), revival table) |
+| `core` | the **dimensioned types**, the **tool contract and registry**, **schema v1**, **`ops/`** — membership closed ([adr/core-membership-is-closed.md](adr/core-membership-is-closed.md)), and `ops/` waits for its second caller ([adr/ops-admission-is-two-tools.md](adr/ops-admission-is-two-tools.md)) | Qt, cv2, codecs, processes (`core-purity`); a v2 field name; a new child without revising the ADR |
+| `tools` | **every pipeline step**, **one module each** ([adr/a-tool-is-one-file.md](adr/a-tool-is-one-file.md)); the one place outside `decode` where cv2 is legal | a second file per tool; reaching the runtime — `run` is a plain function handed its inputs |
+| `pipeline` | **the DAG**, **the plan**, **cache keys**, **the one executor** | a `tool_id` branch ([adr/no-kernel-apparatus.md](adr/no-kernel-apparatus.md)); reaching into `ops/`; Qt (`headless`) |
+| `decode` | **the codec boundary** — **lowering into ffmpeg**, **prefetch**, **decoder identity**; v2 verbatim | Qt; knowing what a tool or a schema is |
+| `cli` | **the headless front end**; with the saved file it is **the cluster handoff** | Qt (`headless`); cv2 — a frame is reached through `decode`, never by a second seek strategy |
+| `gui` | **rendering values**, **emitting intents**, **holding view state** | computing anything — the `gui-computes-nothing` exception list is empty from commit one; a `tool_id` branch ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)); cv2 |
+| `bench` | **the budget table** and **the metric bus** — the loop's claims as numbers | Qt; sitting in the execution path it measures |
+| `storage` | **sink writers** (`crop_writer`, `checkpoint_writer`) | a second output format before someone asks ([PLAN.md](PLAN.md), revival table) |
 
 ## Vision
 

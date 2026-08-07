@@ -700,6 +700,73 @@ def test_findings_speak_the_language_of_what_they_measured(tmp_path):
     assert doc_index.dead_language(tmp_path) == []
 
 
+# The ownership line against the decision that assigns it. Deriving SCAFFOLD
+# from the docstring proves the annotation was copied into the tree faithfully
+# and proves nothing about the docstring naming what VISION.md's component
+# table gives the package — which is the link a module gets misfiled across.
+
+
+COMPONENTS = """## Components, and what each must never own
+
+| Package | Owns | Never |
+|---|---|---|
+| `core` | the **dimensioned types**, **schema v1** — membership closed | Qt |
+
+## Vision
+"""
+
+
+def _repo_with_components(tmp_path: Path, annotation: str, table: str = COMPONENTS) -> Path:
+    write_doc(tmp_path, "docs/VISION.md", table)
+    write_doc(tmp_path, "src/sieve/core/__init__.py", f'"""{annotation}"""\n')
+    return tmp_path
+
+
+def test_an_ownership_the_table_assigns_and_the_line_omits_is_caught(tmp_path):
+    # The case that motivated the gate: `core` owned schema v1 by decision and
+    # said so nowhere, and every check in the repo was green.
+    repo = _repo_with_components(tmp_path, "The dimensioned types and spec-free array math.")
+
+    problems = doc_index.annotation_gaps(repo)
+
+    assert len(problems) == 1
+    assert "schema v1" in problems[0] and "core" in problems[0]
+
+
+def test_a_line_that_names_every_marked_phrase_passes(tmp_path):
+    # Extra words are fine and the case is ignored: the claim is that the line
+    # names the thing, not that it is the cell.
+    repo = _repo_with_components(tmp_path, "Dimensioned types, `schema v1`, and array math.")
+
+    assert doc_index.annotation_gaps(repo) == []
+
+
+def test_a_row_that_marks_nothing_it_owns_is_refused(tmp_path):
+    """The convention is the whole gate: an unmarked cell checks nothing, and
+    would read from the table as a package that owns nothing."""
+    repo = _repo_with_components(tmp_path, "Anything at all.", COMPONENTS.replace("**", ""))
+
+    problems = doc_index.annotation_gaps(repo)
+
+    assert len(problems) == 1 and "marks nothing" in problems[0]
+
+
+def test_a_row_whose_package_does_not_exist_is_reported(tmp_path):
+    repo = _repo_with_components(tmp_path, "Anything at all.", COMPONENTS.replace("core", "kernel"))
+
+    problems = doc_index.annotation_gaps(repo)
+
+    assert len(problems) == 1 and "kernel" in problems[0]
+
+
+def test_a_table_that_has_gone_missing_fails_rather_than_passing_vacuously(tmp_path):
+    repo = _repo_with_components(tmp_path, "Anything at all.", "# Vision\n\nProse and no table.\n")
+
+    problems = doc_index.annotation_gaps(repo)
+
+    assert len(problems) == 1 and "component table" in problems[0]
+
+
 # A broken module tree is one target's problem, not four — and never the
 # selection rule's, which reads no docstring.
 
@@ -781,7 +848,7 @@ def test_mint_over_a_taken_slug_exits_one_and_leaves_the_file(tmp_path, capsys):
 
 
 def test_every_gate_is_reported_and_none_of_them_stops_a_write(tmp_path, capsys):
-    # All four at once, because the claim is about `gates` reporting rather
+    # All five at once, because the claim is about `gates` reporting rather
     # than any one refusal: a run that stopped at the first would report one of
     # these, and a run that let a refusal shadow the render would write none of
     # the four targets. Nothing here is a `.py` file — the tree has to trip the
@@ -795,6 +862,9 @@ def test_every_gate_is_reported_and_none_of_them_stops_a_write(tmp_path, capsys)
     (tmp_path / "src" / "sieve" / "core").mkdir(parents=True)
     (tmp_path / "src" / "sieve" / "core" / "stray.txt").write_text("", encoding="utf-8")
     (docs / "NOTES.md").write_text("the filter runs first\n", encoding="utf-8")
+    # `core/` here is a directory with no `__init__.py`, so the row is a
+    # component the tree does not have.
+    (docs / "VISION.md").write_text(COMPONENTS, encoding="utf-8")
 
     code = doc_index.main([], repo=tmp_path)
 
@@ -805,6 +875,7 @@ def test_every_gate_is_reported_and_none_of_them_stops_a_write(tmp_path, capsys)
         "absent-by-decision paths exist",
         "core has children ADR-6 does not admit",
         "dead language",
+        "component table",
     ):
         assert reported in errors, f"{reported!r} not reported: {errors}"
     for target, _ in doc_index.derived(collect(todo), tmp_path):

@@ -1,1 +1,1 @@
-"""Renders values and emits intents; computes nothing."""
+"""Rendering values, emitting intents, holding view state; computes nothing."""

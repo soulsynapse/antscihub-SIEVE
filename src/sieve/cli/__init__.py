@@ -1,1 +1,1 @@
-"""The command-line surface over the pipeline."""
+"""The headless front end; with the saved file, the cluster handoff."""

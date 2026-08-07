@@ -49,7 +49,25 @@ dependencies = [
     # decoder identity. A `container.decode(...)` anywhere in `sieve` is where
     # that stops holding.
     "av>=13",
+    # `cli/app.py` parses the command line with it. Typer builds the option
+    # list out of the command function's own annotated signature, so `sieve run
+    # --help` and the signature cannot disagree — which is the property v2's
+    # CLI was written against and the reason this is a port rather than a
+    # rewrite onto argparse. `typer.testing.CliRunner` is also what drives the
+    # command in-process in `tests/integration/test_cli_run.py`, so a headless
+    # install that omitted it could not run the CLI's own tests.
+    #
+    # Floored at 0.12: the port uses `Annotated[T, typer.Option(...)] = default`
+    # throughout, and 0.12 is where that became the only supported spelling
+    # rather than one of two that disagreed about where the default lives.
+    "typer>=0.12",
 ]
+
+# One command, and the console script exists from the first one: `sieve run`
+# executed headless beside the saved file *is* the cluster handoff (VISION), so
+# a build that only works through `python -m` would not be the handoff.
+[project.scripts]
+sieve = "sieve.cli.app:main"
 
 [build-system]
 requires = ["hatchling"]

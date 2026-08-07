@@ -1,7 +1,7 @@
 ---
 title: The budget table and the metric bus port verbatim
 step: "06.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/bench/test_budget_table.py tests/bench/test_budget_debt.py tests/bench/test_budget_producers.py tests/unit/test_metrics.py -q"
 opened: 2026-08-07

@@ -1,7 +1,7 @@
 ---
 title: A crop becomes a file that verifies itself
 step: "05.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_materialize.py -q"
 opened: 2026-08-07

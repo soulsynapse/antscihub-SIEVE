@@ -1,9 +1,9 @@
 ---
 title: Minting an item cannot overwrite one
 priority: high
-status: awaiting-review
+status: done
 gated_on: nothing
-done_when: "uv run pytest tests/docs/test_doc_index.py -q"
+done_when: "uv run pytest tests/docs/test_doc_index.py -q -k \"minting_over_a_taken_slug or differs_only_in_case or gone_since_the_commit or opened_date_that_moved\""
 opened: 2026-08-07
 ---
 
@@ -32,6 +32,15 @@ identity half.
 criterion above was written by the session that then met it, which is the
 independence the open -> awaiting-review -> done protocol exists to keep, so
 it is worth re-deriving rather than re-running.
+
+The review re-derived it rather than re-running it, and replaced the criterion
+the worker wrote: a whole-module name is met by any case added to the module,
+so it certified nothing here. What stands names the four claims. An
+independent mutation sweep killed all five semantic mutants in `mint` and
+`tracked_drift` — an unchecked slug, an un-case-folded listing, a collision
+not refused, an `opened` move read in one direction only, a gone file not
+reported. Two survived, both wiring rather than behaviour, and they are owed by
+`doc-index-has-no-case-over-its-own-command-line.md`.
 
 And the text above says `opened` "moves backwards", which is the wrong
 direction: a mint over an occupied slug stamps *today*, so the date it writes

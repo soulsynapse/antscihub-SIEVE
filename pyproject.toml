@@ -3,10 +3,16 @@ name = "sieve"
 version = "0.1.0"
 description = "Signal Isolation for Ethological Video Events"
 requires-python = ">=3.13,<3.14"
-# Empty because no component is scoped yet. A dependency arrives with the
-# component that needs it, with the reason for the pin next to it — v2's
-# pyproject is the model for that habit, not for this list.
-dependencies = []
+# A dependency arrives with the component that needs it, with the reason for
+# the pin next to it — v2's pyproject is the model for that habit, not for this
+# list.
+dependencies = [
+    # `core/types.py` types the frame array it carries, so the shipped package
+    # imports numpy from the first module. 2.x because the types name
+    # `numpy.typing.NDArray` and `np.dtype[Any]`, both of which changed shape
+    # under 2.0's typing rework.
+    "numpy>=2.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -20,18 +26,17 @@ dev = [
     # arrives with the machinery that needs it.
     "pyyaml",
     "import-linter>=2.13",
-    # The synthetic video fixture writes and reads back an mp4. Both sit in the
-    # dev group and not in `dependencies` because no shipped component decodes
-    # anything yet; `sieve.decode` promotes them in Phase 2. Headless because
-    # the runner has no display and the GUI build would drag Qt's system libs
-    # in behind a contract that forbids them.
+    # The synthetic video fixture writes and reads back an mp4. Dev-only and
+    # not a runtime dependency because no shipped component decodes anything
+    # yet; `sieve.decode` promotes it in Phase 2. Headless because the runner
+    # has no display and the GUI build would drag Qt's system libs in behind a
+    # contract that forbids them.
     #
     # Pinned below 5.x already: decoder identity feeds cache-key derivation, so
     # a major OpenCV bump changes what a cached result means. Carrying v2's pin
     # from the first install is cheaper than loosening it and re-tightening it
     # when the frames start mattering.
     "opencv-python-headless>=4.10,<5",
-    "numpy>=2.0",
 ]
 
 [tool.ruff]

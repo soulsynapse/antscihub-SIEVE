@@ -1,7 +1,7 @@
 ---
 title: The execution plan is re-derived
 step: "03.5"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_plan.py -q && uv run pytest tests/unit/test_plan.py -q -k two_roots && uv run pytest tests/unit/test_plan.py -q -k output_rate"
 opened: 2026-08-07

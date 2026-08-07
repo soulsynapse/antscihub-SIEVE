@@ -10,6 +10,11 @@ second answer. Every node's parameters are validated, including the ones
 `Dag.node_keys` never hashes and therefore never checked. And the format the
 reader is opened in is the graph's answer, asked once.
 
+Two cases here are neither a claim about a plan's contents nor carried from v2:
+each pins one line the other fourteen leave free — the fold's closing maximum,
+which a single-root graph satisfies under `min` as readily as under `max`, and
+the refusal of a rate no input could satisfy.
+
 The second side is v3's. v2's window only ever trailed, so its plan asked for
 frames before the span and never after; a tool declaring `lookahead_frames`
 needs the frames after its target to exist in the decode range or the executor
@@ -35,9 +40,9 @@ from sieve.core.tool_base import (
     source_warmup_frames,
 )
 from sieve.core.tool_registry import ToolRegistry, register_tool
-from sieve.core.types import ChannelSpec, FrameCount, FrameIndex, FrameRange
+from sieve.core.types import NO_FRAMES, ChannelSpec, FrameCount, FrameIndex, FrameRange
 from sieve.pipeline.dag import Dag
-from sieve.pipeline.plan import ExecutionPlan
+from sieve.pipeline.plan import ExecutionPlan, _input_lookahead_frames
 
 SOURCE = "footage|1|2"
 
@@ -123,6 +128,43 @@ class DecimateParams(ParamsBase):
 
     def output_rate(self) -> Fraction:
         return Fraction(1, self.factor)
+
+
+@register_tool(
+    tool_id="double",
+    version="1.0.0",
+    summary="Two frames out per frame in.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
+    rate_changing=True,
+    registry=SHELF,
+)
+class DoubleParams(ParamsBase):
+    """The rate change `decimate` is the other side of.
+
+    A rate above 1 is the only shape in which a node needs *fewer* source frames
+    than something below it does, which is what separates the graph's answer from
+    the largest number in the fold's table.
+    """
+
+    def output_rate(self) -> Fraction:
+        return Fraction(2)
+
+
+@register_tool(
+    tool_id="stalled",
+    version="1.0.0",
+    summary="Declares a rate no quantity of input could satisfy.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    element=ElementRelation.PRESERVED,
+    rate_changing=True,
+    registry=SHELF,
+)
+class StalledParams(ParamsBase):
+    def output_rate(self) -> Fraction:
+        return Fraction(0)
 
 
 @register_tool(
@@ -282,6 +324,34 @@ class TestTheWindowHasTwoSides:
         )
 
         assert plan_for(pipeline).lookahead == FrameCount(5)
+
+    def test_two_roots_disagree_and_the_graph_decodes_for_the_larger(self) -> None:
+        """The fold's *closing* maximum, which a single-root graph leaves free.
+
+        Every other pipeline in this file has one root, so
+        `max(need[root] for root in dag.roots)` returns its only operand and
+        returns the same under `min` — measured in `findings/loop/2026.08.07-a-
+        fold-has-two-maxima-and-one-fork-fixture-exercises-the-inner-one.md`.
+        Two unconnected roots is what hands it two operands: one decode feeds
+        both, so the graph wants the larger, and `min` under-warms the deeper
+        branch by the difference with nothing to show for it.
+        """
+        disconnected = Pipeline(nodes=(node("a", "settle1"), node("b", "settle5")))
+
+        assert plan_for(disconnected).lead_in == FrameCount(5)
+
+        # The graph above does not separate the roots from `dag.order`: `need`
+        # only grows towards a root, so ranging over every node would agree with
+        # it. A root that emits *more* frames than it consumes is what breaks
+        # that — `s` wants five of `d`'s frames, which is three of the source's —
+        # so here the graph's answer is smaller than a number in the table it is
+        # folded from, and only the roots give it.
+        above_a_doubling = Pipeline(
+            nodes=(node("d", "double"), node("s", "settle5"), node("c", "settle1")),
+            edges=edges("d>s"),
+        )
+
+        assert plan_for(above_a_doubling).lead_in == FrameCount(3)
 
     def test_lead_in_crosses_a_rate_change_in_source_frames(self) -> None:
         """Five frames of warmup behind a 10:1 decimator is fifty source frames.
@@ -492,6 +562,28 @@ def test_the_replicates_overrides_reach_the_resolved_params() -> None:
     # resolved one and defaulted the other would run this arena's settings and
     # write the result under the baseline's key — a wrong answer with no symptom.
     assert plan.keys["k"] != plan_for(pipeline, replicate=elsewhere).keys["k"]
+
+
+def test_a_non_positive_output_rate_is_refused_on_the_lookahead_side() -> None:
+    """A rate of zero is an output frame no quantity of input could supply.
+
+    Asserted at the fold rather than only through `build`, which cannot tell the
+    two sides apart: `input_warmup_frames` carries the identical guard and the
+    lead-in is folded first, so the warmup twin answers for both graphs below and
+    the refusal declared on this side would survive its own deletion
+    (`todo/a-declared-refusal-that-only-the-lookahead-side-proves.md` holds the
+    twin). What the deletion costs is the tool's name: `at_input_of` refuses the
+    same rate one call later and names only the number, which in a graph of
+    fifteen nodes is the difference between a fix and a search.
+    """
+    pipeline = Pipeline(nodes=(node("z", "stalled"),))
+
+    with pytest.raises(ValueError, match=r"stalled: output_rate must be positive"):
+        _input_lookahead_frames(step(pipeline, "z"), NO_FRAMES)
+    # And the graph is refused rather than planned, which is the `ValueError`
+    # `build` declares — reached one fold earlier, from the warmup side.
+    with pytest.raises(ValueError, match=r"stalled: output_rate must be positive"):
+        plan_for(pipeline)
 
 
 def test_the_reader_format_is_the_graphs_answer_and_not_a_choice() -> None:

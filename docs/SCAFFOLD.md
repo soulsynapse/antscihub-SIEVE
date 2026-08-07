@@ -4,16 +4,18 @@
 
 Derived: each annotation is its module docstring's first line, so the
 docstring is the home and this file cannot drift from it. Add a module
-with a one-line statement of what it owns and this file follows.
+with a one-line statement of what it owns and this file follows. The
+tree reads top of the stack first: a package may reach only what is
+listed below it.
 
 ```tree
 src/sieve/__init__.py           # Signal isolation for ethological video events.
 src/sieve/cli/__init__.py       # The command-line surface over the pipeline.
 src/sieve/compat/__init__.py    # The one-way v2 importer; the only place that spells v2 field names.
-src/sieve/core/__init__.py      # The dimensioned types, the tool contract, and spec-free array math.
-src/sieve/decode/__init__.py    # Decode, prefetch, and lowering into ffmpeg.
 src/sieve/pipeline/__init__.py  # The DAG, the plan, the cache key, and the one execution loop.
 src/sieve/tools/__init__.py     # One module per tool: a ToolSpec and one plain run function.
+src/sieve/decode/__init__.py    # Decode, prefetch, and lowering into ffmpeg.
+src/sieve/core/__init__.py      # The dimensioned types, the tool contract, and spec-free array math.
 scripts/doc_index.py            # The derived docs: item index, findings index, scaffold, and `--next`.
 ```
 

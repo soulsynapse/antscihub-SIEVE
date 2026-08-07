@@ -67,6 +67,13 @@ FORBIDDEN = (
     "src/sieve/gui/filter_tab.py",
 )
 
+#: The stack top-down, so the scaffold reads in import order: a package may
+#: reach only what is listed below it. Declared packages without a directory
+#: (`gui`, `bench`, `storage`) hold their place for when one appears. Once
+#: `.importlinter` lands (item 00.2) its layers contract is the authority and
+#: this tuple must follow it; until then this is the order's only home.
+LAYER_ORDER = ("gui", "cli", "compat", "bench", "pipeline", "tools", "decode", "storage", "core")
+
 #: The docstring's first line is the scaffold annotation, so it has to say
 #: what the module owns and fit the tree column.
 ANNOTATION_LIMIT = 72
@@ -387,6 +394,20 @@ def module_annotation(path: Path, source: str) -> str:
     return first
 
 
+def _scaffold_order(relative: str) -> tuple[int, str]:
+    """Sort key: `src/sieve/` packages by layer, everything else by name."""
+    parts = relative.split("/")
+    if parts[:2] == ["src", "sieve"] and len(parts) > 3:
+        package = parts[2]
+        if package not in LAYER_ORDER:
+            raise ItemError(
+                f"src/sieve/{package}/ is not in LAYER_ORDER — a new package "
+                f"states its place in the stack before it gets modules"
+            )
+        return (1 + LAYER_ORDER.index(package), relative)
+    return (0, relative)
+
+
 def collect_modules(repo: Path = REPO) -> list[tuple[str, str]]:
     """`(repo-relative path, annotation)` for every module under `SCAN_ROOTS`."""
     modules: list[tuple[str, str]] = []
@@ -394,8 +415,12 @@ def collect_modules(repo: Path = REPO) -> list[tuple[str, str]]:
         folder = repo / root
         if not folder.is_dir():
             continue
-        for path in sorted(folder.rglob("*.py")):
-            relative = path.relative_to(repo).as_posix()
+        relatives = sorted(
+            (path.relative_to(repo).as_posix() for path in folder.rglob("*.py")),
+            key=_scaffold_order,
+        )
+        for relative in relatives:
+            path = repo / relative
             annotation = module_annotation(path, path.read_text(encoding="utf-8"))
             modules.append((relative, annotation))
     return modules
@@ -413,7 +438,9 @@ def render_scaffold(modules: list[tuple[str, str]]) -> str:
         "",
         "Derived: each annotation is its module docstring's first line, so the",
         "docstring is the home and this file cannot drift from it. Add a module",
-        "with a one-line statement of what it owns and this file follows.",
+        "with a one-line statement of what it owns and this file follows. The",
+        "tree reads top of the stack first: a package may reach only what is",
+        "listed below it.",
         "",
     ]
     if modules:

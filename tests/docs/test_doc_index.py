@@ -198,6 +198,28 @@ def test_a_modules_docstring_first_line_becomes_its_scaffold_annotation(tmp_path
     assert collect_modules(tmp_path) == [("src/thing.py", "Owns the one thing.")]
 
 
+def test_the_scaffold_lists_packages_by_layer_not_by_name(tmp_path):
+    """Alphabetical would put `decode` before `tools`; the stack puts what
+    imports above what is imported."""
+    for package in ("decode", "tools"):
+        folder = tmp_path / "src" / "sieve" / package
+        folder.mkdir(parents=True)
+        (folder / "x.py").write_text('"""Owns the one thing."""\n', encoding="utf-8")
+
+    paths = [path for path, _ in collect_modules(tmp_path)]
+
+    assert paths == ["src/sieve/tools/x.py", "src/sieve/decode/x.py"]
+
+
+def test_a_package_outside_the_layer_order_is_refused(tmp_path):
+    folder = tmp_path / "src" / "sieve" / "surprise"
+    folder.mkdir(parents=True)
+    (folder / "x.py").write_text('"""Owns the one thing."""\n', encoding="utf-8")
+
+    with pytest.raises(ItemError, match="LAYER_ORDER"):
+        collect_modules(tmp_path)
+
+
 def test_a_module_without_a_docstring_is_refused():
     with pytest.raises(ItemError, match="no docstring"):
         module_annotation(Path("thing.py"), "x = 1\n")

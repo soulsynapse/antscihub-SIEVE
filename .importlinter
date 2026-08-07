@@ -94,6 +94,33 @@ forbidden_modules =
 # any entry added later is a reviewed widening rather than a debt inherited.
 unmatched_ignore_imports_alerting = error
 
+[importlinter:contract:pipeline-computes-nothing]
+name = the pipeline runs tools; it holds no array math of its own
+type = forbidden
+# `gui-computes-nothing` one row down, and for the same reason the row above it
+# needed one: `core` sits below `pipeline`, so `pipeline -> core.ops` points
+# downward and every other contract here allows it. Reaching a tool's array
+# math from the executor is the second execution path
+# (adr/one-execution-path.md), taken by the layer that owns the first.
+#
+# Direct imports only. `pipeline -> tools -> ops` is the supported path, and
+# `sieve.tools` is absent from the list below because running a tool is what
+# the executor is for. What this forbids is `pipeline/` *holding* a
+# computation, which is only ever a direct import.
+#
+# `sieve.core.ops` does not exist yet (adr/ops-admission-is-two-tools.md), so
+# this line is inert until it does
+# (findings/2026.08.06-a-forbidden-module-that-does-not-exist-is-inert.md) and
+# `lint-imports` cannot go red for it here. The red owed for it is paid in
+# `tests/unit/test_import_contracts.py`, against a copy of the tree where
+# `ops/` exists.
+allow_indirect_imports = True
+source_modules =
+    sieve.pipeline
+forbidden_modules =
+    sieve.core.ops
+unmatched_ignore_imports_alerting = error
+
 [importlinter:contract:opencv-containment]
 name = OpenCV stays out of core, bench, and the front ends
 type = forbidden

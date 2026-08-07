@@ -2,7 +2,7 @@
 title: The one VISION never-line that no contract checks gets one
 priority: normal
 phase: "0"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_import_contracts.py -q"
 opened: 2026-08-06

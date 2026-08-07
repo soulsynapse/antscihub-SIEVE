@@ -23,6 +23,13 @@ the violations from the contract file rather than listing them by hand — a
 test that reads `.importlinter` and asserts every line in it can fail cannot
 go stale when a line is added.
 
+That inert line has since been proven red by hand, against a copy of the tree
+with `core/ops/` planted in it
+(`tests/unit/test_import_contracts.py`,
+`findings/2026.08.07-an-inert-forbidden-entry-can-be-proven-red-against-a-copy.md`).
+The copy is the part the generated version inherits: it means a generated
+violation does not have to be hostable by the real tree either.
+
 The trigger to build it is a contract gaining a line, which 02.0.1 does when
 `sieve.mutual` joins the layers. Doing it then means the new line is proven
 by the mechanism rather than by another hand-written edge.

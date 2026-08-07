@@ -18,6 +18,9 @@ package = false
 dev = [
     "pytest",
     "ruff",
+    # tools/todo_index.py reads item frontmatter; the first dependency, and it
+    # arrives with the machinery that needs it.
+    "pyyaml",
 ]
 
 [tool.ruff]

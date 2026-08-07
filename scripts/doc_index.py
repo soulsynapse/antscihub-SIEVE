@@ -44,7 +44,7 @@ compute).
 
     uv run python scripts/doc_index.py           # rewrite everything generated
     uv run python scripts/doc_index.py --check   # exit 1 if anything is stale
-    uv run python scripts/doc_index.py --next    # path of the next takeable item
+    uv run python scripts/doc_index.py --next    # the next role and its item
 """
 
 from __future__ import annotations
@@ -851,8 +851,9 @@ def next_takeable(items: list[Item]) -> Item | None:
     is what the open -> awaiting-review -> done protocol exists to prevent, and
     a drain that steps over exactly those items is drainable by ignoring the
     work that needs specifying. The specified ones are served first so the
-    drain makes progress; when only unspecified ones remain, `--next` answers
-    with nothing and names them, and the phase stays shut."""
+    drain makes progress; when only unspecified ones remain there is no work
+    to take, and `next_action` turns that into a `specify` run rather than a
+    stall."""
     open_items = [i for i in items if i.status == "open"]
     step = min(
         (i for i in open_items if i.step_key is not None),
@@ -866,6 +867,50 @@ def next_takeable(items: list[Item]) -> Item | None:
     if specified:
         return specified[0]
     return None if owed else step
+
+
+def _queue_order(item: Item) -> tuple[int, tuple[int, ...] | tuple[int, int, int, str]]:
+    return (0, item.step_key) if item.step_key is not None else (1, _pool_order(item))
+
+
+def current_owed(items: list[Item]) -> list[Item]:
+    """The pool the boundary in front of the loop owes, whichever one that is."""
+    step = min(
+        (i for i in items if i.step_key is not None and i.status == "open"),
+        key=lambda i: i.step_key or (),
+        default=None,
+    )
+    return owed_pool(items, step.phase if step is not None else None)
+
+
+def next_action(items: list[Item]) -> tuple[str, Item | None]:
+    """What the loop does next, as a role and the item it acts on.
+
+    The role is the half `--next` used to leave to convention. A path alone can
+    only start a work run, so an item at `awaiting-review` was indistinguishable
+    from one that did not exist
+    (`findings/loop/2026.08.07-awaiting-review-leaves-the-selection-rule-and-never-returns.md`),
+    and a shut boundary read as a drained plan. Naming the role is also what
+    keeps a worker off its own verdict: the queue starts the session the role
+    belongs to, so no one session is ever offered both.
+
+    A pending review comes first — the item is finished and unadjudicated, and
+    everything behind it is ordered on a status only the review can set. Then
+    takeable work. Then `specify`: a boundary shut for want of criteria is
+    work for the one role permitted to write one, so the loop clears it instead
+    of waiting. `drained` is the only answer that means stop."""
+    pending = sorted((i for i in items if i.status == "awaiting-review"), key=_queue_order)
+    if pending:
+        return ("review", pending[0])
+    item = next_takeable(items)
+    if item is not None:
+        return ("work", item)
+    # No filtering for a missing criterion here: `next_takeable` returns None
+    # with a non-empty pool only when it found nothing specified in it, so the
+    # first owed item is unspecified by construction. Re-checking would read as
+    # a guard whose false branch is reachable, and it is not.
+    owed = current_owed(items)
+    return ("specify", owed[0]) if owed else ("drained", None)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -903,27 +948,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.next:
-        item = next_takeable(items)
-        # A boundary that is shut says which items shut it. Without this the
-        # loop reads "nothing takeable" as drained and stops, which is the same
-        # silence the pool already produced once. stdout stays the path alone:
-        # the queue reads it.
-        if item is None:
-            step = min(
-                (i for i in items if i.step_key is not None and i.status == "open"),
-                key=lambda i: i.step_key or (),
-                default=None,
-            )
-            owed = owed_pool(items, step.phase if step is not None else None)
-            for name in unspecified(owed):
-                print(f"doc_index: {name} is owed and has no `done_when`", file=sys.stderr)
-            if owed:
-                shut = f"phase {step.phase}" if step is not None else "the plan"
-                print(
-                    f"doc_index: {shut} stays shut until they are specified or dropped",
-                    file=sys.stderr,
-                )
-        print(item.path.relative_to(REPO).as_posix() if item else "nothing takeable")
+        role, item = next_action(items)
+        # How many criteria stand between here and the next phase. A `specify`
+        # run sees one item and would otherwise have no way to tell a last
+        # straggler from a boundary with fifty behind it.
+        if role == "specify":
+            behind = len(unspecified(current_owed(items)))
+            print(f"doc_index: {behind} owed items have no `done_when`", file=sys.stderr)
+        # stdout is the role and the path, in that order, one line: the queue
+        # reads the role to pick which prompt starts and never has to infer it.
+        print(f"{role} {item.path.relative_to(REPO).as_posix()}" if item else role)
         return 0
 
     stale = False

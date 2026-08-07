@@ -217,6 +217,67 @@ def test_with_no_step_and_an_empty_pool_the_plan_is_drained(tmp_path):
     assert next_takeable(collect(tmp_path)) is None
 
 
+def test_a_pending_review_outranks_every_other_role(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    claimed = SEQUENCED.replace('"02.3"', '"06.2"').replace(
+        "status: open", "status: awaiting-review"
+    )
+    write_item(tmp_path, "claimed", claimed)
+
+    role, item = doc_index.next_action(collect(tmp_path))
+
+    assert (role, item.path.name) == ("review", "claimed.md")
+
+
+def test_reviews_queue_by_step_not_by_filename(tmp_path):
+    # Named against the alphabet: ordering on the path would take `a-later`.
+    write_item(tmp_path, "step", SEQUENCED_6)
+    for name, step in (("a-later", '"06.2"'), ("z-earlier", '"06.1"')):
+        front = SEQUENCED.replace('"02.3"', step).replace(
+            "status: open", "status: awaiting-review"
+        )
+        write_item(tmp_path, name, front)
+
+    role, item = doc_index.next_action(collect(tmp_path))
+
+    assert (role, item.path.name) == ("review", "z-earlier.md")
+
+
+def test_takeable_work_is_the_role_when_no_review_is_pending(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+
+    role, item = doc_index.next_action(collect(tmp_path))
+
+    assert (role, item.path.name) == ("work", "step.md")
+
+
+def test_a_boundary_shut_for_want_of_criteria_dispatches_a_specify_run(tmp_path):
+    write_item(tmp_path, "step", SEQUENCED_6)
+    write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
+
+    role, item = doc_index.next_action(collect(tmp_path))
+
+    assert (role, item.path.name) == ("specify", "vague.md")
+
+
+def test_specify_yields_to_the_work_it_unblocks(tmp_path):
+    # The specified half of a drain runs first, so `specify` fires only when
+    # nothing else can move — otherwise it would starve the drain it exists for.
+    write_item(tmp_path, "step", SEQUENCED_6)
+    write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
+    write_item(tmp_path, "ready", OWED)
+
+    role, item = doc_index.next_action(collect(tmp_path))
+
+    assert (role, item.path.name) == ("work", "ready.md")
+
+
+def test_drained_is_the_only_answer_with_no_item(tmp_path):
+    write_item(tmp_path, "done", SEQUENCED_6.replace("status: open", "status: done"))
+
+    assert doc_index.next_action(collect(tmp_path)) == ("drained", None)
+
+
 DEFERRED = """title: An item nothing can clear
 priority: normal
 phase: 5

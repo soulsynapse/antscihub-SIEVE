@@ -5,3 +5,5 @@ nothing. Lines are `NN — Title`, and everything else in the file is prose. -->
 01 — The tool contract
 02 — The saved artifact
 03 — The repo itself
+04 — The executor
+05 — The GUI

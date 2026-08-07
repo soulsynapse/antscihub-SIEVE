@@ -51,8 +51,8 @@ before. Two contract additions, as spec data:
    (`scalar-range`, `enum`, `span`, `region`, `point`, …) as Qt-free spec
    data, unread until Phase 7.
 
-Every forgettable declaration fails loud at registration: declarable means
-runnable or refused by name.
+Every forgettable declaration fails loud at registration
+(`adr/declared-means-verified.md`).
 
 Gate: v2's `filter_base`/`types` unit tests ported and green; the `tool_id`
 spelling gate (shrink-only) in place.

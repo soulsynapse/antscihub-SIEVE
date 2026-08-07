@@ -11,15 +11,27 @@ and its file in `docs/adr/` but leaves this index.
 
 - [Tools, not filters — and the identity values are frozen](adr/tools-not-filters.md) — Pipeline steps are **tools**: field, package, and class names rename (`tool_id`, `sieve.tools`, `ToolSpec`), while the identity *values* (`"crop"`, `"detect"`, …) stay exactly v2's.
 - [No kernel apparatus](adr/no-kernel-apparatus.md) — A tool module is a `ToolSpec` plus one plain `run(params, window, state)`; the spec points at it, the registry hands it to the executor, and the executor never reaches into `ops/` directly.
+- [A new tool is one file](adr/a-tool-is-one-file.md) — Adding a tool touches exactly one module in `sieve.tools` — spec, params, `run` — and nothing else; a tool that needs a second file edited is an architecture failure to stop and fix, not route around.
+- [Declared means verified](adr/declared-means-verified.md) — A spec declaration is either consumed by running machinery or refused by name at registration; nothing is stored against a future consumer, and no declaration certifies its own correctness.
 
 ## 02 — The saved artifact
 
 - [Crop, span, and the detector are graph nodes](adr/detector-is-a-node.md) — Schema v1 has crop, span, and the detector as graph nodes natively — no `Project.detector`, no `Replicate.roi`, no `Project.clip`.
 - [compat is the only module that spells v2 field names](adr/compat-spells-v2.md) — `compat/v2.py` is the one-way importer, and no module outside `compat/` may spell a v2 field name.
+- [What can change an output is a param](adr/param-not-preference.md) — A value that can change an output is a param — in the artifact, in the cache key; one that can only change presentation or performance is a preference, and anything ambiguous is a param.
 
 ## 03 — The repo itself
 
 - [The product owns the word "tools"](adr/the-product-owns-the-word-tools.md) — "Tools" means pipeline steps and nothing else; repo machinery lives in `scripts/`, which is not a package and must not become one.
 - [core's membership is closed](adr/core-membership-is-closed.md) — `core` owns exactly: the dimensioned types, the tool contract and its registry, schema v1, and `ops/`. A new direct child is a revision of this ADR, refused by the gate until the revision is made.
 
-*6 settled, 0 superseded.*
+## 04 — The executor
+
+- [One execution path](adr/one-execution-path.md) — Preview and production are one executor over one plan; a preview is the same pipeline with a span or resolution cut prepended, so what the user tuned against cannot diverge from what the run produces.
+- [Correctness is the default; performance is opt-in](adr/correctness-is-the-default.md) — The naive path is the product surface, not a fallback: every tool runs correct-but-slow on any machine, and a fast path lands only on a measured budget violation, at parity with what it replaces.
+
+## 05 — The GUI
+
+- [The GUI knows kinds, never tools](adr/gui-knows-kinds-not-tools.md) — `gui` reads spec data — param kinds, presentation stereotypes, window shape — and never branches on `tool_id`; widgets and overlays are generated per kind.
+
+*12 settled, 0 superseded.*

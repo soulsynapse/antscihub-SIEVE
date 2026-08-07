@@ -113,4 +113,8 @@ testpaths = ["tests"]
 # width, height, and rate rather than restating them, and a fixture that drifts
 # from what a test expects should break the test, not silently pass it.
 pythonpath = ["."]
-addopts = "--strict-markers --strict-config"
+# `-p pytester`: `tests/test_fixture_gate.py` asserts on the exit code of a
+# whole pytest session, which nothing inside a session can observe about
+# itself. The plugin ships with pytest and is opt-in only because it is a
+# fixture nothing else should reach for.
+addopts = "--strict-markers --strict-config -p pytester"

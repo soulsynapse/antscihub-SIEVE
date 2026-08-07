@@ -51,6 +51,27 @@ STIRRED_SEED = 7
 #: The moving block's intensity, well clear of the background's ceiling.
 STIRRED_FOREGROUND = 235
 
+#: Fixtures whose absence is a broken environment, not an excused test. Writing
+#: an mp4 is a precondition of every environment SIEVE supports, so a run that
+#: could not build one has not exercised the ten test files that take these two
+#: — it has hidden them. The fixtures themselves still call `pytest.skip`,
+#: because the port from v2 is verbatim by decision; the correction is here.
+FATAL_FIXTURE_SKIPS = frozenset({"synthetic_video", "stirred_clip"})
+
+
+class FixtureUnavailable(Exception):
+    """A fixture the environment is required to be able to build did not build."""
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_fixture_setup(fixturedef: pytest.FixtureDef, request: pytest.FixtureRequest):
+    try:
+        return (yield)
+    except pytest.skip.Exception as skipped:
+        if fixturedef.argname not in FATAL_FIXTURE_SKIPS:
+            raise
+        raise FixtureUnavailable(f"{fixturedef.argname}: {skipped.msg}") from skipped
+
 
 @pytest.fixture(scope="session")
 def synthetic_video(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:

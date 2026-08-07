@@ -82,6 +82,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -270,6 +271,10 @@ def run(params: TemporalBaselineParams, window: FrameSpan, state: BaselineState,
     # Channels unstated on both sides: the estimate is per cell and the layout
     # carries through untouched.
     emits=ArraySpec(dtypes=("float32",)),
+    # `background_ema`'s pair for the temporal estimate: the deviation is what a
+    # detector reads, and the baseline is the only thing that shows a window too
+    # short to hold a quiet period.
+    emissions=(Emission(Emit.DEVIATION, "emit"), Emission(Emit.BASELINE, "emit")),
     run=run,
     # Per cell, so the meaning carries through — and this tool is why the
     # relation exists rather than a constant on every spec: it accepts any

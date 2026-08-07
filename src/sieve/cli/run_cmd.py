@@ -45,8 +45,10 @@ crop can serve this span, in whose frame numbering — is the read-back path
 
 v2 kept `load_project`, `refuse` and `parse_span` in a `cli/common.py`, because
 two commands refusing in two spellings would be two spellings of every error
-message a user sees. There is one command, so there is no second speller and no
-module to hold the agreement; the day `inspect` lands is the day these move.
+message a user sees. `inspect` has since landed and refuses nothing — it reads
+declarations and prints them — so there is still one speller and no module to
+hold an agreement between two. The second command that can fail is what moves
+these.
 """
 
 from __future__ import annotations

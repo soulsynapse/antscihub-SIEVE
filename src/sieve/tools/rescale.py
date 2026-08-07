@@ -33,6 +33,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -80,6 +81,7 @@ def run(params: RescaleParams, window: FrameSpan, state: None, /) -> Frame:
     # Channels unstated on both sides: the tool preserves whatever layout it is
     # handed, and constraining either side would reject frames it handles.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
+    emissions=(Emission("rescaled"),),
     run=run,
     # `downsample`'s relation at a float scale, and for its reason: an area
     # average of pixels is the scene sampled more coarsely and is still pixels,

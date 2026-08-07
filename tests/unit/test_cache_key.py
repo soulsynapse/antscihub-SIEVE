@@ -40,6 +40,7 @@ from sieve.core.tool_base import (
     CaptionPart,
     Channel,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -77,6 +78,7 @@ def make_spec(**overrides: object) -> ToolSpec:
         "params_model": BlurParams,
         "accepts": ArraySpec(),
         "emits": ArraySpec(),
+        "emissions": (Emission("out"),),
         "element": ElementRelation.PRESERVED,
         "param_stereotypes": {
             "radius": ParamStereotype.SCALAR_RANGE,

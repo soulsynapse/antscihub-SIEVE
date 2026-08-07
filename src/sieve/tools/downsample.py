@@ -31,6 +31,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -94,6 +95,9 @@ def run(params: DownsampleParams, window: FrameSpan, state: None, /) -> Frame:
     # constraining `emits` would claim knowledge of the source that this tool
     # does not have, and constraining `accepts` would reject frames it handles.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
+    # One product: `anti_alias` picks how the reduction is reached, not what is
+    # reached, so an averaged frame and a sampled one are the same emission.
+    emissions=(Emission("downsampled"),),
     run=run,
     # One output element is `factor**2` input elements. Kind-dependent rather
     # than destructive: a mean of pixels is the scene sampled more coarsely and

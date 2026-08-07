@@ -73,6 +73,7 @@ from sieve.core.tool_base import (
     CaptionPart,
     ElementKind,
     ElementNames,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -551,6 +552,10 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
     summary="Morlet band power, value-band count, and detection gate as a per-frame channel.",
     accepts=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
     emits=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
+    # Band power, the in-band count and the windowed mean are computed and none
+    # of them leaves the node — what a tool computes and what it can emit are
+    # different lists, and this is the tool where they differ most.
+    emissions=(Emission("gate"),),
     run=run,
     # One value describing the source frame as a whole: the noun a count over
     # this node's output is denominated in is *frames*, where its input's was

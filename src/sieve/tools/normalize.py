@@ -36,6 +36,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -122,6 +123,10 @@ def run(params: NormalizeParams, window: FrameSpan, state: None, /) -> Frame:
     # declared set is the union — a declaration holds for every setting of every
     # parameter. Channels are preserved either way.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
+    # `mode` is an emission-shaped parameter that is not one: `off` is this
+    # tool's identity value, and a node contributing nothing to the pixels still
+    # emits the frame rather than a second product.
+    emissions=(Emission("normalized"),),
     run=run,
     # An affine map applied elementwise: whatever one value described going in,
     # it describes coming out.

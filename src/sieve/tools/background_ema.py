@@ -65,6 +65,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -255,6 +256,9 @@ def run(params: BackgroundEmaParams, window: FrameSpan, state: BackgroundState, 
     # carries through untouched, so constraining either side would reject frames
     # this handles.
     emits=ArraySpec(dtypes=SUPPORTED_DTYPES),
+    # Two products of one model, and a session tuning `alpha` wants to keep both
+    # — the foreground cannot show a background that absorbed the animals.
+    emissions=(Emission(Emit.FOREGROUND, "emit"), Emission(Emit.BACKGROUND, "emit")),
     run=run,
     # The model is per element and so is the difference from it; the geometry
     # is untouched, exactly as the unstated channels above say.

@@ -33,7 +33,13 @@ from typing import Any
 import numpy as np
 
 from sieve.core.pipeline_model import Node, Pipeline, SourceSpan
-from sieve.core.tool_base import ArraySpec, ElementRelation, ParamsBase, ParamStereotype
+from sieve.core.tool_base import (
+    ArraySpec,
+    ElementRelation,
+    Emission,
+    ParamsBase,
+    ParamStereotype,
+)
 from sieve.core.tool_registry import ToolRegistry, register_tool
 from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, FrameSpan
 from sieve.pipeline.cache import MemoryFrameStore
@@ -76,6 +82,7 @@ def background_run(params: BackgroundParams, window: FrameSpan, state: list[Any]
     summary="An exponential model of what does not move.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     run=background_run,
     element=ElementRelation.PRESERVED,
     settling_epsilon=1.0,
@@ -110,6 +117,7 @@ def accumulate_run(params: AccumulateParams, window: FrameSpan, state: list[int]
     summary="Running sum, declaring it needs no warmup, which is false.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     run=accumulate_run,
     element=ElementRelation.PRESERVED,
     stateful=True,
@@ -131,6 +139,7 @@ def plain_run(params: PlainParams, window: FrameSpan, state: None) -> Frame:
     summary="Keeps nothing, so there is nothing to mint for it.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     run=plain_run,
     element=ElementRelation.PRESERVED,
     registry=SHELF,

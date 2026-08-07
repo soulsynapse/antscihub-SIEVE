@@ -44,6 +44,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -87,6 +88,7 @@ def run(params: CropParams, window: FrameSpan, state: None, /) -> Frame:
     # layout, and declaring either would reject frames this handles.
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("cropped"),),
     run=run,
     # One output element is one input element — cropping decides *which* values
     # survive and never what one of them is a value of. A count over a crop of

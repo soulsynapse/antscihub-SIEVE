@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import fields
+from enum import StrEnum
 from fractions import Fraction
 from typing import Any
 
@@ -24,6 +25,7 @@ from sieve.core.tool_base import (
     ElementKind,
     ElementNames,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -132,6 +134,20 @@ class CenteredWindowParams(ParamsBase):
         return FrameCount(50)
 
 
+class Product(StrEnum):
+    """Two different things one tool computes, only one of which leaves it."""
+
+    SOFT = "soft"
+    HARD = "hard"
+
+
+class ProductParams(ParamsBase):
+    """`background_ema`'s shape: a parameter that chooses which product is emitted."""
+
+    product: Product = Product.SOFT
+    factor: int = 2
+
+
 def make_spec(**overrides: object) -> ToolSpec:
     model = overrides.get("params_model", SampleParams)
     assert isinstance(model, type) and issubclass(model, ParamsBase)
@@ -142,6 +158,7 @@ def make_spec(**overrides: object) -> ToolSpec:
         "params_model": SampleParams,
         "accepts": ArraySpec(),
         "emits": ArraySpec(),
+        "emissions": (Emission("out"),),
         "element": ElementRelation.PRESERVED,
         # Derived rather than written out: stereotypes are total over the
         # params model, so every fixture below would otherwise carry a map
@@ -435,6 +452,7 @@ class TestLookahead:
             summary="Reads a window centred on its target.",
             accepts=ArraySpec(),
             emits=ArraySpec(),
+            emissions=(Emission("out"),),
             element=ElementRelation.PRESERVED,
             mode=Mode.WINDOWED,
             settling_epsilon=0.0,
@@ -459,6 +477,7 @@ class TestLookahead:
                 summary="Reads ahead without admitting to a window.",
                 accepts=ArraySpec(),
                 emits=ArraySpec(),
+                emissions=(Emission("out"),),
                 element=ElementRelation.PRESERVED,
                 settling_epsilon=0.0,
                 registry=ToolRegistry(),
@@ -539,6 +558,115 @@ class TestElementMeaning:
                 element=None,
                 element_names=ElementNames("point", "points"),
             )
+
+
+class TestEmissions:
+    """What a node of this tool can be asked to persist, and why the list cannot lie.
+
+    VISION's save screen offers *all the possible* outputs a tool could produce,
+    so the two ways the list stops being true are the two things checked here: an
+    emission the tool never produces, and a product it produces that the list
+    does not offer. Every test name carries `emission` because the item's gate
+    selects on it.
+    """
+
+    def test_a_tool_declaring_no_emission_is_refused(self) -> None:
+        # Required for `element`'s reason. A default would be correct today for
+        # the seven single-output tools and would leave the next `block_signal`
+        # offering one checkbox where it computes four — a list short by three,
+        # which is the failure the declaration exists to close and the one
+        # nothing downstream can detect.
+        with pytest.raises(ValueError, match="declares no emission"):
+            make_spec(emissions=())
+
+    def test_an_emission_name_keeps_the_id_spelling_rule(self) -> None:
+        # It becomes a file name and a CSV column, so it may not depend on case
+        # folding or shell quoting to stay itself.
+        with pytest.raises(ValueError, match="emission name must match"):
+            Emission("Flow Speed")
+
+    def test_one_name_cannot_be_two_emissions(self) -> None:
+        with pytest.raises(ValueError, match="declares emission 'out' twice"):
+            make_spec(emissions=(Emission("out"), Emission("out")))
+
+    def test_two_emissions_need_a_parameter_that_chooses_between_them(self) -> None:
+        # A node emits one stream, so a second unselected emission is one the
+        # tool never produces — the save screen's lie, spelled as an omission.
+        with pytest.raises(ValueError, match="nothing chooses between them"):
+            make_spec(emissions=(Emission("first"), Emission("second")))
+
+    def test_emissions_chosen_by_two_parameters_are_refused(self) -> None:
+        # Two selecting parameters make the emission set their cross product,
+        # which no declaration here states and the save screen would have to
+        # invent.
+        with pytest.raises(ValueError, match="one parameter"):
+            make_spec(
+                params_model=ProductParams,
+                emissions=(Emission("soft", "product"), Emission("hard", "factor")),
+                param_stereotypes={
+                    "product": ParamStereotype.ENUM,
+                    "factor": ParamStereotype.SCALAR_RANGE,
+                },
+            )
+
+    def test_an_emission_selected_by_no_such_field_is_refused(self) -> None:
+        with pytest.raises(ValueError, match=r"emissions name no such field.*mode"):
+            make_spec(emissions=(Emission("soft", "mode"),))
+
+    def test_an_emission_selected_by_an_open_parameter_is_refused(self) -> None:
+        # An int has no closed set of values, so nothing could check the list
+        # against it — and a list that cannot be checked is the prose this
+        # field replaces.
+        with pytest.raises(ValueError, match=r"factor.*is not a closed set"):
+            make_spec(emissions=(Emission("soft", "factor"),))
+
+    def test_an_emission_the_tool_never_produces_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="never produces"):
+            make_spec(
+                params_model=ProductParams,
+                emissions=(
+                    Emission("soft", "product"),
+                    Emission("hard", "product"),
+                    Emission("sideways", "product"),
+                ),
+                param_stereotypes={
+                    "product": ParamStereotype.ENUM,
+                    "factor": ParamStereotype.SCALAR_RANGE,
+                },
+            )
+
+    def test_a_product_no_emission_offers_is_refused(self) -> None:
+        # The other direction, and the one a save screen shows as a shorter
+        # list rather than as an error: `hard` is reachable by setting the
+        # parameter, so a list without it is missing an output the tool has.
+        with pytest.raises(ValueError, match="offered by no emission"):
+            make_spec(
+                params_model=ProductParams,
+                emissions=(Emission("soft", "product"),),
+                param_stereotypes={
+                    "product": ParamStereotype.ENUM,
+                    "factor": ParamStereotype.SCALAR_RANGE,
+                },
+            )
+
+    def test_the_exact_list_registers(self) -> None:
+        spec = make_spec(
+            params_model=ProductParams,
+            emissions=(Emission("soft", "product"), Emission("hard", "product")),
+            param_stereotypes={
+                "product": ParamStereotype.ENUM,
+                "factor": ParamStereotype.SCALAR_RANGE,
+            },
+        )
+        assert spec.emission_names == ("soft", "hard")
+
+    def test_emissions_are_an_identity_channel_declaration(self) -> None:
+        # Beside `emits` and `element` rather than with the presentation fields
+        # the save screen also reads: what a tool can produce is what the result
+        # is, and the label a checkbox shows for one of them is already
+        # `param_value_labels`. A tool that changes this set and keeps its
+        # version is `run`'s defect, which is why `version` stands proxy for it.
+        assert SPEC_CHANNELS["emissions"] is Channel.IDENTITY
 
 
 class TestParamStereotypes:
@@ -682,6 +810,7 @@ class TestToolRegistry:
             summary="Gaussian blur.",
             accepts=ArraySpec(),
             emits=ArraySpec(),
+            emissions=(Emission("out"),),
             element=ElementRelation.PRESERVED,
             primary_params=("factor",),
             param_stereotypes={
@@ -712,6 +841,7 @@ class TestToolRegistry:
             summary="Settles before it speaks.",
             accepts=ArraySpec(),
             emits=ArraySpec(),
+            emissions=(Emission("out"),),
             element=ElementRelation.PRESERVED,
             settling_epsilon=0.0,
             registry=registry,
@@ -745,6 +875,7 @@ BASE: dict[str, Any] = {
     "summary": "Gaussian blur.",
     "accepts": ArraySpec(),
     "emits": ArraySpec(),
+    "emissions": (Emission("out"),),
     "element": ElementRelation.PRESERVED,
 }
 
@@ -770,6 +901,7 @@ PROBES: dict[str, Any] = {
     "summary": "Something else entirely.",
     "accepts": ArraySpec(dtypes=("float32",)),
     "emits": ArraySpec(channels=(ChannelSpec.GRAY,)),
+    "emissions": (Emission("other"),),
     # Any callable: the spec stores the pointer and checks nothing about it, and
     # what may call it is `pipeline/executor.py`'s question.
     "run": probe_run,

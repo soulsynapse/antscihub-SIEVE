@@ -48,6 +48,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -82,6 +83,7 @@ def run(params: SpanParams, window: FrameSpan, state: None, /) -> Frame:
     # frames this handles perfectly well.
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("selected"),),
     run=run,
     # A frame that survives is the frame that arrived, unchanged in every way
     # including what one of its values is a value of.

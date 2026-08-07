@@ -51,6 +51,17 @@ nothing before it. It is admitted early under the single shape
 total over `params_model`, and both are refused by name at registration, so the
 check is the consumer until the generator is.
 
+`emissions` is the one declaration here that says something `emits` cannot:
+which *products* a tool can be configured to compute, where `emits` types the
+single stream one node produces. VISION's save screen offers all the possible
+outputs of a graph, so the list has to be over the legal parameter range rather
+than over the run that has just finished — by then the screen has been drawn.
+It is checkable because a product is something a user picks: a multi-product
+tool names the parameter that picks it, and the list must be exactly that
+parameter's values, both directions refused. `sieve inspect` prints it, which
+is the reader that keeps it from being a Phase-7 declaration nobody has read
+(`adr/declared-means-verified.md`).
+
 v2's fourth params-derived declaration, `frame_bytes_ratio`, is cut here with
 `CostEstimate` and `backend_agnostic`: each fed machinery v3 has not built, and
 a declaration with no consumer is refused rather than stored
@@ -563,6 +574,40 @@ type StreamSpec = ArraySpec | TableSpec
 
 
 @dataclass(frozen=True, slots=True)
+class Emission:
+    """One product a node of this tool can be asked to keep.
+
+    `emits` types the single stream a node produces; this names the products
+    *behind* it, which is the list VISION's save screen offers — all the
+    possible outputs, over the whole legal parameter range rather than the one
+    a given run happened to compute. Nothing else in the spec can state it: a
+    run knows which product it made, and by then the screen has been drawn.
+
+    The test a tool author repeats is whether two settings compute different
+    things or one thing two ways. `block_signal`'s four signals are four
+    measurements of one tensor and are four emissions; `downsample`'s area and
+    stride are one downsampled frame reached differently and are one.
+
+    `selected_by` names the parameter whose value chooses among them, and
+    `name` *is* that value rather than a second spelling of it — a separate
+    label is a thing that can disagree with the enum the user actually sets,
+    and the human reading of it already lives in `param_value_labels`. `None`
+    on a tool with a single product, which has nothing to choose.
+    """
+
+    name: str
+    selected_by: str | None = None
+
+    def __post_init__(self) -> None:
+        if not TOOL_ID_PATTERN.match(self.name):
+            raise ValueError(
+                f"emission name must match {TOOL_ID_PATTERN.pattern!r}, got {self.name!r} — "
+                "it becomes a file name and a CSV column, so it may not depend on case folding "
+                "or shell quoting to stay itself"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class CaptionPart:
     """One piece of a collapsed tool caption."""
 
@@ -663,6 +708,95 @@ def _empty_param_stereotypes() -> Mapping[str, ParamStereotype]:
     return {}
 
 
+def _closed_values(annotation: object) -> set[str] | None:
+    """The values a parameter can take, or `None` if it has no closed set.
+
+    A `StrEnum` is the only annotation this asks about, because it is the only
+    one whose members are both enumerable and *stored* as the strings a saved
+    document and an emission name are written in.
+    """
+    if isinstance(annotation, type) and issubclass(annotation, StrEnum):
+        return {member.value for member in annotation}
+    return None
+
+
+def _check_emissions(
+    tool_id: str, emissions: tuple[Emission, ...], params_model: type[ParamsBase]
+) -> None:
+    """Refuse an emission list that does not describe what the tool produces.
+
+    The list's whole value is that a save screen reading it cannot lie, so both
+    directions are errors: an emission no setting of the tool produces would put
+    a checkbox in front of a user that never fills, and a product the list omits
+    is an output they are never offered. Neither has a symptom anywhere else —
+    the run computes what it was configured to compute either way.
+
+    Checkable only against a parameter with a closed set of values, which is why
+    a multi-product tool must name one. That is not a restriction on tools so
+    much as a restatement of what a product *is* here: something a user selects,
+    saves in the document, and can therefore be offered.
+
+    Raises:
+        ValueError: for an empty list, a repeated name, more than one selecting
+            parameter, several products with nothing selecting between them, a
+            selector that is not a field or not an enumerated one, or a list
+            that is not exactly that selector's values.
+    """
+    if not emissions:
+        raise ValueError(
+            f"{tool_id}: declares no emission — name every product a node of this tool can be "
+            "asked to keep, which for most tools is the one thing it computes. There is no "
+            "default on purpose: a tool computing four signals that inherited one would still "
+            "register, and the only symptom is a save screen offering three outputs fewer than "
+            "the tool has"
+        )
+    seen: set[str] = set()
+    for emission in emissions:
+        if emission.name in seen:
+            raise ValueError(f"{tool_id}: declares emission {emission.name!r} twice")
+        seen.add(emission.name)
+    selectors = {emission.selected_by for emission in emissions}
+    if len(selectors) > 1:
+        named = sorted(str(selector) for selector in selectors)
+        raise ValueError(
+            f"{tool_id}: emissions are selected by {named} — one parameter chooses which product "
+            "leaves the node, and two would make the emission set their cross product, which "
+            "nothing declares and a screen would have to invent"
+        )
+    selector = selectors.pop()
+    if selector is None:
+        if len(emissions) > 1:
+            raise ValueError(
+                f"{tool_id}: declares {len(emissions)} emissions and nothing chooses between "
+                "them — a node emits one stream, so name the parameter whose value selects the "
+                "product, or declare the one product this tool has"
+            )
+        return
+    field = params_model.model_fields.get(selector)
+    if field is None:
+        raise ValueError(f"{tool_id}: emissions name no such field: {selector!r}")
+    values = _closed_values(field.annotation)
+    if values is None:
+        raise ValueError(
+            f"{tool_id}: emissions are selected by {selector!r}, which is not a closed set of "
+            "values — a product is something a user picks and saves, so the parameter that "
+            "picks it enumerates its choices or the list is checkable against nothing"
+        )
+    never = sorted(seen - values)
+    if never:
+        raise ValueError(
+            f"{tool_id}: declares {never}, which this tool never produces — the list is exactly "
+            f"the values {selector!r} can take"
+        )
+    unoffered = sorted(values - seen)
+    if unoffered:
+        raise ValueError(
+            f"{tool_id}: {selector!r} can be set to {unoffered}, which is offered by no emission "
+            "— the screen shows all the possible outputs, so a product missing from the list is "
+            "one nobody can ask to keep"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class ToolSpec:
     """Everything about a tool that is knowable without running it."""
@@ -673,6 +807,17 @@ class ToolSpec:
     params_model: type[ParamsBase]
     accepts: StreamSpec
     emits: StreamSpec
+    #: Every product a node of this tool can be asked to keep, in the order a
+    #: reader should meet them. Required, with no default, for `element`'s
+    #: reason: a default of one emission would be right for every single-product
+    #: tool on the shelf today and would turn the next `block_signal`'s omission
+    #: into a save screen offering one output where the tool has four — a list
+    #: short by three, which is exactly the lie the declaration exists to close
+    #: and the one nothing downstream can detect.
+    #:
+    #: Both ways it can stop being true are refused below: an emission no
+    #: setting produces, and a product the list does not offer.
+    emissions: tuple[Emission, ...]
     #: What computes this tool's output, or `None` for a spec nothing can run.
     #: The spec points at the function and the executor calls it, which is what
     #: keeps the executor from growing a branch per tool
@@ -901,6 +1046,7 @@ class ToolSpec:
                 f"{self.tool_id}: declares element_names {self.element_names!r} for "
                 f"{self.element!r} — relation declarations read names from their upstream"
             )
+        _check_emissions(self.tool_id, self.emissions, self.params_model)
         known = set(self.params_model.model_fields)
         unknown = [name for name in self.primary_params if name not in known]
         if unknown:
@@ -979,6 +1125,11 @@ class ToolSpec:
             )
 
     @property
+    def emission_names(self) -> tuple[str, ...]:
+        """What this tool can be asked to keep, as the names a screen lists."""
+        return tuple(emission.name for emission in self.emissions)
+
+    @property
     def version_tuple(self) -> tuple[int, int, int]:
         """Version as integers, so `1.10.0` sorts above `1.9.0`."""
         match = SEMVER_PATTERN.match(self.version)
@@ -1036,6 +1187,12 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "params_model": Channel.IDENTITY,
     "accepts": Channel.IDENTITY,
     "emits": Channel.IDENTITY,
+    # Beside `emits` rather than with the presentation fields the save screen
+    # also reads: what a tool can produce is what the result is, and the label a
+    # checkbox shows for one of those products is `param_value_labels`. A tool
+    # that changes this set and keeps its version is `run`'s defect, and
+    # `version` stands proxy for it in the digest the same way.
+    "emissions": Channel.IDENTITY,
     "element": Channel.IDENTITY,
     "element_names": Channel.IDENTITY,
     # The channel's own sentence names it: a tool that changes what it *computes*

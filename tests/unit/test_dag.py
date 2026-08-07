@@ -27,6 +27,7 @@ from sieve.core.tool_base import (
     ElementKind,
     ElementNames,
     ElementRelation,
+    Emission,
     ParamsBase,
     ParamStereotype,
     TableSpec,
@@ -56,6 +57,7 @@ SHELF = ToolRegistry()
     summary="Frames in, frames out.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     element=ElementRelation.PRESERVED,
     param_stereotypes={"radius": ParamStereotype.SCALAR_RANGE},
     registry=SHELF,
@@ -70,6 +72,7 @@ class BlurParams(ParamsBase):
     summary="Frames in, rows out.",
     accepts=ArraySpec(),
     emits=TableSpec(columns=("x", "y")),
+    emissions=(Emission("out"),),
     registry=SHELF,
 )
 class DetectParams(ParamsBase):
@@ -82,6 +85,7 @@ class DetectParams(ParamsBase):
     summary="Rows in, rows out — a node that never reads a pixel.",
     accepts=TableSpec(),
     emits=TableSpec(columns=("count",)),
+    emissions=(Emission("out"),),
     registry=SHELF,
 )
 class SummarizeParams(ParamsBase):
@@ -94,6 +98,7 @@ class SummarizeParams(ParamsBase):
     summary="Redefines the element: pixels in, blocks out.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     element=ElementKind.BLOCK,
     element_names=ElementNames("block", "blocks"),
     registry=SHELF,
@@ -108,6 +113,7 @@ class GridifyParams(ParamsBase):
     summary="Many elements in, one out — `downsample`'s relation.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     element=ElementRelation.AGGREGATED,
     registry=SHELF,
 )
@@ -121,6 +127,7 @@ class ShrinkParams(ParamsBase):
     summary="Keeps one frame in ten, so a row stops being a source frame.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     element=ElementRelation.PRESERVED,
     rate_changing=True,
     param_stereotypes={"stride": ParamStereotype.SCALAR_RANGE},
@@ -139,6 +146,7 @@ class DecimateParams(ParamsBase):
     summary="Reads colour: names the packed layouts and omits GRAY.",
     accepts=ArraySpec(channels=(ChannelSpec.RGB, ChannelSpec.BGR)),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     element=ElementRelation.PRESERVED,
     registry=SHELF,
 )
@@ -152,6 +160,7 @@ class HueBandParams(ParamsBase):
     summary="Names layouts but keeps GRAY among them, so it demands nothing.",
     accepts=ArraySpec(channels=(ChannelSpec.GRAY, ChannelSpec.RGB)),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     element=ElementRelation.PRESERVED,
     registry=SHELF,
 )
@@ -165,6 +174,7 @@ class EitherWayParams(ParamsBase):
     summary="Does not claim determinism, so nothing downstream of it may be keyed.",
     accepts=ArraySpec(),
     emits=ArraySpec(),
+    emissions=(Emission("out"),),
     element=ElementRelation.PRESERVED,
     deterministic=False,
     registry=SHELF,

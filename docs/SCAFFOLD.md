@@ -13,6 +13,7 @@ src/sieve/__init__.py                   # Signal isolation for ethological video
 src/sieve/gui/__init__.py               # Renders values and emits intents; computes nothing.
 src/sieve/cli/__init__.py               # The command-line surface over the pipeline.
 src/sieve/cli/app.py                    # The `sieve` command: argument parsing and nothing else.
+src/sieve/cli/inspect_cmd.py            # `sieve inspect` — what is on the shelf, read off the declarations.
 src/sieve/cli/run_cmd.py                # `sieve run` — execute a saved project through the one executor.
 src/sieve/bench/__init__.py             # The performance budgets and the metric bus.
 src/sieve/pipeline/__init__.py          # The DAG, the plan, the cache key, and the one execution loop.

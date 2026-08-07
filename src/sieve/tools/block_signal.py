@@ -79,6 +79,7 @@ from sieve.core.tool_base import (
     CaptionPart,
     ElementKind,
     ElementNames,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -198,6 +199,16 @@ def run(params: BlockSignalParams, window: FrameSpan, state: BlockSignalState, /
     accepts=ArraySpec(dtypes=SUPPORTED_DTYPES),
     # The output is always a block grid: one float32 value per block, GRAY.
     emits=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
+    # Four measurements of one tensor rather than one measurement computed four
+    # ways, which is what makes them four emissions: change energy and coherence
+    # answer different questions of the same block and a session that wants both
+    # keeps both.
+    emissions=(
+        Emission(Signal.CHANGE_ENERGY, "signal"),
+        Emission(Signal.FLOW_SPEED, "signal"),
+        Emission(Signal.COHERENCE, "signal"),
+        Emission(Signal.FLOW_AGREEMENT, "signal"),
+    ),
     run=run,
     # The tool that redefines what one element is, whatever it was handed —
     # which is why `blocks_in_band` is a name a detection over this node's

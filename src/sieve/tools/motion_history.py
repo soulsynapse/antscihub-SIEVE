@@ -100,6 +100,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     ElementRelation,
+    Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
@@ -256,6 +257,10 @@ def run(params: MotionHistoryParams, window: FrameSpan, state: MotionHistoryStat
     summary="Leaky accumulator of per-block activity, with neighbourhood coupling.",
     accepts=ArraySpec(dtypes=SUPPORTED_DTYPES, channels=(ChannelSpec.GRAY,)),
     emits=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
+    # One product, not two: `couple` picks how a block's neighbours hold it up,
+    # and what leaves the node is the accumulator either way. The test is
+    # whether the settings compute different things or one thing differently.
+    emissions=(Emission("history"),),
     run=run,
     # Coupling changes a cell's value, not its correspondence to the input.
     element=ElementRelation.PRESERVED,

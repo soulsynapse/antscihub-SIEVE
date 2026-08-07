@@ -397,8 +397,8 @@ class ROI:
     """An axis-aligned region in integer pixels of the array it indexes.
 
     This type does not choose a global coordinate space. The field that carries
-    an ROI decides that: `Replicate.roi` indexes the decoded source frame, while
-    `CropParams.roi` indexes that crop node's input frame.
+    an ROI decides that: `CropRecord.region` indexes the decoded source frame,
+    while a crop node's region parameter indexes that node's input frame.
 
     Integer pixels rather than normalized floats: this is what a crop slice
     actually needs, it is what a user reads off the replicate table when editing

@@ -25,6 +25,12 @@ dependencies = [
     # module already treats a platform that refuses either as a fallthrough
     # rather than an error.
     "psutil>=5.9",
+    # `core/pipeline_model.py` reads and writes the saved project. On the
+    # shipped path rather than in a test: the document is the cluster handoff,
+    # so a headless install that cannot parse one cannot run at all. It was a
+    # dev-group entry while only `scripts/doc_index.py` read frontmatter, and
+    # moves here with its first shipped consumer.
+    "pyyaml",
 ]
 
 [build-system]
@@ -35,9 +41,6 @@ build-backend = "hatchling.build"
 dev = [
     "pytest",
     "ruff",
-    # scripts/doc_index.py reads item frontmatter; the first dependency, and it
-    # arrives with the machinery that needs it.
-    "pyyaml",
     "import-linter>=2.13",
     # The synthetic video fixture writes and reads back an mp4. Dev-only and
     # not a runtime dependency because no shipped component decodes anything

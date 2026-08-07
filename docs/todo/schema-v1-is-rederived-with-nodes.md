@@ -1,7 +1,7 @@
 ---
 title: Schema v1 is re-derived with nodes
 step: "02.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_replicates.py -q"
 opened: 2026-08-06
@@ -34,3 +34,123 @@ box it was cut from by geometry and parentage, never by name, so a rename
 survives and a box that moved correctly stops matching. All three live on
 `Project` because none of them may reach a cache key: turning a checkpoint
 off for a cluster run must not change what a result is.
+
+## The case table
+
+39 rows, one per v2 case. Three verdicts: *survives* — same claim, same name,
+only the fixture rewritten into schema v1's vocabulary; *replaced* — the claim
+survives but is aimed at a different subject, and the v3 case is named;
+*dropped* — the subject is gone, citing what removed it.
+
+Two rules do most of the dropping, and neither is this item's decision.
+PLAN.md's porting discipline refuses a v2 declaration the item's cut list does
+not name and no v3 machinery consumes (`adr/declared-means-verified.md`) —
+that is `equivalence_groups`, `ReplicateSet` and `Project.visited`, all three
+of which have their first consumer in Phase 7. And `core/tool_base.py` cut the
+input-port protocol until the first two-input tool, so an edge has no `port`
+and a node has one input.
+
+### `test_pipeline_model.py` — 25 cases in 8 classes
+
+| v2 case | Verdict | v3 case, or what removed it |
+|---|---|---|
+| `TestRoundTrip::yaml_round_trip_preserves_the_document` | survives | same name |
+| `TestRoundTrip::saving_twice_writes_identical_bytes` | survives | same name |
+| `TestRoundTrip::relocating_rebases_every_stored_path` | survives | same name; the crop record's path joins the source and the sinks |
+| `TestIndependenceFromTheRegistry::a_project_naming_an_unknown_filter_still_loads` | survives | `a_project_naming_an_unknown_tool_still_loads` (`adr/tools-not-filters.md`) |
+| `TestIndependenceFromTheRegistry::a_filter_id_that_cannot_key_a_cache_is_refused` | survives | `a_tool_id_that_cannot_key_a_cache_is_refused` |
+| `TestPurity::gui_state_cannot_be_stashed_in_the_artifact` | survives | `front_end_state_cannot_be_stashed_in_the_document` |
+| `TestPurity::node_carries_identity_and_nothing_else` | survives | same name; the pinned set is `{node_id, tool_id, version, params}` |
+| `TestPurity::a_document_from_a_newer_build_is_refused` | survives | same name |
+| `TestPorts::a_version_1_document_loads_with_every_edge_on_the_default_port` | dropped | v2's schema-1→2 migration pin. Schema v1 is the floor and `upgrade.py` is on PLAN.md's dropped list, so there is no older document to load |
+| `TestPorts::two_edges_may_not_feed_one_port` | replaced | `TestReferentialIntegrity::two_edges_may_not_feed_one_node` — with one input per node the check is stronger, not weaker |
+| `TestPorts::one_upstream_may_feed_two_ports_of_one_downstream` | dropped | not expressible without ports; returns with the first two-input tool, which is when the document learns which input an edge feeds |
+| `TestPorts::a_port_that_cannot_survive_yaml_and_shells_is_refused` | dropped | no `port` field to spell |
+| `TestReferentialIntegrity::an_edge_naming_no_node_is_refused` | survives | same name |
+| `TestReferentialIntegrity::replacing_the_graph_catches_stale_checkpoints_and_sinks` | survives | same name |
+| `TestPerReplicateDeviation::untouched_replicates_follow_the_newest_edit` | survives | same name |
+| `TestPerReplicateDeviation::a_pinned_parameter_does_not_freeze_its_siblings` | survives | same name |
+| `TestPerReplicateDeviation::resetting_returns_a_replicate_to_the_default` | survives | same name |
+| `TestPerReplicateDeviation::an_override_naming_no_node_is_refused` | survives | moved to `TestReferentialIntegrity`, where the other staleness checks are |
+| `TestEquivalenceGroups::a_deviating_replicate_renumbers_every_group_below_it` | dropped | `equivalence_groups` is not carried — see below |
+| `TestEquivalenceGroups::a_deviation_anywhere_in_the_graph_splits_a_group` | dropped | same |
+| `TestEquivalenceGroups::geometry_and_naming_are_not_what_makes_a_group` | dropped | same, and its claim is contradicted outright by `adr/detector-is-a-node.md` — see below |
+| `TestConventions::the_project_file_sits_beside_its_video` | survives | same name |
+| `TestConventions::a_typed_name_is_coerced_without_with_suffix_eating_the_convention` | survives | same name |
+| `TestConventions::a_name_already_obeying_the_convention_is_returned_untouched` | survives | same name |
+| `TestConventions::an_empty_clip_is_refused` | replaced | `an_empty_span_is_refused` — `Project.clip` is gone (`adr/detector-is-a-node.md`) but the crop record still says which source frames a written file covers, so `SourceSpan` keeps the check |
+
+### `test_replicates.py` — 14 cases
+
+| v2 case | Verdict | v3 case, or what removed it |
+|---|---|---|
+| `TestReplicate::identity_survives_rename` | survives | same name |
+| `TestReplicate::identity_survives_geometry_change` | replaced | `identity_survives_a_geometry_edit` — geometry is now an override on the crop node's region param, so the claim holds at the place the box actually lives |
+| `TestReplicate::distinct_replicates_get_distinct_ids` | survives | same name |
+| `TestReplicate::an_override_read_out_cannot_be_written_back_in` | survives | same name |
+| `TestReplicate::pinning_one_parameter_leaves_the_others_pinned` | survives | same name |
+| `TestReplicateSet::append_returns_landing_position` | dropped | `ReplicateSet` is not carried — see below |
+| `TestReplicateSet::index_of_finds_by_id` | dropped | same |
+| `TestReplicateSet::index_of_raises_for_unknown_id` | dropped | same |
+| `TestReplicateSet::remove_and_insert_are_inverses` | dropped | same |
+| `TestReplicateSet::replace_returns_what_it_displaced` | dropped | same |
+| `TestReplicateSet::as_list_is_a_snapshot` | dropped | same |
+| `TestReplicateSet::default_names_count_up` | dropped | same |
+| `TestReplicateSet::default_names_reuse_gaps` | dropped | same |
+| `TestReplicateSet::custom_names_do_not_consume_default_numbers` | dropped | same |
+
+### Six v3 cases with no v2 row
+
+23 cases land in `test_pipeline_model.py` and 7 in `test_replicates.py`: 19
+and 5 carried from the rows above, plus these.
+
+`an_edge_from_a_node_to_itself_is_refused` pins a validator v2 had and v2's
+file did not cover. `TestCropRecords` (three cases) covers `backs` and the
+one-record-per-cut rule, which this item's body names as what the fields must
+be able to say and which v2 tests from `pipeline/` rather than here.
+`a_pin_does_not_reach_the_replicate_it_was_copied_from` and
+`pruning_keeps_only_deviations_that_still_name_a_node` cover copy-on-write and
+`with_overrides_limited_to`, both carried and both untested in v2's file.
+
+## What the drops cost, and what revives them
+
+`equivalence_groups` answered "which of these twelve arenas are actually the
+same run" by fingerprinting resolved params. Under
+`adr/detector-is-a-node.md` a replicate's box *is* a resolved param, so every
+replicate deviates on the crop node and the column would read (1, 2, 3, …)
+for every project — which is the failure v2's
+`geometry_and_naming_are_not_what_makes_a_group` was written to prevent.
+Excluding the region would mean knowing which node is the crop, and this layer
+is registry-blind by the same docstring that forbids resolving `tool_id`. So
+the function is not carried, and Phase 7 — its only consumer, the replicate
+table — is where that question gets answered rather than here.
+
+`ReplicateSet` is a mutable ordered container whose whole surface returns what
+it displaced so the GUI can construct an inverse. Phase 7 does undo as two
+stacks of whole immutable pipeline values rather than command inversion
+(PLAN.md), so the shape it exists to serve is the one v3 replaced.
+`Project.replicates` is an ordered tuple and `with_replicates` sets it.
+
+`Project.visited` — the geometry lock, recording which replicates had been
+opened in the tab v2 tuned a step from — has no test among the 39 and no
+consumer: that tab is on SCAFFOLD.md's absent-by-decision list.
+
+## Two edits outside the module
+
+`pyyaml` moves from the dev group to `dependencies`: the document is the
+cluster handoff, so a headless install that cannot parse one cannot run.
+`core/types.py`'s `ROI` docstring cited `Replicate.roi` and `CropParams.roi`
+as its two coordinate spaces; the first no longer exists, so it names
+`CropRecord.region` and the crop node's param instead. That is this item's
+change making the sentence wrong, not a sweep.
+
+## Criterion
+
+```
+$ uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_replicates.py -q
+..............................                                           [100%]
+30 passed in 0.23s
+```
+
+`ruff check`, `lint-imports` (5 contracts kept) and the full `pytest -q` (179
+passed) are green with it.

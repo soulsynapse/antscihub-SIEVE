@@ -137,7 +137,15 @@ timeline handles, a future stamp tool declares `point`; a handoff's output is
 only a param value, entering through the same command path as a spinbox edit.
 One command layer is the document's only writer, keyed by intent kind
 (SetParam, DrawRegion, SetSpan, AddNode) — dissolving the document/commands
-co-change. Port-with-care: `gui/transport/` and `gui/timeline/`, whose
+co-change. Undo/redo is two stacks of whole immutable pipeline values in a
+Qt-free session layer, not command inversion — the v2.5 spike proved the
+shape (`proto_sieve/docs/DECISIONS.md`, 2026-08-03): moving a pointer through
+values is cheap on a small value, and prefix reuse falls out of the
+executor's cache with no history-aware code. Same source, the one boundary
+*not* to draw: canvas and widget-control are genuinely coupled — a dragged
+crop box is the active control's current step drawn elsewhere — so no import
+fence between them; the handoff services above are that coupling given a
+shape. Port-with-care: `gui/transport/` and `gui/timeline/`, whose
 contract held in v2. The GUI renders values, emits intents, holds view state;
 it computes nothing, and the Phase-0 empty exception list is now load-bearing.
 

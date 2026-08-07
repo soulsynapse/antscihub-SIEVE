@@ -13,6 +13,7 @@ and its file in `docs/adr/` but leaves this index.
 - [No kernel apparatus](adr/no-kernel-apparatus.md) — A tool module is a `ToolSpec` plus one plain `run(params, window, state)`; the spec points at it, the registry hands it to the executor, and the executor never reaches into `ops/` directly.
 - [A new tool is one file](adr/a-tool-is-one-file.md) — Adding a tool touches exactly one module in `sieve.tools` — spec, params, `run` — and nothing else; a tool that needs a second file edited is an architecture failure to stop and fix, not route around.
 - [Declared means verified](adr/declared-means-verified.md) — A spec declaration is either consumed by running machinery or refused by name at registration; nothing is stored against a future consumer, and no declaration certifies its own correctness.
+- [ops admission is two tools](adr/ops-admission-is-two-tools.md) — `core/ops/` holds only math two tools already call: single-caller math lives in its tool module, and the package itself appears with its first two-caller entry, gated by a census test.
 
 ## 02 — The saved artifact
 
@@ -34,4 +35,4 @@ and its file in `docs/adr/` but leaves this index.
 
 - [The GUI knows kinds, never tools](adr/gui-knows-kinds-not-tools.md) — `gui` reads spec data — param kinds, presentation stereotypes, window shape — and never branches on `tool_id`; widgets and overlays are generated per kind.
 
-*12 settled, 0 superseded.*
+*13 settled, 0 superseded.*

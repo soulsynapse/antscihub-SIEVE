@@ -92,7 +92,9 @@ Order: `crop` (with `storage/crop_writer.py` verbatim), `span`, `normalize`,
 tool on the Phase-1 lookahead contract, absorbing `detect/`'s composition.
 Kernels port as the Phase-1 shape: one plain `run` per tool module,
 `backend/dispatch.py` scaffolding stripped; a declared version on the spec
-(entering the cache key) keeps cv2 kernels honest.
+(entering the cache key) keeps cv2 kernels honest. v2's `core/ops/` does not
+port: its math lands in `tools/detect.py`, and `ops/` appears only on the
+two-tool rule (`adr/ops-admission-is-two-tools.md`).
 
 Gate per tool: numeric parity against v2 goldens. For `detect`, the parity
 target is v2's `detect/` **package output** (centered whole-record — what was

@@ -1,7 +1,7 @@
 ---
 title: downsample is the first tool and mints the golden mechanism
 step: "03.7"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_downsample.py -q"
 opened: 2026-08-06

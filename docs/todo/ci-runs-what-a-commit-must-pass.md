@@ -3,16 +3,16 @@ title: CI runs what a commit must pass
 step: "00.3"
 status: done
 gated_on: nothing
-done_when: "uv run ruff check . && uv run lint-imports && uv run pytest -q"
+done_when: "uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run pytest -q"
 opened: 2026-08-06
 ---
 
 # CI runs what a commit must pass
 
-A GitHub Actions workflow running exactly the `done_when` line — ruff,
-import-linter, pytest — so the local gate and CI are one command, not two
-lists to keep in step. v2's `.github/workflows/ci.yml` is the reference for
-runner setup; its nox indirection does not port.
+A GitHub Actions workflow running exactly the `done_when` line — the linter,
+the formatter, import-linter, pytest — so the local gate and CI are one
+command, not two lists to keep in step. v2's `.github/workflows/ci.yml` is the
+reference for runner setup; its nox indirection does not port.
 
 ## Worker note, 2026-08-06
 
@@ -67,3 +67,13 @@ first push is still the proof, and a push is not a reviewer's to make. Done on
 that basis. Whether the gate should hold `actionlint` permanently is
 `the-gate-has-no-opinion-about-the-workflow.md`, and why nothing surfaced this
 item for four runs is `findings/loop/2026.08.07-awaiting-review-leaves-the-selection-rule-and-never-returns.md`.
+
+## Amended at review, 2026-08-07
+
+`done_when` gains `uv run ruff format --check .` as its second command, because
+`a7efe4b` put it in the workflow. The item's whole content is that one line and
+the `run:` line are character-identical, so a commit that moves one and not the
+other leaves the criterion passing over a workflow it no longer describes —
+which is what happened here for one commit. Re-run at that commit, all four
+green. The amendment is the reviewer's because a criterion is; the worker saw
+the divergence and correctly left it alone.

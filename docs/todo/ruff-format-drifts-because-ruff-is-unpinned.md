@@ -1,9 +1,10 @@
 ---
 title: The committed tree fails `ruff format --check`, and ruff is unpinned
-status: awaiting-review
+status: open
 phase: "00"
 gated_on: nothing
 priority: normal
+done_when: "uv run pytest \"tests/unit/test_gate_line.py::test_ruff_is_pinned_to_an_exact_version\" \"tests/unit/test_gate_line.py::test_the_gate_line_runs_the_formatter\" \"tests/unit/test_gate_line.py::test_the_formatters_reach_into_docs_is_the_one_the_gate_declares\" -q"
 opened: 2026-08-07
 ---
 
@@ -82,3 +83,53 @@ is left alone, `done_when` being a reviewer's to edit.
 Not done here: nothing re-runs `doc_index.py`'s `--check` in the gate, and the
 formatter has no opinion about `.md` or `.yml` at all, so both remain checked
 by habit.
+
+## Review, 2026-08-07 — reopened
+
+Both halves landed and the gate is green here as it was there:
+`All checks passed!`, `330 files already formatted`, `Contracts: 6 kept, 0
+broken.`, `617 passed in 11.43s`. The pin is exact, it is the version the lock
+already held, the eight reformatted files are the formatter's output, and the
+CI comment's unreferenced claim is gone. None of that is in dispute.
+
+The last sentence of the worker note is false, and it is false about the thing
+the commit added. ruff 0.16.1 formats Python code blocks inside Markdown, so
+`ruff format --check .` reaches every `.md` in the tree: `docs/` alone accounts
+for 219 of the 330 files the command reports, against 107 tracked `.py` files
+in the whole repo. The worker's own run printed `331` — one more than mine,
+which is the two folded items deleted and this decision item added — so the
+number that proves it was on screen and read as a Python file count. Measured
+in `findings/2026.08.07-ruff-format-check-over-the-root-formats-the-python-in-docs.md`.
+
+Nothing is red today only because no file under `docs/` opens a fenced block
+tagged as Python — zero of 219. That is the trap rather than the reprieve: the gate's
+reach into `docs/` is now real, unargued and undeclared, and the first finding
+that quotes a deliberately-broken snippet in a fenced Python block turns a
+docs-only commit red in CI for a reason this item says cannot happen. Findings
+quoting broken code is what `docs/findings/` is *for*.
+
+What remains is one decision and its proof, and either answer is fine: bound
+the formatter's target to the code (`src tests scripts`) so a document can hold
+whatever a document needs to hold, or keep `.` and say in the gate comment that
+Python inside a doc is Python the gate formats. The `done_when` pins whichever
+is chosen rather than the choice, in `tests/unit/test_gate_line.py`:
+`test_ruff_is_pinned_to_an_exact_version` reads the dev group and requires an
+`==`; `test_the_gate_line_runs_the_formatter` reads `.github/workflows/ci.yml`
+and requires `ruff format --check` in the `run:` line; and
+`test_the_formatters_reach_into_docs_is_the_one_the_gate_declares` writes a
+Markdown file holding an unformatted Python fence and asserts the gate's target
+answers the way the comment beside it says it will. The third is the one with
+content — this defect existed because the reach was a sentence rather than a
+check, and the repo's own rule is to prefer a claim a test can check.
+
+Not reopened for it, because the commit did not introduce it: `git add -A` is
+what staged this work
+(`findings/loop/2026.08.07-git-add--a-commits-the-tree-the-run-inherited-not-the-work-it-did.md`),
+and it was safe only because the tree it inherited was clean. The two folded
+items were deleted rather than adjudicated, which is a status call a worker does
+not have; the fold itself is right and nothing was lost — `tool_base.py`'s
+first sighting and the "either it joins the gate or `pyproject.toml` says which"
+framing both survive above — so this is noted and not undone.
+
+00.3's `done_when` is amended to the four-command line, which is the reviewer's
+edit the worker correctly declined to make.

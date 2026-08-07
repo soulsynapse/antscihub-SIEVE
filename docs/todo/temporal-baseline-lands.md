@@ -1,7 +1,7 @@
 ---
 title: temporal_baseline lands
 step: "04.5"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_temporal_baseline.py -q"
 opened: 2026-08-06

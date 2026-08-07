@@ -16,6 +16,15 @@ of them. Mutating each in turn on `crop` — `PRESERVED` to `AGGREGATED`,
 to `2.0.0` — leaves all 276 unit tests green. `downsample` is the same shape;
 only `param_stereotypes` is pinned, and only because 01.4 wrote a case for it.
 
+04.5's sweep over `temporal_baseline` narrows this in both directions.
+`element`, `settling_epsilon` and `stateful` now die — the contract tests grew,
+so those three are off the list. Still surviving: `version`, `mode`, both
+`caption` parts, `primary_params`, the dtype tuples on `accepts` and `emits`,
+and the *value* of a `param_stereotypes` entry — `ENUM` swapped for
+`SCALAR_RANGE` passes, so what 01.4 pinned is that every field has a
+stereotype, not that it has the right one. The table this item asks for has to
+carry the values, not just the keys.
+
 Two of those five are load-bearing rather than descriptive. `element` is what
 `dag.py` reads to decide an edge is legal, and `mode` is what the executor
 branches on — so a tool declaring the wrong one produces a graph that validates

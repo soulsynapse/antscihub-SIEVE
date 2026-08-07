@@ -1,7 +1,7 @@
 ---
 title: dag is re-derived against schema v1
 step: "03.3"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_dag.py -q"
 opened: 2026-08-07
@@ -102,9 +102,11 @@ did not weaken — it moved. "Two edges feed one node" is `Pipeline`'s validator
 v2's and lives one layer down, where it is structural rather than a graph
 question. Nothing else was read past that.
 
-## Seven v3 cases with no v2 row
+## Eight v3 cases with no v2 row
 
-32 cases land where v2 had 33. `needs_chroma` and `graph_needs_chroma` are in
+Twenty-five of v2's 33 rows carry over and eight cases here have no v2 row at
+all, so `tests/unit/test_dag.py` holds 33 functions again — the same total by
+arithmetic accident, not by matching v2 case for case. `needs_chroma` and `graph_needs_chroma` are in
 this module and v2's file never touched either — v2 tested the format decision
 from the callers that consumed it — so `TestDecodeFormat` covers the four
 answers `_requires_chroma` can give (silence, a colour-only set, a set that

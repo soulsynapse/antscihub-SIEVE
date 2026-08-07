@@ -117,7 +117,7 @@ that difference is the whole argument.
 omitted when nothing owns the change. `docs: order the docs by when things
 happened, not by the alphabet` is the shape — `docs: update docs` is not.
 
-Nothing is pushed unless asked.
+You may push when given permission, but not otherwise.
 
 ## Platform
 

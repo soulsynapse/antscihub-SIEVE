@@ -8,11 +8,9 @@ requires-python = ">=3.13,<3.14"
 # pyproject is the model for that habit, not for this list.
 dependencies = []
 
-[tool.uv]
-# There is no `src/sieve` yet, so there is nothing to build or install; without
-# this uv would try to build the project on every sync and fail. Flip to a
-# hatchling build-system block in the same commit as the first module.
-package = false
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [

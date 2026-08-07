@@ -1,7 +1,7 @@
 ---
 title: The package tree exists and installs
 step: "00.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv sync && uv run python -c \"import sieve\""
 opened: 2026-08-06

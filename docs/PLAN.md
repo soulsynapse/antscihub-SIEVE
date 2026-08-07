@@ -250,6 +250,18 @@ core sets and worker counts, and a flat optimum makes a per-machine constant
 harmless while a sharp one makes it wrong everywhere it was not measured.
 Having imported the constants, this repo owns that question.
 
+Cache admission lands here as well, and after the measurement rather than
+before it: 06.3 found 58 of 87 node outputs recomputed on a post-edit render,
+so what the preview store saves on that graph is the decode and not the
+arithmetic. The decision is `adr/cache-admission-is-bounded-warmup.md` — a tool
+is keyed on having a **bounded warmup** rather than on being stateless, and a
+run entering a cached range re-settles its state over that warmup first — and
+it admits `block_signal` and `detect`, which are the two nodes a graph is drawn
+from. The gate is bit-identity against a cold run, so this is not a fast path
+and `adr/correctness-is-the-default.md` is untouched. What it deliberately does
+not settle is *retention*: which ranges survive when the store cannot hold
+everything.
+
 Gate: in-pipeline budgets (<100 ms slider→preview, <200 ms slider→graph)
 measured headless through the preview session — the value proposition proven
 before a single widget exists, so any later regression is attributable to the
@@ -305,6 +317,7 @@ regimes measured through the GUI; the exception list still empty.
 | A result store API / zarr as the on-disk format | a result too large or too random-access for a file per checkpoint — the folder of files is the format until then |
 | Sink writers beyond FFV1 video and the array format Phase 5 picks | a third output format someone asks for |
 | Rate-changing kernels | a tool that needs one |
+| A retention policy for the cache — which ranges survive when it is full | a scrub pattern from a real session to tune against. v1 evicted oldest-first (`../antscihub-optical-flow-detector`, `core/stream_buffer.py`), which is recency rather than interest, and picking between them without a session to replay is a guess with a policy's authority |
 | `pipeline/lowering.py` — crop and scale pushed into the decoder | a loop budget missed without it (Phase 6's measurement), which is the only evidence that would justify 215 lines reaching across the graph, the schema and `decode/lowered` |
 | v2 project import (`compat/`) | a real v2 project that must come over (`adr/v2-does-not-import.md`) |
 | nox, completion tool, graph-system | something here concretely needing the mechanism |

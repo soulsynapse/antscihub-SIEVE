@@ -361,6 +361,45 @@ def test_the_scaffold_renders_the_absent_list_beside_the_built_one():
     assert "src/sieve/backend" in text
 
 
+# Dead language: vocabulary an ADR renamed away fails in the binding docs,
+# so the old word cannot creep back through prose nobody rereads.
+
+
+def write_doc(repo: Path, relative: str, text: str) -> None:
+    path = repo / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_the_buried_word_fails_in_a_binding_doc(tmp_path):
+    write_doc(tmp_path, "docs/VISION.md", "The pipeline is a chain of filters.\n")
+
+    hits = doc_index.dead_language(tmp_path)
+
+    assert len(hits) == 1
+    assert hits[0].startswith("docs/VISION.md:1:")
+    assert "tools-not-filters" in hits[0]
+
+
+def test_quoting_history_names_and_the_rename_itself_all_pass(tmp_path):
+    write_doc(
+        tmp_path,
+        "docs/PLAN.md",
+        "All ten v2 filters registered CPU-only.\n"
+        "`filters/detect.py` ports as `tools/detect.py`.\n"
+        "Terminology: tools, not filters.\n"
+        "The slug tools-not-filters is citable anywhere.\n",
+    )
+
+    assert doc_index.dead_language(tmp_path) == []
+
+
+def test_findings_speak_the_language_of_what_they_measured(tmp_path):
+    write_doc(tmp_path, "docs/findings/2026.08.06-census.md", "all ten filter modules\n")
+
+    assert doc_index.dead_language(tmp_path) == []
+
+
 # The live gate: the repo's own folders parse, and the checked-in indexes are
 # exactly what the tool would write — a stale index fails here, not in review.
 
@@ -373,6 +412,7 @@ def test_the_repos_own_items_are_hygienic():
     collect_adrs(doc_index.ADR_DIR)
     assert forbidden_present(doc_index.REPO) == []
     assert doc_index.core_strays(doc_index.REPO) == []
+    assert doc_index.dead_language(doc_index.REPO) == []
 
 
 def test_the_checked_in_indexes_are_current():

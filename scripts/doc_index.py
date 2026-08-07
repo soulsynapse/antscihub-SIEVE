@@ -594,6 +594,46 @@ def forbidden_present(repo: Path = REPO) -> list[str]:
     return [entry for entry in FORBIDDEN if (repo / entry).exists()]
 
 
+#: Vocabulary an ADR renamed away, still readable in old repos but dead here:
+#: (the dead word as a regex, what excuses a line that says it, the verdict).
+#: A line naming v1/v2 is quoting history; "not filters" is the rename naming
+#: itself. Grows a row per buried word.
+DEAD_LANGUAGE = [
+    (r"filters?", r"\bv[12]\b|not filters", "adr/tools-not-filters.md"),
+]
+
+_CODE_SPAN = re.compile(r"`[^`]*`")
+
+
+def dead_language(repo: Path = REPO) -> list[str]:
+    """Lines in the binding docs still speaking a vocabulary an ADR buried.
+
+    Scope is the prose that binds: `docs/*.md`, the ADRs, the items. Findings
+    are exempt — a measurement record speaks the language of the repo it
+    measured — and identifiers in `src/` are the Phase-1 spelling gate's job.
+    A word fused into an identifier or path (`filter_base.py`,
+    `tools-not-filters`) is a name, not language, and passes.
+    """
+    docs = repo / "docs"
+    targets = [
+        *sorted(docs.glob("*.md")),
+        *sorted((docs / "adr").glob("*.md")),
+        *sorted((docs / "todo").glob("*.md")),
+    ]
+    hits = []
+    for path in targets:
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            bare = _CODE_SPAN.sub("", line)
+            for word, excuse, verdict in DEAD_LANGUAGE:
+                if re.search(excuse, bare, re.IGNORECASE):
+                    continue
+                match = re.search(rf"(?<![\w/.-]){word}(?![\w/-])", bare, re.IGNORECASE)
+                if match:
+                    relative = path.relative_to(repo).as_posix()
+                    hits.append(f"{relative}:{lineno}: '{match.group(0)}' is dead ({verdict})")
+    return hits
+
+
 def core_strays(repo: Path = REPO) -> list[str]:
     """Direct children of `core/` that ADR-6's enumeration does not admit."""
     folder = repo / "src" / "sieve" / "core"
@@ -664,6 +704,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"core has children ADR-6 does not admit: {', '.join(strays)} — "
                 f"revise adr/core-membership-is-closed.md first"
             )
+        dead = dead_language()
+        if dead:
+            raise ItemError("dead language: " + "; ".join(dead))
         targets = [
             (TODO_DIR / INDEX_NAME, render(items, phase_titles())),
             (

@@ -122,7 +122,9 @@ GUI.
 
 ## Phase 7 — GUI, re-derived
 
-Not ported; `filter_tab.py` is never opened. One generator reads `ToolSpec`
+Not ported; `filter_tab.py` is never opened. The starting skeleton is the
+v2.5 spike's `gui`/`session` packages, with v2's held parts ported into it
+(`adr/gui-base-is-the-v25-spike.md`). One generator reads `ToolSpec`
 presentation stereotypes and emits param widgets — adding a tool adds zero
 GUI code unless it declares a new stereotype. Handoff services generalize
 crop-as-contract: a `region` param gets the canvas-draw surface, `span` gets

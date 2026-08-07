@@ -31,6 +31,7 @@ from sieve.core.tool_base import (
     ParamStereotype,
     TableSpec,
     ToolSpec,
+    WarmupKind,
     caption_for_params,
     input_warmup_frames,
     node_element,
@@ -173,7 +174,12 @@ def make_spec(**overrides: object) -> ToolSpec:
 #: constructing them is what several tests do *before* the thing they are
 #: about, not part of it.
 DECIMATOR = make_spec(tool_id="decimate", params_model=DecimateParams, rate_changing=True)
-IIR = make_spec(tool_id="iir", warmup_frames=FrameCount(5), settling_epsilon=0.0)
+IIR = make_spec(
+    tool_id="iir",
+    warmup_frames=FrameCount(5),
+    settling_epsilon=0.0,
+    warmup_kind=WarmupKind.BOUNDED,
+)
 INTERPOLATOR = make_spec(tool_id="interpolate", params_model=InterpolateParams, rate_changing=True)
 #: Declares a bound of 99 and refines it per configuration.
 WINDOWED = make_spec(
@@ -181,6 +187,7 @@ WINDOWED = make_spec(
     params_model=WindowParams,
     warmup_frames=FrameCount(99),
     settling_epsilon=0.0,
+    warmup_kind=WarmupKind.BOUNDED,
 )
 #: Declares both halves of a centred window as bounds of 50, and refines each
 #: from `length`.
@@ -190,6 +197,7 @@ CENTERED = make_spec(
     mode=Mode.WINDOWED,
     warmup_frames=FrameCount(50),
     settling_epsilon=0.0,
+    warmup_kind=WarmupKind.BOUNDED,
     lookahead_frames=FrameCount(50),
 )
 
@@ -197,9 +205,33 @@ CENTERED = make_spec(
 class TestToolSpec:
     def test_nonzero_warmup_declares_the_epsilon_it_settles_to(self) -> None:
         with pytest.raises(ValueError, match="settling_epsilon must be declared"):
-            make_spec(warmup_frames=FrameCount(1))
+            make_spec(warmup_frames=FrameCount(1), warmup_kind=WarmupKind.BOUNDED)
 
-        assert make_spec(warmup_frames=FrameCount(1), settling_epsilon=0.0).settling_epsilon == 0.0
+        settled = make_spec(
+            warmup_frames=FrameCount(1),
+            settling_epsilon=0.0,
+            warmup_kind=WarmupKind.BOUNDED,
+        )
+        assert settled.settling_epsilon == 0.0
+
+    def test_a_warmup_declares_which_kind_of_warmup_it_is(self) -> None:
+        # The declaration `cache_key.cache_policy` reads and nothing else can
+        # supply. Both directions refused, and the omission is the one that
+        # matters: a default of BOUNDED would key the next EMA that forgot to
+        # say so and serve its output to a run that started somewhere else
+        # (`adr/cache-admission-is-bounded-warmup.md`).
+        with pytest.raises(ValueError, match="no warmup_kind"):
+            make_spec(warmup_frames=FrameCount(1), settling_epsilon=0.0)
+        with pytest.raises(ValueError, match="no warmup_kind"):
+            make_spec(stateful=True)
+        # And refused where there is nothing to settle, so the field cannot
+        # become a way of opting a stateless tool out of the cache.
+        with pytest.raises(ValueError, match="nothing to settle"):
+            make_spec(warmup_kind=WarmupKind.BOUNDED)
+
+        assert make_spec(stateful=True, warmup_kind=WarmupKind.EPSILON).warmup_kind is (
+            WarmupKind.EPSILON
+        )
 
     @pytest.mark.parametrize("epsilon", [-0.1, float("inf"), float("nan")])
     def test_settling_epsilon_must_be_a_finite_non_negative_number(self, epsilon: float) -> None:
@@ -266,13 +298,13 @@ class TestState:
     def test_a_state_factory_without_stateful_is_refused(self) -> None:
         # The declaration the cut list admits and the check that earns it: the
         # factory tells whoever starts the run that state exists, `stateful`
-        # tells `cache_key.py` the node may not be keyed, and a spec carrying
-        # only the first writes span-dependent output under a key with no span
-        # in it.
+        # tells the executor to re-settle it across a served range, and a spec
+        # carrying only the first is run by a loop that never does.
         with pytest.raises(ValueError, match="declares a state_factory but not stateful"):
             make_spec(state_factory=dict)
 
-        assert make_spec(state_factory=dict, stateful=True).state_factory is dict
+        kept = make_spec(state_factory=dict, stateful=True, warmup_kind=WarmupKind.EPSILON)
+        assert kept.state_factory is dict
 
 
 class TestRate:
@@ -456,6 +488,7 @@ class TestLookahead:
             element=ElementRelation.PRESERVED,
             mode=Mode.WINDOWED,
             settling_epsilon=0.0,
+            warmup_kind=WarmupKind.BOUNDED,
             param_stereotypes={"length": ParamStereotype.SCALAR_RANGE},
             registry=registry,
         )
@@ -480,6 +513,7 @@ class TestLookahead:
                 emissions=(Emission("out"),),
                 element=ElementRelation.PRESERVED,
                 settling_epsilon=0.0,
+                warmup_kind=WarmupKind.BOUNDED,
                 registry=ToolRegistry(),
             )
             class StreamingCentered(CenteredWindowParams):
@@ -844,6 +878,7 @@ class TestToolRegistry:
             emissions=(Emission("out"),),
             element=ElementRelation.PRESERVED,
             settling_epsilon=0.0,
+            warmup_kind=WarmupKind.BOUNDED,
             registry=registry,
         )
         class SettlingParams(ParamsBase):
@@ -912,6 +947,7 @@ PROBES: dict[str, Any] = {
     "selecting": True,
     "deterministic": False,
     "stateful": True,
+    "warmup_kind": WarmupKind.EPSILON,
     "state_factory": dict,
     "primary_params": ("factor",),
     "caption": (CaptionPart(label="factor", param="factor"),),
@@ -981,6 +1017,11 @@ class TestDecoratorMatchesSpec:
             elif name == "element_names":
                 values["element"] = ElementKind.BLOCK
             elif name == "state_factory":
+                values["stateful"] = True
+                values["warmup_kind"] = WarmupKind.EPSILON
+            elif name == "stateful":
+                values["warmup_kind"] = WarmupKind.EPSILON
+            elif name == "warmup_kind":
                 values["stateful"] = True
             decorated = register_tool(**values, registry=registry)(model)
 

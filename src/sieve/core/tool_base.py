@@ -34,6 +34,13 @@ actual need, which may refine the bound downward but never exceed it.
 that is too small under-warms a tool silently, and a bound that is too large
 only wastes decode.
 
+How many frames is only half of what a warmup declares. `warmup_kind` is the
+other half — whether those frames *determine* the output or only settle it —
+and it is a constant on the spec rather than a method because no parameter
+changes the answer: a window is exact at every length and an EMA is
+approximate at every alpha. `pipeline/cache_key.py` is its consumer
+(`adr/cache-admission-is-bounded-warmup.md`).
+
 `lookahead_frames` is `warmup_frames`' shape on the other side of the frame
 being emitted, and the two together are the first statement of a window this
 contract can make: a centred window of length `2k+1` is `k` of lead-in and `k`
@@ -110,6 +117,36 @@ class Mode(StrEnum):
     #: Needs a span of frames before it can emit any of them. The executor
     #: must accumulate the window rather than hand frames through singly.
     WINDOWED = "windowed"
+
+
+class WarmupKind(StrEnum):
+    """What a tool's declared `warmup_frames` is a claim *about*.
+
+    `warmup_frames` says how many frames must precede a trustworthy output. It
+    does not say whether those frames are the whole of what the output depends
+    on, and that is a different question with a different consumer: the first is
+    how much lead-in to decode, the second is whether the output may be stored
+    and handed to a run that started somewhere else
+    (`adr/cache-admission-is-bounded-warmup.md`).
+
+    v3 read `stateful` for the second question until 06.5, and one bit was
+    standing for both properties — `block_signal` keeps a frame of state and is
+    exactly determined by two frames, while an EMA keeps the same kind of state
+    and is determined by all of them. This axis is the one that separates them,
+    and it is declared rather than inferred for `stateful`'s own reason: the
+    policy is decided on a machine that may have no tools installed.
+    """
+
+    #: Output at frame `N` is fully determined by the last `warmup_frames + 1`
+    #: input frames (plus `lookahead_frames` after it, where a window has a far
+    #: side). Two runs that both reach `N` with that window filled agree
+    #: exactly, so an entry keyed on the node and the frame index stands.
+    BOUNDED = "bounded"
+    #: The dependence on where the run began decays rather than ending, and
+    #: `warmup_frames` is where it drops below `settling_epsilon`. Two runs
+    #: agree to within that tolerance and not bit-for-bit, so nothing may serve
+    #: one run's frame to another.
+    EPSILON = "epsilon"
 
 
 class StreamKind(StrEnum):
@@ -860,6 +897,18 @@ class ToolSpec:
     #: kernel state is one way to have such outputs rather than the only one — a
     #: `WINDOWED` tool has them too.
     warmup_frames: FrameCount = NO_FRAMES
+    #: What that warmup is a claim about — see `WarmupKind`. Required of any
+    #: tool that has something to settle (a nonzero warmup, or state), refused
+    #: of one that has not, and read by `pipeline/cache_key.cache_policy` to
+    #: decide whether the node may be keyed at all.
+    #:
+    #: No default in either direction, for `element`'s reason. `BOUNDED` by
+    #: default would key the next EMA that forgot to say so, and its output at a
+    #: frame would be served to a run that started somewhere else — a
+    #: well-formed key, a plausible frame, and no symptom. `EPSILON` by default
+    #: would be safe and silently uncacheable, which is the failure this whole
+    #: axis exists to stop being invisible.
+    warmup_kind: WarmupKind | None = None
     #: Absolute tolerance for comparing two runs once this tool's warmup has
     #: elapsed. `None` means the tool has no settling claim; any nonzero
     #: `warmup_frames` must declare a value here so the generic gate can assert
@@ -906,18 +955,14 @@ class ToolSpec:
     #: because cache policy is decided from declarations on a machine that may
     #: have no tools installed.
     #:
-    #: What it costs is the cache, and the reason is subtler than it looks. Such
-    #: a tool's output at frame `i` depends on every frame from wherever the
-    #: run began — but if its `warmup_frames` is correct, that dependence has
-    #: decayed below the tool's own epsilon by the time any frame is yielded,
-    #: and two runs over different spans agree.
-    #:
-    #: The exclusion is because *nothing can check that*. A key is derived from
-    #: declarations, and a tool declaring `warmup_frames=0` over a running sum
-    #: is indistinguishable here from one declaring 90 over a settled EMA. So a
-    #: served entry would rest on an unverified warmup derivation, and the
-    #: failure lands where it must not: well-formed key, plausible frame, no
-    #: symptom.
+    #: **It does not decide the cache**, and reading it that way is the mistake
+    #: `adr/cache-admission-is-bounded-warmup.md` names: whether a run may be
+    #: handed another run's frame is a question about how far back the output
+    #: depends, and keeping state is one way to have a short dependence as well
+    #: as the only way to have an unbounded one. `warmup_kind` is that question;
+    #: this one is read by the executor, which mints a state per run from
+    #: `state_factory` and re-settles it over `warmup_frames` when a served
+    #: range leaves it behind.
     stateful: bool = False
     #: How to make one run's state, or `None` for a tool that keeps none. The
     #: executor mints state per run from this rather than the tool closing over
@@ -926,11 +971,10 @@ class ToolSpec:
     #:
     #: Refused below on a spec that does not declare `stateful`, which is what
     #: gives this field a consumer at registration time rather than only in the
-    #: executor: the two say the same thing to different readers — the factory
-    #: to whoever starts the run, `stateful` to `cache_key.py`, which is what
-    #: denies the node a key — and a tool that kept state behind a spec that did
-    #: not say so would have its span-dependent output written into the cache
-    #: under a key that does not carry the span.
+    #: executor. A tool that kept state behind a spec that did not say so would
+    #: be run by a loop that never re-settles it, so a range served from the
+    #: store would leave the state having seen everything except the frames the
+    #: store answered for — and the frame after it would be computed from that.
     state_factory: Callable[[], Any] | None = None
     #: The one to three parameters the GUI shows before "Advanced". Names must
     #: exist on `params_model`; that is checked below, because the failure mode
@@ -996,6 +1040,23 @@ class ToolSpec:
             raise ValueError(
                 f"{self.tool_id}: warmup_frames={self.warmup_frames.frames} declares a "
                 "settling claim, so settling_epsilon must be declared too"
+            )
+        settles = self.warmup_frames.frames > 0 or self.stateful
+        if settles and self.warmup_kind is None:
+            raise ValueError(
+                f"{self.tool_id}: has a warmup to declare (warmup_frames="
+                f"{self.warmup_frames.frames}, stateful={self.stateful}) and no warmup_kind — "
+                "say whether those frames fully determine the output "
+                "(WarmupKind.BOUNDED) or only settle it to within settling_epsilon "
+                "(WarmupKind.EPSILON). Cache admission reads this and nothing else, so an "
+                "omission is a node that is either wrongly served across runs or wrongly "
+                "recomputed on every one"
+            )
+        if not settles and self.warmup_kind is not None:
+            raise ValueError(
+                f"{self.tool_id}: declares warmup_kind={self.warmup_kind.value} with nothing to "
+                "settle — a tool with no warmup and no state is determined by the frame in front "
+                "of it, and a kind here would be a claim with no subject"
             )
         _whole_lookahead(self.tool_id, self.lookahead_frames, "lookahead_frames")
         if self.lookahead_frames.frames > 0 and self.mode is not Mode.WINDOWED:
@@ -1210,6 +1271,12 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     # ("or refuse to produce it at all"). The hashed half is `params_model`.
     "selecting": Channel.EXECUTION,
     "warmup_frames": Channel.EXECUTION,
+    # Execution rather than identity, and it is the second placement worth
+    # arguing. It decides whether a result may be *reused*, which is this
+    # channel's own third clause — two builds disagreeing here compute the same
+    # frame at different cost, and the frame itself is what `params_model`,
+    # `run` and `version` already stand for.
+    "warmup_kind": Channel.EXECUTION,
     "lookahead_frames": Channel.EXECUTION,
     "settling_epsilon": Channel.EXECUTION,
     "stateful": Channel.EXECUTION,

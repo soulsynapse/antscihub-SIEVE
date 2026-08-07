@@ -26,6 +26,7 @@ from sieve.core.tool_base import (
     StreamSpec,
     ToolRun,
     ToolSpec,
+    WarmupKind,
 )
 
 #: The decorator returns the class it was given, not `ParamsBase` — erasing the
@@ -131,6 +132,7 @@ def register_tool(
     run: ToolRun[Any, Any] | None = None,
     mode: Mode = Mode.STREAMING,
     settling_epsilon: float | None = None,
+    warmup_kind: WarmupKind | None = None,
     rate_changing: bool = False,
     selecting: bool = False,
     deterministic: bool = True,
@@ -175,6 +177,7 @@ def register_tool(
             warmup_frames=params_model.max_warmup_frames(),
             lookahead_frames=params_model.max_lookahead_frames(),
             settling_epsilon=settling_epsilon,
+            warmup_kind=warmup_kind,
             rate_changing=rate_changing,
             selecting=selecting,
             deterministic=deterministic,

@@ -34,6 +34,7 @@ from sieve.core.tool_base import (
     ParamsBase,
     ParamStereotype,
     TableSpec,
+    WarmupKind,
 )
 from sieve.core.tool_registry import ToolRegistry, register_tool
 from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan
@@ -87,6 +88,10 @@ def tag_run(params: TagParams, window: FrameSpan, state: None) -> Frame:
     run=tag_run,
     element=ElementRelation.PRESERVED,
     settling_epsilon=0.0,
+    # Adding a constant reaches no further back than the frame in front of it,
+    # so the three frames below are lead-in this tool does not need and a bound
+    # it is exact within — which is what makes it keyed.
+    warmup_kind=WarmupKind.BOUNDED,
     param_stereotypes={"amount": ParamStereotype.SCALAR_RANGE},
     registry=SHELF,
 )
@@ -96,6 +101,33 @@ class TagParams(ParamsBase):
     @classmethod
     def max_warmup_frames(cls) -> FrameCount:
         return FrameCount(3)
+
+
+def bare_run(params: BareParams, window: FrameSpan, state: None) -> Frame:
+    del params, state
+    return window.target
+
+
+@register_tool(
+    tool_id="bare",
+    version="1.0.0",
+    summary="Hands its frame straight back, having asked for no lead-in.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    emissions=(Emission("out"),),
+    run=bare_run,
+    element=ElementRelation.PRESERVED,
+    registry=SHELF,
+)
+class BareParams(ParamsBase):
+    """`tag` without the declared warmup, which is what the store rests on.
+
+    A node may be served an entry only for frames its own warmup has elapsed
+    behind, so a tool that declares one recomputes that many frames of every
+    run — including a warm one. That is the correct answer and it makes the
+    "reads nothing" claim unsayable on `tag`, whose three frames are a fiction
+    the plan cases need. This is the same tool without the fiction.
+    """
 
 
 def _mean_run(params: ParamsBase, window: FrameSpan, state: None) -> Frame:
@@ -136,6 +168,9 @@ def _windowed(tool_id: str, warmup: int, lookahead: int) -> type[ParamsBase]:
         element=ElementRelation.PRESERVED,
         mode=Mode.WINDOWED,
         settling_epsilon=0.0,
+        # `None` where there is no lead-in to characterize: a kind with nothing
+        # to settle is refused, which `ahead1` is the case for.
+        warmup_kind=WarmupKind.BOUNDED if warmup else None,
         registry=SHELF,
     )
     class Params(ParamsBase):
@@ -349,28 +384,59 @@ def test_the_lead_in_reaches_the_run_and_not_the_caller() -> None:
 
 
 def test_a_warm_cache_skips_the_run_and_the_decode() -> None:
-    """Second run over the same span reads nothing and computes nothing.
+    """Second run over a span with no lead-in reads nothing and computes nothing.
 
     Decode is lazy per frame, so a graph whose every root is a hit never asks the
     reader — which is what makes re-scrubbing a tuned span free rather than
     merely cheaper. `RefusingSource` is what states that: a counter could be
     satisfied by a reader that was called and ignored.
     """
-    plan = plan_for(Pipeline(nodes=(node("t"),)))
+    plan = plan_for(Pipeline(nodes=(node("b", "bare"),)))
     store = MemoryFrameStore()
 
     first = run(plan, ListSource(), store=store)
-    assert len(store) == len(plan.decode_range)
+    assert len(store) == len(plan.decode_range) == 3
     CALLS.clear()
 
     second = run(plan, RefusingSource(), store=store)
 
     assert not CALLS
-    assert [result.from_cache for result in second] == [frozenset({"t"})] * 3
+    assert [result.from_cache for result in second] == [frozenset({"b"})] * 3
     assert all(
-        np.array_equal(before["t"].data, after["t"].data)
+        np.array_equal(before["b"].data, after["b"].data)
         for before, after in zip(first, second, strict=True)
     )
+
+
+def test_the_store_holds_no_frame_computed_before_its_nodes_warmup_elapsed() -> None:
+    """A lead-in frame is not the frame that node computes cold, so it is not kept.
+
+    `tag` declares three frames of warmup, so the first three frames of its
+    decode range are answered by a tool that has not had them — which is exactly
+    what the lead-in is. Filing those under a key would put them in front of a
+    later run whose own lead-in reached further back, and the entry says nothing
+    about how much lead-in produced it. The mirror is the same line: those frames
+    are not *read* from the store either, so a run clamped near frame 0 computes
+    what it would have computed cold rather than being handed something better
+    warmed (`adr/cache-admission-is-bounded-warmup.md`).
+    """
+    plan = plan_for(Pipeline(nodes=(node("t"),)))
+    store = MemoryFrameStore()
+
+    run(plan, ListSource(), store=store)
+
+    assert plan.lead_in == FrameCount(3)
+    assert len(plan.decode_range) == 6
+    assert len(store) == 3
+    assert all(store.get(plan.keys["t"], index) is not None for index in range(20, 23))
+    CALLS.clear()
+
+    second = run(plan, ListSource(), store=store)
+
+    # The lead-in runs again — that is the re-settle, and for a stateful tool it
+    # is the whole reason a served range is safe to enter. The span does not.
+    assert [call[0] for call in CALLS] == [17, 18, 19]
+    assert [result.from_cache for result in second] == [frozenset({"t"})] * 3
 
 
 def test_two_roots_share_one_decode_of_each_frame() -> None:
@@ -400,7 +466,7 @@ def test_the_decoded_frame_reaches_the_caller_only_when_a_decode_happened() -> N
     treat store-served results as fresh pixels. No source at all on the cold run
     is the second decode coming back.
     """
-    plan = plan_for(Pipeline(nodes=(node("t"),)))
+    plan = plan_for(Pipeline(nodes=(node("b", "bare"),)))
     store = MemoryFrameStore()
 
     first = run(plan, ListSource(), store=store)
@@ -426,7 +492,10 @@ def test_a_windowed_node_gets_a_span_ending_at_the_current_frame() -> None:
 
     assert plan.lead_in == FrameCount(5)
     assert plan.lookahead == FrameCount(0)
-    assert plan.key("w") is None
+    # Keyed, since 06.5: a window is bounded on both sides by construction, and
+    # what denies a key is an epsilon warmup rather than a window or a state
+    # (`adr/cache-admission-is-bounded-warmup.md`).
+    assert plan.key("w") is not None
     assert WINDOWS[-3:] == [(18, 19, 20), (19, 20, 21), (20, 21, 22)]
     assert [result.index for result in results] == [20, 21, 22]
     assert [int(result["w"].data[0, 0]) for result in results] == [20, 21, 22]
@@ -581,22 +650,21 @@ def test_a_lookahead_tool_that_answers_for_the_end_of_its_window_is_refused() ->
         run(plan, ListSource())
 
 
-def test_no_node_that_lags_behind_the_lookahead_is_ever_a_keyed_node() -> None:
-    """Why the store index and the reading index may agree without being one.
+def test_a_node_that_lags_the_loop_files_its_entry_under_the_frame_it_answered_for() -> None:
+    """The store index is the frame answered for, never the frame being read.
 
-    The loop files an entry at the frame a node *answered for*, which under a
-    lookahead is not the frame being read. It cannot currently be caught getting
-    that wrong: `cache_policy` denies a windowed tool a key, a key is denied to
-    everything below an unkeyed node, and a node lags only if something windowed
-    is above it — so the set of nodes that lag and the set that are keyed are
-    disjoint, and the two spellings compute the same number
+    Until 06.5 this could not be caught getting wrong: `cache_policy` denied a
+    windowed tool a key, a key was denied to everything below an unkeyed node,
+    and a node lags only if something windowed is above it — so the set of nodes
+    that lag and the set that are keyed were disjoint, and the two spellings
+    computed the same number
     ([findings/loop/2026.08.07-the-emission-delay-and-the-cache-key-cannot-meet.md](
     ../../docs/findings/loop/2026.08.07-the-emission-delay-and-the-cache-key-cannot-meet.md)).
 
-    So this is the disjointness itself, which is a claim rather than a
-    coincidence: the day a windowed frontier becomes keyable, the store call
-    below it is reading an index the loop is no longer at, and this is what says
-    so before a frame is served under the wrong number.
+    `adr/cache-admission-is-bounded-warmup.md` is the day that disjointness
+    ended: `w` and `u` both lag by one and both carry keys. A loop filing under
+    the reading index would put every entry one frame late — adjacent, plausible,
+    and served back later as a different frame's result.
     """
     chained = Pipeline(
         nodes=(node("t"), node("w", "ahead1"), node("u", amount=2)),
@@ -604,8 +672,18 @@ def test_no_node_that_lags_behind_the_lookahead_is_ever_a_keyed_node() -> None:
     )
     plan = plan_for(chained)
     bindings = _bind(plan)
+    store = MemoryFrameStore()
+
+    results = run(plan, ListSource(), store=store)
 
     assert plan.lookahead == FrameCount(1)
     assert {node_id for node_id, bound in bindings.items() if bound.lag} == {"w", "u"}
-    assert set(plan.keys) == {"t"}
-    assert all(bindings[node_id].lag == 0 for node_id in plan.keys)
+    assert set(plan.keys) == {"t", "w", "u"}
+    for result in results:
+        for node_id in ("t", "w", "u"):
+            stored = store.get(plan.keys[node_id], result.index)
+            assert stored is not None
+            assert np.array_equal(stored.data, result[node_id].data)
+    # The two lagging nodes are the ones that would collide, so they have to
+    # disagree between adjacent frames or the check above proves nothing.
+    assert not np.array_equal(results[0]["u"].data, results[1]["u"].data)

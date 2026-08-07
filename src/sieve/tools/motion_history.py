@@ -73,9 +73,10 @@ by `(1 - lambda)`, so a constant input settles to exactly that input and the
 output stays in the input's units — a threshold in `temporal_baseline`
 deviations is still a threshold in deviations after this node.
 
-**Stateful, and therefore uncacheable**, for `background_ema`'s reason verbatim:
-nothing that derives a key can tell an honest `warmup_frames` from a false one,
-so the exclusion is on the category (`pipeline/cache_key.py`). The accumulator
+**An epsilon warmup, and therefore uncacheable**, for `background_ema`'s reason
+verbatim: `lambda` decays the run's origin out of the answer without ever
+removing it, so `settle_frames` is a tolerance rather than a bound
+(`adr/cache-admission-is-bounded-warmup.md`). The accumulator
 starts at zero, which is the correct initial condition — no prior activity,
 unlike a background model where zero would mean a black arena — and what that
 costs is first outputs biased low, which is what the warmup is the length of.
@@ -104,6 +105,7 @@ from sieve.core.tool_base import (
     Mode,
     ParamsBase,
     ParamStereotype,
+    WarmupKind,
 )
 from sieve.core.tool_registry import register_tool
 from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameIndex, FrameSpan
@@ -266,6 +268,9 @@ def run(params: MotionHistoryParams, window: FrameSpan, state: MotionHistoryStat
     element=ElementRelation.PRESERVED,
     mode=Mode.STREAMING,
     settling_epsilon=SETTLED_EPSILON,
+    # `background_ema`'s kind for `background_ema`'s reason: a leaky
+    # accumulator decays its history rather than dropping it.
+    warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=MotionHistoryState,
     primary_params=("tau_seconds", "reach_blocks", "couple"),

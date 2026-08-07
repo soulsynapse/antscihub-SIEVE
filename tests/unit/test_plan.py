@@ -38,6 +38,7 @@ from sieve.core.tool_base import (
     ParamsBase,
     ParamStereotype,
     PathStep,
+    WarmupKind,
     source_warmup_frames,
 )
 from sieve.core.tool_registry import ToolRegistry, register_tool
@@ -65,6 +66,7 @@ def _settling(tool_id: str, warmup: int) -> type[ParamsBase]:
         emissions=(Emission("out"),),
         element=ElementRelation.PRESERVED,
         settling_epsilon=0.0,
+        warmup_kind=WarmupKind.BOUNDED,
         registry=SHELF,
     )
     class Params(ParamsBase):
@@ -93,6 +95,9 @@ def _centred(tool_id: str, warmup: int, lookahead: int) -> type[ParamsBase]:
         element=ElementRelation.PRESERVED,
         mode=Mode.WINDOWED,
         settling_epsilon=0.0,
+        # `None` where the window has no near side: a kind with nothing to
+        # settle is refused, which the `ahead*` tools are the case for.
+        warmup_kind=WarmupKind.BOUNDED if warmup else None,
         registry=SHELF,
     )
     class Params(ParamsBase):

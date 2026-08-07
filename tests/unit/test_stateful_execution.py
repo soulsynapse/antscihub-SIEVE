@@ -39,6 +39,7 @@ from sieve.core.tool_base import (
     Emission,
     ParamsBase,
     ParamStereotype,
+    WarmupKind,
 )
 from sieve.core.tool_registry import ToolRegistry, register_tool
 from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, FrameSpan
@@ -86,6 +87,10 @@ def background_run(params: BackgroundParams, window: FrameSpan, state: list[Any]
     run=background_run,
     element=ElementRelation.PRESERVED,
     settling_epsilon=1.0,
+    # The kind that is refused a key, and honestly: the seed's weight falls
+    # geometrically and never reaches zero, so `SETTLES_IN` is where the
+    # difference drops under the epsilon above.
+    warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=list,
     param_stereotypes={"alpha": ParamStereotype.SCALAR_RANGE},
@@ -120,6 +125,11 @@ def accumulate_run(params: AccumulateParams, window: FrameSpan, state: list[int]
     emissions=(Emission("out"),),
     run=accumulate_run,
     element=ElementRelation.PRESERVED,
+    # A sum forgets nothing, so no count of frames determines its output and
+    # the only honest kind is the refused one. What it declares *falsely* is
+    # `max_warmup_frames`, which stays zero below — and that lie no longer
+    # decides anything, which is the case this file's third section is about.
+    warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=list,
     registry=SHELF,

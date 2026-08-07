@@ -59,7 +59,7 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
 from sieve.core.pipeline_model import CropFormat, Node, Replicate, resolved_params
-from sieve.core.tool_base import Mode, ToolSpec
+from sieve.core.tool_base import Mode, ToolSpec, WarmupKind
 from sieve.decode.identity import decoder_identity
 
 #: Seeds every key. Bumping it invalidates the whole cache in one edit, which is
@@ -108,24 +108,39 @@ class CachePolicy(StrEnum):
 
     KEYED = "keyed"
     NOT_DETERMINISTIC = "not_deterministic"
-    STATEFUL_ORIGIN = "stateful_origin"
-    WINDOWED_FRONTIER = "windowed_frontier"
+    EPSILON_WARMUP = "epsilon_warmup"
+    STATEFUL_WINDOW = "stateful_window"
 
 
 def cache_policy(spec: ToolSpec) -> CachePolicy:
     """Whether this spec may have a node key under the current cache contract.
 
-    This is policy, not a `ToolSpec` fact. The spec declares whether a tool is
-    deterministic, stateful, and windowed; this layer decides whether the
-    current `(node key, source index)` store can stand behind a hit for that
+    This is policy, not a `ToolSpec` fact. The spec declares what determines its
+    output; this layer decides whether the current `(node key, source index)`
+    store and the executor behind it can stand behind a hit for that
     combination.
+
+    **The question is how far back the output depends, not whether state was
+    kept** (`adr/cache-admission-is-bounded-warmup.md`). A bounded warmup means
+    the last `W + 1` frames decide the answer, so a run that re-settles over `W`
+    computes what the entry holds; an epsilon warmup means the run's origin
+    never quite leaves the answer, and no key carries an origin. Until 06.5 this
+    read `stateful`, which refused `block_signal` (one frame of state, exact)
+    and `background_ema` (the same declaration, unbounded) for one reason that
+    was only true of the second.
+
+    A window is bounded on both sides by construction, so `Mode` no longer
+    decides anything here on its own. It reappears in one place: the executor
+    re-settles a state by replaying single frames, which a *windowed* state
+    would need its windows replayed for, and no tool declares both — so the
+    combination is refused rather than served by a loop that cannot honour it.
     """
     if not spec.deterministic:
         return CachePolicy.NOT_DETERMINISTIC
-    if spec.stateful:
-        return CachePolicy.STATEFUL_ORIGIN
-    if spec.mode is not Mode.STREAMING:
-        return CachePolicy.WINDOWED_FRONTIER
+    if spec.warmup_kind is WarmupKind.EPSILON:
+        return CachePolicy.EPSILON_WARMUP
+    if spec.stateful and spec.mode is not Mode.STREAMING:
+        return CachePolicy.STATEFUL_WINDOW
     return CachePolicy.KEYED
 
 
@@ -145,10 +160,16 @@ def _uncacheable_clause(spec: ToolSpec) -> str:
     match cache_policy(spec):
         case CachePolicy.NOT_DETERMINISTIC:
             return "is not deterministic, so its output cannot be keyed"
-        case CachePolicy.STATEFUL_ORIGIN:
-            return "is stateful, so its output cannot be keyed"
-        case CachePolicy.WINDOWED_FRONTIER:
-            return f"declares mode={spec.mode}, so its provisional windowed output cannot be keyed"
+        case CachePolicy.EPSILON_WARMUP:
+            return (
+                f"declares an epsilon warmup, so its output at a frame still carries where the "
+                f"run began — to within {spec.settling_epsilon}, which is not to within nothing"
+            )
+        case CachePolicy.STATEFUL_WINDOW:
+            return (
+                f"is stateful and declares mode={spec.mode}, and the executor re-settles a state "
+                "by replaying frames rather than windows"
+            )
         case CachePolicy.KEYED:
             raise AssertionError(f"{spec.tool_id} is cacheable; there is no refusal to explain")
 

@@ -52,10 +52,14 @@ kernel must stay pure — it cannot ask the graph what the upstream rescale did
 or what the container's frame rate is; whatever configures the node writes both
 from values it already owns.
 
-Stateful (the previous frame is the state), `warmup_frames = 1`, and therefore
-uncacheable — a stateful node gets no key at all, for the reason
-`pipeline/cache_key.py` states. Extraction at working resolution is ~realtime,
-so recomputation is the cheap side of that trade.
+Stateful (the previous frame is the state) and `warmup_frames = 1`, which is a
+*bounded* warmup: `it = g - gp` reaches one frame back and no further, so two
+frames determine every value this tool emits and nothing older than that can
+change one. So it is keyed, and the executor re-settles the state over its one
+frame when a served range leaves it behind
+(`adr/cache-admission-is-bounded-warmup.md`). Until 06.5 it was refused a key for
+being stateful, which is the same declaration `background_ema` makes about a
+dependence that never ends.
 
 v2 declared a `CostEstimate` and a `frame_bytes_ratio` here; both are cut for
 `downsample.py`'s reason — each fed machinery v3 has not built, and a
@@ -83,6 +87,7 @@ from sieve.core.tool_base import (
     Mode,
     ParamsBase,
     ParamStereotype,
+    WarmupKind,
 )
 from sieve.core.tool_registry import register_tool
 from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan
@@ -217,6 +222,9 @@ def run(params: BlockSignalParams, window: FrameSpan, state: BlockSignalState, /
     element_names=ElementNames("block", "blocks"),
     mode=Mode.STREAMING,
     settling_epsilon=0.0,
+    # Exact, not settled: the state is the previous frame and nothing older
+    # reaches the difference, so two frames decide every output value.
+    warmup_kind=WarmupKind.BOUNDED,
     stateful=True,
     state_factory=BlockSignalState,
     primary_params=("signal", "block"),

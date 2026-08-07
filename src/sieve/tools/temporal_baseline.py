@@ -57,10 +57,15 @@ any graph containing this node, including the one asking for a 5 s window at
 30 fps that needs 149. `ParamsBase.warmup_frames` exists because of that number;
 see `core/tool_base.py`.
 
-Stateful (the ring is the state) and therefore uncacheable, for
-`background_ema`'s reason verbatim: nothing that derives a key can tell an honest
-`warmup_frames` from a false one, so the exclusion is on the category, and a
-stateful node gets no key at all — see `pipeline/cache_key.py`.
+Uncacheable, and the window's finiteness is not what decides that. `run` counts
+the stride against `state.seen`, so which frames of the window the ring admitted
+is a fact about where the run started rather than about the frame being
+answered: two runs meeting at one frame hold different samples of the same span.
+They estimate the same median to within the sampling error the sampling argument
+above is denominated in, which is a tolerance and not zero — so
+`warmup_kind=WarmupKind.EPSILON` and no key
+(`adr/cache-admission-is-bounded-warmup.md`). The declared
+`settling_epsilon=0.0` predates that reading and understates it.
 
 v2 declared a `CostEstimate` here; it is cut for `block_signal.py`'s reason — it
 fed machinery v3 has not built, and a declaration arrives with its consumer
@@ -86,6 +91,7 @@ from sieve.core.tool_base import (
     Mode,
     ParamsBase,
     ParamStereotype,
+    WarmupKind,
 )
 from sieve.core.tool_registry import register_tool
 from sieve.core.types import Frame, FrameCount, FrameIndex, FrameSpan
@@ -283,6 +289,12 @@ def run(params: TemporalBaselineParams, window: FrameSpan, state: BaselineState,
     element=ElementRelation.PRESERVED,
     mode=Mode.STREAMING,
     settling_epsilon=0.0,
+    # Epsilon despite the window being finite, and the residual is not the
+    # window's: `run` counts the stride against `state.seen`, so which frames
+    # the ring admitted depends on where the run started. Two runs meeting at
+    # one frame hold different samples of the same span and estimate the same
+    # median to within the sampling error, which is not to within zero.
+    warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=BaselineState,
     primary_params=("window_seconds", "emit"),

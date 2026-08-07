@@ -45,7 +45,9 @@ from sieve.core.tool_base import (
     ParamsBase,
     ParamStereotype,
     ToolSpec,
+    WarmupKind,
 )
+from sieve.core.types import FrameCount
 from sieve.pipeline import cache_key
 from sieve.pipeline.cache_key import (
     NODE_KEY_POSITIONS,
@@ -343,11 +345,31 @@ class TestInputs:
         # the whole subtree is uncacheable without anything computing that.
         with pytest.raises(NotCacheableError, match="not deterministic"):
             node_key(node, spec=make_spec(deterministic=False), upstream=ROOT)
-        with pytest.raises(NotCacheableError, match="stateful"):
-            node_key(node, spec=make_spec(stateful=True), upstream=ROOT)
-        with pytest.raises(NotCacheableError, match="windowed output"):
-            node_key(node, spec=make_spec(mode=Mode.WINDOWED), upstream=ROOT)
+        with pytest.raises(NotCacheableError, match="epsilon warmup"):
+            node_key(
+                node,
+                spec=make_spec(stateful=True, warmup_kind=WarmupKind.EPSILON),
+                upstream=ROOT,
+            )
+        with pytest.raises(NotCacheableError, match="replaying frames rather than windows"):
+            node_key(
+                node,
+                spec=make_spec(mode=Mode.WINDOWED, stateful=True, warmup_kind=WarmupKind.BOUNDED),
+                upstream=ROOT,
+            )
         assert is_cacheable(SPEC)
+        # And the two the rule now admits, which is 06.5's whole subject: a
+        # bounded warmup is keyed whether the tool keeps state
+        # (`block_signal`) or a window (`detect`).
+        assert is_cacheable(make_spec(stateful=True, warmup_kind=WarmupKind.BOUNDED))
+        assert is_cacheable(
+            make_spec(
+                mode=Mode.WINDOWED,
+                warmup_frames=FrameCount(4),
+                settling_epsilon=0.0,
+                warmup_kind=WarmupKind.BOUNDED,
+            )
+        )
         # A spec for the wrong tool would key this node's output under another
         # tool's identity, which is the one mistake that produces a confidently
         # wrong cache hit rather than a miss.

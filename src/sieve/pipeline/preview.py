@@ -59,13 +59,17 @@ the exact remedy is that the dead keys after an edit are *knowable* (the old
 revision's keys, minus the new revision's) rather than a policy, so eviction
 when it arrives is garbage collection and not a heuristic.
 
-**A stateful node makes every render pay its lead-in.** `render_frame` is the
-100 ms path, and it is 100 ms because the frames above the anchor come from the
-store. `cache_key.cache_policy` gives a stateful node no key at all, so a graph
-containing one decodes and runs its whole lead-in on every single render — 90
-frames for `background_ema`. Nothing here can fix that, and it is not a defect
-in this module: it is the price of the category, and the thing that will pay it
-down is a materialized checkpoint upstream of the stateful node.
+**An epsilon-warmup node makes every render pay its lead-in.** `render_frame` is
+the 100 ms path, and it is 100 ms because the frames above the anchor come from
+the store. `cache_key.cache_policy` gives a node whose warmup is an epsilon no
+key at all, so a graph containing one decodes and runs its whole lead-in on
+every single render — 90 frames for `background_ema`. Nothing here can fix that,
+and it is not a defect in this module: it is the price of a dependence that
+never ends, and the thing that will pay it down is a materialized checkpoint
+upstream of it. A node whose warmup is *bounded* pays only that warmup, once,
+where a served range hands its state back (`executor._resettle`) — which is why
+`block_signal` and `detect` are on the cheap side of this sentence and
+`background_ema` is not.
 
 **What v2 carried here and v3 does not.** A `backend` and a kernel shelf go with
 `adr/no-kernel-apparatus.md`; a lowered decode prefix goes with the lowering

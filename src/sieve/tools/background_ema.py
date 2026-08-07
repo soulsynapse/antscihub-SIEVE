@@ -37,13 +37,15 @@ frames into the source cannot be warmed, `sieve run` says so, and no other tool
 on the shelf asks for enough lead-in to produce that warning against an ordinary
 request.
 
-**Uncacheable, and not because it is unreproducible.** The spec declares
-`stateful=True`, so `cache_key.is_cacheable` is False and no key is derived for
-the node. This tool would in fact be safe to cache — the 90 above is the claim
-that its output stops depending on where the run started, and that claim is true
-and tested. What cannot be cached is the *category*: nothing that derives a key
-can tell this declaration from a false one, so the exclusion is on statefulness
-rather than on a number (`pipeline/cache_key.py`).
+**Uncacheable, and this is the tool the rule is for.** The spec declares
+`warmup_kind=WarmupKind.EPSILON`, which is what denies it a key
+(`adr/cache-admission-is-bounded-warmup.md`) — not `stateful`, which
+`block_signal` also declares and is keyed. The 90 above is where the seed's
+weight falls below `SETTLED_EPSILON`, not where it reaches zero, so two runs
+meeting at one frame agree to within that tolerance and not bit-for-bit. An
+entry is bit-for-bit or it is not an entry, so what would have to change here is
+a *measurement* — whether a difference under the epsilon survives into a
+detection flip — and the ADR leaves that open rather than assuming it.
 
 v2 declared a `CostEstimate` here; it is cut for `block_signal.py`'s reason — it
 fed machinery v3 has not built, and a declaration arrives with its consumer
@@ -69,6 +71,7 @@ from sieve.core.tool_base import (
     Mode,
     ParamsBase,
     ParamStereotype,
+    WarmupKind,
 )
 from sieve.core.tool_registry import register_tool
 from sieve.core.types import Frame, FrameCount, FrameIndex, FrameSpan
@@ -265,6 +268,10 @@ def run(params: BackgroundEmaParams, window: FrameSpan, state: BackgroundState, 
     element=ElementRelation.PRESERVED,
     mode=Mode.STREAMING,
     settling_epsilon=SETTLED_EPSILON,
+    # The case the refusal is actually for. An IIR's true warmup is infinite
+    # and the 90 above is where the seed's weight drops below the epsilon, so
+    # where the run began is still in the answer.
+    warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=BackgroundState,
     primary_params=("alpha", "emit"),

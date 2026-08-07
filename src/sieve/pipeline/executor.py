@@ -19,16 +19,28 @@ reader is a `FrameSource` rather than a `VideoReader` for the same reason the
 store is a protocol: a run over materialized frames (VISION step 4) is the same
 executor with a different source, not a mode.
 
-**A stateful node keeps its state in its binding, and is never served a cache
-entry.** The second half is not enforced here; `cache_key.cache_policy` excludes
-`stateful`, so the plan carries no key for such a node and the `key is None`
-branch below already computes it and stores nothing. What matters to this loop
-is the consequence, which is that a stateful node sees every frame of
-`decode_range` in order and never a gap. A store that could serve frame `i-1`
-and miss frame `i` would leave the tool running on a state that had seen
-nothing, and there is no branch here defending against that because there is no
-key to hit. What the lead-in is for finally has a consumer: those frames reach
-the tool, settle its state, and are discarded before the caller sees anything.
+**A stateful node keeps its state in its binding, and a served range is what it
+has to survive.** `cache_policy` keys a node whose warmup is *bounded* whether
+or not it keeps state (`adr/cache-admission-is-bounded-warmup.md`), so a store
+that serves frames 150 to 200 and misses 201 is now reachable — and it leaves
+the tool at 149 with the loop at 201. Three things here answer that, and they
+are one rule seen from three sides:
+
+- The store is read and written only where this run has itself filled the node's
+  warmup, so an entry is never a lead-in frame's under-warmed output and a hit
+  is never better-warmed than what the run would have computed. The run's own
+  lead-in therefore always computes, which is what settles the state before the
+  first hit can happen.
+- A node whose history a skipped call would have filled — anything windowed, and
+  any keyed stateful node — is asked of the store *after* its input is in hand,
+  and keeps that frame either way. A hit skips the call and never the window.
+- `_resettle` replays the kept frames into a state the hits left behind, before
+  the first call that follows them.
+
+The cost is that such a node's input is fetched on every frame, which for a root
+means a decode on a warm re-render. That is paid by graphs whose *root* is
+stateful or windowed and by no others: below a root, the input is the parent's
+emission and the parent's own hit supplies it.
 
 **The spec points at what runs, so there is nothing to select.** v2 asked a
 kernel registry for a callable per node and per backend; v3 reads `ToolSpec.run`
@@ -141,10 +153,11 @@ class FrameResult:
     from_cache: frozenset[str]
     #: The frame as decoded, which is what a viewport showing the whole frame
     #: needs (render-fed playback) and what no node downstream of a crop node
-    #: still has. `None` when every root was served from the store and no decode
-    #: happened, which is exactly the warm re-render where there is nothing to
-    #: share. Carrying it costs one frame's reference for as long as the caller
-    #: holds this, the same argument as `outputs` above.
+    #: still has. `None` when no decode happened for this frame, which is the
+    #: warm re-render of a graph whose roots are all servable without their
+    #: input — see the module docstring on the roots that are not. Carrying it
+    #: costs one frame's reference for as long as the caller holds this, the
+    #: same argument as `outputs` above.
     #:
     #: v2 carried a second field saying whether this was already a crop, because
     #: a run over a written artifact was handed one and the promise above could
@@ -193,6 +206,14 @@ class BoundNode:
     #: one otherwise. A streaming node's warmup settles a state rather than
     #: filling a window, so it buys no history.
     window: int
+    #: This configuration's warmup, in this node's input frames. Two consumers
+    #: below and they are the same claim from either side: it is how far back an
+    #: output depends, so it is both how many frames to replay into a stale
+    #: state and how far into a run an entry stops being a lead-in artefact.
+    warmup: int
+    #: Whether `run` carries state across calls, and therefore whether skipping
+    #: a call leaves it behind the loop.
+    stateful: bool
     #: Frames past its target this node must have read before it may emit.
     lookahead: int
     #: Source frames this node's *upstream* output trails the loop by. Zero at
@@ -232,9 +253,11 @@ def execute(
     is one frame per node rather than one per node per frame. The GUI's cheapest
     correct cancellation is to abandon the iterator; nothing here needs a flag.
 
-    Lead-in frames are computed and stored but never yielded — they exist to
-    warm stateful tools, and handing them to a caller would make the discard the
-    caller's problem in every one of three call sites. The frames past the span
+    Lead-in frames are computed and never yielded — they exist to warm the
+    tools, and handing them to a caller would make the discard the caller's
+    problem in every one of three call sites. They are not stored either, and
+    that is the newer half: a frame computed while a node's own warmup is still
+    filling is not the frame that node would compute cold. The frames past the span
     that a lookahead declaration adds are never yielded either, for the mirror
     reason: they were read so that the last frames of the span could be
     answered, and nothing was asked about them.
@@ -264,6 +287,23 @@ def execute(
         for node_id, bound in bindings.items()
         if bound.mode is Mode.WINDOWED
     }
+    # Only where a served range could leave a state behind: a node with no key
+    # is never skipped, so its state is fed by the loop and there is nothing to
+    # replay. That exclusion is what keeps `temporal_baseline`'s 7199-frame
+    # warmup from becoming 7199 frames held in a deque.
+    feeds: dict[str, deque[Frame]] = {
+        node_id: deque(maxlen=bound.warmup)
+        for node_id, bound in bindings.items()
+        if bound.stateful and bound.warmup > 0 and node_id in plan.keys
+    }
+    # Nodes that need their input frame even on a hit, because what the hit
+    # skips is the call and not the history behind it.
+    reads_regardless = {
+        node_id
+        for node_id, bound in bindings.items()
+        if bound.mode is Mode.WINDOWED or node_id in feeds
+    }
+    fed_through: dict[str, int] = {}
     pending: dict[int, _Partial] = {}
     total = len(plan.dag.order)
     first = int(plan.decode_start)
@@ -289,16 +329,26 @@ def execute(
                 continue
             answers_for = step - bound.lag
             key = plan.keys.get(node.node_id)
-            # `answers_for` is at or after `first` whenever a key exists, and
-            # not by luck: `cache_policy` denies a windowed tool a key, and a
-            # node that lags its own input is windowed by the same declaration.
-            cached = None if key is None else keep.get(key, answers_for)
-            if cached is not None:
-                emitted[node.node_id] = cached
-                held = pending.setdefault(answers_for, _Partial())
-                held.outputs[node.node_id] = cached
-                held.from_cache.add(node.node_id)
-                continue
+            # The store is touched only where this run has itself filled the
+            # node's warmup, and both directions of that matter. Writing an
+            # earlier entry would file a lead-in frame's short-window output
+            # under a key that says nothing about how much lead-in it got, and
+            # a later run would be served it in place of the settled answer.
+            # Reading one would be the mirror: a run clamped at frame 0 would be
+            # handed a better-warmed frame than it would have computed, which is
+            # still a range that does not equal its cold run.
+            reusable = key is not None and answers_for - first >= bound.warmup
+            # Where the one lookup happens. A node whose history the hit does
+            # not fill can be asked before its input is fetched, which is what
+            # keeps a warm re-render from decoding; every other node is asked
+            # after, so that the frames it was going to skip still land in the
+            # window or the feed behind it.
+            eager = reusable and node.node_id in reads_regardless
+            if reusable and not eager:
+                cached = keep.get(key, answers_for)
+                if cached is not None:
+                    _serve(node.node_id, cached, answers_for, emitted, pending)
+                    continue
             fed = plan.dag.upstreams[node.node_id]
             if fed:
                 (parent,) = fed
@@ -317,12 +367,98 @@ def execute(
                 # Holding the window open: this node has its target in hand but
                 # not yet the frames past it that it declared it would read.
                 continue
+            if eager:
+                cached = keep.get(key, answers_for)
+                if cached is not None:
+                    _serve(node.node_id, cached, answers_for, emitted, pending)
+                    _remember(feeds, node.node_id, incoming)
+                    continue
+            _resettle(node.node_id, bound, plan, feeds.get(node.node_id), fed_through)
             produced = _run_node(node, window, bound, plan, answers_for)
+            fed_through[node.node_id] = answers_for
             emitted[node.node_id] = produced
             pending.setdefault(answers_for, _Partial()).outputs[node.node_id] = produced
-            if key is not None:
+            _remember(feeds, node.node_id, incoming)
+            if reusable:
                 keep.put(key, answers_for, produced)
         yield from _completed(pending, total, plan)
+
+
+def _serve(
+    node_id: str,
+    cached: Frame,
+    answers_for: int,
+    emitted: dict[str, Frame],
+    pending: dict[int, _Partial],
+) -> None:
+    """File a stored frame as this node's answer, as if it had been computed.
+
+    Both places the store can answer land here rather than each writing the
+    three lines, because the third — recording the node in `from_cache` — is the
+    one a copy forgets, and forgetting it is a reuse figure that under-reports
+    itself and a HUD that says the store did nothing.
+    """
+    emitted[node_id] = cached
+    held = pending.setdefault(answers_for, _Partial())
+    held.outputs[node_id] = cached
+    held.from_cache.add(node_id)
+
+
+def _remember(feeds: dict[str, deque[Frame]], node_id: str, incoming: Frame) -> None:
+    """Keep this node's input against a state that may have to be replayed.
+
+    Only the last `warmup` of them, and only for a node that can be skipped at
+    all — see `feeds` in `execute`. The frame is kept whether the call happened
+    or was answered from the store, which is the whole point: the run that was
+    served frames 150 to 200 still has to be able to compute 201.
+    """
+    feed = feeds.get(node_id)
+    if feed is not None:
+        feed.append(incoming)
+
+
+def _resettle(
+    node_id: str,
+    bound: BoundNode,
+    plan: ExecutionPlan,
+    feed: deque[Frame] | None,
+    fed_through: dict[str, int],
+) -> None:
+    """Run a stale state over its warmup, discarding what comes out.
+
+    The entry cost `adr/cache-admission-is-bounded-warmup.md` trades for v1's
+    contiguity requirement. A served range skips the call, so the state stops
+    where the hits began; the declaration that let the node be keyed at all says
+    the last `warmup` frames determine the answer, so feeding it exactly those
+    puts it where a cold run would have been. That claim is what the bit-identity
+    gate in `tests/unit/test_cache_admission.py` exists to check, and it is the
+    only thing standing behind an entry — a tool declaring `WarmupKind.BOUNDED`
+    over an accumulator would be replayed here and still answer wrong.
+
+    Nothing to do in the ordinary case, and it costs a dict lookup to find that
+    out: the run's own lead-in is served nothing (`reusable` is false until the
+    warmup has elapsed), so a node that has hit no entries has already been fed
+    every frame in order and this replays none of them. The discard is the same
+    one the lead-in performs; this is where a range that arrives mid-run gets it.
+    """
+    if feed is None:
+        return
+    seen = fed_through.get(node_id)
+    if seen is not None and feed and int(feed[-1].index) <= seen:
+        # The contiguous case, which is every frame of every run that was served
+        # nothing: the newest frame kept is one the state has already had, so
+        # there is no gap and the loop below would skip every element of a deque
+        # that may be thousands long.
+        return
+    params = plan.params[node_id]
+    for frame in feed:
+        index = int(frame.index)
+        if seen is not None and index <= seen:
+            continue
+        bound.run(params, FrameSpan((frame,)), bound.state)
+        seen = index
+    if seen is not None:
+        fed_through[node_id] = seen
 
 
 def _window(incoming: Frame, bound: BoundNode, history: deque[Frame] | None) -> FrameSpan | None:
@@ -473,13 +609,14 @@ def _bind(plan: ExecutionPlan) -> dict[str, BoundNode]:
         assert spec.run is not None  # `_unrunnable_reason` refused a spec without one
         step = (spec, plan.params[node.node_id])
         lookahead = node_lookahead_frames(step).frames
+        warmup = node_warmup_frames(step).frames
         bindings[node.node_id] = BoundNode(
             run=spec.run,
             state=None if spec.state_factory is None else spec.state_factory(),
             mode=spec.mode,
-            window=(
-                node_warmup_frames(step).frames + lookahead + 1 if spec.mode is Mode.WINDOWED else 1
-            ),
+            window=(warmup + lookahead + 1 if spec.mode is Mode.WINDOWED else 1),
+            warmup=warmup,
+            stateful=spec.stateful,
             lookahead=lookahead,
             upstream_lag=max(
                 (bindings[parent].lag for parent in plan.dag.upstreams[node.node_id]),

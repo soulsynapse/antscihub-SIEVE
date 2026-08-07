@@ -77,6 +77,7 @@ from sieve.core.tool_base import (
     Mode,
     ParamsBase,
     ParamStereotype,
+    WarmupKind,
 )
 from sieve.core.tool_registry import register_tool
 from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan
@@ -567,6 +568,9 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
     # warmup the frames the chain reads are all in hand, so two runs over
     # different spans agree bit for bit.
     settling_epsilon=0.0,
+    # Exact on both sides: the window is `2k+1` frames centred on the target
+    # and nothing outside it is read.
+    warmup_kind=WarmupKind.BOUNDED,
     primary_params=("freq_band", "value_band", "count_frac"),
     caption=(
         CaptionPart(label="freq", param="freq_band"),

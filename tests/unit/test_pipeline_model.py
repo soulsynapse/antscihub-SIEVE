@@ -27,6 +27,7 @@ from sieve.core.pipeline_model import (
     SourceSpan,
     as_project_path,
     project_path_for,
+    resolved_params,
 )
 from sieve.core.types import ROI
 
@@ -135,6 +136,14 @@ pipeline:
         assert project.pipeline.node("n1").tool_id == "wavelet_bands"
         assert project.pipeline.node("n1").params == {"bands": 6}
 
+    def test_a_sink_format_that_cannot_survive_a_path_or_a_shell_is_refused(self) -> None:
+        # A sink format is resolved by name at run time exactly as `tool_id` is,
+        # and lands in file names and CLI arguments on the way, so it carries
+        # `tool_id`'s spelling rule rather than a looser one of its own. An enum
+        # would be the alternative and would close the writer set.
+        with pytest.raises(ValidationError, match="sink format must match"):
+            Sink(node_id="n1", format="CSV", path="detections")
+
     def test_a_tool_id_that_cannot_key_a_cache_is_refused(self) -> None:
         # Not registry awareness — it never asks whether the tool exists — but
         # the same syntactic contract `ToolSpec` applies. An id that depends on
@@ -187,6 +196,68 @@ class TestReferentialIntegrity:
                 edges=(Edge(upstream="n1", downstream="ghost"),),
             )
 
+    def test_a_sink_naming_no_node_is_refused(self) -> None:
+        # A sink is what makes the document runnable, so one pointing at a node
+        # that is not there is an output nothing can ever write — discovered by
+        # the executor at the end of a run rather than when the document was
+        # assembled, which on a cluster is hours later.
+        with pytest.raises(ValidationError, match="sink names no such node"):
+            Project(
+                source=SourceRef(path="arena.MP4"),
+                outputs=(Sink(node_id="ghost", format="csv", path="detections"),),
+            )
+
+    def test_two_nodes_may_not_share_an_id(self) -> None:
+        # `node_id` is what edges, checkpoints, sinks and overrides all
+        # reference, so a duplicate makes every one of those ambiguous — and
+        # `Pipeline.node` would answer with whichever came first, silently.
+        with pytest.raises(ValidationError, match="duplicate node_id"):
+            Pipeline(
+                nodes=(
+                    Node(node_id="n1", tool_id="blur", version="1.0.0"),
+                    Node(node_id="n1", tool_id="threshold", version="1.0.0"),
+                )
+            )
+
+    def test_two_replicates_may_not_share_an_id(self) -> None:
+        # `replicate_id` is what downstream artifacts key on, so a duplicate is
+        # two arenas whose results cannot be told apart after the fact.
+        with pytest.raises(ValidationError, match="duplicate replicate_id"):
+            Project(
+                source=SourceRef(path="arena.MP4"),
+                replicates=(
+                    Replicate(name="one", replicate_id="r1"),
+                    Replicate(name="two", replicate_id="r1"),
+                ),
+            )
+
+    def test_a_node_may_not_be_checkpointed_twice(self) -> None:
+        # `checkpoints` is a set of node ids wearing a tuple, because the order
+        # is not meaningful and a repeat is a document that asks for one write
+        # twice.
+        node = Node(node_id="n1", tool_id="blur", version="1.0.0")
+        with pytest.raises(ValidationError, match="duplicate checkpoint"):
+            Project(
+                source=SourceRef(path="arena.MP4"),
+                pipeline=Pipeline(nodes=(node,)),
+                checkpoints=("n1", "n1"),
+            )
+
+    def test_two_sinks_may_not_share_an_id(self) -> None:
+        # `sink_id` exists so a handoff can toggle one output without rewriting
+        # the list positionally, which a duplicate makes impossible: the toggle
+        # would hit both or either.
+        node = Node(node_id="n1", tool_id="blur", version="1.0.0")
+        with pytest.raises(ValidationError, match="duplicate sink_id"):
+            Project(
+                source=SourceRef(path="arena.MP4"),
+                pipeline=Pipeline(nodes=(node,)),
+                outputs=(
+                    Sink(sink_id="s1", node_id="n1", format="csv", path="a"),
+                    Sink(sink_id="s1", node_id="n1", format="mkv", path="b"),
+                ),
+            )
+
     def test_two_edges_may_not_feed_one_node(self) -> None:
         # Structural, not registry-aware: whatever the tool turns out to be, its
         # one input carries one stream. A second input is a contract change
@@ -220,7 +291,14 @@ class TestReferentialIntegrity:
         with pytest.raises(ValidationError, match="checkpoint names no such node"):
             following.with_pipeline(replacement)
 
-        bare = following.model_copy(update={"checkpoints": (), "outputs": ()})
+        # Each of the three is checked separately, so clearing them together
+        # would leave the last one named here asserted about only by this case's
+        # title.
+        without_checkpoints = following.model_copy(update={"checkpoints": ()})
+        with pytest.raises(ValidationError, match="sink names no such node"):
+            without_checkpoints.with_pipeline(replacement)
+
+        bare = without_checkpoints.model_copy(update={"outputs": ()})
         assert bare.with_pipeline(replacement).pipeline == replacement
 
     def test_an_override_naming_no_node_is_refused(self) -> None:
@@ -278,6 +356,43 @@ class TestPerReplicateDeviation:
 
         assert project.params_for("n1", "r1") == {"level": 0.9, "blur": 7}
         assert project.replicate("r1").overrides == {"n1": {"level": 0.9}}
+
+    def test_no_read_path_hands_out_a_writable_parameter(self) -> None:
+        # `frozen=True` is one level deep, and the parameter this item's own
+        # mechanism introduced — the crop node's region — is two. Every one of
+        # these reads used to alias the mapping inside the model, so a front end
+        # holding a parameter form could change what the document hashes to
+        # after it had been handed to an executor: a run that completes and is
+        # wrong, which is what the module docstring exists to prevent.
+        project = make_project()
+        node = project.pipeline.node("n1")
+
+        with pytest.raises(TypeError):
+            project.params_for("n1")["region"]["y"] = 777
+        with pytest.raises(TypeError):
+            project.params_for("n1", "r2")["region"]["x"] = 999
+        with pytest.raises(TypeError):
+            resolved_params(node, project.replicate("r2"))["region"]["x"] = 999
+        with pytest.raises(TypeError):
+            node.params["region"]["width"] = 1
+
+        assert project == make_project()
+
+    def test_a_list_valued_parameter_is_frozen_too(self) -> None:
+        # A band list is the other container a tool's parameters carry, and it
+        # is the one the `_Artifact` docstring's `ser_json_inf_nan` case was
+        # measured against — so it is stored frozen and stored as a `list`, both
+        # because a tuple would come back from YAML as a list and make a saved
+        # document unequal to itself.
+        banded = Node(
+            node_id="n1", tool_id="wavelet_bands", version="1.0.0", params={"cuts": [1, 2]}
+        )
+        project = Project(source=SourceRef(path="arena.MP4"), pipeline=Pipeline(nodes=(banded,)))
+
+        with pytest.raises(TypeError):
+            project.params_for("n1")["cuts"].append(3)
+
+        assert project.pipeline.node("n1").params == {"cuts": [1, 2]}
 
     def test_resetting_returns_a_replicate_to_the_default(self) -> None:
         # The way back from a pin, and it must not move the default: resetting
@@ -353,6 +468,44 @@ class TestCropRecords:
         assert recorded.without_crop(first).crops == (other,)
 
 
+class TestBlankStringsAreRefused:
+    """Every stored string here is resolved or matched, and none survives being
+
+    blank: a blank path resolves to the directory holding the project file, so
+    it is not a missing value that fails loudly but a valid location that is the
+    wrong one. Whitespace counts as blank for the same reason — `" "` resolves
+    identically and reads as a real entry in the YAML.
+    """
+
+    def test_a_source_path_that_names_no_file_is_refused(self) -> None:
+        with pytest.raises(ValidationError, match="source path must not be empty"):
+            SourceRef(path="   ")
+
+    def test_a_sink_path_that_names_no_directory_is_refused(self) -> None:
+        # A sink writes one output per replicate into the directory it names, so
+        # a blank one scatters a fan-out across the project folder itself.
+        with pytest.raises(ValidationError, match="sink path must not be empty"):
+            Sink(node_id="n1", format="csv", path="")
+
+    def test_a_crop_record_missing_its_path_or_provenance_is_refused(self) -> None:
+        # `cut_from` is matched by `backs` and `decoder` is provenance a later
+        # question is answered from. A blank either way is a record that claims
+        # to know where its pixels came from and does not.
+        for field in ("path", "cut_from", "decoder"):
+            with pytest.raises(ValidationError, match="crop record fields must not be empty"):
+                CropRecord.model_validate(
+                    {
+                        "path": "crops/r1.mkv",
+                        "region": ROI(0, 0, 64, 64),
+                        "format": "luma",
+                        "span": SourceSpan(start=0, end=100),
+                        "cut_from": "sha256:parent",
+                        "decoder": "ffmpeg-7.0",
+                        field: "",
+                    }
+                )
+
+
 class TestConventions:
     def test_the_project_file_sits_beside_its_video(self) -> None:
         # The folder layout: the project names the child folders its derivatives
@@ -385,3 +538,10 @@ class TestConventions:
         # back as an artifact that can serve any request and supply no frames.
         with pytest.raises(ValidationError, match="at least one frame"):
             SourceSpan(start=120, end=120)
+
+    def test_a_span_starting_before_the_source_does_is_refused(self) -> None:
+        # File frame 0 is source frame `span.start`, and nothing else translates
+        # between the two index spaces — so a negative start makes every
+        # translation off by that amount rather than failing anywhere.
+        with pytest.raises(ValidationError, match="start must be non-negative"):
+            SourceSpan(start=-1, end=100)

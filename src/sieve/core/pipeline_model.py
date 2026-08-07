@@ -138,12 +138,113 @@ def _posix_relative(target: Path, base: Path) -> str:
     return PurePosixPath(relative.replace(os.sep, "/")).as_posix()
 
 
+class FrozenMapping(dict[str, Any]):
+    """A mapping that refuses every write, and is still a `dict`.
+
+    Being a `dict` subclass rather than a `MappingProxyType` is the whole
+    design. A parameter value lives in an `Any`-typed field, so it passes
+    through pydantic's fallback serializer, and that serializer refuses a
+    `mappingproxy` outright — `model_dump(mode="json")` raises
+    `PydanticSerializationError: Unable to serialize unknown type`, which would
+    make the document unsavable rather than immutable. A `dict` subclass is
+    serialized as the dict it is, compares equal to the plain mapping it was
+    built from, and leaves `ser_json_inf_nan="constants"` reading the same
+    values it read before.
+
+    Copy and pickle go through `__setitem__` for a `dict` subclass, so both are
+    answered here: the value is immutable, so a copy of it may be itself, and
+    the cluster handoff that pickles a `Project` must not trip over its own
+    parameters.
+    """
+
+    def _immutable(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise TypeError(f"{type(self).__name__} is immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    __ior__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+
+    def __copy__(self) -> Self:
+        return self
+
+    def __deepcopy__(self, _memo: dict[int, Any]) -> Self:
+        return self
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (type(self), (dict(self),))
+
+
+class FrozenSequence(list[Any]):
+    """`FrozenMapping`'s counterpart for a parameter that is a list.
+
+    A `list` subclass for `FrozenMapping`'s reasons, and not a tuple for one
+    more: a tuple round-trips through YAML as a list, so freezing to tuples
+    would make a document unequal to itself across a save purely by type.
+    """
+
+    def _immutable(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise TypeError(f"{type(self).__name__} is immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    __iadd__ = _immutable
+    __imul__ = _immutable
+    append = _immutable
+    clear = _immutable
+    extend = _immutable
+    insert = _immutable
+    pop = _immutable
+    remove = _immutable
+    reverse = _immutable
+    sort = _immutable
+
+    def __copy__(self) -> Self:
+        return self
+
+    def __deepcopy__(self, _memo: dict[int, Any]) -> Self:
+        return self
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (type(self), (list(self),))
+
+
+def frozen_value(value: Any) -> Any:
+    """`value` with every container inside it made unwritable.
+
+    Applied where a parameter enters the document, so that the immutability
+    `frozen=True` claims is a property of the stored value rather than of the
+    discipline of each read. The alternative — deep-copying at every read path —
+    leaves the guarantee one forgotten method away from being false, and pays a
+    deep copy per `params_for` call, on the interactive path and again per node
+    per replicate whenever a key is built.
+
+    Scalars are returned as they are: what a document can hold is what YAML
+    round-trips, and every leaf of that is already immutable.
+    """
+    if isinstance(value, Mapping):
+        return FrozenMapping({key: frozen_value(item) for key, item in value.items()})
+    if isinstance(value, list | tuple):
+        return FrozenSequence(frozen_value(item) for item in value)
+    return value
+
+
 class _Artifact(BaseModel):
     """Shared config for every model in the document.
 
     Frozen because a document that has been written to disk, hashed, or handed
     to an executor must not then change underneath it. Extra fields forbidden
     for the module docstring's reason.
+
+    `frozen=True` on its own is one level deep — it stops a field being
+    reassigned and says nothing about a dict nested inside one, and the crop
+    node's region is exactly such a dict (`adr/detector-is-a-node.md`). The
+    fields that can hold a container are therefore frozen through
+    `frozen_value` as they are validated.
 
     `ser_json_inf_nan="constants"` is not a formatting preference. Pydantic
     leaves a non-finite float alone in a *typed* field under
@@ -248,6 +349,11 @@ class Replicate(_Artifact):
     #: optimization.
     overrides: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
+    @field_validator("overrides")
+    @classmethod
+    def _unwritable(cls, value: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        return frozen_value(value)
+
     def renamed(self, name: str) -> Self:
         """Copy carrying a new display name and the same identity."""
         return self.model_copy(update={"name": name})
@@ -255,8 +361,9 @@ class Replicate(_Artifact):
     def override_for(self, node_id: str) -> dict[str, Any]:
         """This replicate's deviation at `node_id`, empty when it follows.
 
-        A copy: handing out the live mapping nested inside a frozen model would
-        make `frozen=True` a claim the type cannot keep.
+        The mapping handed back is a plain one the caller may build on, and
+        every value in it is frozen, so a write through it lands nowhere rather
+        than in a document that has already been hashed.
         """
         return dict(self.overrides.get(node_id, {}))
 
@@ -266,12 +373,17 @@ class Replicate(_Artifact):
         Merged, not replaced, because an edit names only the parameters it
         touched. Replacing would silently un-pin every other parameter the
         replicate had been configured with.
+
+        `model_copy` runs no validator, so the freeze is applied here: what
+        `changes` carries is the caller's own mapping, and storing it as it
+        stands would leave that caller holding a writable handle into a frozen
+        model.
         """
         if not changes:
             return self
-        merged = {key: dict(value) for key, value in self.overrides.items()}
+        merged = dict(self.overrides)
         merged[node_id] = {**merged.get(node_id, {}), **changes}
-        return self.model_copy(update={"overrides": merged})
+        return self.model_copy(update={"overrides": frozen_value(merged)})
 
     def without_override(self, node_id: str) -> Self:
         """Copy that follows `node_id`'s baseline again.
@@ -282,7 +394,7 @@ class Replicate(_Artifact):
         if node_id not in self.overrides:
             return self
         kept = {key: value for key, value in self.overrides.items() if key != node_id}
-        return self.model_copy(update={"overrides": kept})
+        return self.model_copy(update={"overrides": FrozenMapping(kept)})
 
     def with_overrides_limited_to(self, node_ids: Collection[str]) -> Self:
         """Copy keeping only the deviations that still name a real node.
@@ -295,7 +407,7 @@ class Replicate(_Artifact):
         kept = {key: value for key, value in self.overrides.items() if key in node_ids}
         if kept == self.overrides:
             return self
-        return self.model_copy(update={"overrides": kept})
+        return self.model_copy(update={"overrides": FrozenMapping(kept)})
 
 
 class Node(_Artifact):
@@ -321,6 +433,11 @@ class Node(_Artifact):
     #: Not "the parameters" — "the default for replicates that have not been
     #: configured". See the module docstring's identity line.
     params: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("params")
+    @classmethod
+    def _unwritable(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return frozen_value(value)
 
     @field_validator("tool_id")
     @classmethod
@@ -351,6 +468,10 @@ def resolved_params(node: Node, replicate: Replicate | None = None) -> dict[str,
 
     `replicate=None` is the node's baseline — what a graph inspected outside any
     fan-out shows, and what a project with no replicates runs.
+
+    The mapping returned is a fresh outer dict of frozen values, so a caller may
+    build the next edit on top of what it read and still cannot write through it
+    into a document that has been hashed.
     """
     if replicate is None:
         return dict(node.params)
@@ -377,7 +498,7 @@ def edited_params(
     changed = {
         name: value for name, value in params.items() if name not in before or before[name] != value
     }
-    updated = node.model_copy(update={"params": {**node.params, **params}})
+    updated = node.model_copy(update={"params": frozen_value({**node.params, **params})})
     return updated, replicate.with_override(node.node_id, changed)
 
 
@@ -428,6 +549,11 @@ class Sink(_Artifact):
     #: Writer options — codec, frame rate, column selection. Opaque here for
     #: `Node.params`' reason.
     params: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("params")
+    @classmethod
+    def _unwritable(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return frozen_value(value)
 
     @field_validator("format")
     @classmethod

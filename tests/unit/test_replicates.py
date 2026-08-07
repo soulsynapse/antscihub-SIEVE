@@ -8,6 +8,8 @@ the replicate rather than the document.
 
 from __future__ import annotations
 
+import pytest
+
 from sieve.core.pipeline_model import Replicate
 
 
@@ -50,6 +52,33 @@ class TestOverrides:
         original.override_for("n1")["level"] = 0.9
 
         assert original.overrides == {"n1": {"level": 0.5}}
+
+    def test_a_container_valued_override_cannot_be_written_through(self) -> None:
+        # The case above pins the same claim for a scalar, and a shallow copy is
+        # enough for that and for nothing else. A replicate's geometry is a
+        # region — a mapping — since `adr/detector-is-a-node.md` moved it onto
+        # the crop node's parameter, so the container case is the one the
+        # document actually stores, not a hypothetical.
+        original = _replicate("a").with_override("n1", {"region": {"x": 0, "y": 0}})
+
+        with pytest.raises(TypeError):
+            original.override_for("n1")["region"]["x"] = 999
+        with pytest.raises(TypeError):
+            original.overrides["n1"]["region"]["y"] = 999
+
+        assert original.overrides == {"n1": {"region": {"x": 0, "y": 0}}}
+
+    def test_the_mapping_an_override_was_built_from_is_not_the_one_stored(self) -> None:
+        # `with_override` runs no validator — `model_copy` skips them — so the
+        # freeze has to happen in the method. Without it a front end holding the
+        # parameter form it submitted would hold a writable handle into a
+        # document that has since been hashed.
+        submitted = {"region": {"x": 0, "y": 0}}
+        pinned = _replicate("a").with_override("n1", submitted)
+
+        submitted["region"]["x"] = 999
+
+        assert pinned.override_for("n1") == {"region": {"x": 0, "y": 0}}
 
     def test_pinning_one_parameter_leaves_the_others_pinned(self) -> None:
         # An edit names only what it touched, so overrides merge. Replacing

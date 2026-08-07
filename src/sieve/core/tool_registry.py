@@ -21,6 +21,7 @@ from sieve.core.tool_base import (
     ElementNames,
     Mode,
     ParamsBase,
+    ParamStereotype,
     StreamSpec,
     ToolSpec,
 )
@@ -134,6 +135,7 @@ def register_tool(
     primary_params: tuple[str, ...] = (),
     caption: tuple[CaptionPart, ...] = (),
     param_value_labels: Mapping[str, Mapping[str, str]] | None = None,
+    param_stereotypes: Mapping[str, ParamStereotype] | None = None,
     element: ElementDeclaration | None = None,
     element_names: ElementNames | None = None,
     registry: ToolRegistry | None = None,
@@ -170,6 +172,7 @@ def register_tool(
             primary_params=primary_params,
             caption=caption,
             param_value_labels={} if param_value_labels is None else param_value_labels,
+            param_stereotypes={} if param_stereotypes is None else param_stereotypes,
             element=element,
             element_names=element_names,
         )

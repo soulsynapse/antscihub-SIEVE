@@ -16,6 +16,10 @@ check && lint-imports && pytest` — the linter, not the formatter — so
 `ruff format` reads the same `[tool.ruff]` line length the linter does and is
 never run.
 
+The `caption_unknown` line is no longer the instance: 01.4 was editing that
+file and reformatted it in passing. The gap is unchanged — nothing runs the
+formatter, so the next one lands the same way.
+
 Either it joins the gate and the tree is reformatted once, or it is
 deliberately not part of the contract and `pyproject.toml` says which. The state to avoid is the current one, where a contributor who
 runs the formatter produces diff noise in files they did not otherwise touch.

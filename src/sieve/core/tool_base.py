@@ -40,6 +40,13 @@ discipline through `node_lookahead_frames`, plus one cross-check warmup does not
 need: `Mode.STREAMING` and a nonzero lookahead contradict each other outright,
 since a node that emits on consumption has no later frame to have read.
 
+`param_stereotypes` is the one declaration here whose consumer does not exist
+yet: how each parameter is populated, read by Phase 7's widget generator and by
+nothing before it. It is admitted early under the single shape
+`adr/declared-means-verified.md` licenses — the vocabulary is closed, the map is
+total over `params_model`, and both are refused by name at registration, so the
+check is the consumer until the generator is.
+
 v2's fourth params-derived declaration, `frame_bytes_ratio`, is cut here with
 `CostEstimate` and `backend_agnostic`: each fed machinery v3 has not built, and
 a declaration with no consumer is refused rather than stored
@@ -567,7 +574,41 @@ class CaptionPart:
             raise ValueError("static caption text cannot carry a label or format_spec")
 
 
+class ParamStereotype(StrEnum):
+    """How a parameter is populated — the vocabulary a widget generator reads.
+
+    Qt-free by construction: a stereotype names the *kind of population* a value
+    has, not a control. Phase 7's generator maps a kind to a widget and a
+    handoff surface — a `REGION` gets the canvas draw, a `SPAN` gets timeline
+    handles — and it is that one mapping, rather than a branch on `tool_id`,
+    that lets a tool arrive with no GUI code at all
+    (`adr/gui-knows-kinds-not-tools.md`).
+
+    The vocabulary is closed, and closing it is the whole asymmetry: tools grow
+    fast because kinds grow slowly, so a sixth member is a deliberate decision
+    forced by a tool that cannot be expressed in five, not a place to put a
+    tool's own presentation. Until that generator exists, `ToolSpec` refusing an
+    unknown kind by name is what stands in as the consumer
+    (`adr/declared-means-verified.md`).
+    """
+
+    #: One number within declared bounds. Spinbox, slider, or both.
+    SCALAR_RANGE = "scalar-range"
+    #: One of a fixed set of choices, read through `param_value_labels`.
+    ENUM = "enum"
+    #: A half-open interval of frames or time.
+    SPAN = "span"
+    #: A rectangle in the frame the node is handed, e.g. `crop`'s `ROI`.
+    REGION = "region"
+    #: A single location in the frame — what a stamp tool would declare.
+    POINT = "point"
+
+
 def _empty_param_value_labels() -> Mapping[str, Mapping[str, str]]:
+    return {}
+
+
+def _empty_param_stereotypes() -> Mapping[str, ParamStereotype]:
     return {}
 
 
@@ -687,6 +728,19 @@ class ToolSpec:
     param_value_labels: Mapping[str, Mapping[str, str]] = field(
         default_factory=_empty_param_value_labels
     )
+    #: How each parameter is populated, one entry per field of `params_model`.
+    #: Total rather than optional, and checked below: an omitted field is one
+    #: the Phase-7 generator emits no widget for, which is `primary_params`'
+    #: failure mode — a control that silently is not on the panel — reached by
+    #: forgetting rather than by a rename.
+    #:
+    #: A mapping on the spec rather than metadata on the pydantic field, for
+    #: `SPEC_CHANNELS`' reason: presentation policy in `core` is only checkable
+    #: while it is a `ToolSpec` field the partition can name. A hint tucked into
+    #: `Field(json_schema_extra=...)` would be invisible to it.
+    param_stereotypes: Mapping[str, ParamStereotype] = field(
+        default_factory=_empty_param_stereotypes
+    )
     #: What one value of an emitted frame is a value of — a kind outright, or a
     #: relation to what arrived. Required of every array emitter and refused of
     #: every table emitter; `__post_init__` enforces both, which is what makes
@@ -783,7 +837,9 @@ class ToolSpec:
                 f"{self.tool_id}: primary_params names no such field: {sorted(unknown)}"
             )
         caption_unknown = [
-            part.param for part in self.caption if part.param is not None and part.param not in known
+            part.param
+            for part in self.caption
+            if part.param is not None and part.param not in known
         ]
         if caption_unknown:
             raise ValueError(
@@ -794,6 +850,34 @@ class ToolSpec:
             raise ValueError(
                 f"{self.tool_id}: param_value_labels names no such field: {sorted(label_unknown)}"
             )
+        stereotype_unknown = [name for name in self.param_stereotypes if name not in known]
+        if stereotype_unknown:
+            raise ValueError(
+                f"{self.tool_id}: param_stereotypes names no such field: "
+                f"{sorted(stereotype_unknown)}"
+            )
+        undeclared = known - set(self.param_stereotypes)
+        if undeclared:
+            raise ValueError(
+                f"{self.tool_id}: declares no stereotype for {sorted(undeclared)} — every "
+                "parameter says how it is populated, because a field the map skips is one the "
+                "widget generator has nothing to emit for and the symptom is a missing control"
+            )
+        for name in sorted(self.param_stereotypes):
+            kind = self.param_stereotypes[name]
+            if not isinstance(kind, ParamStereotype):
+                # `TypeError` for `_whole_lookahead`'s reason: the neighbouring
+                # refusals take a value that is legal for its type and wrong for
+                # the tool, while a kind outside the vocabulary is not a
+                # `ParamStereotype` at all — including one spelled right as a
+                # bare string, since a member is what the generator dispatches
+                # on.
+                raise TypeError(
+                    f"{self.tool_id}: param_stereotypes[{name!r}] is {kind!r}, which is not a "
+                    f"stereotype — the vocabulary is closed to "
+                    f"{[member.value for member in ParamStereotype]}, and a sixth kind is a "
+                    "decision about what the GUI can generate rather than a field a tool fills in"
+                )
         # Comparing the function objects, not calling them: a params model with
         # required fields cannot be instantiated here, and the question is
         # whether an override exists at all rather than what it returns.
@@ -905,6 +989,7 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "primary_params": Channel.PRESENTATION,
     "caption": Channel.PRESENTATION,
     "param_value_labels": Channel.PRESENTATION,
+    "param_stereotypes": Channel.PRESENTATION,
     "summary": Channel.PRESENTATION,
 }
 

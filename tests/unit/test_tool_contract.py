@@ -26,6 +26,7 @@ from sieve.core.tool_base import (
     ElementRelation,
     Mode,
     ParamsBase,
+    ParamStereotype,
     TableSpec,
     ToolSpec,
     caption_for_params,
@@ -132,6 +133,8 @@ class CenteredWindowParams(ParamsBase):
 
 
 def make_spec(**overrides: object) -> ToolSpec:
+    model = overrides.get("params_model", SampleParams)
+    assert isinstance(model, type) and issubclass(model, ParamsBase)
     fields: dict[str, object] = {
         "tool_id": "downsample",
         "version": "1.0.0",
@@ -140,6 +143,10 @@ def make_spec(**overrides: object) -> ToolSpec:
         "accepts": ArraySpec(),
         "emits": ArraySpec(),
         "element": ElementRelation.PRESERVED,
+        # Derived rather than written out: stereotypes are total over the
+        # params model, so every fixture below would otherwise carry a map
+        # naming its own fields before it could say the thing it is about.
+        "param_stereotypes": dict.fromkeys(model.model_fields, ParamStereotype.SCALAR_RANGE),
     }
     fields.update(overrides)
     return ToolSpec(**fields)  # pyright: ignore[reportArgumentType]
@@ -431,6 +438,7 @@ class TestLookahead:
             element=ElementRelation.PRESERVED,
             mode=Mode.WINDOWED,
             settling_epsilon=0.0,
+            param_stereotypes={"length": ParamStereotype.SCALAR_RANGE},
             registry=registry,
         )
         class DecoratedCentered(CenteredWindowParams):
@@ -533,6 +541,64 @@ class TestElementMeaning:
             )
 
 
+class TestParamStereotypes:
+    """How a param is populated, declared as data a Qt-free layer can hold.
+
+    Nothing reads these until Phase 7's widget generator, so the checks below
+    *are* the consumer for now — the licensed shape in
+    `adr/declared-means-verified.md`. Every test name carries `stereotype`
+    because the item's gate selects on it.
+    """
+
+    def test_the_stereotype_vocabulary_is_closed(self) -> None:
+        # Kinds grow slowly and deliberately (`adr/gui-knows-kinds-not-tools.md`)
+        # — the asymmetry that lets tools grow fast is that each new kind costs
+        # generator work, so a sixth member arriving without a tool that forced
+        # it fails here rather than in a review nobody scheduled.
+        assert [kind.value for kind in ParamStereotype] == [
+            "scalar-range",
+            "enum",
+            "span",
+            "region",
+            "point",
+        ]
+
+    def test_every_param_field_declares_a_stereotype(self) -> None:
+        # Totality is what makes the declaration worth having: a field the map
+        # skips is a parameter the generator emits no widget for, and the
+        # symptom is a control that is simply not on the panel — `primary_params`'
+        # failure mode, minus the chance of noticing it on a tool you use.
+        with pytest.raises(ValueError, match=r"declares no stereotype for.*anti_alias"):
+            make_spec(param_stereotypes={"factor": ParamStereotype.SCALAR_RANGE})
+
+    def test_a_stereotype_for_no_such_field_is_refused(self) -> None:
+        with pytest.raises(ValueError, match=r"param_stereotypes names no such field.*scale"):
+            make_spec(
+                param_stereotypes={
+                    "factor": ParamStereotype.SCALAR_RANGE,
+                    "anti_alias": ParamStereotype.ENUM,
+                    "scale": ParamStereotype.SCALAR_RANGE,
+                }
+            )
+
+    def test_an_unknown_stereotype_kind_is_refused_by_name(self) -> None:
+        # The vocabulary is closed by identity rather than by spelling: a tool
+        # inventing `slider` is refused here, and so is one that wrote the right
+        # word as a bare string, because a member is what the generator
+        # dispatches on and a string that happens to match today is a match
+        # nothing keeps true. `TypeError` rather than the file's usual
+        # `ValueError` for `_whole_lookahead`'s reason — this is not a legal
+        # value used wrongly, it is not a `ParamStereotype`.
+        with pytest.raises(TypeError, match=r"'slider'.*is not a stereotype"):
+            make_spec(param_stereotypes={"factor": "slider", "anti_alias": ParamStereotype.ENUM})
+
+    def test_stereotypes_are_a_presentation_channel_declaration(self) -> None:
+        # Beside `primary_params` and for its reason: never hashed, never read
+        # by the executor, and the partition is the only thing that can see a
+        # field carrying GUI policy in core.
+        assert SPEC_CHANNELS["param_stereotypes"] is Channel.PRESENTATION
+
+
 class TestArraySpec:
     def test_disjoint_channel_sets_do_not_chain(self) -> None:
         gray_only = ArraySpec(channels=(ChannelSpec.GRAY,))
@@ -618,6 +684,10 @@ class TestToolRegistry:
             emits=ArraySpec(),
             element=ElementRelation.PRESERVED,
             primary_params=("factor",),
+            param_stereotypes={
+                "factor": ParamStereotype.SCALAR_RANGE,
+                "anti_alias": ParamStereotype.ENUM,
+            },
             registry=registry,
         )
         class BlurParams(SampleParams):
@@ -699,6 +769,10 @@ PROBES: dict[str, Any] = {
     "primary_params": ("factor",),
     "caption": (CaptionPart(label="factor", param="factor"),),
     "param_value_labels": {"anti_alias": {"True": "averaged"}},
+    "param_stereotypes": {
+        "factor": ParamStereotype.ENUM,
+        "anti_alias": ParamStereotype.ENUM,
+    },
     "element": ElementKind.BLOCK,
     "element_names": ElementNames("block", "blocks"),
 }
@@ -749,7 +823,12 @@ class TestDecoratorMatchesSpec:
         for name, probe in PROBES.items():
             registry = ToolRegistry()
             model = models.get(name, ProbeParams)
-            values = {**BASE, name: probe}
+            # Stereotypes are total over the params model, and the model varies
+            # with the probe, so the map is derived before the probe is applied
+            # rather than carried in `BASE` — where it would be wrong for the
+            # two rows that ride on a different one.
+            stereotypes = dict.fromkeys(model.model_fields, ParamStereotype.SCALAR_RANGE)
+            values = {**BASE, "param_stereotypes": stereotypes, name: probe}
             if name == "element":
                 values["element_names"] = ElementNames("block", "blocks")
             elif name == "element_names":

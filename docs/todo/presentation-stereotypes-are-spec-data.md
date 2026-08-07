@@ -1,7 +1,7 @@
 ---
 title: Presentation stereotypes are spec data
 step: "01.4"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -k stereotype -q"
 opened: 2026-08-06

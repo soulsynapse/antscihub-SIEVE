@@ -2,15 +2,15 @@
 title: decode/ ports verbatim
 step: "02.1"
 status: deferred
-gated_on: "a ruling on the three dependencies below: whether test_decode_format.py belongs to this item at all, whether mutual/ comes over with decode/, and where write_ffv1 lands"
-done_when: "uv run pytest tests/integration/test_decode.py tests/unit/test_decode_format.py tests/unit/test_decode_workers.py -q"
+gated_on: "a ruling on two phase-order questions: whether mutual/ comes over with decode/, and where write_ffv1 lands for test_decode.py's NTSC fixture"
+done_when: "uv run pytest tests/integration/test_decode.py tests/unit/test_decode_workers.py -q"
 opened: 2026-08-06
 ---
 
 # decode/ ports verbatim
 
 All six modules of `decode/`, byte-identical modulo imports (PLAN.md, porting
-discipline); the three test files above port with them and run on
+discipline); the test files above port with them and run on
 `synthetic_video` (00.4). ffmpeg presence is the environment's problem, not
 the port's — if it is missing, that is a blocker note at the bottom of this
 item, never a softened test.
@@ -53,3 +53,27 @@ carrying four unnamed files (`mutual/{__init__,machine,pool_meter,shares}.py`),
 which "no files beyond what the item names" forbids.
 
 Nothing was written to `src/` or `tests/`.
+
+## Reviewed 2026-08-07: one of the three was the criterion's to fix
+
+All three were re-derived against v2 `main` (671aa8a) and PLAN.md and all
+three hold. They are not the same kind of problem, and only the first was a
+reviewer's to settle.
+
+`test_decode_format.py` is struck from `done_when`. Every one of its cases
+imports a module that does not exist after this item — the strongest form of
+the test the 01.2 amendment established — and its subjects are `dag`,
+`cache_key`, and `executor`, which 02.2 and 02.3 build. It does not simply
+move there: it also needs `backend/` (dropped), `filter_base`/
+`filter_registry` under their v2 names, and `pipeline_model` (Phase 3), so it
+is a re-derivation and not a port, and it is now a pool item
+(`the-decode-executor-format-contract-is-rederived.md`) rather than a line in
+02.3's criterion.
+
+The other two are phase-order rulings, not criterion defects, so the item
+stays `deferred` on them. Striking `test_decode.py` would strike this item's
+whole subject, and pulling `mutual/` or `crop_writer.py` forward is a change
+to PLAN.md's order — the reviewer may edit a criterion, not the plan. The
+underlying tension is in PLAN.md itself: the port disposition lists `decode/*`
+as verbatim while Phase 5 holds `mutual/` "only if a command reads it", and
+`decode/ffmpeg.py` reads it. One of those two sentences has to give.

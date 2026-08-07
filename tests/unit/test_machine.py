@@ -114,15 +114,19 @@ def test_the_desktop_answer_is_physical_memory_and_it_is_a_real_number(tmp_path:
 def test_the_session_rss_reading_is_real_and_monotone_in_allocation() -> None:
     """A live process reads its own memory, and holding more shows up.
 
-    The second half is what distinguishes an actual reading from a constant:
-    allocate 64 MB, touch it so it is resident, and the reading must move by
-    at least most of it. The lower bound is deliberately loose — the interp
-    may free other things meanwhile — but a sampler returning a cached or
-    fabricated number fails it every time.
+    Movement is the whole claim: allocate 64 MB, touch it so it is resident,
+    and the reading must move by at least most of it. The lower bound is
+    deliberately loose — the interpreter may free other things meanwhile —
+    but a sampler returning a cached or fabricated number fails it every time.
+
+    v2 also asserted a floor on the reading before allocating, which measured
+    the pytest session's import footprint rather than the sampler: it passed
+    over the whole suite and failed over the three files 03.1's criterion
+    named. Dropped rather than lowered, because the movement assertion below
+    already refuses every constant a floor would have caught
+    (`findings/2026.08.07-the-rss-floor-measures-the-test-session-not-the-resolver.md`).
     """
     before = process_memory_bytes()
-    assert before > 64 * MIB  # a Python process with numpy loaded holds more
-
     slab = bytearray(64 * MIB)
     slab[::4096] = b"x" * len(slab[::4096])  # touch every page
     after = process_memory_bytes()

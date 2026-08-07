@@ -1,6 +1,6 @@
 ---
 title: Proof of red covers every line of a contract
-priority: normal
+priority: low
 phase: 0
 status: open
 gated_on: nothing

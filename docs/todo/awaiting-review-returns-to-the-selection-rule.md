@@ -1,6 +1,6 @@
 ---
 title: awaiting-review returns to the selection rule
-priority: high
+priority: normal
 status: open
 gated_on: nothing
 opened: 2026-08-07

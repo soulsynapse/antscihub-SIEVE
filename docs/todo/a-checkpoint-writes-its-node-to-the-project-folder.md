@@ -18,9 +18,12 @@ want persisted before pressing process settles which.
 
 What lands: a run writes each checkpointed node's per-frame output into the
 project folder, and a sink record says where and in what format. The format
-is this item's decision and it is recorded as one — a file per checkpoint,
-readable without SIEVE, is the default the revival table's zarr row is
-measured against later. The writer lives in `storage/` beside `crop_writer`,
+is decided: one `.npy` per checkpointed node per replicate, plus a manifest
+recording the node key and the span it covers. It needs no library anyone has
+to argue for, it opens in numpy and nothing else, and it makes this phase's
+gate a file comparison rather than a claim. zarr earns its way in when a
+result is too large or too random-access for that, which is the trigger the
+revival table already holds. The writer lives in `storage/` beside `crop_writer`,
 which is the second output format VISION's never-line holds against "before
 someone asks"; this is the ask.
 

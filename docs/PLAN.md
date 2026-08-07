@@ -39,9 +39,11 @@ restating it.
   the item's cut list names is in scope; adapting one is not.
 - A v2 declaration the item's cut list does not name and no v3 machinery
   consumes is refused, not carried (`adr/declared-means-verified.md`).
-- No files beyond what the item names — no per-tool `.md` (an open question
-  below), no helper modules (`adr/a-tool-is-one-file.md`,
-  `adr/ops-admission-is-two-tools.md`).
+- No files beyond what the item names — no per-tool `.md`, no helper modules
+  (`adr/a-tool-is-one-file.md`, `adr/ops-admission-is-two-tools.md`).
+  Guidance is not a file in v3: what a tool is for goes in its module
+  docstring while it is being written, and is promoted to a `ToolSpec` field
+  in Phase 7 when the expander that shows it exists.
 - When the item cannot be done as written, it stays `awaiting-review` with
   the blocker written at the bottom. Wrong-but-green is the one outcome the
   loop cannot detect; a stopped item is cheap.
@@ -170,8 +172,12 @@ port: its math lands in `tools/detect.py`, and `ops/` appears only on the
 two-tool rule (`adr/ops-admission-is-two-tools.md`).
 
 Gate per tool: numeric parity against v2 goldens. For `detect`, the parity
-target is v2's `detect/` **package output** (centered whole-record — what was
-tuned against), not the trailing `filters/detect.py` kernel.
+target is v2's `detect/` **package output** — centered whole-record, which is
+what was tuned against — and not the trailing `filters/detect.py` kernel.
+The trailing kernel is the shape that could not express what a detector does;
+it is why the detector node blocked in v2 and why Phase 1 added the second
+side of the window, so parity against it would certify the artifact this plan
+replaced.
 
 ## Phase 5 — Results at rest, the full CLI, and the oracle in CI
 
@@ -233,6 +239,13 @@ changed between the two runs and every cache key unmoved.
 
 `bench/budgets.py` + `metrics.py` verbatim (two-regime table, character-exact
 pin test); `pipeline/preview.py` and `cli/preview_cmd.py` port-with-rename.
+`bench/sweep.py` and its command port here too, and they are not optional
+tooling: v3 carried `mutual/shares.py`'s worker constants over verbatim,
+chosen on v2's machine, and sweep is what says whether such a constant is
+defensible at all — it measures the curvature of the response surface over
+core sets and worker counts, and a flat optimum makes a per-machine constant
+harmless while a sharp one makes it wrong everywhere it was not measured.
+Having imported the constants, this repo owns that question.
 
 Gate: in-pipeline budgets (<100 ms slider→preview, <200 ms slider→graph)
 measured headless through the preview session — the value proposition proven
@@ -240,6 +253,18 @@ before a single widget exists, so any later regression is attributable to the
 GUI.
 
 ## Phase 7 — GUI, re-derived
+
+The first cut is a capability, not a surface list: open a project, see the
+pipeline the way VISION describes it, tune a param with the graphs refilling
+inside the budget, check off the outputs to keep, run. Everything v2 had
+beyond that — the wizard, the replicate tab, the history dialog, the sweep
+view — waits, and each waits for a reason rather than for room: the history
+dialog would make undo a visible object, which is the opposite of the two
+stacks of whole values the v2.5 spike settled on. A layout can be rearranged
+later at low cost; a capability that implies machinery cannot, which is why
+the cut is drawn here and not at the widget level. Guidance text lands in
+this phase as a `ToolSpec` field, promoted from the tool docstrings that hold
+it until the expander exists to read it.
 
 Not ported; `filter_tab.py` is never opened. The starting skeleton is the
 v2.5 spike's `gui`/`session` packages, with v2's held parts ported into it
@@ -280,11 +305,12 @@ regimes measured through the GUI; the exception list still empty.
 | `pipeline/lowering.py` — crop and scale pushed into the decoder | a loop budget missed without it (Phase 6's measurement), which is the only evidence that would justify 215 lines reaching across the graph, the schema and `decode/lowered` |
 | v2 project import (`compat/`) | a real v2 project that must come over (`adr/v2-does-not-import.md`) |
 | nox, completion tool, graph-system | something here concretely needing the mechanism |
+| `bench/retention_trace.py` — recording a tuning session and replaying it through candidate proxy-retention policies | a Phase-7 proxy ring plus a proposal to change its policy; the module exists because a reasoned guess about retention is not adoptable without a replay, and there is nothing to replay until the ring is built |
 
 ## Port disposition
 
 **Verbatim:** `core/types.py`, `decode/*`, `mutual/*`, `pipeline/cache.py`,
-`storage/crop_writer.py`, `bench/budgets.py`+`metrics.py`,
+`storage/crop_writer.py`, `bench/budgets.py`+`metrics.py`+`sweep.py`,
 `tests/conftest.py` fixture, most kernels.
 
 **Port-with-rename:** `core/filter_base.py`, `filter_registry.py`,
@@ -315,12 +341,8 @@ drawn from, which is the plotting path and not the run path.
 Each carries a decision item in `docs/todo/`, so a question blocking a step
 is visible in the index rather than only here.
 
-- Detect parity target: confirm centered whole-record (`detect/` package
-  output) and abandon the trailing kernel as a target.
-- Per-tool `.md` files: hand-written like v2, generated from `ToolSpec`, or
-  dropped.
-- First GUI cut: which v2 surfaces (wizard, replicate tab, history dialog,
-  sweep) are in Phase 7 vs later.
-- `bench/sweep.py` and `bench/retention_trace.py`: the only two modules still
-  without a verdict. Nothing before Phase 6 reads either, and 05.3 is
-  deferred on the first of them.
+None open. The four that stood here on 2026-08-07 — the detect parity
+target, per-tool documents, the first GUI cut, and the last two `bench/`
+modules — were answered in the same pass that answered the phase order, and
+each answer is in the phase it binds rather than in this list. A question
+returns here when something measured contradicts one of them.

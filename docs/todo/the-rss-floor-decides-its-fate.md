@@ -1,6 +1,6 @@
 ---
 title: The RSS floor decides its fate
-status: open
+status: done
 priority: normal
 phase: 3
 gated_on: nothing
@@ -19,7 +19,7 @@ chose. Measurements in
 `findings/2026.08.07-the-rss-floor-measures-the-test-session-not-the-resolver.md`.
 
 This item is the authorization the porting discipline requires: the floor is
-in the cut list, so editing it is in scope here and nowhere else. 02.0.1's
+in the cut list, so editing it is in scope here and nowhere else. 03.1's
 review would not take it, because striking an assertion from a ported test to
 make a criterion pass is the one move a reviewer must not make on its own.
 
@@ -39,3 +39,12 @@ because the suite only ever grows and a floor that tracks it proves nothing.
 Whichever wins, the comment goes with it: "a Python process with numpy
 loaded holds more" is the claim the measurement refuted, and leaving it
 beside a changed number would preserve the reasoning that was wrong.
+
+## Ruled 2026-08-07: struck
+
+The floor is gone and the monotonicity assertion stands alone, with the
+docstring rewritten to say why the floor is absent — a reader who wonders
+where it went is the reader most likely to add it back. The comment went with
+it. `uv run pytest tests/unit/test_machine.py tests/unit/test_pool_meter.py
+tests/unit/test_ledger_sensors.py -q` is 15 passed, which is 03.1's criterion
+green over the three files it names rather than over the whole suite.

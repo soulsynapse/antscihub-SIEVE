@@ -24,16 +24,14 @@ no home since 01.2 cut its fixture — do not fold it into the in-process
 canonical-form assertion `test_tool_contract.py` already has, which cannot
 see the failure it exists for.
 
-The guidance question is not settled here and this item does not settle it.
-PLAN.md's open questions list per-tool `.md` as hand-written, generated, or
-dropped; until that is decided, the two guidance cases
-(`every_discovered_tool_has_guidance_markdown`,
-`every_guidance_file_answers_the_three_questions`) have no format to assert
-against. Port the four that do — the scan imports no tool module, checked by
-parsing `__init__.py` as an AST rather than as text; every discovered tool
-declares a caption; and the two `ParamsBase` cases — and write the guidance
-question at the bottom rather than inventing an answer to it.
+The two guidance cases (`every_discovered_tool_has_guidance_markdown`,
+`every_guidance_file_answers_the_three_questions`) are *dropped*, not
+deferred: there is no per-tool document in v3, and guidance is a `ToolSpec`
+field arriving in Phase 7 with the expander that reads it. Port the four that
+survive — the scan imports no tool module, checked by parsing `__init__.py`
+as an AST rather than as text; every discovered tool declares a caption; and
+the two `ParamsBase` cases.
 
-This lands before 02.5 rather than in a pool because `sieve run` names a tool
+This lands before 03.8 rather than in a pool because `sieve run` names a tool
 by id in YAML and the registry has to be populated by then, and the one thing
 the registry's docstring forbids is a manifest that adding a tool must edit.

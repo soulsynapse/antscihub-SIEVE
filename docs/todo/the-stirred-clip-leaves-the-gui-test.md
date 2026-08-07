@@ -23,4 +23,4 @@ a signal that varies frame to frame in a way a windowed tool can disagree
 about, asserted directly, not assumed. Cheap enough to build per session, or
 it will not be used.
 
-No CLI work here. 05.2 and Phase 6 are the consumers.
+No CLI work here. 05.6 and Phase 6 are the consumers.

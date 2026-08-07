@@ -2,7 +2,7 @@
 title: The detect parity target is named before detect is written
 priority: high
 phase: 4
-status: open
+status: done
 gated_on: nothing
 opened: 2026-08-07
 ---
@@ -25,3 +25,11 @@ this rather than leaving it open.
 Closing it means: the sentence in PLAN.md loses "confirm", 04.8's `done_when`
 gains the artifact it compares against, and the golden's regeneration command
 (02.4's mechanism) names the package entry point, not the module.
+
+## Ruled 2026-08-07: the package output, and "confirm" is gone
+
+PLAN.md's Phase 4 gate now states it without hedging and 04.8 carries it in
+its body: the golden is minted from `detect/`'s package entry point, and the
+regeneration command recorded beside it names that entry point rather than
+the module. A run comparing against `filters/detect.py` has taken the wrong
+artifact.

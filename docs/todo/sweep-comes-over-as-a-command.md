@@ -1,22 +1,31 @@
 ---
 title: sweep comes over as a command
-step: "05.7"
-status: deferred
-gated_on: "PLAN's open question about bench/sweep.py, which has no disposition in either direction and is the whole of what this command runs"
+step: "06.4"
+status: open
+gated_on: nothing
 done_when: "uv run pytest tests/unit/test_sweep.py -q"
 opened: 2026-08-07
 ---
 
 # sweep comes over as a command
 
-`cli/sweep_cmd.py` port-with-rename: the command that measures decode
-throughput across worker counts and prints the table you pick a setting
-from. Its only real dependencies are `bench/sweep.py` and `decode/reader`.
+`bench/sweep.py` verbatim and `cli/sweep_cmd.py` port-with-rename: the
+instrument that sweeps a cost over core sets and worker counts and reports
+the curvature of the surface, so a worker constant can be judged rather than
+believed.
 
-Deferred before it starts, and deliberately so. `bench/sweep.py` appears
-nowhere in PLAN.md's port disposition — not verbatim, not renamed, not
-re-derived, not dropped — and this command is a thin front end over it, so
-doing the work means deciding the module's fate in passing. That is the
-disposition gap the plan's open questions now name. The criterion above is
-v2's own test file and stands whichever way the ruling goes, so what the
-ruling unblocks is the work, not the measurement of it.
+It lands in this phase because of what 03.1 did. `mutual/shares.py` came over
+verbatim with its caps and shares intact, every one of them chosen on v2's
+machine, and nothing since has asked whether they hold here. Sweep is the
+only thing in either repo that can answer it: a flat optimum means the
+constants are harmless wherever they came from, a sharp one means they are
+wrong everywhere they were not measured. Having imported them, this repo owns
+the question.
+
+Affinity is the machine axis and `mutual/machine.py` is what reports it, so
+the module has its dependency already. `tests/unit/test_sweep.py` is the
+criterion.
+
+The reading it produces is a `docs/findings/` file in the same session, with
+the machine named — a curvature reported in a passing test tells the next
+reader nothing about which way the constants should move.

@@ -11,7 +11,7 @@ opened: 2026-08-07
 
 Phase 6's gate, and the moment v3 either has its value proposition or does
 not: both regimes measured through the preview session on the stirred clip
-(05.1), with no Qt in the process. Under budget the number is proven before
+(05.5), with no Qt in the process. Under budget the number is proven before
 a widget exists, so any later regression is the GUI's — over budget, that is
 the finding the plan most needs and it stops Phase 7 rather than being
 smoothed.

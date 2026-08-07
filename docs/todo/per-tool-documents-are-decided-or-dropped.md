@@ -1,27 +1,27 @@
 ---
-title: Per-tool documents are decided or dropped
+title: Guidance is a spec field, not a file per tool
 priority: normal
 phase: 4
-status: open
+status: done
 gated_on: nothing
 opened: 2026-08-07
 ---
 
-# Per-tool documents are decided or dropped
+# Guidance is a spec field, not a file per tool
 
-Every Phase 4 item currently says "no per-tool `.md`, because PLAN's open
-question decides that later", which works for one tool and rots across nine:
-by 04.8 the question has been deferred eight times and the tools that could
-have carried guidance shipped without it.
+Ruled 2026-08-07, and neither of the two obvious answers won. There is no
+per-tool `.md` in v3 — a second home for a fact drifts, which is what the
+derived-docs machinery exists to prevent — and dropping guidance outright is
+wrong too, because VISION's project pane has the user hitting a down expander
+that shows "all the help text they need". That is a consumer, so the text is
+a declaration.
 
-Three options, and the evidence for each is in v2. Hand-written like v2 —
-they existed, `inspect` printed a path to them, and whether anyone read them
-is checkable in that worktree. Generated from `ToolSpec` — the param
-stereotypes (01.4) and the two-sided window (01.3) are already spec data, so
-a generated page would be derived and could not drift, which is the same
-argument `SCAFFOLD.md` won on. Dropped — the docstring is the contract's home
-in this repo and a second home is a second thing to keep in step.
+It arrives as a `ToolSpec` field in Phase 7, with the expander that reads it
+(`adr/declared-means-verified.md`). Until then it lives in the tool's module
+docstring, which is already where this repo keeps a contract, and which is
+written at the only moment anyone knows what the tool is for: while writing
+it. Phase 7 promotes it.
 
-What decides it is whether there is anything true about a tool that is not
-already in its spec or its docstring. If there is not, generation and
-dropping are the same answer and hand-writing is the only wrong one.
+What this closes for every Phase 4 item is the clause about the question
+being open. A tool item creates no document and no field; it writes a
+docstring, which it was doing anyway.

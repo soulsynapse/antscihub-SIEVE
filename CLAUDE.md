@@ -125,3 +125,7 @@ work sitting only in this checkout.
 Windows. PowerShell by default, with a Bash tool also available. This directory
 is a git worktree, so `.git` is a file rather than a directory — anything that
 assumes otherwise fails in a confusing way.
+
+A queued loop run gets its own worktree. Two sessions writing this one commit
+each other's uncommitted work under the wrong authorship — it has happened —
+and a third worktree off the same `.git` costs nothing.

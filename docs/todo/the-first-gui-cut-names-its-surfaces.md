@@ -1,27 +1,26 @@
 ---
-title: The first GUI cut names its surfaces
+title: The first GUI cut is a capability, and Phase 7 chunks from it
 priority: normal
 phase: 7
-status: open
+status: done
 gated_on: nothing
 opened: 2026-08-07
 ---
 
-# The first GUI cut names its surfaces
+# The first GUI cut is a capability, and Phase 7 chunks from it
 
-Phase 7 has no items and cannot get any until this is answered: which v2
-surfaces are in the first cut and which wait. The candidates are v2's wizard,
-replicate tab, history dialog and sweep view, against VISION's own
-description of the project pane, the pipeline view, and moving between
-replicates with the arrow keys — which is not v2's arrangement and is the
-part of VISION written most concretely.
+Ruled 2026-08-07. The first cut is what the GUI can *do*, not which of v2's
+surfaces come over: open a project, see the pipeline as VISION describes it,
+tune a param with the graphs refilling inside the budget, check off the
+outputs to keep, run. The wizard, the replicate tab, the history dialog and
+the sweep view wait — each for a reason rather than for room, the sharpest
+being that a history dialog makes undo a visible object, which is the
+opposite of the two stacks of whole immutable values the v2.5 spike settled
+on (`adr/gui-base-is-the-v25-spike.md`).
 
-The question is not a feature list. Each surface implies machinery: the
-replicate tab implies the replicates ruling
-(`replicates-need-a-home-outside-core.md`), the history dialog implies the
-undo model is visible rather than internal, the sweep view implies
-`bench/sweep.py`'s disposition. So the answer is best given as what the first
-cut can *do*, with the surfaces falling out.
+The cut is drawn at capability because that is where the cost of being wrong
+is. A layout can be rearranged for nothing; a capability drags machinery
+behind it, and machinery is what Phase 7 would have to unbuild.
 
-Until then Phase 7 stays empty on purpose — the v2.5 warning is a phase
-chunked into items before anyone knew what it was for.
+The record is in PLAN.md's Phase 7, which is where the items get chunked
+from. This file stays as the ruling's home rather than as work to do.

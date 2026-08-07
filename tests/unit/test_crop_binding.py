@@ -282,9 +282,7 @@ class TestTheTwinsCannotDisagree:
         which two independently broken implementations would also manage.
         """
         backing = _backing((record,), tmp_path)
-        resolved = resolve(
-            (record,), ARENA, home=_home(tmp_path), luma=True, want=WANT
-        )
+        resolved = resolve((record,), ARENA, home=_home(tmp_path), luma=True, want=WANT)
 
         assert backing.state is CropState.AT_REST
         assert backing.record is resolved.record

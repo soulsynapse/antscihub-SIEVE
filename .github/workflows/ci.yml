@@ -38,12 +38,18 @@ jobs:
       - name: Sync the uv environment
         run: uv sync --locked
 
-      # Character-for-character what a commit is checked against locally, so
-      # there is one gate and not two lists to keep in step. Nothing here has
+      # This line is the gate — there is no second copy of it in a noxfile or a
+      # README, so a contributor runs these four or reads them here. `ruff
+      # format --check` is separate from `ruff check` and green on one says
+      # nothing about the other; it is in the list because a configured
+      # formatter that nothing enforces means the next person to run it emits a
+      # diff unrelated to their change, and the version it enforces is pinned
+      # exactly in `pyproject.toml` so the answer does not move on a lock
+      # refresh. Nothing here has
       # to be installed for `lint-imports` to have an opinion about it — grimp
       # reads import statements, not the environment
       # (findings/2026.08.06-every-contract-goes-red-on-one-line.md), so Qt is
       # absent and OpenCV is present only because the video fixture writes an
       # mp4, and neither fact weakens a contract.
       - name: Run the gate
-        run: uv run ruff check . && uv run lint-imports && uv run pytest -q
+        run: uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run pytest -q

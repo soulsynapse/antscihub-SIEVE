@@ -178,8 +178,8 @@ PRIORITIES = ("high", "normal", "low", "unassessed")
 #: run at the head of the queue rather than a place outside it.
 DEFER_REASONS = (
     "decision",  # only Kendrick can settle it
-    "subject",   # the thing it would be about does not exist yet
-    "phase",     # no phase hosts it yet; pulled in when one is minted
+    "subject",  # the thing it would be about does not exist yet
+    "phase",  # no phase hosts it yet; pulled in when one is minted
 )
 
 #: An ADR is `settled` or it is `superseded` — there is no `proposed`, because

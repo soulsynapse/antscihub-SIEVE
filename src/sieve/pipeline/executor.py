@@ -478,9 +478,7 @@ def _bind(plan: ExecutionPlan) -> dict[str, BoundNode]:
             state=None if spec.state_factory is None else spec.state_factory(),
             mode=spec.mode,
             window=(
-                node_warmup_frames(step).frames + lookahead + 1
-                if spec.mode is Mode.WINDOWED
-                else 1
+                node_warmup_frames(step).frames + lookahead + 1 if spec.mode is Mode.WINDOWED else 1
             ),
             lookahead=lookahead,
             upstream_lag=max(

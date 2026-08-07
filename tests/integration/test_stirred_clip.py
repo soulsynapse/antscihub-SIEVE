@@ -67,9 +67,7 @@ BLOCK = 16
 #: Frames whose *difference from their predecessor* holds a burst. A block that
 #: is present on frames `first..last` is present-versus-absent on `last + 1` too,
 #: so the moving pair count is one wider at the far end than the burst is.
-MOVED = frozenset(
-    index for first, last in STIRRED_BURSTS for index in range(first, last + 2)
-)
+MOVED = frozenset(index for first, last in STIRRED_BURSTS for index in range(first, last + 2))
 
 #: How far above the still footage a burst frame has to sit. The measured ratio
 #: is ~2.5e3 against the largest codec twitch in the quiet stretches; this is
@@ -102,9 +100,7 @@ def _series(video: Path) -> NDArray[np.float32]:
     it, and a hand-rolled frame difference here would let the fixture and the
     graph disagree about the very thing being measured.
     """
-    params = BlockSignalParams(
-        signal=Signal.CHANGE_ENERGY, block=BLOCK, scale=1.0, fps=FIXTURE_FPS
-    )
+    params = BlockSignalParams(signal=Signal.CHANGE_ENERGY, block=BLOCK, scale=1.0, fps=FIXTURE_FPS)
     state = BlockSignalState()
     rows = []
     with VideoReader(video, luma=True) as reader:
@@ -141,9 +137,7 @@ class TestTheClipHoldsTwoEventsAndNothingElse:
     ) -> None:
         assert series.shape == (FIXTURE_FRAMES, *grid_shape(FIXTURE_HEIGHT, FIXTURE_WIDTH, BLOCK))
 
-    def test_every_burst_frame_outruns_every_still_frame(
-        self, series: NDArray[np.float32]
-    ) -> None:
+    def test_every_burst_frame_outruns_every_still_frame(self, series: NDArray[np.float32]) -> None:
         """Separation in time, as a margin rather than as a threshold.
 
         Frame 0 is excluded from both sides: `block_signal` has no predecessor
@@ -245,9 +239,7 @@ class TestTheRampCannotDisagree:
     it replaces cannot support the question at all.
     """
 
-    def test_every_block_of_a_frame_carries_the_same_signal(
-        self, synthetic_video: Path
-    ) -> None:
+    def test_every_block_of_a_frame_carries_the_same_signal(self, synthetic_video: Path) -> None:
         """The root cause, measured on the series rather than argued from the
         writer: a uniform field has no spatial gradient, so every block of a
         frame reduces to the same number and no value band can select a subset
@@ -256,9 +248,7 @@ class TestTheRampCannotDisagree:
 
         assert spread.max() < 1e-6
 
-    def test_the_count_is_all_or_nothing_at_every_floor(
-        self, synthetic_video: Path
-    ) -> None:
+    def test_the_count_is_all_or_nothing_at_every_floor(self, synthetic_video: Path) -> None:
         """The consequence a detector meets. Floors are taken from the ramp's
         own band power, so this is not the stirred clip's scale applied to
         footage that never reaches it."""

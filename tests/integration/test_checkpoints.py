@@ -98,9 +98,7 @@ def _project(
 
 
 def _run(project_path: Path, span: SourceSpan = SPAN) -> str:
-    result = runner.invoke(
-        app, ["run", str(project_path), "--frames", f"{span.start}:{span.end}"]
-    )
+    result = runner.invoke(app, ["run", str(project_path), "--frames", f"{span.start}:{span.end}"])
     assert result.exit_code == 0, result.output
     return result.output
 
@@ -198,9 +196,7 @@ class TestAPersistedRunComputesWhatAnUnpersistedOneDoes:
             _project(synthetic_video, tmp_path / "plain", replicates=(target,)), DOWN, target
         )
         kept = tmp_path / "kept"
-        project_path = _project(
-            synthetic_video, kept, checkpoints=(DOWN,), replicates=(target,)
-        )
+        project_path = _project(synthetic_video, kept, checkpoints=(DOWN,), replicates=(target,))
 
         _run(project_path)
 

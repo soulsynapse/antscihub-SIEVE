@@ -90,7 +90,14 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest",
-    "ruff",
+    # Exact, unlike every other pin here, because ruff's formatter decides what
+    # the committed tree *is* rather than what it may import: a floor lets a
+    # routine `uv lock` refresh restyle files nobody edited, which is how this
+    # tree drifted out of `format --check` for two commits under four separate
+    # items. `==` makes a style change an edit with a commit behind it, and it
+    # is also what keeps a verbatim-ported module format-clean until someone
+    # deliberately bumps the number.
+    "ruff==0.16.1",
     "import-linter>=2.13",
 ]
 

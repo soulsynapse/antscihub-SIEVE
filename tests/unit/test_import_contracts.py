@@ -54,7 +54,9 @@ FORBIDDEN = "sieve.core.ops"
 #: and `lint_imports` is the same function the script calls. `no_cache` because
 #: each copy is a fresh tree at the same path family and a cache hit would
 #: answer for the wrong one.
-_LINT = "import sys; from importlinter.cli import lint_imports; sys.exit(lint_imports(no_cache=True))"
+_LINT = (
+    "import sys; from importlinter.cli import lint_imports; sys.exit(lint_imports(no_cache=True))"
+)
 
 
 def _modules(section: configparser.SectionProxy, key: str) -> list[str]:
@@ -70,7 +72,9 @@ def _contracts() -> dict[str, configparser.SectionProxy]:
     parsed = configparser.ConfigParser()
     parsed.read(CONFIG, encoding="utf-8")
     return {
-        name: parsed[name] for name in parsed.sections() if name.startswith("importlinter:contract:")
+        name: parsed[name]
+        for name in parsed.sections()
+        if name.startswith("importlinter:contract:")
     }
 
 

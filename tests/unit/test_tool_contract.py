@@ -879,6 +879,7 @@ BASE: dict[str, Any] = {
     "element": ElementRelation.PRESERVED,
 }
 
+
 def probe_run(params: ParamsBase, window: FrameSpan, state: None) -> Frame:
     """A `ToolRun` that does nothing, for the `run` probe below.
 

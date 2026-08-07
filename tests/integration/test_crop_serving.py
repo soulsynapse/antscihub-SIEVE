@@ -225,7 +225,7 @@ class TestTheServedFramesAreTheFramesTheParentWouldHaveGiven:
     def test_the_run_is_rooted_on_the_artifact_alone_and_yields_source_numbering(
         self, synthetic_video: Path, tmp_path: Path
     ) -> None:
-        """"A source in its own right" reaching the read side.
+        """ "A source in its own right" reaching the read side.
 
         The run names the parent nowhere — not in the identity it keys on, not in
         the file it opens — and still answers in *source* numbering, which is the
@@ -276,9 +276,7 @@ class TestAStaleRecordChangesNothing:
         assert int(stale.first_index) == 0
         replicate = _replicate(moved)
         assert (
-            ExecutionPlan.build(
-                dag, source=stale.identity, span=SPAN, replicate=replicate
-            ).keys
+            ExecutionPlan.build(dag, source=stale.identity, span=SPAN, replicate=replicate).keys
             == ExecutionPlan.build(
                 dag, source=source_identity(video), span=SPAN, replicate=replicate
             ).keys

@@ -1,7 +1,7 @@
 ---
 title: The import contracts bind before any code
 step: "00.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run lint-imports"
 opened: 2026-08-06

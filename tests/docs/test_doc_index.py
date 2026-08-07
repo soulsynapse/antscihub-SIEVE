@@ -923,6 +923,87 @@ def test_the_repos_own_items_are_hygienic():
     assert doc_index.gates() == []
 
 
+#: A `key: value` line offered as an example, as opposed to a bare field name
+#: or a path — the only spans this checks are the ones a reader would copy.
+EXAMPLE = re.compile(r"^[A-Za-z_][\w-]*: \S")
+#: `DOTALL` because a span wrapping across a line is one span to markdown, and
+#: without it which examples get checked would depend on where the file wraps.
+CODE_SPAN = re.compile(r"``(?P<double>.+?)``|`(?P<single>[^`]+)`", re.DOTALL)
+#: How a template marks an example as the failing form.
+REFUSED = re.compile(r"not valid YAML|ScannerError")
+#: The prohibition itself: something reserved at the head of a value.
+FORBIDS = (
+    re.compile(r"\bquotes?\b", re.IGNORECASE),
+    re.compile(r"\b(may not|cannot|must not|reserves?|reserved)\b", re.IGNORECASE),
+    re.compile(r"\b(open|opens|opening|begins?|beginning|leads?|leading|head)\b", re.IGNORECASE),
+)
+#: What makes that prohibition true: it is a rule about plain scalars.
+QUALIFIED = re.compile(r"\bunquoted\b|\bplain\b|\bnot quoted\b", re.IGNORECASE)
+
+
+def _sentences(text: str) -> list[tuple[str, list[str]]]:
+    """Each sentence with the code spans it contains.
+
+    Spans are masked before the split because they are full of the character
+    the split is on: `doc_index.py` and a path in a span would each cut a
+    sentence in half and hand the two markers to different halves.
+    """
+    spans: list[str] = []
+
+    def hide(match: re.Match[str]) -> str:
+        spans.append(" ".join((match["double"] or match["single"]).split()))
+        return f"\x00{len(spans) - 1}\x00"
+
+    out = []
+    for sentence in re.split(r"(?<=\.)\s", CODE_SPAN.sub(hide, text)):
+        held = [spans[int(i)] for i in re.findall(r"\x00(\d+)\x00", sentence)]
+        out.append((re.sub(r"\x00\d+\x00", "", sentence), held))
+    return out
+
+
+def _parses(example: str) -> bool:
+    try:
+        return isinstance(yaml.safe_load(example), dict)
+    except yaml.YAMLError:
+        return False
+
+
+def test_the_templates_do_not_forbid_the_quoting_they_recommend():
+    """A template's claim about YAML is checked as constructions, not wording.
+
+    The rule the three of them mean is YAML's plain-scalar rule, and a
+    template that drops the qualifier forbids the remedy it offers in the same
+    paragraph — in the file an author is reading while writing the field.
+    """
+    wrong: list[str] = []
+    stated = legal = illegal = 0
+    for folder in (doc_index.TODO_DIR, doc_index.FINDINGS_DIR, doc_index.ADR_DIR):
+        template = folder / "_TEMPLATE.md"
+        doc_index.parse_frontmatter(template)
+        for sentence, spans in _sentences(template.read_text(encoding="utf-8")):
+            forbidding = all(marker.search(sentence) for marker in FORBIDS)
+            stated += forbidding
+            if forbidding and not QUALIFIED.search(sentence):
+                wrong.append(f"{folder.name}: forbids an opening quote outright — {sentence}")
+            for span in spans:
+                if not EXAMPLE.match(span):
+                    continue
+                refused = bool(REFUSED.search(sentence))
+                legal += not refused
+                illegal += refused
+                if _parses(span) is refused:
+                    claim = (
+                        "shown as the failing form, but it" if refused else "offered as the fix,"
+                    )
+                    verdict = "parses" if refused else "does not parse"
+                    wrong.append(f"{folder.name}: `{span}` is {claim} {verdict}")
+
+    assert wrong == []
+    # The three of them state the rule and show both forms; a rewrite that
+    # deleted the examples would satisfy everything above and teach nothing.
+    assert (stated, bool(legal), bool(illegal)) == (3, True, True)
+
+
 def test_the_checked_in_indexes_are_current():
     # Over `derived` rather than a second list of the four, which would let a
     # target added to the tool arrive here untested and look covered.

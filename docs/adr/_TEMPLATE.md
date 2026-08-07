@@ -21,11 +21,13 @@ Copy to `docs/adr/<slug>.md`, delete this section, fill it in. Then run
 `uv run python scripts/doc_index.py`; do not edit `ARCHITECTURE.md` by hand —
 `tests/docs/test_doc_index.py` fails when it is stale.
 
-A title naming the thing it decides about — ``title: `core`'s membership is
-closed`` — has to be quoted whole, or led with a word. YAML reserves an opening
-backtick (and an opening quote), so an unquoted one is not a doc_index rule
-being broken but a file that stopped being YAML, and the error says so in terms
-of a character rather than of this field.
+A title naming the thing it decides about has to be quoted whole, or led with
+a word. ``title: `core`'s membership is closed`` is not valid YAML.
+``title: "`core`'s membership is closed"`` is the same title quoted whole, and
+parses. YAML reserves an opening backtick (and an opening quote) in an
+unquoted value, so the failing form is not a doc_index rule being broken but a
+file that stopped being YAML, and the error says so in terms of a character
+rather than of this field.
 
 `adr:` is identity: highest existing number plus one, minted once, never
 reused — the gate refuses a duplicate. `position:` is placement only: dotted

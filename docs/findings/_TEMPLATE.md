@@ -76,7 +76,10 @@ all. This is YAML's rule, not a house one — quoting the whole value
 (``probe: "`set(POS_FRAMES)` on 500 frames"``) or writing
 `probe: the set(POS_FRAMES) call on 500 frames` both satisfy it,
 and so does any block scalar, since `>` moves the backtick off the front. An
-opening quote is reserved the same way, for the same reason.
+opening quote is reserved the same way in an unquoted value, and for the same
+reason — what makes `verdict: "the seek is irreducible"` legal is that the
+quote closes, which is the difference between the quoted form and a plain
+scalar that happens to start with a reserved character.
 
 `probe` and `result` are where this lands, because a probe is usually named in
 code. `verdict` and `question` are folded above and already safe.

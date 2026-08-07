@@ -24,7 +24,7 @@ import cv2
 #: existing entry was computed from the colour path and must not be served to a
 #: run that now decodes luma, so the whole cache turns over once. *Which* format
 #: a given run used is a separate question and a per-run one; that is
-#: `DecodeFormat` in `cache_key.source_key`, not this constant.
+#: `source_key`'s `decode_format` argument, not this constant.
 DECODE_POLICY_VERSION = 2
 
 

@@ -1,7 +1,7 @@
 ---
 title: The cache key is re-derived and its layout pinned
 step: "03.4"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_key.py -q"
 opened: 2026-08-07
@@ -32,3 +32,66 @@ The layout gets a pin test in the shape `bench/budgets.py` uses: the ordered
 list of positions that enter a node key, asserted character-exact, so a later
 edit that adds or reorders one is visible in a diff rather than in a cache
 that silently misses.
+
+## Three positions the body did not name
+
+`visited` is v2's field and schema v1 has none — the convenience fields on
+`Project` are `checkpoints`, `outputs` and `crops` — so the claim that sentence
+makes lands on `checkpoints`, which the same sentence names and which is the
+one the HPC handoff empties.
+
+Two further v2 arguments go the way `backend_agnostic` goes, each on a decision
+already taken. `source_key`'s `roi` is gone: the box is the crop node's
+`region` parameter (`adr/detector-is-a-node.md`), so the geometry enters
+through `resolved_params` at the node that cuts, and this module needs no
+notion of a region. `source_key`'s `lowered_prefix` is gone with the producer
+that would build one — `pipeline/lowering.py`, which PLAN.md does not build
+until a budget is missed — for the reason `todo/the-key-walk-rejoins-the-graph.md`
+gives about the same parameter on `Dag.node_keys`. What replaces v2's `luma:
+bool` is `decode_format: CropFormat`, required rather than defaulted: the
+document already spells the two formats as the source key spells them
+(`core/pipeline_model.py`), and a caller that has not asked the graph about
+chroma has not answered this either.
+
+`upstream` is one key rather than a port-to-key mapping, and the port cases
+below drop with it: an edge names no port, so `a - b` and `b - a` are not two
+graphs schema v1 can write.
+
+## The case table
+
+9 rows, one per v2 case in `tests/unit/test_cache_key.py` — 9 test functions in
+2 classes. Three verdicts, as 03.3's table used them: *survives* — same claim,
+same name, only the fixture rewritten into schema v1's vocabulary; *replaced* —
+the claim survives but is aimed at a different subject, and the v3 case is
+named; *dropped* — the subject is gone, citing what removed it.
+
+| v2 case | Verdict | v3 case, or what removed it |
+|---|---|---|
+| `TestIsolation::editing_one_branch_leaves_its_sibling_valid` | survives | same name; the fan-out is the same three nodes with no geometry on the replicate |
+| `TestIsolation::a_pinned_replicate_ignores_the_default_moving_under_it` | survives | same name |
+| `TestIsolation::the_crop_separates_two_otherwise_identical_replicates` | replaced | `the_region_separates_two_otherwise_identical_replicates` — same claim, different subject: the box is a per-replicate override on the crop node, so what separates the two is `resolved_params` and not `source_key` |
+| `TestIsolation::locking_a_replicate_moves_no_key` | replaced | `turning_a_checkpoint_off_moves_no_key` — `Project.visited` has no schema-v1 counterpart, and the claim is about a field recorded for convenience, which is `checkpoints` |
+| `TestIsolation::a_presentation_edit_moves_no_key` | survives | same name; `cost` leaves the substitutes with `CostEstimate` and `param_stereotypes` joins them, still checked against `SPEC_CHANNELS` rather than a typed list |
+| `TestInputs::backend_identity_leaves_the_key_only_when_the_filter_claims_agreement` | dropped | `backend/` is gone (`adr/no-kernel-apparatus.md`) and Phase 1 cut `backend_agnostic` — this is the sixth position the item's body removes |
+| `TestInputs::which_port_a_stream_arrives_on_is_part_of_the_computation` | dropped | no port to bind a key to; the sorted-pairs fold it pins has no expression until a two-input tool exists |
+| `TestInputs::an_omitted_parameter_and_its_default_are_one_computation` | survives | same name |
+| `TestInputs::refuses_a_key_it_cannot_stand_behind` | survives | same name; the three refusals are `cache_policy`'s three, unchanged |
+
+Five survive, two are replaced, two are dropped, and both drops are the same
+decision twice — one about the machine a node runs on, one about the wiring
+that reaches it, neither expressible in v3.
+
+## Two v3 cases with no v2 row
+
+`a_luma_read_and_a_colour_read_of_one_file_are_two_computations` is the first
+test `source_key` has ever had. v2's file keyed everything off a hand-walk and
+asserted only about nodes, so neither the format position nor the decoder
+identity — the two things that make the root a key rather than a constant — was
+covered anywhere, and the decoder half is the one whose failure serves colour
+pixels to a graph that asked for luma.
+
+`the_positions_that_enter_a_key_are_pinned` is this item's layout pin, and it
+asserts the arity refusal as well as the two tuples: `_digest` takes the
+declared positions and refuses a part list that does not fill them, so the
+declaration is what a position has to be added to before it can be hashed
+rather than a comment beside the call.

@@ -1,7 +1,7 @@
 ---
 title: decode/ ports verbatim
 step: "03.2"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_decode.py tests/unit/test_decode_workers.py -q"
 opened: 2026-08-06
@@ -143,3 +143,27 @@ has the count. `decode/__init__.py` keeps its v3 ownership line and gains
 none of v2's re-exports: six modules is what this item names, nothing imports
 `sieve.decode` as a namespace yet, and adding the re-exports would be a
 decision about the package's surface.
+
+## Reviewed 2026-08-07: byte-identical was one word stricter than verbatim
+
+The criterion re-runs green (24 passed) and every one of the nine blobs hashes
+equal to v2 `main`. Proof of red is in the transcript: with the seven source
+files moved aside both test modules die at collection. Ruff, the five import
+contracts, and the doc-index tests pass; `pytest -q` is 219 passed, 1 failed,
+and the one failure is the spelling gate.
+
+Byte-identical is not what the porting discipline asks for. PLAN.md's rule is
+"identical modulo import paths **and ADR-1's renames**" — so `reader.py:135`,
+which calls `max_width` a thing it is never a pipeline one of, was always the
+rename's to change, and `core/types.py` is the worked precedent: it is *not*
+byte-identical to v2's blob, because 01.5's gate renamed six lines of its prose
+in a file this same list calls verbatim. There is no ruling owed here and
+nothing for Kendrick to settle about that line; it was licensed before the port
+began. The run's framing of it as the plan against the gate is recorded in
+`findings/loop/2026.08.07-byte-identical-is-stricter-than-verbatim-and-the-difference-reads-as-a-question-for-kendrick.md`.
+
+The item is `done` on its own subject rather than reopened: the port's
+substance is right, the criterion covers what the item named, and one word in
+`reader.py` cannot be separated from the twenty-seven lines beside it that
+03.2.1 has to answer anyway. 03.2.1's criterion is the gate green, so that word
+lands there.

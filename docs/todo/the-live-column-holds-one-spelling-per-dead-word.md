@@ -43,11 +43,24 @@ bound off `LoweredPrefix.ffmpeg_roi` and the parameter of
 may stream a whole video clip through it.
 
 The twenty-eighth is real: `reader.py:135` calls `max_width`
-`never a pipeline filter`, which is the dead word in its dead sense. It is in a file
-this repo has ruled ports byte-identical, so the gate and the porting
-discipline disagree about that one line and the fix has to say which wins —
-the smallest form of the question is whether "verbatim" is a license to spell
-the dead word or only to keep the code.
+`never a pipeline filter`, which is the dead word in its dead sense.
+
+## Reviewed 2026-08-07: that twenty-eighth line is not a question
+
+03.2's run left that line as a standoff between the gate and the porting
+discipline and said only Kendrick could break it. It is not one. PLAN.md's
+porting discipline defines verbatim as identical modulo import paths *and*
+ADR-1's renames, so the rename was licensed on that comment before the file was
+copied, and `core/types.py` is the case already decided the same way — it sits
+in the same verbatim list and its blob differs from v2's by exactly six lines
+of renamed prose, five of them found by this gate at 01.5. Apply the rename to
+`reader.py:135` and move on; nothing about it waits on a ruling.
+
+What does wait is the other twenty-seven, and they are the whole of this item.
+Those lines are FFmpeg's, PyAV's, and English's word rather than v2's, and no
+row edit reaches them — `-filter_threads` and `ffmpeg_roi` carry the dead word
+as a morpheme, so a word-boundary match fails them too. What the shape has to
+express is which vocabulary a line is speaking, and `decode/` speaks two.
 
 `src/sieve/` is the walked tree, so nothing about this is confined to
 `decode/`: the ported files are simply the first ones written in a vocabulary

@@ -1,9 +1,9 @@
 ---
 title: The live column holds one spelling per dead word
+step: "03.2.1"
 status: open
-priority: normal
-phase: 4
 gated_on: nothing
+done_when: "uv run pytest tests/unit/test_tool_id_spelling.py -q"
 opened: 2026-08-07
 ---
 
@@ -29,3 +29,28 @@ a call nobody has written. The failure mode if it is not decided is worse than
 noisy: the cheap way out under a red gate is to rename a legitimate `np.clip`
 call, which makes the array math worse to read in order to keep a rename gate
 green.
+
+## 2026-08-07: the collision arrived, from `decode/` and not from `clip`
+
+03.2 ported `decode/` and `storage/crop_writer.py` byte-identical and the gate
+went red on 28 lines: `roi` 14, `filter` 13, `clip` 1. Twenty-seven of them are
+a different word. `filter` is FFmpeg's (`-filter_threads`,
+`-filter_complex_threads`, `LoweredPrefix.filtergraph`) and `quiet.py`'s, whose
+whole subject is filtering one line out of a byte stream. `roi` is a local
+bound off `LoweredPrefix.ffmpeg_roi` and the parameter of
+`lowered.roi_parts(roi: ROI)` — a region typed as the live `ROI`, not v2's
+`Replicate.roi` field. `clip` is `crop_writer.py`'s docstring saying a caller
+may stream a whole video clip through it.
+
+The twenty-eighth is real: `reader.py:135` calls `max_width`
+`never a pipeline filter`, which is the dead word in its dead sense. It is in a file
+this repo has ruled ports byte-identical, so the gate and the porting
+discipline disagree about that one line and the fix has to say which wins —
+the smallest form of the question is whether "verbatim" is a license to spell
+the dead word or only to keep the code.
+
+`src/sieve/` is the walked tree, so nothing about this is confined to
+`decode/`: the ported files are simply the first ones written in a vocabulary
+SIEVE does not own. Any word FFmpeg, OpenCV, or PyAV also uses will land the
+same way. The gate is red at HEAD until this closes, which is why it is a step
+and no longer a pool item.

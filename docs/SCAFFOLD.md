@@ -16,7 +16,14 @@ src/sieve/bench/__init__.py       # The performance budgets and the metric bus.
 src/sieve/pipeline/__init__.py    # The DAG, the plan, the cache key, and the one execution loop.
 src/sieve/tools/__init__.py       # One module per tool: a ToolSpec and one plain run function.
 src/sieve/decode/__init__.py      # Decode, prefetch, and lowering into ffmpeg.
+src/sieve/decode/ffmpeg.py        # FFmpeg rawvideo source for a crop/scale prefix lowered out of the graph.
+src/sieve/decode/identity.py      # Decoder identity string for cache key derivation.
+src/sieve/decode/lowered.py       # Pure value objects for source prefixes that have been lowered into decode.
+src/sieve/decode/prefetch.py      # N readers over one file, reading ahead in order, so the convert is not the rate.
+src/sieve/decode/quiet.py         # Drop one known-benign OpenCV line from stderr, and pass everything else on.
+src/sieve/decode/reader.py        # OpenCV `VideoCapture` wrapper trading grab-vs-seek and BGR-vs-luma for
 src/sieve/storage/__init__.py     # Sink writers: how results leave the pipeline for disk.
+src/sieve/storage/crop_writer.py  # FFV1 in Matroska, written frame by frame from arrays.
 src/sieve/mutual/__init__.py      # Dependency-shared resource readings and declarations.
 src/sieve/mutual/machine.py       # The machine is read once. Both resources, one home, importable headless.
 src/sieve/mutual/pool_meter.py    # The counters a worker pool exposes so its utilisation stops being a guess.

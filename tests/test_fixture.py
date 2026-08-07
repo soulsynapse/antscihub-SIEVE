@@ -10,7 +10,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
+
+from tests.conftest import FIXTURE_FRAMES, FIXTURE_HEIGHT, FIXTURE_WIDTH
 
 
 def _decode(path: Path) -> list[np.ndarray]:

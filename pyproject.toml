@@ -31,6 +31,24 @@ dependencies = [
     # dev-group entry while only `scripts/doc_index.py` read frontmatter, and
     # moves here with its first shipped consumer.
     "pyyaml",
+    # `decode/reader.py` drives `VideoCapture`, and it is the only module
+    # allowed to — decoder identity is one string precisely because one package
+    # holds the decoder. Promoted from the dev group with that module, as the
+    # entry there always said it would be.
+    #
+    # Pinned below 5.x: `decoder_identity()` puts the OpenCV version into the
+    # cache key, so a major bump changes what every cached result means. That is
+    # the intended behaviour, and it is a decision to take deliberately rather
+    # than by resolver.
+    "opencv-python-headless>=4.10,<5",
+    # `storage/crop_writer.py` encodes FFV1 through it, and `decode/reader.py`
+    # reads one container header through it: `container_rate` probes
+    # `avg_frame_rate`, because `CAP_PROP_FPS` is a double and 30000/1001 does
+    # not survive the round trip. No frame is ever decoded here — every pixel
+    # still comes from OpenCV — which is what keeps this from becoming a second
+    # decoder identity. A `container.decode(...)` anywhere in `sieve` is where
+    # that stops holding.
+    "av>=13",
 ]
 
 [build-system]
@@ -42,23 +60,25 @@ dev = [
     "pytest",
     "ruff",
     "import-linter>=2.13",
-    # The synthetic video fixture writes and reads back an mp4. Dev-only and
-    # not a runtime dependency because no shipped component decodes anything
-    # yet; `sieve.decode` promotes it in Phase 2. Headless because the runner
-    # has no display and the GUI build would drag Qt's system libs in behind a
-    # contract that forbids them.
-    #
-    # Pinned below 5.x already: decoder identity feeds cache-key derivation, so
-    # a major OpenCV bump changes what a cached result means. Carrying v2's pin
-    # from the first install is cheaper than loosening it and re-tightening it
-    # when the frames start mattering.
-    "opencv-python-headless>=4.10,<5",
 ]
 
 [tool.ruff]
 line-length = 100
 target-version = "py313"
 
+[tool.ruff.lint.per-file-ignores]
+# `from ...machine import available_cpus as available_cpus` is a re-export, not
+# a slip: `prefetch.py`'s own comment says callers ask it how many decode
+# threads a machine supports. The file ports verbatim, so the rule bends here
+# rather than the file.
+"src/sieve/decode/prefetch.py" = ["PLC0414"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# `tests` is a package (the empty `__init__.py` files) and the repo root is on
+# the path, so a test can import a sibling's constants —
+# `tests/integration/test_decode.py` asserts against the fixture's declared
+# width, height, and rate rather than restating them, and a fixture that drifts
+# from what a test expects should break the test, not silently pass it.
+pythonpath = ["."]
 addopts = "--strict-markers --strict-config"

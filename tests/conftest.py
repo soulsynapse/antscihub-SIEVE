@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Iterator
+from fractions import Fraction
 from pathlib import Path
 
 import cv2
@@ -21,6 +22,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 FIXTURE_FPS = 20.0
+#: The same rate as a container states it, which is what `VideoMetadata.fps`
+#: carries. Whole here, so the two spellings agree exactly.
+FIXTURE_RATE = Fraction(20)
 FIXTURE_FRAMES = 40
 FIXTURE_WIDTH = 160
 FIXTURE_HEIGHT = 120

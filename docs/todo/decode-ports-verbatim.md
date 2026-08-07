@@ -1,7 +1,7 @@
 ---
 title: decode/ ports verbatim
 step: "03.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_decode.py tests/unit/test_decode_workers.py -q"
 opened: 2026-08-06
@@ -106,3 +106,40 @@ The step numbers quoted in the two sections above are the ones this item was
 deferred and reviewed under. The phase order has since changed — schema v1
 took Phase 2 and the slice moved to Phase 3 — so read them as names of the
 graph and executor items rather than as current steps.
+
+## Ported 2026-08-07: the criterion is green and one neighbouring gate is not
+
+The seven files are byte-identical to v2 `main` (671aa8a) — no import needed
+rewriting, because everything they reach for (`core.types`, `mutual.*`,
+`decode.*`) already carries its v2 name here. What changed outside them:
+
+`av>=13` and `opencv-python-headless` are runtime dependencies now. The
+opencv entry in the dev group had said all along that `sieve.decode` would
+promote it, and this is that; `av` arrives with `crop_writer.py`'s FFV1
+encoder and `reader.container_rate`, which reads one container header and no
+frames.
+
+`tests/` became a package with the repo root on `pythonpath`, because
+`test_decode.py` imports the fixture's declared dimensions from
+`tests.conftest` rather than restating them. `FIXTURE_RATE` joined
+`conftest.py` for the same reason — 00.4 ported the fixture without it and
+`TestTheSourceRate` is what wants it. `tests/test_fixture.py`'s bare
+`from conftest import` became `from tests.conftest import`, which is what the
+package marker costs.
+
+`prefetch.py`'s deliberate `available_cpus as available_cpus` re-export takes
+a per-file ruff ignore rather than a `# noqa` inside a file that ports
+verbatim.
+
+**`tests/unit/test_tool_id_spelling.py` is red and stays red until 03.2.1.**
+The seven new files spell `roi`, `filter`, and `clip` on 28 lines; 27 of those
+are FFmpeg's, PyAV's, or stderr's word rather than v2's, and one
+(`reader.py:135`) is genuine. The gate has no shape that can express the
+difference, which is what
+`the-live-column-holds-one-spelling-per-dead-word.md` was already opened for —
+it is now step 03.2.1 rather than a Phase 4 aside, and
+`findings/2026.08.07-the-rename-gate-does-not-survive-borrowed-vocabulary.md`
+has the count. `decode/__init__.py` keeps its v3 ownership line and gains
+none of v2's re-exports: six modules is what this item names, nothing imports
+`sieve.decode` as a namespace yet, and adding the re-exports would be a
+decision about the package's surface.

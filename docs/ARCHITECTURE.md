@@ -32,7 +32,7 @@ and its file in `docs/adr/` but leaves this index.
 - [One execution path](adr/one-execution-path.md) — Preview and production are one executor over one plan; a preview is the same pipeline with a span or resolution cut prepended, so what the user tuned against cannot diverge from what the run produces.
 - [Correctness is the default; performance is opt-in](adr/correctness-is-the-default.md) — The naive path is the product surface, not a fallback: every tool runs correct-but-slow on any machine, and a fast path lands only on a measured budget violation, at parity with what it replaces.
 - [Cache admission is a bounded warmup, not a stateless tool](adr/cache-admission-is-bounded-warmup.md) — A tool is keyed when its warmup is **bounded**, stateful or not, and a run entering a cached range re-settles its state over that warmup first. An epsilon warmup is refused.
-- [An input is a keyed frame provider](adr/an-input-is-a-keyed-frame-provider.md) — A node's input is a keyed frame provider; whether it names an upstream node or a file the user chose changes only how its key is derived, never what the executor does with it.
+- [An input's origin is a fact about its key](adr/an-inputs-origin-is-a-fact-about-its-key.md) — Every input carries an identity that enters the key; naming an upstream node or a user-chosen file changes only how that identity is derived, never the executor's route or the payload's kind.
 
 ## 05 — The GUI
 

@@ -24,6 +24,8 @@ src/sieve/pipeline/plan.py        # Everything about a run that is knowable befo
 src/sieve/tools/__init__.py       # One module per tool: a ToolSpec and one plain run function.
 src/sieve/tools/crop.py           # Take a region of every frame, with the whole frame as the identity value.
 src/sieve/tools/downsample.py     # Reduce spatial resolution by an integer factor.
+src/sieve/tools/normalize.py      # Per-frame contrast normalization: `off` or `zscore`.
+src/sieve/tools/rescale.py        # Reduce spatial resolution by a float linear scale factor.
 src/sieve/tools/span.py           # Keep a range of frames, with every frame there could be as the identity value.
 src/sieve/decode/__init__.py      # Decode, prefetch, and lowering into ffmpeg.
 src/sieve/decode/ffmpeg.py        # FFmpeg rawvideo source for a crop/scale prefix lowered out of the graph.

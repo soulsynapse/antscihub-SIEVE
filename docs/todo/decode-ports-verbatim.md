@@ -1,6 +1,6 @@
 ---
 title: decode/ ports verbatim
-step: "02.1"
+step: "03.2"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_decode.py tests/unit/test_decode_workers.py -q"
@@ -92,7 +92,7 @@ protecting a remainder that does not exist, and `test_decode_workers.py` is
 entirely `resolve_workers` — the caps are its subject. Stubbing
 `available_cpus` instead would be a decision taken inside a file the plan
 calls verbatim, which is the one thing the porting discipline refuses. It is
-now 02.0.1, with the layer edit that comes with it.
+its own step ahead of this one, with the layer edit that comes with it.
 
 `crop_writer.py` moves into this item rather than a step of its own: v2 has
 no test that is about it, so a separate step would have no criterion but the
@@ -101,3 +101,8 @@ next step's. Phase 4's `crop` item drops it.
 Both rulings are PLAN.md edits, made by Kendrick — the reviewer was right
 that neither was a criterion defect. This item is `open` again with its
 criterion unchanged.
+
+The step numbers quoted in the two sections above are the ones this item was
+deferred and reviewed under. The phase order has since changed — schema v1
+took Phase 2 and the slice moved to Phase 3 — so read them as names of the
+graph and executor items rather than as current steps.

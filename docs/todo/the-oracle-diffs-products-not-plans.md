@@ -1,6 +1,6 @@
 ---
 title: The oracle diffs products, not plans
-step: "05.4"
+step: "05.8"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_v2_oracle.py -q"

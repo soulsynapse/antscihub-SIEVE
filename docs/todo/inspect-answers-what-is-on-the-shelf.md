@@ -1,6 +1,6 @@
 ---
 title: inspect answers what is on the shelf
-step: "05.2"
+step: "05.6"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cli_inspect.py tests/integration/test_cli_help.py -q"

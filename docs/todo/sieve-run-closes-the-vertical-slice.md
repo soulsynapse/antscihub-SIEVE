@@ -1,6 +1,6 @@
 ---
 title: sieve run closes the vertical slice
-step: "02.5"
+step: "03.8"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_cli_run.py -q"

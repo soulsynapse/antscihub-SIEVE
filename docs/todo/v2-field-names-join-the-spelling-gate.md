@@ -1,6 +1,6 @@
 ---
 title: The v2 field names join the spelling gate
-step: "03.2"
+step: "02.2"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_id_spelling.py -q"

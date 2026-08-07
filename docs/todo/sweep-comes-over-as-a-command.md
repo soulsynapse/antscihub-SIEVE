@@ -1,6 +1,6 @@
 ---
 title: sweep comes over as a command
-step: "05.3"
+step: "05.7"
 status: deferred
 gated_on: "PLAN's open question about bench/sweep.py, which has no disposition in either direction and is the whole of what this command runs"
 done_when: "uv run pytest tests/unit/test_sweep.py -q"

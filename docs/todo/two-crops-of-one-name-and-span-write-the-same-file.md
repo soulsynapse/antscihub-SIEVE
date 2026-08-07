@@ -1,9 +1,9 @@
 ---
 title: Two crops of one name and span write the same file
-priority: high
-phase: 5
+step: "05.11"
 status: open
 gated_on: nothing
+done_when: "uv run pytest tests/integration/test_materialize.py -q"
 opened: 2026-08-07
 ---
 
@@ -30,9 +30,11 @@ Whichever lands, `artifact_filename`'s docstring sentence about the name being
 "disambiguated on the way out" has to go or become true — it currently
 describes neither v2's shape nor v3's.
 
-Gates `the-materialize-command-derives-what-v2-was-handed.md` rather than
-blocking a step: nothing calls `materialize_crop` today, so the corruption is
-unreachable until that command exists, and it must not still be here then. The
+Numbered before 05.12 rather than filed beside it, because "gates" was a
+relation the pool could not express: nothing calls `materialize_crop` today, so
+the corruption is unreachable until that command exists and it must not still
+be here then, and within a phase's pool the only ordering is the priority tier
+and then the filename — which put this one *after* the item it gates. The
 case belongs beside 05.1's refusal cases in
 `tests/integration/test_materialize.py` — two cuts, one name, one span,
 different regions, and both records still describing their own files.

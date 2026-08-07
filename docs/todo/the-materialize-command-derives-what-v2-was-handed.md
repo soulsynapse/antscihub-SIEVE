@@ -1,9 +1,9 @@
 ---
 title: The materialize command derives what v2 was handed
-priority: high
-phase: 5
+step: "05.12"
 status: open
 gated_on: nothing
+done_when: "uv run pytest tests/integration/test_materialize.py tests/integration/test_cli_help.py -q"
 opened: 2026-08-07
 ---
 
@@ -29,10 +29,17 @@ artifact nothing points at is minutes of decode the next session silently pays
 again, so the command saves the project with `with_crop` and the case asserts
 `backs` against the reloaded document.
 
-Wants 05.2 first — `resolve_source` is what makes a registered record mean
-anything on the next run, and a command that writes records nothing reads is
-half a feature. Not a step for that reason: it follows 05.2 and 05.3 rather
-than blocking them.
+Last of the four, and each predecessor is a real dependency rather than a
+preference. 05.2 is what makes a registered record mean anything on the next
+run, and a command that writes records nothing reads is half a feature. 05.10
+derives the region per replicate and is the one that puts that derivation
+where this can call it. 05.11 is the naming collision: this command is what
+makes it reachable, so shipping this first would ship the corruption.
+
+It was a pool item on the reasoning that following 05.2 is not the same as
+blocking it. True, and beside the point — the pool orders by priority and then
+by filename, which cannot say "after", and put this ahead of the item that
+gates it.
 
 `findings/2026.08.07-05.1s-case-count-is-v2s-file-count-and-two-of-them-are-the-command.md`
 is why this is a separate item rather than the tail of 05.1.

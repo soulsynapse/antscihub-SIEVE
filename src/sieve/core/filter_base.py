@@ -543,6 +543,14 @@ class TableSpec:
 StreamSpec: TypeAlias = ArraySpec | TableSpec
 
 
+def stream_kind_label(stream: object) -> str:
+    """Human-readable stream family name from a declaration object."""
+    kind: object = getattr(stream, "kind", type(stream).__name__)
+    if isinstance(kind, StrEnum):
+        return kind.value
+    return str(kind)
+
+
 @dataclass(frozen=True, slots=True)
 class CostEstimate:
     """Order-of-magnitude cost, for predicting a run before making it.

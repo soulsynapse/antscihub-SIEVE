@@ -31,13 +31,15 @@ from dataclasses import dataclass, replace
 
 from sieve.core.filter_base import (
     DEFAULT_PORT,
+    ArraySpec,
     AuthoringGroup,
     ElementKind,
     FilterSpec,
     Mode,
     TableSpec,
+    stream_kind_label,
 )
-from sieve.core.filter_registry import REGISTRY, FilterRegistry
+from sieve.core.filter_registry import REGISTRY, FilterRegistry, UnknownFilterError
 from sieve.core.pipeline_model import Node, Pipeline
 from sieve.filters import Guidance, discover
 from sieve.filters import guidance_for as _filter_guidance
@@ -203,7 +205,11 @@ def _entry_from_spec(spec: FilterSpec) -> CatalogEntry | None:
     if spec.mode is not Mode.STREAMING:
         return None
     kind_in = _input_kind(spec)
+    if kind_in is None:
+        return None
     kind_out = _output_kind(spec, kind_in)
+    if kind_out is None:
+        return None
     return CatalogEntry(
         entry_id=spec.filter_id,
         title=_title_for(spec.filter_id),
@@ -217,23 +223,56 @@ def _entry_from_spec(spec: FilterSpec) -> CatalogEntry | None:
     )
 
 
-def _input_kind(spec: FilterSpec) -> ChainKind:
-    accepted = spec.input_ports[DEFAULT_PORT]
+def _runtime_stream(stream: object) -> object:
+    """Erase the closed `StreamSpec` union for runtime projection guards."""
+    return stream
+
+
+def _input_kind(spec: FilterSpec) -> ChainKind | None:
+    accepted = _runtime_stream(spec.input_ports[DEFAULT_PORT])
     if isinstance(accepted, TableSpec):
         return ChainKind.EVENTS
+    if not isinstance(accepted, ArraySpec):
+        return None
     if spec.authoring_group in {AuthoringGroup.TEMPORAL_FILTER, AuthoringGroup.DETECTION}:
         return ChainKind.BLOCK_SERIES
     return ChainKind.IMAGE
 
 
-def _output_kind(spec: FilterSpec, kind_in: ChainKind) -> ChainKind:
-    if isinstance(spec.emits, TableSpec):
+def _output_kind(spec: FilterSpec, kind_in: ChainKind) -> ChainKind | None:
+    emitted = _runtime_stream(spec.emits)
+    if isinstance(emitted, TableSpec):
         return ChainKind.EVENTS
+    if not isinstance(emitted, ArraySpec):
+        return None
     if spec.authoring_group is AuthoringGroup.DETECTION:
         return ChainKind.EVENTS
     if spec.element is ElementKind.BLOCK or kind_in is ChainKind.BLOCK_SERIES:
         return ChainKind.BLOCK_SERIES
     return ChainKind.IMAGE
+
+
+def _catalog_refusal(spec: FilterSpec) -> str | None:
+    ports = spec.input_ports
+    if tuple(ports) != (DEFAULT_PORT,):
+        return (
+            f"declares input ports {sorted(ports)}, and the stack can render only the default "
+            "input port"
+        )
+    if spec.mode is not Mode.STREAMING:
+        return f"declares mode={spec.mode}, and the stack can render only streaming filters"
+    accepted = ports[DEFAULT_PORT]
+    if _input_kind(spec) is None:
+        return (
+            f"declares accepts={stream_kind_label(accepted)}, and the stack has no chain kind "
+            "for that stream family"
+        )
+    if _output_kind(spec, ChainKind.IMAGE) is None:
+        return (
+            f"declares emits={stream_kind_label(spec.emits)}, and the stack has no chain kind "
+            "for that stream family"
+        )
+    return None
 
 
 def _title_for(filter_id: str) -> str:
@@ -487,13 +526,14 @@ def chain_from_pipeline(
             rather than approximated: a stack silently missing a loaded step
             would look better-founded than it is.
     """
-    entries = catalog(registry=registry)
+    shelf = _shelf(registry)
+    entries = catalog(registry=shelf)
     by_filter = {e.filter_id: e for e in entries if e.filter_id is not None}
     steps: list[ChainStep] = []
     for node in linear_order(pipeline):
         entry = by_filter.get(node.filter_id)
         if entry is None:
-            raise ValueError(f"no catalog entry for filter {node.filter_id!r}")
+            raise ValueError(_missing_catalog_entry_message(node, shelf))
         steps.append(
             ChainStep(
                 step_id=entry.entry_id,
@@ -519,6 +559,17 @@ def chain_from_pipeline(
     # and resolves the selected replicate's values in immediately after —
     # this function knows graphs, not selections.
     return LiveChain(steps=tuple(steps), detector=DetectorState.default(fps), fps=fps)
+
+
+def _missing_catalog_entry_message(node: Node, registry: FilterRegistry) -> str:
+    try:
+        spec = registry.get(node.filter_id, node.version)
+    except UnknownFilterError:
+        return f"no catalog entry for filter {node.filter_id!r}"
+    reason = _catalog_refusal(spec)
+    if reason is not None:
+        return f"no catalog entry for filter {node.filter_id!r}: {reason}"
+    return f"no catalog entry for filter {node.filter_id!r}"
 
 
 # ---- guidance -----------------------------------------------------------------

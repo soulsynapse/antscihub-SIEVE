@@ -384,7 +384,7 @@ Steps:
   `TableSpec`, `spec.accepts`, and `spec.emits`, classifying each as a generic
   compatibility reader, a runtime-exhaustiveness gate, a single-output
   assumption, or a presentation/interop special case.
-- [ ] Add a contract-level canary for a third stream declaration family, or an
+- [x] Add a contract-level canary for a third stream declaration family, or an
   equivalent test double, that proves registration, edge compatibility,
   `Dag.attachable_operations()`, and inspect/presentation fallback either consume
   it generically or refuse it by the declaration field that blocks it.
@@ -462,6 +462,24 @@ support: registration, DAG edge compatibility, and `Dag.attachable_operations()`
 can consume a test stream through `admits()`, while dispatch and current
 presentation surfaces should refuse by the declaration field they cannot
 support rather than by filter id or an opaque payload.
+
+Step 2 third-family canary:
+
+`tests/unit/test_stream_extension_canary.py` now defines a test-only `MaskSpec`
+stream declaration that is neither `ArraySpec` nor `TableSpec`. The scratch
+registry can register filters that emit, consume, and convert that stream
+family without editing any existing filter module. `Dag.build()` accepts a
+`mask_source -> mask_to_frame` edge by calling `MaskSpec.admits()`, rejects a
+mismatched mask label with `EdgeTypeError`, and `Dag.attachable_operations()`
+offers the mask consumers through the same query path.
+
+The unsupported surfaces are now explicit rather than accidental. `dispatch`
+uses `stream_kind_label()` to refuse `accepts mask` or `emits mask` by field
+before kernel lookup, while preserving `assert_never` for future `StreamKind`
+members. The transitional wizard catalog no longer projects a non-array,
+non-table stream as an image step; `chain_from_pipeline()` reports
+`accepts=mask` or `emits=mask` when a saved graph contains a registered filter
+the stack cannot render.
 
 Completed when:
 

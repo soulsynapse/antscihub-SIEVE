@@ -38,7 +38,7 @@ from enum import StrEnum
 from importlib.util import find_spec
 from typing import Any, Protocol, TypeVar, assert_never, cast
 
-from sieve.core.filter_base import FilterSpec, Mode, ParamsBase, StreamKind
+from sieve.core.filter_base import FilterSpec, Mode, ParamsBase, StreamKind, stream_kind_label
 from sieve.core.types import Frame, FrameSpan
 
 
@@ -198,7 +198,12 @@ def unrunnable_reason(spec: FilterSpec) -> str | None:
             "input frame"
         )
     for port, accepts in spec.input_ports.items():
-        accepted = accepts.kind
+        accepted = _core_stream_kind(accepts)
+        if accepted is None:
+            return (
+                f"accepts {stream_kind_label(accepts)} on port {port!r}, and no kernel protocol "
+                "is handed that stream family"
+            )
         if accepted is StreamKind.ARRAY:
             pass
         elif accepted is StreamKind.TABLE:
@@ -208,7 +213,12 @@ def unrunnable_reason(spec: FilterSpec) -> str | None:
             )
         else:
             assert_never(accepted)
-    emitted = spec.emits.kind
+    emitted = _core_stream_kind(spec.emits)
+    if emitted is None:
+        return (
+            f"emits {stream_kind_label(spec.emits)}, and no kernel protocol returns that stream "
+            "family"
+        )
     if emitted is StreamKind.ARRAY:
         return None
     elif emitted is StreamKind.TABLE:
@@ -218,6 +228,11 @@ def unrunnable_reason(spec: FilterSpec) -> str | None:
         )
     else:
         assert_never(emitted)
+
+
+def _core_stream_kind(stream: object) -> StreamKind | None:
+    kind: object = getattr(stream, "kind", None)
+    return kind if isinstance(kind, StreamKind) else None
 
 
 class DuplicateKernelError(LookupError):

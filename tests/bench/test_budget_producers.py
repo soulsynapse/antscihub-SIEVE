@@ -2,15 +2,16 @@
 
 `test_budget_table.py` pins the table against VISION.md, so the two cannot
 disagree about what a limit *is*. Neither of them can say whether anything ever
-measures against it — and today nothing does, while the table reads as twelve
-enforced ceilings. A budget with no producer cannot be missed, which is
-indistinguishable from compliance.
+measures against it, and ten of the twelve are still measured by nothing while
+the table reads as twelve enforced ceilings. A budget with no producer cannot be
+missed, which is indistinguishable from compliance.
 
 *Published* and *timed* are two different gaps and the second is wider: a
 published budget shows a session it was missed, a timed one catches the miss
-before it ships. Both are declared as sets, both are empty of coverage right
-now, and both are checked in both directions — so 06.2's first publisher and
-06.3's first measurement each have to delete a line here to land.
+before it ships. Both are declared as sets and both are checked in both
+directions, so paying either down is a deletion here rather than a silently
+truer tree — 06.2 deleted the preview session's two from `WITHOUT_PRODUCER`, and
+`TIMED` is still empty until 06.3's benchmark puts a clock on them.
 
 Checks, one per direction a key can go wrong:
 
@@ -28,8 +29,9 @@ how a module chooses to name its key, and the failure it catches — a ceiling
 nobody wired up — does not need the stronger claim to be caught.
 
 The two scanners are exercised against planted text as well as against the
-tree, because a scanner that reached nothing would report the same emptiness
-the tree honestly has, and right now both sets are empty.
+tree, because a scanner that reached nothing would report the same emptiness the
+tree nearly has: two produced keys and no timed ones is close enough to nothing
+that a broken scanner still reads as green.
 """
 
 from __future__ import annotations
@@ -92,7 +94,7 @@ def test_the_walk_reaches_the_modules_that_exist() -> None:
 
 
 def test_a_named_key_is_seen_as_a_producer() -> None:
-    """With every budget currently unproduced, the scanner's own sight needs a case."""
+    """With ten of twelve budgets unproduced, the scanner's own sight needs a case."""
     assert _keys_named_in(['bus.publish("slider_to_preview", elapsed)']) == {"slider_to_preview"}
     assert _keys_named_in(["bus.publish(slider_to_preview, elapsed)"]) == set()
 

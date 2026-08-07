@@ -14,10 +14,14 @@ from doc_index import (
     ItemError,
     collect,
     collect_findings,
+    collect_modules,
+    forbidden_present,
+    module_annotation,
     next_takeable,
     phase_titles,
     render,
     render_findings,
+    render_scaffold,
 )
 
 
@@ -182,6 +186,52 @@ def test_a_missing_findings_folder_is_an_empty_list_not_an_error(tmp_path):
     assert collect_findings(tmp_path / "loop") == []
 
 
+# The scaffold: derived from docstring first lines, with the rules that make
+# a first line an annotation.
+
+
+def test_a_modules_docstring_first_line_becomes_its_scaffold_annotation(tmp_path):
+    (tmp_path / "src").mkdir()
+    module = tmp_path / "src" / "thing.py"
+    module.write_text('"""Owns the one thing.\n\nMore prose.\n"""\n', encoding="utf-8")
+
+    assert collect_modules(tmp_path) == [("src/thing.py", "Owns the one thing.")]
+
+
+def test_a_module_without_a_docstring_is_refused():
+    with pytest.raises(ItemError, match="no docstring"):
+        module_annotation(Path("thing.py"), "x = 1\n")
+
+
+def test_a_first_line_too_long_for_the_tree_column_is_refused():
+    long = '"""' + "words " * 20 + '"""'
+
+    with pytest.raises(ItemError, match="chars"):
+        module_annotation(Path("thing.py"), long)
+
+
+def test_an_annotation_that_dodges_ownership_is_refused():
+    """ "Helpers" is the word a module reaches for when it owns more than one
+    thing; the gate asks again at the moment renaming is cheapest."""
+    with pytest.raises(ItemError, match="helper"):
+        module_annotation(Path("thing.py"), '"""Helpers for the pipeline."""')
+
+
+def test_a_dropped_path_that_gets_built_is_caught(tmp_path):
+    (tmp_path / "src" / "sieve" / "backend").mkdir(parents=True)
+
+    assert forbidden_present(tmp_path) == ["src/sieve/backend"]
+    assert forbidden_present(tmp_path / "empty") == []
+
+
+def test_the_scaffold_renders_the_absent_list_beside_the_built_one():
+    text = render_scaffold([("src/sieve/core/types.py", "The four quantities.")])
+
+    assert "src/sieve/core/types.py" in text
+    assert "## Absent by decision" in text
+    assert "src/sieve/backend" in text
+
+
 # The live gate: the repo's own folders parse, and the checked-in indexes are
 # exactly what the tool would write — a stale index fails here, not in review.
 
@@ -190,6 +240,8 @@ def test_the_repos_own_items_are_hygienic():
     collect(doc_index.TODO_DIR)
     collect_findings(doc_index.FINDINGS_DIR)
     collect_findings(doc_index.LOOP_DIR)
+    collect_modules(doc_index.REPO)
+    assert forbidden_present(doc_index.REPO) == []
 
 
 def test_the_checked_in_indexes_are_current():
@@ -204,6 +256,7 @@ def test_the_checked_in_indexes_are_current():
                 collect_findings(doc_index.FINDINGS_DIR), collect_findings(doc_index.LOOP_DIR)
             ),
         ),
+        (doc_index.SCAFFOLD, render_scaffold(collect_modules(doc_index.REPO))),
     ):
         assert index.is_file(), f"{index.name} missing — run `uv run python tools/doc_index.py`"
         assert index.read_text(encoding="utf-8") == expected, (

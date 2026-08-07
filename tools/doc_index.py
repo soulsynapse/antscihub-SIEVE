@@ -1,5 +1,4 @@
-"""Generate the indexes for `docs/todo/` and `docs/findings/`, and answer
-what to take next.
+"""The derived docs: item index, findings index, scaffold, and `--next`.
 
 Work items: one file each, YAML frontmatter, two shapes. A *sequenced* item
 carries `step:` — dotted numbers whose first component is the phase, so
@@ -15,19 +14,29 @@ truths about how the work loop fails rather than about the system — separate
 folder because the audiences never overlap: loop findings are what the review
 prompt is distilled from.
 
-Both indexes are derived, never edited, and `tests/docs/test_doc_index.py`
-fails when either drifts from the files it describes — v2's discipline, cut
-to the subset v3 uses (no primer, no settled table, no `after:` graph; the
-step numbers are the ordering those existed to compute).
+The scaffold: `docs/SCAFFOLD.md` answers "where does this module go", derived
+from each module docstring's first line rather than maintained by hand —
+v2's SCAFFOLD annotation was a hand-kept copy of exactly that line, and a
+declared copy of derivable state drifts. The one half that cannot be derived
+is intent: `FORBIDDEN` names the paths the plan dropped, checked must-not-
+exist, because a dropped module that quietly gets built is the drift the
+scaffold exists to catch.
 
-    uv run python tools/doc_index.py           # rewrite both indexes
-    uv run python tools/doc_index.py --check   # exit 1 if either is stale
+Everything generated here is derived, never edited, and
+`tests/docs/test_doc_index.py` fails when any of it drifts from the files it
+describes — v2's discipline, cut to the subset v3 uses (no primer, no settled
+table, no `after:` graph; the step numbers are the ordering those existed to
+compute).
+
+    uv run python tools/doc_index.py           # rewrite everything generated
+    uv run python tools/doc_index.py --check   # exit 1 if anything is stale
     uv run python tools/doc_index.py --next    # path of the next takeable item
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from dataclasses import dataclass
@@ -41,7 +50,27 @@ TODO_DIR = REPO / "docs" / "todo"
 FINDINGS_DIR = REPO / "docs" / "findings"
 LOOP_DIR = FINDINGS_DIR / "loop"
 PLAN = REPO / "docs" / "PLAN.md"
+SCAFFOLD = REPO / "docs" / "SCAFFOLD.md"
 INDEX_NAME = ".index.md"
+
+#: Where modules live; anything else in the repo carries no docstring to read.
+SCAN_ROOTS = ("src", "tools")
+
+#: The half of the scaffold that cannot be derived: intent. These are the
+#: paths PLAN.md's disposition dropped, and a dropped module that quietly gets
+#: built is the drift the scaffold exists to catch — so their absence is a
+#: gate, not a comment. Shrink-or-grow only with the plan.
+FORBIDDEN = (
+    "src/sieve/backend",
+    "src/sieve/detect",
+    "src/sieve/workers",
+    "src/sieve/gui/filter_tab.py",
+)
+
+#: The docstring's first line is the scaffold annotation, so it has to say
+#: what the module owns and fit the tree column.
+ANNOTATION_LIMIT = 72
+BANNED_IN_ANNOTATION = ("helper", "utils", "utility", "various", "miscellaneous", "this module")
 
 #: `_TEMPLATE.md` and the generated index itself are machinery, not entries.
 SKIP_PREFIXES = ("_", ".")
@@ -329,6 +358,85 @@ def render_findings(findings: list[Item], loop: list[Item]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def module_annotation(path: Path, source: str) -> str:
+    """The docstring's first line, held to the rules that make it an annotation.
+
+    Refusals happen at the gate rather than in review because the moment to
+    name what a module owns is the moment it is created — a module that cannot
+    say it in one line is usually a module that owns more than one thing.
+    """
+    try:
+        docstring = ast.get_docstring(ast.parse(source))
+    except SyntaxError as error:
+        raise ItemError(f"{path.name}: does not parse — {error}") from error
+    if not docstring or not docstring.strip():
+        raise ItemError(f"{path.name}: no docstring; the first line is the scaffold annotation")
+    first = docstring.strip().splitlines()[0].strip()
+    if len(first) > ANNOTATION_LIMIT:
+        raise ItemError(
+            f"{path.name}: docstring first line is {len(first)} chars; "
+            f"the scaffold column holds {ANNOTATION_LIMIT}"
+        )
+    lowered = first.lower()
+    for word in BANNED_IN_ANNOTATION:
+        if word in lowered:
+            raise ItemError(
+                f"{path.name}: docstring first line says {word!r} — name what the "
+                f"module owns instead"
+            )
+    return first
+
+
+def collect_modules(repo: Path = REPO) -> list[tuple[str, str]]:
+    """`(repo-relative path, annotation)` for every module under `SCAN_ROOTS`."""
+    modules: list[tuple[str, str]] = []
+    for root in SCAN_ROOTS:
+        folder = repo / root
+        if not folder.is_dir():
+            continue
+        for path in sorted(folder.rglob("*.py")):
+            relative = path.relative_to(repo).as_posix()
+            annotation = module_annotation(path, path.read_text(encoding="utf-8"))
+            modules.append((relative, annotation))
+    return modules
+
+
+def forbidden_present(repo: Path = REPO) -> list[str]:
+    return [entry for entry in FORBIDDEN if (repo / entry).exists()]
+
+
+def render_scaffold(modules: list[tuple[str, str]]) -> str:
+    lines = [
+        NOTICE,
+        "",
+        "# SCAFFOLD — where things live",
+        "",
+        "Derived: each annotation is its module docstring's first line, so the",
+        "docstring is the home and this file cannot drift from it. Add a module",
+        "with a one-line statement of what it owns and this file follows.",
+        "",
+    ]
+    if modules:
+        width = max(len(path) for path, _ in modules)
+        lines += ["```tree"]
+        lines += [f"{path.ljust(width)}  # {annotation}" for path, annotation in modules]
+        lines += ["```"]
+    else:
+        lines.append("*No modules yet.*")
+    lines += [
+        "",
+        "## Absent by decision",
+        "",
+        "PLAN.md dropped these; the gate fails if one appears. A path leaves",
+        "this list by a plan change, not by being built.",
+        "",
+        "```tree",
+        *FORBIDDEN,
+        "```",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def next_takeable(items: list[Item]) -> Item | None:
     """The lowest open sequenced step. `awaiting-review` is not takeable —
     its next session is a review, and the review queue entry names itself."""
@@ -344,12 +452,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         items = collect()
+        built = forbidden_present()
+        if built:
+            raise ItemError(f"absent-by-decision paths exist: {', '.join(built)}")
         targets = [
             (TODO_DIR / INDEX_NAME, render(items, phase_titles())),
             (
                 FINDINGS_DIR / INDEX_NAME,
                 render_findings(collect_findings(FINDINGS_DIR), collect_findings(LOOP_DIR)),
             ),
+            (SCAFFOLD, render_scaffold(collect_modules())),
         ]
     except ItemError as error:
         print(f"doc_index: {error}", file=sys.stderr)

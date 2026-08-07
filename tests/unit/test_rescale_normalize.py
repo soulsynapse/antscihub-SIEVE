@@ -22,6 +22,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from sieve.core.types import ChannelSpec, Frame, FrameSpan
 from sieve.tools.normalize import NormalizeMode, NormalizeParams
@@ -66,6 +67,19 @@ def gradient_frame(width: int, height: int) -> Frame:
     return Frame(data=data, index=7, channels=ChannelSpec.GRAY)
 
 
+def banded_ramp() -> NDArray[np.float32]:
+    """Three planes with deliberately different means and different slopes.
+
+    Different slopes and not merely different means, because the two channel
+    orders have to disagree on the spread as well as on the centre: a fixture
+    that only moved the mean would let a wrong projection still land on sd 32.
+    """
+    ramp = np.arange(48 * 48, dtype=np.float32).reshape(48, 48)
+    return np.stack([ramp * 0.1 + 40, ramp * 0.3 + 120, ramp * 0.05 + 200], axis=-1).astype(
+        np.float32
+    )
+
+
 def banded_bgr_frame() -> Frame:
     """A color frame whose channels have deliberately different means.
 
@@ -73,9 +87,7 @@ def banded_bgr_frame() -> Frame:
     frame, which is the only condition under which a test can tell the two
     implementations apart.
     """
-    ramp = np.arange(48 * 48, dtype=np.float32).reshape(48, 48)
-    data = np.stack([ramp * 0.1 + 40, ramp * 0.3 + 120, ramp * 0.05 + 200], axis=-1)
-    return Frame(data=data.astype(np.float32), index=0, channels=ChannelSpec.BGR)
+    return Frame(data=banded_ramp(), index=0, channels=ChannelSpec.BGR)
 
 
 def one(frame: Frame) -> FrameSpan:
@@ -95,6 +107,18 @@ def test_rescale_rounds_each_extent_and_preserves_dtype() -> None:
     assert out.data.shape == (13, 25)
     assert out.data.dtype == np.uint16
     assert (out.index, out.channels) == (7, ChannelSpec.GRAY)
+
+
+def test_rescale_rounds_up_past_the_half() -> None:
+    # The case that separates `round` from `int`, which no other fixture here
+    # does: 101 and 53 at 0.25 both land under the half, and 12 x 8 at 0.05
+    # lands where `max(1, ...)` covers the disagreement. 6 x 0.45 is 2.7, so
+    # rounding gives 3 and truncation gives 2.
+    frame = gradient_frame(width=6, height=6)
+
+    out = rescale_run(RescaleParams(scale=0.45), one(frame), None)
+
+    assert out.data.shape == (3, 3)
 
 
 def test_rescale_at_one_is_the_identity_object() -> None:
@@ -162,6 +186,31 @@ def test_zscore_on_bgr_normalizes_the_downstream_gray_series() -> None:
     gray = cv2.cvtColor(out.data, cv2.COLOR_BGR2GRAY)
     assert float(gray.mean()) == pytest.approx(128.0, abs=0.05)
     assert float(gray.std()) == pytest.approx(32.0, abs=0.05)
+
+
+def test_zscore_on_rgb_reads_the_channels_in_their_declared_order() -> None:
+    # `_gray_stats` branches on the layout, and BT.601 is not symmetric: the
+    # same three planes weight to 0.2025 per ramp step read as BGR and 0.2117
+    # read as RGB, so a projection hard-wired to one order misses sd 32 by
+    # about 1.5 on the other. The BGR case above cannot see that branch.
+    frame = Frame(data=banded_ramp(), index=0, channels=ChannelSpec.RGB)
+
+    out = normalize_run(NormalizeParams(mode=NormalizeMode.ZSCORE), one(frame), None)
+
+    gray = cv2.cvtColor(out.data, cv2.COLOR_RGB2GRAY)
+    assert float(gray.mean()) == pytest.approx(128.0, abs=0.05)
+    assert float(gray.std()) == pytest.approx(32.0, abs=0.05)
+
+
+def test_normalize_carries_the_frame_index() -> None:
+    # Which frame this is survives the value axis. `rescale` is asserted on the
+    # same point; a tool that renumbered would misalign every series a
+    # downstream detector indexes by frame.
+    frame = gradient_frame(width=16, height=16)
+
+    out = normalize_run(NormalizeParams(mode=NormalizeMode.ZSCORE), one(frame), None)
+
+    assert (out.index, out.channels) == (7, ChannelSpec.GRAY)
 
 
 def test_rescale_output_equals_the_v2_golden() -> None:

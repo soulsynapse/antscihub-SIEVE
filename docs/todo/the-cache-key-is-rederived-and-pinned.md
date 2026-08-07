@@ -1,17 +1,19 @@
 ---
 title: The cache key is re-derived and its layout pinned
 step: "03.4"
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_cache_key.py -q"
+done_when: "uv run pytest tests/unit/test_cache_key.py -q && uv run pytest tests/unit/test_cache_key.py -q -k ancestor && uv run pytest tests/unit/test_cache_key.py -q -k rename"
 opened: 2026-08-07
 ---
 
 # The cache key is re-derived and its layout pinned
 
 `pipeline/cache_key.py` re-derived against schema v1 under PLAN.md's
-re-derivation clause. `tests/unit/test_cache_key.py` holds **9 cases in 3
-classes**, and this item's table has 9 rows.
+re-derivation clause. `tests/unit/test_cache_key.py` holds **11 cases in 3
+classes**, and this item's table has 9 rows — the table maps v2's nine cases,
+and four of the eleven answer to no v2 row at all. Two of those four were
+amended in at review; the count read **9 cases** when the item opened.
 
 The digest changes and that is the point of doing it as a re-derivation. v2's
 `node_key` folds `backend_identity(backend)` into every node digest except
@@ -95,3 +97,29 @@ asserts the arity refusal as well as the two tuples: `_digest` takes the
 declared positions and refuses a part list that does not fill them, so the
 declaration is what a position has to be added to before it can be hashed
 rather than a comment beside the call.
+
+## Two more cases with no v2 row, amended in at review
+
+The nine that landed all pass with `node_key`'s `upstream` part replaced by
+`None`, and all pass with the replicate's display name folded into that part —
+both measured, in
+[findings/loop/2026.08.07-a-declared-layout-and-an-isolation-test-both-pass-with-the-ancestry-dropped.md](../findings/loop/2026.08.07-a-declared-layout-and-an-isolation-test-both-pass-with-the-ancestry-dropped.md).
+So the module's headline claim and one of its stated absences are argued in the
+docstring and asserted nowhere. Both holes are v2's too — its file has no case
+for either — which is why the table has no row to move and these arrive as
+additions rather than as verdicts on a v2 row.
+
+`an_edit_to_an_ancestor_moves_every_key_below_it` is the complement of
+`editing_one_branch_leaves_its_sibling_valid`, and the direction that fails
+silently: a parameter edit on `a` must move `b` and `c`, because their pixels are
+computed from its output. Isolation alone is satisfied by a `node_key` that
+ignores its `upstream` argument.
+
+`renaming_a_replicate_moves_no_key` pins what the layout pin cannot: two
+replicates resolving to the same parameters key alike whatever they are called,
+and `replicate_id` is out too (`Replicate` — "a rename must not invalidate an
+entry keyed on it"). The pin says `upstream` is the second position; it cannot
+say that position holds an upstream key and nothing else.
+
+`done_when` selects both by name (`-k ancestor`, `-k rename`) because the bare
+pytest command passed before either existed.

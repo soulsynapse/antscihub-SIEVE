@@ -48,16 +48,44 @@ class _DeadWriter:
 cv2.VideoWriter = _DeadWriter
 """
 
+# A fixture the gate does not guard, skipping where the gate can see it — in
+# setup rather than in the call phase, which `pytest_fixture_setup` is never
+# handed.
+_UNGUARDED_SKIP = """
+import pytest
 
-def _nested_run(pytester: pytest.Pytester, conftest_tail: str, body: str) -> pytest.RunResult:
+
+@pytest.fixture
+def a_fixture_the_gate_does_not_guard():
+    pytest.skip("an excused fixture, outside FATAL_FIXTURE_SKIPS")
+"""
+
+
+def _nested_run(
+    pytester: pytest.Pytester,
+    monkeypatch: pytest.MonkeyPatch,
+    conftest_tail: str,
+    body: str,
+) -> pytest.RunResult:
+    # `Pytester.run` reads the child's captured output as utf-8 while the child
+    # picks its stdout encoding from the locale — cp1252 on a bare Windows
+    # shell. The two agree only by coincidence, and the coincidence holds until
+    # a traceback quotes a source line above 0x7f: `stirred_clip`'s docstring
+    # has an em dash in it. Pinning the child is the only half of that pair we
+    # control
+    # (`docs/findings/loop/2026.08.07-a-nested-pytest-session-is-decoded-as-utf-8-and-only-the-harness-env-makes-that-true.md`).
+    monkeypatch.setenv("PYTHONIOENCODING", "utf-8")
     pytester.makeconftest(_CONFTEST.format(root=str(REPO_ROOT)) + conftest_tail)
     pytester.makepyfile(body)
     return pytester.runpytest_subprocess()
 
 
-def test_skipping_synthetic_video_fails_the_run(pytester: pytest.Pytester) -> None:
+def test_skipping_synthetic_video_fails_the_run(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
     result = _nested_run(
         pytester,
+        monkeypatch,
         _NO_ENCODER,
         """
         def test_wants_the_fixture(synthetic_video):
@@ -69,9 +97,12 @@ def test_skipping_synthetic_video_fails_the_run(pytester: pytest.Pytester) -> No
     result.assert_outcomes(errors=1, skipped=0, passed=0)
 
 
-def test_skipping_stirred_clip_fails_the_run(pytester: pytest.Pytester) -> None:
+def test_skipping_stirred_clip_fails_the_run(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
     result = _nested_run(
         pytester,
+        monkeypatch,
         _NO_ENCODER,
         """
         def test_wants_the_fixture(stirred_clip):
@@ -83,10 +114,13 @@ def test_skipping_stirred_clip_fails_the_run(pytester: pytest.Pytester) -> None:
     result.assert_outcomes(errors=1, skipped=0, passed=0)
 
 
-def test_a_run_with_no_fixture_skip_stays_green(pytester: pytest.Pytester) -> None:
+def test_a_run_with_no_fixture_skip_stays_green(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The control: a gate that failed every run would satisfy the two above."""
     result = _nested_run(
         pytester,
+        monkeypatch,
         "",
         """
         import pytest
@@ -104,3 +138,59 @@ def test_a_run_with_no_fixture_skip_stays_green(pytester: pytest.Pytester) -> No
 
     assert result.ret == 0
     result.assert_outcomes(passed=1, skipped=1, errors=0)
+
+
+def test_an_unguarded_fixture_skip_stays_a_skip(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other direction: the gate is narrow, not merely present.
+
+    The control above skips by mark, in the call phase, which
+    `pytest_fixture_setup` never sees — so it leaves the gate's membership test
+    free to be deleted outright
+    (`docs/findings/loop/2026.08.07-a-control-that-skips-by-mark-cannot-see-a-hook-that-only-watches-fixtures.md`).
+    This one enters the hook and has to come back out of it still a skip.
+    """
+    result = _nested_run(
+        pytester,
+        monkeypatch,
+        _UNGUARDED_SKIP,
+        """
+        def test_wants_the_fixture(a_fixture_the_gate_does_not_guard):
+            raise AssertionError
+        """,
+    )
+
+    assert result.ret == 0
+    result.assert_outcomes(skipped=1, errors=0, failed=0, passed=0)
+
+
+def test_the_nested_runner_pins_the_child_encoding(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_nested_run` sets the child's text encoding rather than inheriting it.
+
+    Asserted from inside a child launched with the variable cleared, because
+    the environment that made the inherited value utf-8 is the orchestrator's,
+    and no incantation in an item's `done_when` is portable enough to stand in
+    for a test. `sys.__stdout__` rather than `sys.stdout`: pytest's capture
+    replaces the latter with a utf-8 file whatever the interpreter chose, so
+    only the startup object still reports what the child was told.
+    """
+    monkeypatch.delenv("PYTHONIOENCODING", raising=False)
+    result = _nested_run(
+        pytester,
+        monkeypatch,
+        "",
+        """
+        import codecs
+        import sys
+
+
+        def test_the_child_writes_utf_8():
+            assert codecs.lookup(sys.__stdout__.encoding).name == "utf-8"
+        """,
+    )
+
+    assert result.ret == 0
+    result.assert_outcomes(passed=1)

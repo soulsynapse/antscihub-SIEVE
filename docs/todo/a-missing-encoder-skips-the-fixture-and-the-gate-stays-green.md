@@ -1,6 +1,6 @@
 ---
 title: A missing encoder skips the fixture and the gate stays green
-status: open
+status: awaiting-review
 priority: low
 phase: 0
 gated_on: nothing
@@ -64,3 +64,15 @@ three cases passing
 (`docs/findings/loop/2026.08.07-a-control-that-skips-by-mark-cannot-see-a-hook-that-only-watches-fixtures.md`).
 `test_an_unguarded_fixture_skip_stays_a_skip` needs a fixture outside the
 frozenset that skips, and that skip must arrive as a skip.
+
+Both corrections land in `tests/test_fixture_gate.py`; `tests/conftest.py` is
+untouched, because neither defect was in the gate — the gate was narrow all
+along and nothing exercised the narrowness, and the encoding was never the
+gate's to choose. The nested runner now sets `PYTHONIOENCODING` for the child
+instead of passing on whatever the parent had, and the new control declares a
+fixture in the nested conftest that skips during setup, which is the only place
+`pytest_fixture_setup` can see it. Each was watched fail before it passed: with
+the `setenv` removed, `test_skipping_stirred_clip_fails_the_run` and
+`test_the_nested_runner_pins_the_child_encoding` both fail in a shell that
+exports nothing; with the membership test replaced by `if False:`,
+`test_an_unguarded_fixture_skip_stays_a_skip` fails while the other four pass.

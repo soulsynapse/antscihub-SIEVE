@@ -18,7 +18,7 @@ and its file in `docs/adr/` but leaves this index.
 ## 02 — The saved artifact
 
 - [Crop, span, and the detector are graph nodes](adr/detector-is-a-node.md) — Schema v1 has crop, span, and the detector as graph nodes natively — no `Project.detector`, no `Replicate.roi`, no `Project.clip`.
-- [compat is the only module that spells v2 field names](adr/compat-spells-v2.md) — `compat/v2.py` is the one-way importer, and no module outside `compat/` may spell a v2 field name.
+- [v2 projects do not import](adr/v2-does-not-import.md) — v3 reads no v2 file: there is no `compat` package and no importer, and no module anywhere spells a v2 field name — schema v1 is written as if v2 never existed.
 - [What can change an output is a param](adr/param-not-preference.md) — A value that can change an output is a param — in the artifact, in the cache key; one that can only change presentation or performance is a preference, and anything ambiguous is a param.
 
 ## 03 — The repo itself
@@ -36,4 +36,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The GUI knows kinds, never tools](adr/gui-knows-kinds-not-tools.md) — `gui` reads spec data — param kinds, presentation stereotypes, window shape — and never branches on `tool_id`; widgets and overlays are generated per kind.
 - [The GUI's base is the v2.5 spike, not v2's gui](adr/gui-base-is-the-v25-spike.md) — `gui/` starts from the v2.5 spike's skeleton — `proto_sieve`'s `gui` and `session` — not v2's `gui/`; v2 components port into it where they held, and the layout operates as VISION describes.
 
-*14 settled, 0 superseded.*
+*14 settled, 1 superseded.*

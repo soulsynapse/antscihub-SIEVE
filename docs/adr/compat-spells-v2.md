@@ -1,8 +1,8 @@
 ---
 title: compat is the only module that spells v2 field names
 adr: 4
-position: "02.02"
-status: settled
+status: superseded
+superseded_by: v2-does-not-import
 decided: 2026-08-06
 ---
 

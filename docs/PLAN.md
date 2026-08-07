@@ -47,7 +47,7 @@ restating it.
 ## Phase 0 — Skeleton and enforcement
 
 Before any logic: the package tree (`core`, `tools`, `pipeline`, `decode`,
-`cli`, `compat`; `gui`/`bench`/`storage` declared in contracts but empty),
+`cli`; `gui`/`bench`/`storage` declared in contracts but empty),
 `.importlinter` adapted — not copied — from v2 (layers with `sieve.tools`, no
 `detect` or `backend` layer; `core-purity`, `opencv-containment` with tools
 the named exception, `headless` minus its detect entry; `gui-computes-nothing`
@@ -92,20 +92,16 @@ over an inline/YAML pipeline.
 Gate: `sieve run` on `synthetic_video` produces output; first per-tool parity
 test — v3 output equals v2 golden arrays.
 
-## Phase 3 — Schema v1 and the v2 importer
+## Phase 3 — Schema v1
 
 `core/pipeline_model.py` re-derived as schema v1: crop, span, and **detector**
 are graph nodes natively (`adr/detector-is-a-node.md`). Kept verbatim in
 spirit: `extra=forbid`, registry-blind, no
 measurements in the artifact, checkpoints/outputs on `Project` not `Node`.
-`compat/v2.py` is the one-way importer and the only module that spells v2
-field names (`adr/compat-spells-v2.md`); it reuses `upgrade.py`'s carry logic (derived node ids,
-per-replicate pinned boxes, identity-crop baseline) and completes what v2's
-refused — the 2026.08.05 finding's revision licenses it: two of the three
-blockers have answers, the third was drawn too wide.
+No v2 project imports and no module spells a v2 field name
+(`adr/v2-does-not-import.md`) — schema v1 is written as if v2 never existed.
 
-Gate: v3 save/load round-trip; a real v2 project imports and validates; the
-importer refuses by field name what it cannot carry.
+Gate: v3 save/load round-trip; a v2 field name appears nowhere in `src/`.
 
 ## Phase 4 — Tools, one at a time
 
@@ -130,8 +126,9 @@ run/inspect — detection is a node now). `mutual/` ports only if a command
 reads it. The stirred-clip fixture (the one that can disagree with itself)
 extracted from v2's parity test into shared fixtures.
 
-Gate: import one v2 project, run it through v2's CLI (sibling worktree) and
-v3's, diff outputs at the product level — never the resolved plan.
+Gate: build the equivalent pipeline by hand in v2 (sibling worktree) and v3
+— the frozen identity values make the correspondence mechanical — run both
+CLIs, diff outputs at the product level, never the resolved plan.
 
 ## Phase 6 — Bench and the headless loop budget
 
@@ -181,6 +178,7 @@ regimes measured through the GUI; the exception list still empty.
 | Materialization / result store / zarr | a user needing persisted results beyond the crop writer |
 | Sink writers beyond `crop_writer` | a second output format someone asks for |
 | Rate-changing kernels | a tool that needs one |
+| v2 project import (`compat/`) | a real v2 project that must come over (`adr/v2-does-not-import.md`) |
 | nox, completion tool, graph-system | something here concretely needing the mechanism |
 
 ## Port disposition
@@ -193,12 +191,12 @@ regimes measured through the GUI; the exception list still empty.
 `filters/*`, `cli/*`, `pipeline/plan.py`, `preview.py`, `gui/transport/`,
 `gui/timeline/`, `gui/param_form.py` (as generator seed).
 
-**Re-derived:** `pipeline_model.py` (schema v1), `upgrade.py` →
-`compat/v2.py`, `detect/`+`filters/detect.py` → centered `tools/detect.py`,
+**Re-derived:** `pipeline_model.py` (schema v1),
+`detect/`+`filters/detect.py` → centered `tools/detect.py`,
 `document.py`+`commands.py` → intent command layer, everything else under
 `gui/`.
 
-**Dropped:** `backend/`, `gui/filter_tab.py`, `detect/`,
+**Dropped:** `backend/`, `gui/filter_tab.py`, `detect/`, `upgrade.py`,
 `pipeline/materialize.py`, `cli/materialize_cmd.py`, `cli/detect_cmd.py`.
 
 ## Open questions

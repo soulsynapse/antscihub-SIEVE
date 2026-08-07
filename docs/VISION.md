@@ -31,7 +31,6 @@ The never-lines are the forbidden edge set. None of them is enforced by this tab
 | `pipeline` | the DAG, the plan, cache keys, the one executor | a `tool_id` branch ([adr/no-kernel-apparatus.md](adr/no-kernel-apparatus.md)); reaching into `ops/`; Qt (`headless`) |
 | `decode` | the codec boundary — ffmpeg lowering, prefetch, decoder identity; v2 verbatim | Qt; knowing what a tool or a schema is |
 | `cli` | the headless front end; with the saved file it is the cluster handoff | Qt (`headless`); cv2 — a frame is reached through `decode`, never by a second seek strategy |
-| `compat` | the one-way v2 importer, the only module that spells a v2 field name ([adr/compat-spells-v2.md](adr/compat-spells-v2.md)) | writing v2 files — one direction only |
 | `gui` | rendering values, emitting intents, holding view state | computing anything — the `gui-computes-nothing` exception list is empty from commit one; a `tool_id` branch ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)); cv2 |
 | `bench` | the budget table and the metric bus — the loop's claims as numbers | Qt; sitting in the execution path it measures |
 | `storage` | sink writers (`crop_writer`) | a second output format before someone asks ([PLAN.md](PLAN.md), revival table) |

@@ -85,7 +85,7 @@ FORBIDDEN = (
 #: reach only what is listed below it. Once `.importlinter` lands (item 00.2)
 #: its layers contract is the authority and this tuple must follow it; until
 #: then this is the order's only home.
-LAYER_ORDER = ("gui", "cli", "compat", "bench", "pipeline", "tools", "decode", "storage", "core")
+LAYER_ORDER = ("gui", "cli", "bench", "pipeline", "tools", "decode", "storage", "core")
 
 #: ADR-6 (`adr/core-membership-is-closed.md`): core owns exactly these, and a
 #: new direct child is a revision of that ADR — refused here until it is made.

@@ -12,8 +12,8 @@ opened: 2026-08-06
 v2's `tests/unit/test_filter_id_spelling.py` ports as
 `test_tool_id_spelling.py`, shrink-only: source under `src/sieve/` never
 spells the pre-rename identifiers, with an exception list that starts empty
-and only shrinks; `compat/` earns its entries in Phase 3
-(`adr/compat-spells-v2.md`). The identity *values* (`"crop"`, `"detect"`, …)
+and stays empty — nothing imports v2 projects, so nothing earns an entry
+(`adr/v2-does-not-import.md`). The identity *values* (`"crop"`, `"detect"`, …)
 are frozen and are not what this gate scans for
 (`adr/tools-not-filters.md`). The docs-side twin already runs
 (`dead_language` in `scripts/doc_index.py`); this one covers identifiers,

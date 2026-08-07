@@ -39,9 +39,11 @@ jobs:
         run: uv sync --locked
 
       # Character-for-character what a commit is checked against locally, so
-      # there is one gate and not two lists to keep in step. Qt and OpenCV are
-      # forbidden by contract and never installed here — grimp reads import
-      # statements, not the environment
-      # (findings/2026.08.06-every-contract-goes-red-on-one-line.md).
+      # there is one gate and not two lists to keep in step. Nothing here has
+      # to be installed for `lint-imports` to have an opinion about it — grimp
+      # reads import statements, not the environment
+      # (findings/2026.08.06-every-contract-goes-red-on-one-line.md), so Qt is
+      # absent and OpenCV is present only because the video fixture writes an
+      # mp4, and neither fact weakens a contract.
       - name: Run the gate
         run: uv run ruff check . && uv run lint-imports && uv run pytest -q

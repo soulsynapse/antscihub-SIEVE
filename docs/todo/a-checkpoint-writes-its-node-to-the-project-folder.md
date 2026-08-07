@@ -1,7 +1,7 @@
 ---
 title: A checkpoint writes its node's output to the project folder
 step: "05.3"
-status: awaiting-review
+status: open
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_checkpoints.py -q"
 opened: 2026-08-07
@@ -37,3 +37,22 @@ how much is recomputed.
 There is no v2 test file to port, so the criterion is a new one and the
 case table does not apply. What replaces it: each claim above is a named
 test, and the item says so before the code exists.
+
+## Reopened 2026-08-07: the first claim's test cannot observe the run
+
+The writer landed in `85cfdb5` and the second claim is genuinely covered. The
+first is not. `test_changing_it_between_two_runs_moves_no_cache_key` builds its
+own `ExecutionPlan` from the loaded document and compares two of them, so what
+it certifies is that `ExecutionPlan.build`'s *signature* has no way to see
+`checkpoints` — which is true before any of this code exists. It never observes
+the plan `sieve run` built. Measured: patching `run_cmd` so that an *empty*
+checkpoint list perturbs `source` — precisely the cluster handoff the item names,
+a run with the list emptied that must still be the same run — survives all 482
+tests, this one included. See
+`docs/findings/loop/2026.08.07-a-test-that-rebuilds-the-derivation-cannot-see-the-command-that-made-it.md`.
+
+What closes it: a case that reads the keys the *command* derived, for the same
+document with the list set and cleared, and finds them equal. `--dry-run` already
+prints a key prefix per node and opens no video, so the two invocations' output
+is the observation; any route that goes through `run_project` rather than around
+it will do.

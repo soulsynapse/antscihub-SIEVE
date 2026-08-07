@@ -258,7 +258,7 @@ def test_the_checked_in_indexes_are_current():
         ),
         (doc_index.SCAFFOLD, render_scaffold(collect_modules(doc_index.REPO))),
     ):
-        assert index.is_file(), f"{index.name} missing — run `uv run python tools/doc_index.py`"
+        assert index.is_file(), f"{index.name} missing — run `uv run python scripts/doc_index.py`"
         assert index.read_text(encoding="utf-8") == expected, (
-            f"stale {index} — run `uv run python tools/doc_index.py`"
+            f"stale {index} — run `uv run python scripts/doc_index.py`"
         )

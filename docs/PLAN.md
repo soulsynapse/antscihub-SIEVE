@@ -28,7 +28,7 @@ directly: that would move per-tool param/state/window translation into the
 loop, keyed by `tool_id`, making adding a tool edit the executor.
 
 Work is chunked into `docs/todo/` items attached to these phases;
-`tools/todo_index.py` generates the index and answers what to take next.
+`scripts/doc_index.py` generates the index and answers what to take next.
 
 ## Phase 0 — Skeleton and enforcement
 

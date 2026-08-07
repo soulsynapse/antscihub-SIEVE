@@ -59,7 +59,7 @@ having looked — write down what the refuted mechanism *would* have produced.
 Copy to `docs/findings/YYYY.MM.DD-short-name.md` (or `findings/loop/` for a
 truth about how the work loop fails rather than about the system), delete this
 section and the example values, fill it in. One file per finding. Then run
-`uv run python tools/doc_index.py`; do not edit `.index.md` by hand —
+`uv run python scripts/doc_index.py`; do not edit `.index.md` by hand —
 `tests/docs/test_doc_index.py` fails when it is stale.
 
 Required: `title`, `date`, `status`, `verdict`. Everything else is optional,

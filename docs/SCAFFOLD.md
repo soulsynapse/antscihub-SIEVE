@@ -22,6 +22,7 @@ src/sieve/pipeline/dag.py         # The graph, resolved: what runs, in what orde
 src/sieve/pipeline/executor.py    # The single shared execution path: a plan, a reader, and a store go in.
 src/sieve/pipeline/plan.py        # Everything about a run that is knowable before a frame is decoded.
 src/sieve/tools/__init__.py       # One module per tool: a ToolSpec and one plain run function.
+src/sieve/tools/crop.py           # Take a region of every frame, with the whole frame as the identity value.
 src/sieve/tools/downsample.py     # Reduce spatial resolution by an integer factor.
 src/sieve/decode/__init__.py      # Decode, prefetch, and lowering into ffmpeg.
 src/sieve/decode/ffmpeg.py        # FFmpeg rawvideo source for a crop/scale prefix lowered out of the graph.

@@ -1,7 +1,7 @@
 ---
 title: crop lands
 step: "04.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_crop.py tests/unit/test_crop_artifact.py -q"
 opened: 2026-08-06

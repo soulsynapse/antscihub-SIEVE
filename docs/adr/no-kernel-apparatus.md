@@ -18,11 +18,9 @@ is also what dissolves v2's `backend/dispatch.py` scaffolding: a declared
 version on the spec, entering the cache key, is what keeps cv2 kernels
 honest instead.
 
-Checked against v2 (2026-08-06): its ten filters used three of dispatch.py's
-four protocols — five plain, four stateful, one windowed, zero merging, zero
-GPU — all projections of the one signature; the four registration decorators
-existed to catch arity mismatches this signature makes inexpressible. Two v2
-lessons ride along. State is minted per run by the executor from a
+Checked against v2: no filter needs a shape the one signature cannot express
+(`findings/2026.08.06-v2-kernel-shape-census.md`). Two v2 lessons ride
+along. State is minted per run by the executor from a
 spec-declared factory, never closed over — and a factory on a spec not
 declaring `stateful` is refused at registration, since `stateful` is also
 what denies the node a cache key. And the executor branches on declared

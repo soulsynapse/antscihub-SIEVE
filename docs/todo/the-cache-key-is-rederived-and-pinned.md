@@ -1,7 +1,7 @@
 ---
 title: The cache key is re-derived and its layout pinned
 step: "03.4"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_key.py -q && uv run pytest tests/unit/test_cache_key.py -q -k ancestor && uv run pytest tests/unit/test_cache_key.py -q -k rename"
 opened: 2026-08-07
@@ -115,11 +115,13 @@ silently: a parameter edit on `a` must move `b` and `c`, because their pixels ar
 computed from its output. Isolation alone is satisfied by a `node_key` that
 ignores its `upstream` argument.
 
-`renaming_a_replicate_moves_no_key` pins what the layout pin cannot: two
+`a_replicate_rename_moves_no_key` pins what the layout pin cannot: two
 replicates resolving to the same parameters key alike whatever they are called,
 and `replicate_id` is out too (`Replicate` — "a rename must not invalidate an
 entry keyed on it"). The pin says `upstream` is the second position; it cannot
 say that position holds an upstream key and nothing else.
 
 `done_when` selects both by name (`-k ancestor`, `-k rename`) because the bare
-pytest command passed before either existed.
+pytest command passed before either existed. The prose above named the second
+case `renaming_a_replicate_moves_no_key`, which `-k rename` does not match —
+the selector is the binding half, and the name follows it.

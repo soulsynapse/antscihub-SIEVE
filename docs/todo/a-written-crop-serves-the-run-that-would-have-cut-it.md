@@ -1,7 +1,7 @@
 ---
 title: A written crop serves the run that would have cut it
 step: "05.2"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_crop_serving.py tests/unit/test_crop_binding.py -q"
 opened: 2026-08-07

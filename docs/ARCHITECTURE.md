@@ -11,7 +11,7 @@ and its file in `docs/adr/` but leaves this index.
 
 - [Tools, not filters — and the identity values are frozen](adr/tools-not-filters.md) — Pipeline steps are **tools**: field, package, and class names rename (`tool_id`, `sieve.tools`, `ToolSpec`), while the identity *values* (`"crop"`, `"detect"`, …) stay exactly v2's.
 - [No kernel apparatus](adr/no-kernel-apparatus.md) — A tool module is a `ToolSpec` plus one plain `run(params, window, state)`; the spec points at it, the registry hands it to the executor, and the executor never reaches into `ops/` directly.
-- [A new tool is one file](adr/a-tool-is-one-file.md) — Adding a tool touches exactly one module in `sieve.tools` — spec, params, `run` — and nothing else; a tool that needs a second file edited is an architecture failure to stop and fix, not route around.
+- [A new tool is one file](adr/a-tool-is-one-file.md) — A tool's machinery is one module in `sieve.tools`; it adds only files it alone opens and edits none another tool edits, the sole exception being extending a closed vocabulary that cannot express it.
 - [Declared means verified](adr/declared-means-verified.md) — A spec declaration is either consumed by running machinery or refused by name at registration; nothing is stored against a future consumer, and no declaration certifies its own correctness.
 - [ops admission is two tools](adr/ops-admission-is-two-tools.md) — `core/ops/` holds only math two tools already call: single-caller math lives in its tool module, and the package itself appears with its first two-caller entry, gated by a census test.
 

@@ -10,9 +10,11 @@ component exists once it has been scoped, not before.
 
 ## Where things are
 
-`VISION.md` is the only document that binds. It names the primary components,
-each with what it owns and what it must never own; the never-lists are the
-forbidden edge set.
+`docs/VISION.md` binds the target: the loop, the primary components with what
+each owns and must never own — the never-lists are the forbidden edge set —
+and the claims that define built-correctly. Settled decisions bind too, as
+ADRs under `docs/adr/` indexed in `docs/ARCHITECTURE.md`; sequence lives in
+`docs/PLAN.md`.
 
 `../antscihub-SIEVE-v2` is a sibling worktree of this same repo, on `main`. It
 is the evidence base, not a parts bin: v2 ran long enough to show which of its
@@ -25,20 +27,23 @@ circles. Treat it as a warning.
 
 ## What deliberately isn't here
 
-v2 has nox sessions, an import-linter contract, a `docs/todo/` item system with
-generated indexes, and a completion tool. None of it exists in v3. Don't
-recreate any of it by reflex — port a mechanism when something here needs it,
-and say in the commit what needed it.
+v2 has nox sessions, an import-linter contract, and a completion tool. None
+of those exists in v3 yet — the import contracts are a Phase-0 item, not an
+installed file. What v3 did adopt is its own item/findings/ADR system with
+`scripts/doc_index.py` generating the indexes. Don't recreate the rest by
+reflex — port a mechanism when something here needs it, and say in the commit
+what needed it.
 
-v3 has also not decided which of v2's eight rules it carries. Several are
-already implied by VISION.md's components (one execution path, the identity
-line, a result never looking better-founded than it is), but implied is not
-adopted, and there is no rules table yet. Don't cite "non-negotiable #N" here.
+v3 has also not decided which of v2's eight rules it carries as a set. Some
+have since been adopted individually as ADRs (one execution path, the
+identity values, declared-means-verified — see `docs/ARCHITECTURE.md`), but
+there is no rules table and "non-negotiable #N" cites nothing here.
 
 ## "Bring X over from v2"
 
 This means: go read v2's version, work out what it actually decided, and bring
-that. It does not mean copy the file. Check `VISION.md` first — it already has
+that. It does not mean copy the file. Check `docs/VISION.md` first — it
+already has
 a verdict on several of these, in both directions (the spec/kernel split and
 the decode boundary are marked copy-verbatim; the backend type system and a
 separate detection package are marked don't).

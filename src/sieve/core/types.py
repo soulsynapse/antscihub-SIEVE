@@ -183,7 +183,13 @@ class WorkUnits:
 #: Calibration measures this operation on a target profile; filter declarations
 #: remain relative to it and therefore do not smuggle a reference CPU into the
 #: spec.
-WORK_UNIT_ANCHOR = "copy one full frame at the reference resolution"
+#:
+#: Denominated per megapixel, not per frame, because every declaration that
+#: divides by it is (`CostEstimate.work_per_megapixel`). A frame-sized anchor
+#: would make `crop`'s declared 1.0 read as *one whole-frame copy per input
+#: megapixel* — off by the frame's megapixel count — and would reintroduce a
+#: "reference resolution" the spec exists to keep out.
+WORK_UNIT_ANCHOR = "copy one megapixel of a frame"
 
 
 @dataclass(frozen=True, order=True, slots=True)

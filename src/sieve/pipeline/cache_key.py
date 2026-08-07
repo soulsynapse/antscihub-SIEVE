@@ -134,11 +134,22 @@ def is_cacheable(spec: FilterSpec) -> bool:
 
 
 def _uncacheable_clause(spec: FilterSpec) -> str:
-    if not spec.deterministic:
-        return "is not deterministic, so its output cannot be keyed"
-    if spec.stateful:
-        return "is stateful, so its output cannot be keyed"
-    return f"declares mode={spec.mode}, so its provisional windowed output cannot be keyed"
+    """Why the refusal happened, said off `cache_policy` and not off the spec.
+
+    Reading the spec a second time here is how the message and the decision
+    drift apart: the three disqualifications are ordered, so a spec that is
+    both stateful and windowed is refused for one reason and could be
+    explained by another. One derivation, consulted twice.
+    """
+    match cache_policy(spec):
+        case CachePolicy.NOT_DETERMINISTIC:
+            return "is not deterministic, so its output cannot be keyed"
+        case CachePolicy.STATEFUL_ORIGIN:
+            return "is stateful, so its output cannot be keyed"
+        case CachePolicy.WINDOWED_FRONTIER:
+            return f"declares mode={spec.mode}, so its provisional windowed output cannot be keyed"
+        case CachePolicy.KEYED:
+            raise AssertionError(f"{spec.filter_id} is cacheable; there is no refusal to explain")
 
 
 def _digest(*parts: object) -> str:

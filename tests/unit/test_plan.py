@@ -440,3 +440,25 @@ class TestPlanningAgainstACropThatAlreadyExists:
         assert plan.decode_start - plan.source_start == NO_FRAMES
         assert plan.lead_in_shortfall == FrameCount(5)
         assert not plan.warmed
+
+    def test_a_span_beginning_before_the_artifact_clamps_rather_than_raising(self) -> None:
+        """The clamp's limit case, which typing the positions made able to raise.
+
+        `resolve_source.resolve` declines an artifact that does not cover the
+        request, so the pair below is not one the tree assembles today — which
+        is exactly why it is worth pinning. `decode_start` subtracts two
+        `FrameIndex`es to get a `FrameCount`, and a `FrameCount` refuses to be
+        negative, so typing the positions turned the docstring's "clamped
+        rather than rejected" into a `ValueError` raised out of `core/types.py`
+        by a property that promises a clamp.
+
+        `lead_in_shortfall` still refuses this plan, as it did before the
+        positions were typed, and that refusal is a separate open question: a
+        span the source cannot cover at all is worse than a shortfall and
+        reporting it as one would understate it.
+        """
+        pipeline = Pipeline(nodes=(node("s", "settle5"),))
+
+        plan = plan_for(pipeline, span=ClipRange(start=10, end=20), source_start=40)
+
+        assert plan.decode_start == 40

@@ -19,7 +19,7 @@ layers =
     sieve.pipeline | (sieve.workers)
     sieve.filters
     sieve.decode | sieve.storage | sieve.backend | sieve.detect
-    (sieve.mutual)
+    sieve.mutual
     sieve.core
 
 [importlinter:contract:core-purity]

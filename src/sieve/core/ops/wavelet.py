@@ -57,9 +57,10 @@ def _pool_size(workers: int) -> int | None:
     """`workers` as a `ThreadPoolExecutor` size; `None` is the stdlib default.
 
     `ALL_CORES` becomes `None` rather than `os.cpu_count()` on purpose.
-    `mutual.machine.available_cpus` is importable from here now that the machine
-    reading lives below this module, but taking it would still be this module holding
-    a policy about how much of the machine a caller meant — and re-deriving
+    `mutual.machine.available_cpus` is not even reachable from here — `mutual`
+    sits *above* `core` in the layers contract — and reaching for it would in
+    any case be this module holding a policy about how much of the machine a
+    caller meant, which is the objection that survives the layer. Re-deriving
     "how much do I have" via `os.cpu_count` is exactly the second answer
     `resolve_workers` documents at length as the thing to avoid. The stdlib's
     own default is a third party to the disagreement rather than a party in

@@ -55,7 +55,7 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
     element=ElementRelation.AGGREGATED,
     cost=CostEstimate(
         # The static declaration takes the anti-aliased path: one neighborhood
-        # read and one smaller write, stated relative to a full-frame copy
+        # read and one smaller write, stated relative to a megapixel copy
         # rather than as one machine's elapsed time.
         work_per_megapixel=WorkUnits(2.0),
         # Input plus an output that is at most a quarter of it, no scratch.

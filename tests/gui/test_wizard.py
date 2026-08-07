@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QSpinBox
 from pytestqt.qtbot import QtBot
@@ -91,7 +91,16 @@ def test_wizard_lifecycle_boundary_is_named_signals(qapp: object) -> None:
     lifecycle = WizardLifecycle()
     try:
         assert WIZARD_LIFECYCLE_SIGNALS == EXPECTED_LIFECYCLE_SIGNALS
-        assert all(name in WizardLifecycle.__dict__ for name in EXPECTED_LIFECYCLE_SIGNALS)
+        # Both directions, for `SPEC_CHANNELS`' reason. One direction — every
+        # listed name exists on the class — lets a *new* crossing signal be
+        # added and never reach the declared boundary, which is the only drift
+        # this test exists to catch: the list is what says what the extraction
+        # made public, and a signal missing from it is the tab reaching back in
+        # under another name.
+        declared = {
+            name for name, member in vars(WizardLifecycle).items() if isinstance(member, Signal)
+        }
+        assert declared == set(EXPECTED_LIFECYCLE_SIGNALS)
         assert lifecycle.parent() is None
         assert not {"_tab", "_filter_tab"} & vars(lifecycle).keys()
     finally:

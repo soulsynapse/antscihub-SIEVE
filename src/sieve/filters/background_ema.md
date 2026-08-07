@@ -125,8 +125,8 @@ filter's job.
 
 ## Cost
 
-Declared as **6 work units per input megapixel**, anchored to a full-frame copy
-at the reference resolution. That is relative work, not seconds: an
+Declared as **6 work units per input megapixel**, anchored to copying one
+megapixel of a frame. That is relative work, not seconds: an
 uncalibrated machine can compare it to other filters, but cannot turn it into
 wall time until calibration measures the anchor.
 

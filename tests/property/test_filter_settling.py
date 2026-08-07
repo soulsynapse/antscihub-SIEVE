@@ -22,12 +22,19 @@ from sieve.filters import discover
 
 WIDTH, HEIGHT = 48, 36
 
-WITHOUT_SETTLING_PRODUCER: frozenset[tuple[str, str]] = frozenset()
+#: Discovered filters this probe cannot verify, and so does not claim to.
+#: Shrink-only, the `WITHOUT_PRODUCER` construction. `detect` is here because
+#: its published value is its span's *last* frame, which by construction is
+#: never settled: the kernel returns NaN at every span length, so two origins
+#: agree on nothing. It leaves this list when the kernel publishes a sample it
+#: can stand behind (`docs/todo/the-detect-kernel-publishes-an-unsettled-sample.md`).
+WITHOUT_SETTLING_PRODUCER: frozenset[tuple[str, str]] = frozenset({("detect", "1.0.0")})
 
 DISCOVERED = discover()
 
 
-def _probeable(spec: FilterSpec) -> bool:
+def _shaped_for_the_probe(spec: FilterSpec) -> bool:
+    """Whether the generic single-array probe can call this filter at all."""
     return (
         len(spec.input_ports) == 1
         and all(isinstance(stream, ArraySpec) for stream in spec.input_ports.values())
@@ -36,12 +43,31 @@ def _probeable(spec: FilterSpec) -> bool:
     )
 
 
+def _yields_a_comparable_sample(spec: FilterSpec) -> bool:
+    """Whether the probe gets a value back that two origins could disagree on.
+
+    The second half of probeability, and the half a structural test cannot
+    see. A filter whose output is entirely NaN passes `np.allclose(...,
+    equal_nan=True)` against anything — including itself — so counting it as
+    verified is rule 6 at the level of the gate: unexamined rendering as quiet.
+    """
+    params = spec.params_model()
+    target = node_warmup_frames((spec, params)).frames + 1
+    produced = _runner(spec)(spec, params, 0, target)
+    return not bool(np.isnan(np.asarray(produced.data, dtype=np.float64)).all())
+
+
+def _unverifiable(spec: FilterSpec) -> bool:
+    return not _shaped_for_the_probe(spec) or not _yields_a_comparable_sample(spec)
+
+
 PROBED = tuple(spec for spec in DISCOVERED if spec.key not in WITHOUT_SETTLING_PRODUCER)
 
 
-def test_the_unverified_set_names_exactly_the_unprobeable_discovered_filters() -> None:
-    unprobeable = {spec.key for spec in DISCOVERED if not _probeable(spec)}
-    assert set(WITHOUT_SETTLING_PRODUCER) == unprobeable
+def test_the_unverified_set_names_exactly_the_filters_the_probe_cannot_verify() -> None:
+    assert set(WITHOUT_SETTLING_PRODUCER) == {
+        spec.key for spec in DISCOVERED if _unverifiable(spec)
+    }
 
 
 def _frame(index: int) -> Frame:
@@ -63,10 +89,17 @@ def _streaming_output(spec: FilterSpec, params: ParamsBase, start: int, target: 
 
 
 def _windowed_output(spec: FilterSpec, params: ParamsBase, start: int, target: int) -> Frame:
+    """`target`'s output from a span beginning at `start`.
+
+    The span is *not* re-clamped to the declared window. Clamping is what made
+    this vacuous: with `first = max(start, target - window + 1)` and a target
+    of `start + warmup + extra`, both origins resolved to the same first frame,
+    so the two-origin comparison was a run against itself. Handing the
+    later-origin run the minimum and the frame-zero run everything before it is
+    the whole claim — history older than the declared window must not matter.
+    """
     run = cast(WindowedKernel[ParamsBase], KERNELS.select(spec, (Backend.CPU,)).start())
-    window = node_warmup_frames((spec, params)).frames + 1
-    first = max(start, target - window + 1)
-    span = FrameSpan(tuple(_frame(index) for index in range(first, target + 1)))
+    span = FrameSpan(tuple(_frame(index) for index in range(start, target + 1)))
     return run(span, params)
 
 
@@ -95,5 +128,9 @@ def test_discovered_filters_agree_after_their_declared_warmup(
 
     assert from_zero.index == from_later.index == target
     assert from_zero.data.shape == from_later.data.shape
+    # Before the agreement: something to agree *on*. `equal_nan=True` is right
+    # for a filter whose output is partly undefined and wrong as a whole-array
+    # verdict — two all-NaN arrays are "close" to each other and to nothing.
+    assert not np.isnan(np.asarray(from_zero.data, dtype=np.float64)).all()
     epsilon = 0.0 if spec.settling_epsilon is None else spec.settling_epsilon
     assert np.allclose(from_zero.data, from_later.data, rtol=0.0, atol=epsilon, equal_nan=True)

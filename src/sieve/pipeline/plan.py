@@ -265,6 +265,16 @@ class ExecutionPlan:
         the same field.
         """
         span_start = FrameIndex(self.span.start)
+        if span_start <= self.source_start:
+            # A span that begins before the footage does is the clamp taken to
+            # its limit, not a new case. `resolve_source.resolve` declines an
+            # artifact that does not cover the request, so nothing in the tree
+            # builds this plan today — but the subtraction below is
+            # `FrameIndex - FrameIndex`, which is a `FrameCount`, and a
+            # `FrameCount` refuses to be negative. Without this line the
+            # documented clamp would raise instead of clamping, from inside
+            # `core/types.py`, on an invariant held one module away.
+            return self.source_start
         available = span_start - self.source_start
         if available < self.lead_in:
             return self.source_start

@@ -1,7 +1,7 @@
 ---
 title: sieve run closes the vertical slice
 step: "03.8"
-status: awaiting-review
+status: open
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_cli_run.py -q"
 opened: 2026-08-06
@@ -31,3 +31,31 @@ re-derivation rule applies and this is its table. Four rows survive, two drop.
 | `a_dry_run_never_opens_the_video` | **replaced by** the same-named case. Its second half tested a project with the clip cleared; schema v1 records none at all, so it becomes "no `--frames`", which is every unspanned project rather than a hand-edited one. |
 | `declared_outputs_are_refused_rather_than_ignored` | **survives** verbatim in substance. |
 | `a_filter_this_build_does_not_have_is_named_before_anything_decodes` | **survives** as `a_tool_this_build_does_not_have_...` (`adr/tools-not-filters.md`). |
+
+## Reopened by review, 2026-08-07
+
+Two cases short, and both are the ordinary invocation rather than an edge. The
+four cases that landed build every project the same way — always with at least
+one `Replicate`, always invoked with `--frames` — and that uniformity leaves two
+production branches which no test can tell from nonsense. Verified by mutation
+against the criterion, both still green:
+
+- `_targets` reduced to `tuple(project.replicates)`, dropping `or (None,)`. A
+  project with no replicates then runs nothing, prints nothing, and exits 0.
+  This is the plain invocation, and it is the claim v2's
+  `a_hand_written_crop_node_runs_with_no_replicates` carried — the table dropped
+  that row for its *tool*, but the row's claim is about the baseline, and
+  `downsample` serves it.
+- `span_for`'s fallback replaced with `SourceSpan(start=0, end=1)`. This is the
+  branch the commit subject names — the span is the flag *or the whole video* —
+  and the whole video half has never run.
+
+Add both cases: a project with no replicates whose output line is labelled
+`baseline`, and an invocation with no `--frames` that covers `FIXTURE_FRAMES`
+frames (`tests/conftest.py`). `done_when` is unchanged; it covers them.
+
+Not required, and named so the next run does not go hunting: the lead-in
+shortfall warning and `load_project`'s `ValidationError` refusal also survive
+mutation. The first is unreachable with a one-tool shelf that declares no
+lead-in, and the second has no v2 row. Both come back with the tools of Phase 4
+and the full CLI of Phase 5.

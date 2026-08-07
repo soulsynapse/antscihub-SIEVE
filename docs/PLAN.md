@@ -14,18 +14,9 @@ held, with the contracts installed first; re-derive the half that didn't.**
 The anti-v2.5 constraint governs every phase: each lands something runnable
 and gated. No phase is a pile of specs.
 
-Terminology: v3 says **tools**, not filters. Renamed are field, package, and
-class names (`tool_id`, `sieve.tools`, `ToolSpec`); the identity *values*
-(`"crop"`, `"detect"`, …) stay unchanged — they are what the v2 importer maps
-against and what parity fixtures reference.
-
-The kernel question, decided: no kernel apparatus. A tool module is `ToolSpec`
-plus one plain function `run(params, window, state)` with a fixed signature;
-the spec points at it, the registry hands it to the executor. `core/ops/`
-keeps its v2 role — shared math with no spec attached — and a trivial tool's
-`run` is a one-line delegation into it. The executor never reaches into `ops/`
-directly: that would move per-tool param/state/window translation into the
-loop, keyed by `tool_id`, making adding a tool edit the executor.
+Terminology: v3 says **tools**, not filters, with the identity values frozen
+(`adr/tools-not-filters.md`). The kernel question is decided — no kernel
+apparatus, one plain `run` per tool module (`adr/no-kernel-apparatus.md`).
 
 Work is chunked into `docs/todo/` items attached to these phases;
 `scripts/doc_index.py` generates the index and answers what to take next.
@@ -81,11 +72,11 @@ test — v3 output equals v2 golden arrays.
 ## Phase 3 — Schema v1 and the v2 importer
 
 `core/pipeline_model.py` re-derived as schema v1: crop, span, and **detector**
-are graph nodes natively — no `Project.detector`, no `Replicate.roi`, no
-`Project.clip`. Kept verbatim in spirit: `extra=forbid`, registry-blind, no
+are graph nodes natively (`adr/detector-is-a-node.md`). Kept verbatim in
+spirit: `extra=forbid`, registry-blind, no
 measurements in the artifact, checkpoints/outputs on `Project` not `Node`.
 `compat/v2.py` is the one-way importer and the only module that spells v2
-field names; it reuses `upgrade.py`'s carry logic (derived node ids,
+field names (`adr/compat-spells-v2.md`); it reuses `upgrade.py`'s carry logic (derived node ids,
 per-replicate pinned boxes, identity-crop baseline) and completes what v2's
 refused — the 2026.08.05 finding's revision licenses it: two of the three
 blockers have answers, the third was drawn too wide.

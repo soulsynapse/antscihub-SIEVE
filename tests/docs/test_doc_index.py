@@ -750,6 +750,67 @@ def test_the_three_targets_that_render_are_written_and_only_the_scaffold_is_refu
     assert (repo / "docs" / "ARCHITECTURE.md").is_file()
 
 
+# The rest of the command line. Each of these is driven through `main` rather
+# than through the function it exercises, because every one of them was found
+# individually well covered and wired to nothing: `tracked_drift`, `mint` and
+# all four gate predicates could be cut out of `main` with the suite green.
+
+
+def test_the_index_build_refuses_a_drifted_item(tmp_path, capsys):
+    todo = _repo_with_items(tmp_path, "hit")
+    (tmp_path / "docs" / "findings").mkdir()
+    write_item(todo, "hit", POOLED.replace("opened: 2026-08-06", "opened: 2026-08-09"))
+
+    code = doc_index.main([], repo=tmp_path)
+
+    assert code == 1
+    assert "overwritten or removed" in capsys.readouterr().err
+
+
+def test_mint_over_a_taken_slug_exits_one_and_leaves_the_file(tmp_path, capsys):
+    todo = tmp_path / "docs" / "todo"
+    todo.mkdir(parents=True)
+    write_item(todo, "_TEMPLATE", "title: t")
+    write_item(todo, "taken", POOLED, body="the item that would be deleted")
+
+    code = doc_index.main(["--mint", "taken"], repo=tmp_path)
+
+    assert code == 1
+    assert "already exists" in capsys.readouterr().err
+    assert "would be deleted" in (todo / "taken.md").read_text(encoding="utf-8")
+
+
+def test_every_gate_is_reported_and_none_of_them_stops_a_write(tmp_path, capsys):
+    # All four at once, because the claim is about `gates` reporting rather
+    # than any one refusal: a run that stopped at the first would report one of
+    # these, and a run that let a refusal shadow the render would write none of
+    # the four targets. Nothing here is a `.py` file — the tree has to trip the
+    # gates while the scaffold still renders, or the second half of the
+    # assertion would be testing the annotation limit again.
+    todo = _repo_with_items(tmp_path, "hit")
+    docs = tmp_path / "docs"
+    (docs / "findings").mkdir()
+    write_item(todo, "hit", POOLED.replace("opened: 2026-08-06", "opened: 2026-08-09"))
+    (tmp_path / "src" / "sieve" / "backend").mkdir(parents=True)
+    (tmp_path / "src" / "sieve" / "core").mkdir(parents=True)
+    (tmp_path / "src" / "sieve" / "core" / "stray.txt").write_text("", encoding="utf-8")
+    (docs / "NOTES.md").write_text("the filter runs first\n", encoding="utf-8")
+
+    code = doc_index.main([], repo=tmp_path)
+
+    errors = capsys.readouterr().err
+    assert code == 1
+    for reported in (
+        "overwritten or removed",
+        "absent-by-decision paths exist",
+        "core has children ADR-6 does not admit",
+        "dead language",
+    ):
+        assert reported in errors, f"{reported!r} not reported: {errors}"
+    for target, _ in doc_index.derived(collect(todo), tmp_path):
+        assert target.is_file(), f"{target.name} was not written past the gates"
+
+
 # The live gate: the repo's own folders parse, and the checked-in indexes are
 # exactly what the tool would write — a stale index fails here, not in review.
 

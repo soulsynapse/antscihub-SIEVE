@@ -2,7 +2,7 @@
 title: doc_index has no case over its own command line
 priority: normal
 phase: 0
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/docs/test_doc_index.py::test_the_index_build_refuses_a_drifted_item tests/docs/test_doc_index.py::test_mint_over_a_taken_slug_exits_one_and_leaves_the_file tests/docs/test_doc_index.py::test_every_gate_is_reported_and_none_of_them_stops_a_write -q"
 opened: 2026-08-07

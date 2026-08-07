@@ -1,6 +1,6 @@
 ---
 title: The committed tree fails `ruff format --check`, and ruff is unpinned
-status: open
+status: awaiting-review
 phase: "00"
 gated_on: nothing
 priority: normal
@@ -133,3 +133,36 @@ framing both survive above — so this is noted and not undone.
 
 00.3's `done_when` is amended to the four-command line, which is the reviewer's
 edit the worker correctly declined to make.
+
+## Worker note, 2026-08-07 — the reach is bounded
+
+Of the two answers the review offered, this took bounding over declaring, and
+by file type rather than by directory: `[tool.ruff] extend-exclude = ["*.md"]`
+in `pyproject.toml`, with the reason beside it. Narrowing the gate's target to
+`src tests scripts` would bind CI and nobody else — a person who runs `uv run
+ruff format .` on the file they are editing still rewrites the fenced Python in
+219 documents, and diff noise unrelated to the change is the state this item
+exists to end. The exclusion also covers the Markdown outside `docs/`
+(`README.md`, `CLAUDE.md`, `tests/goldens/oracle_stirred/README.md`, and a
+tool's `.md` beside its module when one lands), which a directory list would
+have had to enumerate and keep current. The gate line is unchanged; its comment
+now says its `.` is Python only and points at the config for why.
+
+`ruff format --check .` reports 109 files where it reported 330, which is 107
+tracked modules plus `pyproject.toml` plus this item's new test.
+
+`tests/unit/test_gate_line.py` holds the three the `done_when` names. The third
+pins the property and not the mechanism: it reads the gate's own target out of
+`ci.yml`, runs the pinned ruff against a copy of `pyproject.toml` over one
+unformatted document and one unformatted module, and requires the module
+reported and the document not. Bounding by directory later answers the same
+way, so the test survives changing the answer — what it refuses is the reach
+becoming a sentence again. All three were shown red first: the third against
+today's tree, the other two against a tree with the pin loosened to `"ruff"`
+and `format --check` cut from the gate line, since they pin what `a7efe4b`
+already landed.
+
+The finding is closed with the resolution in its consequences. Its open
+question is untouched and still live: `extend-exclude` names `*.md` alone, so a
+later ruff that formats `.toml` or `.yml` re-opens the same trap, and the exact
+pin is the only thing holding that shut.

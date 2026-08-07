@@ -104,6 +104,15 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# ruff 0.16 formats the Python inside a Markdown fence, so `ruff format .` at
+# the root reaches 219 documents against 107 modules
+# (findings/2026.08.07-ruff-format-check-over-the-root-formats-the-python-in-docs.md).
+# A document is not a place the formatter gets a vote: `docs/findings/` exists
+# to quote code that does not work, and a deliberately-broken snippet in a
+# tagged fence would turn a docs-only commit red. Excluded here rather than by
+# narrowing the gate's target, because the target only binds CI — this binds
+# anyone who runs the formatter on the tree they are editing.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint.per-file-ignores]
 # `from ...machine import available_cpus as available_cpus` is a re-export, not

@@ -45,7 +45,10 @@ jobs:
       # formatter that nothing enforces means the next person to run it emits a
       # diff unrelated to their change, and the version it enforces is pinned
       # exactly in `pyproject.toml` so the answer does not move on a lock
-      # refresh. Nothing here has
+      # refresh. Its `.` is Python only: ruff would otherwise format the
+      # fenced Python in every document, and `pyproject.toml`'s
+      # `extend-exclude` is where that is refused, with the reason.
+      # Nothing here has
       # to be installed for `lint-imports` to have an opinion about it — grimp
       # reads import statements, not the environment
       # (findings/2026.08.06-every-contract-goes-red-on-one-line.md), so Qt is

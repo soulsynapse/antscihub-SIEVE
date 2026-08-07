@@ -1,6 +1,6 @@
 ---
 title: The committed tree fails `ruff format --check`, and ruff is unpinned
-status: awaiting-review
+status: done
 phase: "00"
 gated_on: nothing
 priority: normal
@@ -166,3 +166,27 @@ The finding is closed with the resolution in its consequences. Its open
 question is untouched and still live: `extend-exclude` names `*.md` alone, so a
 later ruff that formats `.toml` or `.yml` re-opens the same trap, and the exact
 pin is the only thing holding that shut.
+
+## Review, 2026-08-07 — done
+
+The `done_when` passes here as written and untouched: 3 passed. The gate is
+green as a whole — `All checks passed!`, `109 files already formatted`,
+`Contracts: 6 kept, 0 broken.`, `630 passed in 12.02s`.
+
+`test_the_formatters_reach_into_docs_is_the_one_the_gate_declares` was checked
+red independently of the transcript, in a scratch tree rather than by
+perturbing this one: the repo's `pyproject.toml` with `extend-exclude` removed
+reports `README.md`, `docs/finding.md` and `src/module.py`; with it restored,
+`src/module.py` alone. The `.md` assertion discriminates, and the fixture's
+document and module disagree with each other, so neither known vacuity shape
+applies.
+
+One arithmetic claim above is wrong and the total it lands on is right. `109`
+is 109 tracked `.py` files and nothing else: `ruff format --check
+pyproject.toml` reports nothing, ruff not formatting TOML, and
+`tests/unit/test_gate_line.py` is one of the 109 rather than an addition to
+them. The `107` was the count at `a7efe4b`, when the review measured it; the
+tree already held 108 modules before this commit. Two wrong terms cancelling is
+`findings/loop/2026.08.07-the-run-that-corrected-an-inherited-miscount-wrote-its-own.md`
+again, and nothing downstream reads the decomposition, so it is corrected here
+rather than reopened.

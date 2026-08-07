@@ -1,9 +1,9 @@
 ---
 title: The execution plan is re-derived
 step: "03.5"
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_plan.py -q"
+done_when: "uv run pytest tests/unit/test_plan.py -q && uv run pytest tests/unit/test_plan.py -q -k two_roots && uv run pytest tests/unit/test_plan.py -q -k output_rate"
 opened: 2026-08-07
 ---
 
@@ -81,3 +81,30 @@ property test could check the walk against brute-force path enumeration, and
 under schema v1 a node has one input and therefore exactly one root path — the
 enumeration *is* the walk. The walk is checked against `source_warmup_frames`,
 the single-path definition it folds, taken over each chain of the fork by hand.
+
+## Two more cases with no v2 row, amended in at review
+
+`_fold` maximises over two collections and the fourteen cases reach one of
+them. Every pipeline in the file has exactly one root, so the closing
+`max(need[root] for root in dag.roots)` passes as `min`, and passes folding
+over `dag.order` instead — measured in
+[findings/loop/2026.08.07-a-fold-has-two-maxima-and-one-fork-fixture-exercises-the-inner-one.md](../findings/loop/2026.08.07-a-fold-has-two-maxima-and-one-fork-fixture-exercises-the-inner-one.md).
+Separately, `_input_lookahead_frames`' refusal of a non-positive `output_rate`
+— declared in its own `Raises:` and again in `ExecutionPlan.build`'s — is
+deleted with every case still green.
+
+Both are v3's own: v2's file has no row for either, so they arrive as additions
+rather than as verdicts. `done_when` selects them by substring, so the
+substrings are the requirement and the sentences below only say what each must
+assert (`findings/loop/2026.08.07-a-k-selector-and-the-prose-name-beside-it-are-two-criteria.md`).
+
+- A case whose name contains **`two_roots`**: two roots with unequal windows —
+  `Pipeline(nodes=(node("a", "settle1"), node("b", "settle5")))` builds with no
+  edges and has both — asserting the graph's `lead_in` is the larger. It should
+  fail under `min` and under a fold that ranged over `dag.order`, which means
+  the two roots must also be the two extremes of `need`.
+- A case whose name contains **`output_rate`**: a node whose `output_rate()`
+  returns zero or less, reaching the *lookahead* fold, refused with the
+  `ValueError` `build` declares. The warmup twin in `core/tool_base.py` carries
+  the identical guard and is untested too, but it is outside this item —
+  `todo/a-declared-refusal-that-only-the-lookahead-side-proves.md` holds it.

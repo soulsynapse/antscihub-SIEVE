@@ -1,7 +1,7 @@
 ---
 title: Schema v1 is re-derived with nodes
 step: "02.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_replicates.py -q"
 opened: 2026-08-06
@@ -148,11 +148,11 @@ change making the sentence wrong, not a sweep.
 
 ```
 $ uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_replicates.py -q
-..............................                                           [100%]
-30 passed in 0.23s
+............................................                             [100%]
+44 passed in 0.18s
 ```
 
-`ruff check`, `lint-imports` (5 contracts kept) and the full `pytest -q` (179
+`ruff check`, `lint-imports` (5 contracts kept) and the full `pytest -q` (193
 passed) are green with it.
 
 ## Reopened at review, 2026-08-07
@@ -176,3 +176,42 @@ None had a v2 row, which is why the table did not surface them
 (`findings/loop/2026.08.07-a-re-derivation-table-certifies-v2s-coverage-not-v3s.md`).
 `test_replacing_the_graph_catches_stale_checkpoints_and_sinks` names sinks and
 asserts nothing about them.
+
+## Closed at rework, 2026-08-07
+
+**Immutability is structural, not a read-boundary rule.** The finding's open
+question was deep-copying at each read against storing params already-immutable;
+the second is what shipped. A read boundary is a list of methods somebody has to
+remember to extend, and `params_for` is on the interactive path and is read
+again per node per replicate whenever a key is built, so the copy would be paid
+on every drag of a slider rather than once at validation.
+
+The obvious immutable mapping does not survive this module, which is what the
+finding's caveat was pointing at: `MappingProxyType` in an `Any`-typed field
+makes `model_dump(mode="json")` raise `PydanticSerializationError`, so the
+document would be immutable and unsavable. `FrozenMapping` and `FrozenSequence`
+are `dict`/`list` subclasses that refuse every write, which leaves pydantic
+serializing them as what they are, `ser_json_inf_nan="constants"` reading the
+same values, and a stored list still equal to the literal it round-tripped from
+— a tuple would not be. `extra="forbid"` never entered it: params are an
+`Any`-typed field's *contents*, not a field. `frozen_value` is applied in the
+two field validators and in the three methods that reach the model through
+`model_copy`, which runs no validator.
+
+`FrozenSequence` was not covered until the mutation sweep said so: only the
+region case had a test, and a band list is the other container a tool's
+parameters carry.
+
+**Each refusal now has a case that fails without it.** Six added — the stale
+sink reference, the four duplicate-id checks, and the sink format pattern — plus
+`TestBlankStringsAreRefused` for the three blank-string checks and a negative
+span start beside the empty-span case.
+`test_replacing_the_graph_catches_stale_checkpoints_and_sinks` cleared
+`checkpoints` and `outputs` in one step, so nothing depended on the sink check
+existing; it now clears them one at a time and asserts the refusal between.
+
+Verified by mutation rather than by reading: each of the module's 22 `raise`
+statements replaced with `pass` in turn, criterion re-run, tree restored with
+`git checkout --`. All 22 are now caught; before this work, ten were not.
+The commit that ran the sweep was made first, because `git checkout --` restores
+to `HEAD` and takes uncommitted work with it.

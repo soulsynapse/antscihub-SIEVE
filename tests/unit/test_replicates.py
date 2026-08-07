@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from sieve.core.pipeline_model import Replicate
+from sieve.core.pipeline_model import Project, Replicate, SourceRef
 
 
 def _replicate(name: str) -> Replicate:
@@ -109,3 +109,24 @@ class TestOverrides:
 
         assert replicate.with_overrides_limited_to({"n1", "n2"}) is replicate
         assert replicate.with_overrides_limited_to({"n1"}).overrides == {"n1": {"level": 0.5}}
+
+
+class TestLookup:
+    def _project(self) -> Project:
+        return Project(
+            source=SourceRef(path="arena.MP4"),
+            replicates=(Replicate(name="one", replicate_id="r1"),),
+        )
+
+    def test_a_replicate_lookup_for_an_absent_id_raises_keyerror(self) -> None:
+        # An id survives every rename, so the ids a caller holds outlive the
+        # names — one that no longer resolves is a deleted replicate, and the
+        # exception has to say which. Returning `None` says nothing and defers
+        # the failure to whoever reads a field off it.
+        with pytest.raises(KeyError) as absent:
+            self._project().replicate("r9")
+
+        assert absent.value.args[0] == "r9"
+
+    def test_a_replicate_lookup_for_a_present_id_returns_it(self) -> None:
+        assert self._project().replicate("r1").name == "one"

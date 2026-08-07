@@ -312,6 +312,25 @@ class TestReferentialIntegrity:
             )
 
 
+class TestLookup:
+    def test_a_node_lookup_for_an_absent_id_raises_keyerror(self) -> None:
+        # `Pipeline.node` declares the `KeyError` in its docstring and is the
+        # route `pipeline/dag.py` resolves an edge endpoint by. Returning `None`
+        # instead surfaces as an `AttributeError` several frames downstream,
+        # naming an attribute rather than the id that was not there.
+        pipeline = make_project().pipeline
+
+        with pytest.raises(KeyError) as absent:
+            pipeline.node("ghost")
+
+        assert absent.value.args[0] == "ghost"
+
+    def test_a_node_lookup_for_a_present_id_returns_it(self) -> None:
+        pipeline = make_project().pipeline
+
+        assert pipeline.node("n2").tool_id == "threshold"
+
+
 class TestPerReplicateDeviation:
     def _project(self) -> Project:
         """Two regions and one node carrying two parameters."""

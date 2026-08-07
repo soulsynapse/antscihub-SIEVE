@@ -9,7 +9,9 @@ nearly all the tangle (`filter_tab.py` at 2,321 lines and eleven jobs,
 `document.py`+`commands.py` co-changing 7/7, 2,072 Qt-free lines stranded
 above every consumer). So the rewrite is asymmetric: **port the half that
 held, with the contracts installed first; re-derive the half that didn't.**
-"Everything makes it over" is true of decisions, not files.
+"Everything makes it over" was never the goal: a v2 decision comes over one
+at a time, each on its evidence, and the ADRs record where v3 decided
+otherwise.
 
 The anti-v2.5 constraint governs every phase: each lands something runnable
 and gated. No phase is a pile of specs.

@@ -2,7 +2,7 @@
 
 The reason for v3 is to make the repo easy to grow. v2 works, and works well, but the way the code is structured, it is faster to do the refactoring here.
 
-The ideal case: every *decision* makes it over from v2 — not every file — with the boundaries enforced from the first commit and the missing pieces integrated from the start. The port is asymmetric on v2's own evidence: the non-GUI half held its boundaries and ports; the GUI half didn't and gets re-derived ([PLAN.md](PLAN.md)).
+The ideal case: v2's evidence decides what comes over, one decision at a time, with the boundaries enforced from the first commit and the missing pieces integrated from the start. A boundary that held ports; one that needed propping gets re-derived; and a v2 decision transfers only where no ADR here overrides it — several already do (the kernel apparatus, the detect package, the importer). The port is asymmetric on that evidence: the non-GUI half held; the GUI half didn't ([PLAN.md](PLAN.md)).
 
 ## The loop
 

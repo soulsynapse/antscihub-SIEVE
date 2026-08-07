@@ -1,0 +1,29 @@
+[project]
+name = "sieve"
+version = "0.1.0"
+description = "Signal Isolation for Ethological Video Events"
+requires-python = ">=3.13,<3.14"
+# Empty because no component is scoped yet. A dependency arrives with the
+# component that needs it, with the reason for the pin next to it — v2's
+# pyproject is the model for that habit, not for this list.
+dependencies = []
+
+[tool.uv]
+# There is no `src/sieve` yet, so there is nothing to build or install; without
+# this uv would try to build the project on every sync and fail. Flip to a
+# hatchling build-system block in the same commit as the first module.
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"

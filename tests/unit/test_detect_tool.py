@@ -25,7 +25,7 @@ import numpy.typing as npt
 import pytest
 
 from sieve.core.pipeline_model import Node, Pipeline, SourceSpan
-from sieve.core.tool_base import node_lookahead_frames, node_warmup_frames
+from sieve.core.tool_base import ParamStereotype, node_lookahead_frames, node_warmup_frames
 from sieve.core.tool_registry import REGISTRY
 from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan
 from sieve.pipeline.dag import Dag
@@ -251,6 +251,28 @@ def test_the_bounds_are_reached_only_at_the_corner_and_every_run_refines_them() 
     assert node_warmup_frames((SPEC, params)) == FrameCount(29)
     assert node_lookahead_frames((SPEC, params)) == FrameCount(29)
     assert params.warmup_frames() * 60 < SPEC.warmup_frames
+
+
+def test_the_three_bands_declare_a_band_and_not_a_span() -> None:
+    """`SPAN` is frames or time, and none of these three is either.
+
+    `freq_band` is in Hz, `value_band` is in the incoming signal's own units and
+    `count_frac` is a fraction of the frame's elements. As controls the two
+    stereotypes are indistinguishable — a lo/hi pair, two handles, dragged — and
+    as handoff surfaces they share nothing, which is why declaring `freq_band` a
+    `SPAN` tells Phase 7's generator to put frequency handles on the scrubber.
+    The last assertion is the one that stays true after a fourth band: no
+    parameter of this tool belongs on the timeline at all.
+    """
+    stereotypes = SPEC.param_stereotypes
+
+    assert stereotypes["freq_band"] is ParamStereotype.BAND
+    assert stereotypes["value_band"] is ParamStereotype.BAND
+    assert stereotypes["count_frac"] is ParamStereotype.BAND
+    assert stereotypes["window_frames"] is ParamStereotype.SCALAR_RANGE
+    assert stereotypes["centered"] is ParamStereotype.ENUM
+    assert stereotypes["fps"] is ParamStereotype.SCALAR_RANGE
+    assert ParamStereotype.SPAN not in set(stereotypes.values())
 
 
 def test_the_emitted_frame_is_the_target_and_not_the_end_of_the_window() -> None:

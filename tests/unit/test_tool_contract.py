@@ -731,12 +731,15 @@ class TestParamStereotypes:
     def test_the_stereotype_vocabulary_is_closed(self) -> None:
         # Kinds grow slowly and deliberately (`adr/gui-knows-kinds-not-tools.md`)
         # — the asymmetry that lets tools grow fast is that each new kind costs
-        # generator work, so a sixth member arriving without a tool that forced
-        # it fails here rather than in a review nobody scheduled.
+        # generator work, so a member arriving without a tool that forced it
+        # fails here rather than in a review nobody scheduled. `band` was forced
+        # by `detect`, whose three interval params are on Hz, a block-power
+        # value and a fraction rather than on the timeline `span` reaches.
         assert [kind.value for kind in ParamStereotype] == [
             "scalar-range",
             "enum",
             "span",
+            "band",
             "region",
             "point",
         ]

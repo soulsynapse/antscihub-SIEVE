@@ -578,16 +578,13 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
         CaptionPart(label="count", param="count_frac"),
         CaptionPart(label="D", param="window_frames"),
     ),
-    # Three of these are a pair of handles dragged along an axis, which is the
-    # population `SPAN` names — and the axis is Hz, a block-power value, and a
-    # fraction rather than time, which is the part the closed vocabulary has no
-    # word for. `docs/todo/a-band-has-no-stereotype-of-its-own.md` holds the
-    # question; nothing generates a widget yet, so the wrong-axis reading costs
-    # nothing until it is answered.
+    # This is the tool `BAND` was minted for: three pairs of handles dragged
+    # along Hz, a block-power value, and a fraction, none of which is the
+    # timeline `SPAN` hands off to.
     param_stereotypes={
-        "freq_band": ParamStereotype.SPAN,
-        "value_band": ParamStereotype.SPAN,
-        "count_frac": ParamStereotype.SPAN,
+        "freq_band": ParamStereotype.BAND,
+        "value_band": ParamStereotype.BAND,
+        "count_frac": ParamStereotype.BAND,
         "window_frames": ParamStereotype.SCALAR_RANGE,
         "centered": ParamStereotype.ENUM,
         "fps": ParamStereotype.SCALAR_RANGE,

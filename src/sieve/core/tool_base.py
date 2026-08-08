@@ -671,19 +671,28 @@ class ParamStereotype(StrEnum):
     (`adr/gui-knows-kinds-not-tools.md`).
 
     The vocabulary is closed, and closing it is the whole asymmetry: tools grow
-    fast because kinds grow slowly, so a sixth member is a deliberate decision
-    forced by a tool that cannot be expressed in five, not a place to put a
-    tool's own presentation. Until that generator exists, `ToolSpec` refusing an
-    unknown kind by name is what stands in as the consumer
-    (`adr/declared-means-verified.md`).
+    fast because kinds grow slowly, so a new member is a deliberate decision
+    forced by a tool that cannot be expressed in the members that exist, not a
+    place to put a tool's own presentation. The count is `len(ParamStereotype)`
+    and is not written into this sentence, because two items each arguing they
+    are the next member is how the ordinal goes wrong while the rule stays
+    right. Until that generator exists, `ToolSpec` refusing an unknown kind by
+    name is what stands in as the consumer (`adr/declared-means-verified.md`).
     """
 
     #: One number within declared bounds. Spinbox, slider, or both.
     SCALAR_RANGE = "scalar-range"
     #: One of a fixed set of choices, read through `param_value_labels`.
     ENUM = "enum"
-    #: A half-open interval of frames or time.
+    #: A half-open interval of frames or time — and therefore the timeline. An
+    #: interval on any other axis is a `BAND`: the two are the same control and
+    #: different surfaces, and the surface is what a stereotype is read for.
     SPAN = "span"
+    #: An ordered lo/hi pair on a value axis rather than the time axis —
+    #: `detect`'s frequency band in Hz, its value band in the incoming signal's
+    #: units, its count threshold as a fraction. Which plot the handles are
+    #: grabbed on is undeclared and arrives with the generator that has to know.
+    BAND = "band"
     #: A rectangle in the frame the node is handed, e.g. `crop`'s `ROI`.
     REGION = "region"
     #: A single location in the frame — what a stamp tool would declare.
@@ -1153,7 +1162,7 @@ class ToolSpec:
                 raise TypeError(
                     f"{self.tool_id}: param_stereotypes[{name!r}] is {kind!r}, which is not a "
                     f"stereotype — the vocabulary is closed to "
-                    f"{[member.value for member in ParamStereotype]}, and a sixth kind is a "
+                    f"{[member.value for member in ParamStereotype]}, and another kind is a "
                     "decision about what the GUI can generate rather than a field a tool fills in"
                 )
         # Comparing the function objects, not calling them: a params model with

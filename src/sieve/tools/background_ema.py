@@ -5,12 +5,10 @@ this. Ported from v2's module of the same name; what carries is the model, the
 two emits, and the convergence argument behind `warmup_frames`.
 
 The model is `bg <- bg + alpha * (frame - bg)`, seeded with the first frame it
-sees. `alpha` is the weight of the newest frame: small means a background that
-takes a long time to accept a change and therefore keeps a stopped ant in the
-foreground; large means one that absorbs the ant and leaves only its motion.
-There is no correct value — that is a question about how long the animals in
-this footage hold still, which is why it is the primary parameter and not a
-constant (`adr/param-not-preference.md`).
+sees. What `alpha` costs a user is a question about how long the animals in this
+footage hold still, which has no answer here — so it is the primary parameter
+rather than a constant (`adr/param-not-preference.md`), and how to choose it is
+`GUIDANCE` below rather than this docstring.
 
 **Why the bound is 90 frames and what epsilon it is settled to.** An EMA's true
 warmup is infinite: the seed frame's weight after `n` updates is `(1 - alpha)^n`,
@@ -99,6 +97,31 @@ SETTLED_EPSILON = 0.01
 #: chose that dtype to keep — `np.promote_types` against `float32` says exactly
 #: that in one call and with no branch to get backwards.
 FloatArray = NDArray[np.floating[Any]]
+
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Keeps a running picture of what the arena looks like with nothing happening in
+it, and hands you either that picture or how far each frame departs from it. The
+departure is the foreground: the animals, and only while they differ from the
+scene the model has settled on.
+
+`alpha` is how much of each new frame is folded into that picture, and there is
+no correct value — it is a question about your animals rather than about the
+footage. A low alpha means a background that takes a long time to accept a
+change, so an ant that stops moving stays in the foreground for many seconds. A
+high alpha means one that absorbs a stationary animal quickly, leaving only
+motion. Ask how long the animals hold still while still being what you want to
+count, and set the model slower than that.
+
+Keep the background itself in view while you tune. Watching only the foreground
+cannot tell you that the model has swallowed a resting animal, and looking at the
+background is how that becomes obvious rather than inferred.
+
+It needs a run-up. The model is seeded from the first frame it sees and takes
+roughly 90 frames at the slowest setting — fewer as alpha rises — before what it
+holds is the scene rather than that first frame. SIEVE decodes that lead-in
+before the stretch you asked for, and says so when the recording does not start
+early enough to supply it."""
 
 
 def settle_frames(alpha: float, epsilon: float = SETTLED_EPSILON) -> int:
@@ -274,6 +297,7 @@ def run(params: BackgroundEmaParams, window: FrameSpan, state: BackgroundState, 
     warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=BackgroundState,
+    guidance=GUIDANCE,
     primary_params=("alpha", "emit"),
     caption=(
         CaptionPart(label="alpha", param="alpha", format_spec=".2f"),

@@ -60,6 +60,29 @@ MIN_STD = 1e-6
 #: it is handed straight through and the declaration covers both modes.
 SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
 
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Rescales each frame on its own so that all of them sit at the same brightness and
+contrast. What it removes is the change that happened to the whole image at once
+— a lamp warming up over the first hour, a cloud passing a window, an auto-gain
+camera reacting to something entering the shot — none of which is the animals
+moving, and all of which a motion measure downstream would otherwise read as
+activity in every block at the same instant.
+
+`off` passes the frames through untouched, which is the honest setting when the
+lighting is already controlled: the correction is per frame, so it also follows
+any change that genuinely fills the arena.
+
+What it does not fix is one block being brighter, or busier, than another, or
+those differences drifting apart over the recording. A threshold that has to mean
+the same thing in the corner as in the middle, or the same thing in two
+replicates under different rigs, wants `temporal_baseline` further down the
+pipeline; this node cannot give you one.
+
+On colour footage the correction is computed from the grey the frames would
+convert to and applied to every channel, so it does not shift the colour
+balance."""
+
 
 class NormalizeMode(StrEnum):
     """Whether to touch the pixels at all."""
@@ -132,6 +155,7 @@ def run(params: NormalizeParams, window: FrameSpan, state: None, /) -> Frame:
     # it describes coming out.
     element=ElementRelation.PRESERVED,
     mode=Mode.STREAMING,
+    guidance=GUIDANCE,
     primary_params=("mode",),
     caption=(CaptionPart(param="mode"),),
     # A choice from a fixed set, and the values read as themselves — "off" and

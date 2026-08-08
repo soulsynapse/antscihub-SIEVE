@@ -45,6 +45,30 @@ from sieve.core.types import Frame, FrameSpan
 #: static declaration, it is a runtime branch written in the wrong place.
 SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
 
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Divides both extents of every frame by a whole number and throws the rest away,
+so a factor of 4 leaves a sixteenth of the pixels. Reach for it when a run is
+slower than the tuning loop wants, or when a checkpoint of the frames would be
+too large to keep: everything downstream then works on the smaller frame, at a
+quarter of the cost per doubling of the factor.
+
+Use `rescale` instead when you want a percentage rather than a whole divisor —
+0.4 of the original width has no factor. This tool exists beside it because a
+whole divisor composes exactly and never rounds, which is what makes it the safe
+thing to put in front of storage.
+
+`anti_alias` decides how the pixels that survive are chosen. Averaging takes the
+mean of each block, which is what you want whenever anything downstream measures
+change over time: sampling every fourth pixel keeps fine detail from aliasing
+into the signal as motion the animal did not make. Sampling is faster and leaves
+every output pixel a pixel that was really there, which is the honest choice when
+you are looking at the frames rather than measuring them.
+
+Everything downstream of this node is denominated in the smaller frame: a region
+drawn here is in these pixels, and a block grid resolved here counts these
+pixels."""
+
 
 def run(params: DownsampleParams, window: FrameSpan, state: None, /) -> Frame:
     """Downsample the frame this streaming node was handed.
@@ -106,6 +130,7 @@ def run(params: DownsampleParams, window: FrameSpan, state: None, /) -> Frame:
     # in blocks has nothing to be taken over.
     element=ElementRelation.AGGREGATED,
     mode=Mode.STREAMING,
+    guidance=GUIDANCE,
     primary_params=("factor",),
     caption=(CaptionPart(label="factor", param="factor"),),
     param_stereotypes={

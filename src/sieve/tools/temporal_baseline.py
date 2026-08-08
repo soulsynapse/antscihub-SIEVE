@@ -23,13 +23,11 @@ detecting sources at N-sigma over a locally-estimated sky rather than at an
 absolute flux.
 
 **`window_seconds` is the primary parameter because it has no correct value.**
-Too short and a sustained behaviour becomes its own baseline and vanishes; too
-long and the baseline stops tracking drift. That is the same shape of argument
-as `background_ema`'s `alpha` and reaches the same conclusion — it is a question
-about the footage, not a constant. `emit=baseline` exists so the answer is
-visible: a user who has set the window too short sees their animal *in* the
-baseline, in the step composite, rather than inferring it from a detector that
-has quietly gone blind.
+The same shape of argument as `background_ema`'s `alpha`, reaching the same
+conclusion — it is a question about the footage, not a constant — and how to
+answer it is `GUIDANCE` below rather than this docstring. `emit=baseline` exists
+for that answering: what the window is too short for is visible in the baseline
+and only inferable from the deviation.
 
 **One node rather than two ports.** Standardizing needs *two* statistics and a
 node emits one stream, so the composition would be two baseline nodes, each
@@ -140,6 +138,38 @@ MAX_SAMPLES = 256
 SUPPORTED_DTYPES = ("float32", "float64")
 
 FloatArray = NDArray[np.floating[Any]]
+
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Puts the incoming signal into units a threshold can be carried in. Each cell of
+the grid gets its own idea, over a trailing window, of what quiet looks like
+there, and what leaves this node is how far the current value departs from that
+in units of that cell's own variability — so a 4 means the same thing in the
+dim corner as under the lamp, in this replicate as in the next one, and on this
+rig as on the one next door.
+
+Put it after whatever measures motion and before whatever thresholds it. Without
+it, a threshold is a number about your lighting, your camera's gain, and how much
+of a block the animal covers, and it will not survive being carried to a second
+recording.
+
+`window_seconds` is the parameter with no correct value. Too short and a
+behaviour that lasts becomes its own baseline and disappears — the animal is
+compared against itself grooming. Too long and the baseline stops following real
+drift in the scene. Aim for a window comfortably longer than the longest bout you
+want to detect, and short enough that the arena has not changed much across it.
+
+Look at the baseline when you set the window. Switching the output to the
+baseline shows what the tool thinks quiet is: if your animal is visible in it,
+the window is too short, which is a thing to see rather than to deduce from a
+detector that has quietly gone blind.
+
+The estimate is robust — a median and a median absolute deviation, not a mean and
+a standard deviation — precisely because the events are in the sample and would
+otherwise inflate the spread they are being measured against.
+
+It needs a run-up of about one window before the first output is trustworthy,
+which SIEVE decodes ahead of the stretch you asked for."""
 
 
 def window_frames(window_seconds: float, fps: float) -> int:
@@ -312,6 +342,7 @@ def run(params: TemporalBaselineParams, window: FrameSpan, state: BaselineState,
     warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=BaselineState,
+    guidance=GUIDANCE,
     primary_params=("window_seconds", "emit"),
     caption=(
         CaptionPart(label="window", param="window_seconds", format_spec=".1f"),

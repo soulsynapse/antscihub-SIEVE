@@ -62,6 +62,26 @@ WHOLE_FRAME_EXTENT = 1 << 20
 #: The identity crop. A value, not an absence — see the module docstring.
 WHOLE_FRAME = ROI(x=0, y=0, width=WHOLE_FRAME_EXTENT, height=WHOLE_FRAME_EXTENT)
 
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Keeps a rectangle of every frame and drops the rest. The usual reason is that one
+arena, or one replicate's dish, occupies a corner of footage that shows several:
+everything downstream then measures that animal and not the light flickering over
+the neighbours. The second reason is cost — nothing outside the rectangle is ever
+decoded into a measurement.
+
+The rectangle is drawn on the frame *this node* is handed, not on the source. A
+crop placed under a rescale is in the rescaled frame's pixels, and a second crop
+is inside the first one's output, so a box that looked right on the canvas can
+name somewhere else entirely if a resizing node moves above it. Put the crop that
+selects the arena at the very start of the pipeline, where the frame it sees and
+the frame the video holds are the same one.
+
+Left alone it keeps everything: the default region is larger than any frame and
+trims to exactly what arrives, so "no crop" is a setting rather than a missing
+node. A rectangle that hangs off the edge is trimmed the same way rather than
+refused."""
+
 
 def run(params: CropParams, window: FrameSpan, state: None, /) -> Frame:
     """The region of the target frame this node declares, trimmed to what arrived.
@@ -95,6 +115,7 @@ def run(params: CropParams, window: FrameSpan, state: None, /) -> Frame:
     # `block_signal`'s output is still a count of blocks.
     element=ElementRelation.PRESERVED,
     mode=Mode.STREAMING,
+    guidance=GUIDANCE,
     primary_params=("region",),
     caption=(CaptionPart(param="region"),),
     # The declaration Phase 7's canvas handoff reads. It says the value is a

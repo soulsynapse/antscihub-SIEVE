@@ -122,6 +122,40 @@ MAX_FPS = 240.0
 FloatArray = NDArray[np.floating[Any]]
 ComplexArray = NDArray[np.complexfloating[Any, Any]]
 
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Answers, frame by frame, whether the footage is showing the behaviour. It asks
+three questions in order: for each block, how much of its activity is rhythmic at
+the rate you care about; across the frame, how many blocks are inside the value
+range you called interesting; and over a window centred on the frame, whether
+that many blocks stayed inside it long enough to be an event rather than a
+twitch.
+
+`freq_band` is in cycles per second and is about the behaviour's rhythm — the
+stroke rate of grooming, the wingbeat, the step frequency. It is not about how
+long an event lasts; that is `window_frames`.
+
+`value_band` is in the units of whatever is feeding this node, which is why a
+`temporal_baseline` upstream is worth having: it makes the band a number of
+deviations that means the same thing in another replicate, instead of a number
+about this recording's lighting.
+
+`count_frac` is how much of the frame has to be involved, as a fraction of the
+blocks — the difference between one animal moving and the whole dish stirring.
+Left unset, nothing is claimed at all and the output is blank rather than
+everything passing, which is deliberate: a fresh session should not look like one
+continuous detection.
+
+`window_frames` is how long the count has to hold. Centred means the window
+straddles the frame it is answering for, using footage from both sides, which is
+what you are looking at when you tune against a stretch you can already see —
+keep it on. The cost is that a detection needs the frames after it before it can
+be claimed, which SIEVE reads ahead for.
+
+Every setting here is tuned by watching, so tune it on a stretch you have
+already scrubbed through and can recognise. The output is one value per frame: 1
+detected, 0 not, and blank where nothing is claimed."""
+
 
 def _pool_size(workers: int) -> int | None:
     """`workers` as a `ThreadPoolExecutor` size; `None` is the stdlib default.
@@ -570,6 +604,7 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
     # Exact on both sides: the window is `2k+1` frames centred on the target
     # and nothing outside it is read.
     warmup_kind=WarmupKind.BOUNDED,
+    guidance=GUIDANCE,
     primary_params=("freq_band", "value_band", "count_frac"),
     caption=(
         CaptionPart(label="freq", param="freq_band"),

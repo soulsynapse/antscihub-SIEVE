@@ -969,6 +969,58 @@ class TestParamStereotypes:
         assert SPEC_CHANNELS["param_stereotypes"] is Channel.PRESENTATION
 
 
+class TestGuidance:
+    """What a tool is for, promoted off the module docstring and onto the spec.
+
+    Phase 3 through 6 kept it in the docstring because the expander that shows
+    it did not exist (`PLAN.md`, and `tools/__init__.py` on the per-tool `.md`
+    v2 had instead). The promotion is what this asserts, and the shape of the
+    assertion is the point: a field a reader can hold, not a `__doc__` a widget
+    reads at runtime.
+    """
+
+    def test_guidance_is_spec_data_every_shelf_tool_declares(self) -> None:
+        """Presentation data, one string per tool, and never the docstring.
+
+        Three claims, and the third is the one that would decay silently. The
+        channel is `param_stereotypes`' claim for its reason. The shelf sweep is
+        what makes the field cost something: a tool registering without guidance
+        would leave the expander blank on that step and nothing else would say
+        so, and the sweep is over `discover()` so a new module is covered the day
+        it lands rather than when somebody remembers this list.
+
+        Not the module docstring, and not the summary either. Both are the
+        shortcuts that would make the promotion nominal — a docstring handed
+        through carries this repo's ADR citations and v2 archaeology to a user
+        who wants to know what the knob does, and a summary repeated is the
+        caption they can already read on the collapsed step.
+        """
+        import sys
+
+        from sieve.tools import discover
+
+        assert SPEC_CHANNELS["guidance"] is Channel.PRESENTATION
+
+        shelf = discover()
+        assert shelf, "the scan found no tools, so the sweep below asserts nothing"
+        for spec in shelf:
+            module = sys.modules[spec.params_model.__module__]
+            assert spec.guidance.strip(), f"{spec.tool_id} declares no guidance"
+            assert spec.guidance != module.__doc__
+            assert spec.guidance != spec.summary
+
+    def test_guidance_defaults_to_nothing_for_a_spec_with_no_user(self) -> None:
+        """A spec built without one is legal, for `run`'s reason.
+
+        Every graph test in this repo builds specs nobody will ever open a panel
+        on, and requiring help text of them would teach that the field is
+        ceremony to be filled in. What makes the default safe rather than silent
+        is the sweep above: it is the shelf a user meets, and the shelf is where
+        the field is required.
+        """
+        assert make_spec().guidance == ""
+
+
 class TestArraySpec:
     def test_disjoint_channel_sets_do_not_chain(self) -> None:
         gray_only = ArraySpec(channels=(ChannelSpec.GRAY,))
@@ -1157,6 +1209,7 @@ PROBES: dict[str, Any] = {
     "stateful": True,
     "warmup_kind": WarmupKind.EPSILON,
     "state_factory": dict,
+    "guidance": "Turn the factor up until the frames are small enough.",
     "primary_params": ("factor",),
     "caption": (CaptionPart(label="factor", param="factor"),),
     "param_value_labels": {"anti_alias": {"True": "averaged"}},

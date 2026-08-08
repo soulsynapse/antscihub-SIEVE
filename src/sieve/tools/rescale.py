@@ -47,6 +47,31 @@ from sieve.core.types import Frame, FrameSpan
 #: configuration happens to reach.
 SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
 
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Shrinks every frame by a fraction of its width and height, so 0.25 leaves a
+quarter of the width, a quarter of the height, and a sixteenth of the pixels.
+This is the resolution knob to reach for first: it is how much of the footage's
+detail the rest of the pipeline gets to see, and it is usually the largest single
+lever on how fast the tuning loop runs.
+
+1.0 is a real setting and does nothing at all — the frame is handed on
+untouched — so the scale can be dragged back to the top without taking the node
+out of the graph.
+
+The pixels that come out are area averages of the ones that went in, which is the
+right thing when anything downstream measures change over time: the alternative
+lets fine texture alias into the signal as motion nothing in the arena made.
+
+Set it before tuning a block grid or drawing a region. `block_signal` holds its
+blocks fixed in the *source's* pixels, so moving this scale changes how much
+compute a block costs rather than where a detection lands; a region drawn on the
+canvas, though, is in the pixels of the frame the node was handed, and rescaling
+underneath one moves it.
+
+Use `downsample` instead when the frames are being kept rather than measured: a
+whole-number divisor composes exactly and never rounds an extent."""
+
 
 def run(params: RescaleParams, window: FrameSpan, state: None, /) -> Frame:
     """Shrink the target frame, or hand it through untouched at 1.0.
@@ -89,6 +114,7 @@ def run(params: RescaleParams, window: FrameSpan, state: None, /) -> Frame:
     # denominated in.
     element=ElementRelation.AGGREGATED,
     mode=Mode.STREAMING,
+    guidance=GUIDANCE,
     primary_params=("scale",),
     caption=(
         CaptionPart(label="scale", param="scale", format_spec=".2f"),

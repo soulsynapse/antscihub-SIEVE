@@ -11,17 +11,10 @@ field* in computational neuroscience. It goes after `block_signal`, and after
 `temporal_baseline` if there is one: its input is a block grid, its output is
 the same grid in the same units, and its output is what a detector thresholds.
 
-**What it is for.** A behaviour that is intermittent while the event is not: an
-animal grooming produces motion in bursts with pauses between them, and a
-per-frame signal thresholded per frame reads that as ten short events. A
-persistence of a second bridges the pauses and reads it as one. `reach_blocks`
-answers the second half of the same problem — a grooming ant straddles two or
-three blocks and which of them carries the signal flickers between frames, so
-coupling lets the block that is momentarily quiet be held up by the one beside
-it, and the detection becomes about the animal rather than about where the grid
-happened to fall. Leave it out of a graph measuring an instantaneous quantity: a
-flow speed in px/s reported as px/s is not improved by being smeared over a
-second, and the group delay below becomes an error in the reported number.
+**What it is for** — a behaviour that is intermittent while the event is not, and
+a grid whose blocks disagree about which of them the animal is in — is `GUIDANCE`
+below, with when to leave it out. What the rest of this docstring holds is why
+the operator has the shape it does.
 
 **Decay and coupling are one node, two parameters.** Coupling applies to the
 previous state before it decays and before this frame's signal mixes in —
@@ -30,13 +23,9 @@ applied `t` times rather than once. A `motion_history` node followed by a blur
 node cannot produce this; the composition that could would need the two to share
 state.
 
-**`tau_seconds` is the primary parameter and has no correct value.** Too short
-and a bout with pauses in it reads as several bouts; too long and two genuinely
-separate bouts merge, with the reported end of an event drifting later by
-roughly `tau`. The rule of thumb is somewhat longer than the longest pause
-inside a bout and shorter than the shortest gap between two bouts worth counting
-separately — the same shape of argument as `temporal_baseline`'s window,
-resolving the opposite way (`adr/param-not-preference.md`).
+**`tau_seconds` is the primary parameter and has no correct value.** The same
+shape of argument as `temporal_baseline`'s window, resolving the opposite way
+(`adr/param-not-preference.md`); the rule of thumb it resolves to is `GUIDANCE`'s.
 
 **Two coupling operators, agreeing on the scale and not on the profile.**
 `dilate` is a grayscale morphological dilation: a block takes the largest of its
@@ -133,6 +122,40 @@ MAX_DIFFUSION_NUMBER = 0.25
 SUPPORTED_DTYPES = ("float32", "float64")
 
 FloatArray = NDArray[np.floating[Any]]
+
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Gives the signal a memory, so that a behaviour that comes in bursts reads as one
+event rather than ten. An animal grooming produces motion with pauses in it, and
+a per-frame measure thresholded per frame breaks that into a handful of short
+detections; a second of persistence bridges the pauses and reports the bout.
+
+`reach_blocks` is the same repair across space. A grooming ant straddles two or
+three blocks and which one carries the signal flickers between frames, so letting
+a quiet block be held up by its busy neighbours makes the detection about the
+animal instead of about where the grid happened to fall.
+
+`tau_seconds` has no correct value and is the parameter to spend time on. Too
+short and one bout with pauses in it becomes several; too long and two genuinely
+separate bouts merge. Aim somewhat longer than the longest pause inside a bout,
+and shorter than the shortest gap between two bouts you want counted separately.
+
+Two coupling operators, and they are not interchangeable. `dilate` lets a block
+take the strongest of itself and its neighbours, so a sustained event peaks
+exactly where it would have without coupling — reach for this one. `diffuse`
+spreads the peak down as it spreads it out, which fights the threshold below it,
+and by an amount that moves with the reach: switching operators means re-tuning
+the threshold. It ships because which one suits real footage is an open question,
+not because it is expected to win.
+
+The output lags. A persistence of `tau` reports an event about `tau` late, which
+matters the moment an onset is timed or aligned against another data stream, and
+particularly against a detector whose window is centred and has no lag of its
+own.
+
+Leave it out when the number you are reporting is instantaneous. A flow speed in
+pixels per second smeared over a second is not a better speed, it is a wrong
+one."""
 
 
 def decay_lambda(tau_seconds: float, fps: float) -> float:
@@ -273,6 +296,7 @@ def run(params: MotionHistoryParams, window: FrameSpan, state: MotionHistoryStat
     warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=MotionHistoryState,
+    guidance=GUIDANCE,
     primary_params=("tau_seconds", "reach_blocks", "couple"),
     caption=(
         CaptionPart(label="tau", param="tau_seconds", format_spec=".2f"),

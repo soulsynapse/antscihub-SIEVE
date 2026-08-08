@@ -56,6 +56,28 @@ from sieve.core.tool_base import (
 from sieve.core.tool_registry import register_tool
 from sieve.core.types import Frame, FrameSpan
 
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Narrows the run to a stretch of the recording — the ten minutes the animals were
+actually in the arena, the hour after the treatment, the few minutes you are
+tuning against before committing to the whole recording. Nothing outside the
+range is
+measured, written, or decoded, so a graph tuned on a short span costs what the
+span costs and not what the recording does.
+
+Put it at the end of the pipeline. The result is the same wherever it sits, since
+a run has one set of frames, but a span near the start makes every node below it
+depend on the bounds — so nudging the end of the range throws away work on frames
+whose pixels never changed. At the end, dragging the bounds recomputes almost
+nothing.
+
+Widening it later costs only the new frames. Tools that need history — a
+background model, a baseline, a detector's window — still get the frames before
+the start as lead-in, so a span does not leave them unsettled at the first frame
+you asked to see.
+
+Left alone it keeps everything, which is a setting rather than a missing node."""
+
 
 def run(params: SpanParams, window: FrameSpan, state: None, /) -> Frame:
     """The frame, unchanged and uncopied.
@@ -90,6 +112,7 @@ def run(params: SpanParams, window: FrameSpan, state: None, /) -> Frame:
     element=ElementRelation.PRESERVED,
     mode=Mode.STREAMING,
     selecting=True,
+    guidance=GUIDANCE,
     primary_params=("frames",),
     caption=(CaptionPart(param="frames"),),
     param_stereotypes={"frames": ParamStereotype.SPAN},

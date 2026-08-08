@@ -1109,6 +1109,28 @@ class ToolSpec:
     #: store would leave the state having seen everything except the frames the
     #: store answered for — and the frame after it would be computed from that.
     state_factory: Callable[[], Any] | None = None
+    #: What the tool is for, in the words a user tuning it needs: what it does
+    #: to the footage, which parameter has no correct value and what question
+    #: settles it, and when to leave the tool out. `summary` is the line a
+    #: collapsed step carries; this is the page behind the expander VISION puts
+    #: on the step, and the two are different lengths because they answer at
+    #: different moments.
+    #:
+    #: Prose the tool author wrote, not the module docstring handed through. The
+    #: docstring is where this text lived from Phase 3 until the expander existed
+    #: to read it (`PLAN.md`), and it is addressed to whoever maintains the
+    #: kernel — v2 archaeology, ADR citations, why the constant is that constant.
+    #: A widget reading `__doc__` would put all of that in front of somebody who
+    #: asked what the knob does, so the promotion is a copy that leaves the
+    #: argument behind rather than a pointer at it.
+    #:
+    #: Defaults to nothing, unlike `summary`, for `run`'s reason: a spec is
+    #: legitimately built with no user — every graph test in this repo builds
+    #: specs nobody opens a panel on — and requiring help text of those would
+    #: make the field ceremony. What keeps that from being silent is that the
+    #: shelf is swept for it (`tests/unit/test_tool_contract.py`), which is the
+    #: only population an expander is ever handed.
+    guidance: str = ""
     #: The one to three parameters the GUI shows before "Advanced". Names must
     #: exist on `params_model`; that is checked below, because the failure mode
     #: of a stale name is a widget that silently stops appearing.
@@ -1446,6 +1468,7 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "param_value_labels": Channel.PRESENTATION,
     "param_stereotypes": Channel.PRESENTATION,
     "summary": Channel.PRESENTATION,
+    "guidance": Channel.PRESENTATION,
 }
 
 

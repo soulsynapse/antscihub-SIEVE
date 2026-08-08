@@ -296,6 +296,7 @@ class TestIsolation:
             },
             "primary_params": ("radius",),
             "summary": "Blurs, described differently.",
+            "guidance": "Turn the radius up until the speckle stops moving.",
         }
         presentation = {n for n, c in SPEC_CHANNELS.items() if c is Channel.PRESENTATION}
         assert set(substitutes) == presentation

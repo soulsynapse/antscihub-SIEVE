@@ -85,6 +85,22 @@ message the first run will write into, and emits `run_issued` for a process Qt
 declines to start. `running()` is the state that should gate the button, and
 nothing gates it today.
 
+## And the guidance expander, which is the fourth thing on the step (2026-08-08, from 07.10)
+
+07.10 landed `gui/expander.py` on the same terms: its criterion is that the
+widget's text is the tool's own declaration, which is asked of the expander
+directly, so `MainWindow` builds none and the step position still holds a
+`NodeBox` and nothing else. Placing it is this item's, with the panel and the
+editors above.
+
+What placing it decides that the widget cannot: the step position now has four
+things wanting to be on it — the node's caption, the generated param form, the
+kind editors' handoffs, and an arrow that opens onto a page of prose. The
+expander caps its own body height so a wordy tool cannot set the layout for
+every other one, but which of the four is above which, and whether opening the
+guidance pushes the controls off the pane or scrolls beside them, is a question
+about the step and not about any one widget on it.
+
 ## 06.3's headless claim now rests on collection order (2026-08-08, from 07.4)
 
 `tests/bench/test_loop_budget.py::test_the_measurement_ran_with_no_qt_in_the_process`

@@ -14,6 +14,7 @@ src/sieve/gui/__init__.py                  # Rendering values, emitting intents,
 src/sieve/gui/app.py                       # The window: what the parts are, and what the four navigation verbs mean.
 src/sieve/gui/canvas.py                    # The viewport: the frame the transport last handed over, drawn to fit.
 src/sieve/gui/control.py                   # Which of the three positions is showing, and the track that slides between.
+src/sieve/gui/expander.py                  # The down arrow on a step, and the tool's own guidance under it.
 src/sieve/gui/graph_panel.py               # The graph: one refill's series, drawn where its frames are.
 src/sieve/gui/hotkeys.py                   # Which keys exist and which verb each one calls.
 src/sieve/gui/kind_editors.py              # One editor per composite kind, on the surface the value is about.

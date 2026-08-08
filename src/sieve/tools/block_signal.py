@@ -109,6 +109,43 @@ SUPPORTED_DTYPES = ("uint8", "uint16", "float32", "float64")
 
 FloatArray = NDArray[np.floating[Any]]
 
+#: What this tool is for, in the words of somebody tuning it.
+GUIDANCE = """\
+Divides the frame into a grid of blocks and reports one number per block per
+frame, measured from how the image changed since the frame before. This is where
+video stops being pixels and becomes a signal: everything downstream — baselines,
+persistence, detection — works on this grid.
+
+Which number is the `signal` parameter, and the four are different questions
+rather than four qualities of one answer:
+
+  change_energy — how much the block changed at all. The cheapest, and the one to
+  start with: it responds to anything that alters the picture, including flicker,
+  shadows and an animal changing posture without going anywhere.
+
+  flow_speed — how fast the block's contents moved, in pixels per second. Use it
+  when speed is the thing you are reporting, or when you want to separate walking
+  from motion in place. Roughly four times the cost of change_energy.
+
+  coherence — whether one single movement explains the whole block, on a scale of
+  0 to 1. An animal walking through reads near 1; grooming, flicker and lighting
+  change read near 0. This is the discriminator to reach for when locomotion and
+  in-place behaviour have to be told apart.
+
+  flow_agreement — of the pixels that resolved a direction, how many agreed on
+  it, again 0 to 1. It asks coherence's question of different evidence and
+  measurably answers differently, so it is worth trying when coherence nearly
+  works.
+
+`block` is the grid's resolution, and 0 means automatic: about 64 pixels of the
+original footage, wherever the rescale knob currently sits. That is what keeps
+tuning the resolution from moving where a detection lands — bigger blocks average
+more of the arena together, so a small animal in a large block is diluted, while
+blocks smaller than the animal split one event across several.
+
+Feed it a stable picture. Whatever this measures as change, a moving camera, a
+flickering lamp or a compression artifact also produces."""
+
 
 def auto_block(scale: float) -> int:
     """The `0 = auto` block size in working pixels: 64 source px at `scale`.
@@ -227,6 +264,7 @@ def run(params: BlockSignalParams, window: FrameSpan, state: BlockSignalState, /
     warmup_kind=WarmupKind.BOUNDED,
     stateful=True,
     state_factory=BlockSignalState,
+    guidance=GUIDANCE,
     primary_params=("signal", "block"),
     caption=(
         CaptionPart(param="signal"),

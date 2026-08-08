@@ -1,7 +1,7 @@
 ---
 title: Guidance is promoted to the spec, and the expander reads it
 step: "07.10"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -q -k guidance_is_spec_data && uv run pytest tests/gui/test_expander.py -q -k the_expander_reads_the_spec"
 opened: 2026-08-08

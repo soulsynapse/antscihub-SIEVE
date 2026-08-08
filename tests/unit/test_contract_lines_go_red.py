@@ -30,6 +30,13 @@ and a fold that drops part of a contract's cases while leaving it non-empty.
 The reds cannot see the third — a case never built never fails — so it is
 counted instead, by an arithmetic over the same config that the generator
 walks.
+
+These cases already plant every downward never that `test_import_contracts.py`
+lists, so the split between the two files is held here as well:
+`test_no_downward_never_is_proven_red_twice` asserts that each edge there has a
+case here and that nothing there lints a planted tree. It sits in this file
+because a criterion inside the module losing cases is one an empty module would
+satisfy.
 """
 
 from __future__ import annotations
@@ -40,10 +47,20 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from types import CodeType
 
 import pytest
 
-from tests.unit.test_import_contracts import CONFIG, contracts, copy_tree, lint, modules
+from tests.unit import test_import_contracts
+from tests.unit.test_import_contracts import (
+    CONFIG,
+    EDGES,
+    Edge,
+    contracts,
+    copy_tree,
+    lint,
+    modules,
+)
 
 #: The planted module, one name reused and deleted after every case, so no red
 #: can be read as belonging to the case that ran before it.
@@ -202,6 +219,71 @@ def test_every_contract_contributes_at_least_one_case() -> None:
 def test_every_line_contributes_every_case_it_owes() -> None:
     """A contract can lose cases without losing all of them, and stay green."""
     assert len(CASES) == _owed()
+
+
+def _names(func: object) -> set[str]:
+    """Every name `func` mentions, its arguments and nested code included.
+
+    Arguments because a fixture is requested by name and never called, and
+    nested code because a fixture's work is the closure it hands back.
+    """
+    code = getattr(getattr(func, "__wrapped__", func), "__code__", None)
+    if code is None:
+        return set()
+    found: set[str] = set()
+    stack = [code]
+    while stack:
+        current = stack.pop()
+        found |= set(current.co_names) | set(current.co_varnames)
+        stack += [const for const in current.co_consts if isinstance(const, CodeType)]
+    return found
+
+
+def lint_running_tests() -> set[str]:
+    """The tests in `test_import_contracts` that reach the linter.
+
+    Running `lint` is what a proof of red is, and there is one way to run it, so
+    the name is the marker. Followed through the module's own globals rather
+    than read off one function, because a test reaches the tree it lints through
+    a fixture and so names the fixture, not the call.
+    """
+
+    def reaches(name: str, seen: set[str]) -> bool:
+        if name in seen or name == "lint":
+            return False
+        seen.add(name)
+        mentioned = _names(getattr(test_import_contracts, name, None))
+        return "lint" in mentioned or any(reaches(other, seen) for other in mentioned)
+
+    return {
+        name
+        for name in dir(test_import_contracts)
+        if name.startswith("test_") and reaches(name, set())
+    }
+
+
+@pytest.mark.parametrize("edge", EDGES, ids=[edge.id for edge in EDGES])
+def test_no_downward_never_is_proven_red_twice(edge: Edge) -> None:
+    """A generated case and a hand-written one for one edge, and the split is stated.
+
+    The generator walks every `forbidden_modules` entry against every one of its
+    `source_modules`, which is where each of these edges lives, so a second
+    proof by hand costs a tree copy and a linter subprocess to assert something
+    weaker (`todo/the-hand-written-reds-are-generated-too.md`). What the
+    hand-written file keeps is the pair of claims read out of the config, and
+    the second half of this asserts it kept only those.
+    """
+    assert [
+        case for case in CASES if (case.importer, case.imported) == (edge.source, edge.forbidden)
+    ], (
+        f"no case here plants {edge.source} -> {edge.forbidden}, so the edge's only proof "
+        f"of red is the hand-written one and cutting it would leave the line unproven"
+    )
+
+    assert lint_running_tests() == set(), (
+        f"{sorted(lint_running_tests())} lint a planted tree in test_import_contracts.py, "
+        f"which the generated cases already do; that file's subject is the config"
+    )
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,7 @@
 title: The hand-written proofs of red are generated too, and the docstring says they are not
 priority: low
 phase: 0
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_contract_lines_go_red.py -q -k proven_red_twice"
 opened: 2026-08-08

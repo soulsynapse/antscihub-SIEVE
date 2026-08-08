@@ -1,4 +1,4 @@
-"""The downward nevers are held by a contract, and each entry that says so fires.
+"""The downward nevers are held by a contract, and the route around each stays legal.
 
 `.importlinter`'s header calls the file the forbidden edge set of VISION.md's
 component table made checkable. A never-clause is refused for free when the
@@ -12,27 +12,22 @@ Three are the same refusal at three layers: reaching a tool's array math from
 (`adr/one-execution-path.md`), taken from a layer that owns or asks for the
 first. The fourth is `decode` and a schema.
 
-Two claims per edge, and the second is why this file exists rather than a line
-in `.importlinter` alone. `src/sieve/core/ops/` does not exist yet
-(`adr/ops-admission-is-two-tools.md`), and a forbidden module that names nothing
-in the graph is silently inert — `lint-imports` reports success and no setting
-says otherwise
-(`findings/2026.08.06-a-forbidden-module-that-does-not-exist-is-inert.md`). So
-reading the entry back out of the config would only re-read the line the same
-commit wrote. The proof of red is run against a *copy* of the tree in which the
-missing package exists and the source module imports it, which is what lets the
-red land with the line instead of waiting on ops admission.
+Two claims per edge, and both are read out of the config, which is the whole of
+what this file is for: that some `forbidden` contract carries the edge at all,
+and that where the row grants a supported route, `allow_indirect_imports`
+leaves that route legal. The second is not a red and so has no proof-of-red
+shape at all; the first would be, but the generated reds in
+`test_contract_lines_go_red.py` walk every `forbidden_modules` entry against
+every one of its `source_modules` and so already plant every edge below, and
+assert the contract's name against `BROKEN` rather than against a report that
+lists every contract. Proving them here too was the same red twice, bought with
+a tree copy and a linter subprocess each
+(`findings/loop/2026.08.08-a-file-whose-docstring-claims-a-division-of-labour-the-generator-has-outgrown.md`).
+`test_no_downward_never_is_proven_red_twice` holds that split, so a fifth edge
+added later costs one config-reading case rather than two.
 
-The copy is also linted clean before the violation is planted. Without that,
-a non-zero exit could be a broken copy — an unparseable config, a package
-grimp could not find — and a red for the wrong reason certifies nothing.
-
-These are lines proven by hand, and the copy is the part
-`test_contract_lines_go_red.py` inherits: it plants the same package to cover
-every other line the file carries. What stays here is the pair of claims that
-generator has no shape for — that some forbidden contract holds each edge at
-all, and that where a supported route exists `allow_indirect_imports` leaves it
-legal, which is not a red.
+`lint` and `copy_tree` stay here because the generator runs its reds through
+them, and the copy is what lets a red land on a line the real tree cannot host.
 """
 
 from __future__ import annotations
@@ -42,7 +37,6 @@ import os
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,18 +66,13 @@ class Edge:
 
 
 #: `gui`'s two are absent: its contract predates this file, and the generator
-#: covers its reds as it covers every other line. Each edge below landed
-#: alongside the case that proves it.
+#: covers its reds as it covers every other line.
 EDGES = (
     Edge("sieve.session", "sieve.tools", reached_through="sieve.pipeline"),
     Edge("sieve.session", "sieve.core.ops", reached_through="sieve.pipeline"),
     Edge("sieve.pipeline", "sieve.core.ops", reached_through="sieve.tools"),
     Edge("sieve.decode", "sieve.core.pipeline_model"),
 )
-
-#: The module each planted violation lives in, named once so the report line the
-#: fire case looks for is the one it wrote.
-VIOLATION = "_reaches_across"
 
 #: Run the linter in-process in a child rather than through the `lint-imports`
 #: console script: the script's location differs by platform and by installer,
@@ -156,32 +145,6 @@ def copy_tree(tree: Path) -> Path:
     return tree
 
 
-@pytest.fixture(scope="module")
-def copied(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return copy_tree(tmp_path_factory.mktemp("linted"))
-
-
-@pytest.fixture(scope="module")
-def violating(copied: Path, tmp_path_factory: pytest.TempPathFactory) -> Callable[[Edge], Path]:
-    """`copied`, plus any package an ADR defers, plus the import that crosses."""
-
-    def build(edge: Edge) -> Path:
-        tree = tmp_path_factory.mktemp("violating")
-        shutil.copytree(copied, tree, dirs_exist_ok=True)
-        for dotted in (edge.source, edge.forbidden):
-            path = tree
-            for part in dotted.split("."):
-                path = path / part
-                if not path.exists():
-                    path.mkdir()
-                    (path / "__init__.py").write_bytes(b"")
-        crossing = tree.joinpath(*edge.source.split(".")) / f"{VIOLATION}.py"
-        crossing.write_text(f"import {edge.forbidden}\n", encoding="utf-8")
-        return tree
-
-    return build
-
-
 @pytest.mark.parametrize("edge", EDGES, ids=[edge.id for edge in EDGES])
 def test_a_forbidden_contract_carries_the_edge(edge: Edge) -> None:
     section = _forbidding_edge(edge.source, edge.forbidden)
@@ -208,22 +171,3 @@ def test_the_supported_path_stays_legal(edge: Edge) -> None:
 
     assert section.getboolean("allow_indirect_imports") is True
     assert edge.reached_through not in modules(section, "forbidden_modules")
-
-
-def test_the_copied_tree_lints_clean(copied: Path) -> None:
-    """The control: red in the next test is the planted edge and not the copy."""
-    result = lint(copied)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-@pytest.mark.parametrize("edge", EDGES, ids=[edge.id for edge in EDGES])
-def test_the_entry_fires(violating: Callable[[Edge], Path], edge: Edge) -> None:
-    section = _forbidding_edge(edge.source, edge.forbidden)
-    assert section is not None
-
-    result = lint(violating(edge))
-
-    assert result.returncode != 0, result.stdout + result.stderr
-    assert section["name"] in result.stdout, result.stdout + result.stderr
-    assert f"{edge.source}.{VIOLATION} -> {edge.forbidden}" in result.stdout

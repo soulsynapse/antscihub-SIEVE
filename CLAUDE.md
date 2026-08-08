@@ -33,8 +33,14 @@ plays. Architecture serves that or it does not belong.
 ## Environment
 
 - Windows, PowerShell 5.1 by default; a Bash tool is also available. This
-  directory is a git worktree (`.git` is a file). A queued loop run gets its
-  own worktree — two sessions must not share this one.
+  directory is a git worktree (`.git` is a file).
+- Queued runs never execute here. They run in the sibling worktree on branch
+  `v3-run` — `git worktree list` says where — so that an unattended run and a
+  session at the keyboard never share a tree, an index, or the before/after
+  HEAD the orchestrator judges a run's commit by. Queue against it explicitly:
+  `orchestrator add --project <that worktree> "…"`. Nothing moves between the
+  two branches on its own; merge `v3-run` down when you want a run's output,
+  and up before queueing so the run starts from your commits.
 - Run Python through `uv run`, never bare `python`. No type checker is
   installed; don't spawn one.
 - Write commit messages to a file and `git commit -F <file>` — a here-string

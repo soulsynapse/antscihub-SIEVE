@@ -31,3 +31,17 @@ only prose: a params model reshaped without a changed computation keys
 differently at the same version, and the document that names the old fields does
 not load. The `done_when` names that case in
 `tests/unit/test_declarations_run.py`, beside the golden it explains.
+
+## Folded 2026-08-08 — the ADR states the opposite
+
+`adr/one-field-is-one-populated-value.md` costs the decision as "one tool's
+parameters and the ported test that constructs them; the goldens are unaffected,
+since the values do not move". True of the parity goldens, whose columns are
+frame numbers, and false of `cache_key_span_1.0.0.txt`, which 42612df replaced —
+the key folds the canonical params JSON, and reshaping the model moves that
+without moving anything the tool computes. A settled ADR carrying a false
+current-state claim is `CLAUDE.md`'s durable-instruction rule failing in the
+place it is most load-bearing, so the sentence wants correcting to name the
+cache-key golden as the one thing that does move and why replacing it at the
+same version is safe. That edit is Kendrick's to make on a settled ADR; this
+item is where the observation waits.

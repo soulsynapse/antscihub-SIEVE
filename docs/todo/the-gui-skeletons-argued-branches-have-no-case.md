@@ -2,9 +2,9 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/app.py --mutant \"and node.node_id in source_fed_nodes(pipeline) ==> and False\" -- uv run pytest -q tests/gui tests/bench/test_gui_loop_budget.py"
+done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/timeline/window.py --mutant \"length = min(window.frame_count, frame_count) ==> length = window.frame_count\" -- uv run pytest -q tests/gui"
 opened: 2026-08-08
 ---
 
@@ -484,3 +484,50 @@ way past. `window.moved_to`'s clamp is the guard-with-no-caller shape the item
 calls the least of the four, and it goes last. Two mutants and the two prose
 corrections stand after this one, and the item is `open` until the last is
 spent.
+
+## The viewport's refusal is held, and the criterion rotates a seventh time (2026-08-08)
+
+`2843e4e` answered the `source_fed_nodes` clause with `tests/gui/test_app.py`,
+the module's first file of its own, and touched nothing in `src/`. Re-run
+independently: the criterion's mutant dies, and the same sweep with
+`--ignore=tests/gui/test_app.py` is 0 killed / 1 survived, so the kill is the
+new file's own rather than the run's word for it. `tests/gui` is 112 passed
+(was 111). The status the worker left was `awaiting-review` and `done_when` is
+untouched.
+
+The kill is what establishes the shelf resolved `crop`, and the case's own
+second half does not — which is the residue. Its docstring says standing on the
+node below is what separates "the window has no picture to show" from "the
+window declines to show one", because a case asserting only the `None` "would
+pass on a shelf that had never resolved `crop` at all". Half true: with
+`crop`'s spec absent, `viewport_node` at the root falls past the region clause
+into `frame_bearing`, which returns `None` on the missing spec — and one node
+down `frame_bearing` resolves `downsample` and returns `_BELOW` regardless. So
+the added assertion rules out a shelf that resolved *nothing*, not a shelf that
+resolved everything but the subject. What separates them at case level is an
+assertion about `crop`'s own spec — the same node walked where it is not
+source-fed, whose `viewport_node` is then `crop` itself. The mutant covers this
+today; the sentence names a guarantee the assertions do not carry.
+
+**Eighth rotation, and it is `window.moved_to`'s clamp** — the last of the four
+the 07.6 section named. `length = min(window.frame_count, frame_count) ==>
+length = window.frame_count` is verified red at 0 killed / 1 survived under
+`uv run pytest -q tests/gui` on the tree this review closes. The oracle narrows
+to `tests/gui` because `window.py` is not walked by the budget file.
+
+This one is the guard-with-no-caller shape and the criterion cannot see the
+difference: the clamp only bites for a window longer than its source, which the
+bar cannot currently produce, so a case that calls `moved_to` directly will kill
+the mutant whether or not anything in the tree can reach it
+(`findings/loop/2026.08.08-a-case-that-calls-the-guard-directly-cannot-see-the-caller-that-pre-empts-it.md`).
+A direct call is not thereby wrong here — `moved_to` is a module-level function
+of the timeline's geometry surface and `test_geometry.py` already holds its
+neighbour that way — but the rotation owes the second question with it: whether
+any gesture the bar offers can hand `moved_to` a window longer than the source.
+If the answer is no, deleting the clamp is a source change with a choice in it
+and comes back to review rather than being settled on the way past.
+
+`param_form`'s combo signal stays where the seventh rotation left it, for the
+reason given there. After this one the mutants are spent and what remains on the
+item is that choice and the two prose corrections — `canvas.py`'s guard comment
+and `frame_at`'s two-variant sentence — so the item is `open` until they are.

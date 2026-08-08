@@ -24,6 +24,11 @@ to refuse. A third reading is that it belongs to the workflow rather than the
 commit, and lives as a step inside `ci.yml` itself, which catches the error one
 push too late for the push that introduced it.
 
+The three readings above are this item's question, asked before there was a
+rule to ask it against. The rule the answer produced is
+[ADR 20](../adr/a-check-joins-the-gate-line.md), and a later check is argued
+there rather than from this paragraph.
+
 Whichever way it goes, the tool arrives with it: `actionlint-py` in the dev
 group rather than a `uvx` line that resolves the network on every run.
 

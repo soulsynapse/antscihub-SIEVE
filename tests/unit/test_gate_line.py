@@ -1,7 +1,7 @@
 """The gate's line holds the formatter and the workflow linter, and reaches the code only.
 
-Four claims that were prose until this file, and each was wrong as prose at
-some point. `ruff` sat in the dev group with no bound, so a lock refresh
+Five claims that were prose until this file, and each of the first four was
+wrong as prose at some point. `ruff` sat in the dev group with no bound, so a lock refresh
 restyled files nobody edited; the gate ran `ruff check` and never `ruff format
 --check`, so the tree disagreed with its own formatter for two commits; and the
 commit that fixed both stated that the formatter "has no opinion about `.md`",
@@ -13,7 +13,13 @@ The fourth is `actionlint`, and it is here because the formatter's two-commit
 absence is the precedent: a command can leave this line and nothing notices.
 Nothing else in the tree reads `.github/workflows/`, and the errors actionlint
 catches are the ones that stop the job — so a CI green cannot stand in for it
-(`findings/2026.08.07-actionlint-is-seven-tenths-of-a-percent-of-the-gate.md`).
+(`findings/2026.08.07-actionlint-is-seven-tenths-of-a-percent-of-the-gate.md`,
+settled as `adr/a-check-joins-the-gate-line.md`).
+
+The fifth is about the line's comment rather than the line: it holds the rule
+for what may join, so it has to cite the ADR that rule binds in rather than
+restate it. Membership was argued from scratch in three files before there was
+one, which is what `docs/todo/what-earns-a-place-on-the-gate-line.md` is.
 
 The third test is the one with content. `docs/findings/` exists to quote code
 that does not work, and a Markdown file is not a place a formatter gets a vote,
@@ -31,6 +37,7 @@ all three.
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -51,6 +58,10 @@ WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
 #: noxfile or a README, so this name is the only handle on it.
 GATE_STEP = "Run the gate"
 
+#: A citation as the gate step's comment already spells one: a path relative to
+#: `docs/`, unbracketed, inside prose.
+CITATION = re.compile(r"\badr/[a-z0-9-]+\.md\b")
+
 #: A file ruff wants to rewrite, in both spellings the tree holds.
 UNFORMATTED = "x = (   1+2 )\n"
 UNFORMATTED_FENCE = f"# A finding quoting code that does not work.\n\n```python\n{UNFORMATTED}```\n"
@@ -67,6 +78,24 @@ def _gate_line() -> str:
         if step.get("name") == GATE_STEP:
             return str(step["run"])
     raise AssertionError(f"no step named {GATE_STEP!r} in {WORKFLOW.name}")
+
+
+def _gate_comment() -> str:
+    """The comment block directly above the gate step, which YAML parsing drops.
+
+    Read off the raw text by walking back from the step's `name:`, so a comment
+    moved to sit above some other step stops being this one.
+    """
+    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() == f"- name: {GATE_STEP}":
+            break
+    else:
+        raise AssertionError(f"no step named {GATE_STEP!r} in {WORKFLOW.name}")
+    start = index
+    while start and lines[start - 1].lstrip().startswith("#"):
+        start -= 1
+    return "\n".join(lines[start:index])
 
 
 def _gate_commands() -> list[list[str]]:
@@ -144,6 +173,19 @@ def test_the_gate_line_lints_the_workflow() -> None:
         f"`.github/workflows/`, and a step added to `ci.yml` to check `ci.yml` is a step the "
         f"errors worth catching stop from running, so the pre-push line is the only reader"
     )
+
+
+def test_the_gate_steps_comment_cites_the_rule_it_applies() -> None:
+    comment = _gate_comment()
+    cited = [REPO / "docs" / reference for reference in CITATION.findall(comment)]
+
+    assert cited, (
+        f"the {GATE_STEP!r} comment cites no ADR:\n{comment}\n"
+        f"the rule for what may join this line binds in `docs/adr/`, and a comment that "
+        f"argues it instead of citing it is where the fourth argument from scratch starts"
+    )
+    missing = [path.name for path in cited if not path.exists()]
+    assert not missing, f"the {GATE_STEP!r} comment cites {missing}, which is not in docs/adr/"
 
 
 def test_the_formatters_reach_into_docs_is_the_one_the_gate_declares(

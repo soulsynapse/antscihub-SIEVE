@@ -26,6 +26,8 @@ and its file in `docs/adr/` but leaves this index.
 - [The product owns the word "tools"](adr/the-product-owns-the-word-tools.md) — "Tools" means pipeline steps and nothing else; repo machinery lives in `scripts/`, which is not a package and must not become one.
 - [core's membership is closed](adr/core-membership-is-closed.md) — `core` owns exactly: the dimensioned types, the tool contract and its registry, schema v1, and `ops/`. A new direct child is a revision of this ADR, refused by the gate until the revision is made.
 - [The annotation limit is the source line's budget, applied at edit time](adr/annotation-limit-is-the-source-line-budget.md) — The annotation limit is the docstring line's own budget — ruff's 100 columns less the opening `"""`, 97 — and it binds when a line is written or edited in v3, never at the moment of port.
+- [The gate is one line, stated once](adr/the-gate-is-one-line.md) — The checks a commit must pass are one `&&`-joined command, written once, in `ci.yml`'s gate step. Nothing else enumerates them — not a noxfile, not a README, not a `paths:` entry.
+- [What earns a place on the gate line](adr/a-check-joins-the-gate-line.md) — A check joins the gate line when it is cheap against the line's cost, no other placement catches what it catches, and scoping it to its files would enumerate the gate's membership twice.
 
 ## 04 — The executor
 
@@ -39,4 +41,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The GUI knows kinds, never tools](adr/gui-knows-kinds-not-tools.md) — `gui` reads spec data — param kinds, presentation stereotypes, window shape — and never branches on `tool_id`; widgets and overlays are generated per kind.
 - [The GUI's base is the v2.5 spike, not v2's gui](adr/gui-base-is-the-v25-spike.md) — `gui/` starts from the v2.5 spike's skeleton — `proto_sieve`'s `gui` and `session` — not v2's `gui/`; v2 components port into it where they held, and the layout operates as VISION describes.
 
-*17 settled, 1 superseded.*
+*19 settled, 1 superseded.*

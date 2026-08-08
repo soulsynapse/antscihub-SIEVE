@@ -38,12 +38,15 @@ jobs:
       - name: Sync the uv environment
         run: uv sync --locked
 
-      # This line is the gate — there is no second copy of it in a noxfile or a
-      # README, so a contributor runs these four or reads them here. `ruff
-      # format --check` is separate from `ruff check` and green on one says
-      # nothing about the other; it is in the list because a configured
-      # formatter that nothing enforces means the next person to run it emits a
-      # diff unrelated to their change, and the version it enforces is pinned
+      # This line is the gate, and it lives only here
+      # (adr/the-gate-is-one-line.md); what may join it is
+      # adr/a-check-joins-the-gate-line.md, so a sixth command is argued
+      # against those three clauses here rather than from scratch again.
+      #
+      # `ruff format --check` is separate from `ruff check` and green on one
+      # says nothing about the other; without it a configured formatter that
+      # nothing enforces means the next person to run it emits a diff
+      # unrelated to their change, and the version it enforces is pinned
       # exactly in `pyproject.toml` so the answer does not move on a lock
       # refresh. Its `.` is Python only: ruff would otherwise format the
       # fenced Python in every document, and `pyproject.toml`'s
@@ -55,18 +58,11 @@ jobs:
       # absent and OpenCV is present only because the video fixture writes an
       # mp4, and neither fact weakens a contract.
       #
-      # `actionlint` is the one member whose subject is this file. It is on the
-      # line rather than a sixth step below because a step cannot check the
-      # workflow it is a step of: `runs-on: ubuntu-latests` is what actionlint
-      # catches and also what stops the job that would have run it. On the line
-      # it runs on a laptop before the push, which is the only place that error
-      # is catchable at all. It takes no path argument — it discovers every
-      # workflow under `.github/` from the repo root, so a second workflow file
-      # is covered by existing without anyone updating a list here. What it
-      # costs the four checks that cannot fail on a `.github/`-only commit is
-      # 0.7% of the gate
-      # (findings/2026.08.07-actionlint-is-seven-tenths-of-a-percent-of-the-gate.md),
-      # and that measurement is why it is here and not behind a `paths:` entry
-      # that would have been a second copy of the gate's membership.
+      # `actionlint` is the one member whose subject is this file, and the one
+      # the membership rule was written against
+      # (findings/2026.08.07-actionlint-is-seven-tenths-of-a-percent-of-the-gate.md).
+      # It takes no path argument — it discovers every workflow under
+      # `.github/` from the repo root, so a second workflow file is covered by
+      # existing without anyone updating a list here.
       - name: Run the gate
         run: uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run pytest -q && uv run actionlint

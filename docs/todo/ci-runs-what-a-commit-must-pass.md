@@ -11,7 +11,10 @@ opened: 2026-08-06
 
 A GitHub Actions workflow running exactly the `done_when` line — the linter,
 the formatter, import-linter, pytest — so the local gate and CI are one
-command, not two lists to keep in step. v2's `.github/workflows/ci.yml` is the
+command. The rule that argued for is settled at
+[ADR 19](../adr/the-gate-is-one-line.md), which also names this item's
+`done_when` as the second copy that drifted.
+v2's `.github/workflows/ci.yml` is the
 reference for runner setup; its nox indirection does not port.
 
 ## Worker note, 2026-08-06

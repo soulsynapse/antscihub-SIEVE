@@ -27,7 +27,7 @@ from fractions import Fraction
 from typing import assert_type
 
 import pytest
-from pydantic import Field, ValidationError
+from pydantic import Field
 
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Replicate, SourceSpan
 from sieve.core.tool_base import (
@@ -43,7 +43,7 @@ from sieve.core.tool_base import (
 )
 from sieve.core.tool_registry import ToolRegistry, register_tool
 from sieve.core.types import NO_FRAMES, ChannelSpec, FrameCount, FrameIndex, FrameRange
-from sieve.pipeline.dag import Dag
+from sieve.pipeline.dag import Dag, InvalidParamsError
 from sieve.pipeline.plan import ExecutionPlan, _input_lookahead_frames
 
 SOURCE = "footage|1|2"
@@ -536,8 +536,36 @@ def test_params_are_validated_even_where_no_key_is_derived() -> None:
     pipeline = Pipeline(nodes=(node("j", "jitter", amonut=4),))
 
     assert "j" not in Dag.build(pipeline, SHELF).node_keys(source=SOURCE)
-    with pytest.raises(ValidationError):
+    with pytest.raises(InvalidParamsError):
         plan_for(pipeline)
+
+
+def test_invalid_params_names_the_node_and_not_only_the_field() -> None:
+    """The plan validates a call before the key walk does, so its refusal is the one read.
+
+    `Dag.node_keys` wraps pydantic's error so the message carries the node id,
+    and `build` validates the same nodes in the same order one statement
+    earlier — so a plan that let the raw error out would make the wrapping
+    unreachable from every caller that builds a plan, which is all of them.
+    A misspelled key on a *cacheable* node is the case that separates the two:
+    the walk would have refused this node itself.
+    """
+    pipeline = Pipeline(
+        nodes=(node("smooth", "settle1"), node("smooth-again", "settle5", radiuz=3)),
+        edges=edges("smooth>smooth-again"),
+    )
+
+    with pytest.raises(InvalidParamsError, match="smooth-again") as raised:
+        plan_for(pipeline)
+
+    assert raised.value.node_id == "smooth-again"
+    # The field survives the wrapping, for `test_dag.py`'s reason: a caller that
+    # wants the cursor on the offending parameter reads the original.
+    assert raised.value.error.errors()[0]["loc"] == ("radiuz",)
+    # And the walk one statement later refuses the same node, so what the plan
+    # raises is the walk's rejection reached earlier rather than a second one.
+    with pytest.raises(InvalidParamsError, match="smooth-again"):
+        Dag.build(pipeline, SHELF).node_keys(source=SOURCE)
 
 
 def test_a_span_near_the_start_runs_under_warmed_rather_than_failing() -> None:

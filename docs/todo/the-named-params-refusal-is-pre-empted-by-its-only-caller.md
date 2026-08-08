@@ -2,7 +2,7 @@
 title: The named params refusal is pre-empted by its only caller
 priority: normal
 phase: 3
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_plan.py -q -k invalid_params_names_the_node"
 opened: 2026-08-08

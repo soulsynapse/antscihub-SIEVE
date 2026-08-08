@@ -149,8 +149,10 @@ class InvalidParamsError(GraphError):
     """A node's parameters, resolved for one replicate, are not valid for its tool.
 
     Not a fourth rejection of `build`: parameters are checked where a wrong one
-    would enter a hash, so this is raised by the key walk and by nothing else,
-    and a graph that builds may still fail it. It is a `GraphError` because what
+    would enter a hash or a kernel, so this is raised by the key walk and by
+    `ExecutionPlan.build`, which validates every node — including the ones no
+    key is derived for — and does so one statement earlier over the same order.
+    A graph that builds may still fail it. It is a `GraphError` because what
     it reports is the same kind of thing the other three do — a document that
     cannot be executed as written, addressed to a node a renderer can colour.
 

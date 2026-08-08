@@ -39,7 +39,12 @@ question the *reader* can answer and this cannot.
 claimed determinism is never hashed — so without this module a tool declaring
 `deterministic=False` could carry a misspelled parameter all the way to its
 kernel. The plan needs the parsed params anyway to call kernels with, so the gap
-closes for free.
+closes for free. It is also the validation that *runs first* — one statement
+before `node_keys`, over the same `dag.order` — so it is the refusal every
+caller of a plan reads, and it raises `InvalidParamsError` for the reason that
+error was minted: pydantic names the field and the model, and the reader here is
+the interactive loop, where a field with no owner is a hunt through the graph.
+Wrapping only in the walk would leave that message reachable from nothing.
 
 **Which frames are in the answer is the graph's, and the decode range is an
 optimization over it.** `span` is folded here from every `selecting` node's
@@ -87,6 +92,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
+from pydantic import ValidationError
+
 from sieve.core.pipeline_model import Replicate, SourceSpan, resolved_params
 from sieve.core.tool_base import (
     ALL_FRAMES,
@@ -96,7 +103,7 @@ from sieve.core.tool_base import (
     node_lookahead_frames,
 )
 from sieve.core.types import NO_FRAMES, FrameCount, FrameIndex, FrameRange
-from sieve.pipeline.dag import Dag
+from sieve.pipeline.dag import Dag, InvalidParamsError
 
 #: The first frame any source can supply. The floor `decode_start` clamps at
 #: while every run reads whole footage; Phase 5's read-back path is what makes a
@@ -163,8 +170,9 @@ class ExecutionPlan:
                 `None` is the baseline a project with no fan-out runs.
 
         Raises:
-            ValidationError: if any node's resolved parameters are not valid for
-                its tool.
+            InvalidParamsError: if any node's resolved parameters are not valid
+                for its tool, naming that node — see the module docstring on why
+                the wrap is here and not only in the walk below it.
             ValueError: if any node declares a non-positive output rate, or if
                 the `selecting` nodes and the requested span have no frame in
                 common. Refused rather than run empty: a graph that computes
@@ -172,12 +180,14 @@ class ExecutionPlan:
                 than it is, and the message names the ranges that disagree so the
                 reader can see which one to move.
         """
-        params = {
-            node.node_id: dag.specs[node.node_id].params_model.model_validate(
-                resolved_params(node, replicate)
-            )
-            for node in dag.order
-        }
+        params: dict[str, ParamsBase] = {}
+        for node in dag.order:
+            try:
+                params[node.node_id] = dag.specs[node.node_id].params_model.model_validate(
+                    resolved_params(node, replicate)
+                )
+            except ValidationError as invalid:
+                raise InvalidParamsError(node.node_id, invalid) from invalid
         return cls(
             dag=dag,
             span=_selected(dag, params, span),

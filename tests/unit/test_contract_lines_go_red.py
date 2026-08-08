@@ -23,9 +23,13 @@ simply has the package
 The copy is linted clean first, because a non-zero exit from a broken copy —
 an unparseable config, a package grimp could not find — certifies nothing.
 
-Two ways this could go quietly stale, both closed by a test rather than by a
-branch in the generator: a contract of a type with no case shape here, and a
-contract that contributes no cases at all because a key was renamed under it.
+Three ways this could go quietly stale, each closed by a test rather than by a
+branch in the generator: a contract of a type with no case shape here, a
+contract that contributes no cases at all because a key was renamed under it,
+and a fold that drops part of a contract's cases while leaving it non-empty.
+The reds cannot see the third — a case never built never fails — so it is
+counted instead, by an arithmetic over the same config that the generator
+walks.
 """
 
 from __future__ import annotations
@@ -68,9 +72,10 @@ class Case:
     contract: str
     importer: str
     imported: str
-    #: The section suffix. Two contracts can forbid the same edge — `sieve.core`
-    #: importing `cv2` is both `core-purity` and `opencv-containment` — and the
-    #: case is a different one each time, so it is part of the identity.
+    #: The section suffix, carried for the node id alone. Two contracts can
+    #: forbid the same edge — `sieve.core` importing `cv2` is both `core-purity`
+    #: and `opencv-containment` — and `-k core-purity` selects the one meant,
+    #: which the contract's sentence-long `name` would not.
     key: str
 
     @property
@@ -117,6 +122,28 @@ def _cases() -> list[Case]:
 
 
 CASES = _cases()
+
+
+def _owed() -> int:
+    """The cases the config is owed, multiplied out rather than walked.
+
+    Deliberately a second expression of the same rule, which is the only way a
+    generator gets a subject: a wrong case cannot hide — a legal edge lints
+    clean and fails its own red — so the failure left is a case that was never
+    built, and nothing that iterates the config alongside `_cases` would notice
+    the same fold twice. Spelt without `pairwise` or `product` for that reason.
+    """
+    owed = 0
+    for section in contracts().values():
+        if section.get("type") == "forbidden":
+            owed += len(modules(section, "source_modules")) * len(
+                modules(section, "forbidden_modules")
+            )
+        elif section.get("type") == "layers":
+            rows = layer_rows(modules(section, "layers"))
+            owed += sum(len(rows[i]) * len(rows[i + 1]) for i in range(len(rows) - 1))
+            owed += sum(len(row) * (len(row) - 1) for row in rows)
+    return owed
 
 
 def _ensure_package(tree: Path, dotted: str) -> Path | None:
@@ -170,6 +197,11 @@ def test_every_contract_contributes_at_least_one_case() -> None:
     named = {section["name"] for section in contracts().values()}
 
     assert {case.contract for case in CASES} == named
+
+
+def test_every_line_contributes_every_case_it_owes() -> None:
+    """A contract can lose cases without losing all of them, and stay green."""
+    assert len(CASES) == _owed()
 
 
 @pytest.mark.parametrize(

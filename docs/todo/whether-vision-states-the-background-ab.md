@@ -4,7 +4,7 @@ status: deferred
 deferred_for: decision
 gated_on: Kendrick deciding whether the scenario compares two backgrounds at once — which costs the multi-root graph — or stays as one outside file standing where a generated one stood
 priority: normal
-phase: "04"
+phase: "03"
 opened: 2026-08-07
 ---
 

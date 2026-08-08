@@ -3,7 +3,7 @@ title: The first source tool moves the three places one root is assumed
 status: open
 gated_on: nothing
 priority: normal
-phase: "04"
+phase: "03"
 done_when: 'uv run pytest tests/unit/test_source_tool.py -k "two_roots_order_and_execute or swapping_the_picked_file_moves_only_its_own_key or a_pattern_matching_several_files_is_refused" -q'
 opened: 2026-08-07
 ---

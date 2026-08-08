@@ -8,7 +8,7 @@ worktree.
 | If I ask for | Look at |
 |---|---|
 | The layer contract, or how a boundary was enforced | `.importlinter` — six contracts, each with its rationale in the comments above it |
-| The filter contract / what a step declares | `src/sieve/core/filter_base.py` |
+| v2's filter contract / what a step declares | `src/sieve/core/filter_base.py` |
 | The saved artifact, schema, migration | `src/sieve/core/pipeline_model.py`, `src/sieve/pipeline/upgrade.py` |
 | Cache keys, what gets hashed | `src/sieve/pipeline/cache_key.py` |
 | The one execution loop | `src/sieve/pipeline/executor.py` |
@@ -18,7 +18,7 @@ worktree.
 | Decode, prefetch, lowering into ffmpeg | `src/sieve/decode/` |
 | Budgets, the metric bus, retention replay | `src/sieve/bench/` |
 | Array math with no spec attached | `src/sieve/core/ops/` |
-| A filter as a worked example | any `src/sieve/filters/<name>.py` with its `.md` |
+| A v2 filter as a worked example | any `src/sieve/filters/<name>.py` with its `.md` |
 | The import-graph extractor and viewer | `graph-system/` |
 | Gates, sessions, what CI runs | `noxfile.py`, `.github/workflows/ci.yml` |
 | Test layout, the synthetic video fixture | `tests/conftest.py` |

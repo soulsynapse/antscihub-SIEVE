@@ -1086,10 +1086,12 @@ class ToolSpec:
             # tool and got a raise wants to know why it cannot simply default,
             # and that answer lives in a completed-item entry nobody is going
             # to go and read.
+            kinds = "/".join(member.name for member in ElementKind)
+            relations = "/".join(member.name for member in ElementRelation)
             raise ValueError(
                 f"{self.tool_id}: emits an array and declares no element meaning — pass "
-                "element=ElementKind.PIXEL/BLOCK if this tool decides what one value is, or "
-                "element=ElementRelation.PRESERVED/AGGREGATED if it relates to what it was "
+                f"element=ElementKind.{kinds} if this tool decides what one value is, or "
+                f"element=ElementRelation.{relations} if it relates to what it was "
                 "handed. There is no default on purpose: a tool that redefines its elements "
                 "and inherited PRESERVED would still register, and the only symptom is a count "
                 "written to a CSV under a noun nothing checked"

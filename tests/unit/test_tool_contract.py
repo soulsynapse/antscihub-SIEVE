@@ -608,6 +608,19 @@ class TestElementMeaning:
         with pytest.raises(ValueError, match="declares no element meaning"):
             make_spec(element=None)
 
+    def test_the_element_hint_names_every_kind(self) -> None:
+        # The refusal above is where a fixture author meets the rule, so the
+        # kinds it offers are the whole of what they learn exists. It shipped
+        # naming two of three, which is not a wrong count but a member that
+        # cannot be reached from the only place it is advertised. Asserting
+        # membership rather than a literal string is what makes the hint
+        # answerable to the enum: a fourth kind fails here instead of quietly
+        # not being offered.
+        with pytest.raises(ValueError) as raised:
+            make_spec(element=None)
+        message = str(raised.value)
+        assert [member.name for member in ElementKind if member.name not in message] == []
+
     def test_a_table_emitter_declaring_one_is_refused(self) -> None:
         # The mirror, and not symmetry for its own sake: `None` has to mean
         # "emits rows" rather than "an array emitter that forgot", or the

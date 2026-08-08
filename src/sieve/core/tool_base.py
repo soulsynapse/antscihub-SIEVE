@@ -529,6 +529,71 @@ class ParamsBase(BaseModel):
         return NO_FRAMES
 
 
+def resolved_schema(params_model: type[ParamsBase]) -> dict[str, Any]:
+    """The model's JSON Schema with every property resolved to its constraints.
+
+    `params_model` is the one description of a tool's parameter space, and both
+    of its presentation readers — `sieve inspect` and the GUI's widget generator
+    — ask each property the same two questions: what shape is this value, and
+    what range may it take. For a scalar the answer is on the property itself.
+    For a value that is a whole composite it is one level down: pydantic writes
+    a model-valued field as a bare `$ref` into `$defs`, and an optional as an
+    `anyOf` of the real branch and `null`, so a reader that stops at the
+    property sees no `type` and no keywords at all and degrades every composite
+    parameter to `any` — which is exactly the three parameters (a rectangle, a
+    band, an optional band) whose legal range a user is least able to guess.
+
+    One level, not a full resolver: that is where pydantic puts the constraints
+    of the fields these models actually declare, and a general `$ref` walk would
+    be machinery for a nesting depth no tool has. A property this cannot resolve
+    — an `anyOf` of two real branches — is returned untouched rather than
+    guessed at, because a widget generator handed one branch of a genuine union
+    would be showing bounds the other branch does not have.
+
+    The property's own keys win over the resolved ones, `default` being the one
+    that collides: a field's default is stated where the field is declared and
+    the type it refers to knows nothing about it. `title` survives from the
+    definition, where it is the *type's* name rather than the parameter's, which
+    is why a label belongs to the field name and not to this.
+    """
+    schema = params_model.model_json_schema()
+    defs: Mapping[str, Any] = schema.get("$defs", {})
+    properties: Mapping[str, Mapping[str, Any]] = schema.get("properties", {})
+    # A new dict rather than an edit: pydantic caches the schema on the model,
+    # so resolving in place would hand the next caller a schema this one walked.
+    return {
+        **schema,
+        "properties": {name: _resolve(described, defs) for name, described in properties.items()},
+    }
+
+
+def _resolve(described: Mapping[str, Any], defs: Mapping[str, Any]) -> dict[str, Any]:
+    """One property, merged with the single definition it stands for."""
+    own = {key: value for key, value in described.items() if key not in ("$ref", "anyOf")}
+    if "$ref" in described:
+        return {**_dereference(described["$ref"], defs), **own}
+    branches = [branch for branch in described.get("anyOf", ()) if branch.get("type") != "null"]
+    if len(branches) != 1:
+        return dict(described)
+    branch = branches[0]
+    if "$ref" in branch:
+        return {**_dereference(branch["$ref"], defs), **own}
+    return {**branch, **own}
+
+
+def _dereference(ref: str, defs: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The `$defs` entry `ref` names, or nothing if it names something else.
+
+    A pointer this does not understand degrades to the unresolved property
+    rather than raising: the readers above are a terminal listing and a widget
+    panel, and neither is a place to fail a tool over a schema keyword.
+    """
+    prefix = "#/$defs/"
+    if not ref.startswith(prefix):
+        return {}
+    return defs.get(ref[len(prefix) :], {})
+
+
 @dataclass(frozen=True, slots=True)
 class ArraySpec:
     """What a tool consumes or produces, declared narrowly enough to reject.

@@ -16,6 +16,7 @@ src/sieve/gui/control.py                # Which of the three positions is showin
 src/sieve/gui/hotkeys.py                # Which keys exist and which verb each one calls.
 src/sieve/gui/layout.py                 # Where the main window's two halves sit and how big they start.
 src/sieve/gui/node_list.py              # How one node is drawn, and how the ordered list of them is built.
+src/sieve/gui/param_form.py             # One control per parameter, chosen by how the parameter is populated.
 src/sieve/gui/project_select.py         # Picking one of the project files that already exist.
 src/sieve/gui/rail.py                   # One tick per node, down the left edge, marking where the walk is.
 src/sieve/gui/walk.py                   # The order Up and Down move through a graph.

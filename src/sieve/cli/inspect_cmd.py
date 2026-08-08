@@ -37,7 +37,7 @@ from typing import Annotated
 
 import typer
 
-from sieve.core.tool_base import ArraySpec, ParamsBase, StreamSpec, ToolSpec
+from sieve.core.tool_base import ArraySpec, ParamsBase, StreamSpec, ToolSpec, resolved_schema
 from sieve.pipeline.cache_key import is_cacheable
 from sieve.tools import discover
 
@@ -180,6 +180,12 @@ _CONSTRAINT_KEYS = (
     "multipleOf",
     "minLength",
     "maxLength",
+    # How many components a composite value has, which is the whole of what a
+    # pair-shaped parameter bounds. They sit behind `resolved_schema`'s walk —
+    # a scalar field never carries one, so the two arrived with the first
+    # reader that could see past an `anyOf`.
+    "minItems",
+    "maxItems",
     "pattern",
     "enum",
 )
@@ -197,8 +203,10 @@ def _parameters(spec: ToolSpec) -> list[str]:
     `model_fields`, because the constraints are the half a user most needs and
     pydantic stores them as `annotated_types` objects whose reprs this module
     would have to learn to unpack. The schema is the model's canonical
-    self-description, it is what the Phase-7 generator will build widgets from,
-    and using it here means the terminal and that dialog read one thing.
+    self-description, it is what the widget generator builds widgets from, and
+    using it here means the terminal and that panel read one thing — including
+    the walk into `$ref` and `anyOf` that a composite parameter's shape and
+    bounds sit behind, which is `resolved_schema`'s and not this module's.
 
     `primary_params` is a marker rather than a separate section: the GUI's
     "before Advanced" split is a decision made for a panel with limited height,
@@ -209,7 +217,7 @@ def _parameters(spec: ToolSpec) -> list[str]:
     pydantic never sees — so that is a branch with no subject, and it returns
     with the guidance field that gives a tool prose in the first place.
     """
-    schema = spec.params_model.model_json_schema()
+    schema = resolved_schema(spec.params_model)
     properties: dict[str, dict[str, object]] = schema.get("properties", {})
     if not properties:
         return ["  (none)"]

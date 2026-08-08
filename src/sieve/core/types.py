@@ -208,11 +208,34 @@ class FrameCount:
     subtracted the wrong way round — and refusing it here is what makes
     `ToolSpec.warmup_frames` unable to be declared negative in the first
     place, at the decorator where somebody wrote it.
+
+    Whole, and the `int` above is not what makes it so: an annotation is not a
+    check. Half a frame is producible — dividing a window length in two is the
+    obvious way — and unhonorable, because decode ranges, warmup folds and
+    emission delays are counted in whole frames and nothing else. It cannot be
+    left to be rounded where it is used, because the round is invisible: 2.5
+    frames behind a 10:1 decimator arrives at a decode range as 25 source
+    frames through `at_input_of`'s `ceil`, whole, from a step whose subject is
+    the rate change. `TypeError` and not `ValueError` for the reason the split
+    always has here — this is not a count out of range, it is not a count.
     """
 
     frames: int
 
     def __post_init__(self) -> None:
+        if isinstance(self.frames, bool):
+            raise TypeError(
+                f"a frame count must be whole frames, not a flag, got {self.frames!r} — "
+                "`bool` subclasses `int`, so a truthiness value standing where a count "
+                "goes is one frame of lead-in, which is a legal declaration nothing "
+                "downstream has grounds to question"
+            )
+        if not isinstance(self.frames, int):
+            raise TypeError(
+                f"a frame count must be whole frames, got {self.frames!r} — a window "
+                "boundary lands between two frames or on one, and only one of those is "
+                "a frame the executor can wait for"
+            )
         if self.frames < 0:
             raise ValueError(f"a frame count must be non-negative, got {self.frames}")
 

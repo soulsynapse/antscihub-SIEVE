@@ -432,12 +432,12 @@ class TestLookahead:
             node_lookahead_frames((CENTERED, BackwardsParams()))
 
     def test_a_fractional_lookahead_is_refused_as_bound_and_as_refinement(self) -> None:
-        # `FrameCount` annotates `frames: int` and enforces only the sign, so
-        # half a frame reaches here intact — dividing a window length by two is
-        # the obvious way to produce one. It cannot be honored: the executor
-        # delays emission by whole frames or not at all, and `ceil`-ing it
-        # somewhere downstream would make the declared window and the window
-        # actually read differ by a frame with nothing to say so.
+        # Refused by `FrameCount` now, like the negative one above and in the
+        # same place: neither declaration below builds a spec or reaches
+        # `node_lookahead_frames`, because the count raises where it is
+        # written. The case stays a lookahead case because the two boundaries
+        # are what the item asked to be closed, and `TestWholeFrames` is where
+        # the refusal itself is pinned.
         class HalfParams(CenteredWindowParams):
             def lookahead_frames(self) -> FrameCount:
                 return FrameCount(2.5)  # pyright: ignore[reportArgumentType]
@@ -526,6 +526,60 @@ class TestLookahead:
         # would produce the same frames at different cost rather than
         # different frames.
         assert SPEC_CHANNELS["lookahead_frames"] is Channel.EXECUTION
+
+
+class TestWholeFrames:
+    """A count that is not a whole number of frames, refused where it is made.
+
+    01.3 guarded `lookahead_frames` alone, at the two boundaries that count
+    passes through, and left every other `FrameCount` admitting a fraction. The
+    refusal is `FrameCount.__post_init__`'s now — 01.1's anchor widened by
+    `todo/a-frame-count-does-not-enforce-its-own-int.md` — so the counts below
+    are the ones that were never guarded: a warmup bound, a warmup refinement,
+    and the constructor the rate conversion reads through.
+
+    Every test name carries `whole_frames` because the item's gate selects on it.
+    """
+
+    def test_a_fractional_warmup_bound_is_not_whole_frames(self) -> None:
+        # The count that decides how far back a run decodes, and the one the
+        # lookahead guard's twin left open: a bound is written by hand in a
+        # decoration, which is exactly where a half of something gets typed.
+        with pytest.raises(TypeError, match="whole frames"):
+            make_spec(
+                warmup_frames=FrameCount(2.5),  # pyright: ignore[reportArgumentType]
+                settling_epsilon=0.0,
+                warmup_kind=WarmupKind.BOUNDED,
+            )
+
+    def test_a_refined_warmup_is_not_whole_frames_either(self) -> None:
+        # The refinement is the half that is computed rather than typed, so it
+        # is the half a window length divided in two actually comes from.
+        class HalfWindowParams(WindowParams):
+            def warmup_frames(self) -> FrameCount:
+                return FrameCount(self.length / 2)  # pyright: ignore[reportArgumentType]
+
+        with pytest.raises(TypeError, match="whole frames"):
+            input_warmup_frames((WINDOWED, HalfWindowParams(length=5)), NO_FRAMES)
+
+    def test_a_count_is_whole_frames_before_the_rate_conversion_can_round_it(self) -> None:
+        # Why the refusal had to move to the constructor rather than sit at one
+        # more boundary. `at_input_of` ceils, so a fractional count crossing a
+        # rate change comes out whole: 2.5 frames behind a 10:1 decimator is 25
+        # source frames, a decode range nobody declared, arriving intact from a
+        # step whose job is the rate and not the rounding.
+        with pytest.raises(TypeError, match="whole frames"):
+            FrameCount(2.5)  # pyright: ignore[reportArgumentType]
+
+    def test_a_flag_is_not_whole_frames_however_int_a_bool_is(self) -> None:
+        # `bool` subclasses `int`, so this is the one clause an int check does
+        # not already cover — 01.3's review found the whole contract green with
+        # it deleted. Kept, because it is the silent direction: a truthiness
+        # value where a count goes is one frame of warmup, which is a legal
+        # declaration nothing downstream has grounds to question.
+        with pytest.raises(TypeError, match="whole frames"):
+            FrameCount(True)  # pyright: ignore[reportArgumentType]
+        assert FrameCount(1).frames == 1
 
 
 class TestElementMeaning:
@@ -768,8 +822,8 @@ class TestParamStereotypes:
         # word as a bare string, because a member is what the generator
         # dispatches on and a string that happens to match today is a match
         # nothing keeps true. `TypeError` rather than the file's usual
-        # `ValueError` for `_whole_lookahead`'s reason — this is not a legal
-        # value used wrongly, it is not a `ParamStereotype`.
+        # `ValueError` for `FrameCount.__post_init__`'s reason — this is not a
+        # legal value used wrongly, it is not a `ParamStereotype`.
         with pytest.raises(TypeError, match=r"'slider'.*is not a stereotype"):
             make_spec(param_stereotypes={"factor": "slider", "anti_alias": ParamStereotype.ENUM})
 

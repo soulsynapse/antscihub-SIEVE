@@ -1067,7 +1067,6 @@ class ToolSpec:
                 "settle — a tool with no warmup and no state is determined by the frame in front "
                 "of it, and a kind here would be a claim with no subject"
             )
-        _whole_lookahead(self.tool_id, self.lookahead_frames, "lookahead_frames")
         if self.lookahead_frames.frames > 0 and self.mode is not Mode.WINDOWED:
             raise ValueError(
                 f"{self.tool_id}: declares lookahead_frames={self.lookahead_frames.frames} but "
@@ -1153,9 +1152,9 @@ class ToolSpec:
         for name in sorted(self.param_stereotypes):
             kind = self.param_stereotypes[name]
             if not isinstance(kind, ParamStereotype):
-                # `TypeError` for `_whole_lookahead`'s reason: the neighbouring
-                # refusals take a value that is legal for its type and wrong for
-                # the tool, while a kind outside the vocabulary is not a
+                # `TypeError` for `FrameCount.__post_init__`'s reason: the
+                # neighbouring refusals take a value that is legal for its type
+                # and wrong for the tool, while a kind outside the vocabulary is not a
                 # `ParamStereotype` at all — including one spelled right as a
                 # bare string, since a member is what the generator dispatches
                 # on.
@@ -1381,30 +1380,6 @@ def node_warmup_frames(step: PathStep) -> FrameCount:
     return refined
 
 
-def _whole_lookahead(tool_id: str, count: FrameCount, source: str) -> FrameCount:
-    """`count`, or refuse it for not being a whole number of frames.
-
-    `FrameCount` annotates `frames: int` and enforces only the sign, so half a
-    frame arrives here intact — a window length divided by two is the obvious
-    way to produce one. It cannot be honored downstream: emission is delayed by
-    whole frames or not at all, so rounding it wherever the delay is applied
-    would leave the declared window and the window actually read differing by a
-    frame, with the declaration still reading exact.
-
-    `TypeError` where every other refusal in this file raises `ValueError`, and
-    the split is the honest one: the neighbours refuse a value that is in range
-    for its type and wrong for the tool, while this refuses a value that is not
-    a `FrameCount`'s declared `int` at all.
-    """
-    if isinstance(count.frames, bool) or not isinstance(count.frames, int):
-        raise TypeError(
-            f"{tool_id}: {source} must be whole frames, got {count.frames!r} — a window "
-            "boundary lands between two frames or on one, and only one of those is a frame "
-            "the executor can wait for"
-        )
-    return count
-
-
 def node_lookahead_frames(step: PathStep) -> FrameCount:
     """One node's read-ahead: the refinement if it has one, else the bound.
 
@@ -1415,16 +1390,17 @@ def node_lookahead_frames(step: PathStep) -> FrameCount:
     the plan folds, lookahead by the emission delay the executor applies
     (02.3) — and a caller wanting one has no use for the other.
 
+    A refinement that is not a whole count of frames is refused by `FrameCount`
+    itself, alongside a negative one and for the same reason it is better met
+    there: at the `return` inside the tool that computed it.
+
     Raises:
         ValueError: if the refinement exceeds the spec's bound.
-        TypeError: if the refinement is not a whole count of frames.
     """
     spec, params = step
     if type(params).lookahead_frames is ParamsBase.lookahead_frames:
         return spec.lookahead_frames
-    refined = _whole_lookahead(
-        spec.tool_id, params.lookahead_frames(), f"{type(params).__name__}.lookahead_frames()"
-    )
+    refined = params.lookahead_frames()
     if refined > spec.lookahead_frames:
         raise ValueError(
             f"{spec.tool_id}: {type(params).__name__}.lookahead_frames() returned {refined}, "

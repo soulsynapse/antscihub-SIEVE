@@ -24,6 +24,7 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
+from pydantic import ValidationError
 
 from sieve.core.pipeline_model import (
     Edge,
@@ -337,6 +338,17 @@ class TestInputs:
         assert node_key(spelled_out, spec=SPEC, upstream=ROOT) == node_key(
             implied, spec=SPEC, upstream=ROOT
         )
+
+    def test_invalid_params_never_reach_the_digest(self) -> None:
+        # The declared raise. It is the last statement before the hash and it is
+        # reachable from a document `Dag.build` accepted, which checks edges and
+        # elements and not values. A misspelled key is the case worth pinning:
+        # `ParamsBase` forbids extras precisely so it cannot validate, run with
+        # the default, and key identically to the run the user meant to vary.
+        with pytest.raises(ValidationError, match="radiuz"):
+            node_key(make_node("a", radiuz=5), spec=SPEC, upstream=ROOT)
+        with pytest.raises(ValidationError, match="radius"):
+            node_key(make_node("a", radius="wide"), spec=SPEC, upstream=ROOT)
 
     def test_refuses_a_key_it_cannot_stand_behind(self) -> None:
         node = make_node("a")

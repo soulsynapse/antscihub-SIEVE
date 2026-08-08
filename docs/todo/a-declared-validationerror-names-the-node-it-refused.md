@@ -1,6 +1,6 @@
 ---
 title: A declared ValidationError names the node it refused
-status: open
+status: awaiting-review
 gated_on: nothing
 priority: normal
 phase: "03"

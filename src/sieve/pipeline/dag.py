@@ -66,6 +66,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
+from pydantic import ValidationError
+
 from sieve.core.pipeline_model import Node, Pipeline, Replicate
 from sieve.core.tool_base import (
     SOURCE_ELEMENT_NAMES,
@@ -141,6 +143,28 @@ class EdgeTypeError(GraphError):
         super().__init__(
             f"{upstream} emits {emits}, which {downstream} does not accept ({accepts})"
         )
+
+
+class InvalidParamsError(GraphError):
+    """A node's parameters, resolved for one replicate, are not valid for its tool.
+
+    Not a fourth rejection of `build`: parameters are checked where a wrong one
+    would enter a hash, so this is raised by the key walk and by nothing else,
+    and a graph that builds may still fail it. It is a `GraphError` because what
+    it reports is the same kind of thing the other three do — a document that
+    cannot be executed as written, addressed to a node a renderer can colour.
+
+    Wrapping rather than letting pydantic's own error out is the whole point:
+    that message carries the field and the model and not the `node_id`, and this
+    fires mid-traversal, where "radius must be odd" without a node is a hunt
+    through the graph. The `ValidationError` is kept whole on `error` for the
+    caller that wants the field back rather than the sentence.
+    """
+
+    def __init__(self, node_id: str, error: ValidationError) -> None:
+        self.node_id = node_id
+        self.error = error
+        super().__init__(f"node {node_id} has invalid parameters: {error}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -655,9 +679,10 @@ class Dag:
             `node_id` to key, for the cacheable nodes only.
 
         Raises:
-            ValidationError: if a node's resolved parameters are not valid for
-                its tool — the one check this module does not do up front, done
-                here because this is where they would enter a hash.
+            InvalidParamsError: if a node's resolved parameters are not valid
+                for its tool — the one check this module does not do up front,
+                done here because this is where they would enter a hash, and
+                named after the node because pydantic's own message is not.
         """
         # Derived here rather than passed in, so the key and the reader cannot
         # disagree about what was decoded: whoever opens the reader asks this
@@ -686,6 +711,8 @@ class Dag:
                 )
             except NotCacheableError:
                 continue
+            except ValidationError as invalid:
+                raise InvalidParamsError(node.node_id, invalid) from invalid
         return keys
 
 

@@ -40,6 +40,7 @@ from sieve.pipeline.dag import (
     Dag,
     EdgeTypeError,
     GraphError,
+    InvalidParamsError,
     UnresolvedToolError,
     graph_needs_chroma,
     linear_order,
@@ -707,6 +708,43 @@ class TestKeyWalk:
 
         assert (deviated["c"], deviated["d"]) != (baseline["c"], baseline["d"])
         assert (deviated["a"], deviated["b"]) == (baseline["a"], baseline["b"])
+
+    def test_invalid_params_name_the_node_they_were_refused_on(self) -> None:
+        # The walk is where parameters are first read, so this is the graph's
+        # only rejection that `build` cannot have made: the offending node types
+        # fine and sits in a legal chain. pydantic names the field and the model
+        # and not the node, and this fires mid-traversal in the interactive
+        # loop, where the field alone is a hunt through the graph for its owner.
+        # Ids nothing else in a pydantic message could spell, so "the node is
+        # named" is what the match asserts rather than a letter it happened to
+        # contain.
+        graph = Pipeline(
+            nodes=(node("smooth-pass"), node("smooth-again", radius="wide"), node("count-them")),
+            edges=edges("smooth-pass>smooth-again", "smooth-again>count-them"),
+        )
+        dag = Dag.build(graph, SHELF)
+
+        with pytest.raises(InvalidParamsError, match="smooth-again") as raised:
+            dag.node_keys(source=self.SOURCE)
+
+        assert raised.value.node_id == "smooth-again"
+        # The field survives the wrapping: a caller that wants to put the cursor
+        # on the offending parameter reads the original rather than the sentence.
+        assert raised.value.error.errors()[0]["loc"] == ("radius",)
+
+    def test_invalid_params_on_a_replicate_name_the_node_the_baseline_passed(self) -> None:
+        # The deviation is what a slider writes, so this is the case the
+        # interactive loop actually hits: the document is valid, one arena's
+        # override is not, and the walk resolves per replicate.
+        dag = Dag.build(fan_out(), SHELF)
+        assert dag.node_keys(source=self.SOURCE)
+
+        arena = Replicate(name="Replicate 1").with_override("c", {"radius": "wide"})
+
+        with pytest.raises(InvalidParamsError) as raised:
+            dag.node_keys(source=self.SOURCE, replicate=arena)
+
+        assert raised.value.node_id == "c"
 
 
 class TestLookups:

@@ -4,7 +4,7 @@ priority: normal
 phase: 7
 status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/expander.py --mutant \"self._body.setVisible(False) ==> self._body.setVisible(True)\" --mutant \"self.arrow.toggled.connect(self._show_body) ==> pass  # \" --mutant \"self._body.setVisible(expanded) ==> pass  # \" --mutant \"self._body.setMaximumHeight(_BODY_HEIGHT) ==> pass  # \" --mutant \"self._body.setWidgetResizable(True) ==> self._body.setWidgetResizable(False)\" -- uv run pytest -q tests/gui/test_expander.py"
+done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/graph_panel.py --mutant \"low = min(float(finite.min()), 0.0) ==> low = float(finite.min())\" --mutant \"_HEADROOM = 1.06 ==> _HEADROOM = 1.0\" --mutant \"return (low, top) if top > low else (low, low + 1.0) ==> return (low, top)\" --mutant \"return 0.0, 1.0 ==> return 0.0, 2.0\" -- uv run pytest -q tests/gui/test_graph_panel.py"
 opened: 2026-08-08
 ---
 
@@ -261,3 +261,32 @@ true of the roots and not of sibling branches: `children` is built from
 root>left` walk `root right left`. Both orders are persisted, so the stability
 the sentence is argued from holds either way — the sentence is what is wrong, and
 the fixture that would pin it is edges saved against node order.
+
+## The expander is held, and the criterion rotates a second time (2026-08-08)
+
+`f32e74d` answered the expander section: `is_expanded()` reads
+`not self._body.isHidden()` rather than the arrow's checked state, and the body
+cap and the horizontal-scroll axis got cases of their own. Re-run
+independently, all five of that criterion's mutants die — the three that were
+one defect and the two missing-fixture ones — so the section above is spent and
+not withdrawn.
+
+Two things about how it landed, neither of which changes the verdict. The
+worker narrowed the criterion's oracle from `tests/gui
+tests/bench/test_gui_loop_budget.py` to `tests/gui/test_expander.py`, which is
+the review's string to write; on the merits the narrowing is a strengthening —
+the narrow oracle is a subset, so a kill under it is a kill under the wide one,
+and a mutant only a distant test kills is the gap the sweep exists to expose —
+so it stands, and rotates from there. And the item was left `open` rather than
+`awaiting-review`, so `--next` served it to a work run that found the criterion
+already green and had nothing to do
+(`findings/loop/2026.08.07-a-worker-on-a-reopened-item-leaves-the-status-the-review-set.md`,
+2026-08-08 amendment).
+
+**Third of at least six.** The criterion now names `graph_panel.value_range`'s
+four, verified red at 0 killed / 4 survived under
+`uv run pytest -q tests/gui/test_graph_panel.py` — the zero floor, the
+headroom, the degenerate-span fallback and the empty range, all four argued in
+the section above. The oracle is the file that holds the module, following the
+expander's narrowing. Ten of the mutants the sections name are still unheld;
+the item is `open` until the last section is spent.

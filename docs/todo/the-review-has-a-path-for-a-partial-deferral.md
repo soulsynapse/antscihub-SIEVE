@@ -24,3 +24,26 @@ was handled by hand.
 three blockers and not the other two, and had no status meaning "partly
 settled, still stopped". It wrote a section in the item instead, which worked
 because a human read it.
+
+## The state itself is now detectable, whatever produced it (2026-08-08)
+
+The three cases above all end in the same observable: an `open` item whose
+`done_when` already passes, served to a work run with nothing to do. It has
+since happened twice from a fourth cause — a worker that finished an item and
+left `status: open` instead of `awaiting-review`
+(`findings/loop/2026.08.07-a-worker-on-a-reopened-item-leaves-the-status-the-review-set.md`
+and its 2026-08-08 amendment) — and the second time it cost a full work run,
+because the review that had already noticed and already swept the criterion
+wrote the instruction into a queue entry rather than into `status`.
+
+So the remedy generalises past the deferral branch that opened this item.
+`--next` can run the selected item's `done_when` before answering and refuse to
+call it `work` when it is green, which catches every cause including ones
+nobody has thought of, and is the one check that does not need to know why the
+item is in that state. Two costs to weigh rather than assume: a criterion is an
+arbitrary shell command and running it on every selection is not free — the
+sweeps in the Phase 7 items take minutes — and a criterion that is green
+because the tree is broken elsewhere would be misread as finished. The cheaper
+variant is to run it only when the answer would be `work` and to report the
+green rather than suppress the item, which leaves the judgement with whoever
+reads it.

@@ -30,10 +30,14 @@ status: open          # open | awaiting-review | deferred | done
 # contradicts the tree. Only a review sets done or edits done_when.
 # `deferred` requires a real trigger in gated_on.
 gated_on: nothing
-# Sequenced items only, and required there: the executable completion
-# criterion, written when the item is written and never edited by the session
-# doing the work. The worker runs it and pastes its output; the reviewer
-# re-runs it.
+# Required on every item: the executable completion criterion, written when
+# the item is written and never edited by the session doing the work. The
+# worker runs it and pastes its output; the reviewer re-runs it. A pool item
+# is not exempt — off-step work whose completion the session doing it gets to
+# define is the same defect as on-step work that does, and `validate` refuses
+# both. The one exemption is `status: deferred` with
+# `deferred_for: decision`, where what the command would assert is the thing
+# being decided; it is owed the moment the deferral lifts.
 # Name the claim, not the file, and prove it red. A criterion pointing at a
 # whole test module passes today and is met by any weak case added to it, which
 # is how a green command certifies work that was not done — so name the test

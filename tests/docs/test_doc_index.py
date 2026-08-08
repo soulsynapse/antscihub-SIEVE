@@ -51,6 +51,7 @@ POOLED = """title: An aside that can wait
 priority: normal
 status: open
 gated_on: nothing
+done_when: "true"
 opened: 2026-08-06"""
 
 #: A pool item on phase 5, against the phase-6 step in SEQUENCED_6 — the pair
@@ -199,9 +200,20 @@ def test_work_is_the_role_when_the_head_carries_a_criterion(tmp_path):
     assert (role, item.path.name) == ("work", "step.md")
 
 
-def test_a_head_with_no_criterion_is_a_specify_run_on_that_same_item(tmp_path):
+def on_the_ledger(monkeypatch, *names: str) -> None:
+    """Put temp items on `UNSPECIFIED_DEBT`, the only population without one.
+
+    A new item with no criterion is refused, so the `specify` role's own cases
+    have to build the thing it exists to drain rather than the thing that can
+    no longer be written.
+    """
+    monkeypatch.setattr(doc_index, "UNSPECIFIED_DEBT", frozenset(names))
+
+
+def test_a_head_with_no_criterion_is_a_specify_run_on_that_same_item(tmp_path, monkeypatch):
     # It is not skipped and it shuts nothing: the item that would have been
     # worked is handed to the one role permitted to write a `done_when`.
+    on_the_ledger(monkeypatch, "vague.md")
     write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
     write_item(tmp_path, "ready", OWED.replace("phase: 5", "phase: 6"))
 
@@ -210,10 +222,11 @@ def test_a_head_with_no_criterion_is_a_specify_run_on_that_same_item(tmp_path):
     assert (role, item.path.name) == ("specify", "vague.md")
 
 
-def test_a_later_item_does_not_jump_the_queue_by_having_a_criterion(tmp_path):
+def test_a_later_item_does_not_jump_the_queue_by_having_a_criterion(tmp_path, monkeypatch):
     # The rule this refuses is the one the boundary drain had. Serving the
     # first *specified* item makes the queue drainable by ignoring exactly the
     # work that needs specifying, and lets a criterion act as a priority.
+    on_the_ledger(monkeypatch, "vague.md")
     write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
     write_item(tmp_path, "ready", OWED.replace("priority: normal", "priority: low"))
 
@@ -271,7 +284,8 @@ def test_a_reason_on_an_item_that_is_not_deferred_is_refused(tmp_path):
         collect(tmp_path)
 
 
-def test_the_waiting_section_separates_a_deferral_from_an_unspecified_item(tmp_path):
+def test_the_waiting_section_separates_a_deferral_from_an_unspecified_item(tmp_path, monkeypatch):
+    on_the_ledger(monkeypatch, "vague.md")
     write_item(tmp_path, "step", SEQUENCED_6)
     write_item(tmp_path, "parked", DEFERRED)
     write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
@@ -280,6 +294,66 @@ def test_the_waiting_section_separates_a_deferral_from_an_unspecified_item(tmp_p
 
     assert [i.path.name for i in deferred] == ["parked.md"]
     assert [i.path.name for i in unspecified_items] == ["vague.md"]
+
+
+def test_a_pool_item_without_a_criterion_is_refused(tmp_path, monkeypatch):
+    """The hole this closes: `validate` asked a `step` for its criterion and
+    asked a pool item for nothing, so forty-nine landed without one."""
+    on_the_ledger(monkeypatch)
+    write_item(tmp_path, "vague", OWED.replace('done_when: "true"\n', ""))
+
+    with pytest.raises(ItemError, match="needs `done_when`"):
+        collect(tmp_path)
+
+
+def test_a_deferral_on_a_decision_needs_no_criterion(tmp_path, monkeypatch):
+    """The one exemption, and it is not a loophole: `deferred_for` is refused
+    on an item that is not deferred, so it cannot be worn by open work."""
+    on_the_ledger(monkeypatch)
+    write_item(tmp_path, "parked", DEFERRED)
+
+    assert [i.path.name for i in collect(tmp_path)] == ["parked.md"]
+
+
+def test_a_deferral_on_a_subject_still_needs_one(tmp_path, monkeypatch):
+    # The subject is missing, not the answer: what `done` means is knowable
+    # today and the command names a test that does not exist yet, which is
+    # what every criterion does at the moment it is written.
+    on_the_ledger(monkeypatch)
+    subject = DEFERRED.replace("deferred_for: decision", "deferred_for: subject")
+    write_item(tmp_path, "waiting", subject)
+
+    with pytest.raises(ItemError, match="needs `done_when`"):
+        collect(tmp_path)
+
+
+def test_a_sequenced_deferral_is_not_excused_by_its_decision(tmp_path, monkeypatch):
+    # A step is committed work. The decision exemption is for a pool item
+    # parked on an answer, not for something the phase already sequenced.
+    on_the_ledger(monkeypatch)
+    stepped = DEFERRED.replace("priority: normal\nphase: 5", 'step: "05.4"')
+    write_item(tmp_path, "parked", stepped)
+
+    with pytest.raises(ItemError, match="a sequenced item needs `done_when`"):
+        collect(tmp_path)
+
+
+def test_the_unspecified_ledger_only_shrinks():
+    """Every name on it still exists and still lacks a criterion.
+
+    The ledger is the backlog the rule was added on top of, so an entry that
+    has been repaid — or renamed, or closed by deletion — fails here until it
+    is removed. Nothing may be added: a new item with no criterion is refused
+    by `validate`, so growth is impossible rather than merely discouraged.
+    """
+    live = {
+        path.name
+        for path in doc_index.TODO_DIR.glob("*.md")
+        if not path.name.startswith(doc_index.SKIP_PREFIXES)
+        and not str(doc_index.parse_frontmatter(path).get("done_when", "")).strip()
+    }
+
+    assert doc_index.UNSPECIFIED_DEBT - live == set()
 
 
 def test_the_pool_takes_the_earliest_phase_first(tmp_path):

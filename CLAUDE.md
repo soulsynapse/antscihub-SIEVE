@@ -29,6 +29,10 @@ plays. Architecture serves that or it does not belong.
   feat, fix, refactor, perf, docs, test, build, ci, chore.
 - End the session with the branch committed and pushed. Never force-push.
 - Stage by explicit path. Never `git add -A` or `git add .`.
+- Orchestrator loop agents: an edit you did not make is the author's, and
+  belongs to a separate commit. Don't stage it, revert it, stash it, or
+  account for it as yours — leave it where it is and name it in your final
+  message.
 
 ## Environment
 

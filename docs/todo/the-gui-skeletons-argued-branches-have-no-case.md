@@ -2,9 +2,9 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/timeline/geometry.py --mutant \"MIN_BAND_PIXELS = 2.0 ==> MIN_BAND_PIXELS = 0.0\" --mutant \"index = int(x / self.width * self.frame_count) ==> index = int(x / (self.width - 1) * self.frame_count)\" -- uv run pytest -q tests/gui"
+done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/graph_panel.py --mutant \"low = min(float(finite.min()), 0.0) ==> low = 0.0\" -- uv run pytest -q tests/gui"
 opened: 2026-08-08
 ---
 
@@ -400,3 +400,46 @@ the fixtures want. Four mutants across four files are still unheld after this
 one — `graph_panel`'s negative floor, `window.moved_to`'s clamp, `app.py`'s
 `source_fed_nodes` clause and `param_form`'s combo signal — plus the comment
 above, and the item is `open` until the last is spent.
+
+## Geometry is held, and the criterion rotates a fifth time (2026-08-08)
+
+`597f156` answered the geometry section with `tests/gui/test_geometry.py`, the
+module's first file of its own, and touched nothing in `src/`. Re-run
+independently: both of that criterion's mutants die, and the same sweep against
+each case alone is 1 killed / 1 survived apiece, each case killing the other's
+survivor — the floor case takes `MIN_BAND_PIXELS` and the boundary case takes
+the denominator — so the two are attributable and not a lucky aggregate. The
+same sweep with `--ignore=tests/gui/test_geometry.py` is 0 killed / 2 survived,
+so the red is this commit's own rather than the run's word for it. `tests/gui`
+is 110 passed.
+
+The fixture premise the whole section argues from holds as stated:
+`test_timeline.py` is `SOURCE_FRAMES == STRIP_WIDTH == 1000`, which is why
+`width` and `width - 1` agree everywhere it looks and why every band it paints
+clears the floor. The new file's two proportions — 108 000 frames under 1000 px,
+and 10 frames under the same band — are what separate them, and a second file
+rather than a second fixture in the first one is the right call for that reason.
+
+The residue the run folded above is correct on its arithmetic, re-derived here:
+under `width - 1` the last frame's boundary is 899.1 and every x from there to
+the right edge still names it, so the mutant is pixel-early and not
+unreachable; the "never reaches it at all" clause is true only of
+`x / width * (frame_count - 1)`, whose boundary is 1000 and so falls outside the
+band. Two variants in one sentence, and the criterion swept one.
+
+One thing the floor case asserts beyond its mutant, and it earns its place:
+`left == x_of_frame(start)` cannot fail under either mutant in the criterion,
+which is close to the shape of a case comparing a run's output to itself. It is
+not one — it holds `span`'s *rightward* widening, which a symmetric round-up
+would break and which nothing else in the tree covers.
+
+**Sixth rotation, and it returns to `graph_panel` for the negative floor** the
+third rotation's review named as belonging to a later pass rather than to its
+own four. `low = min(float(finite.min()), 0.0) ==> low = 0.0` is verified red at
+0 killed / 1 survived under `uv run pytest -q tests/gui` on the tree this review
+closes; no fixture carries a value below zero, so a panel that clipped a
+below-zero series onto the floor draws the same graph. Three mutants across
+three files are unheld after this one — `window.moved_to`'s clamp, `app.py`'s
+`source_fed_nodes` clause and `param_form`'s combo signal — plus the two prose
+corrections the fourth and fifth sections leave standing, and the item is `open`
+until the last is spent.

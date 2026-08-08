@@ -1047,7 +1047,7 @@ class TestParamStereotypes:
                 },
             )
 
-    def test_an_enum_over_an_annotation_with_no_choices_is_refused(self) -> None:
+    def test_a_stereotype_of_enum_over_an_annotation_with_no_choices_is_refused(self) -> None:
         # `ENUM` is the one kind whose control is built from the annotation's
         # *values* rather than from its bounds, and `gui/param_form.py`'s builder
         # falls back to `(True, False)` for a property that writes no `enum`

@@ -4,6 +4,7 @@ priority: low
 phase: 0
 status: open
 gated_on: nothing
+done_when: "uv run pytest -q tests/unit/test_contract_lines_go_red.py tests/unit/test_import_contracts.py"
 opened: 2026-08-07
 ---
 
@@ -30,6 +31,17 @@ with `core/ops/` planted in it
 The copy is the part the generated version inherits: it means a generated
 violation does not have to be hostable by the real tree either.
 
-The trigger to build it is a contract gaining a line, which 02.0.1 does when
-`sieve.mutual` joins the layers. Doing it then means the new line is proven
-by the mechanism rather than by another hand-written edge.
+The trigger has fired. It was a contract gaining a line, and the layers
+contract has gained `sieve.mutual` — so the newest line in the file is
+currently proven by the same one-red-per-contract gate that certifies nothing
+about it individually.
+
+Done is `tests/unit/test_contract_lines_go_red.py`: for every line the config
+carries — each `forbidden_modules` entry against each of its `source_modules`,
+each adjacent pair in `layers` — a violation planted in a copy of the tree and
+the linter run against it, red, naming that contract. Read out of
+`.importlinter`, so a line added later is covered the day it lands rather than
+the day someone remembers. `test_import_contracts.py` stays in the criterion
+because the generator does not subsume it: its supported-path case asserts what
+`allow_indirect_imports` leaves *legal*, which is not a red and has no
+generated form.

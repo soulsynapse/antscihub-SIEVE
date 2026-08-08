@@ -78,7 +78,12 @@ binding in none, and this run argued it a fourth time from scratch. That is
 and it is an ADR, minted by its own commit — not by this one, which is an
 implementation.
 
-One thing the first push answers and nothing here can: actionlint drops its
+Verified on a runner, not only locally: the pushed commit's CI run
+(31236275388) is green in 36 s with the five-command line, and installs
+`actionlint-py` from the lock rather than resolving anything at run time.
+
+One thing that push did not answer, as it turns out: actionlint drops its
 shellcheck and pyflakes rules when those binaries are absent, which they are
-locally. If the runner has them, the gate is one command with two answers.
-Recorded as the finding's open question.
+locally, and it says which rules it dropped only under `-verbose`. A green
+runner therefore does not report whether it ran more rules than the laptop. Left
+as the finding's open question with what would actually settle it.

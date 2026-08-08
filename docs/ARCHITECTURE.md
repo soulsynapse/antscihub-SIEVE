@@ -32,7 +32,7 @@ and its file in `docs/adr/` but leaves this index.
 - [One execution path](adr/one-execution-path.md) — Preview and production are one executor over one plan; a preview is the same pipeline with a span or resolution cut prepended, so what the user tuned against cannot diverge from what the run produces.
 - [Correctness is the default; performance is opt-in](adr/correctness-is-the-default.md) — The naive path is the product surface, not a fallback: every tool runs correct-but-slow on any machine, and a fast path lands only on a measured budget violation, at parity with what it replaces.
 - [Cache admission is a bounded warmup, not a stateless tool](adr/cache-admission-is-bounded-warmup.md) — A tool is keyed when its warmup is **bounded**, stateful or not, and a run entering a cached range re-settles its state over that warmup first. An epsilon warmup is refused.
-- [A user's file wires in like any other input](adr/a-users-file-wires-in-like-any-other-input.md) — A node's input may be wired to an upstream node or to a file the user picked. Both wire the same way; only the key differs — derived from the graph, or from the file's own content identity.
+- [A user's file wires in like any other input](adr/a-users-file-wires-in-like-any-other-input.md) — A file a user picks enters as a **source tool** — a node with no upstream — so every input is an edge. Only the key differs: a graph-fed node keys from the graph, a source tool from its file.
 
 ## 05 — The GUI
 

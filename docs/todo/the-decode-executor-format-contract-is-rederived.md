@@ -1,6 +1,6 @@
 ---
 title: The decode/executor format contract is re-derived, not ported
-status: awaiting-review
+status: done
 priority: normal
 phase: 3
 gated_on: nothing

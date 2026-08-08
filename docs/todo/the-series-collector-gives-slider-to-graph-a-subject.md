@@ -3,7 +3,7 @@ title: The series collector gives slider_to_graph a subject
 step: "06.6"
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/bench/test_loop_budget.py tests/bench/test_budget_producers.py -q"
+done_when: "uv run pytest tests/bench/test_loop_budget.py tests/bench/test_budget_producers.py -q && uv run python -c \"from sieve.bench.budgets import TIMED, WITHOUT_PRODUCER; assert 'slider_to_graph' in TIMED and 'slider_to_graph' not in WITHOUT_PRODUCER\""
 opened: 2026-08-07
 ---
 
@@ -54,3 +54,21 @@ step that carries it, and `PLAN.md`'s Phase 6 now says so in its own words.
 That closes the second branch: the gate is not amended down. `slider_to_graph`
 moves from `budgets.WITHOUT_PRODUCER` into `budgets.TIMED` and the phase meets
 the gate it stated.
+
+## Reviewed 2026-08-08 — the criterion could not have failed, and now can
+
+The two files the criterion named are bidirectional consistency guards: they
+assert that `WITHOUT_PRODUCER` and `TIMED` equal what a scan of the tree finds,
+which is true of a tree with no collector and true again of a tree with one.
+The command was green on the unbuilt tree, so it could only ever have certified
+work nobody did — recorded in
+[findings/loop/2026.08.08-a-consistency-guard-as-a-criterion-is-green-on-both-sides-of-the-work.md](../findings/loop/2026.08.08-a-consistency-guard-as-a-criterion-is-green-on-both-sides-of-the-work.md).
+The `done_when` now carries the membership check the section above already
+states in prose, and is red until it is true.
+
+The guards make the rest follow: `TIMED` may only name a key some `within_budget`
+call site in `tests/bench/` passes, so the criterion cannot go green without the
+benchmark, and the benchmark cannot be honest without the collector to measure.
+What the criterion still does not carry is non-vacuity of the new gate's sample
+count — every gate in `test_loop_budget.py` asserts on the number of samples it
+judged, and this one owes the same.

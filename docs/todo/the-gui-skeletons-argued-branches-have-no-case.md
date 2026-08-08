@@ -2,9 +2,9 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/graph_panel.py --mutant \"low = min(float(finite.min()), 0.0) ==> low = 0.0\" -- uv run pytest -q tests/gui"
+done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/app.py --mutant \"and node.node_id in source_fed_nodes(pipeline) ==> and False\" -- uv run pytest -q tests/gui tests/bench/test_gui_loop_budget.py"
 opened: 2026-08-08
 ---
 
@@ -443,3 +443,44 @@ three files are unheld after this one — `window.moved_to`'s clamp, `app.py`'s
 `source_fed_nodes` clause and `param_form`'s combo signal — plus the two prose
 corrections the fourth and fifth sections leave standing, and the item is `open`
 until the last is spent.
+
+## The negative floor is held, and the criterion rotates a sixth time (2026-08-08)
+
+`073c4ef` answered the negative floor with one case in the file that already
+holds the module, and touched nothing in `src/`. Re-run independently: the
+criterion's mutant dies; the same sweep with
+`--deselect ...::test_the_floor_follows_a_series_that_goes_below_zero` is
+0 killed / 1 survived and the sweep restricted to `-k below_zero` is
+1 killed / 0 survived, so the kill is that case's own and not an aggregate of
+the eight that were already there. `tests/gui` is 111 passed.
+
+Three of the case's four assertions kill the mutant independently — the floor
+itself, the first point on the bottom edge, and zero drawn above it — which is
+what makes it a case about the docstring's second half rather than about one
+returned number. The fourth is the one worth naming: `top == -2.0 + 5.0 * 1.06`
+is the first assertion in the file to pin `_HEADROOM` numerically at all
+(`test_the_peak_is_drawn_below_the_top_edge` only asks `top > 4.0`), and it
+pins it as a literal rather than by importing the constant, which is the
+direction
+`findings/loop/2026.08.08-a-literal-pin-replaced-by-the-constant-it-now-reads-stops-being-a-pin.md`
+argues for. It also pins the thing the mutant does not reach: that the headroom
+is measured over the whole span from the negative floor rather than from zero.
+
+**Seventh rotation, and it is `gui/app.py`'s `source_fed_nodes` clause** — the
+one the 07.12 section left, and the first rotation whose subject is a behaviour
+the tree can get wrong rather than a number no fixture separates.
+`and node.node_id in source_fed_nodes(pipeline) ==> and False` is verified red
+at 0 killed / 1 survived under `uv run pytest -q tests/gui
+tests/bench/test_gui_loop_budget.py` on the tree this review closes. The oracle
+stays wide because `app.py` is walked by both files. The fixture the section
+already names is a walk that stops on the source-fed node and asks
+`viewport_node`.
+
+`param_form`'s combo signal is deliberately not next: the item's own section
+says the surviving side is the wrong one, so it is a behaviour change with a
+choice in it — the narrow signal swap or a no-op guard — and a rotation that
+handed it to a worker as a fixture task would have it settle that choice on the
+way past. `window.moved_to`'s clamp is the guard-with-no-caller shape the item
+calls the least of the four, and it goes last. Two mutants and the two prose
+corrections stand after this one, and the item is `open` until the last is
+spent.

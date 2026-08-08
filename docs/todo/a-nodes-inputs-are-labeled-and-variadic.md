@@ -1,6 +1,6 @@
 ---
 title: The sites that predict a second input disagree — two raise, two fold the first
-status: awaiting-review
+status: done
 gated_on: nothing
 priority: high
 phase: "03"

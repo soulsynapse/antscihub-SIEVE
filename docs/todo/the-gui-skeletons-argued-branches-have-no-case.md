@@ -2,9 +2,9 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/timeline/window.py --mutant \"length = min(window.frame_count, frame_count) ==> length = window.frame_count\" -- uv run pytest -q tests/gui"
+done_when: "uv run python -c \"import pathlib,sys; c=pathlib.Path('src/sieve/gui/canvas.py').read_text(); g=pathlib.Path('src/sieve/gui/timeline/geometry.py').read_text(); sys.exit(0 if ('division by zero' in c and 'did not earn' not in c and 'a pixel early' in g and 'never reaches it at all' not in g) else 1)\""
 opened: 2026-08-08
 ---
 
@@ -531,3 +531,51 @@ and comes back to review rather than being settled on the way past.
 reason given there. After this one the mutants are spent and what remains on the
 item is that choice and the two prose corrections — `canvas.py`'s guard comment
 and `frame_at`'s two-variant sentence — so the item is `open` until they are.
+
+## The window algebra is held, and the criterion leaves mutation (2026-08-08)
+
+`6ef3e37` answered the clamp with `tests/gui/test_window.py`, the module's first
+file of its own, and touched nothing in `src/`. Re-run independently: the
+criterion's mutant dies, and the same sweep with
+`--ignore=tests/gui/test_window.py` is 0 killed / 1 survived, so the kill is the
+new file's own rather than the run's word for it. `tests/gui` is 113 passed (was
+112). The status the worker left was `awaiting-review` and `done_when` is
+untouched.
+
+The second question the seventh rotation attached to this one — whether any
+gesture can reach the clamp — was answered no and measured rather than read,
+which is what the rotation owed
+(`findings/2026.08.08-no-gesture-hands-the-window-algebra-a-span-longer-than-its-source.md`).
+**The source decision it deferred is taken here: the clamp stays.** `moved_to`
+is a module-level function whose docstring states a total contract — a window
+starting at `origin`, clamped to the source — and the clamp is what makes that
+sentence true of an argument the type permits. Deleting it would trade a guard
+for a `SourceSpan` refusal raised out of a function whose job is to return a
+drawable window, and it would do so on the strength of today's caller set, which
+`TimelineBar.set_window` is public precisely to let move. The finding is closed
+on that ruling.
+
+One residue the finding leaves, corrected here. Its first open question names
+`Strip._window_from_x`; the tree holds `TimelineStrip._dragged_to`, and the span
+in question is `bar.py:435`. Swept independently, `end=max(self._frame_count, 1)
+==> end=self._frame_count` survives `uv run pytest -q tests/gui` — but it is
+unreachable rather than unfixtured, and by the same argument as the clamp one
+degree further on: `_dragged_to` takes that branch only when `self._window is
+None`, `whole_of` returns `None` only at zero frames, and `_on_source_changed`
+disables the strip there. A case would have to call `_dragged_to` directly on a
+disabled widget, which asserts the tree's arithmetic rather than any behaviour.
+It is recorded, not rotated.
+
+**The mutants are spent, and the criterion is now the two prose corrections** —
+`canvas.py`'s guard comment, whose second clause names a consequence
+(`np.zeros_like` is the low extreme of the ramp) that the branch produces rather
+than avoids, and `frame_at`'s docstring, which charges one denominator with two
+off-by-ones only one of which is its. The criterion checks that each false
+clause is gone and that the true half beside it has survived, so it is a
+replacement and not a deletion; it is red on the tree this review closes.
+
+After that the item holds one thing and it is not a rotation: `param_form`'s
+combo signal, where the surviving side is the wrong one and the fix is a choice
+between the narrow signal swap and a no-op guard that would also cover a spin
+box arrowed back to where it started. That is Kendrick's to settle, not a
+worker's on the way past, and the item closes when it is settled.

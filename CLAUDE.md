@@ -20,6 +20,14 @@ plays. Architecture serves that or it does not belong.
 
 ## Conventions
 
+- Minting a `docs/todo/` item is the exception, not the reflex. Before writing
+  one, search the open items for the module, the symbol, and the claim: if a
+  not-yet-done item would carry the observation, fold it in there. Two items
+  one commit would satisfy are one item. The backlog's cost is its count, and
+  a review that mints per observation pays that cost on your behalf.
+  A fold adds the paragraph to the existing item and never edits its
+  `done_when` — say in your final message that the criterion may no longer
+  cover the whole of it, so the review can widen it.
 - Comments record what the code cannot show. If a competent reader could
   derive the sentence from the code, delete it. Match the density of the
   file you're in.

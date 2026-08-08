@@ -2,7 +2,7 @@
 title: ElementKind's docstring counts two members over three and promises a third that already landed
 priority: high
 phase: 1
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -k element_kind_docstring_counts_its_own_members -q"
 opened: 2026-08-07

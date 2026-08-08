@@ -1032,7 +1032,7 @@ def _silent(docs: Path) -> list[str]:
         f"{folder.name}: states it {shown.stated}x, {shown.legal} legal / {shown.illegal} illegal"
         for folder in _templates(docs)
         for shown in (_shown(folder),)
-        if (shown.stated, bool(shown.legal), bool(shown.illegal)) != (1, True, True)
+        if not (shown.stated and shown.legal and shown.illegal)
     ]
 
 
@@ -1071,8 +1071,8 @@ ONE_FORM_TEMPLATE = (
     SILENT_TEMPLATE + '\nWrite `gated_on: "the pin"` and the value is read as written.\n'
 )
 
-#: Shows both forms and states nothing. `stated` is the only element of the
-#: tuple this moves, so it is the subject that element has a case from.
+#: Shows both forms and states nothing. `stated` is the only one of the three
+#: counts this moves, so it is the subject that count has a case from.
 UNSTATED_TEMPLATE = """---
 title: A question nobody has settled
 status: open
@@ -1083,6 +1083,28 @@ status: open
 `gated_on: "the pin` is not valid YAML.
 
 Write `gated_on: "the pin"` and the value is read as written.
+"""
+
+
+#: States the rule in two places and shows both forms — the other side of the
+#: same count, and the one a longer template reaches by mentioning the
+#: reservation again where a second field needs it.
+TWICE_TEMPLATE = """---
+title: A question nobody has settled
+status: open
+---
+
+# The question, restated
+
+A backtick or a quote opening an unquoted value is reserved, so quote the
+whole value.
+
+`gated_on: "the pin` is not valid YAML.
+
+Write `gated_on: "the pin"` and the value is read as written.
+
+Because the same reservation heads any plain value, a colon or a quote may not
+open one either.
 """
 
 
@@ -1136,6 +1158,20 @@ def test_a_template_that_shows_the_rule_without_stating_it_is_reported(tmp_path)
     docs = _docs_with_template(tmp_path, UNSTATED_TEMPLATE)
 
     assert _silent(docs) == ["questions: states it 0x, 1 legal / 1 illegal"]
+
+
+def test_a_template_that_states_the_rule_twice_is_not_reported(tmp_path):
+    """Restating is neither of the two failures the guard exists to catch.
+
+    Teaching by prose alone and teaching by example alone are the states an
+    author must not be handed, and a template that says it in two places is
+    neither — so the count is read for whether the sentence is there at all.
+    Held to exactly one, the guard would report a template for the second
+    mention and there would be nowhere to put it.
+    """
+    docs = _docs_with_template(tmp_path, TWICE_TEMPLATE)
+
+    assert _silent(docs) == []
 
 
 def test_the_checked_in_indexes_are_current():

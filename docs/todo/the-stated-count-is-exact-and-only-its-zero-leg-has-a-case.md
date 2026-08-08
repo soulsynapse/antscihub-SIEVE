@@ -2,7 +2,7 @@
 title: The guard demands the rule be stated exactly once, and only the zero side of that has a subject
 priority: normal
 phase: "00"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/docs/test_doc_index.py -q -k \"states_the_rule_twice\""
 opened: 2026-08-07

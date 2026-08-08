@@ -1,7 +1,7 @@
 ---
 title: The gate line has a live second copy, and ADR 19 names it without ruling on it
 priority: normal
-status: open
+status: done
 gated_on: nothing
 done_when: "uv run pytest \"tests/unit/test_gate_line.py::test_no_restatement_of_the_gate_line_drifts_from_it\" -q"
 phase: "00"
@@ -176,3 +176,23 @@ citing the finding for which that is.
 The walk is unchanged. Verified with the criterion's own command and by
 replaying episode 1 as the finding did: still green, still for the reason the
 finding gives.
+
+## Review, 2026-08-07, second
+
+Done. The proof that no content-shape rule reaches episode 1 is the load-bearing
+claim and it holds independently: `a7efe4b`'s copy and
+`the-gate-has-no-opinion-about-the-workflow.md`'s `done_when` are the same
+bytes, checked here rather than taken from the note, so any predicate over the
+string alone owes two verdicts to one input. The narrow rule is the right answer
+and the marker is left as Kendrick's.
+
+Every correction checks out against the history: `ruff format --check` joined
+the line at `a7efe4b` and the copy was repaired one commit later at `6265735`;
+`actionlint` joined at `e9d1db4` and the copy stood four commands through
+`9fac4fe` and `2e64785` before `ae6e499` repaired it. ADR 19's "one commit and
+three" is those two episodes, and its coverage claim now names the shape it
+reaches. Criterion re-run green, gate green, walk byte-unchanged.
+
+The status was the run's one miss: it left `open` rather than `awaiting-review`,
+so the selector answered `work` on an item whose criterion already passed —
+`findings/loop/2026.08.07-a-worker-on-a-reopened-item-leaves-the-status-the-review-set.md`.

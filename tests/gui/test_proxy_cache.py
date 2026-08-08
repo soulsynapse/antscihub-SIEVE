@@ -110,6 +110,28 @@ def test_recaching_an_index_replaces_its_bytes_rather_than_adding_them() -> None
     assert cache.bytes_used == 0
 
 
+def test_a_recache_promotes_the_frame_the_way_a_hit_does() -> None:
+    """Re-scrubbing warmed ground arrives as `put`, not as `get`.
+
+    An `OrderedDict` assignment to a key already present keeps that key's
+    position, so without the delete in `put` the frames the grid keeps
+    returning to are the ones that lose their recency — the failure the LRU
+    exists to prevent, on the path that triggers it most.
+    """
+    from sieve.gui.transport.proxy_cache import ProxyFrameCache
+
+    cache = ProxyFrameCache(capacity_bytes=2 * FRAME_BYTES)
+    cache.put(0, frame())
+    cache.put(1, frame())
+
+    cache.put(0, frame())
+    cache.put(2, frame())
+
+    assert cache.get(1) is None
+    assert cache.get(0) is not None
+    assert cache.get(2) is not None
+
+
 def test_an_image_larger_than_the_whole_capacity_is_dropped_and_nothing_else_is() -> None:
     """Storing it would evict everything to hold one frame nobody asked to keep.
 

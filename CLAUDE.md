@@ -128,4 +128,22 @@ assumes otherwise fails in a confusing way.
 
 A queued loop run gets its own worktree. Two sessions writing this one commit
 each other's uncommitted work under the wrong authorship — it has happened —
-and a third worktree off the same `.git` costs nothing.
+and a third worktree off the same `.git` costs nothing. The same accident has
+a second door: never `git add -A` or `git add .` — stage by explicit path, so
+what lands under your name is what you wrote.
+
+Traps each of which has cost a session, so they are named once here:
+
+- Commit messages go through a file — `Write` the message, then
+  `git commit -F <file>` — never a PowerShell here-string piped through Bash,
+  which has twice pushed a subject line reading `@'`.
+- The working tree is CRLF; text you match against it or restore into it goes
+  through bytes, not `write_text`. A mutation sweep is
+  `uv run python scripts/mutation_sweep.py` (its docstring is the contract),
+  never a scratch harness.
+- Run Python through `uv run`; bare `python` is a different interpreter with
+  a different path. No type checker is installed — whether v3 gates on types
+  is an open decision item, so don't spawn `pyright` or `mypy` expecting one.
+- In PowerShell 5.1, `2>&1` on a native command wraps stderr lines in
+  ErrorRecords and fails commands that succeeded; stderr is already captured,
+  so don't redirect it.

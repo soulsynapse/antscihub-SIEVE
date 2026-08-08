@@ -110,3 +110,29 @@ series for its axis rather than for its trace, which
 `_one_value_per_frame`, `status_text`, the non-finite break and the
 `start_index` offset all die, so this module is not uncovered either — the value
 axis is.
+
+## The expander is open by default and nothing says so, from 07.10's review (2026-08-08)
+
+`gui/expander.py` landed with two tests, and the one named for the arrow holds
+none of the arrow. Under `uv run pytest -q tests/gui/test_expander.py`, five of
+seven mutants survive: `self._body.setVisible(False) ==> setVisible(True)`,
+`self.arrow.toggled.connect(self._show_body) ==> pass`,
+`self._body.setVisible(expanded) ==> pass`,
+`self._body.setMaximumHeight(_BODY_HEIGHT) ==> pass`, and
+`setWidgetResizable(True) ==> setWidgetResizable(False)`. Only the label's text
+and the widget's own `setMaximumHeight` die, and the widget cap is what the
+criterion's sibling asserts.
+
+The first three are one defect: `is_expanded()` returns
+`self.arrow.isChecked()`, so every assertion about opening and closing is an
+assertion about `QToolButton.setCheckable`, and the module's headline claim —
+"stays shut until it is asked for", the sentence that makes this the wizard
+reimagined rather than the wizard — survives the widget shipping open. The fix
+is one of two: `is_expanded()` reading the body's visibility, or the test
+asserting `expander.findChild(QScrollArea).isVisible()` beside the checked
+state. The other two are the ordinary guard-with-no-fixture shape — the body
+cap is masked by the widget cap above it, and word wrap is a rendering property
+no case reads.
+
+Written up as a vacuity shape in
+`findings/loop/2026.08.08-a-widgets-state-accessor-reads-the-toggle-and-not-the-thing-toggled.md`.

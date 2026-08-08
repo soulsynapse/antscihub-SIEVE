@@ -32,3 +32,16 @@ names or stop claiming it.
 Not gated on 05.6, but that item rewrites this command and this file; doing it
 there rather than alone is fine, and doing it there without noticing is what
 this item exists to prevent.
+
+## And whether it prints guidance, which 05.6 said it would (2026-08-08, from 07.10)
+
+05.6's item ruled that v2's guidance path had "no referent — guidance is a spec
+field arriving in Phase 7, so what `inspect` will print then is a declaration,
+and what it prints now is nothing". 07.10 landed the field and declined to add
+the second reader, on the ground that the expander is the consumer
+`adr/declared-means-verified.md` asks for and a CLI reader would be a seam a
+later tool could branch on. Both positions are arguable and nobody now owns the
+question: a `ToolSpec` field exists that `inspect` reads and prints for every
+other declaration, and the one a user would most want at a terminal is the one
+it is silent about. Rule it here — print it, or amend 05.6's sentence so the
+prediction stops standing unmet.

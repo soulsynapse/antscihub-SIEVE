@@ -3,7 +3,7 @@ title: A served run elides the node its file already holds
 step: "08.2"
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/integration/test_cli_run.py -q -k elide && uv run pytest tests/integration/test_crop_serving.py tests/integration/test_cli_run.py -q"
+done_when: "uv run pytest tests/integration/test_cli_run.py -q -k elide && uv run pytest tests/integration/test_cli_run.py -q -k window && uv run pytest tests/integration/test_crop_serving.py tests/integration/test_cli_run.py -q"
 opened: 2026-08-07
 ---
 
@@ -91,3 +91,19 @@ by tests only, which is O3's headless creation-and-reuse loop half-closed.
 After 05.9 and not before it. This is what makes `resolve` reachable from
 `sieve run`, and until the coverage clause is fixed that reachability is a
 crash on any graph with a window rather than a feature.
+
+**08.1's caller half lands here, because this item is the caller.** `resolve`
+is handed the frames the run *reads* — `ExecutionPlan.decode_range`, not the
+span — and 08.1 could only pin that in `test_crop_serving._window`, because no
+production caller existed to hold it. The shape is two passes over an object
+that opens no container: build a plan on any identity to learn `decode_range`,
+resolve against that, key the run on whichever identity comes back. Two things
+already in the tree rest on that caller existing and are claims about nothing
+until it does — 08.1 settled that the far end needs no translated guard
+*because* a record too tight for the read-ahead stops serving, and
+`resolve_source.py`'s module docstring still opens "for *this* region over
+*this* span", which its own `want` parameter now contradicts while pointing at
+it for the reason. The elide case has to be over a graph with a declared
+window or it cannot tell the two arguments apart, a streaming graph's decode
+range being its span; `done_when` selects that case on `window`, so the name
+carries the word.

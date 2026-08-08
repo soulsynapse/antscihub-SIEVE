@@ -45,3 +45,11 @@ into a GUI — the alternative being a second field that holds the readable name
 and leaves the id machine-spelled. That is the half only Kendrick can settle,
 and it is why no `done_when` is written here: the command would assert the
 answer.
+
+Review fold, 2026-08-07: the reversibility argument above is one-directional
+at the schema layer and not at the consumer's. Loosening the pattern later
+still admits every document, but the reason to put it on the field is so the
+next writer does not carry its own guard — so every consumer written while
+the pattern held has to get one back the day it is widened. The freedom to
+loosen is bought from the consumers, not free, and that is the half of the
+asymmetry the recommendation does not price.

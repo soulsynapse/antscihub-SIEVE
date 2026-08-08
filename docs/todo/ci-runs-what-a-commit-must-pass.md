@@ -3,7 +3,7 @@ title: CI runs what a commit must pass
 step: "00.3"
 status: done
 gated_on: nothing
-done_when: "uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run pytest -q"
+done_when: "uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run pytest -q && uv run actionlint"
 opened: 2026-08-06
 ---
 
@@ -77,3 +77,18 @@ other leaves the criterion passing over a workflow it no longer describes —
 which is what happened here for one commit. Re-run at that commit, all four
 green. The amendment is the reviewer's because a criterion is; the worker saw
 the divergence and correctly left it alone.
+
+## Amended again at review, 2026-08-07
+
+`uv run actionlint` joins as the fifth command, for the same reason and after
+the same divergence: `e9d1db4` put it in the workflow
+(`the-gate-has-no-opinion-about-the-workflow.md`) and left this line at four.
+Re-run at that state, all five green — `All checks passed!`, `113 files already
+formatted`, `Contracts: 6 kept, 0 broken.`, `708 passed in 24.32s`, actionlint
+silent at exit 0. Twice now the divergence has lasted exactly one commit and
+been repaired by the review that followed, which is a working arrangement but
+not a checked one: nothing compares this line to the `run:` line, so the two
+agree only because a reviewer noticed. The check that would close that is
+`what-earns-a-place-on-the-gate-line.md`'s neighbour rather than its content,
+and it is not minted here — a third occurrence is the evidence that would
+justify it.

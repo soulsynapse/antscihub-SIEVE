@@ -2,7 +2,7 @@
 title: The gate has no opinion about the workflow that runs it
 priority: low
 phase: 0
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run ruff check . && uv run lint-imports && uv run pytest -q"
 opened: 2026-08-07
@@ -87,3 +87,27 @@ shellcheck and pyflakes rules when those binaries are absent, which they are
 locally, and it says which rules it dropped only under `-verbose`. A green
 runner therefore does not report whether it ran more rules than the laptop. Left
 as the finding's open question with what would actually settle it.
+
+## Review, 2026-08-07
+
+Every measurement re-run and every one of them holds. Both mutations go red
+against a copy of the committed file outside the tree — `label
+"ubuntu-latests" is unknown [runner-label]` and `step must run script with
+"run" section [syntax-check]`, exit 1 each, exit 0 on the unmutated copy — so
+the argument that puts actionlint on the line rather than inside `ci.yml`
+stands on what was measured. Discovery with no path argument reports "Collected
+1 YAML files" from the worktree root under `-verbose`, and names shellcheck and
+pyflakes as disabled for exactly the reason the finding gives. The timings
+reproduce (actionlint 0.19 s beside ruff 0.16 s, ruff format 0.15 s,
+lint-imports 0.40 s, pytest 24.0 s), and run 31236275388 is `success` on
+`e9d1db4` in 36 s.
+
+What the worker left, and what the criterion could not see: nothing pinned
+`actionlint` to the line. That is not a general coverage complaint — it is the
+one gap `tests/unit/test_gate_line.py` exists to close, because the formatter
+had already fallen off this same line for two commits, and the file's docstring
+says so. Closed here rather than reopened:
+`test_the_gate_line_lints_the_workflow` asserts `["uv", "run", "actionlint"]`
+is one of the line's `&&`-separated commands, red with the fifth command
+removed and green with it back. The criterion's own divergence is 00.3's, where
+character-identity is the stated content, and it is amended there.

@@ -4,6 +4,7 @@ status: open
 gated_on: nothing
 priority: normal
 phase: "00"
+done_when: "uv run pytest \"tests/unit/test_gate_line.py::test_the_gate_steps_comment_cites_the_rule_it_applies\" -q"
 opened: 2026-08-07
 ---
 
@@ -39,3 +40,21 @@ Not urgent, and deliberately not folded into the commit that placed
 `actionlint`: a decision does not ride along inside an implementation, which is
 the reason this is a separate item rather than a fifth ADR written by the
 session that had the argument fresh.
+
+## Criterion, written at review 2026-08-07
+
+The named test asserts that the gate step's comment in `ci.yml` cites a file
+under `docs/adr/` that exists, and it is the checkable half of "settled in one
+home": a rule that binds is a rule the place applying it can point at. Today
+that comment cites two findings and no ADR — `grep 'adr/\|findings/'` over
+`ci.yml` returns only the two `findings/` lines — so the test fails on the
+item's own subject rather than on an accident of naming. It is deliberately
+silent about how many ADRs there are and where they sit on the shelf, because
+that is the part the item says to decide rather than assume; one ADR cited from
+the comment satisfies it, and so do two if the run rules that way.
+
+The red pasted at review is the selector's, `exit 4 / ERROR: not found`, since
+the test does not exist yet. That red cannot turn green vacuously the way a
+`-k` expression matching nothing can — pytest refuses an unknown node id
+instead of reporting a pass over zero tests — but it is red for the test's
+absence, and the substantive red is the `grep` above.

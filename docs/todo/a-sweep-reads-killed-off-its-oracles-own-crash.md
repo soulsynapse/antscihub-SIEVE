@@ -1,7 +1,7 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k 'a_red_baseline_is_refused_rather_than_swept'"
 opened: 2026-08-08
@@ -32,3 +32,24 @@ was already red" sends the reader back to run it by hand, and `run_sweep`
 currently discards `stdout` and `stderr` entirely.
 
 One extra invocation per sweep, not per mutant.
+
+## The baseline is also the clock (folded 2026-08-08)
+
+Two sweeps against `gui/expander.py` stalled the loop the same way on
+2026-08-08: the oracle was `uv run pytest -q tests/gui
+tests/bench/test_gui_loop_budget.py` for five mutants, which outlives the
+harness's foreground command window, so the sweep was backgrounded, then killed
+when the run's turn ended — with the current mutant still patched into the
+source. A killed sweep never reaches its `finally`, so the failure leaves the
+tree mutated and uncommitted, and the next run inherits it.
+
+The baseline this item already asks for is the instrument that prevents this:
+run it under the oracle budget as a hard timeout, and refuse — rather than
+sweep — when it does not finish green inside it, with an explicit flag for a
+deliberately broad run. A refused broad oracle is also the stricter
+measurement: KILLED is any non-zero exit, so one red test suffices, and a
+mutant that only a distant test kills is a coverage gap the narrow oracle
+exposes and a broad one hides. The green baseline's elapsed time then bounds
+each mutant run, and a mutant that stops the command terminating counts as
+KILLED — it broke the program — which closes the third stall shape, the hung
+mutant, that the unbounded `subprocess.run` invited.

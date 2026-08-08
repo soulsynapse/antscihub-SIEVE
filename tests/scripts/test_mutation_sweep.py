@@ -1,4 +1,4 @@
-"""The sweep cannot lie the four recorded ways: bad anchors refuse, restores are byte-exact.
+"""The sweep cannot lie the recorded ways: bad anchors and red baselines refuse, restores are byte-exact.
 
 Each case pins one of the loop findings the module encodes. The test commands are
 `python -c` probes reading the subject file, so a kill and a survival are decided by
@@ -194,3 +194,73 @@ def test_a_refused_anchor_is_reported_rather_than_raised(
     argv = ["--file", "src/subject.py", "--mutant", "absent ==> x", "--", sys.executable, "-c", ""]
     assert main(argv, repo) == 1
     assert "not found" in capsys.readouterr().err
+
+
+def test_a_red_baseline_is_refused_rather_than_swept(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The fifth lie: a command red on the original bytes prints KILLED for every mutant.
+
+    The command here is red no matter what the file holds, which is the crash shape —
+    the sweep must refuse and show the command's own words, not report a clean kill.
+    """
+    subject_with(repo, b"limit = 100\n")
+    red = [
+        sys.executable,
+        "-c",
+        "import sys; print('E   ImportError: no such fixture'); sys.exit(4)",
+    ]
+    argv = ["--file", "src/subject.py", "--mutant", "limit = 100 ==> limit = 1", "--", *red]
+    assert main(argv, repo) == 1
+    captured = capsys.readouterr()
+    assert "KILLED" not in captured.out
+    assert "before any mutation" in captured.err
+    assert "no such fixture" in captured.err
+
+
+def test_an_oracle_over_budget_is_refused_as_too_broad(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The budget is a refusal with a remedy, not a report — no mutant verdict prints."""
+    subject_with(repo, b"limit = 100\n")
+    argv = [
+        "--file",
+        "src/subject.py",
+        "--mutant",
+        "limit = 100 ==> limit = 1",
+        "--oracle-budget",
+        "0.0001",
+        "--",
+        sys.executable,
+        "-c",
+        "",
+    ]
+    assert main(argv, repo) == 1
+    captured = capsys.readouterr()
+    assert "KILLED" not in captured.out
+    assert "--oracle-budget" in captured.err
+
+
+def test_a_hung_mutant_is_killed_and_the_subject_restores(repo: Path) -> None:
+    """A mutant that stops the command terminating broke the program, which is a kill.
+
+    Without the per-mutant timeout this case never returns — the hang is the shape
+    that stranded the loop's own sweeps, backgrounded and then killed at turn end
+    with the mutant still patched into the tree.
+    """
+    data = b"limit = 100\n"
+    subject = subject_with(repo, data)
+    code = (
+        f"import sys, time, pathlib; "
+        f"text = pathlib.Path({str(subject)!r}).read_text(); "
+        f"time.sleep(60) if 'limit = 100' not in text else sys.exit(0)"
+    )
+    results = run_sweep(
+        subject,
+        [Mutant(anchor="limit = 100", replacement="limit = 1")],
+        [sys.executable, "-c", code],
+        repo,
+        mutant_timeout=1.0,
+    )
+    assert [killed for _, killed in results] == [True]
+    assert subject.read_bytes() == data

@@ -2,7 +2,7 @@
 title: The template guard names its three subjects by hand, so a fourth template is uncovered the day it lands
 priority: normal
 phase: "00"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest \"tests/docs/test_doc_index.py::test_the_template_guard_covers_every_template\" -q"
 opened: 2026-08-07

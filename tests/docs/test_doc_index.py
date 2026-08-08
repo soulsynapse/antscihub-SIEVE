@@ -7,6 +7,7 @@ out of both lists silently.
 """
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import NamedTuple
@@ -969,7 +970,18 @@ def _parses(example: str) -> bool:
         return False
 
 
-TEMPLATES = (doc_index.TODO_DIR, doc_index.FINDINGS_DIR, doc_index.ADR_DIR)
+DOCS = doc_index.REPO / "docs"
+
+
+def _templates(docs: Path) -> list[Path]:
+    """Every folder under `docs` that hands an author a file to fill in.
+
+    Globbed rather than listed because the guards below reach exactly this far:
+    a folder that gains a template is otherwise outside them on the day it
+    lands, and the omission leaves no trace — the new template can state the
+    rule and show neither form, which is the state these guards exist to catch.
+    """
+    return sorted((path.parent for path in docs.glob("**/_TEMPLATE.md")), key=lambda f: f.name)
 
 
 class Shown(NamedTuple):
@@ -1011,7 +1023,17 @@ def test_the_templates_do_not_forbid_the_quoting_they_recommend():
     template that drops the qualifier forbids the remedy it offers in the same
     paragraph — in the file an author is reading while writing the field.
     """
-    assert [problem for folder in TEMPLATES for problem in _shown(folder).wrong] == []
+    assert [problem for folder in _templates(DOCS) for problem in _shown(folder).wrong] == []
+
+
+def _silent(docs: Path) -> list[str]:
+    """Which templates under `docs` fail to teach the rule by showing it."""
+    return [
+        f"{folder.name}: states it {shown.stated}x, {shown.legal} legal / {shown.illegal} illegal"
+        for folder in _templates(docs)
+        for shown in (_shown(folder),)
+        if (shown.stated, bool(shown.legal), bool(shown.illegal)) != (1, True, True)
+    ]
 
 
 def test_each_template_shows_both_forms():
@@ -1024,13 +1046,41 @@ def test_each_template_shows_both_forms():
     go silent under it, which is the state the tree was actually in. An author
     reads one of these files, not three.
     """
-    shown = {folder.name: _shown(folder) for folder in TEMPLATES}
+    assert _silent(DOCS) == []
 
-    assert {name: (s.stated, bool(s.legal), bool(s.illegal)) for name, s in shown.items()} == {
-        "todo": (1, True, True),
-        "findings": (1, True, True),
-        "adr": (1, True, True),
-    }
+
+#: States the rule once and shows neither form — the state the todo template
+#: was in, and the state a folder that gains a template arrives in.
+SILENT_TEMPLATE = """---
+title: A question nobody has settled
+status: open
+---
+
+# The question, restated
+
+A backtick or a quote opening an unquoted value is reserved, so quote the
+whole value.
+"""
+
+
+def test_the_template_guard_covers_every_template(tmp_path):
+    """The subject set is the tree's, so a fourth template arrives covered.
+
+    Asserted by building a docs tree the guard has never been told about: the
+    three real templates, copied so their passing is what it is in the repo,
+    plus one more that states the rule and shows nothing. A guard over folders
+    someone listed reports nothing here, and the day such a folder is real
+    nothing goes red either.
+    """
+    docs = tmp_path / "docs"
+    for folder in _templates(DOCS):
+        copied = docs / folder.name
+        copied.mkdir(parents=True)
+        shutil.copyfile(folder / "_TEMPLATE.md", copied / "_TEMPLATE.md")
+    (docs / "questions").mkdir()
+    (docs / "questions" / "_TEMPLATE.md").write_text(SILENT_TEMPLATE, encoding="utf-8")
+
+    assert _silent(docs) == ["questions: states it 1x, 0 legal / 0 illegal"]
 
 
 def test_the_checked_in_indexes_are_current():

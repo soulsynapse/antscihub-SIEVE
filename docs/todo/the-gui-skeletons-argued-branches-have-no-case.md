@@ -2,9 +2,9 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/canvas.py --mutant \"scale = min(self.width() / image.width(), self.height() / image.height(), 1.0) ==> scale = min(self.width() / image.width(), self.height() / image.height())\" --mutant \"scaled = np.zeros_like(array) if spread <= 0.0 else (array - low) / spread ==> scaled = (array - low) / spread\" -- uv run pytest -q tests/gui"
+done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/timeline/geometry.py --mutant \"MIN_BAND_PIXELS = 2.0 ==> MIN_BAND_PIXELS = 0.0\" --mutant \"index = int(x / self.width * self.frame_count) ==> index = int(x / (self.width - 1) * self.frame_count)\" -- uv run pytest -q tests/gui"
 opened: 2026-08-08
 ---
 
@@ -336,3 +336,51 @@ complaint. Beyond the two in the criterion, six mutants across five files are
 still unheld — `graph_panel`'s negative floor, `geometry`'s two,
 `window.moved_to`'s clamp, `app.py`'s `source_fed_nodes` clause and
 `param_form`'s combo signal — and the item is `open` until the last is spent.
+
+## The canvas is held, and the criterion rotates a fourth time (2026-08-08)
+
+`fa1a86d` answered the canvas section with `tests/gui/test_canvas.py`, the
+module's first file of its own, and touched nothing else in `src/`. Re-run
+independently: both of that criterion's mutants die, and the same sweep against
+each case alone — `-k own_size`, `-k spread` — is 1 killed / 1 survived apiece,
+the killed one being the other's survivor, so the two are attributable and not a
+lucky aggregate. The same sweep with `--deselect tests/gui/test_canvas.py` is
+0 killed / 2 survived, so the red is this commit's own rather than the previous
+review's word for it. `tests/gui` is 108 passed.
+
+The guard's case asserts the absence of the division rather than the colour, and
+that is the right call rather than a shortcut: measured in
+`findings/2026.08.08-the-constant-frame-guard-is-output-equivalent-to-the-division-it-refuses.md`,
+and re-derived here. It is the counterpart to the failure
+`findings/loop/2026.08.08-an-equivalent-mutant-is-a-claim-about-every-reachable-state.md`
+records — a run that finds two expressions agreeing on every reachable input and
+goes looking for the oracle that separates them, instead of reporting the
+survivor as equivalent. The 07.12 section's description of this mutant as the
+ordinary missing-fixture shape is corrected by that finding, not withdrawn: the
+fixture the section asked for would have gone green under the mutant.
+
+**One residue, and it is prose in `canvas.py` rather than a mutant.** The comment
+over the guard argues two things — "dividing by the spread would be a division by
+zero, and either extreme of the ramp would be a brightness the frame did not
+earn" — and the second is false of the code as written, in a way the run's own
+finding states and its commit did not act on. `np.zeros_like` *is* the low
+extreme of the ramp; so is what `nan_to_num` gives the mutant. The clause names a
+consequence the branch does not avoid and in fact produces. The correction is one
+sentence, deleting the second clause or replacing it with what the branch
+actually buys (no invalid floating-point operation, which is what the new case
+asserts). Recorded as a third occurrence in
+`findings/loop/2026.08.08-the-proof-of-red-corrects-the-item-and-leaves-the-comment-it-was-written-from.md`;
+it is folded here rather than minted because it is one line in a module this item
+already owns four sections about.
+
+**Fifth of at least six, and it is `gui/timeline/geometry.py`.** The criterion now
+names the two the 07.6 section left on that module — `MIN_BAND_PIXELS`'s floor
+and `frame_at`'s denominator, the off-by-one its docstring spends four lines
+refusing — verified red at 0 killed / 2 survived under `uv run pytest -q
+tests/gui`. Both survive for one fixture reason, `STRIP_WIDTH == SOURCE_FRAMES`,
+so one file's fixtures answer both. The oracle stays the whole `tests/gui`
+directory: `test_timeline.py` holds the module and a second file may not be what
+the fixtures want. Four mutants across four files are still unheld after this
+one — `graph_panel`'s negative floor, `window.moved_to`'s clamp, `app.py`'s
+`source_fed_nodes` clause and `param_form`'s combo signal — plus the comment
+above, and the item is `open` until the last is spent.

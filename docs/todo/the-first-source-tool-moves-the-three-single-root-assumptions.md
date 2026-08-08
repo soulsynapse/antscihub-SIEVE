@@ -4,7 +4,7 @@ status: open
 gated_on: nothing
 priority: normal
 phase: "03"
-done_when: 'uv run pytest tests/unit/test_source_tool.py -k "two_roots_order_and_execute or swapping_the_picked_file_moves_only_its_own_key or a_pattern_matching_several_files_is_refused" -q'
+done_when: 'uv run pytest tests/unit/test_source_tool.py -k "two_roots_order_and_execute or swapping_the_picked_file_moves_only_its_own_key or a_pattern_matching_several_files_is_refused or the_picker_emits_a_concrete_stream_type" -q'
 opened: 2026-08-07
 ---
 
@@ -72,9 +72,12 @@ scene description into a dtype. That meaning goes through the products: an
 `Emission` is something a user picks and saves, and `selected_by` names the
 parameter that picks it.
 
-This claim is not covered by `done_when` above, which names the three root
-sites. Extending the criterion to name a case over the picker's declared stream
-type is the reviewer's edit, not the working session's.
+`done_when` above carries a fourth case for this,
+`the_picker_emits_a_concrete_stream_type`, added by review after the working
+session declined to edit its own criterion. It has to assert both tuples
+non-empty: `emits.dtypes` and `emits.channels`. Asserting one leaves the other
+a wildcard, and one unstated tuple is enough for `admits` to pass against every
+`accepts` on the shelf, which is the whole failure this section refuses.
 
 ### Open: which axis carries a meaning like "generated background"
 

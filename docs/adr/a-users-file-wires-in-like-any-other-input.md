@@ -62,12 +62,29 @@ Deciding whether a record still backs a box is real work and none of it is lost 
 the four states are facts about records
 ([crop_binding](../todo/a-written-crop-serves-the-run-that-would-have-cut-it.md)),
 and a stale record must still fail toward the parent. What changes is what that
-work produces: an edge to offer, rather than a run already routed. Nor does this
-move Phase 5's gate, and it is the gate that makes the collapse safe to attempt —
-under the child-source model a run against a written artifact already roots off
-that file's own identity with no region in the key, so the keys a source tool
-produces are the keys the bespoke path produces, and "every cache key unmoved"
-([PLAN.md](../PLAN.md)) is the assertion that catches it if that is wrong.
+work produces: an edge to offer, rather than a run already routed.
+
+**The two halves pay differently in keys, and only one of them pays nothing.**
+The crop half is free by construction rather than by assertion: `dag.node_keys`
+folds `source_key(<the file>, decode_format)` into every root and schema v1 puts
+no region in it, so a run rooted on the written crop folds exactly the string a
+source tool over that file folds. That holds only if the crop node is *dropped*
+— a node neutralised at `WHOLE_FRAME` still stands between the source key and
+everything under it and moves every one of those keys. This decision takes the
+dropped reading, which is what collides with
+[05.10](../todo/a-served-run-elides-the-node-its-file-already-holds.md).
+
+The checkpoint half is the opposite, and "every cache key unmoved"
+([PLAN.md](../PLAN.md)) is not the check for it. That gate runs one project
+twice with its checkpoint list changed — Phase 2's "none of them may reach a
+cache key" restated — so it never derives a key both ways and cannot compare a
+bespoke route against a wired one. And a read-back that is a document edit moves
+the key of everything below the checkpointed node, off that node's key and onto
+the written file's identity. Not a wrong answer: the file holds what the node
+computed, and the cost is recomputing downstream entries once. But it is the
+price of the collapse, it is charged only here, and when a reader lands the
+gate's *rerun reading written artifacts* will be a rerun of a mutated project,
+so the gate needs re-stating. That re-statement is the migration's work.
 
 **What forced it is a case with nothing to hang on.** A folder of pre-cropped
 videos has no crop node: no region for `resolve` to be handed, no record for it to

@@ -37,6 +37,25 @@ price of keeping the graph uniform, or whether the node should be dropped from
 both be in the tree, because the second changes `plan.keys` and the first
 does not.
 
+**Read [adr/a-users-file-wires-in-like-any-other-input.md](../adr/a-users-file-wires-in-like-any-other-input.md)
+before answering that.** It was amended after this item was written and it takes
+the dropped reading, on a wider argument than this item's: a written crop is a
+source tool wired to the crop node's consumers, so there is no node in the
+executed graph to neutralise or to drop, and the substitution is a document edit
+rather than a plan-time route. It leans on the drop, too — the keys coincide with
+a source tool's only when nothing stands between the source key and what reads
+it. So `WHOLE_FRAME` is no longer open here; settling it that way would put the
+tree at odds with a settled ADR.
+
+What is left for this item is the join it is actually for — derive the region per
+replicate, resolve, run — with the elision spelt as dropping the node.
+[crop-serving-and-checkpoint-read-back-become-source-tools.md](crop-serving-and-checkpoint-read-back-become-source-tools.md)
+is the migration to the wired form and is deferred behind the first source tool.
+**The two must not both land.** This one is reachable now and that one is not, so
+this lands first and is unwound by it; anything built here that assumes a
+plan-time route is work with a known expiry, and `resolve_source.py`'s module
+docstring — which still says the caller elides a node — expires with it.
+
 The caller is the right home for it and that is not a dodge: `resolve` is handed
 a region the caller derived from the graph, so the caller already holds the node
 id that region came off. What is missing is that no caller derives either yet —

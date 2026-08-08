@@ -37,11 +37,23 @@ What must hold after, and is what the criterion is for: a run served by a
 written crop executes a graph whose root is a source tool over that file and
 which holds no crop node at all, and a folder of pre-cropped videos wires in
 with no `CropRecord` anywhere — same mechanism, no crop node to hang one on,
-which is the case that forced the ADR. Cache keys are the guard on both: the
-child-source model already roots a served run off the artifact's own identity
-with no region in the key, so Phase 5's second gate should pass unchanged across
-this migration, and it failing is the signal that the two routes were not
-producing the same keys after all.
+which is the case that forced the ADR.
+
+Cache keys are not one guard over both halves, and the ADR now says which is
+which. The crop half moves no key *provided the crop node is dropped rather than
+neutralised*: `dag.node_keys` folds `source_key(<file>, decode_format)` into
+every root and schema v1 puts no region in it, so a root reading the written crop
+already folds the string a source tool over that file folds — but a node left in
+at `WHOLE_FRAME` stands between them and moves everything below. Assert that
+equality directly, over the two key dicts; Phase 5's second gate does not cover
+it, because it runs one project twice with only its checkpoint list changed and
+never derives a key both ways.
+
+The checkpoint half does move keys, off the checkpointed node's key and onto the
+written file's identity, and that is owed here rather than discovered later: this
+item re-states Phase 5's second gate in `PLAN.md` so it says what a read-back
+that is a document edit can actually satisfy. Re-stating a gate is a change to
+the plan, so it is proposed to Kendrick and not written past him.
 
 Where the clause work goes is open and is this item's call.
 `crop_binding.py`'s four states are facts about records and stay facts, but a

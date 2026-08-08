@@ -1,7 +1,7 @@
 ---
 title: A served run elides the node its file already holds
 step: "08.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_cli_run.py -q -k elide && uv run pytest tests/integration/test_cli_run.py -q -k window && uv run pytest tests/integration/test_crop_serving.py tests/integration/test_cli_run.py -q"
 opened: 2026-08-07
@@ -74,6 +74,17 @@ also calls — into the migration. Or keep this step and accept building a
 plan-time route with a known expiry, in which case say so here rather than on
 the premise above. What must not happen is a session taking this step on the
 sentence as it stood.
+
+**2026-08-08: the fork above never fired, because what it says about the queue
+is not what the queue does.**
+[the-first-source-tool-moves-the-three-single-root-assumptions.md](the-first-source-tool-moves-the-three-single-root-assumptions.md)
+carries `phase: 8` and no step, so it sorts into phase 8's pool — *after* every
+stepped item in the phase, this one included — and `--next` selected this item
+ahead of it, which is the check rather than the argument. The paragraph two
+above therefore holds as written: this one is reachable and the migration is
+not. Taken on the second way out, so this says so here — a plan-time route with
+a known expiry, spelt as such in `cli/run_cmd.py`'s docstring and
+`resolve_source.py`'s.
 
 The caller is the right home for it and that is not a dodge: `resolve` is handed
 a region the caller derived from the graph, so the caller already holds the node

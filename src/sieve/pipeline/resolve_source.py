@@ -1,11 +1,13 @@
 """Which file a run opens, and in whose frame numbering.
 
 One step, called by every front end, answering one question: for *this* region
-over *this* span, is there a written crop that can serve it, or does the run read
-the parent and cut the region itself? `sieve run`, a preview session, and a GUI
-render worker call this and nothing else — a second place deciding it would be
-the "two answers to what a project computes" failure `executor.py` opens by
-naming, arriving one layer higher up.
+over *this* window, is there a written crop that can serve it, or does the run
+read the parent and cut the region itself? `sieve run`, a preview session, and a
+GUI render worker call this and nothing else — a second place deciding it would
+be the "two answers to what a project computes" failure `executor.py` opens by
+naming, arriving one layer higher up. The window rather than the span, because
+the frames a graph reads around the ones it answers for come out of whichever
+file this returns; `resolve`'s `want` is where that is argued.
 
 **Nothing below this module learns that artifacts exist.** `cache_key.py`,
 `plan.py` and `executor.py` are untouched by this file, which is the whole
@@ -16,12 +18,20 @@ video a user opened. v2 needed a `pre_cropped` flag on the plan and a region for
 that flag to suppress; schema v1 has neither to carry (`CropRecord`,
 `adr/detector-is-a-node.md`).
 
-What the caller keeps is the other half of that trade, and it is stated here
-because nothing else states it: the file already holds the crop node's output,
-so a run served by one must not run that node again. `resolve` is handed a region
-the caller derived from the graph, so the caller is the one holding the node id
-that region came off, and eliding it is its call rather than this module's. The
-item is `todo/a-served-run-elides-the-node-its-file-already-holds.md`.
+What the caller keeps is the other half of that trade: the file already holds
+the crop node's output, so a run served by one must not run that node again.
+`crop_bound` and `elided` below are the two halves of that spelt out — which
+node a record could stand for, and the graph without it — but the decision to
+take them is the caller's, because only a caller knows what else it has promised
+that node's output to. `cli/run_cmd.py` is the one that takes it today.
+
+**A plan-time route with a known expiry.**
+`adr/a-users-file-wires-in-like-any-other-input.md` settles that the substitution
+is a document edit — the written crop is a source tool wired to the crop node's
+consumers, and there is then no node in the executed graph to drop. Everything in
+this module that routes rather than reports is unwound by that migration
+(`todo/crop-serving-and-checkpoint-read-back-become-source-tools.md`), which is
+deferred behind the first source tool.
 
 **Presence is consulted once per render, never per frame.** `resolve` is called
 where a run is *planned*; the result is fixed for the whole run. Asking per frame
@@ -49,16 +59,19 @@ request entirely.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from sieve.core.pipeline_model import CropRecord, SourceSpan
+from sieve.core.pipeline_model import CropRecord, Pipeline, SourceSpan
+from sieve.core.tool_base import ParamsBase
 from sieve.core.types import ROI, Frame, FrameIndex
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
+from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import FrameSource
 from sieve.pipeline.source_home import SourceHome
+from sieve.tools.crop import CropParams
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +207,64 @@ def resolve(
             record=record,
         )
     return _parent(home)
+
+
+def crop_bound(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[str, ROI] | None:
+    """Which node a record could stand for, and the box it would have to hold.
+
+    The argument `resolve` does not derive for itself, because the graph is the
+    caller's. Recognised by the resolved params type rather than by a tool id:
+    the box is `CropParams.region`, `materialize_crop` cut it with that same
+    tool, so the type *is* the claim that a file can stand where this node
+    stands, and `pipeline` stays out of the business of knowing tools by name.
+
+    A root, because a record is cut from the parent footage and a crop of some
+    other node's output is a crop of something no file on disk holds. One or
+    nothing: two of them are two boxes, and choosing between them is what
+    `todo/the-materialize-command-derives-what-v2-was-handed.md` is open on, so
+    until that is settled the answer is the fallback every clause in this module
+    takes.
+
+    Args:
+        dag: The graph about to run.
+        params: Resolved parameters per node id — `ExecutionPlan.params`, so the
+            box is the one the replicate being processed actually resolved to
+            and nothing re-derives an override.
+
+    Returns:
+        `(node_id, region)`, or `None` when the graph offers no single box.
+        `None` is what `resolve` reads as "run the parent".
+    """
+    bound: tuple[str, ROI] | None = None
+    for node in dag.order:
+        resolved = params[node.node_id]
+        if not isinstance(resolved, CropParams) or dag.upstreams[node.node_id]:
+            continue
+        if bound is not None:
+            return None
+        bound = (node.node_id, resolved.region)
+    return bound
+
+
+def elided(pipeline: Pipeline, node_id: str) -> Pipeline:
+    """`pipeline` without `node_id`, its consumers left reading the source.
+
+    Dropped rather than neutralised at `crop.WHOLE_FRAME`. The identity crop
+    would compute the same pixels, but a node still standing between the source
+    key and everything below it moves every one of those keys, and
+    `adr/a-users-file-wires-in-like-any-other-input.md` settles that a served
+    run's keys are the keys a source tool over that file would fold.
+
+    Not a general graph edit and not on `Pipeline` for that reason: it is legal
+    only for a root whose output is already on disk, which is `crop_bound`'s
+    answer and nothing else.
+    """
+    return Pipeline(
+        nodes=tuple(node for node in pipeline.nodes if node.node_id != node_id),
+        edges=tuple(
+            edge for edge in pipeline.edges if node_id not in (edge.upstream, edge.downstream)
+        ),
+    )
 
 
 def _parent(home: SourceHome) -> ResolvedSource:

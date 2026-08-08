@@ -55,6 +55,17 @@ item re-states Phase 5's second gate in `PLAN.md` so it says what a read-back
 that is a document edit can actually satisfy. Re-stating a gate is a change to
 the plan, so it is proposed to Kendrick and not written past him.
 
+**Only one front end serves a crop, and this is what makes that stop mattering.**
+08.2 landed the plan-time route in `cli/run_cmd.py` and nowhere else, so a
+preview session and a GUI render worker still decode the parent and re-cut a box
+that is already on disk — which `resolve_source.py`'s opening paragraph has
+claimed all three call, since before any of them did. Under the wired form there
+is no call to add: the substitution is a mutation the project holds, so a front
+end that reads the document is served without knowing artifacts exist. Unwinding
+`_route` and its two-pass shape is this item's work either way; what the gap
+says is that the alternative — teaching two more front ends the same plan-time
+route — is work with the same known expiry and should not be done.
+
 Where the clause work goes is open and is this item's call.
 `crop_binding.py`'s four states are facts about records and stay facts, but a
 state that used to mean "this run will be served" now means "this edit is

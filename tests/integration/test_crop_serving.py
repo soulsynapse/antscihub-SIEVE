@@ -51,7 +51,7 @@ from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
 from sieve.pipeline.materialize import materialize_crop
 from sieve.pipeline.plan import ExecutionPlan
-from sieve.pipeline.resolve_source import ResolvedSource, resolve
+from sieve.pipeline.resolve_source import ResolvedSource, crop_bound, resolve
 from sieve.pipeline.source_home import SourceHome
 from sieve.tools import discover
 from tests.conftest import FIXTURE_FPS
@@ -108,6 +108,25 @@ WINDOWED_GRAPH = Pipeline(
 #: record failing to cover an end failed on its own span and not on the clamp.
 WINDOWED_SPAN = SourceSpan(start=16, end=20)
 
+#: Two boxes at the root and nothing in the document to choose between them.
+TWO_CUTS = Pipeline(
+    nodes=(
+        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
+        Node(node_id=DOWN, tool_id="downsample", version="1.0.0", params={"factor": 2}),
+        Node(node_id="other", tool_id="crop", version="1.0.0"),
+    ),
+    edges=(Edge(upstream=CUT, downstream=DOWN),),
+)
+
+#: A crop of another node's output rather than of the footage.
+CUT_BELOW = Pipeline(
+    nodes=(
+        Node(node_id=DOWN, tool_id="downsample", version="1.0.0", params={"factor": 2}),
+        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
+    ),
+    edges=(Edge(upstream=DOWN, downstream=CUT),),
+)
+
 
 def _replicate(region: ROI = ARENA) -> Replicate:
     pinned = {"x": region.x, "y": region.y, "width": region.width, "height": region.height}
@@ -160,6 +179,18 @@ def _window(pipeline: Pipeline, span: SourceSpan, replicate: Replicate | None = 
     return SourceSpan(start=int(reach.start), end=int(reach.stop))
 
 
+def _bound(pipeline: Pipeline, replicate: Replicate | None = None) -> tuple[str, ROI] | None:
+    """What `crop_bound` answers for `pipeline`, as a front end would ask.
+
+    Through a plan rather than off the document, because that is the only place
+    a replicate's deviation has been resolved into a value.
+    """
+    discover()
+    dag = Dag.build(pipeline)
+    plan = ExecutionPlan.build(dag, source="", span=SPAN, replicate=replicate)
+    return crop_bound(dag, plan.params)
+
+
 def _materialize(
     project: Project, directory: Path, region: ROI = ARENA, span: SourceSpan = SPAN
 ) -> Project:
@@ -201,6 +232,48 @@ def _outputs(
     with VideoReader(resolved.path, luma=plan.luma) as reader:
         frames = [np.array(result[DOWN].data) for result in execute(plan, resolved.wrap(reader))]
     return frames, resolved
+
+
+class TestWhichNodeARecordCouldStandFor:
+    """The argument `resolve` will not derive for itself.
+
+    Two graphs a served run must not elide from, beside the one it must, and the
+    three are one case. Alone, either refusal passes against a derivation that
+    answered `None` to everything, and the answer alone passes against one that
+    took the first crop it saw at any depth.
+    """
+
+    def test_the_single_root_crop_answers_with_the_replicates_resolved_box(self) -> None:
+        """The box is the replicate's, and the node's default is not a box.
+
+        `GRAPH` holds `crop.WHOLE_FRAME` at `CUT` and the deviation is where
+        geometry lives under schema v1, so a derivation reading the document
+        would hand `resolve` the identity crop, match no record ever written,
+        and fall back to the parent on every project that has one.
+        """
+        assert _bound(GRAPH, _replicate()) == (CUT, ARENA)
+
+    def test_a_second_crop_at_the_root_leaves_no_box_to_serve(self) -> None:
+        """Two boxes are two answers, and a caller eliding either is guessing.
+
+        Which one a record is a record *of* is
+        `todo/the-materialize-command-derives-what-v2-was-handed.md`'s to
+        settle. Until it is, the fallback is the parent — and the failure this
+        refuses is silent: the wrong node dropped is a run whose frames were
+        never cut to the box its keys claim.
+        """
+        assert _bound(TWO_CUTS) is None
+
+    def test_a_crop_of_another_nodes_output_is_not_one_a_file_could_hold(self) -> None:
+        """A record is cut from the footage, so only a root can be stood in for.
+
+        Both nodes here resolve to the same `WHOLE_FRAME` a single-root graph
+        would, so nothing about the box distinguishes this case — only the edge
+        above it does. A derivation ignoring that would match a record on
+        geometry alone and serve a downsampled stream's crop out of a file cut
+        from the parent.
+        """
+        assert _bound(CUT_BELOW) is None
 
 
 class TestTheArtifactIsWhatGetsDecoded:

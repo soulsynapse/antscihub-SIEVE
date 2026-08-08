@@ -2,7 +2,7 @@
 title: A generated control commits on intent, and a value passed through is not one
 priority: normal
 phase: "7"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_param_generator.py -q -k 'a_wheel_over_a_control_does_not_edit_the_document or arrowing_a_closed_choice_commits_once'"
 opened: 2026-08-08
@@ -81,3 +81,13 @@ All three cases are answered in `gui/param_form.py` and the two above are the
 measures `activated ==> currentIndexChanged` surviving still, now because a
 closed combo has no arrow behaviour left for the two signals to disagree about.
 The other four rules die under the sweep.
+
+## The equivalence the section above rests on is overturned (2026-08-08, review)
+
+The finding cited above is superseded by
+`findings/2026.08.08-the-combos-two-signals-disagree-on-reselecting-the-shown-choice.md`:
+the two signals still disagree when a user picks the entry the combo is already
+showing, so the swap is an unexercised mutant and `activated` — the side that
+ships — is the one that commits a no-op edit. The three cases this item asked
+for all landed and are held; what is not owed by this item is carried by
+`the-gui-skeletons-argued-branches-have-no-case.md`.

@@ -193,3 +193,29 @@ of the two is held and the other is not. Under
 in it — are the guard-with-no-case shape rather than a missing fixture: the only
 producer of a non-picture on this graph is `detect`, and `frame_bearing` climbs
 past it before `image_of` is ever asked.
+
+## The combo's signal is the wrong one, from the commit-on-intent review (2026-08-08)
+
+`gui/param_form.py` gained three commit rules and three cases, and four of the
+five mutants the worker swept die. The fifth,
+`combo.activated.connect ==> combo.currentIndexChanged.connect`, was reported as
+an equivalent mutant and is not: opening the popup and selecting the entry the
+combo already shows emits `activated` and not `currentIndexChanged`, so it is
+the ordinary missing-fixture shape — and the surviving side is the wrong one.
+`ParamForm._edit` issues a `SetParam` unconditionally and `Session.commit`
+appends unconditionally, so that one click costs a re-plan, a render and an undo
+entry for a value nobody changed, which is the exact thing `_enum`'s docstring
+argues the signal was chosen to prevent. Measured in
+`findings/2026.08.08-the-combos-two-signals-disagree-on-reselecting-the-shown-choice.md`;
+the fixture is a popup Return on the current entry, and the fix is a choice
+between the narrow signal swap and a no-op guard that would also cover a spin
+box arrowed back to where it started.
+
+Two smaller ones on the same module, neither swept. `_CommittedSpin.wheelEvent`
+ignores the event so that the enclosing `QScrollArea` scrolls instead — the
+justification for dropping v2's `_scrollable_ancestor` walk, and true of
+`step_pane.py` today — but no case reads the scroll area's position, so
+"declined" and "declined and handed on" are the same green. And
+`_keep_focus_off_the_wheel` rewrites only the exact `WheelFocus` default; the
+branch where a control already carries some other policy is never taken,
+because nothing in the generator sets one.

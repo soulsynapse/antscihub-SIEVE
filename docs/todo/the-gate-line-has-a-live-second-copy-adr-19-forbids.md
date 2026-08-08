@@ -1,7 +1,7 @@
 ---
 title: The gate line has a live second copy, and ADR 19 names it without ruling on it
 priority: normal
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest \"tests/unit/test_gate_line.py::test_no_restatement_of_the_gate_line_drifts_from_it\" -q"
 phase: "00"
@@ -71,3 +71,43 @@ does not exist. The substantive red is that nothing in the tree reads an item's
 `test_doc_index.py`'s fixtures, which write the field into a temporary item and
 never read this repo's. So the two lines agree today by the arrangement the
 item names and by nothing else.
+
+## Worker note, 2026-08-07
+
+Struck. 00.3's `done_when` is now
+`uv run pytest tests/unit/test_gate_line.py -q && uv run actionlint`: the check
+that reads the gate line off `ci.yml`, and the one command whose subject is the
+workflow's own validity, which is the part of the old line the item's content
+turned on. Its opening paragraph no longer enumerates anything, which is where
+the third drift was.
+
+Striking rather than pinning, because pinning is the reading ADR 19 refuses one
+paragraph later for a `paths:` entry: two enumerations and a mechanism to keep
+them in step is worse than one enumeration, and the mechanism only ever tells
+you the second copy is wrong. Nothing was lost that a person runs — a
+contributor pushing reads `ci.yml`, which ADR 19 already says is the one place
+to read.
+
+The walk is `test_no_restatement_of_the_gate_line_drifts_from_it`, and what it
+calls a restatement is a `done_when` whose commands are a prefix of the gate
+line's or a superset with the line as its prefix. The prefix half is the one
+that carries weight: both recorded drifts were the line minus its newest command, so a
+rule that only caught an equal-length copy would be blind to the shape the
+failure actually takes. Checked by simulation before striking — restoring the
+four-command copy of `ae6e499` turns the walk red and names both lines. Two
+neighbours stay out and should: `the-gate-has-no-opinion-about-the-workflow.md`
+is checked by three gate commands that were never the line (they skip
+`ruff format --check`), and `mutual-comes-over-with-its-layer.md` by two in the
+wrong order. Neither is a copy of anything; sharing commands with the gate is
+what most criteria in the folder do.
+
+Grandfathering was not taken, and the criterion's argument for foreclosing it
+holds up: something did require this copy to stay identical — 00.3's own
+sentence that the two lines are character-identical — and two reviewers acted
+on that requirement. Striking removes the requirement instead of exempting it,
+so ADR 19's clause is left saying exactly what it said.
+
+ADR 19 gains two sentences rather than an amendment: its account of the copy
+moves to the past tense, because the copy is gone and a settled ADR that
+describes the tree as it no longer is decays into the thing it was written
+against. The clause itself is untouched.

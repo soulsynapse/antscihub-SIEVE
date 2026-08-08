@@ -3,18 +3,17 @@ title: CI runs what a commit must pass
 step: "00.3"
 status: done
 gated_on: nothing
-done_when: "uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run pytest -q && uv run actionlint"
+done_when: "uv run pytest tests/unit/test_gate_line.py -q && uv run actionlint"
 opened: 2026-08-06
 ---
 
 # CI runs what a commit must pass
 
-A GitHub Actions workflow running exactly the `done_when` line — the linter,
-the formatter, import-linter, pytest — so the local gate and CI are one
-command. The rule that argued for is settled at
-[ADR 19](../adr/the-gate-is-one-line.md), which also names this item's
-`done_when` as the second copy that drifted.
-v2's `.github/workflows/ci.yml` is the
+A GitHub Actions workflow whose gate step is the checks a commit must pass, so
+the line a contributor runs before pushing and the line CI runs are the same
+characters. The rule that argued for is settled at
+[ADR 19](../adr/the-gate-is-one-line.md), and this item's `done_when` was the
+second copy that produced its evidence. v2's `.github/workflows/ci.yml` is the
 reference for runner setup; its nox indirection does not port.
 
 ## Worker note, 2026-08-06
@@ -95,3 +94,20 @@ agree only because a reviewer noticed. The check that would close that is
 `what-earns-a-place-on-the-gate-line.md`'s neighbour rather than its content,
 and it is not minted here — a third occurrence is the evidence that would
 justify it.
+
+## The copy is struck, 2026-08-07
+
+Amended from `the-gate-line-has-a-live-second-copy-adr-19-forbids.md`'s work
+run, which exists because ADR 19 named this `done_when` a live copy and did not
+say what became of it. `done_when` now names the check that reads the gate line
+off `ci.yml` — `tests/unit/test_gate_line.py`, which is where the claims about
+that step live — and
+`actionlint`, which is the one command that separates a valid workflow from a
+broken one and so is the part of the old line this item's content actually
+turned on. Nothing here enumerates the gate any more, which is what ADR 19 asks
+for and what the third drift, in the paragraph above the worker note, showed
+the enumeration costs even in prose.
+
+The two amendments above stand as the record of what the copy did. What they
+should not be read as is a standing requirement to bring this line back into
+step: there is no line here to bring.

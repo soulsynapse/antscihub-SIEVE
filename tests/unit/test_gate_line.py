@@ -1,6 +1,6 @@
-"""The gate's line holds the formatter and the workflow linter, and reaches the code only.
+"""The gate's line holds the formatter and the workflow linter, and it is written once.
 
-Five claims that were prose until this file, and each of the first four was
+Six claims that were prose until this file, and each of the first four was
 wrong as prose at some point. `ruff` sat in the dev group with no bound, so a lock refresh
 restyled files nobody edited; the gate ran `ruff check` and never `ruff format
 --check`, so the tree disagreed with its own formatter for two commits; and the
@@ -32,6 +32,14 @@ the same way.
 
 `docs/todo/ruff-format-drifts-because-ruff-is-unpinned.md` is the item behind
 all three.
+
+The sixth is the only one about a copy rather than the line. ADR 19 makes a
+copy forbidden exactly when something requires it to stay identical to the
+line, and the one copy that met that test was an item's `done_when`, repaired
+twice by a reviewer noticing rather than by anything red. That copy is struck
+(`docs/todo/the-gate-line-has-a-live-second-copy-adr-19-forbids.md`), so the
+walk passes over an empty set and the case beside it is what the walk would
+catch — a check written for the next copy, not this one.
 """
 
 from __future__ import annotations
@@ -53,6 +61,7 @@ import sieve
 REPO = Path(str(sieve.__file__)).resolve().parents[2]
 PYPROJECT = REPO / "pyproject.toml"
 WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
+TODO = REPO / "docs" / "todo"
 
 #: The step whose `run:` is the gate. There is no second copy of the line in a
 #: noxfile or a README, so this name is the only handle on it.
@@ -112,6 +121,33 @@ def _format_targets() -> list[str]:
         after = tokens[tokens.index("--check") + 1 :]
         return [token for token in after if not token.startswith("-")]
     raise AssertionError(f"no `ruff format --check` in the {GATE_STEP!r} line")
+
+
+def _front_matter(path: Path) -> dict:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---"):
+        return {}
+    return yaml.safe_load(text.split("---", 2)[1]) or {}
+
+
+def _restates_the_gate_line(criterion: str) -> bool:
+    """Whether a `done_when` stands in for the gate line rather than naming a check.
+
+    A stand-in is the line, the line with commands appended, or the line with
+    commands missing off its end. The last is the shape both recorded drifts
+    took — a command joined the line and not the copy — so a rule that only
+    caught an exact-length copy would be blind to the failure it exists for.
+
+    Sharing commands with the gate is not restating it. Most items are checked
+    by some arrangement of `pytest` and `lint-imports`, and nothing in their
+    content requires those to track the line.
+    """
+    gate = [command.strip() for command in _gate_line().split("&&")]
+    commands = [command.strip() for command in criterion.split("&&")]
+    if len(commands) < 2:
+        return False
+    shorter, longer = sorted((commands, gate), key=len)
+    return longer[: len(shorter)] == shorter
 
 
 def _ruff() -> Path:
@@ -208,3 +244,32 @@ def test_the_formatters_reach_into_docs_is_the_one_the_gate_declares(
         f"the gate's target formats the Python inside documents:\n{report}\n"
         f"a finding quoting broken code would turn a docs-only commit red in CI"
     )
+
+
+def test_no_restatement_of_the_gate_line_drifts_from_it() -> None:
+    drifted = {
+        path.name: criterion
+        for path in sorted(TODO.glob("*.md"))
+        if _restates_the_gate_line(criterion := str(_front_matter(path).get("done_when", "")))
+        and criterion != _gate_line()
+    }
+
+    assert not drifted, (
+        "these items' `done_when` stands in for the gate line and no longer matches it:\n"
+        + "\n".join(f"  {name}: {criterion}" for name, criterion in drifted.items())
+        + f"\n  {WORKFLOW.name}: {_gate_line()}\n"
+        f"a copy of the line falls behind it and the copy a person runs is the one that "
+        f"falls (adr/the-gate-is-one-line.md); an item whose criterion is the gate names a "
+        f"check that reads the line instead of holding a second copy of it"
+    )
+
+
+def test_a_copy_a_command_behind_the_gate_line_is_the_thing_that_walk_looks_for() -> None:
+    """What the walk above would catch, since today it passes over an empty set.
+
+    Both recorded drifts were the line minus its newest command. The second
+    case is the one that has to stay out: an item checked by two of the gate's
+    commands is not keeping a copy of the line.
+    """
+    assert _restates_the_gate_line(" && ".join(_gate_line().split("&&")[:-1]))
+    assert not _restates_the_gate_line("uv run pytest -q && uv run lint-imports")

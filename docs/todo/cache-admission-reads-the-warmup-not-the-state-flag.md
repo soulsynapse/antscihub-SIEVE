@@ -3,7 +3,7 @@ title: Cache admission reads the warmup, not the state flag
 step: "06.5"
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_cache_admission.py -q -k a_bounded_warmup_tool_served_from_the_store_equals_its_cold_run"
+done_when: "uv run pytest tests/unit/test_cache_admission.py -q -k an_entry_is_never_a_lead_in_frames_under_warmed_output"
 opened: 2026-08-07
 ---
 
@@ -67,3 +67,16 @@ cannot reach: two runs whose `span.start` *differ*, so the second decodes
 further back than the first and asks the store for a frame the first filed from
 its own lead-in. Both runs in the current gate share a `span.start`, which is
 why it agrees with itself here.
+
+## The criterion follows the reopening, 2026-08-08 (review)
+
+That section reopened the item and left `done_when` naming
+`a_bounded_warmup_tool_served_from_the_store_equals_its_cold_run`, which was
+already green when it was written and is green now — the section says so in
+prose ("the item is not done however green the criterion is"), but the prose
+half is not the half a worker runs. An item whose criterion passes before the
+work starts certifies work nobody did, so the criterion moves to the case the
+re-take is *for*: `an_entry_is_never_a_lead_in_frames_under_warmed_output`,
+the module docstring's own bullet, red today because no such case exists. The
+served-equals-cold gate stays where it is and keeps guarding what it guards;
+it is no longer the thing that says this item is finished.

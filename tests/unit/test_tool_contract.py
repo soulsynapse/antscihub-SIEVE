@@ -38,6 +38,7 @@ from sieve.core.tool_base import (
     node_element,
     node_element_names,
     node_lookahead_frames,
+    resolved_schema,
     source_warmup_frames,
 )
 from sieve.core.tool_registry import (
@@ -198,6 +199,45 @@ class ProductParams(ParamsBase):
 
     product: Product = Product.SOFT
     factor: int = 2
+
+
+class UnenumerableParams(ParamsBase):
+    """The three annotations an `ENUM` can be declared over, one of them wrongly.
+
+    A `StrEnum` writes its members into the schema and a `bool` is the pair the
+    generator's fallback is right about; a `str` is neither, and no tool on the
+    shelf declares one.
+    """
+
+    label: str = "left"
+    product: Product = Product.SOFT
+    anti_alias: bool = True
+
+
+class ForeignPointerParams(ParamsBase):
+    """A params model whose schema points somewhere `$defs` is not.
+
+    Pydantic writes no such pointer and cannot be made to write one property-
+    side: a `$ref` injected through `json_schema_extra` or
+    `__get_pydantic_json_schema__` is refused by pydantic's own generator, which
+    resolves every reference it emits before this module sees the document. The
+    `ref_template` is the one way through, and asking for another document is
+    what a caller rendering an OpenAPI-shaped schema does.
+
+    The template is `$defs`' own length with a different name, which is the
+    pointer the prefix check is *for*: a walk that took the offset on trust
+    would slice `ROI` out of it and resolve a definition this document never
+    claimed to hold. The realistic `#/components/schemas/{model}` degrades with
+    or without the check, because the tail it slices names no definition either
+    (`findings/2026.08.08-the-foreign-pointer-guard-is-load-bearing-only-at-its-own-length.md`).
+    """
+
+    region: ROI = ROI(x=0, y=0, width=1, height=1)
+
+    @classmethod
+    def model_json_schema(cls, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        kwargs["ref_template"] = "#/$DEFS/{model}"
+        return super().model_json_schema(*args, **kwargs)
 
 
 def make_spec(**overrides: object) -> ToolSpec:
@@ -1007,11 +1047,64 @@ class TestParamStereotypes:
                 },
             )
 
+    def test_an_enum_over_an_annotation_with_no_choices_is_refused(self) -> None:
+        # `ENUM` is the one kind whose control is built from the annotation's
+        # *values* rather than from its bounds, and `gui/param_form.py`'s builder
+        # falls back to `(True, False)` for a property that writes no `enum`
+        # keyword. So a `str` field wearing the kind gets a two-item true/false
+        # drop list holding neither of the values it can take — a degradation
+        # with no symptom, in a module whose whole argument is that a kind the
+        # generator cannot serve is loud.
+        #
+        # The two annotations the fallback is right about are accepted in the
+        # same breath, because refusing every `ENUM` would satisfy a rule
+        # written only as a refusal.
+        with pytest.raises(ValueError, match=r"'label'.*'enum'.*enumerates nothing"):
+            make_spec(
+                params_model=UnenumerableParams,
+                param_stereotypes={
+                    "label": ParamStereotype.ENUM,
+                    "product": ParamStereotype.ENUM,
+                    "anti_alias": ParamStereotype.ENUM,
+                },
+            )
+
+        enumerable = {
+            "label": ParamStereotype.SCALAR_RANGE,
+            "product": ParamStereotype.ENUM,
+            "anti_alias": ParamStereotype.ENUM,
+        }
+        spec = make_spec(params_model=UnenumerableParams, param_stereotypes=enumerable)
+
+        assert spec.param_stereotypes == enumerable
+
     def test_stereotypes_are_a_presentation_channel_declaration(self) -> None:
         # Beside `primary_params` and for its reason: never hashed, never read
         # by the executor, and the partition is the only thing that can see a
         # field carrying GUI policy in core.
         assert SPEC_CHANNELS["param_stereotypes"] is Channel.PRESENTATION
+
+
+class TestResolvedSchema:
+    """The pointer walk's degradation, which is not `sieve inspect`'s claim.
+
+    `tests/unit/test_inspect_cmd.py` holds what a reader sees printed, including
+    the union the walk declines to reduce. What is here is the branch no printed
+    line can reach: a pointer into something other than `$defs`, which the walk
+    argues it degrades over rather than raises on.
+    """
+
+    def test_a_pointer_pydantic_does_not_write_leaves_the_property_unresolved(self) -> None:
+        # Two claims, and the equality carries both. Degraded means the
+        # property's own keys and nothing else — no raise, since neither reader
+        # is a place to fail a tool over a schema keyword, and no definition
+        # either, since the one this pointer aligns with is a document it never
+        # named. The same `ROI` field resolves under pydantic's own template, so
+        # what is under test is the pointer and not the annotation.
+        described = resolved_schema(ForeignPointerParams)["properties"]["region"]
+
+        assert described == {"default": {"x": 0, "y": 0, "width": 1, "height": 1}}
+        assert resolved_schema(CompositeParams)["properties"]["region"]["type"] == "object"
 
 
 class TestGuidance:
@@ -1259,7 +1352,7 @@ PROBES: dict[str, Any] = {
     "caption": (CaptionPart(label="factor", param="factor"),),
     "param_value_labels": {"anti_alias": {"True": "averaged"}},
     "param_stereotypes": {
-        "factor": ParamStereotype.ENUM,
+        "factor": ParamStereotype.SCALAR_RANGE,
         "anti_alias": ParamStereotype.ENUM,
     },
     "element": ElementKind.BLOCK,

@@ -61,10 +61,17 @@ from sieve.pipeline.cache_key import (
 
 
 class BlurParams(ParamsBase):
-    """Two fields so a test can move one and leave the other inherited."""
+    """Two fields so a test can move one and leave the other inherited.
+
+    `separable` is neither of those two. It is here because a stereotype map is
+    checked against the annotations it stands over, and `enum` on a number is
+    refused — so a model of numbers alone admits exactly one legal map and the
+    presentation substitute below would have nothing to differ by.
+    """
 
     radius: int = 3
     sigma: float = 1.0
+    separable: bool = True
 
 
 class CropParams(ParamsBase):
@@ -86,6 +93,7 @@ def make_spec(**overrides: object) -> ToolSpec:
         "param_stereotypes": {
             "radius": ParamStereotype.SCALAR_RANGE,
             "sigma": ParamStereotype.SCALAR_RANGE,
+            "separable": ParamStereotype.SCALAR_RANGE,
         },
     }
     fields.update(overrides)
@@ -292,7 +300,8 @@ class TestIsolation:
             "param_value_labels": {"radius": {"3": "three pixels"}},
             "param_stereotypes": {
                 "radius": ParamStereotype.SCALAR_RANGE,
-                "sigma": ParamStereotype.ENUM,
+                "sigma": ParamStereotype.SCALAR_RANGE,
+                "separable": ParamStereotype.ENUM,
             },
             "primary_params": ("radius",),
             "summary": "Blurs, described differently.",

@@ -1322,9 +1322,26 @@ class ToolSpec:
                     f"{[member.value for member in ParamStereotype]}, and another kind is a "
                     "decision about what the GUI can generate rather than a field a tool fills in"
                 )
+            annotation = self.params_model.model_fields[name].annotation
+            if kind is ParamStereotype.ENUM:
+                # The one kind whose control is built from the annotation's
+                # values rather than from its bounds, so it is the one kind an
+                # annotation can fail to answer. `gui/param_form.py` falls back
+                # to `(True, False)` where the schema writes no `enum` keyword,
+                # which is right for a `bool` and silent for everything else:
+                # the drop list appears, holds two choices the parameter cannot
+                # take, and nothing downstream can tell that from a tool whose
+                # values really are the two.
+                if _closed_values(annotation) is None and annotation is not bool:
+                    raise ValueError(
+                        f"{self.tool_id}: param_stereotypes[{name!r}] is {kind.value!r} on "
+                        f"{annotation}, which enumerates nothing — a drop list is built from the "
+                        "values the annotation admits, so declare a StrEnum or a bool, or pick "
+                        "the kind that fits the value this field actually holds"
+                    )
+                continue
             if kind in _ONE_FIELD_STEREOTYPES:
                 continue
-            annotation = self.params_model.model_fields[name].annotation
             if _value_components(annotation) < 2:
                 raise ValueError(
                     f"{self.tool_id}: param_stereotypes[{name!r}] is {kind.value!r} on "

@@ -91,10 +91,27 @@ IDS = [f"{contract}-{source}-{forbidden}" for contract, source, forbidden in REF
 def test_the_walk_has_a_denominator() -> None:
     """An empty parametrization is a walk of nothing, which passes.
 
-    The failure this refuses is a renamed key under a contract silently
-    contributing no cases — the same shape `test_contract_lines_go_red.py`
-    counts its own cases against.
+    What the count refuses is a narrowed nesting inside `refusals()` — the two
+    loops walked in step rather than crossed — which drops cases while leaving
+    every contract contributing something. It cannot refuse a key renamed in
+    the config, because both sides of it read the same literal keys through
+    `modules`, so a key that stops parsing zeroes the walk and the count
+    together
+    (`findings/loop/2026.08.07-a-generator-that-drops-half-its-cases-is-green-because-the-reds-only-see-what-it-built.md`,
+    dated section). That is what the first leg is for, and it is spelt the one
+    way the others are not: the keys are asked for by presence rather than by
+    what they parse to, so no single fold reaches both statements. `_owed` in
+    `test_contract_lines_go_red.py` buys the same separation by multiplying
+    where its generator walks.
     """
+    for name, section in contracts().items():
+        if section.get("type") == "forbidden":
+            missing = {"source_modules", "forbidden_modules"} - set(section)
+            assert not missing, (
+                f"{name} has no {sorted(missing)}, so it contributes no cases and the count "
+                f"below agrees with a walk of nothing"
+            )
+
     assert len(REFUSALS) == sum(
         len(modules(section, "source_modules")) * len(modules(section, "forbidden_modules"))
         for section in contracts().values()

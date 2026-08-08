@@ -23,9 +23,12 @@ The copy is also linted clean before the violation is planted. Without that,
 a non-zero exit could be a broken copy — an unparseable config, a package
 grimp could not find — and a red for the wrong reason certifies nothing.
 
-This is one line proven by hand. The generated, per-line version of the same
-idea is `docs/todo/proof-of-red-covers-every-line-of-a-contract.md`, whose
-trigger is a contract gaining a line rather than this entry.
+This is one line proven by hand, and the copy is the part
+`test_contract_lines_go_red.py` inherits: it plants the same package to cover
+every other line the file carries. What stays here is the pair of claims that
+generator has no shape for — that some forbidden contract holds this edge at
+all, and that `allow_indirect_imports` leaves `pipeline -> tools -> ops` legal,
+which is not a red.
 """
 
 from __future__ import annotations
@@ -59,7 +62,7 @@ _LINT = (
 )
 
 
-def _modules(section: configparser.SectionProxy, key: str) -> list[str]:
+def modules(section: configparser.SectionProxy, key: str) -> list[str]:
     """The multi-line value at `key`, minus blanks and comment lines."""
     return [
         line.strip()
@@ -68,7 +71,7 @@ def _modules(section: configparser.SectionProxy, key: str) -> list[str]:
     ]
 
 
-def _contracts() -> dict[str, configparser.SectionProxy]:
+def contracts() -> dict[str, configparser.SectionProxy]:
     parsed = configparser.ConfigParser()
     parsed.read(CONFIG, encoding="utf-8")
     return {
@@ -79,17 +82,17 @@ def _contracts() -> dict[str, configparser.SectionProxy]:
 
 
 def _forbidding_edge(source: str, forbidden: str) -> configparser.SectionProxy | None:
-    for section in _contracts().values():
+    for section in contracts().values():
         if section.get("type") != "forbidden":
             continue
-        if source in _modules(section, "source_modules") and forbidden in _modules(
+        if source in modules(section, "source_modules") and forbidden in modules(
             section, "forbidden_modules"
         ):
             return section
     return None
 
 
-def _lint(tree: Path) -> subprocess.CompletedProcess[str]:
+def lint(tree: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-c", _LINT],
         cwd=tree,
@@ -108,18 +111,21 @@ def _lint(tree: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-@pytest.fixture(scope="module")
-def copied(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def copy_tree(tree: Path) -> Path:
     """The tree as `lint-imports` sees it: the package beside its config.
 
     Copied to the cwd as a top-level `sieve/` because `lint_imports` puts the
     working directory on `sys.path` and nothing else — the editable install
     that makes `src/sieve` importable here is not what is being tested.
     """
-    tree = tmp_path_factory.mktemp("linted")
     shutil.copytree(SRC, tree / "sieve", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copyfile(CONFIG, tree / ".importlinter")
     return tree
+
+
+@pytest.fixture(scope="module")
+def copied(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return copy_tree(tmp_path_factory.mktemp("linted"))
 
 
 @pytest.fixture(scope="module")
@@ -157,12 +163,12 @@ def test_the_supported_path_stays_legal() -> None:
     assert section is not None
 
     assert section.getboolean("allow_indirect_imports") is True
-    assert "sieve.tools" not in _modules(section, "forbidden_modules")
+    assert "sieve.tools" not in modules(section, "forbidden_modules")
 
 
 def test_the_copied_tree_lints_clean(copied: Path) -> None:
     """The control: red in the next test is the planted edge and not the copy."""
-    result = _lint(copied)
+    result = lint(copied)
 
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -171,7 +177,7 @@ def test_the_entry_fires_where_ops_exists(violating: Path) -> None:
     section = _forbidding_edge(SOURCE, FORBIDDEN)
     assert section is not None
 
-    result = _lint(violating)
+    result = lint(violating)
 
     assert result.returncode != 0, result.stdout + result.stderr
     assert section["name"] in result.stdout, result.stdout + result.stderr

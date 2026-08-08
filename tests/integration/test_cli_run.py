@@ -16,14 +16,15 @@ invocations here.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from sieve.cli.app import app
-from sieve.core.pipeline_model import Node, Pipeline, Project, Replicate, Sink
-from tests.conftest import FIXTURE_FRAMES
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Replicate, Sink
+from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES
 
 runner = CliRunner()
 
@@ -119,6 +120,107 @@ def test_a_run_with_no_frames_covers_the_whole_video(synthetic_video: Path, tmp_
     assert result.output.splitlines() == [
         f"arena 1: {FIXTURE_FRAMES} frames, {FIXTURE_FRAMES} node outputs computed, 0 from cache"
     ]
+
+
+#: The detector's low band edge, and the read-ahead it buys at `FIXTURE_FPS`.
+#: The transform's reach is charged at the band's lowest frequency, so the
+#: wide-open default would put more frames either side of every target than the
+#: 40-frame fixture holds and there would be no span to narrow *to* —
+#: `tests/integration/test_v2_oracle.py` picks 7 Hz for the same reason.
+DETECT_FREQ_LO = 7.0
+DETECT_LOOKAHEAD = 11
+
+
+def _looking_ahead(video: Path, directory: Path) -> Path:
+    """A `blocks -> detector` project beside `video`, whose detector reads ahead.
+
+    The smallest graph that reaches the failure: `detect` is the one tool that
+    declares a lookahead (`adr/detector-is-a-node.md` is why it can be a node at
+    all), and it wants a per-block signal under it.
+    """
+    project = Project.for_video(video, directory).with_pipeline(
+        Pipeline(
+            nodes=(
+                Node(
+                    node_id="blocks",
+                    tool_id="block_signal",
+                    version="1.0.0",
+                    params={
+                        "signal": "change_energy",
+                        "block": 16,
+                        "scale": 1.0,
+                        "fps": FIXTURE_FPS,
+                    },
+                ),
+                Node(
+                    node_id="detector",
+                    tool_id="detect",
+                    version="1.0.0",
+                    params={
+                        "freq_band": (DETECT_FREQ_LO, math.inf),
+                        "value_band": (1e6, math.inf),
+                        "count_frac": (0.25, math.inf),
+                        "window_frames": 9,
+                        "centered": True,
+                        "fps": FIXTURE_FPS,
+                    },
+                ),
+            ),
+            edges=(Edge(upstream="blocks", downstream="detector"),),
+        )
+    )
+    path = directory / "detecting.sieve.yaml"
+    project.save(path)
+    return path
+
+
+def test_a_default_run_answers_to_the_end_of_footage_it_can_and_says_what_it_dropped(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """The default invocation of the only graph shape Phase 4 built a contract for.
+
+    No `--frames` means the whole video, and a graph reading ahead of the frame
+    it answers for cannot answer for the last of them — `plan.py` charges the
+    read-ahead past `span.end` and the reader refuses an index past the last
+    frame. Fails two ways, both of which have shipped: refusing the run entirely
+    with `Frame 40 out of range 0..39`, which answers for nothing where it could
+    answer for 29 of 40; and narrowing the span quietly, which reports a number
+    of frames the user never asked about and never says which frames are missing
+    or whose read-ahead cost them.
+    """
+    project = _looking_ahead(synthetic_video, tmp_path)
+
+    result = runner.invoke(app, ["run", str(project)])
+
+    assert result.exit_code == 0, result.output
+    answered = FIXTURE_FRAMES - DETECT_LOOKAHEAD
+    assert f"baseline: {answered} frames," in result.output
+    warning = next(line for line in result.output.splitlines() if "not answered for" in line)
+    assert f"the last {DETECT_LOOKAHEAD} frames" in warning
+    assert "detector" in warning
+    assert f"0:{answered}" in warning
+
+
+def test_a_span_wholly_inside_the_end_of_footage_read_ahead_is_still_refused(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """Narrowing stops where there is nothing left to narrow to.
+
+    The last frames of a video are unanswerable rather than merely under-warmed,
+    so a span sitting entirely inside the read-ahead has no shorter span that
+    would satisfy it — unlike a lead-in, which can always be cut back to frame
+    zero. Fails for a clamp applied by reflex, which turns this into a run
+    reporting success over zero frames or over a span the user did not ask for.
+    """
+    project = _looking_ahead(synthetic_video, tmp_path)
+
+    result = runner.invoke(
+        app, ["run", str(project), "--frames", f"{FIXTURE_FRAMES - 10}:{FIXTURE_FRAMES}"]
+    )
+
+    assert result.exit_code == 1
+    assert "nothing is left to compute" in result.stderr
+    assert str(DETECT_LOOKAHEAD) in result.stderr
 
 
 def test_a_dry_run_never_opens_the_video(

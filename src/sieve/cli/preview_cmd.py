@@ -48,7 +48,7 @@ the node the file already holds — one join, shared with `sieve run`, and
 `todo/a-served-run-elides-the-node-its-file-already-holds.md` owns it. Until
 then this reads the project's own video, exactly as `run` does.
 
-`load_project`, `refuse`, `span_for` and `frame_source` are imported from
+`load_project`, `refuse`, `span_for`, `footage_end` and `frame_source` are imported from
 `run_cmd` rather than respelled: two commands refusing in two spellings would be
 two spellings of every error message a user sees. That module's docstring said
 the second command that can fail is what moves them to a `cli/common.py`, and
@@ -68,7 +68,7 @@ from pydantic import ValidationError
 
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import MetricBus, Recorder
-from sieve.cli.run_cmd import frame_source, load_project, refuse, span_for
+from sieve.cli.run_cmd import footage_end, frame_source, load_project, refuse, span_for
 from sieve.core.pipeline_model import Pipeline, Project, Replicate, SourceSpan
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache import MemoryFrameStore
@@ -141,7 +141,7 @@ def preview_project(
         luma = not graph_needs_chroma(project.pipeline)
     except GraphError as error:
         raise refuse(str(error)) from error
-    window = span_for(frames, video)
+    window = span_for(frames, footage_end(video))
 
     bus = MetricBus()
     recorder = Recorder()

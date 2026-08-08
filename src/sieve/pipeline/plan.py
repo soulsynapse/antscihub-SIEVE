@@ -25,14 +25,19 @@ against a centred result could not be a node at all
 (`adr/detector-is-a-node.md`). Both sides are real here, so the decode range is
 widened at *both* ends and the executor honours the second by delaying emission.
 
-The two sides are symmetric in the arithmetic and asymmetric in the clamp, and
-that asymmetry is forced rather than chosen: the first source frame is zero on
-every machine, so lead-in reaching before it is knowably unavailable and is
-reported by `lead_in_shortfall`. There is no corresponding ceiling — how many
-frames the footage holds is a fact about a container this module may not open —
-so the trailing end is asked for and the reader supplies what exists. A caller
-that has opened one and wants the run refused rather than short is asking a
-question the *reader* can answer and this cannot.
+The two sides are symmetric in the arithmetic and asymmetric in where the clamp
+*comes from*, and that asymmetry is forced rather than chosen: the first source
+frame is zero on every machine, so lead-in reaching before it is knowably
+unavailable and `decode_start` clamps at `SOURCE_FRAME_ZERO` unasked. How many
+frames the footage holds is a fact about a container this module may not open,
+so the ceiling is `source_end`, and a caller that has opened one hands it over
+the way `SOURCE_FRAME_ZERO` is built in. Given one, the trailing end clamps
+symmetrically: the span narrows to the last frame the lookahead can be filled
+behind, `trailing_shortfall` is how many frames that cost, and a span with
+nothing left is refused rather than run empty. Given none, the trailing end is
+asked for unclamped and the reader answers — which for `decode/reader.py` means
+raising, not running short
+(`findings/2026.08.07-a-lookahead-at-the-end-of-a-video-is-a-decode-error.md`).
 
 **Every node's parameters are validated here, not just the cacheable ones.**
 `Dag.node_keys` validates as a side effect of hashing, and a node that has not
@@ -141,6 +146,13 @@ class ExecutionPlan:
     #: the frame at `i` until it has read `i + lookahead`.
     lookahead: FrameCount
     replicate: Replicate | None = None
+    #: Frames cut from the end of the requested span because the lookahead behind
+    #: them would have reached past the end of the footage. 0 when nothing was
+    #: cut, and always 0 when `build` was handed no `source_end` to cut against —
+    #: the ceiling itself is not carried, because nothing has asked a plan what it
+    #: was clamped against and a field nobody reads is a second description of the
+    #: run.
+    trailing_shortfall: FrameCount = NO_FRAMES
 
     @classmethod
     def build(
@@ -150,6 +162,7 @@ class ExecutionPlan:
         source: str,
         span: SourceSpan,
         replicate: Replicate | None = None,
+        source_end: FrameIndex | None = None,
     ) -> ExecutionPlan:
         """Derive the run of `dag` over `span`.
 
@@ -168,14 +181,20 @@ class ExecutionPlan:
             replicate: The replicate being processed. Its overrides enter every
                 node's params, geometry included (`adr/detector-is-a-node.md`).
                 `None` is the baseline a project with no fan-out runs.
+            source_end: One past the last frame the footage holds, from a caller
+                that has opened a container. Optional because this module is
+                buildable where none can be opened, and the whole difference it
+                makes is whether the trailing end of the window is clamped or
+                merely asked for.
 
         Raises:
             InvalidParamsError: if any node's resolved parameters are not valid
                 for its tool, naming that node — see the module docstring on why
                 the wrap is here and not only in the walk below it.
-            ValueError: if any node declares a non-positive output rate, or if
-                the `selecting` nodes and the requested span have no frame in
-                common. Refused rather than run empty: a graph that computes
+            ValueError: if any node declares a non-positive output rate, if the
+                `selecting` nodes and the requested span have no frame in common,
+                or if `source_end` leaves no frame the lookahead can be filled
+                behind. Refused rather than run empty: a graph that computes
                 nothing and reports success is a result that looks better founded
                 than it is, and the message names the ranges that disagree so the
                 reader can see which one to move.
@@ -188,14 +207,17 @@ class ExecutionPlan:
                 )
             except ValidationError as invalid:
                 raise InvalidParamsError(node.node_id, invalid) from invalid
+        lookahead = _fold(dag, params, _input_lookahead_frames)
+        answerable, dropped = _within_footage(_selected(dag, params, span), lookahead, source_end)
         return cls(
             dag=dag,
-            span=_selected(dag, params, span),
+            span=answerable,
             params=params,
             keys=dag.node_keys(source=source, replicate=replicate),
             lead_in=_fold(dag, params, input_warmup_frames),
-            lookahead=_fold(dag, params, _input_lookahead_frames),
+            lookahead=lookahead,
             replicate=replicate,
+            trailing_shortfall=dropped,
         )
 
     # ---- what the reader is asked for ------------------------------------
@@ -219,9 +241,10 @@ class ExecutionPlan:
     def decode_range(self) -> FrameRange:
         """Every source frame the run touches, window included, in order.
 
-        Unclamped at the far end, where `decode_start` is clamped at the near
-        one — see the module docstring: this module knows where footage begins
-        and cannot know where it ends.
+        No clamp of its own at the far end, where `decode_start` has one at the
+        near end: given a `source_end` the span was already narrowed so that this
+        lands on or before it, and given none there is nothing to clamp against —
+        see the module docstring.
         """
         return FrameRange(self.decode_start, FrameIndex(self.span.end) + self.lookahead)
 
@@ -235,6 +258,22 @@ class ExecutionPlan:
         ignores it.
         """
         return self.lead_in - (FrameIndex(self.span.start) - self.decode_start)
+
+    @property
+    def looks_ahead(self) -> tuple[str, ...]:
+        """The nodes declaring a read-ahead of their own, in graph order.
+
+        Who to name when `trailing_shortfall` is nonzero. The fold that produces
+        `lookahead` sums a path and keeps no attribution, and a single blamed
+        node would be a guess wherever two of them are chained; the declarations
+        are the thing a user can act on, and every one of them is here.
+        """
+        return tuple(
+            node.node_id
+            for node in self.dag.order
+            if node_lookahead_frames((self.dag.specs[node.node_id], self.params[node.node_id]))
+            != NO_FRAMES
+        )
 
     @property
     def warmed(self) -> bool:
@@ -309,6 +348,47 @@ def _selected(dag: Dag, params: Mapping[str, ParamsBase], requested: SourceSpan)
             f"{', '.join(narrowed)} — the intersection is empty"
         )
     return SourceSpan(start=start, end=end)
+
+
+def _within_footage(
+    selected: SourceSpan, lookahead: FrameCount, source_end: FrameIndex | None
+) -> tuple[SourceSpan, FrameCount]:
+    """`selected` cut back to the frames `lookahead` can be filled behind.
+
+    The mirror of `decode_start`'s clamp and made for its reason: a run that
+    refused because its last frames want footage past the end would make the
+    closing seconds of every video untunable, exactly as refusing an unwarmed
+    lead-in would make the opening ones. What the two share is that the narrowing
+    is *reported* rather than silent — `lead_in_shortfall` on one side, the second
+    return value here on the other — because a span quietly shorter than the one
+    asked for is a wrong answer a user has no way to notice.
+
+    Only the window overhangs the end, never the span itself. A span reaching
+    past `source_end` is asking for frames that do not exist, which is a
+    different mistake from asking for frames whose *read-ahead* does not exist:
+    the frames are unanswerable in the first case and merely unfillable in the
+    second, and narrowing the first would answer a question nobody asked. It is
+    left to the reader, which refuses it.
+
+    Raises:
+        ValueError: if no frame survives. This is the case `decode_start` has no
+            counterpart to: a lead-in can always be shortened until frame zero is
+            reachable, and a span sitting entirely inside the read-ahead has no
+            frame to shorten to.
+    """
+    if source_end is None or selected.end > int(source_end):
+        return selected, NO_FRAMES
+    last = int(source_end) - lookahead.frames
+    if last >= selected.end:
+        return selected, NO_FRAMES
+    if last <= selected.start:
+        raise ValueError(
+            f"nothing is left to compute: [{selected.start}:{selected.end}) was asked for, the "
+            f"graph reads {lookahead.frames} frames past every frame it answers for, and the "
+            f"footage ends at {int(source_end)} — so nothing at or after frame {selected.start} "
+            "can be answered for"
+        )
+    return SourceSpan(start=selected.start, end=last), FrameCount(selected.end - last)
 
 
 def _input_lookahead_frames(step: PathStep, output_lookahead: FrameCount) -> FrameCount:

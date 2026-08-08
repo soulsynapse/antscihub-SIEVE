@@ -82,6 +82,38 @@ into "somebody stops the loop at what the reader has and says how many frames
 that cost". A run that silently narrows its span is refused by this criterion
 as firmly as one that still dies with `Frame 40 out of range 0..39`.
 
+## Folded in 2026-08-08: the decision is made, and two callers did not get it
+
+The phase-5 item above landed first, as its own last section said it would, and
+it took the second candidate: `ExecutionPlan.build` takes an optional
+`source_end`, `sieve run` opens the container once to supply it, and given one
+the span narrows to the last frame the lookahead can be filled behind while
+`ExecutionPlan.trailing_shortfall` says how many frames that cost. The empty case
+refuses. `SOURCE_FRAME_ZERO` is the floor the ceiling is now symmetric with, and
+`findings/2026.08.07-a-lookahead-at-the-end-of-a-video-is-a-decode-error.md`
+carries a dated amendment saying what is still true of a plan handed no ceiling.
+
+What is left for this item is the callers that hand none, since for them the
+finding is still exactly what happens:
+
+- `PreviewSession` builds its own plan and passes no ceiling, so a preview
+  window reaching the last frames of a video under a centred detector still dies
+  with `Frame N out of range`. It holds a `FrameSource` rather than a container
+  and cannot ask one how long the footage is, so this is the question of whether
+  `FrameSource` grows a length — which is also what `resolve_source` would need
+  to hand a *crop artifact's* ceiling over, the candidate this one names.
+- `tests/integration/test_v2_oracle.py` still derives `SPAN` from the declared
+  lookahead, and its module docstring and
+  `test_the_span_is_the_widest_the_footage_can_answer_for` both explain that
+  derivation by "the plan does not clamp it". True of the plan the oracle builds
+  and no longer true of the command it invokes: passing `--frames 0:29` and
+  passing nothing now produce the same run, and the workaround has become a
+  pinning of a number that the run would arrive at by itself.
+
+Neither is covered by the criterion below, which is about the shortfall being
+named — a thing that now happens, in one of the three files, under the other
+item's spelling.
+
 Deliberately not pinned: whether the run completes or refuses when nothing is
 left, and where the number is computed. The first is the phase-5 item's
 sentence — keep the refusal when the span empties — and the second is the

@@ -30,9 +30,11 @@ finishing, for `_refuse_sinks`' reason.
 **`--dry-run` opens no video.** It stats the footage — a cache key is a fact
 about which file, and a plan that omitted it would be a plan for a different
 run — but nothing decodes, so it answers on a login node with the footage on a
-mount and no codec in the environment. The one thing it therefore cannot do is
-infer a span from the container, and schema v1 records no span of its own
-(`adr/detector-is-a-node.md`), so a dry run needs `--frames`.
+mount and no codec in the environment. What it therefore cannot do is learn the
+video's length, and both of the things that length is for go with it: schema v1
+records no span of its own (`adr/detector-is-a-node.md`) so a dry run needs
+`--frames`, and the plan it prints is unclamped at the trailing end, so a graph
+that reads ahead is described over a span a real run would narrow.
 
 **Cut from v2's command, each with where it comes back.** `--backend` has no
 referent (`adr/no-kernel-apparatus.md`). `--replicate` and `--workers` are
@@ -60,6 +62,7 @@ import typer
 from pydantic import ValidationError
 
 from sieve.core.pipeline_model import Project, Replicate, Sink, SourceSpan
+from sieve.core.types import NO_FRAMES, FrameIndex
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
@@ -92,8 +95,9 @@ def run_project(
         typer.Exit: code 1 for anything refused deliberately — an invalid
             document, a graph that does not resolve or does not chain, a node
             this executor cannot call, footage that is not where the project
-            says, a span the footage cannot supply, or a project declaring
-            outputs nothing can yet write.
+            says, a span the footage cannot supply — including one lying wholly
+            inside the graph's read-ahead of the last frame — or a project
+            declaring outputs nothing can yet write.
     """
     discover()
     project = load_project(project_path)
@@ -109,11 +113,19 @@ def run_project(
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
 
-    span = span_for(frames, video, dry_run=dry_run)
-    plans = [
-        ExecutionPlan.build(dag, source=source, span=span, replicate=target)
-        for target in _targets(project)
-    ]
+    end = None if dry_run else footage_end(video)
+    span = span_for(frames, end)
+    # `ValueError` rather than the `GraphError` above: what a plan refuses is a
+    # span it cannot answer for, which is neither a graph nor a document and has
+    # no error of its own — the message names the ranges that disagree, and a
+    # traceback would be this command's only refusal a user cannot read.
+    try:
+        plans = [
+            ExecutionPlan.build(dag, source=source, span=span, replicate=target, source_end=end)
+            for target in _targets(project)
+        ]
+    except ValueError as error:
+        raise refuse(str(error)) from error
 
     if dry_run:
         for plan in plans:
@@ -196,6 +208,13 @@ def _execute_one(
             f"{label}: warning — {plan.lead_in_shortfall.frames} of "
             f"{plan.lead_in.frames} lead-in frames are before the start of the video, "
             "so the first outputs are under-warmed"
+        )
+    if plan.trailing_shortfall != NO_FRAMES:
+        typer.echo(
+            f"{label}: warning — the last {plan.trailing_shortfall.frames} frames asked for "
+            f"are not answered for, because {', '.join(plan.looks_ahead)} reads "
+            f"{plan.lookahead.frames} frames past every frame it reports and the video ends; "
+            f"the run covers {plan.span.start}:{plan.span.end}"
         )
     computed = 0
     hits = 0
@@ -330,7 +349,23 @@ def parse_span(frames: str) -> SourceSpan:
     return parsed
 
 
-def span_for(frames: str | None, video: Path, *, dry_run: bool = False) -> SourceSpan:
+def footage_end(video: Path) -> FrameIndex:
+    """One past the last frame `video` holds.
+
+    The one fact this command opens a container to learn before it decodes
+    anything, and it answers both of the questions `pipeline` cannot: where the
+    fallback span ends, and where the plan's trailing window has to stop
+    (`pipeline/plan.py` on `source_end`). One call, because a second open of the
+    same file to ask the same question is a pool build per question.
+
+    Raises:
+        VideoDecodeError: if the container will not open.
+    """
+    with VideoReader(video) as reader:
+        return FrameIndex(reader.metadata.frame_count)
+
+
+def span_for(frames: str | None, end: FrameIndex | None) -> SourceSpan:
     """Which frames to work over: the flag, else the whole video.
 
     Two answers where v2 had three, and the missing one is the middle: a v2
@@ -340,19 +375,20 @@ def span_for(frames: str | None, video: Path, *, dry_run: bool = False) -> Sourc
     narrows a run by holding a selecting node, which `ExecutionPlan` intersects
     into `plan.span` well after this has answered.
 
-    The fallback is the only one of the two that needs the container open, which
-    is why `--dry-run` refuses instead of reaching it.
+    Takes the length rather than the path because the fallback is not the only
+    thing a run needs it for, and a function that opened the container here would
+    be the second opener of a file the caller already has to open anyway.
 
     Raises:
-        typer.Exit: code 1 for an unparseable `--frames`, or for a path that may
-            not open the video and was given none.
+        typer.Exit: code 1 for an unparseable `--frames`, or for no span and no
+            length to fall back on.
     """
     if frames is not None:
         return parse_span(frames)
-    if dry_run:
+    if end is None:
         raise refuse(
-            "no span was given, so it comes from the video's length — which --dry-run does not "
-            "open the container to read. Pass --frames START:END."
+            "no span was given, so it comes from the video's length — which is not known here "
+            "because nothing opened the container, and --dry-run is the invocation that does "
+            "not. Pass --frames START:END."
         )
-    with VideoReader(video) as reader:
-        return SourceSpan(start=0, end=reader.metadata.frame_count)
+    return SourceSpan(start=0, end=int(end))

@@ -2,7 +2,7 @@
 title: A detector cannot run to the end of its own footage, and says so as a frame index
 priority: high
 phase: 5
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_cli_run.py -q -k end_of_footage"
 opened: 2026-08-07

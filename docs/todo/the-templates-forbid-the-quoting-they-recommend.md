@@ -1,7 +1,7 @@
 ---
 title: The three templates forbid the quoting they recommend in the same paragraph
 priority: high
-status: awaiting-review
+status: done
 phase: "00"
 gated_on: nothing
 done_when: "uv run pytest \"tests/docs/test_doc_index.py::test_the_templates_do_not_forbid_the_quoting_they_recommend\" -q"

@@ -172,6 +172,20 @@ COMPOSITE_KINDS = {
 }
 
 
+class UndeclaredArityParams(ParamsBase):
+    """The two annotations the arity rule reasons about and no tool declares.
+
+    `scalar_or_pair` is a union whose branches disagree about arity, and
+    `unbounded` a tuple with no length. Neither is on the shelf: `count_frac` is
+    `tuple[float, float] | None`, which is a one-branch union once `NoneType` is
+    dropped and so cannot see how the reduction over branches was written
+    (`findings/2026.08.08-the-arity-guards-two-hardest-branches-are-the-two-nothing-holds.md`).
+    """
+
+    scalar_or_pair: int | tuple[int, int] = 0
+    unbounded: tuple[int, ...] = ()
+
+
 class Product(StrEnum):
     """Two different things one tool computes, only one of which leaves it."""
 
@@ -961,6 +975,37 @@ class TestParamStereotypes:
         spec = make_spec(params_model=CompositeParams, param_stereotypes=COMPOSITE_KINDS)
 
         assert spec.param_stereotypes == COMPOSITE_KINDS
+
+    def test_a_composite_stereotype_on_an_arity_the_shelf_does_not_declare_a_union(self) -> None:
+        # The case above accepts an optional pair, and an optional pair is one
+        # branch wide once `NoneType` is dropped — so it cannot tell a reduction
+        # over branches from reading the first one. This is the union the rule was
+        # written for: a field that could arrive as a bare int is a field the
+        # generator has to emit a spinbox for, so the narrowest branch decides and
+        # the pair-shaped branch does not earn the whole field a pair of handles.
+        with pytest.raises(ValueError, match=r"'scalar_or_pair'.*'band'.*one component"):
+            make_spec(
+                params_model=UndeclaredArityParams,
+                param_stereotypes={
+                    "scalar_or_pair": ParamStereotype.BAND,
+                    "unbounded": ParamStereotype.SCALAR_RANGE,
+                },
+            )
+
+    def test_a_composite_stereotype_on_an_arity_the_shelf_does_not_declare_a_variadic(self) -> None:
+        # A `tuple[X, ...]` has as many components as the value happens to be
+        # long, which is to say the annotation does not answer the arity question
+        # at all — and a kind whose editor draws a fixed number of handles cannot
+        # be handed a length nobody has bounded. Refused rather than accepted at
+        # the two the default happens to hold.
+        with pytest.raises(ValueError, match=r"'unbounded'.*'region'.*one component"):
+            make_spec(
+                params_model=UndeclaredArityParams,
+                param_stereotypes={
+                    "scalar_or_pair": ParamStereotype.SCALAR_RANGE,
+                    "unbounded": ParamStereotype.REGION,
+                },
+            )
 
     def test_stereotypes_are_a_presentation_channel_declaration(self) -> None:
         # Beside `primary_params` and for its reason: never hashed, never read

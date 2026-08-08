@@ -2,7 +2,7 @@
 title: The arity guard's union and variadic branches have no case
 priority: low
 phase: 7
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -q -k arity_the_shelf_does_not_declare"
 opened: 2026-08-08
@@ -46,6 +46,11 @@ survives `tests/unit/test_inspect_cmd.py` and `tests/gui/test_param_generator.py
 because pydantic writes no other pointer. Same disposition as the two above: the
 case is written against a schema the shelf does not produce, or the branch is
 unfalsifiable.
+
+The two paragraphs above this one — the `ENUM` refusal and `_dereference`'s
+`$ref` — are `enum-is-refused-by-nothing-at-registration.md`, split off because
+this item's criterion selects only on the arity cases and the `ENUM` half wants
+a refusal the module does not make yet.
 
 The variadic rule's spelling is the open question the finding records: the
 docstring argues an editor drawing a fixed number of handles cannot be handed an

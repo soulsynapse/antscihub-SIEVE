@@ -4,11 +4,9 @@ SIEVE isolates ethological events from video. The product constraint: the
 interactive tuning loop — drag a slider, graphs refill faster than the video
 plays. Architecture serves that or it does not belong.
 
-When in doubt, follow `docs/VISION.md` — the GUI's operating model and the
-speed of tool development are the ends, and the aim is par with the best of
-v1 and v2, never below it. The ADRs are answers minted to facilitate that:
-settled decisions bind, and their purpose is the vision, so a reading of an
-ADR that works against it is the wrong reading.
+When in doubt, follow the vision in terms of the GUI and speed of tool
+development, while aiming for par with the best of v1 and v2 — all the ADRs
+are meant to be answers to facilitate that.
 
 ## Layout
 

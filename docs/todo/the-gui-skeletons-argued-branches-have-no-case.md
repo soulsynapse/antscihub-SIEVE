@@ -4,7 +4,7 @@ priority: normal
 phase: 7
 status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/expander.py --mutant \"self._body.setVisible(False) ==> self._body.setVisible(True)\" --mutant \"self.arrow.toggled.connect(self._show_body) ==> pass  # \" --mutant \"self._body.setVisible(expanded) ==> pass  # \" --mutant \"self._body.setMaximumHeight(_BODY_HEIGHT) ==> pass  # \" --mutant \"self._body.setWidgetResizable(True) ==> self._body.setWidgetResizable(False)\" -- uv run pytest -q tests/gui tests/bench/test_gui_loop_budget.py"
+done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/expander.py --mutant \"self._body.setVisible(False) ==> self._body.setVisible(True)\" --mutant \"self.arrow.toggled.connect(self._show_body) ==> pass  # \" --mutant \"self._body.setVisible(expanded) ==> pass  # \" --mutant \"self._body.setMaximumHeight(_BODY_HEIGHT) ==> pass  # \" --mutant \"self._body.setWidgetResizable(True) ==> self._body.setWidgetResizable(False)\" -- uv run pytest -q tests/gui/test_expander.py"
 opened: 2026-08-08
 ---
 

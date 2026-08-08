@@ -80,7 +80,18 @@ class GuidanceExpander(QWidget):
         return self._text
 
     def is_expanded(self) -> bool:
-        return self.arrow.isChecked()
+        """Whether the guidance is on the step.
+
+        The body rather than `self.arrow.isChecked()`: the arrow is the input to
+        the behaviour, so an accessor that reads it makes every assertion about
+        opening an assertion about `QToolButton.setCheckable`, and the widget
+        shipping open reads as correct
+        (`findings/loop/2026.08.08-a-widgets-state-accessor-reads-the-toggle-and-not-the-thing-toggled.md`).
+        `isHidden` rather than `isVisible` because a widget whose window has
+        never been shown is not visible either way, and most callers here are
+        tests that never show one.
+        """
+        return not self._body.isHidden()
 
     def _show_body(self, expanded: bool) -> None:
         self._body.setVisible(expanded)

@@ -88,3 +88,58 @@ def test_the_arrow_opens_it_and_the_text_scrolls(qapp) -> None:
     expander.arrow.click()
 
     assert not expander.is_expanded()
+
+
+def test_a_wordier_tool_asks_for_no_more_of_the_step(qapp) -> None:
+    """The cap is on the body, and the body is what a wordy tool grows.
+
+    Two tools whose guidance both overflow the cap ask their parent for the same
+    height — the module's opening sentence, that a widget grown to fit its text
+    would let the wordiest tool on the shelf decide the layout of every other
+    one. The expander's own maximum is that cap plus the arrow, so it bounds
+    what the widget is *given*; this is what it *asks for*, which is the number
+    that matters where `step_pane.py` puts it, inside a scroll area whose extent
+    is the column's request.
+
+    The bound is asserted as well as the equality: a widget's own
+    `maximumHeight` does not clamp its own `sizeHint`, and `QScrollArea` caps
+    its hint internally at a height both of these texts exceed, so without the
+    bound the two hints agree whether or not the body cap exists.
+    """
+    from sieve.gui.expander import _BODY_HEIGHT, GuidanceExpander
+
+    wordy = GuidanceExpander(_spec("stir", "Stir the pot.", "Turn speed up.\n" * 200))
+    wordier = GuidanceExpander(_spec("settle", "Let it settle.", "Wait longer.\n" * 800))
+
+    wordy.arrow.click()
+    wordier.arrow.click()
+
+    assert wordy.sizeHint().height() == wordier.sizeHint().height()
+    ceiling = wordy.arrow.sizeHint().height() + wordy.layout().spacing() + _BODY_HEIGHT
+    assert wordy.sizeHint().height() <= ceiling
+
+
+def test_a_long_line_wraps_rather_than_scrolling_sideways(qapp) -> None:
+    """Guidance written as prose stays inside the width it was given.
+
+    The vertical scroll is what the test above is about; this is the axis the
+    body must *not* scroll on. A label left to its own size hint inside the
+    viewport lays a paragraph out as one line and the user drags sideways to
+    read a sentence, which is the failure the `setWidgetResizable` call is
+    there for and which word wrap alone does not prevent.
+    """
+    from PySide6.QtWidgets import QScrollArea
+
+    from sieve.gui.expander import GuidanceExpander
+
+    prose = "Turn the speed up until the pot moves and the ants scatter. " * 40
+    expander = GuidanceExpander(_spec("stir", "Stir the pot.", prose))
+    expander.resize(300, 400)
+    expander.show()
+    expander.arrow.click()
+    # Widget geometry is assigned by the layout when the events queued by show()
+    # and the click are delivered, not by the calls themselves.
+    qapp.processEvents()
+
+    viewport = expander.findChild(QScrollArea).viewport()
+    assert expander.body().width() <= viewport.width()

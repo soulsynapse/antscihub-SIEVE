@@ -1,7 +1,7 @@
 ---
 title: cut_to_ready is the one pre-pipeline ceiling nothing can measure
 status: open
-phase: 6
+phase: 8
 priority: normal
 gated_on: nothing
 opened: 2026-08-07

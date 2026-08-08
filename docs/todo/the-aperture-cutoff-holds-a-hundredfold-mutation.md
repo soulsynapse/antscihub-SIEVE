@@ -1,7 +1,7 @@
 ---
 title: block_signal's aperture cutoff survives a ten-thousandfold mutation
 priority: normal
-phase: 4
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

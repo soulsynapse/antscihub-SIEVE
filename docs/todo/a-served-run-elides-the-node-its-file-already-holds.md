@@ -1,6 +1,6 @@
 ---
 title: A served run elides the node its file already holds
-step: "05.10"
+step: "08.2"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_cli_run.py -q -k elide && uv run pytest tests/integration/test_crop_serving.py tests/integration/test_cli_run.py -q"

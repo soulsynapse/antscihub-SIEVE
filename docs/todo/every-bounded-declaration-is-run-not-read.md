@@ -1,7 +1,7 @@
 ---
 title: The third BOUNDED tool is keyed and gated by nothing
 priority: high
-phase: 6
+phase: 8
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_admission.py -k every_bounded_tool_is_covered -q"

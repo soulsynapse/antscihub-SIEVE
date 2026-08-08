@@ -1,7 +1,7 @@
 ---
 title: temporal_baseline pins the three paths its prose argues for and no case enters
 priority: normal
-phase: 4
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

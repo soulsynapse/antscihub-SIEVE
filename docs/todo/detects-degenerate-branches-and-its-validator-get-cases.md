@@ -1,7 +1,7 @@
 ---
 title: detect's degenerate branches and its own validator get cases, and the two max bounds get honest prose
 priority: normal
-phase: 4
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

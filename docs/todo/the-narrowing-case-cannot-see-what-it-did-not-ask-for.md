@@ -1,7 +1,7 @@
 ---
 title: The narrowing case cannot see what it did not ask for
 priority: normal
-phase: 5
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

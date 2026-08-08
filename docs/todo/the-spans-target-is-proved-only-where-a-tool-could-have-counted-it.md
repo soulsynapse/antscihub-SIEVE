@@ -1,7 +1,7 @@
 ---
 title: The span's target is proved only where a tool could have counted it itself
 priority: normal
-phase: 3
+phase: 8
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_executor.py -q -k bound_only_target"

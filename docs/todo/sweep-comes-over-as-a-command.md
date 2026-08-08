@@ -1,6 +1,6 @@
 ---
 title: sweep comes over as a command
-step: "06.4"
+step: "08.5"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_sweep.py -q"

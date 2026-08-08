@@ -1,7 +1,7 @@
 ---
 title: The lookahead conversion picks a home
 priority: normal
-phase: 3
+phase: 8
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py tests/unit/test_plan.py -q -k one_conversion && uv run lint-imports"

@@ -1,6 +1,6 @@
 ---
 title: The materialize command derives what v2 was handed
-step: "05.12"
+step: "08.4"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_materialize.py -q -k command && uv run pytest tests/integration/test_materialize.py tests/integration/test_cli_help.py -q"

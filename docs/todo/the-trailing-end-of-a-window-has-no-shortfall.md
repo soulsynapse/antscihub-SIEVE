@@ -1,7 +1,7 @@
 ---
 title: The trailing end of a window has no shortfall
 priority: normal
-phase: 3
+phase: 8
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_plan.py tests/unit/test_executor.py tests/integration/test_cli_run.py -q -k trailing_shortfall"

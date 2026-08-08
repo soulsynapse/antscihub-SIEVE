@@ -1,7 +1,7 @@
 ---
 title: inspect's selecting parameter is asserted by a substring of the tool id
 priority: normal
-phase: 5
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

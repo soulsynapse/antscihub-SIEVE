@@ -1,7 +1,7 @@
 ---
 title: The detection chain's two non-finite guards get the case their subject needs
 priority: normal
-phase: 4
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

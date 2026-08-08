@@ -1,7 +1,7 @@
 ---
 title: A per-replicate setting is asserted against the whole README rather than its section
 priority: normal
-phase: 5
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

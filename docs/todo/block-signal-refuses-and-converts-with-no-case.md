@@ -1,7 +1,7 @@
 ---
 title: block_signal's refusal, its color path, and its auto label have no case
 priority: normal
-phase: 4
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

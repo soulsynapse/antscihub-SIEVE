@@ -1,13 +1,13 @@
 ---
-title: Half of Phase 6's stated gate has no subject in the tree
+title: The series collector gives slider_to_graph a subject
+step: "06.6"
 status: open
-phase: 6
-priority: high
 gated_on: nothing
+done_when: "uv run pytest tests/bench/test_loop_budget.py tests/bench/test_budget_producers.py -q"
 opened: 2026-08-07
 ---
 
-# Half of Phase 6's stated gate has no subject in the tree
+# The series collector gives slider_to_graph a subject
 
 `PLAN.md`'s Phase 6 gate reads "in-pipeline budgets (<100 ms slider->preview,
 <200 ms slider->graph) measured headless through the preview session". 06.3
@@ -40,3 +40,17 @@ moved out of `WITHOUT_PRODUCER` and into `TIMED`, or an amended Phase 6 gate in
 `PLAN.md` that promises what the phase can actually measure.
 `docs/findings/2026.08.07-the-loop-budget-is-met-headless.md` is the reading
 that exposed the gap.
+
+## Ruled 2026-08-08 — the collector lands here, and this is the step
+
+The plan revision that put Phase 7 ahead of the rest of 5 and 6 answered the
+decision above the only way it could: the first cut's whole capability is a
+param tuned with the graphs refilling inside the budget, so the collector has a
+consumer either way, and the only question left was whether its first number is
+taken headless or through Qt. Taken through Qt it is unattributable, which is
+what Phase 6 exists to prevent. So it is a Phase 6 deliverable, this item is the
+step that carries it, and `PLAN.md`'s Phase 6 now says so in its own words.
+
+That closes the second branch: the gate is not amended down. `slider_to_graph`
+moves from `budgets.WITHOUT_PRODUCER` into `budgets.TIMED` and the phase meets
+the gate it stated.

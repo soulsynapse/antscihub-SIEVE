@@ -2,7 +2,7 @@
 title: discover()'s ordering claim is untested until a second tool lands
 status: open
 priority: normal
-phase: "03"
+phase: 8
 gated_on: nothing
 done_when: 'uv run python scripts/mutation_sweep.py --file src/sieve/tools/__init__.py --mutant "sorted(REGISTRY, key=lambda spec: spec.key) ==> REGISTRY" -- uv run pytest -q tests/unit/test_tool_discovery.py'
 opened: 2026-08-07

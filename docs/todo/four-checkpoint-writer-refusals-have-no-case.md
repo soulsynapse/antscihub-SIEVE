@@ -2,7 +2,7 @@
 title: Four of the checkpoint writer's refusals have no case, and two have no caller
 status: open
 priority: normal
-phase: 5
+phase: 8
 gated_on: nothing
 opened: 2026-08-07
 ---

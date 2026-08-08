@@ -262,6 +262,17 @@ and `adr/correctness-is-the-default.md` is untouched. What it deliberately does
 not settle is *retention*: which ranges survive when the store cannot hold
 everything.
 
+`pipeline/series_collector.py` lands here too, and the gate below is the whole
+reason. `slider_to_graph` is the interval from a drag to a *graph* updating, and
+nothing in this repo assembles a node's per-frame outputs into a series a graph
+could be drawn from, so 06.3 measured one regime and declared the other in
+`budgets.WITHOUT_PRODUCER`. A collector whose only consumer is a benchmark is a
+declaration thin on readers, which `adr/declared-means-verified.md` would
+ordinarily refuse — it is admitted for one phase because the alternative is
+measuring the second regime for the first time through Qt, and a number first
+taken through the GUI can never be attributed to anything else. That
+attribution is what this phase exists for.
+
 Gate: in-pipeline budgets (<100 ms slider→preview, <200 ms slider→graph)
 measured headless through the preview session — the value proposition proven
 before a single widget exists, so any later regression is attributable to the
@@ -280,6 +291,20 @@ later at low cost; a capability that implies machinery cannot, which is why
 the cut is drawn here and not at the widget level. Guidance text lands in
 this phase as a `ToolSpec` field, promoted from the tool docstrings that hold
 it until the expander exists to read it.
+
+The first cut opens a project that exists; it does not build one from a folder
+of videos, so VISION's picker scenario and the plausibility ranking behind it
+(`todo/the-offering-predicate-is-not-the-edge-legality-check.md`) are a later
+cut, not this one.
+
+This phase runs before the remainder of 5 and 6, and the reorder is deliberate.
+Phases 0–6 committed to steps and all but a few are done; what stood between
+here and a widget was mostly pool items — observations those phases shipped
+without. Several of them are questions no session can answer while the reader is
+missing: what a generator does with a stereotype, what a composite param prints,
+what an offer is keyed on, whether a collector has a consumer. Deferring the
+reader to pay the debt it would settle is the wrong order, and Phase 8 is where
+that debt went.
 
 Not ported; `filter_tab.py` is never opened. The starting skeleton is the
 v2.5 spike's `gui`/`session` packages, with v2's held parts ported into it
@@ -305,6 +330,25 @@ it computes nothing, and the Phase-0 empty exception list is now load-bearing.
 
 Gate: GUI/CLI parity at the executor level on stirred-clip; both budget
 regimes measured through the GUI; the exception list still empty.
+
+## Phase 8 — The headless remainder
+
+The read-back path (a served run resolved against its span but decoded over its
+window, the elision, colliding crop names, the `materialize` command), the bench
+instrument that judges v2's worker constants (`sweep`), and the pool Phases 3–6
+accumulated. None of it is what the first slice stands on, and all of it is
+answerable without a GUI — which is why it waits rather than why it was
+dropped: work that keeps its subject keeps its value, while the Phase 7
+questions above lose theirs by being asked before their reader exists.
+
+One thing moves here with a known defect rather than a missing case: crop
+serving raises at both ends of the widened window
+(`findings/2026.08.07-a-served-run-is-resolved-against-its-span-and-decoded-over-its-window.md`).
+The first cut has no path to it — it neither materializes nor serves crops — but
+Phase 5 ships with that open and this sentence is the record.
+
+Gate: the phase's own steps green, and the pool it inherited answered or
+re-argued against the tree as Phase 7 left it.
 
 ## Not built, and what revives it
 

@@ -1,7 +1,7 @@
 ---
 title: A record survives the rename it is built to survive
 priority: normal
-phase: 5
+phase: 8
 status: open
 gated_on: nothing
 opened: 2026-08-07

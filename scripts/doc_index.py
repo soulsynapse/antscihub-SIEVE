@@ -226,7 +226,6 @@ UNSPECIFIED_DEBT = frozenset(
         "the-review-has-a-path-for-a-partial-deferral.md",
         "the-rss-floor-decides-its-fate.md",
         "the-second-failing-command-moves-the-shared-refusals.md",
-        "the-series-collector-gives-slider-to-graph-a-subject.md",
         "two-items-name-the-same-crop-artifact-test-file.md",
     }
 )

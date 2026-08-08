@@ -1,7 +1,7 @@
 ---
 title: The source identity has no consumer and no case
 priority: normal
-phase: 3
+phase: 8
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_key.py -q -k source_identity"

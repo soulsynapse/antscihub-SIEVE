@@ -1,10 +1,10 @@
 ---
-title: Whether a stereotype declares an arity, since the two interval kinds disagree about it
-status: deferred
-deferred_for: decision
-gated_on: Kendrick deciding whether the stereotype map answers "how many params make one widget" — a pairing rule the generator is answerable to, a pair-shaped `SPAN`, or a second declaration `adr/declared-means-verified.md` will not admit before a reader exists
-priority: normal
+title: A composite stereotype sits on the field that holds the whole value
+status: open
+gated_on: nothing
+priority: high
 phase: 7
+done_when: "uv run pytest tests/unit/test_tool_contract.py -q -k composite_stereotype && uv run pytest tests/unit/test_span.py -q"
 opened: 2026-08-07
 ---
 
@@ -44,3 +44,31 @@ Three shapes are live and this item picks none of them:
 It is answerable only against Phase 7's generator, which is where
 `a-composite-parameter-prints-no-shape-and-no-bounds.md` also waits on a
 reader, and the two may be one ruling.
+
+## Ruled 2026-08-08 — `adr/one-field-is-one-populated-value.md`
+
+The third shape is the one taken, in the form the item did not list: arity
+becomes a property of the *field* rather than a second declaration beside the
+kind, so nothing new is declared and nothing has to be kept in agreement. A
+composite kind must sit on the annotation that holds the whole value, and
+registration reads `params_model` to prove it — which is why this needed no
+generator to become checkable.
+
+`span` is what that costs: one pair-shaped parameter in place of two bounds,
+`selected_frames` folding the pair it is handed, `primary_params` and the
+caption collapsing to one entry each, and `tests/unit/test_span.py`'s
+constructors rewritten. Editing a ported test is a decision under the porting
+discipline; the ADR is where that decision is recorded, so this item carries it
+out rather than taking it.
+
+The argument that moved it was not the generator. A timeline drag is one
+gesture, and a value split across two fields makes it two commands and one
+intermediate state the model's own validator refuses — so the split would have
+reached the undo stacks, not just the widget. `a-composite-parameter-prints-no-shape-and-no-bounds.md`
+stays a separate item: it is about reading bounds through an `anyOf`, which
+this rule makes more load-bearing rather than answering.
+
+One observation this ruling leaves standing: `POINT` is a member no tool
+declares, admitted for a stamp tool that does not exist. Cheap for an enum
+member, and not worth its own item, but it is `adr/declared-means-verified.md`
+bent inside the vocabulary that rule is enforced through.

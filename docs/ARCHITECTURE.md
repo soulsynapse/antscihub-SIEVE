@@ -14,6 +14,7 @@ and its file in `docs/adr/` but leaves this index.
 - [A new tool is one file](adr/a-tool-is-one-file.md) — A tool's machinery is one module in `sieve.tools`; it adds only files it alone opens and edits none another tool edits, the sole exception being extending a closed vocabulary that cannot express it.
 - [Declared means verified](adr/declared-means-verified.md) — A spec declaration is either consumed by running machinery or refused by name at registration; nothing is stored against a future consumer, and no declaration certifies its own correctness.
 - [ops admission is two tools](adr/ops-admission-is-two-tools.md) — `core/ops/` holds only math two tools already call: single-caller math lives in its tool module, and the package itself appears with its first two-caller entry, gated by a census test.
+- [One field is one populated value](adr/one-field-is-one-populated-value.md) — A composite stereotype sits on the field that holds the whole value, never on one bound of a pair, and registration proves it against `params_model`.
 
 ## 02 — The saved artifact
 
@@ -41,4 +42,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The GUI knows kinds, never tools](adr/gui-knows-kinds-not-tools.md) — `gui` reads spec data — param kinds, presentation stereotypes, window shape — and never branches on `tool_id`; widgets and overlays are generated per kind.
 - [The GUI's base is the v2.5 spike, not v2's gui](adr/gui-base-is-the-v25-spike.md) — `gui/` starts from the v2.5 spike's skeleton — `proto_sieve`'s `gui` and `session` — not v2's `gui/`; v2 components port into it where they held, and the layout operates as VISION describes.
 
-*19 settled, 1 superseded.*
+*20 settled, 1 superseded.*

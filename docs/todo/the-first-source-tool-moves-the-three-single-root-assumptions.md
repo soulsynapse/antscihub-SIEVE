@@ -41,3 +41,63 @@ The two VISION scenarios that wait on this are the picker and the folder
 ([VISION.md](../VISION.md)), and whether VISION also states an A/B of two
 backgrounds is
 [a separate question for Kendrick](whether-vision-states-the-background-ab.md).
+
+## The picker's `emits` names one concrete stream type
+
+Settled, and the alternative is refused. The alternative was a wildcard —
+`ArraySpec()` with neither dtype nor channel layout stated — on the reading that
+a node whose file the user chooses cannot know what it will be handed.
+`StreamSpec.admits` is permissive by construction, and its own docstring is the
+argument against: a wildcard on either side admits, because the static check
+exists to reject graphs that *cannot* work rather than ones that cannot be
+proven to. So an unconstrained `emits` passes against every `accepts` on the
+shelf, and `dag.py`'s edge check is retired for every graph that contains the
+picker. A node whose whole purpose is to let a user substitute an arbitrary file
+is the last node that should switch that check off; the permissiveness that
+makes a wildcard cheap everywhere else is exactly what makes it expensive here.
+
+`crop` and `span` do emit `ArraySpec()` and are not the precedent this looks
+like. Both are wildcards on *both* sides of a pass-through: what they emit is
+whatever arrived, so the unstated pair is a statement of preservation and the
+edge check still runs against the real upstream. A source tool has no upstream
+to preserve from, so the same two empty tuples would be a claim of ignorance
+standing where a claim about frames belongs.
+
+What the picker declares is what its frames *are* — the dtype and channel layout
+a decoded frame carries, which it can state because a picked file reaches the
+graph through the decode boundary the project's own video reaches it through.
+What its frames *mean* — that this one is a background rather than a plate — is
+not a question a stream type asks, and naming it there would be smuggling a
+scene description into a dtype. That meaning goes through the products: an
+`Emission` is something a user picks and saves, and `selected_by` names the
+parameter that picks it.
+
+This claim is not covered by `done_when` above, which names the three root
+sites. Extending the criterion to name a case over the picker's declared stream
+type is the reviewer's edit, not the working session's.
+
+### Open: which axis carries a meaning like "generated background"
+
+Not decided here, and not to be decided by the session that lands the tool.
+
+The conversation that settled the paragraph above leaned on `ElementKind`'s
+promise that "a third member arrives with the tool that needs it". That premise
+is gone: the enum already has three members — `PIXEL`, `BLOCK` and `FRAME`, all
+three present in the commit that wrote the sentence — and `detect` declares
+`FRAME`. So the question stands on its own terms with two live readings. An
+`Emission` name puts the meaning where the user's choice already is, per tool,
+and says nothing to a consumer asking what it was handed. A fourth `ElementKind`
+member puts it on the type, where it propagates through `node_element` and
+reaches every downstream — but `ElementKind`'s own docstring says it answers what
+one value *is a value of*, and a scene description is not an answer to that
+question: a background frame's values are pixels, whatever produced them.
+
+Which axis is Kendrick's call. Name it before the picker's spec is written,
+because the spec is where the answer is spent.
+
+### Noted, not owed here
+
+`ElementKind`'s docstring opens its third paragraph with "Two members" while the
+enum defines three. That is a defect independent of everything above and it
+survives whichever way the axis question goes. Fixing it is a docstring change
+with its own reason and must not ride along with this item.

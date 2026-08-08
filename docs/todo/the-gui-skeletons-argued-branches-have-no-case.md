@@ -2,9 +2,9 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/graph_panel.py --mutant \"low = min(float(finite.min()), 0.0) ==> low = float(finite.min())\" --mutant \"_HEADROOM = 1.06 ==> _HEADROOM = 1.0\" --mutant \"return (low, top) if top > low else (low, low + 1.0) ==> return (low, top)\" --mutant \"return 0.0, 1.0 ==> return 0.0, 2.0\" -- uv run pytest -q tests/gui/test_graph_panel.py"
+done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/canvas.py --mutant \"scale = min(self.width() / image.width(), self.height() / image.height(), 1.0) ==> scale = min(self.width() / image.width(), self.height() / image.height())\" --mutant \"scaled = np.zeros_like(array) if spread <= 0.0 else (array - low) / spread ==> scaled = (array - low) / spread\" -- uv run pytest -q tests/gui"
 opened: 2026-08-08
 ---
 
@@ -290,3 +290,49 @@ headroom, the degenerate-span fallback and the empty range, all four argued in
 the section above. The oracle is the file that holds the module, following the
 expander's narrowing. Ten of the mutants the sections name are still unheld;
 the item is `open` until the last section is spent.
+
+## The value axis is held, and the criterion rotates a third time (2026-08-08)
+
+`32128c7` answered the graph panel section with four cases and touched nothing
+else. Re-run independently: all four of that criterion's mutants die, and the
+same sweep run against each new case alone kills exactly one apiece — floor,
+headroom, degenerate span, empty range — so the four are attributable and not a
+lucky aggregate. The pre-commit file swept under the same four is 0 killed / 4
+survived, so the red is the commit's own and not the previous review's word for
+it. `tests/gui` is 106 passed.
+
+One residue on the function the section just closed, and it is a new mutant
+rather than one of the four. `value_range`'s docstring argues both halves of the
+clamp — zero is the floor, and "the floor drops below zero only for a series that
+goes there, [because] a negative value drawn on the bottom edge would read as the
+same nothing a zero does". The four cases hold the first half; the second is
+unheld, and `low = min(float(finite.min()), 0.0) ==> low = 0.0` survives
+`uv run pytest -q tests/gui`. No fixture carries a negative value, so a panel
+that clipped a below-zero series onto the floor would draw the same graph. The
+fixture is a series with a value under zero, asserting the floor is that value
+and that its point is on the bottom edge. It is not in the rotation below — it
+belongs to this section and a later rotation returns to this file for it.
+
+Two smaller things about how the four landed, neither changing the verdict. The
+constant-series docstring says "a constant series has a peak equal to its floor",
+which is true of the all-zero series it then builds and not of a constant series
+generally: `series([3.0, 3.0, 3.0])` clamps `low` to zero and gets a span of
+3.18, so the degenerate branch is reachable only for a constant at or below zero.
+The sentence names a wider class than the branch it is testing. And the floor
+case's second assertion computes its expected `y` from the `top` the panel just
+returned, so that half is a consistency check between `value_range` and `y_of`
+rather than an independent claim about either; it kills the mutant on `low`
+regardless, and `low == 0.0` above it is the independent assertion.
+
+**Fourth of at least six, and it is `gui/canvas.py`.** The criterion now names
+the two the 07.6 and 07.12 sections left on that module — `frame_rect`'s
+never-upscale clamp and `image_of`'s constant-frame branch — verified red at
+0 killed / 2 survived under `uv run pytest -q tests/gui`. The two are one
+rotation because `mutation_sweep` takes one `--file` and both are in it, not
+because they are one claim. The oracle is the whole `tests/gui` directory rather
+than one file, because there is no `tests/gui/test_canvas.py` — the module is
+reached from the timeline and app cases, which is the 07.6 section's original
+complaint. Beyond the two in the criterion, six mutants across five files are
+still unheld — `graph_panel`'s negative floor, `geometry`'s two,
+`window.moved_to`'s clamp, `app.py`'s `source_fed_nodes` clause and
+`param_form`'s combo signal — and the item is `open` until the last is spent.

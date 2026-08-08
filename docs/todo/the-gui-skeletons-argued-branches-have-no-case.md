@@ -2,9 +2,9 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/walk.py --mutant \"if node.node_id not in fed:==>if True:\" --mutant \"for child in children[node.node_id]:==>for child in ():\" --mutant \"return tuple(ordered)==>return tuple(pipeline.nodes)\" -- uv run pytest -q tests/gui"
+done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/expander.py --mutant \"self._body.setVisible(False) ==> self._body.setVisible(True)\" --mutant \"self.arrow.toggled.connect(self._show_body) ==> pass  # \" --mutant \"self._body.setVisible(expanded) ==> pass  # \" --mutant \"self._body.setMaximumHeight(_BODY_HEIGHT) ==> pass  # \" --mutant \"self._body.setWidgetResizable(True) ==> self._body.setWidgetResizable(False)\" -- uv run pytest -q tests/gui tests/bench/test_gui_loop_budget.py"
 opened: 2026-08-08
 ---
 
@@ -219,3 +219,45 @@ justification for dropping v2's `_scrollable_ancestor` walk, and true of
 `_keep_focus_off_the_wheel` rewrites only the exact `WheelFocus` default; the
 branch where a control already carries some other policy is never taken,
 because nothing in the generator sets one.
+
+## The walk has its three documents, and the criterion rotates (2026-08-08)
+
+`tests/gui/test_walk.py` landed and the criterion this item opened with —
+`walk.py`'s roots-first pass, its recursive descent and its accumulated return —
+is killed. Re-run independently: three killed, none survived, and each mutant is
+killed by exactly one named case with the other two green, so the trio is
+attributable rather than a lucky aggregate. That criterion is retired, not kept:
+its three are green from here on and a criterion nothing can turn red certifies
+nothing.
+
+**The item's `done_when` now names one module at a time, and this is the second
+of at least six.** Six reviews folded into this file without widening the
+criterion, which is the fold rule working as written; what it left is an item
+whose body holds every Phase 7 module's uncovered claim and whose criterion held
+one file's. `done_when` cannot cover them in one string — `mutation_sweep` takes
+one `--file` — so it rotates, and the item is `open` until the last section
+below is spent. Swept today under `uv run pytest -q tests/gui
+tests/bench/test_gui_loop_budget.py` (107 passed, baseline green immediately
+before), fifteen of the sixteen mutants the sections above name still survive:
+`canvas.frame_rect`'s clamp, `geometry`'s two, `window.moved_to`'s clamp,
+`graph_panel.value_range`'s four, `expander`'s five (the current criterion),
+`app.py`'s `source_fed_nodes` clause, and `param_form`'s combo signal.
+`canvas.clear`'s `self._frame = None ==> pass` is the one that has since died —
+07.12's pixel-reading case reaches it — so the 07.6 section's sentence naming it
+is corrected here rather than above.
+
+Two residues the walk work leaves, both about a sentence rather than a branch.
+`test_walk.py`'s own docstring says every case's document order is chosen to
+disagree with its walk order, and the cycle case's does not: saved
+`root tail loop back`, walked `root tail loop back`, so
+`return tuple(ordered) ==> return tuple(pipeline.nodes)` survives that case
+alone. It earns its place on a different mutant — deleting the second,
+unreached-node loop is killed by the cycle case and by neither of the other two
+— but the file states the disqualifying shape and then ships one, and saving it
+`loop back root tail` would satisfy the sentence and kill the return mutant too.
+And `walk.py`'s docstring says ties "break on the document's own order", which is
+true of the roots and not of sibling branches: `children` is built from
+`pipeline.edges` order, so nodes `root left right` with edges `root>right
+root>left` walk `root right left`. Both orders are persisted, so the stability
+the sentence is argued from holds either way — the sentence is what is wrong, and
+the fixture that would pin it is edges saved against node order.

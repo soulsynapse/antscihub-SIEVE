@@ -1,7 +1,7 @@
 ---
 title: A run commits what it wrote
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 opened: 2026-08-07
 ---

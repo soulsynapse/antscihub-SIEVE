@@ -2,9 +2,10 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
-gated_on: nothing
-done_when: "uv run python -c \"import pathlib,sys; c=pathlib.Path('src/sieve/gui/canvas.py').read_text(); g=pathlib.Path('src/sieve/gui/timeline/geometry.py').read_text(); sys.exit(0 if ('division by zero' in c and 'did not earn' not in c and 'a pixel early' in g and 'never reaches it at all' not in g) else 1)\""
+status: deferred
+deferred_for: decision
+gated_on: whether the combo's re-selection is fixed by the narrow signal swap or by a no-op guard in the commit path
+done_when: "uv run pytest -q tests/gui/test_param_generator.py -k reselect"
 opened: 2026-08-08
 ---
 
@@ -579,3 +580,46 @@ combo signal, where the surviving side is the wrong one and the fix is a choice
 between the narrow signal swap and a no-op guard that would also cover a spin
 box arrowed back to where it started. That is Kendrick's to settle, not a
 worker's on the way past, and the item closes when it is settled.
+
+## The prose is corrected, and the item is deferred on the choice (2026-08-08)
+
+`64b2bca` answered both prose corrections and touched no branch. Re-run
+independently: the criterion is `exit=0`, `tests/gui` is 113 passed, and the
+`src/` half of the diff is comment and docstring lines only, so "prose only"
+holds by inspection rather than by the count. `frame_at`'s two variants are
+re-derived here and both numbers are the code's: under `x / (width - 1) *
+frame_count`, ten frames in a 1000-px band put frame 9's boundary at 899.1 and
+every x from there to the right edge still names it; under `x / width *
+(frame_count - 1)` the boundary is 1000, which is outside the band. `done_when`
+was untouched and the status the worker left was `awaiting-review`.
+
+One residue, and it is the same sentence one degree on. The replacement comment
+in `image_of` says the guard "is not visible in the pixels" without the clause
+the finding it cites carries — that verdict is scoped to a constant frame *that
+carries no positive infinity*, and the finding's sole open question is whether
+the graph can produce one. Measured again here: `np.array([[5, 5, inf]])`
+guarded draws `0 0 0` and unguarded draws `0 0 255`. A reader who took the
+unqualified sentence at face value would read the branch as pure arithmetic
+hygiene and could delete it for pixels that would then move. Shape recorded in
+`findings/loop/2026.08.08-a-correction-inherits-the-findings-citation-and-drops-its-scope-clause.md`;
+the one-sentence fix is queued rather than folded, because of what follows.
+
+**The item is `deferred_for: decision` rather than `done` or `open`.** Its
+criterion is green and its mutants are spent, but its body still holds
+`param_form`'s combo signal, which the seventh rotation and the one above both
+refuse to hand a worker: the surviving side is the wrong one and the fix is a
+choice between the narrow `activated` → `currentIndexChanged` swap and a no-op
+guard in `_edit`/`Session.commit`. `done` would certify that as settled; `open`
+would serve a green criterion to a worker with nothing to do, which is the
+failure `findings/loop/2026.08.07-a-worker-on-a-reopened-item-leaves-the-status-the-review-set.md`
+records. Deferred on a decision is what the third `DEFER_REASONS` case is for,
+and it takes the item out of the queue until Kendrick clears it.
+
+The criterion is rewritten with it, because the prose one is spent and a spent
+criterion is green from here on. The new one is deliberately fix-agnostic —
+both candidate fixes make the same behaviour true — and it is red today at
+`exit=5`, no case matching. What the case must assert, which the selector
+cannot: opening the popup and re-selecting the entry the combo already shows
+appends no `SetParam` and no undo entry. A review closing this item checks that
+assertion and not only the exit code
+(`findings/loop/2026.08.07-a-k-selector-and-the-prose-name-beside-it-are-two-criteria.md`).

@@ -33,12 +33,23 @@ headless is not built
 (`todo/the-materialize-command-derives-what-v2-was-handed.md`), and
 `todo/cut-to-ready-gets-a-headless-referent.md` holds the gap.
 
-**Every gate is a median, and no single sample is allowed to miss either.**
-`Recorder.median_ms` argues the median: one page fault should not fail a gate.
-But a series whose median passes while a sample misses by 400 ms is the preview
-a user calls janky, so `test_no_single_sample_missed_its_ceiling` asserts the
-bus's own per-sample verdict as well — the same verdict `preview_cmd` prints as
-`MISS by`. Two readings of one series, not two statistics for one gate.
+**Every gate is a median over its own series, and no sample anywhere in the run
+is allowed to miss.** `Recorder.median_ms` argues the median: one page fault
+should not fail a gate. But a series whose median passes while a sample misses
+by 400 ms is the preview a user calls janky, so
+`test_every_sample_the_run_published_is_gated` asserts the bus's own per-sample
+verdict as well — the same verdict `preview_cmd` prints as `MISS by`.
+
+Those are two readings of the *run*, over two different collections, and
+`Reading` keeps them apart because narrowing one must not narrow the other. A
+median gate wants the samples its own gesture published and no others, which is
+what the fixture's clears cut it down to. The per-sample gate wants everything
+the run published, the dropped samples included — a first frame that decodes is
+the largest `slider_to_preview` of the run, so a guard reading only the survivors
+sat further from firing than its own numbers suggested
+(`docs/findings/2026.08.07-the-per-sample-gate-cannot-see-the-cold-first-frame.md`).
+`Reading.published` is therefore flat and in arrival order rather than keyed: no
+median can be taken over it by accident.
 
 **A gate over an empty series passes and means nothing**, which is the failure
 that matters most in a file whose assertions are all inequalities. Every key
@@ -57,6 +68,7 @@ is 160x120, and a ceiling met on it is not yet a ceiling met on 5.3K footage.
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -153,7 +165,14 @@ class Reading:
     would be re-deriving the structure of the run to read its result.
     """
 
-    samples: Mapping[str, tuple[Sample, ...]]
+    #: What each median gate reads: the samples that gate's own gesture
+    #: published, narrowed by the fixture's clears. A subset of `published` for
+    #: the two keys more than one stage publishes under.
+    gated: Mapping[str, tuple[Sample, ...]]
+    #: Every sample the run published, in arrival order across all keys. Flat
+    #: rather than keyed so that nothing can take a median over it — see the
+    #: module docstring.
+    published: tuple[Sample, ...]
     #: Rows each `GRAPH_EDITS` refill assembled, in order. Not a timing and here
     #: anyway: `slider_to_graph` is the one gate whose subject can be fast by
     #: being empty, because a collector that assembled nothing publishes the
@@ -174,16 +193,15 @@ class Reading:
         return max(self[key], key=lambda sample: sample.elapsed_ms)
 
     def misses(self) -> tuple[Sample, ...]:
-        """Every sample that exceeded its ceiling, across every key."""
-        return tuple(
-            sample
-            for samples in self.samples.values()
-            for sample in samples
-            if not sample.within_budget
-        )
+        """Every sample the run published that exceeded its ceiling.
+
+        Over `published` and not over `gated`: a sample a median gate excluded
+        still happened, and the ones excluded here are the slowest of their key.
+        """
+        return tuple(sample for sample in self.published if not sample.within_budget)
 
     def __getitem__(self, key: str) -> tuple[Sample, ...]:
-        samples = self.samples.get(key)
+        samples = self.gated.get(key)
         if not samples:
             raise KeyError(f"nothing was measured under {key!r}")
         return samples
@@ -246,18 +264,27 @@ def reading(stirred_clip: Path) -> Iterator[Reading]:
     rather than re-decoding the clip per assertion, which would make the gates
     disagree about which run they were judging.
 
-    The recorder is emptied between the window renders and the drags, and that
-    is not tidiness: `render_window` publishes `slider_to_preview` around its own
-    first frame, which is the cold decode of a window and not a drag. Pooled with
-    the drags it would raise the median of the ceiling that decides whether
-    direct manipulation is direct — by exactly the interval the store exists to
-    keep out of it.
+    The recorder is emptied between the stages, and that is not tidiness:
+    `render_window` publishes `slider_to_preview` around its own first frame,
+    which is the cold decode of a window and not a drag. Pooled with the drags it
+    would raise the median of the ceiling that decides whether direct
+    manipulation is direct — by exactly the interval the store exists to keep out
+    of it. The refills of the third stage publish both of the earlier stages'
+    keys again, for the same reason and with the same consequence.
+
+    That narrowing is per gate and stops there, which is the whole of what
+    `run` is for: it is subscribed alongside and never emptied, so the samples
+    each clear drops still reach `Reading.published` and the per-sample gate
+    still judges them. A clear that also removed them from the run would be a
+    filter on the collection wearing the argument for a filter on one statistic.
     """
     discover()
     pipeline = graph()
     bus = MetricBus()
     recorder = Recorder()
+    run: list[Sample] = []
     bus.subscribe(recorder.record)
+    bus.subscribe(run.append)
 
     _pre_pipeline(bus, stirred_clip)
     collected = {key: recorder.samples(key) for key in recorder.keys}
@@ -291,7 +318,7 @@ def reading(stirred_clip: Path) -> Iterator[Reading]:
             rows.append(0 if series is None else int(series.data.shape[0]))
         collected["slider_to_graph"] = recorder.samples("slider_to_graph")
 
-    yield Reading(samples=collected, rows_per_refill=tuple(rows))
+    yield Reading(gated=collected, published=tuple(run), rows_per_refill=tuple(rows))
 
 
 # ---- pre-pipeline: the video-editor regime -------------------------------
@@ -371,12 +398,31 @@ def test_the_graph_refills_within_two_perceived_beats(reading: Reading) -> None:
 # ---- what the medians above cannot say -----------------------------------
 
 
-def test_no_single_sample_missed_its_ceiling(reading: Reading) -> None:
+def test_every_sample_the_run_published_is_gated(reading: Reading) -> None:
     """A median that passes over a sample that missed is a janky preview.
 
     The bus judged each sample against `BUDGETS` on the way past, so this is one
     pass over what arrived rather than a second opinion about the table.
+
+    The counts first, and they are this gate's own anti-vacuity assertion rather
+    than a restatement of the fixture. Every other gate here goes vacuous if its
+    samples vanish; this one goes vacuous if it is handed a *narrowed* series,
+    which is not empty and passes. The two keys asserted are the two the clears
+    narrow — the cold first frame of each window render, and the whole-window
+    span of each refill — so a `published` that had quietly become `gated` again
+    is red here rather than green everywhere.
+
+    That the cold first frame is judged under `slider_to_preview` at all is the
+    question the finding left open, and it is answered yes: a window render
+    follows a parameter edit, so its first frame is the repaint that edit asked
+    for and the 100 ms ceiling is exactly the promise being made about it. The
+    only render here that no drag caused is the first, and that one is the
+    strictest reading of the ceiling rather than an exemption from it.
     """
+    published = Counter(sample.key for sample in reading.published)
+    assert published["slider_to_preview"] == len(WINDOWS) + len(PLAYHEAD_STOPS) + len(GRAPH_EDITS)
+    assert published["full_preview_render"] == len(WINDOWS) + len(GRAPH_EDITS)
+
     missed = [
         f"{sample.key} took {sample.elapsed_ms:.1f} ms, over by {sample.over_ms:.1f}"
         for sample in reading.misses()

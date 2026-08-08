@@ -1,6 +1,6 @@
 ---
 title: The proxy cache's share cites a test that has never existed, so its floor is pinned by nothing
-status: open
+status: awaiting-review
 gated_on: nothing
 priority: normal
 phase: 7

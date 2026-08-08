@@ -1,9 +1,8 @@
 ---
 title: A composite stereotype sits on the field that holds the whole value
+step: "07.1"
 status: open
 gated_on: nothing
-priority: high
-phase: 7
 done_when: "uv run pytest tests/unit/test_tool_contract.py -q -k composite_stereotype && uv run pytest tests/unit/test_span.py -q"
 opened: 2026-08-07
 ---

@@ -96,6 +96,26 @@ def test_the_floor_stays_at_zero_for_a_series_that_never_reaches_it(panel: Any) 
     assert panel.trace()[0][0].y() == pytest.approx(PANEL_HEIGHT * (1.0 - 2.0 / top))
 
 
+def test_the_floor_follows_a_series_that_goes_below_zero(panel: Any) -> None:
+    """The clamp is one-sided: zero is a ceiling on the floor, not the floor.
+
+    A negative value clipped onto the bottom edge would draw as the same
+    nothing a zero does, and the trace either side of it would read as a
+    quantity that bottomed out rather than one that went under.
+    """
+    panel.set_series(series([-2.0, 1.0, 3.0]))
+
+    low, top = panel.value_range()
+    assert low == -2.0
+    # The minimum is what sits on the bottom edge here, and the headroom is
+    # measured over the whole span rather than from zero.
+    assert top == pytest.approx(-2.0 + 5.0 * 1.06)
+    points = panel.trace()[0]
+    assert points[0].y() == pytest.approx(float(PANEL_HEIGHT))
+    # Zero is no longer the floor, so it is drawn above it.
+    assert panel.y_of(0.0) < PANEL_HEIGHT
+
+
 def test_the_peak_is_drawn_below_the_top_edge(panel: Any) -> None:
     """The ceiling is the peak plus headroom.
 

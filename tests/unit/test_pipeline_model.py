@@ -160,6 +160,19 @@ pipeline:
             )
         with pytest.raises(ValidationError, match="node_id must match"):
             Node(node_id="a/b", tool_id="downsample", version="1.0.0")
+        # A *trailing* newline is the one character `$` would let through —
+        # Python spells it `(?=\n?\Z)`, not `\Z` — and a quoted scalar is all it
+        # takes to write one. It reaches `open_memmap` as a file name: an
+        # `OSError` on Windows, and on POSIX a real file whose name breaks the
+        # shell quoting this field's docstring says it must not depend on.
+        with pytest.raises(ValidationError, match="node_id must match"):
+            Node(node_id="abc\n", tool_id="downsample", version="1.0.0")
+        with pytest.raises(ValidationError, match="node_id must match"):
+            Project.from_yaml(
+                "source: {path: arena.MP4}\n"
+                "pipeline:\n"
+                '  nodes: [{node_id: "abc\\n", tool_id: downsample, version: 1.0.0}]\n'
+            )
         # Looser than `tool_id`'s, and it has to be: the generated id is
         # `uuid4().hex`, which begins with a digit more often than not.
         assert Node(node_id="9f2c", tool_id="downsample", version="1.0.0").node_id == "9f2c"

@@ -1,6 +1,6 @@
 ---
 title: A node id reaches the filesystem with no spelling rule
-status: open
+status: awaiting-review
 priority: normal
 phase: 2
 gated_on: nothing
@@ -90,3 +90,13 @@ already selects, so the criterion is unchanged. `TOOL_ID_PATTERN` and
 `SEMVER_PATTERN` anchor with `$` for the same reason and were the precedent
 followed here; whether either is reachable by a value with a trailing newline is
 a separate question and not this item's.
+
+Worker note, 2026-08-08: `\Z` landed and the criterion's case gained the newline
+id by both routes — a direct `Node` and a `from_yaml` whose quoted scalar carries
+it. The criterion was green on the unchanged tree and is green now; what changed
+is that it can go red. Mutating the constant back to `$` against
+`tests/unit/test_pipeline_model.py` and `tests/integration/test_checkpoints.py`
+is KILLED, which is the mutant the finding was written because nothing could
+kill. The separate question above is now measured and answered yes — both
+anchors are reachable by a hand-edited document — and is carried by
+`two-ids-anchored-with-dollar-take-a-trailing-newline-from-a-document.md`.

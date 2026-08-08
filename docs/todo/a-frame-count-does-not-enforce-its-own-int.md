@@ -25,6 +25,16 @@ terms deliberately or to leave the guard at the declaration boundaries and say
 so — either is fine, neither should happen by reflex. Whichever wins,
 `_whole_lookahead` collapses into it.
 
+It is not the only item asking that question of that file.
+[a-centred-window-counts-its-target-from-the-wrong-end.md](a-centred-window-counts-its-target-from-the-wrong-end.md)
+wants `FrameSpan` to carry which of its frames is the target, and stops for the
+same reason in the same words — widening 01.1's anchor is a decision about that
+file. One decision, two subjects, and this one drains first (phase 1 before
+phase 3), so the session that takes it settles the terms and the window item
+spends them rather than re-arguing them. State the terms in whatever lands here:
+whether the anchor admits a guard the v2 file did not have, a constructor it did
+not have, or neither.
+
 Carry the `isinstance(count.frames, bool)` clause across when it does. It is
 there because `bool` subclasses `int`, so `FrameCount(True)` passes the int
 check alone; 01.3's review found that deleting the clause leaves all 57

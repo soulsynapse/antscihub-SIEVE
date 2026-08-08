@@ -47,3 +47,35 @@ cannot both stand, and the surviving one is the reason the sort is what it is.
 Not settled here because it reorders the drain that is about to fire — the
 lowest open step is now 05.9, and once Phase 5 and 6 close, `owed_pool(None)`
 brings all forty-nine owed items due at once in whatever order this decides.
+
+## The contradiction went; the choice did not (2026-08-07)
+
+`owed_pool` and `_pool_order` no longer exist. `queue_key` replaced both — its
+docstring records what it replaced and why — and the two comments above went
+with them, so the half of this item that was "two comments cannot both stand"
+is closed. What survives is the arbitrary constant they left behind:
+
+    UNPHASED = 1 << 16
+
+and its own comment now cites this item as the open question, saying the value
+is "chosen rather than derived" and that repo-wide work being owed everywhere
+"is as good an argument for first as for last". So the three answers below are
+still the three answers; nothing about them turns on the old comments. What
+changed is that the effect is no longer upside down by accident — it is upside
+down on purpose, pending this.
+
+The counts in the paragraph above have moved and are not worth re-pinning: two
+of the five named items are `done` (`minting-an-item-cannot-overwrite-one`, and
+`claude-md-says-there-is-no-code-yet`, closed on a criterion that had gone green
+under some other work), leaving four unattached and two of those at `high`. The
+shape is what matters and it holds — an unphased `high` sorts behind every
+phase-7 `low`.
+
+**The second answer has a doc half nothing else covers.** `PLAN.md` says "Work
+is chunked into `docs/todo/` items attached to these phases", which is the
+premise the whole ordering rests on and is false of four items today. If
+`phase:` becomes required, that sentence is already right and the loop
+machinery has to claim a phase. If unattached items stay legal, that sentence
+is what has to change — and it is `PLAN.md`, so it is proposed to Kendrick
+rather than written past him. Either way the sentence and the sort are one
+decision and should not be made in two sessions.

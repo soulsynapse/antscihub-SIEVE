@@ -47,3 +47,22 @@ somebody has to stop the loop at what the reader has before there is anything to
 report. It also sharpens the symmetry argument — `decode_start` clamps because
 refusing would make the opening seconds of every video untunable, and refusing
 is exactly what happens at the other end today.
+
+## This is the decision, and the failure that prices it is filed elsewhere
+
+[a-detector-cannot-run-to-the-end-of-its-own-footage.md](a-detector-cannot-run-to-the-end-of-its-own-footage.md)
+is the same question with a user in front of it: `sieve run` over a project
+holding a `detect` node with no `--frames` refuses the whole run with
+`arena-1: Frame 40 out of range 0..39`, which is the default invocation of the
+only graph shape Phase 4 built the contract for. It argues the first candidate
+above — narrow the span, name how many frames were dropped and why, keep the
+refusal for the case where nothing is left — and names `cli/run_cmd.span_for`
+as the caller that has opened a container and so is the one that can answer.
+
+Two items, one decision, and this one drains first: phase 3 before phase 5.
+So the session that takes this owes the answer for both, and should read that
+item before choosing among the three candidates — it carries the concrete
+failure, the proposed reading, and the observation that
+`tests/integration/test_v2_oracle.py` already works around the gap by deriving
+its span from the declared lookahead. Whichever way this goes, that item is
+closed against it or narrowed to the message alone.

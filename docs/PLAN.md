@@ -357,8 +357,18 @@ drawn from, which is the plotting path and not the run path.
 Each carries a decision item in `docs/todo/`, so a question blocking a step
 is visible in the index rather than only here.
 
-None open. The four that stood here on 2026-08-07 — the detect parity
-target, per-tool documents, the first GUI cut, and the last two `bench/`
-modules — were answered in the same pass that answered the phase order, and
-each answer is in the phase it binds rather than in this list. A question
-returns here when something measured contradicts one of them.
+Three open, each deferred on Kendrick and none of them blocking a phase
+boundary:
+
+| Question | Item | Costs |
+|---|---|---|
+| Does an external input carry a portable identity, so substitution is not silent? | `whether-an-external-input-carries-a-portable-identity.md` | a content hash, a home on `Project`, and a staleness surface — or the reproducibility promise detects absence and not substitution |
+| Does VISION's picker scenario state an A/B of two backgrounds? | `whether-vision-states-the-background-ab.md` | the multi-root graph and a comparison surface — or the scenario stays one outside file standing where a generated one stood |
+| Does v3 gate on types at all? | `nothing-in-v3-type-checks.md` | a checker, a strictness, and whatever the first run reports — or an ADR saying the annotations are documentation |
+
+The four that stood here on 2026-08-07 — the detect parity target, per-tool
+documents, the first GUI cut, and the last two `bench/` modules — were answered
+in the same pass that answered the phase order, and each answer is in the phase
+it binds rather than in this list. An answered question returns here when
+something measured contradicts it; a new one arrives when an item is deferred
+on a decision no session can make.

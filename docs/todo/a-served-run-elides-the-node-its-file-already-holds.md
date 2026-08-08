@@ -56,6 +56,25 @@ this lands first and is unwound by it; anything built here that assumes a
 plan-time route is work with a known expiry, and `resolve_source.py`'s module
 docstring — which still says the caller elides a node — expires with it.
 
+**The premise in that paragraph is not true of the queue, and this item cannot
+settle which way to fix it.** What that migration is gated on is
+[the-first-source-tool-moves-the-three-single-root-assumptions.md](the-first-source-tool-moves-the-three-single-root-assumptions.md),
+which is `open`, `gated_on: nothing`, and phase 3. `queue_key` puts phase ahead
+of everything, so the source tool drains before 05.9–05.12 and the migration is
+ungated by the time anything reaches this step — at which point the migration
+item's own rule fires from the other side: "if this one lands first 05.10 loses
+its subject and should be closed rather than worked." Both items were written
+believing they were the reachable one.
+
+Two ways out and both are Kendrick's, because either changes what a phase
+commits to. Give the source tool a step in phase 3 and close this item, folding
+the derivation it owes — region per replicate, from the graph, which
+[the-materialize-command-derives-what-v2-was-handed.md](the-materialize-command-derives-what-v2-was-handed.md)
+also calls — into the migration. Or keep this step and accept building a
+plan-time route with a known expiry, in which case say so here rather than on
+the premise above. What must not happen is a session taking this step on the
+sentence as it stood.
+
 The caller is the right home for it and that is not a dodge: `resolve` is handed
 a region the caller derived from the graph, so the caller already holds the node
 id that region came off. What is missing is that no caller derives either yet —

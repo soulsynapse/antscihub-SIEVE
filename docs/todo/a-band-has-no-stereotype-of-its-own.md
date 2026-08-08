@@ -65,3 +65,37 @@ identity values that get two spellings.
 it now excludes, and `core/tool_base.py`'s closed-vocabulary prose says six.
 `ToolSpec` refusing an unknown kind by name is still the only consumer, which is
 why this is cheap now and is not after a generator reads it.
+
+## The seat is claimed twice, and "sixth" is written in three places
+
+A path stereotype is already settled too, in
+[ADR-18](../adr/a-users-file-wires-in-like-any-other-input.md) — "a path param
+is a presentation stereotype whose handoff surface is a file or folder picker" —
+and it is spent by
+[the-first-source-tool-moves-the-three-single-root-assumptions.md](the-first-source-tool-moves-the-three-single-root-assumptions.md),
+which argues its own case as *the* sixth member forced by a tool that cannot be
+expressed in five. Both rulings stand; what cannot is the arithmetic. This item
+is phase 1 and that one is phase 3, so a band lands sixth and a path lands
+seventh, and the scarcity sentence each item leans on is spent once rather than
+twice.
+
+So the paragraph this item rewrites is the shared one, not the band's own. Three
+sites say "sixth" and only the first is prose about a count:
+
+- `ParamStereotype`'s class docstring, "a sixth member is a deliberate decision
+  forced by a tool that cannot be expressed in five".
+- `ToolSpec.__post_init__`'s refusal message (`core/tool_base.py`), which
+  enumerates the members dynamically and then says "and a sixth kind is a
+  decision about what the GUI can generate" — the enumeration stays right and
+  the ordinal goes wrong the moment this lands.
+- [a-run-names-the-external-files-it-needs-before-it-starts.md](a-run-names-the-external-files-it-needs-before-it-starts.md),
+  which states "closed at five" as a fact its walk argument rests on.
+
+What lands here is the rule stated without an ordinal in it — the vocabulary is
+closed, a new member is a deliberate decision forced by a tool that cannot be
+expressed in the existing ones, and the count is `len(ParamStereotype)` — so the
+path member costs a member and not a rewrite of the rule. Whether the count is
+worth asserting the way
+[elementkind-counts-two-members-over-three.md](elementkind-counts-two-members-over-three.md)
+asserts its own is that item's shape to reuse, and it is phase 1 and ahead of
+this one in the drain.

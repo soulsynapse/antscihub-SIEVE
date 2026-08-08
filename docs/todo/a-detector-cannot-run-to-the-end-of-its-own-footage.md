@@ -45,3 +45,12 @@ Filed high because it is the default invocation of the only graph shape Phase 4
 built the contract for. `tests/integration/test_v2_oracle.py` works around it by
 deriving its span from the declared lookahead, which is a test knowing something
 no user can be expected to.
+
+The general form of the question — who answers for a window that runs off the
+end, given `plan.py` cannot open a container — is
+[the-trailing-end-of-a-window-has-no-shortfall.md](the-trailing-end-of-a-window-has-no-shortfall.md),
+which enumerates three candidates and is phase 3, so it drains first. The
+reading proposed above is that item's first candidate, and this item is the
+failure that prices it rather than a second decision about the same thing. If
+that one settles on narrow-and-report, what is left here is the message; if it
+settles otherwise, this closes against it.

@@ -38,3 +38,12 @@ sides.
 
 04.8's centred detector is the first tool that meets this. It should not be the
 thing that decides it.
+
+Nor should this item decide the anchor's terms alone.
+[a-frame-count-does-not-enforce-its-own-int.md](a-frame-count-does-not-enforce-its-own-int.md)
+stops at the same wall over `FrameCount.__post_init__` and is phase 1, so it
+drains first and is where "how far does 01.1's copy-verbatim survive" gets
+answered. Read what it settled before weighing the two shapes above; if it
+ruled that the anchor holds and guards live at the declaration boundaries, then
+the `FrameSpan.centred_on` constructor is refused with it and what is left here
+is a target index carried by whoever builds the span.

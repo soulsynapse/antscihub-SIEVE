@@ -28,11 +28,18 @@ upstream to the reader (`executor.py`, the root-is-the-reader comment), which
 is the binding a source tool replaces rather than shares.
 
 The ADR names two more consequences that land with the tool and not before. A
-sixth `ParamStereotype` for a path: `ParamStereotype`'s own docstring says the
-vocabulary is closed and a sixth member is a deliberate decision forced by a
-tool that cannot be expressed in five — ADR-18 is that decision, so the tool is
-what spends it, and `ToolSpec` refusing an unknown kind is what would otherwise
-stop it. And the resolution policy stays out of the key: a pattern resolving to
+new `ParamStereotype` for a path: `ParamStereotype`'s own docstring says the
+vocabulary is closed and a new member is a deliberate decision forced by a tool
+that cannot be expressed in the existing ones — ADR-18 is that decision, so the
+tool is what spends it, and `ToolSpec` refusing an unknown kind is what would
+otherwise stop it. Not the *sixth*, which this item said until the two claims on
+that seat were read together:
+[a-band-has-no-stereotype-of-its-own.md](a-band-has-no-stereotype-of-its-own.md)
+is ruled, is phase 1, and drains first, so `BAND` is sixth and a path is
+seventh. Nothing in the argument here depends on which — the closure rule is
+what the ADR spends, and that item is the one that restates the rule without an
+ordinal in it. Read it before writing the picker's spec, since it also carries
+the `SPAN`/`BAND` split and the picker declares neither. And the resolution policy stays out of the key: a pattern resolving to
 nothing is a run that cannot happen, one resolving to several is refused rather
 than ordered, and what is hashed is the file each replicate resolved to and
 never the rule that found it.

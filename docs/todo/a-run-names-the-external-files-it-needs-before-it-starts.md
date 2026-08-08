@@ -52,9 +52,11 @@ stopped. This follows
 until a project can have a second root there is no external input to report,
 and that item is where the roots stop being one. It is also where the walk
 above gets the thing it walks by. "The roots' path params" names no field
-today — `ParamStereotype`'s vocabulary is closed at five and none of them is a
-path — so a walk written before that sixth member exists could only find a
-file param by branching on `tool_id`, which is what
+today — `ParamStereotype`'s vocabulary is closed and none of its members is a
+path (five when this was written, six once
+[a-band-has-no-stereotype-of-its-own.md](a-band-has-no-stereotype-of-its-own.md)
+lands, neither of them a path) — so a walk written before the path member
+exists could only find a file param by branching on `tool_id`, which is what
 [gui-knows-kinds-not-tools](../adr/gui-knows-kinds-not-tools.md) and
 [a-tool-is-one-file](../adr/a-tool-is-one-file.md) each refuse. The source-tool
 item spends that decision; this one reads the result.

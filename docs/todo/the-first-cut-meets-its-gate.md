@@ -30,6 +30,19 @@ not exist. A miss inside the scope is a defect or a declared debt in
 And the `gui-computes-nothing` exception list is as empty as Phase 0 left it,
 now that there is a GUI for it to be empty about.
 
+## The graph panel is built and placed nowhere (2026-08-08, from 07.7)
+
+07.7 landed `gui/graph_panel.py` as a view with two verbs — a completed refill
+in, a stale mark for the interval before the next one — and stopped there,
+because its criterion is about what the panel draws and nothing in the tree yet
+drives a refill from a param edit. So `MainWindow` does not build one, no layout
+holds one, and `SeriesCollector`'s only caller is still `tests/bench/`.
+
+That lands here rather than in 07.8, whose subject is the band editor and not
+where the surface it sits on lives: measuring `slider_to_graph` through the GUI
+is what forces a panel that a param edit actually refills, and the two calls it
+needs are already the ones a `SeriesCollector.refill()` block brackets.
+
 ## 06.3's headless claim now rests on collection order (2026-08-08, from 07.4)
 
 `tests/bench/test_loop_budget.py::test_the_measurement_ran_with_no_qt_in_the_process`

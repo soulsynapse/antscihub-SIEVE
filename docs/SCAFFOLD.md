@@ -14,6 +14,7 @@ src/sieve/gui/__init__.py                  # Rendering values, emitting intents,
 src/sieve/gui/app.py                       # The window: what the parts are, and what the four navigation verbs mean.
 src/sieve/gui/canvas.py                    # The viewport: the frame the transport last handed over, drawn to fit.
 src/sieve/gui/control.py                   # Which of the three positions is showing, and the track that slides between.
+src/sieve/gui/graph_panel.py               # The graph: one refill's series, drawn where its frames are.
 src/sieve/gui/hotkeys.py                   # Which keys exist and which verb each one calls.
 src/sieve/gui/layout.py                    # Where the main window's two halves sit and how big they start.
 src/sieve/gui/node_list.py                 # How one node is drawn, and how the ordered list of them is built.

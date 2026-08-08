@@ -187,10 +187,7 @@ class StalledParams(ParamsBase):
     emissions=(Emission("out"),),
     element=ElementRelation.PRESERVED,
     selecting=True,
-    param_stereotypes={
-        "first": ParamStereotype.SPAN,
-        "last": ParamStereotype.SPAN,
-    },
+    param_stereotypes={"kept": ParamStereotype.SPAN},
     registry=SHELF,
 )
 class KeepParams(ParamsBase):
@@ -201,11 +198,12 @@ class KeepParams(ParamsBase):
     — which is the whole of what the plan reads.
     """
 
-    first: int = 0
-    last: int = 1_000_000
+    #: One field rather than two bounds, which is the shape the contract now
+    #: enforces for a composite kind (`adr/one-field-is-one-populated-value.md`).
+    kept: tuple[int, int] = (0, 1_000_000)
 
     def selected_frames(self) -> range:
-        return range(self.first, self.last)
+        return range(*self.kept)
 
 
 @register_tool(
@@ -431,7 +429,7 @@ class TestSelection:
         # either bound from the wrong operand fails here rather than agreeing by
         # coincidence.
         plan = plan_for(
-            Pipeline(nodes=(node("k", "keep", first=102, last=108),)),
+            Pipeline(nodes=(node("k", "keep", kept=(102, 108)),)),
             span=SourceSpan(start=100, end=110),
         )
 
@@ -449,7 +447,7 @@ class TestSelection:
         """
         plan = plan_for(
             Pipeline(
-                nodes=(node("k", "keep", first=102, last=108), node("w", "centre2")),
+                nodes=(node("k", "keep", kept=(102, 108)), node("w", "centre2")),
                 edges=edges("k>w"),
             ),
             span=SourceSpan(start=100, end=110),
@@ -470,13 +468,13 @@ class TestSelection:
         """
         first = plan_for(
             Pipeline(
-                nodes=(node("k", "keep", first=102, last=108), node("s", "settle1")),
+                nodes=(node("k", "keep", kept=(102, 108)), node("s", "settle1")),
                 edges=edges("k>s"),
             )
         )
         last = plan_for(
             Pipeline(
-                nodes=(node("s", "settle1"), node("k", "keep", first=102, last=108)),
+                nodes=(node("s", "settle1"), node("k", "keep", kept=(102, 108))),
                 edges=edges("s>k"),
             )
         )
@@ -491,13 +489,13 @@ class TestSelection:
         # it is — the message names both ranges, which is what a reader needs to
         # know which one to move.
         overlapping = Pipeline(
-            nodes=(node("a", "keep", first=100, last=108), node("b", "keep", first=104, last=120)),
+            nodes=(node("a", "keep", kept=(100, 108)), node("b", "keep", kept=(104, 120))),
             edges=edges("a>b"),
         )
         assert plan_for(overlapping).span == SourceSpan(start=104, end=108)
 
         disjoint = Pipeline(
-            nodes=(node("a", "keep", first=100, last=104), node("b", "keep", first=106, last=120)),
+            nodes=(node("a", "keep", kept=(100, 104)), node("b", "keep", kept=(106, 120))),
             edges=edges("a>b"),
         )
         with pytest.raises(ValueError, match=r"nothing is left to compute.*100:110"):
@@ -512,11 +510,11 @@ class TestSelection:
         test above and leave two different answers sharing entries.
         """
         pipeline = Pipeline(
-            nodes=(node("k", "keep", first=102, last=108), node("s", "settle1")),
+            nodes=(node("k", "keep", kept=(102, 108)), node("s", "settle1")),
             edges=edges("k>s"),
         )
         wider = Pipeline(
-            nodes=(node("k", "keep", first=101, last=108), node("s", "settle1")),
+            nodes=(node("k", "keep", kept=(101, 108)), node("s", "settle1")),
             edges=edges("k>s"),
         )
 
@@ -591,9 +589,11 @@ def test_the_replicates_overrides_reach_the_resolved_params() -> None:
     a replicate's box is the crop node's region parameter, deviated through this
     same path (`adr/detector-is-a-node.md`), so this case now covers both.
     """
-    pipeline = Pipeline(nodes=(node("j", "jitter", amount=1), node("k", "keep", first=100)))
+    pipeline = Pipeline(
+        nodes=(node("j", "jitter", amount=1), node("k", "keep", kept=(100, 1_000_000)))
+    )
     replicate = Replicate(name="arena 2").with_override("j", {"amount": 9})
-    elsewhere = replicate.with_override("k", {"first": 104})
+    elsewhere = replicate.with_override("k", {"kept": (104, 1_000_000)})
 
     plan = plan_for(pipeline, replicate=replicate)
 

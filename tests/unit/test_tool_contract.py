@@ -46,7 +46,7 @@ from sieve.core.tool_registry import (
     UnknownToolError,
     register_tool,
 )
-from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, FrameSpan
+from sieve.core.types import NO_FRAMES, ROI, ChannelSpec, Frame, FrameCount, FrameSpan
 
 
 class SampleParams(ParamsBase):
@@ -150,6 +150,26 @@ class CenteredWindowParams(ParamsBase):
     @classmethod
     def max_lookahead_frames(cls) -> FrameCount:
         return FrameCount(50)
+
+
+class CompositeParams(ParamsBase):
+    """One field per populated value, in the three shapes the shelf uses.
+
+    `detect`'s bands are bare pairs and its `count_frac` is a pair that can be
+    unset; `crop`'s region is a type of its own whose components are its fields.
+    """
+
+    band: tuple[float, float] = (0.0, 1.0)
+    optional_band: tuple[float, float] | None = None
+    region: ROI = ROI(x=0, y=0, width=1, height=1)
+
+
+#: Total over `CompositeParams`, which every stereotype map must be.
+COMPOSITE_KINDS = {
+    "band": ParamStereotype.BAND,
+    "optional_band": ParamStereotype.BAND,
+    "region": ParamStereotype.REGION,
+}
 
 
 class Product(StrEnum):
@@ -906,6 +926,41 @@ class TestParamStereotypes:
         # legal value used wrongly, it is not a `ParamStereotype`.
         with pytest.raises(TypeError, match=r"'slider'.*is not a stereotype"):
             make_spec(param_stereotypes={"factor": "slider", "anti_alias": ParamStereotype.ENUM})
+
+    def test_a_composite_stereotype_on_one_bound_of_a_pair_is_refused(self) -> None:
+        # `span`'s own shape before `adr/one-field-is-one-populated-value.md`:
+        # two int fields each declaring `SPAN`, on the reading that both bounds
+        # wear the kind because together they are one value. Refused because the
+        # generator would then have to find the other half by adjacency or by
+        # name, and — the reason that outlives the generator — a timeline drag on
+        # a two-field value is two commands, two undo entries, and an
+        # intermediate state this model's own validator refuses.
+        with pytest.raises(ValueError, match=r"'first'.*'span'.*one component"):
+            make_spec(
+                params_model=SpanningParams,
+                selecting=True,
+                param_stereotypes={
+                    "first": ParamStereotype.SPAN,
+                    "last": ParamStereotype.SPAN,
+                },
+            )
+
+    def test_every_composite_stereotype_reads_the_annotation_it_stands_over(self) -> None:
+        # Both directions, because a rule that only refuses could be satisfied by
+        # refusing every composite kind there is. The refusals are the whole
+        # vocabulary minus the two one-field kinds, each on a plain int; the
+        # acceptance is the three shapes a whole value actually arrives in on the
+        # shelf — `detect`'s bands as bare pairs, its `count_frac` as a pair that
+        # can be unset, and `crop`'s region as a type of its own. The optional
+        # one is where a union could smuggle a scalar through, so every branch of
+        # it is asked rather than the first.
+        for kind in (ParamStereotype.BAND, ParamStereotype.REGION, ParamStereotype.POINT):
+            with pytest.raises(ValueError, match=rf"'factor'.*{kind.value!r}.*one component"):
+                make_spec(param_stereotypes={"factor": kind, "anti_alias": ParamStereotype.ENUM})
+
+        spec = make_spec(params_model=CompositeParams, param_stereotypes=COMPOSITE_KINDS)
+
+        assert spec.param_stereotypes == COMPOSITE_KINDS
 
     def test_stereotypes_are_a_presentation_channel_declaration(self) -> None:
         # Beside `primary_params` and for its reason: never hashed, never read

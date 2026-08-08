@@ -66,8 +66,8 @@ def run(params: SpanParams, window: FrameSpan, state: None, /) -> Frame:
     frame, so there is nothing a copy could release.
 
     See the module docstring for why there is no selection here: it is applied
-    by `ExecutionPlan.span`, and the frames reaching this kernel below
-    `params.start` are the lead-in, which must pass through to warm what is
+    by `ExecutionPlan.span`, and the frames reaching this kernel below the first
+    of `params.frames` are the lead-in, which must pass through to warm what is
     downstream of it.
     """
     del params, state
@@ -90,38 +90,31 @@ def run(params: SpanParams, window: FrameSpan, state: None, /) -> Frame:
     element=ElementRelation.PRESERVED,
     mode=Mode.STREAMING,
     selecting=True,
-    primary_params=("start", "end"),
-    caption=(
-        CaptionPart(label="start", param="start"),
-        CaptionPart(label="end", param="end"),
-    ),
-    # Both bounds carry one stereotype because they are one populated value: the
-    # generator that meets `span` reaches for a pair of timeline handles, and a
-    # bound declaring `scalar-range` on its own would get a spinbox and take the
-    # interval apart.
-    param_stereotypes={
-        "start": ParamStereotype.SPAN,
-        "end": ParamStereotype.SPAN,
-    },
+    primary_params=("frames",),
+    caption=(CaptionPart(param="frames"),),
+    param_stereotypes={"frames": ParamStereotype.SPAN},
 )
 class SpanParams(ParamsBase):
     """Which frames survive, half-open, in source indices.
 
-    Two ints rather than a range type: these are saved parameters, and a `range`
+    A pair rather than a range type: these are saved parameters, and a `range`
     has no pydantic form that reads as anything in YAML. `selected_frames` below
     is where the pair becomes the interval the plan folds, which is the one place
     the half-open convention is stated in code.
+
+    One field rather than two bounds because the interval is one populated value
+    and a drag on the timeline is one gesture
+    (`adr/one-field-is-one-populated-value.md`).
     """
 
-    #: First frame kept.
-    start: int = 0
-    #: One past the last frame kept. Defaults to `UNBOUNDED_FRAME` — past any
-    #: footage, so the default range meets every video as the whole of it. That
-    #: is what "no span" is: a value of this parameter rather than the absence of
-    #: the node, for the same reason `crop.WHOLE_FRAME` is, and the same writers
-    #: force it — a document is written by things that have not opened the video
-    #: and cannot know its length.
-    end: int = UNBOUNDED_FRAME
+    #: First frame kept, and one past the last. The second bound defaults to
+    #: `UNBOUNDED_FRAME` — past any footage, so the default range meets every
+    #: video as the whole of it. That is what "no span" is: a value of this
+    #: parameter rather than the absence of the node, for the same reason
+    #: `crop.WHOLE_FRAME` is, and the same writers force it — a document is
+    #: written by things that have not opened the video and cannot know its
+    #: length.
+    frames: tuple[int, int] = (0, UNBOUNDED_FRAME)
 
     @model_validator(mode="after")
     def _ordered_and_nonempty(self) -> Self:
@@ -133,10 +126,11 @@ class SpanParams(ParamsBase):
         do not overlap, and the reader has to be told which pair. An empty range
         on one node makes no sense on its own and the node is the whole message.
         """
-        if self.start < 0:
-            raise ValueError(f"span start must be non-negative, got {self.start}")
-        if self.end <= self.start:
-            raise ValueError(f"span must keep at least one frame, got [{self.start}, {self.end})")
+        start, end = self.frames
+        if start < 0:
+            raise ValueError(f"span start must be non-negative, got {start}")
+        if end <= start:
+            raise ValueError(f"span must keep at least one frame, got [{start}, {end})")
         return self
 
     def selected_frames(self) -> range:
@@ -148,4 +142,4 @@ class SpanParams(ParamsBase):
         branch returning the allocated constant would buy an `is` nothing asks
         for.
         """
-        return range(self.start, self.end)
+        return range(*self.frames)

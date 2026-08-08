@@ -55,8 +55,9 @@ since a node that emits on consumption has no later frame to have read.
 yet: how each parameter is populated, read by Phase 7's widget generator and by
 nothing before it. It is admitted early under the single shape
 `adr/declared-means-verified.md` licenses — the vocabulary is closed, the map is
-total over `params_model`, and both are refused by name at registration, so the
-check is the consumer until the generator is.
+total over `params_model`, a composite kind must stand over an annotation that
+holds the whole value, and all three are refused at registration, so the check
+is the consumer until the generator is.
 
 `emissions` is the one declaration here that says something `emits` cannot:
 which *products* a tool can be configured to compute, where `emits` types the
@@ -83,10 +84,12 @@ import json
 import math
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, is_dataclass
+from dataclasses import fields as dataclass_fields
 from enum import StrEnum
 from fractions import Fraction
-from typing import Any, ClassVar, Protocol, TypeVar
+from types import NoneType, UnionType
+from typing import Any, ClassVar, Protocol, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict
 
@@ -687,6 +690,13 @@ class ParamStereotype(StrEnum):
     are the next member is how the ordinal goes wrong while the rule stays
     right. Until that generator exists, `ToolSpec` refusing an unknown kind by
     name is what stands in as the consumer (`adr/declared-means-verified.md`).
+
+    Every kind but `SCALAR_RANGE` and `ENUM` is populated as a whole value of
+    several components, and it sits on the one field that holds that value rather
+    than on each part of it (`adr/one-field-is-one-populated-value.md`). So a
+    tool selecting an interval declares one pair-shaped parameter, and arity is a
+    property of the annotation rather than a second thing a tool declares and
+    could disagree with.
     """
 
     #: One number within declared bounds. Spinbox, slider, or both.
@@ -762,6 +772,43 @@ def _empty_param_value_labels() -> Mapping[str, Mapping[str, str]]:
 
 def _empty_param_stereotypes() -> Mapping[str, ParamStereotype]:
     return {}
+
+
+#: The kinds that are one field per value, so the rest are composite. Written as
+#: the exception rather than as the list of composite kinds on purpose: a member
+#: minted later and forgotten here is treated as composite and refused on the
+#: first scalar field that declares it, where the other spelling would let it
+#: through unchecked and hand the generator half a value
+#: (`adr/one-field-is-one-populated-value.md`).
+_ONE_FIELD_STEREOTYPES = frozenset({ParamStereotype.SCALAR_RANGE, ParamStereotype.ENUM})
+
+
+def _value_components(annotation: object) -> int:
+    """How many components the annotation carries as one value.
+
+    A tuple's are its elements and a dataclass' are its fields, which is what
+    makes a pair-shaped parameter and `ROI` the same answer to the arity
+    question. A union answers with its narrowest branch — an optional pair is
+    still a pair, and a branch that could be populated as a scalar makes the
+    whole field one, because a widget has to be emitted for every value the
+    field admits. Anything else is one component: a kind that says otherwise is
+    asking a scalar to carry an interval.
+
+    A variadic `tuple[int, ...]` is one component here rather than a whole value
+    of unknown length. No tool declares one, and a kind whose editor draws a
+    fixed number of handles is not something a length nobody has bounded can be
+    handed.
+    """
+    origin = get_origin(annotation)
+    if origin is UnionType:
+        branches = [arg for arg in get_args(annotation) if arg is not NoneType]
+        return min((_value_components(branch) for branch in branches), default=1)
+    if origin is tuple:
+        args = get_args(annotation)
+        return 1 if Ellipsis in args else len(args)
+    if is_dataclass(annotation):
+        return len(dataclass_fields(annotation))
+    return 1
 
 
 def _closed_values(annotation: object) -> set[str] | None:
@@ -1187,6 +1234,16 @@ class ToolSpec:
                     f"stereotype — the vocabulary is closed to "
                     f"{[member.value for member in ParamStereotype]}, and another kind is a "
                     "decision about what the GUI can generate rather than a field a tool fills in"
+                )
+            if kind in _ONE_FIELD_STEREOTYPES:
+                continue
+            annotation = self.params_model.model_fields[name].annotation
+            if _value_components(annotation) < 2:
+                raise ValueError(
+                    f"{self.tool_id}: param_stereotypes[{name!r}] is {kind.value!r} on "
+                    f"{annotation}, which carries one component — a composite kind sits on the "
+                    "field that holds the whole value, so an interval is one pair-shaped "
+                    "parameter and never two bounds each wearing the kind"
                 )
         # Comparing the function objects, not calling them: a params model with
         # required fields cannot be instantiated here, and the question is

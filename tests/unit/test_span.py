@@ -51,15 +51,18 @@ REGENERATE = (
 
 GOLDENS = Path(__file__).resolve().parents[1] / "goldens"
 
-#: The configurations `REGENERATE` builds, in its order, written the same way on
-#: both sides. Two of the four are constructed with a default — the whole point
-#: of the first two rows is that v2 and v3 agree on what an *unwritten* bound is,
-#: which a table of literal numbers could not ask.
+#: The configurations `REGENERATE` builds, in its order. v2 spelled them as two
+#: bounds and v3 spells them as one pair
+#: (`adr/one-field-is-one-populated-value.md`), so the *numbers* are what the two
+#: sides share and the golden's first two columns are where they are compared.
+#: Only the first row can be built from the default now — the pair defaults as a
+#: whole, so v2's `SpanParams(start=5)` is written here with the constant that
+#: default holds, and the unwritten-bound question is asked by that row alone.
 GOLDEN_CASES = (
     SpanParams(),
-    SpanParams(start=5),
-    SpanParams(start=10, end=20),
-    SpanParams(start=0, end=1),
+    SpanParams(frames=(5, UNBOUNDED_FRAME)),
+    SpanParams(frames=(10, 20)),
+    SpanParams(frames=(0, 1)),
 )
 
 
@@ -94,7 +97,7 @@ def test_a_bound_is_one_past_the_last_frame_kept() -> None:
     # The half-open convention, stated where the pair becomes an interval. An
     # inclusive `end` would drop or add exactly one frame at the boundary, which
     # no downstream shape check can see and no graph refuses.
-    kept = SpanParams(start=10, end=20).selected_frames()
+    kept = SpanParams(frames=(10, 20)).selected_frames()
 
     assert (kept.start, kept.stop, len(kept)) == (10, 20, 10)
     assert 19 in kept
@@ -106,11 +109,11 @@ def test_a_backwards_or_empty_range_is_refused_at_the_node() -> None:
     # *intersection* is two ranges that each make sense, and the reader has to be
     # told which pair. This one makes no sense alone and the node is the message.
     with pytest.raises(ValueError, match=r"at least one frame, got \[20, 20\)"):
-        SpanParams(start=20, end=20)
+        SpanParams(frames=(20, 20))
     with pytest.raises(ValueError, match=r"at least one frame, got \[20, 10\)"):
-        SpanParams(start=20, end=10)
+        SpanParams(frames=(20, 10))
     with pytest.raises(ValueError, match="non-negative, got -1"):
-        SpanParams(start=-1)
+        SpanParams(frames=(-1, 10))
 
 
 def test_the_kernel_passes_the_lead_in_through_rather_than_refusing_it() -> None:
@@ -119,7 +122,7 @@ def test_the_kernel_passes_the_lead_in_through_rather_than_refusing_it() -> None
     # at the yield, after they have done that warming. A kernel that refused them
     # — raised, or emitted a blank — would leave everything downstream unsettled
     # for the whole span, and the frames it did emit would look plausible.
-    params = SpanParams(start=100, end=200)
+    params = SpanParams(frames=(100, 200))
 
     for index in (0, 99, 100, 150):
         frame = gradient_frame(index)
@@ -135,7 +138,7 @@ def test_the_kernel_neither_copies_nor_renumbers() -> None:
     # index without changing a pixel.
     frame = gradient_frame(7)
 
-    emitted = run(SpanParams(start=0, end=10), one(frame), None)
+    emitted = run(SpanParams(frames=(0, 10)), one(frame), None)
 
     assert np.shares_memory(emitted.data, frame.data)
     assert (emitted.index, emitted.channels) == (7, ChannelSpec.GRAY)
@@ -143,12 +146,13 @@ def test_the_kernel_neither_copies_nor_renumbers() -> None:
 
 def test_the_span_declares_the_stereotype_the_timeline_handoff_reads() -> None:
     # The GUI reaches a span through the kind, never through `tool_id`
-    # (`adr/gui-knows-kinds-not-tools.md`). Both bounds carry it because they are
-    # one populated value: a bound declaring `scalar-range` on its own would get
-    # a spinbox and take the interval apart.
+    # (`adr/gui-knows-kinds-not-tools.md`), and the kind sits on the field that
+    # holds the whole interval rather than on either bound
+    # (`adr/one-field-is-one-populated-value.md`) — which is what makes a drag one
+    # gesture, one command, and one undo entry.
     stereotypes = SpanParams.spec().param_stereotypes
 
-    assert stereotypes == {"start": ParamStereotype.SPAN, "end": ParamStereotype.SPAN}
+    assert stereotypes == {"frames": ParamStereotype.SPAN}
 
 
 def test_the_selection_is_declared_and_the_spec_says_so() -> None:
@@ -169,7 +173,7 @@ def test_the_identity_span_is_a_value_in_the_saved_params() -> None:
     # node that was left at its default.
     canonical = SpanParams().canonical_json()
 
-    assert canonical == '{"end":4294967296,"start":0}'
+    assert canonical == '{"frames":[0,4294967296]}'
     assert UNBOUNDED_FRAME == 4294967296
     assert SpanParams.model_validate_json(SpanParams().model_dump_json()) == SpanParams()
 
@@ -185,10 +189,7 @@ def test_every_configuration_selects_what_v2_selected() -> None:
     """
     golden = np.load(GOLDENS / "span_selected_frames.npy")
     produced = np.array(
-        [
-            [p.start, p.end, p.selected_frames().start, p.selected_frames().stop]
-            for p in GOLDEN_CASES
-        ],
+        [[*p.frames, p.selected_frames().start, p.selected_frames().stop] for p in GOLDEN_CASES],
         dtype=np.int64,
     )
 

@@ -77,10 +77,13 @@ class Geometry:
     def frame_at(self, x: float) -> int:
         """The frame whose column contains `x`, clamped to the asset.
 
-        The inverse of `x_of_frame` over the full width, not `width - 1`. The
-        off-by-one version reaches the last frame a pixel early and never
-        reaches it at all when the band is wider than the asset is long, which
-        is the ordinary case for a short source in a maximised window.
+        The inverse of `x_of_frame` over the full width, and neither of the two
+        off-by-one versions it is mistaken for. Dividing by `width - 1` names
+        the last frame a pixel early — over ten frames in a 1000-pixel band,
+        from x = 899.1 rather than from 900 — and goes on naming it from there
+        to the right edge. Multiplying by `frame_count - 1` is the one that
+        never names the last frame for a click inside the band at all: its
+        boundary lands on the band's right edge.
         """
         if self.is_empty:
             return 0

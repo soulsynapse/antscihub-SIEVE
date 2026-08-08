@@ -2,7 +2,7 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run python -c \"import pathlib,sys; c=pathlib.Path('src/sieve/gui/canvas.py').read_text(); g=pathlib.Path('src/sieve/gui/timeline/geometry.py').read_text(); sys.exit(0 if ('division by zero' in c and 'did not earn' not in c and 'a pixel early' in g and 'never reaches it at all' not in g) else 1)\""
 opened: 2026-08-08

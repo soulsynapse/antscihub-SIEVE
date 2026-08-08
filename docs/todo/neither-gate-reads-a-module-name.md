@@ -1,6 +1,6 @@
 ---
 title: Neither gate reads a module name
-status: open
+status: awaiting-review
 priority: low
 phase: 1
 gated_on: nothing

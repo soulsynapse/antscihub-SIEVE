@@ -3,9 +3,9 @@
 `dead_language` in `scripts/doc_index.py` holds the prose and deliberately
 passes anything fused into an identifier or a path, because a checker that
 fires on `filter_base.py` cannot be pointed at code. This is the other half,
-and it is the mirror image: text, not prose — identifiers, comments, and string
-literals alike, since `filter_id` in a field name and "filter" in a docstring
-are the same rename left half-done. The identity *values* (`"crop"`,
+and it is the mirror image: text, not prose — identifiers, comments, string
+literals, and the path the module sits at alike, since `filter_id` in a field
+name and "filter" in a docstring are the same rename left half-done. The identity *values* (`"crop"`,
 `"detect"`, …) are frozen and none of them is a dead word, so freezing them
 costs this gate nothing (`adr/tools-not-filters.md`).
 
@@ -119,23 +119,33 @@ SPEAKS_A_FOREIGN_VOCABULARY: frozenset[tuple[str, str, str]] = frozenset(
 )
 
 
+def _spells(text: str, word: str, live: tuple[str, ...]) -> bool:
+    bare = text
+    # Longest first: a shorter live spelling that is a substring of a longer one
+    # would eat the longer one's middle and leave the dead word standing in the
+    # wreckage.
+    for spelling in sorted(live, key=len, reverse=True):
+        bare = bare.replace(spelling, "")
+    return bool(re.search(re.escape(word), bare, re.IGNORECASE))
+
+
 def _hits(modules: Iterable[Path], root: Path) -> Iterator[tuple[str, str, int]]:
     """`(module, dead word, line number)` for every dead spelling in `modules`.
 
     Read as text rather than as an AST: a comment is not a node, and a rename
-    that stopped at the identifiers leaves its evidence in the comments.
+    that stopped at the identifiers leaves its evidence in the comments. The
+    path is read as one more line of that text, since `dead_language` passes a
+    word fused into one and hands the case here; a path offends at no line, so
+    it reports line 0, which no line is numbered.
     """
     for path in sorted(modules):
         relative = path.relative_to(root).as_posix()
+        for word, live, _ in DEAD_IDENTIFIERS:
+            if _spells(relative, word, live):
+                yield (relative, word, 0)
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for word, live, _ in DEAD_IDENTIFIERS:
-                bare = line
-                # Longest first: a shorter live spelling that is a substring of a
-                # longer one would eat the longer one's middle and leave the dead
-                # word standing in the wreckage.
-                for spelling in sorted(live, key=len, reverse=True):
-                    bare = bare.replace(spelling, "")
-                if re.search(re.escape(word), bare, re.IGNORECASE):
+                if _spells(line, word, live):
                     yield (relative, word, lineno)
 
 
@@ -191,6 +201,17 @@ def test_the_walk_sees_a_spelling_in_code_and_in_a_comment(tmp_path: Path) -> No
         ("planted.py", "filter", 2),
         ("planted.py", "filter", 3),
     ]
+
+
+def test_a_module_name_is_a_spelling_no_line_holds(tmp_path: Path) -> None:
+    """The half `dead_language` hands over: it passes a path, so this reads one.
+
+    Line 0 is the report: a path offends at no line, and no line is numbered 0.
+    """
+    named = tmp_path / "filter_base.py"
+    named.write_text("VALUE = 1\n", encoding="utf-8")
+
+    assert list(_hits([named], tmp_path)) == [("filter_base.py", "filter", 0)]
 
 
 def test_the_adr_slug_is_a_name_and_not_a_spelling(tmp_path: Path) -> None:

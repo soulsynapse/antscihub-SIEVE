@@ -2,7 +2,7 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/canvas.py --mutant \"scale = min(self.width() / image.width(), self.height() / image.height(), 1.0) ==> scale = min(self.width() / image.width(), self.height() / image.height())\" --mutant \"scaled = np.zeros_like(array) if spread <= 0.0 else (array - low) / spread ==> scaled = (array - low) / spread\" -- uv run pytest -q tests/gui"
 opened: 2026-08-08

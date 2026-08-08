@@ -42,6 +42,13 @@ gated_on: nothing
 # write it and paste the output; `sieve-v3-specify` holds the same rule for the
 # criteria written later, and this is the same sentence at minting time.
 done_when: "uv run pytest tests/... -q"
+# Two more, both optional and both refused where they disagree with what they
+# stand over. An item carrying a case table states its own arithmetic as
+# `table_rows: 21` — the body rows of every table in it, summed — and `cases:`
+# maps a v3 test file to the number of cases it holds. A total in prose is
+# what a reviewer would otherwise re-derive by hand, and it has been wrong
+# three times over tables that were exact. `cases:` is read until the item is
+# done; past that the number is a record of what the item delivered.
 opened: 2026-08-06
 ---
 

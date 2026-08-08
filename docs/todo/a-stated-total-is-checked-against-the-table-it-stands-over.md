@@ -1,7 +1,7 @@
 ---
 priority: low
 phase: 0
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/docs/test_doc_index.py -q && uv run pytest tests/docs/test_doc_index.py -q -k stated_total && uv run pytest tests/docs/test_doc_index.py -q -k named_test_file"
 opened: 2026-08-07

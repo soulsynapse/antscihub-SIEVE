@@ -329,6 +329,91 @@ def test_a_pool_item_without_a_priority_is_refused(tmp_path):
         collect(tmp_path)
 
 
+# The arithmetic an item states about itself. A re-derivation item's verdict
+# columns have been exact every time and its totals wrong three times, because
+# a column is something a grep reaches and a sentence is not.
+
+TABLE = """## The case table
+
+| v2 case | Verdict | v3 case |
+|---|---|---|
+| `one` | survives | same name |
+| `two` | dropped | nothing to select |
+"""
+
+
+def _repo_with_item(tmp_path: Path, front: str, body: str = TABLE) -> Path:
+    """A tree whose `docs/todo` holds one item, so `cases:` paths resolve."""
+    todo = tmp_path / "docs" / "todo"
+    todo.mkdir(parents=True)
+    write_item(todo, "item", front, body)
+    return todo
+
+
+def test_a_stated_total_over_a_table_of_another_height_is_refused(tmp_path):
+    todo = _repo_with_item(tmp_path, OWED + "\ntable_rows: 3")
+
+    with pytest.raises(ItemError, match="says 3 rows over tables holding 2"):
+        collect(todo)
+
+
+def test_a_stated_total_sums_the_tables_and_ignores_a_fenced_one(tmp_path):
+    # Summed because 03.6 split one enumeration across two headings, and the
+    # sentence stands over both. A table inside a fence is an example of the
+    # markup, not part of the enumeration.
+    body = TABLE + TABLE + "\n```\n| a | b |\n|---|---|\n| c | d |\n```\n"
+    todo = _repo_with_item(tmp_path, OWED + "\ntable_rows: 4", body)
+
+    assert [i.path.name for i in collect(todo)] == ["item.md"]
+
+
+def test_a_named_test_file_holding_another_number_of_cases_is_refused(tmp_path):
+    # The half no row count reaches: the wrong number in 03.6 was the count of
+    # a v3 file, which the item's own table says nothing about.
+    todo = _repo_with_item(tmp_path, OWED + "\ntable_rows: 2\ncases:\n  tests/unit/test_x.py: 3")
+    module = tmp_path / "tests" / "unit" / "test_x.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("def test_one():\n    pass\n", encoding="utf-8")
+
+    with pytest.raises(ItemError, match="test_x.py holds 3 cases; it holds 1"):
+        collect(todo)
+
+
+def test_a_named_test_file_counts_cases_inside_a_class(tmp_path):
+    todo = _repo_with_item(tmp_path, OWED + "\ntable_rows: 2\ncases:\n  tests/unit/test_x.py: 2")
+    module = tmp_path / "tests" / "unit" / "test_x.py"
+    module.parent.mkdir(parents=True)
+    module.write_text(
+        "class TestThing:\n    def test_one(self):\n        pass\n\n"
+        "    def test_two(self):\n        pass\n\ndef helper():\n    pass\n",
+        encoding="utf-8",
+    )
+
+    assert [i.path.name for i in collect(todo)] == ["item.md"]
+
+
+def test_a_named_test_file_that_is_not_written_yet_still_indexes(tmp_path):
+    # The count is stated when the item is written and the file is what the
+    # item goes on to write, so demanding it exist shuts the item out of the
+    # index until it is finished.
+    todo = _repo_with_item(tmp_path, OWED + "\ntable_rows: 2\ncases:\n  tests/unit/test_x.py: 3")
+
+    assert [i.path.name for i in collect(todo)] == ["item.md"]
+
+
+def test_a_named_test_file_is_no_longer_checked_once_the_item_is_done(tmp_path):
+    # Past `done` the number is a record of what the item delivered. Later
+    # items add cases to the same file, so a finished item held to its count
+    # would pin every test file's size to whatever created it.
+    front = OWED + "\ntable_rows: 2\ncases:\n  tests/unit/test_x.py: 3"
+    todo = _repo_with_item(tmp_path, front.replace("status: open", "status: done"))
+    module = tmp_path / "tests" / "unit" / "test_x.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("def test_one():\n    pass\n", encoding="utf-8")
+
+    assert [i.path.name for i in collect(todo)] == ["item.md"]
+
+
 def test_a_value_opening_with_a_code_span_names_its_line_and_its_field(tmp_path):
     """The commonest way to write invalid frontmatter here, because the fields
     are prose about code: YAML reserves a leading backtick, and the scanner's

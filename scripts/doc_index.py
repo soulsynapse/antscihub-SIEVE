@@ -19,6 +19,15 @@ phase is groundwork the later ones stand on, so a `low` in phase 0 precedes a
 all — it is minted as a decimal step in the phase's own list, and a phase whose
 steps all read `done` is still a place to file one.
 
+Either shape may declare its own arithmetic, and both declarations are refused
+where they disagree with what they stand over: `table_rows:` against the body
+rows of the item's own markdown tables, and `cases:` — a v3 test file mapped to
+the number of cases it holds — against that file. A re-derivation item states
+both in prose, and the prose totals are the one part of such an item nothing
+reaches, which is why they have been wrong three times over tables whose
+verdict columns were exact
+(`findings/loop/2026.08.07-the-run-that-corrected-an-inherited-miscount-wrote-its-own.md`).
+
 Findings: one file per measurement, newest first, `verdict` standing alone as
 the row a reader triages from. `docs/findings/loop/` holds the same shape for
 truths about how the work loop fails rather than about the system — separate
@@ -222,6 +231,10 @@ UNGATED = "nothing"
 #: the machine that wrote the check.
 SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
+#: A markdown table's second line, which is what tells a run of pipe lines from
+#: a table: rows are the run less its header and this.
+TABLE_RULE = re.compile(r"^\|(?:\s*:?-+:?\s*\|)+$")
+
 #: The one frontmatter field written at mint and never edited afterwards, which
 #: is what makes it the witness that a slug was reused: everything else about an
 #: item is expected to move.
@@ -311,6 +324,85 @@ def parse_frontmatter(path: Path) -> dict[str, Any]:
     return {str(key): value for key, value in loaded.items()}
 
 
+def table_rows(body: str) -> int:
+    """Body rows across every markdown table in `body`.
+
+    Every table, summed, because an item's total stands over its whole
+    enumeration and 03.6 split one across two headings. A run of pipe lines
+    with no rule under it is not a table and counts nothing — which fails a
+    declaration loudly rather than passing it on a table markdown never read.
+    """
+    total, fenced, run = 0, False, []
+
+    def close(run: list[str]) -> int:
+        return len(run) - 2 if len(run) > 1 and TABLE_RULE.match(run[1]) else 0
+
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            fenced = not fenced
+        if fenced or stripped.startswith("```"):
+            continue
+        if stripped.startswith("|") and stripped.endswith("|"):
+            run.append(stripped)
+            continue
+        total += close(run)
+        run = []
+    return total + close(run)
+
+
+def case_count(path: Path) -> int:
+    """Test functions in `path`, at module level or inside a class."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sum(
+        1
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        and node.name.startswith("test_")
+    )
+
+
+def check_totals(path: Path, fields: dict[str, Any]) -> None:
+    """The two totals an item may state about itself, against their subjects.
+
+    The tree the `cases:` paths are read against is two folders above the item,
+    because an item's home is `<repo>/docs/todo` — so a fixture repo is checked
+    the same way this one is, rather than the check being live in one of them.
+
+    A path with no file yet is skipped rather than refused: the count is stated
+    when the item is written and the test file is what the item goes on to
+    write, so demanding it exist would make the item unindexable until it was
+    finished. At `done` the check stops entirely — by then the number is a
+    record of what the item delivered, and later items add cases to the same
+    file, so holding a finished item to it would pin every test file's size to
+    whatever the item that created it found.
+    """
+    declared = fields.get("table_rows")
+    if declared is not None:
+        if not isinstance(declared, int):
+            raise ItemError(f"{path.name}: `table_rows` must be a bare number")
+        _, _, body = path.read_text(encoding="utf-8").partition("\n---\n")
+        held = table_rows(body)
+        if held != declared:
+            raise ItemError(f"{path.name}: says {declared} rows over tables holding {held}")
+
+    cases = fields.get("cases")
+    if cases is None or str(fields.get("status", "")) == "done":
+        return
+    if not isinstance(cases, dict):
+        raise ItemError(f"{path.name}: `cases` maps a test file to the number of cases it holds")
+    repo = path.resolve().parents[2]
+    for relative, stated in cases.items():
+        if not isinstance(stated, int):
+            raise ItemError(f"{path.name}: `cases` value for {relative} must be a bare number")
+        named = repo / str(relative)
+        if not named.is_file():
+            continue
+        held = case_count(named)
+        if held != stated:
+            raise ItemError(f"{path.name}: says {relative} holds {stated} cases; it holds {held}")
+
+
 def validate(path: Path, fields: dict[str, Any]) -> None:
     for key in ("title", "status", "opened", "gated_on"):
         if not str(fields.get(key, "")).strip():
@@ -340,6 +432,8 @@ def validate(path: Path, fields: dict[str, Any]) -> None:
     else:
         if fields.get("priority") not in PRIORITIES:
             raise ItemError(f"{path.name}: a pool item needs `priority` from {PRIORITIES}")
+
+    check_totals(path, fields)
 
 
 def collect(todo_dir: Path = TODO_DIR) -> list[Item]:

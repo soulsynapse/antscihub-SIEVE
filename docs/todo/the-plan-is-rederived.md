@@ -4,6 +4,7 @@ step: "03.5"
 status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_plan.py -q && uv run pytest tests/unit/test_plan.py -q -k two_roots && uv run pytest tests/unit/test_plan.py -q -k output_rate"
+table_rows: 14
 opened: 2026-08-07
 ---
 

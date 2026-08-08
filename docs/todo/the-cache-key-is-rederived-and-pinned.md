@@ -4,6 +4,7 @@ step: "03.4"
 status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_key.py -q && uv run pytest tests/unit/test_cache_key.py -q -k ancestor && uv run pytest tests/unit/test_cache_key.py -q -k rename"
+table_rows: 9
 opened: 2026-08-07
 ---
 

@@ -4,6 +4,7 @@ step: "03.3"
 status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_dag.py -q"
+table_rows: 33
 opened: 2026-08-07
 ---
 

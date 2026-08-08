@@ -4,6 +4,7 @@ step: "03.6"
 status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_executor.py tests/unit/test_stateful_execution.py -q"
+table_rows: 21
 opened: 2026-08-06
 ---
 

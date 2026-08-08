@@ -2,7 +2,7 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/timeline/window.py --mutant \"length = min(window.frame_count, frame_count) ==> length = window.frame_count\" -- uv run pytest -q tests/gui"
 opened: 2026-08-08

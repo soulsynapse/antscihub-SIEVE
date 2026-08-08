@@ -10,10 +10,10 @@ opened: 2026-08-07
 # The decode/executor format contract is re-derived, not ported
 
 v2's `tests/unit/test_decode_format.py` is the only place the format
-handshake between `decode/` and the executor is checked, and 02.1's review
+handshake between `decode/` and the executor is checked, and 03.2's review
 struck it from that item's criterion because it is not a decode test. Its
-three subjects are `graph_needs_chroma` (02.2's `dag`), `source_key` (02.2's
-`cache_key`), and `FormatMismatchError` (02.3's `executor`), and no item's
+three subjects are `graph_needs_chroma` (03.3's `dag`), `source_key` (03.4's
+`cache_key`), and `FormatMismatchError` (03.6's `executor`), and no item's
 `done_when` names it now — so without this item the contract ships untested
 and nothing goes red.
 

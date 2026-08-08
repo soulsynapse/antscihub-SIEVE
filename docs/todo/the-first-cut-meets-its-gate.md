@@ -64,6 +64,20 @@ proxy's scale where the frame is handed over. Which one is this item's to pick,
 along with the harder half `crop.py` states and 07.8 did not touch — that a
 crop below a `rescale` is denominated in a frame nothing on screen is showing.
 
+## And the save screen, which is where the walk would have to gain a fourth position (2026-08-08, from 07.9)
+
+07.9 landed `gui/save_screen.py` on the same terms: its criterion is what the
+checkoff writes and what the run button issues, and both are asked of the screen
+directly. `MainWindow` builds none, and `control.py`'s track is three panes wide
+by construction — project, pipeline, step, VISION's walk — so placing this one is
+not a layout choice but a decision about what the walk *is*. VISION puts the
+screen after the pipeline ("checks off the outputs they want persisted, and
+selects 'process'"), which reads as a fourth position rather than a dialog, and
+the rail, the slide and `POSITION_NAMES` all count three today.
+
+That decision belongs here, with the two panels above, because this item is the
+one that has to render a whole GUI a user can walk end to end.
+
 ## 06.3's headless claim now rests on collection order (2026-08-08, from 07.4)
 
 `tests/bench/test_loop_budget.py::test_the_measurement_ran_with_no_qt_in_the_process`

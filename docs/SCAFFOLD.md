@@ -22,6 +22,7 @@ src/sieve/gui/node_list.py                 # How one node is drawn, and how the 
 src/sieve/gui/param_form.py                # One control per parameter, chosen by how the parameter is populated.
 src/sieve/gui/project_select.py            # Picking one of the project files that already exist.
 src/sieve/gui/rail.py                      # One tick per node, down the left edge, marking where the walk is.
+src/sieve/gui/save_screen.py               # What the run keeps, and the command that runs it.
 src/sieve/gui/timeline/__init__.py         # The full-width band: where a frame lands on the strip, and what a click means.
 src/sieve/gui/timeline/bar.py              # The anchor: one full-width band across the bottom of the window.
 src/sieve/gui/timeline/geometry.py         # Where a frame lands on the strip, and which frame a pixel names.

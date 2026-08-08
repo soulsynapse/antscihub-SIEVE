@@ -1,7 +1,7 @@
 ---
 title: The save screen checks off outputs, and the run button issues the CLI command
 step: "07.9"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_save_and_run.py -q -k 'the_checkoff_writes_the_projects_lists or the_run_button_issues_the_cli_command'"
 opened: 2026-08-08

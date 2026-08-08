@@ -2,7 +2,7 @@
 title: The per-sample gate sees every sample the run published
 phase: 6
 priority: high
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/bench/test_loop_budget.py -k every_sample_the_run_published -q"
 opened: 2026-08-07

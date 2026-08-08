@@ -29,3 +29,17 @@ Until then the miss is visible and not actionable: `_timings` prints a
 suffix by feeding a `Recorder` directly, and the gate that judges
 `slider_to_preview` and `full_preview_render` is 06.3's benchmark against
 `bench/budgets.py`.
+
+A fake clock would also close a hole the same benchmark now has. `f1bc0fd`
+rewired `Reading.misses()` from the fixture's narrowed per-gate map onto
+`Reading.published`, the run's whole series — the whole point of
+[the-per-sample-gate-sees-every-sample-the-run-published.md](the-per-sample-gate-sees-every-sample-the-run-published.md)
+— and the review's mutant putting it back onto `gated` survived the entire
+module. It survives because `assert not missed` is an empty expectation over a
+healthy clock: no sample misses either way, so nothing distinguishes the two
+collections. The new gate's count assertions pin that `published` is whole, not
+that `misses()` is the thing reading it. What would kill the mutant is a
+`Reading` carrying one over-ceiling sample in a position the clears drop, which
+is the same fake-clock capability this item is waiting on and wants the same
+answer about who owns the bus. Doing it here is cheaper than twice
+([findings/loop/2026.08.07-a-live-gate-asserting-a-collector-is-empty-passes-for-a-collector-that-collects-nothing.md](../findings/loop/2026.08.07-a-live-gate-asserting-a-collector-is-empty-passes-for-a-collector-that-collects-nothing.md)).

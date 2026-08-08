@@ -54,6 +54,7 @@ from sieve.pipeline.plan import ExecutionPlan
 from sieve.pipeline.resolve_source import ResolvedSource, resolve
 from sieve.pipeline.source_home import SourceHome
 from sieve.tools import discover
+from tests.conftest import FIXTURE_FPS
 
 #: Wholly inside the 160x120 fixture and at an odd origin in both axes, matching
 #: `test_materialize.py` so the two files describe one cut.
@@ -64,6 +65,8 @@ SPAN = SourceSpan(start=10, end=16)
 PROJECT_NAME = "arena.sieve.yaml"
 CUT = "cut"
 DOWN = "down"
+SIGNAL = "signal"
+GATE = "gate"
 
 #: The crop node carries no region of its own — `crop.WHOLE_FRAME` is its default
 #: and that is the identity crop as a value — and the replicate pins the box. This
@@ -77,15 +80,47 @@ GRAPH = Pipeline(
     edges=(Edge(upstream=CUT, downstream=DOWN),),
 )
 
+#: `detect`'s band, chosen for the reason `test_cli_run.py` chooses one: the
+#: transform's reach is charged at the band's low edge, so the wide-open default
+#: would want more frames either side of every target than the 40-frame fixture
+#: holds.
+DETECT_BAND = (10.0, 14.0)
+
+#: The graph `GRAPH` is not: `crop -> downsample` streams, so its decode range
+#: *is* its span and every case above passes over the distinction. Here the
+#: detector reads 10 frames past every frame it answers for and 10 behind, and
+#: the difference under it one more, so a run of `WINDOWED_SPAN` answers for four
+#: frames and reads twenty-five.
+WINDOWED_GRAPH = Pipeline(
+    nodes=(
+        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
+        Node(node_id=SIGNAL, tool_id="block_signal", version="1.0.0", params={"fps": FIXTURE_FPS}),
+        Node(
+            node_id=GATE,
+            tool_id="detect",
+            version="1.0.0",
+            params={"freq_band": DETECT_BAND, "window_frames": 3, "fps": FIXTURE_FPS},
+        ),
+    ),
+    edges=(Edge(upstream=CUT, downstream=SIGNAL), Edge(upstream=SIGNAL, downstream=GATE)),
+)
+#: Far enough inside the fixture that the whole window is legal footage, so a
+#: record failing to cover an end failed on its own span and not on the clamp.
+WINDOWED_SPAN = SourceSpan(start=16, end=20)
+
 
 def _replicate(region: ROI = ARENA) -> Replicate:
     pinned = {"x": region.x, "y": region.y, "width": region.width, "height": region.height}
     return Replicate(name="Arena 1", replicate_id="a").with_override(CUT, {"region": pinned})
 
 
-def _project(video: Path, directory: Path, *, replicate: Replicate) -> Project:
-    """A two-node, one-arena project over `video`, saved beside it."""
-    project = Project.for_video(video, directory).with_pipeline(GRAPH).with_replicates((replicate,))
+def _project(
+    video: Path, directory: Path, *, replicate: Replicate, pipeline: Pipeline = GRAPH
+) -> Project:
+    """A one-arena project over `video`, saved beside it."""
+    project = (
+        Project.for_video(video, directory).with_pipeline(pipeline).with_replicates((replicate,))
+    )
     project.save(directory / PROJECT_NAME)
     return project
 
@@ -108,14 +143,33 @@ def _resolved(
     )
 
 
-def _materialize(project: Project, directory: Path, region: ROI = ARENA) -> Project:
-    """Cut `region` over `SPAN`, record it, and save. Returns the new project."""
+def _window(pipeline: Pipeline, span: SourceSpan, replicate: Replicate | None = None) -> SourceSpan:
+    """The source frames a run of `pipeline` over `span` reads, window included.
+
+    What `resolve` must be handed, and the two-pass shape a caller owes it: the
+    window folds over the graph and its params alone, so a plan built on any
+    identity answers it and the run is then keyed on whichever identity comes
+    back. Handing over the span instead certifies a record for the frames in the
+    answer and then reads the frames around them, which raises at both ends
+    (`findings/2026.08.07-a-served-run-is-resolved-against-its-span-and-decoded-over-its-window.md`).
+    """
+    discover()
+    reach = ExecutionPlan.build(
+        Dag.build(pipeline), source="", span=span, replicate=replicate
+    ).decode_range
+    return SourceSpan(start=int(reach.start), end=int(reach.stop))
+
+
+def _materialize(
+    project: Project, directory: Path, region: ROI = ARENA, span: SourceSpan = SPAN
+) -> Project:
+    """Cut `region` over `span`, record it, and save. Returns the new project."""
     discover()
     dag = Dag.build(project.pipeline)
     record = materialize_crop(
         project.source_path(directory / PROJECT_NAME),
         region,
-        SPAN,
+        span,
         name="Arena 1",
         project_dir=directory,
         luma=not dag.needs_chroma,
@@ -194,6 +248,74 @@ class TestTheArtifactIsWhatGetsDecoded:
 
         assert resolved.record is None
         assert resolved.path == backed.source_path(tmp_path / PROJECT_NAME)
+
+
+class TestTheWindowIsWhatARecordIsCheckedAgainst:
+    """A declared window, not a hand-made one, and both ends of it.
+
+    The class above supplies its own `want` a frame either side of the span,
+    which pins the clause and says nothing about who computes the argument. Here
+    the window comes off a graph — `_window` — and that is the whole subject: a
+    caller handing over the span certifies a record for the four frames in the
+    answer and then reads twenty-five.
+
+    Two rows per end, and the pairing is the point. A row per end would pass
+    against a resolver that had stopped serving anything at all, and the covering
+    row is exact at the end under test, so widening the clause to `>=` on that
+    side fails here too.
+
+    **This is also why the far end needs no guard of its own.**
+    `OffsetFrameSource` catches an index before the artifact begins and rewrites
+    the message in source numbering; the trailing end has no counterpart, and the
+    raw `VideoReader` message — "Frame 30 out of range 0..29", in the artifact's
+    numbering, against a project that mentions neither number — is what the
+    finding measured. It is unreachable from here: a record that cannot supply
+    the read-ahead does not serve the run, so no served reader is ever asked past
+    its own end, and a guard no case can reach is what
+    `adr/declared-means-verified.md` refuses.
+    """
+
+    @pytest.mark.parametrize(
+        ("cut", "served"),
+        [
+            (SourceSpan(start=5, end=40), True),
+            (SourceSpan(start=6, end=40), False),
+            (SourceSpan(start=0, end=30), True),
+            (SourceSpan(start=0, end=29), False),
+        ],
+        ids=["lead_in-covered", "lead_in-short", "lookahead-covered", "lookahead-short"],
+    )
+    def test_a_record_reaching_only_as_far_as_the_span_does_not_serve(
+        self, synthetic_video: Path, tmp_path: Path, cut: SourceSpan, served: bool
+    ) -> None:
+        """Serve or fall back, and the keys say which without being asked.
+
+        The last assertion is the one that makes the pair mean something in both
+        directions: serving is a re-key, because the artifact is a source in its
+        own right, and falling back is the status quo down to the last key. A
+        resolver that returned the parent path with the artifact's identity would
+        satisfy every other line here.
+        """
+        replicate = _replicate()
+        project = _project(synthetic_video, tmp_path, replicate=replicate, pipeline=WINDOWED_GRAPH)
+        backed = _materialize(project, tmp_path, span=cut)
+        parent = backed.source_path(tmp_path / PROJECT_NAME)
+        dag = Dag.build(backed.pipeline)
+
+        resolved = _resolved(
+            backed, tmp_path, ARENA, want=_window(backed.pipeline, WINDOWED_SPAN, replicate)
+        )
+
+        assert (resolved.record is not None) is served
+        assert resolved.path == (backed.crops[0].resolve(tmp_path) if served else parent)
+        assert int(resolved.first_index) == (cut.start if served else 0)
+        on_artifact = ExecutionPlan.build(
+            dag, source=resolved.identity, span=WINDOWED_SPAN, replicate=replicate
+        )
+        on_parent = ExecutionPlan.build(
+            dag, source=source_identity(parent), span=WINDOWED_SPAN, replicate=replicate
+        )
+        assert (on_artifact.keys == on_parent.keys) is not served
 
 
 class TestTheServedFramesAreTheFramesTheParentWouldHaveGiven:

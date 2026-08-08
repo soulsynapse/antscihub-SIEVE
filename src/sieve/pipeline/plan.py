@@ -88,8 +88,10 @@ region it suppressed, and the artifact's own frame floor go together and for one
 reason: under schema v1 a written crop is a *child source* with an identity of
 its own, so a run over one is handed a different `source` rather than a flag, a
 replicate carries no geometry to stop applying (`adr/detector-is-a-node.md`), and
-whose frame numbering a file is in is the read-back path's question — `PLAN.md`
-builds that in Phase 5, which is where the floor stops being zero.
+whose frame numbering a file is in is the read-back path's question, answered a
+layer above this one in `resolve_source.py`. The floor does not move with it: a
+record too tight for the window it is asked about does not serve the run at all,
+so nothing here ever reads an artifact from before its own start.
 """
 
 from __future__ import annotations
@@ -110,9 +112,11 @@ from sieve.core.tool_base import (
 from sieve.core.types import NO_FRAMES, FrameCount, FrameIndex, FrameRange
 from sieve.pipeline.dag import Dag, InvalidParamsError
 
-#: The first frame any source can supply. The floor `decode_start` clamps at
-#: while every run reads whole footage; Phase 5's read-back path is what makes a
-#: crop artifact's own start the floor instead.
+#: The first frame any source can supply, and the floor `decode_start` clamps
+#: at. Zero over a written crop as well: `resolve_source.resolve` is handed the
+#: whole decode range and declines a record that does not hold it, so a served
+#: run's artifact always reaches its own lead-in and there is no second floor to
+#: pick between.
 SOURCE_FRAME_ZERO = FrameIndex(0)
 
 

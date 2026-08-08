@@ -162,10 +162,12 @@ def backing_for(
         luma: Whether the current graph decodes luma. `not Dag.needs_chroma`,
             derived by the caller for the reason `materialize_crop` makes it an
             argument: a format is a consequence of the chain, never a choice.
-        window: The span the artifact has to cover — what a render actually asks
-            for, and what `resolve_source` matches against. `None` when no span
-            is bound, in which case there is nothing to judge coverage against
-            and the clause is skipped.
+        window: The frames the artifact has to cover — the run's span widened by
+            the graph's window, which is what a render actually reads and what
+            `resolve_source` matches against, so a report judged on the span
+            alone would say `AT_REST` about a record no run would open. `None`
+            when no span is bound, in which case there is nothing to judge
+            coverage against and the clause is skipped.
 
     Returns:
         `ABSENT`, `AT_REST`, or `STALE` with the clause that missed. Never

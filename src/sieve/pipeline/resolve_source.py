@@ -162,8 +162,12 @@ def resolve(
         luma: Whether this run decodes the luma plane — `not Dag.needs_chroma`.
             An artifact in the other format is declined, because a luma read of
             a colour file is the wrong-pixels trap the codec finding measured.
-        want: The span about to be run, in source frames. A record that does not
-            cover all of it is declined whole; see the module docstring.
+        want: The source frames the run will *read* — its span widened by the
+            graph's window, which is `ExecutionPlan.decode_range`. Not the span:
+            the frames a window adds are read from whichever file this returns,
+            so a record certified for the answer alone is then asked for frames
+            it does not hold, at either end. A record that does not cover all of
+            `want` is declined whole; see the module docstring.
 
     Returns:
         The parent, or a record that covers the request.

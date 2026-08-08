@@ -84,3 +84,29 @@ does die, so the module is not uncovered — these two are.
 survives; that clamp only bites for a window longer than its source, which the
 bar cannot currently produce, so it is the guard-with-no-caller shape rather
 than a missing fixture and is the least of the four.
+
+## The graph panel's whole value axis, from 07.7's review (2026-08-08)
+
+`gui/graph_panel.py` landed with five tests that hold its trace, its stale mark
+and its two refusals — the criterion's two kill the `start_index` offset, the
+stale flag and the y mapping — and with `value_range` held by nothing at all.
+Under `uv run pytest -q tests/gui`, all four of these survive:
+`low = min(float(finite.min()), 0.0) ==> low = float(finite.min())`,
+`_HEADROOM = 1.06 ==> _HEADROOM = 1.0`,
+`return (low, top) if top > low else (low, low + 1.0) ==> return (low, top)`,
+and `return 0.0, 1.0 ==> return 0.0, 2.0`.
+
+The first is the module's headline decision — "Zero is the floor of the value
+axis", argued from there being no tick labels — and the fixture is
+`series([0.0, 1.0, 2.0, 3.0])`, whose minimum *is* zero, so the clamp and its
+absence agree. The test comment above that assertion says the floor is what puts
+the first point on the bottom edge; a floor at the series minimum puts it there
+too. What separates them is a series that never reaches zero, which no fixture
+holds. The degenerate-span fallback needs a constant series (without it `y_of`
+divides by zero), and the empty range needs a case that asks a panel with no
+series for its axis rather than for its trace, which
+`test_a_panel_with_nothing_to_draw_says_so` stops one call short of.
+
+`_one_value_per_frame`, `status_text`, the non-finite break and the
+`start_index` offset all die, so this module is not uncovered either — the value
+axis is.

@@ -1,7 +1,7 @@
 ---
 title: The graph panel draws the collector's series
 step: "07.7"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_graph_panel.py -q -k 'the_panel_draws_the_series_it_is_handed or a_stale_series_is_labeled_stale'"
 opened: 2026-08-08

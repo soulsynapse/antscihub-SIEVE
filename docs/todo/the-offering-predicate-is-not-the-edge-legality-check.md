@@ -1,7 +1,8 @@
 ---
 title: The offering predicate is a plausibility question, and admits cannot answer it
-status: open
-gated_on: nothing
+status: deferred
+deferred_for: decision
+gated_on: what a plausibility offer is keyed on — an Emission name, a new ElementKind member, or the path stereotype ADR-18 spends — and whether the answer is an ordering or a yes or no, and whether a tool declares its own plausibility or has it derived
 priority: normal
 phase: "07"
 opened: 2026-08-07

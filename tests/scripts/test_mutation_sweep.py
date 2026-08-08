@@ -38,6 +38,21 @@ def test_a_mutant_is_anchor_separator_replacement() -> None:
     assert (mutant.anchor, mutant.replacement) == ("left + width", "left - width")
 
 
+def test_a_mutant_written_without_padding_splits_the_same_way() -> None:
+    """The unspaced form is the fallback, so an anchor ending in a space is still reachable."""
+    assert parse_mutant("a==>b") == Mutant(anchor="a", replacement="b")
+
+
+def test_an_empty_anchor_is_refused() -> None:
+    with pytest.raises(SweepError, match="empty anchor"):
+        parse_mutant(" ==> replacement")
+
+
+def test_a_long_anchor_is_labelled_within_the_column() -> None:
+    label = Mutant(anchor="x" * 80, replacement="y").label
+    assert len(label) == 60 and label.endswith("...")
+
+
 def test_a_mutant_without_the_separator_is_refused() -> None:
     with pytest.raises(SweepError, match="==>"):
         parse_mutant("left + width -> left - width")
@@ -97,6 +112,46 @@ def test_the_subject_restores_when_the_command_cannot_even_run(repo: Path) -> No
     assert subject.read_bytes() == data
 
 
+def test_a_restore_that_did_not_take_refuses_the_tree(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guarantee has to fire on a restore that silently did nothing, not only on a good one.
+
+    Nothing reachable through the public API can defeat the `finally`, so the write is
+    dropped from underneath it — which is the shape of the `write_text` bug the guard
+    exists for: a restore that returns without leaving the original bytes on disk.
+    """
+    data = b"limit = 100\n"
+    subject = subject_with(repo, data)
+    write_bytes = Path.write_bytes
+    monkeypatch.setattr(
+        Path, "write_bytes", lambda self, raw: len(raw) if raw == data else write_bytes(self, raw)
+    )
+    with pytest.raises(SweepError, match="byte-exact"):
+        run_sweep(subject, [Mutant("100", "1")], [sys.executable, "-c", ""], repo)
+
+
+def test_the_child_runs_with_bytecode_writing_off(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The stale-bytecode hit at its source: the child is the process that would write a `.pyc`.
+
+    The variable is cleared first because a sweep of this very module sets it for the
+    pytest it spawns, so the grandchild would inherit it and the case would pass with
+    the line that sets it deleted
+    (`docs/findings/loop/2026.08.07-a-test-that-clears-an-environment-variable-is-vacuous-where-the-platform-default-already-agrees.md`).
+    """
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
+    marker = repo / "dont-write.txt"
+    subject = subject_with(repo, b"limit = 100\n")
+    report = (
+        f"import sys, pathlib; "
+        f"pathlib.Path({str(marker)!r}).write_text(str(sys.dont_write_bytecode))"
+    )
+    run_sweep(subject, [Mutant("100", "1")], [sys.executable, "-c", report], repo)
+    assert marker.read_text() == "True"
+
+
 def test_stale_bytecode_is_purged_for_every_run(repo: Path) -> None:
     """The same-size-edit hit: any cached bytecode under the roots is removed."""
     cache = repo / "src" / "__pycache__"
@@ -115,5 +170,12 @@ def test_exit_is_red_on_a_survivor_and_green_on_a_clean_kill(repo: Path) -> None
 
 
 def test_a_command_line_without_a_test_command_is_refused(repo: Path) -> None:
+    """The subject is written first: without it both lines are refused for the missing file."""
+    subject_with(repo, b"limit = 100\n")
     assert main(["--file", "src/subject.py", "--mutant", "a ==> b"], repo) == 2
     assert main(["--file", "src/subject.py", "--mutant", "a ==> b", "--"], repo) == 2
+
+
+def test_a_subject_that_is_not_a_file_is_refused(repo: Path) -> None:
+    argv = ["--file", "src/absent.py", "--mutant", "a ==> b", "--", sys.executable, "-c", ""]
+    assert main(argv, repo) == 2

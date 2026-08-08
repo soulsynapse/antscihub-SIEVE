@@ -2,7 +2,7 @@
 title: Proof of red covers every line of a contract
 priority: low
 phase: 0
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest -q tests/unit/test_contract_lines_go_red.py tests/unit/test_import_contracts.py"
 opened: 2026-08-07

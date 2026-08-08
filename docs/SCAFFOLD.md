@@ -61,6 +61,7 @@ src/sieve/core/tool_base.py             # The tool contract, as data: `ToolSpec`
 src/sieve/core/tool_registry.py         # The shelf tools put themselves on: a container keyed by `(id, version)`.
 src/sieve/core/types.py                 # Frame, ROI, quantities, and metadata value objects shared across all layers.
 scripts/doc_index.py                    # The derived docs: indexes, ARCHITECTURE, the scaffold, and `--next`.
+scripts/inherited_changes.py            # What a run inherited: uncommitted changes present before it wrote anything.
 scripts/mutation_sweep.py               # Mutation sweeps over one file: unique anchors, byte-exact restore, no stale bytecode.
 ```
 

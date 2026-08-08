@@ -79,6 +79,45 @@ def test_the_panel_draws_the_series_it_is_handed(panel: Any) -> None:
     assert panel.status_text() == ""
 
 
+def test_the_floor_stays_at_zero_for_a_series_that_never_reaches_it(panel: Any) -> None:
+    """The floor is zero rather than the series minimum.
+
+    There are no tick labels, so the bottom edge reads as none. A series of
+    large values floored at its own minimum would draw identically to one that
+    starts at nothing, which is the comparison between two tunings the graph
+    exists to make.
+    """
+    panel.set_series(series([2.0, 3.0, 4.0]))
+
+    low, top = panel.value_range()
+    assert low == 0.0
+    # A floor at the minimum would have put the smallest value on the bottom
+    # edge instead.
+    assert panel.trace()[0][0].y() == pytest.approx(PANEL_HEIGHT * (1.0 - 2.0 / top))
+
+
+def test_the_peak_is_drawn_below_the_top_edge(panel: Any) -> None:
+    """The ceiling is the peak plus headroom.
+
+    A maximum drawn on the frame reads as a value that left the plot rather
+    than as the largest one in it.
+    """
+    panel.set_series(series([0.0, 4.0]))
+
+    _low, top = panel.value_range()
+    assert top > 4.0
+    assert panel.trace()[0][-1].y() > 0.0
+
+
+def test_a_series_that_never_moves_still_has_an_axis(panel: Any) -> None:
+    """A constant series has a peak equal to its floor, and a span of zero is
+    not an axis — `y_of` divides by it."""
+    panel.set_series(series([0.0, 0.0, 0.0]))
+
+    assert panel.value_range() == (0.0, 1.0)
+    assert [point.y() for point in panel.trace()[0]] == pytest.approx([float(PANEL_HEIGHT)] * 3)
+
+
 def test_a_stale_series_is_labeled_stale(panel: Any) -> None:
     """The old graph stays up and says what it is, rather than blanking.
 
@@ -124,3 +163,7 @@ def test_a_panel_with_nothing_to_draw_says_so(panel: Any) -> None:
     # A column of an axis that does not exist. Asked for by a resize arriving
     # before the first series, which is what a widget shown empty does.
     assert panel.x_of(START) == 0.0
+    # And the axis itself, which the same repaint asks for: a unit range, so
+    # that the first series to land is placed by the same arithmetic as the
+    # empty frame it replaces.
+    assert panel.value_range() == (0.0, 1.0)

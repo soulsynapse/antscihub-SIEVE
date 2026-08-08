@@ -2,7 +2,7 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/graph_panel.py --mutant \"low = min(float(finite.min()), 0.0) ==> low = float(finite.min())\" --mutant \"_HEADROOM = 1.06 ==> _HEADROOM = 1.0\" --mutant \"return (low, top) if top > low else (low, low + 1.0) ==> return (low, top)\" --mutant \"return 0.0, 1.0 ==> return 0.0, 2.0\" -- uv run pytest -q tests/gui/test_graph_panel.py"
 opened: 2026-08-08

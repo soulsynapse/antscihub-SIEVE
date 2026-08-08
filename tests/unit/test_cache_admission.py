@@ -32,6 +32,15 @@ refuses it outright. Both are held here anyway. Which of two failures announces
 itself is a property of a type in `core/types.py`, and a gate that only covered
 the quiet one would be relying on that type to stay the way it is.
 
+**A second graph, for the half a shared `span.start` cannot reach.** Every case
+built on the pair above fills the store from a run beginning where the served run
+begins, so both runs' lead-in frames are under-warmed by the same amount and
+agree with each other. What that hides is the boundary the entries are written
+at: an entry is settled once the lead-in *behind* the node has elapsed, which is
+its own warmup plus its ancestors', and a guard reading only the node's own is
+wrong by exactly the difference. `under_a_warmed_node` is where that difference
+is nonzero and visible.
+
 Real tools rather than fixtures, unlike every other file in `tests/unit/`: what
 is under test is a declaration two shipped tools make, and a fixture declaring
 `BOUNDED` would be testing that this file's author can write one.
@@ -56,7 +65,7 @@ from sieve.tools import discover
 
 SOURCE = "footage|1|2"
 
-BLOCKS, DETECTOR = "blocks", "detector"
+BLOCKS, DETECTOR, NORMALIZED = "blocks", "detector", "norm"
 
 #: Big enough that `block_signal`'s grid has several cells and small enough that
 #: two hundred frames of it cost nothing.
@@ -76,6 +85,13 @@ WIDTH, HEIGHT = 64, 48
 #: one of the two tools.
 WIDE = SourceSpan(start=60, end=140)
 NARROW = SourceSpan(start=60, end=80)
+
+#: A span that begins *before* `WIDE` does, which the two above cannot express
+#: between them: sharing a `span.start` means sharing a `decode_start`, so both
+#: runs' lead-in frames are under-warmed by the same amount and agree with each
+#: other. A run starting here decodes from 39 and is fully settled by 60, so
+#: every frame it is served from a `WIDE` store is one it can check.
+EARLIER = SourceSpan(start=40, end=100)
 
 
 class NoiseSource:
@@ -131,14 +147,45 @@ def graph() -> Pipeline:
     )
 
 
+def under_a_warmed_node() -> Pipeline:
+    """`block_signal -> normalize`: a node with no warmup of its own beneath one.
+
+    `detect` cannot show this. It over-declares — `node_warmup_frames` returns 22
+    for the configuration above while its arithmetic reaches `window_frames`
+    back — so an entry it files one frame too early is right by a margin nobody
+    declared, and the graph agrees with itself for the wrong reason. `normalize`
+    declares nothing and reaches nowhere: every frame of lead-in behind it is
+    its parent's, which is the whole quantity under test here.
+    """
+    return Pipeline(
+        nodes=(
+            Node(
+                node_id=BLOCKS,
+                tool_id="block_signal",
+                version="1.0.0",
+                params={"signal": "change_energy", "block": 8, "scale": 1.0, "fps": 30.0},
+            ),
+            Node(
+                node_id=NORMALIZED,
+                tool_id="normalize",
+                version="1.0.0",
+                params={"mode": "zscore"},
+            ),
+        ),
+        edges=(Edge(upstream=BLOCKS, downstream=NORMALIZED),),
+    )
+
+
 @pytest.fixture(scope="module", autouse=True)
 def shelf() -> None:
     """The process-wide registry, populated. These are the real tools."""
     discover()
 
 
-def plan_over(span: SourceSpan) -> ExecutionPlan:
-    return ExecutionPlan.build(Dag.build(graph()), source=SOURCE, span=span)
+def plan_over(span: SourceSpan, pipeline: Pipeline | None = None) -> ExecutionPlan:
+    return ExecutionPlan.build(
+        Dag.build(graph() if pipeline is None else pipeline), source=SOURCE, span=span
+    )
 
 
 def outputs(plan: ExecutionPlan, store: MemoryFrameStore | None = None) -> list[FrameResult]:
@@ -214,7 +261,7 @@ def test_a_run_that_was_served_nothing_computes_what_the_served_run_computed() -
             assert np.array_equal(result[node_id].data, earlier[node_id].data)
 
 
-def test_the_store_is_never_written_before_a_nodes_own_warmup_has_elapsed() -> None:
+def test_the_store_is_never_written_before_the_lead_in_behind_a_node_elapsed() -> None:
     """A lead-in frame is not what that node computes cold, so no key holds it.
 
     `detect` needs eleven frames behind its target here and the run decodes them,
@@ -222,6 +269,12 @@ def test_the_store_is_never_written_before_a_nodes_own_warmup_has_elapsed() -> N
     computed from a short window. An entry for one of them would be served to a
     later run that had decoded further back, in place of the settled answer —
     and the entry carries nothing that says which it is.
+
+    The boundary is the *accumulated* warmup and not the node's own: `detect` is
+    fed `block_signal`'s output, so the frame at which its answer stops carrying
+    where the run began is one frame later than its own declaration would put it.
+    Summed by hand over the two nodes rather than folded, because a walk written
+    here would be the executor's walk asserted against itself.
     """
     plan = plan_over(WIDE)
     store = MemoryFrameStore()
@@ -229,16 +282,60 @@ def test_the_store_is_never_written_before_a_nodes_own_warmup_has_elapsed() -> N
     outputs(plan, store)
 
     first = int(plan.decode_start)
+    # This configuration's numbers, not the specs' bounds: `detect` refines 1972
+    # down to what its bands and window actually reach.
+    warmups = {
+        node_id: node_warmup_frames((plan.dag.spec(node_id), plan.params[node_id])).frames
+        for node_id in (BLOCKS, DETECTOR)
+    }
+    settled = {BLOCKS: warmups[BLOCKS], DETECTOR: warmups[BLOCKS] + warmups[DETECTOR]}
     for node_id in (BLOCKS, DETECTOR):
-        # This configuration's number, not the spec's bound: `detect` refines
-        # 1972 down to what its bands and window actually reach.
-        warmup = node_warmup_frames((plan.dag.spec(node_id), plan.params[node_id])).frames
-        assert warmup > 0
+        assert warmups[node_id] > 0
         held = {
             index for index in plan.decode_range if store.get(plan.keys[node_id], index) is not None
         }
-        assert min(held) == first + warmup
-        assert min(held) < WIDE.start
+        assert min(held) == first + settled[node_id]
+
+    # The upper node keys frames the span does not contain, which is what makes
+    # this a boundary inside the decode range rather than the span's own edge.
+    # The lower one cannot: it is the node `plan.lead_in` was folded from, so
+    # the first frame it may key is the first frame asked for.
+    assert first + settled[BLOCKS] < WIDE.start
+    assert first + settled[DETECTOR] == WIDE.start == first + plan.lead_in.frames
+
+
+def test_an_entry_is_never_a_lead_in_frames_under_warmed_output() -> None:
+    """`executor.py`'s first bullet, run against a store filled by another span.
+
+    Every other case here fills the store from a run sharing this one's
+    `span.start`, so both runs' lead-in frames are equally under-warmed and the
+    comparison is of a mistake with itself. Here the filling run starts at 60 and
+    the served run at 40: it decodes from 39, is settled well before the first
+    frame it can be served, and so is in a position to notice an entry the first
+    run filed out of its own lead-in.
+
+    What that costs when the guard reads a node's own warmup: `normalize` has
+    none, so the filling run keys its very first decoded frame — computed from a
+    `block_signal` that had seen one frame rather than two — and hands it back
+    here as the settled answer.
+    """
+    store = MemoryFrameStore()
+    outputs(plan_over(WIDE, under_a_warmed_node()), store)
+
+    plan = plan_over(EARLIER, under_a_warmed_node())
+    served = outputs(plan, store)
+    cold = outputs(plan)
+
+    assert plan.lead_in_shortfall.frames == 0
+    for node_id in (BLOCKS, NORMALIZED):
+        assert {int(r.index) for r in served if node_id in r.from_cache}, (
+            f"{node_id} was served nothing, so this compares two cold runs"
+        )
+    for from_store, from_scratch in zip(served, cold, strict=True):
+        for node_id in (BLOCKS, NORMALIZED):
+            assert np.array_equal(from_store[node_id].data, from_scratch[node_id].data), (
+                f"{node_id} at frame {from_store.index} differs from its cold run"
+            )
 
 
 def test_the_two_epsilon_warmup_tools_are_still_refused() -> None:

@@ -1,7 +1,7 @@
 ---
 title: Cache admission reads the warmup, not the state flag
 step: "06.5"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_admission.py -q -k an_entry_is_never_a_lead_in_frames_under_warmed_output"
 opened: 2026-08-07

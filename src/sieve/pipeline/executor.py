@@ -26,9 +26,10 @@ that serves frames 150 to 200 and misses 201 is now reachable — and it leaves
 the tool at 149 with the loop at 201. Three things here answer that, and they
 are one rule seen from three sides:
 
-- The store is read and written only where this run has itself filled the node's
-  warmup, so an entry is never a lead-in frame's under-warmed output and a hit
-  is never better-warmed than what the run would have computed. The run's own
+- The store is read and written only where this run has itself filled the lead-in
+  behind the node — its own warmup *and* every ancestor's, accumulated along the
+  path — so an entry is never a lead-in frame's under-warmed output and a hit is
+  never better-warmed than what the run would have computed. The run's own
   lead-in therefore always computes, which is what settles the state before the
   first hit can happen.
 - A node whose history a skipped call would have filled — anything windowed, and
@@ -206,10 +207,9 @@ class BoundNode:
     #: one otherwise. A streaming node's warmup settles a state rather than
     #: filling a window, so it buys no history.
     window: int
-    #: This configuration's warmup, in this node's input frames. Two consumers
-    #: below and they are the same claim from either side: it is how far back an
-    #: output depends, so it is both how many frames to replay into a stale
-    #: state and how far into a run an entry stops being a lead-in artefact.
+    #: This configuration's warmup, in this node's input frames: how far back
+    #: its output depends on what it was fed, and therefore how many frames to
+    #: replay into a state the store's answers walked past.
     warmup: int
     #: Whether `run` carries state across calls, and therefore whether skipping
     #: a call leaves it behind the loop.
@@ -219,11 +219,29 @@ class BoundNode:
     #: Source frames this node's *upstream* output trails the loop by. Zero at
     #: a root, where the upstream is the reader.
     upstream_lag: int
+    #: Source frames of lead-in this node's *input* needs before what it is being
+    #: fed is itself settled. Zero at a root, where the input is the reader and a
+    #: decoded frame is what it is.
+    upstream_warmup: int
 
     @property
     def lag(self) -> int:
         """Source frames this node's own output trails the loop by."""
         return self.upstream_lag + self.lookahead
+
+    @property
+    def lead_in(self) -> int:
+        """Source frames behind a frame that this node's output for it depends on.
+
+        Its own warmup plus its ancestors', which is what an entry is settled
+        against: a node's output at frame `f` equals its cold value only once
+        every node above it has also been fed back to `f` minus its own warmup,
+        and that is a sum along the path rather than one node's declaration.
+        `ExecutionPlan.lead_in` is the maximum of this over the roots — the
+        graph's number, for widening one decode range; this is each node's own,
+        for deciding which of that range it may key.
+        """
+        return self.upstream_warmup + self.warmup
 
 
 @dataclass(slots=True)
@@ -256,8 +274,8 @@ def execute(
     Lead-in frames are computed and never yielded — they exist to warm the
     tools, and handing them to a caller would make the discard the caller's
     problem in every one of three call sites. They are not stored either, and
-    that is the newer half: a frame computed while a node's own warmup is still
-    filling is not the frame that node would compute cold. The frames past the span
+    that is the newer half: a frame computed while the lead-in behind a node is
+    still filling is not the frame that node would compute cold. The frames past the span
     that a lookahead declaration adds are never yielded either, for the mirror
     reason: they were read so that the last frames of the span could be
     answered, and nothing was asked about them.
@@ -330,14 +348,16 @@ def execute(
             answers_for = step - bound.lag
             key = plan.keys.get(node.node_id)
             # The store is touched only where this run has itself filled the
-            # node's warmup, and both directions of that matter. Writing an
-            # earlier entry would file a lead-in frame's short-window output
-            # under a key that says nothing about how much lead-in it got, and
-            # a later run would be served it in place of the settled answer.
+            # lead-in behind the node — its own warmup and every ancestor's,
+            # which is `bound.lead_in` and not `bound.warmup`. Both directions of
+            # that matter. Writing an earlier entry would file the output of a
+            # node that was itself fed under-warmed frames, under a key that says
+            # nothing about how much lead-in it got, and a later run reaching
+            # further back would be served it in place of the settled answer.
             # Reading one would be the mirror: a run clamped at frame 0 would be
             # handed a better-warmed frame than it would have computed, which is
             # still a range that does not equal its cold run.
-            reusable = key is not None and answers_for - first >= bound.warmup
+            reusable = key is not None and answers_for - first >= bound.lead_in
             # Where the one lookup happens. A node whose history the hit does
             # not fill can be asked before its input is fetched, which is what
             # keeps a warm re-render from decoding; every other node is asked
@@ -625,6 +645,10 @@ def _bind(plan: ExecutionPlan) -> dict[str, BoundNode]:
             lookahead=lookahead,
             upstream_lag=max(
                 (bindings[parent].lag for parent in plan.dag.upstreams[node.node_id]),
+                default=0,
+            ),
+            upstream_warmup=max(
+                (bindings[parent].lead_in for parent in plan.dag.upstreams[node.node_id]),
                 default=0,
             ),
         )

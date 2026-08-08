@@ -1,6 +1,6 @@
 ---
 title: Two ids anchored with `$` take a trailing newline from a document
-status: awaiting-review
+status: done
 priority: normal
 phase: 2
 gated_on: nothing

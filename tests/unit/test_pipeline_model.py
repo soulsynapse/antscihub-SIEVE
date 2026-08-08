@@ -144,6 +144,26 @@ pipeline:
         with pytest.raises(ValidationError, match="sink format must match"):
             Sink(node_id="n1", format="CSV", path="detections")
 
+    def test_a_node_id_the_filesystem_cannot_hold_is_refused_at_load(self) -> None:
+        # A checkpoint is `<node_id>.npy` and the manifest names ids too, so an
+        # id carrying a separator aims a write outside the folder it was meant
+        # for — and the way to get one is to hand-edit the YAML, which is why
+        # the document is refused as it is read rather than by each consumer as
+        # it builds a path. Sanitizing instead would mint one mapping per
+        # consumer, and two ids sanitizing alike is one file holding two
+        # results.
+        with pytest.raises(ValidationError, match="node_id must match"):
+            Project.from_yaml(
+                "source: {path: arena.MP4}\n"
+                "pipeline:\n"
+                "  nodes: [{node_id: ../escape, tool_id: downsample, version: 1.0.0}]\n"
+            )
+        with pytest.raises(ValidationError, match="node_id must match"):
+            Node(node_id="a/b", tool_id="downsample", version="1.0.0")
+        # Looser than `tool_id`'s, and it has to be: the generated id is
+        # `uuid4().hex`, which begins with a digit more often than not.
+        assert Node(node_id="9f2c", tool_id="downsample", version="1.0.0").node_id == "9f2c"
+
     def test_a_tool_id_that_cannot_key_a_cache_is_refused(self) -> None:
         # Not registry awareness — it never asks whether the tool exists — but
         # the same syntactic contract `ToolSpec` applies. An id that depends on

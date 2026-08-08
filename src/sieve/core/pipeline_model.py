@@ -25,7 +25,7 @@ a project open on a machine where a tool is missing: the user gets "no tool
 than a parse error that names nothing. It is also what lets a front end draw a
 graph it cannot execute. What *is* checked here is structural — ids unique,
 edges pointing at nodes that exist, `tool_id`/`version` syntactically able to
-enter a cache key. Cycle detection is not, because it needs a traversal, it is
+enter a cache key, `node_id` able to be a file name. Cycle detection is not, because it needs a traversal, it is
 the first thing `dag.py` does, and two implementations means two answers.
 
 Registry-blindness is also why the crop record's `backs` takes a region rather
@@ -56,6 +56,7 @@ report keys against them from outside — and that is all it owes.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Self
@@ -85,6 +86,16 @@ PROJECT_SUFFIX = ".sieve.yaml"
 #: resolved by name at run time, and both appear in paths and CLI arguments
 #: where case folding and shell quoting are not to be relied on.
 _SINK_FORMAT_PATTERN = TOOL_ID_PATTERN
+
+#: What a node id may be spelt as. Node ids reach the filesystem — a checkpoint
+#: is `<node_id>.npy`, and a manifest and a crop artifact name them too — so an
+#: id holding a separator aims a write outside the folder it was meant for, and
+#: a hand-edited document is all it takes to write one. Refused here rather than
+#: sanitized per consumer: two ids that sanitize alike are one file, and a
+#: result silently overwriting another is the failure the reviewer-rerun promise
+#: cannot survive. Looser than `TOOL_ID_PATTERN`, which a generated id would
+#: fail — `uuid4().hex` may start with a digit.
+NODE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def project_path_for(video: Path) -> Path:
@@ -426,7 +437,9 @@ class Node(_Artifact):
     #: Stable across reorderings and parameter edits, because edges,
     #: checkpoints, sinks and overrides all reference it. Generated rather than
     #: derived from the tool id: two `downsample` nodes in one graph is
-    #: ordinary.
+    #: ordinary. Spelt within `NODE_ID_PATTERN`, which is also the rule for what
+    #: a user may type where an id is typed — `Node` carries no display name, so
+    #: until a surface wants one there is nothing else for a rename to write on.
     node_id: str = Field(default_factory=_new_id)
     tool_id: str
     version: str
@@ -438,6 +451,16 @@ class Node(_Artifact):
     @classmethod
     def _unwritable(cls, value: dict[str, Any]) -> dict[str, Any]:
         return frozen_value(value)
+
+    @field_validator("node_id")
+    @classmethod
+    def _known_shape_node_id(cls, value: str) -> str:
+        if not NODE_ID_PATTERN.match(value):
+            raise ValueError(
+                f"node_id must match {NODE_ID_PATTERN.pattern!r}, got {value!r} — it becomes a "
+                "file name, so it may not depend on case folding or shell quoting to stay itself"
+            )
+        return value
 
     @field_validator("tool_id")
     @classmethod

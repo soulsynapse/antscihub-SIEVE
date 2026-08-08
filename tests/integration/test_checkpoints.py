@@ -39,7 +39,13 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
 from sieve.pipeline.plan import ExecutionPlan
-from sieve.storage.checkpoint_writer import BASELINE_DIR, MANIFEST_NAME, checkpoints_dir
+from sieve.storage.checkpoint_writer import (
+    BASELINE_DIR,
+    MANIFEST_NAME,
+    CheckpointWriteError,
+    CheckpointWriter,
+    checkpoints_dir,
+)
 from sieve.tools import discover
 from tests.conftest import FIXTURE_FRAMES
 
@@ -317,20 +323,44 @@ class TestAnUnfinishedRunLeavesNothingToBelieve:
 def test_a_node_id_that_is_not_a_file_name_is_refused(
     synthetic_video: Path, tmp_path: Path, node_id: str
 ) -> None:
-    """`Node.node_id` carries no spelling rule and this one reaches a path.
+    """An id that would aim a write out of the folder never reaches the writer.
 
-    A project is hand-editable YAML, so an id with a separator in it would aim a
-    write outside the folder it was meant for. Refused rather than sanitized:
-    two ids that sanitize alike would silently become one file.
+    The schema refuses it (`NODE_ID_PATTERN`), so the document has to be written
+    past the model to get here — hand-edited YAML is the only way to produce one,
+    and it is the way this run gets it. What the run has to demonstrate is that
+    the refusal arrives before any decoding, with the id named, rather than as a
+    path error from whatever built one first.
     """
+    placeholder = "zz"
     project_path = _project(
         synthetic_video,
         tmp_path,
-        checkpoints=(node_id,),
-        pipeline=Pipeline(nodes=(Node(node_id=node_id, tool_id="downsample", version="1.0.0"),)),
+        checkpoints=(placeholder,),
+        pipeline=Pipeline(
+            nodes=(Node(node_id=placeholder, tool_id="downsample", version="1.0.0"),)
+        ),
+    )
+    project_path.write_bytes(
+        project_path.read_bytes().replace(placeholder.encode(), node_id.encode())
     )
 
     result = runner.invoke(app, ["run", str(project_path), "--frames", f"{SPAN.start}:{SPAN.end}"])
 
     assert result.exit_code == 1
-    assert "file name" in result.stderr
+    assert "node_id must match" in result.stderr
+    assert node_id in result.stderr
+    assert not (checkpoints_dir(synthetic_video, tmp_path)).exists()
+
+
+def test_the_writer_refuses_an_id_no_document_could_have_carried(
+    synthetic_video: Path, tmp_path: Path
+) -> None:
+    """The writer's own guard, which a document can no longer reach.
+
+    Constructed directly rather than through `sieve run`, because that is now
+    the only way in: the schema refuses such an id at load, so the write-side
+    defense survives for callers that assemble a mapping instead of loading a
+    document — and a defense nothing exercises is one that rots.
+    """
+    with pytest.raises(CheckpointWriteError, match="cannot be a file name"):
+        CheckpointWriter(synthetic_video, project_dir=tmp_path, keys={"a/b": "deadbeef"}, span=SPAN)

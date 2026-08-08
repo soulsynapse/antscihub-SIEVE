@@ -1,6 +1,6 @@
 ---
 title: A node id reaches the filesystem with no spelling rule
-status: open
+status: awaiting-review
 priority: normal
 phase: 2
 gated_on: nothing

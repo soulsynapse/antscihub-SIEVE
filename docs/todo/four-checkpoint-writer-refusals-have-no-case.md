@@ -31,6 +31,25 @@ caller that justifies it. `adr/declared-means-verified.md` is the same argument
 one level down from a schema field — a message a user is promised and can never
 see is a claim the code does not keep.
 
+Fold, 2026-08-08, from `a-node-id-reaches-the-filesystem-with-no-spelling-rule`:
+the unusable-node-id refusal has moved category. `Node.node_id` now carries
+`NODE_ID_PATTERN` and the document is refused at load, so no project can reach
+that raise — the integration case that used to drive it through `sieve run` now
+dies in the schema, and the writer's guard is exercised by a direct
+`CheckpointWriter` construction added beside it. It is now the same shape as the
+out-of-order guard below: a defense kept for a caller that assembles a mapping
+rather than loads a document, and the decision this item makes has to rule on it
+on those terms rather than on "reached by an integration test".
+
+The same fold carries a hole the pattern did not close. `replicate_dir` names a
+folder `replicate.replicate_id`, and `Replicate.replicate_id` has no spelling
+rule at all — it is checked for uniqueness and nothing else, exactly where
+`node_id` was before this. It is a missing refusal in the same module rather than
+one of the six, and the argument for the schema over the consumer is the one
+already ruled for `node_id`: two ids sanitizing alike are one folder holding two
+replicates' results. `Sink.sink_id` is the third generated id and reaches no path
+today, which is the distinction to check rather than assume.
+
 The out-of-order guard in `record` is the interesting one: it is unreachable
 today only because `run_cmd` is the single caller and feeds it the executor's
 stream directly. It is the guard that would fire the day something else drives a

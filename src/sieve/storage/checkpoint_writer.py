@@ -46,7 +46,6 @@ later ask whether the file still describes what the project would now compute.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from pathlib import Path
 from types import TracebackType
@@ -56,7 +55,7 @@ import yaml
 from numpy.lib.format import open_memmap
 from numpy.typing import NDArray
 
-from sieve.core.pipeline_model import Replicate, Sink, SourceSpan
+from sieve.core.pipeline_model import NODE_ID_PATTERN, Replicate, Sink, SourceSpan
 from sieve.core.types import Frame
 
 #: The `Sink.format` a checkpoint is recorded under, spelt as a sink format is
@@ -81,12 +80,6 @@ MANIFEST_VERSION = 1
 #: checkpoint folder itself, so that adding the first replicate to a project
 #: moves results into a sibling rather than leaving them mixed with it.
 BASELINE_DIR = "baseline"
-
-#: What a node id may be when it becomes a file name. A document is hand-editable
-#: YAML and `Node.node_id` carries no spelling rule, so an id containing a
-#: separator would write outside the folder it was aimed at. Refused rather than
-#: sanitized: two ids that sanitize alike would silently be one file.
-_SAFE_NODE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
 
 class CheckpointWriteError(RuntimeError):
@@ -151,8 +144,12 @@ class CheckpointWriter:
         """
         if not keys:
             raise CheckpointWriteError("a checkpoint writer was built with no checkpointed nodes")
+        # The schema's rule checked a second time rather than a second rule: a
+        # document is refused at load for an id that cannot be a file name, and
+        # ids also reach here from callers that assembled a mapping instead of
+        # loading one. A regex match per checkpointed node, once per run.
         for node_id in keys:
-            if not _SAFE_NODE_ID.match(node_id):
+            if not NODE_ID_PATTERN.match(node_id):
                 raise CheckpointWriteError(
                     f"node id {node_id!r} is checkpointed but cannot be a file name; ids reaching "
                     "the filesystem must be alphanumerics, dots, dashes and underscores"

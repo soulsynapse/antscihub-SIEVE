@@ -51,3 +51,20 @@ of the pair, not a hard-coded name — so the item closes whichever way the pair
 travels and does not close if it stays split. `lint-imports` is joined to it
 because the "moves down" branch is the one that can be made to pass by breaking
 a layer, and a green suite would not say so.
+
+## Folded in 2026-08-08: the guard's neighbours are described wrongly beside it
+
+Whichever way the pair travels, it carries the case that 8fba2b7 added for
+`input_warmup_frames`'s non-positive-rate refusal, and two sentences in that
+case are false about the guard one line below. `StalledParams`'s docstring in
+`tests/unit/test_tool_contract.py` says a zero rate "makes `at_input_of` divide
+by zero" and the inline comment in
+`test_a_non_positive_output_rate_is_refused_on_the_warmup_side` says a negative
+one "arrives as frames rather than as an error". Neither happens:
+`FrameCount.at_input_of` refuses `rate <= 0` before dividing, so both
+directions raise there identically, and the guard above it buys the `tool_id`
+and nothing else — which is what the case actually proves, per call, and what
+the item that added it records under its own proof-of-red heading. The
+correction belongs with the move because the move is what will next read these
+lines; the measurement is in
+`findings/loop/2026.08.08-the-proof-of-red-corrects-the-item-and-leaves-the-comment-it-was-written-from.md`.

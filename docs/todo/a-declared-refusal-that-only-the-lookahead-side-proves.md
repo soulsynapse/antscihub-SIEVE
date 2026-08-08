@@ -2,7 +2,7 @@
 title: A declared refusal that only the lookahead side proves
 priority: normal
 phase: 3
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py tests/unit/test_plan.py -q -k warmup_side"
 opened: 2026-08-07

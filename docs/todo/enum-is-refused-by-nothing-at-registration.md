@@ -2,7 +2,7 @@
 title: ENUM is checked for nothing at registration, and a $ref nothing writes decides a branch
 priority: low
 phase: 7
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -q -k 'enum_over_an_annotation_with_no_choices or a_pointer_pydantic_does_not_write'"
 opened: 2026-08-08

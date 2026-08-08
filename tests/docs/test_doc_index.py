@@ -1071,6 +1071,11 @@ ONE_FORM_TEMPLATE = (
     SILENT_TEMPLATE + '\nWrite `gated_on: "the pin"` and the value is read as written.\n'
 )
 
+#: States the rule once and shows the form that fails without ever offering the
+#: one that works — the mirror of `ONE_FORM_TEMPLATE`, and the state a template
+#: reaches by trimming the fix as redundant with the sentence above it.
+ILLEGAL_ONLY_TEMPLATE = SILENT_TEMPLATE + '\n`gated_on: "the pin` is not valid YAML.\n'
+
 #: Shows both forms and states nothing. `stated` is the only one of the three
 #: counts this moves, so it is the subject that count has a case from.
 UNSTATED_TEMPLATE = """---
@@ -1150,6 +1155,19 @@ def test_a_template_that_shows_one_form_is_reported(tmp_path):
     docs = _docs_with_template(tmp_path, ONE_FORM_TEMPLATE)
 
     assert _silent(docs) == ["questions: states it 1x, 1 legal / 0 illegal"]
+
+
+def test_a_template_that_shows_only_the_failing_form_is_reported(tmp_path):
+    """The `legal` leg, which no subject the guard had could fail alone.
+
+    `SILENT_TEMPLATE` fails `legal` and `illegal` together, so deleting
+    `shown.legal` from the conjunction left the module green: a template that
+    names the construction to avoid and never writes the one to use was
+    compliant, which is the half-taught state read from the other side.
+    """
+    docs = _docs_with_template(tmp_path, ILLEGAL_ONLY_TEMPLATE)
+
+    assert _silent(docs) == ["questions: states it 1x, 0 legal / 1 illegal"]
 
 
 def test_a_template_that_shows_the_rule_without_stating_it_is_reported(tmp_path):

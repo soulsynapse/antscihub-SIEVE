@@ -2,7 +2,7 @@
 title: The guard's legal-form leg is the one of the three still carried by no subject
 priority: normal
 phase: "00"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest \"tests/docs/test_doc_index.py::test_a_template_that_shows_only_the_failing_form_is_reported\" -q"
 opened: 2026-08-07

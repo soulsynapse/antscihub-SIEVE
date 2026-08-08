@@ -1,6 +1,6 @@
 ---
-name: orc
-description: Queue a prompt into the agent-orchestrator window from this repo, instead of doing the work in this session. Use when Kendrick says to queue something, add it to the queue, send it to the orchestrator, or hand it to a run — with /orc or in his own words.
+name: q
+description: Queue a prompt into the agent-orchestrator window from this repo, instead of doing the work in this session. Use when Kendrick says to queue something, add it to the queue, send it to the orchestrator, or hand it to a run — with /q or in his own words.
 ---
 
 # Queue it, don't do it
@@ -25,7 +25,7 @@ and anything the run could not work out for itself. Not a plan, not a file list,
 not steps. The run starts later against a tree that has moved on, and
 over-specifying is the usual way a queued entry fails.
 
-If `/orc` came with text, that text is the subject; work it up into an outcome
+If `/q` came with text, that text is the subject; work it up into an outcome
 rather than queueing it verbatim. If it came with nothing, queue what this
 conversation has just settled on, and say back what you queued.
 

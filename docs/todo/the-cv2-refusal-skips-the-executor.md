@@ -2,7 +2,7 @@
 title: The cv2 refusal skips the executor, and three of its sources answer to no row
 priority: high
 phase: 0
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_contract_lines_go_red.py -q -k opencv-containment__sieve_pipeline_imports_cv2"
 opened: 2026-08-08

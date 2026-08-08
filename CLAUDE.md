@@ -135,10 +135,12 @@ what lands under your name is what you wrote.
 Traps each of which has cost a session, so they are named once here:
 
 - Commit messages go through a file — `Write` the message, then
-  `git commit -F <file>` — never a PowerShell here-string piped through Bash,
-  which has twice put a quoting artefact into a pushed commit message — once a
-  subject line of a bare `@` with the real subject demoted into the body, once
-  doubled apostrophes throughout the body.
+  `git commit -F <file>` — never a here-string, in either shell. `@'…'@` in
+  Bash concatenates into a message whose first line is a bare `@`, so the
+  subject reads `@ type(scope): …` in the log; written in PowerShell, where
+  the delimiter is real, a doubled apostrophe stays doubled in the body. Both
+  exit 0 with nothing said, and the no-force rule freezes what was pushed —
+  `git log --format=%s | grep '^@'` counts how often this has already landed.
 - The working tree is CRLF; text you match against it or restore into it goes
   through bytes, not `write_text`. A mutation sweep is
   `uv run python scripts/mutation_sweep.py` (its docstring is the contract),

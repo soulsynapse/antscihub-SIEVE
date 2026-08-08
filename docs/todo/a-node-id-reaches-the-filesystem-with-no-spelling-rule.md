@@ -1,9 +1,10 @@
 ---
 title: A node id reaches the filesystem with no spelling rule
-status: open
+status: deferred
+deferred_for: decision
 priority: normal
 phase: 2
-gated_on: nothing
+gated_on: Kendrick deciding whether a node id is a filesystem-safe name that schema v1 refuses at load, or a free-form string each consumer sanitises on its own terms
 opened: 2026-08-07
 ---
 
@@ -29,3 +30,18 @@ sanitising or refusing on its own terms.
 Not decided here because it is a schema change with a migration shape to it:
 `SCHEMA_VERSION` is 1 and there is no importer, so tightening the field now is
 free, and tightening it after a project exists in the wild is not.
+
+The recommendation, since the decision is what this now waits on: put the
+pattern on the field. `node_id` defaults to `uuid4().hex`, so nothing SIEVE
+generates can fail it, and the ids it would refuse are the ones only a
+hand-edited document produces today. The reversibility runs one way — a wider
+pattern admits every document a narrower one did, so loosening stays free
+after there are projects in the wild, and tightening does not.
+
+What the choice actually costs sits in a surface nothing has scoped. `Node`
+carries no label, so `node_id` is the only handle a rename would have to
+write on, and a pattern on the field is then a rule about what a user may type
+into a GUI — the alternative being a second field that holds the readable name
+and leaves the id machine-spelled. That is the half only Kendrick can settle,
+and it is why no `done_when` is written here: the command would assert the
+answer.

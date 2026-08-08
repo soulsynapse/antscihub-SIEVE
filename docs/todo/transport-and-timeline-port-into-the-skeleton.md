@@ -1,7 +1,7 @@
 ---
 title: Transport and timeline port into the skeleton
 step: "07.6"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_timeline.py tests/gui/test_player_scrub.py -q"
 opened: 2026-08-08

@@ -37,8 +37,50 @@ deletion, and no production caller can reach either — the canvas takes a
 already recorded for `_value_components`
 (`the-arity-guard-accepts-a-union-nothing-asked-it-about.md`): the refusal
 cases have to be written against widgets the tree does not otherwise hold.
+(07.6 has since replaced the `QLabel` with `canvas.VideoCanvas`, which declares
+`Expanding` on both axes, so the guard is still unreachable and for the same
+reason — the sentence above is corrected, not the finding.)
 And `control.show_graph` carries the rail's visibility across a rebuild rather
 than deciding it, so that a walk moved from the project position does not put
 a rail on a screen with no graph on it; `setVisible(True)` in its place
 survives, because nothing moves the walk while the project position is
 current.
+
+## The same shape three modules later, from 07.6's review (2026-08-08)
+
+The transport-and-timeline port added `gui/canvas.py`, `gui/timeline/geometry.py`
+and `gui/timeline/window.py`, and two of the three carry the same gap for the
+same reason: the ported tests are v2's claims, and the modules v3 wrote fresh to
+serve the port get no case of their own.
+
+`gui/canvas.py` is held by nothing at all.
+`uv run python scripts/mutation_sweep.py --file src/sieve/gui/canvas.py --mutant "self._frame = image ==> pass  # " -- uv run pytest -q`
+is green across the whole 868-test suite: the viewport can drop every frame the
+transport hands it and no case moves, including
+`test_timeline.py::TestTheSkeletonBindsTheSource::test_the_first_frame_reaches_the_canvas`,
+which is named for the canvas and asserts on the strip's `window_rect`. The
+same sweep survives `min(..., 1.0) ==> 1.0` in `frame_rect` — the never-upscale
+rule the module docstring argues from the proxy width — and `self._frame = None
+==> pass` in `clear`. `frame_rect`'s own docstring says it is exposed *because*
+"the footage is not stretched" is a claim about this rectangle; nothing asks it.
+The item's headline promise, that the canvas plays and scrubs footage through
+the decode path, is carried by the player's tests up to the signal and by
+nothing past it.
+
+`gui/timeline/geometry.py` loses its two argued numbers to one fixture choice.
+Under `uv run pytest -q tests/gui`, `MIN_BAND_PIXELS = 2.0 ==> 0.0` survives and
+`index = int(x / self.width * self.frame_count) ==> int(x / (self.width - 1) *
+...)` survives — the second being the exact off-by-one the `frame_at` docstring
+spends four lines refusing. Both survive because `test_timeline.py` resizes the
+strip to `STRIP_WIDTH = 1000` over `SOURCE_FRAMES = 1000` so that "every frame
+owns exactly one column", which is a readability decision that also makes
+`width` and `width - 1` agree everywhere a case looks, and makes every window
+wider than the floor. The fixtures the two need are a band wider than the asset
+is long (the ordinary case the docstring names: a short source in a maximised
+window) and a one-frame window in a long source. `centre_of_frame`'s `+ 0.5`
+does die, so the module is not uncovered — these two are.
+
+`window.py`'s `length = min(window.frame_count, frame_count)` in `moved_to` also
+survives; that clamp only bites for a window longer than its source, which the
+bar cannot currently produce, so it is the guard-with-no-caller shape rather
+than a missing fixture and is the least of the four.

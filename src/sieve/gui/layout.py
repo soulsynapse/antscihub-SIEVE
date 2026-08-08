@@ -6,9 +6,10 @@ one package by decision — a dragged crop box is the active step drawn elsewher
 (`PLAN.md`, Phase 7) — so the fence between them is this module's silence about
 their insides, not an import contract.
 
-The bar under the canvas that VISION gives the scrubber is not here yet. It
-arrives with the scrubber, because a fixed-height strip holding nothing is a
-layout decision taken before the thing it is for exists.
+The scrubber runs the full width under both halves rather than under the canvas
+alone. VISION calls it "the bottom area", and it is the one surface whose answer
+— where am I, and what stretch am I working on — must not depend on which
+position the control track is showing.
 """
 
 from __future__ import annotations
@@ -78,8 +79,14 @@ class CanvasSlot(QWidget):
         widget.show()
 
 
-def compose(canvas: QWidget, control: QWidget) -> QWidget:
-    """The canvas and the control side, split evenly, resizable by the divider."""
+def compose(canvas: QWidget, control: QWidget, timeline: QWidget) -> QWidget:
+    """The canvas and the control side split evenly, the timeline under both.
+
+    The timeline is not a layout section: it fixes its own height by design
+    (`timeline/bar.STRIP_HEIGHT`), which is the declaration `_require_layout_section`
+    refuses — vertically, though, and the splitter it must not fight is
+    horizontal, so it is placed here rather than checked.
+    """
     _require_layout_section(canvas)
     _require_layout_section(control)
 
@@ -94,7 +101,14 @@ def compose(canvas: QWidget, control: QWidget) -> QWidget:
     # sizeHint-driven allocation instead. Real pixel values against the window
     # size this module owns sidestep that.
     split.setSizes([_WINDOW_WIDTH // 2, _WINDOW_WIDTH // 2])
-    return split
+
+    stacked = QWidget()
+    column = QVBoxLayout(stacked)
+    column.setContentsMargins(0, 0, 0, 0)
+    column.setSpacing(0)
+    column.addWidget(split, 1)
+    column.addWidget(timeline)
+    return stacked
 
 
 def size_window(window: QMainWindow) -> None:

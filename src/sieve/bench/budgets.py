@@ -7,11 +7,9 @@ drift away from what the code enforces, in either direction.
 
 **A ceiling nothing publishes is a number, not a budget**, which is the half of
 the claim this table cannot state by itself. It is stated by `WITHOUT_PRODUCER`
-below and checked by `tests/bench/test_budget_producers.py`. Three of the twelve
-have left that set — `pipeline/preview.py` publishes both sides of a render and
-`pipeline/series_collector.py` the refill of the series a graph is drawn from —
-and the set is where the rest are written down rather than left to be inferred
-from the absence of a call.
+below and checked by `tests/bench/test_budget_producers.py`. That set names the
+ceilings nothing publishes yet; it is where the gap is written down rather than
+left to be inferred from the absence of a call, and it only shrinks.
 
 Every limit carries an **anchor** comment saying which perceptual band the
 number came from (~100 ms reads as instantaneous, ~1 s holds the flow of
@@ -223,13 +221,15 @@ BUDGETS: dict[str, Budget] = _table(
 #: import this table — so those two ceilings can now be missed by something a
 #: user runs. 06.6 took the third for the same reason and from the same layer:
 #: `pipeline/series_collector.py` publishes `slider_to_graph` around the refill
-#: that carries a render on to the array a graph is drawn from. The rest are the
-#: honest reading of a repo that plots nothing and has no GUI: nothing under
-#: `src/` outside this package names them.
+#: that carries a render on to the array a graph is drawn from. 07.6 took the
+#: fourth from a layer that may import this table: `gui/transport/player.py`
+#: publishes `scrub_to_repaint` around the round trip of a drag, and reads its
+#: own degradation threshold from the same row so the trigger and the ceiling
+#: cannot drift apart. The rest are the honest reading of a repo that plots
+#: nothing: nothing under `src/` outside this package names them.
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
     {
         "open_to_first_frame",
-        "scrub_to_repaint",
         "scrub_settle",
         "cut_to_ready",
         "tool_to_first_tick",

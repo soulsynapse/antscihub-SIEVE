@@ -9,73 +9,86 @@ tree reads top of the stack first: a package may reach only what is
 listed below it.
 
 ```tree
-src/sieve/__init__.py                   # Signal isolation for ethological video events.
-src/sieve/gui/__init__.py               # Rendering values, emitting intents, holding view state; computes nothing.
-src/sieve/gui/app.py                    # The window: what the parts are, and what the four navigation verbs mean.
-src/sieve/gui/control.py                # Which of the three positions is showing, and the track that slides between.
-src/sieve/gui/hotkeys.py                # Which keys exist and which verb each one calls.
-src/sieve/gui/layout.py                 # Where the main window's two halves sit and how big they start.
-src/sieve/gui/node_list.py              # How one node is drawn, and how the ordered list of them is built.
-src/sieve/gui/param_form.py             # One control per parameter, chosen by how the parameter is populated.
-src/sieve/gui/project_select.py         # Picking one of the project files that already exist.
-src/sieve/gui/rail.py                   # One tick per node, down the left edge, marking where the walk is.
-src/sieve/gui/walk.py                   # The order Up and Down move through a graph.
-src/sieve/cli/__init__.py               # The headless front end; with the saved file, the cluster handoff.
-src/sieve/cli/app.py                    # The `sieve` command: argument parsing and nothing else.
-src/sieve/cli/inspect_cmd.py            # `sieve inspect` — what is on the shelf, read off the declarations.
-src/sieve/cli/preview_cmd.py            # `sieve preview` — the tuning loop's inner step, with the timings printed.
-src/sieve/cli/run_cmd.py                # `sieve run` — execute a saved project through the one executor.
-src/sieve/session/__init__.py           # The open project and its history: two stacks of whole immutable pipeline values.
-src/sieve/session/intents.py            # Every mutation of the open project, named by what it changes.
-src/sieve/session/session.py            # The open project, the file it came from, and the two stacks around it.
-src/sieve/bench/__init__.py             # The budget table and the metric bus: the loop's claims as numbers.
-src/sieve/bench/budgets.py              # The latency budget table. Source of truth in code for both speed regimes.
-src/sieve/bench/metrics.py              # The metric collection bus: where a timed interval goes and who hears it.
-src/sieve/pipeline/__init__.py          # The DAG, the plan, cache keys, and the one executor.
-src/sieve/pipeline/cache.py             # Where a computed frame is kept so it is not computed twice.
-src/sieve/pipeline/cache_key.py         # What makes two computations the same computation.
-src/sieve/pipeline/crop_binding.py      # Which record backs a box right now, and why one stopped.
-src/sieve/pipeline/dag.py               # The graph, resolved: what runs, in what order, and whether it can run at all.
-src/sieve/pipeline/executor.py          # The single shared execution path: a plan, a reader, and a store go in.
-src/sieve/pipeline/materialize.py       # Cut one replicate's crop to a file, and refuse to register one that lies.
-src/sieve/pipeline/plan.py              # Everything about a run that is knowable before a frame is decoded.
-src/sieve/pipeline/preview.py           # The preview session: one working window, one replicate, many revisions.
-src/sieve/pipeline/resolve_source.py    # Which file a run opens, and in whose frame numbering.
-src/sieve/pipeline/series_collector.py  # Assemble one node's per-frame outputs into the series a graph is drawn from.
-src/sieve/pipeline/source_home.py       # The frame of reference a crop record is read against: three facts, one value.
-src/sieve/tools/__init__.py             # Every pipeline step, one module each: a ToolSpec and one plain run function.
-src/sieve/tools/background_ema.py       # An exponential moving-average background model, and the difference from it.
-src/sieve/tools/block_signal.py         # Per-block motion signals from the structure tensor of consecutive frames.
-src/sieve/tools/crop.py                 # Take a region of every frame, with the whole frame as the identity value.
-src/sieve/tools/detect.py               # Morlet band power, an in-band block count, and a centred detection gate.
-src/sieve/tools/downsample.py           # Reduce spatial resolution by an integer factor.
-src/sieve/tools/motion_history.py       # A causal leaky accumulator of per-block activity, with its neighbours.
-src/sieve/tools/normalize.py            # Per-frame contrast normalization: `off` or `zscore`.
-src/sieve/tools/rescale.py              # Reduce spatial resolution by a float linear scale factor.
-src/sieve/tools/span.py                 # Keep a range of frames, with every frame there could be as the identity value.
-src/sieve/tools/temporal_baseline.py    # Each cell's own null distribution over time, and the signal in units of it.
-src/sieve/decode/__init__.py            # The codec boundary: lowering into ffmpeg, prefetch, decoder identity.
-src/sieve/decode/ffmpeg.py              # FFmpeg rawvideo source for a crop/scale prefix lowered out of the graph.
-src/sieve/decode/identity.py            # Decoder identity string for cache key derivation.
-src/sieve/decode/lowered.py             # Pure value objects for source prefixes that have been lowered into decode.
-src/sieve/decode/prefetch.py            # N readers over one file, reading ahead in order, so the convert is not the rate.
-src/sieve/decode/quiet.py               # Drop one known-benign OpenCV line from stderr, and pass everything else on.
-src/sieve/decode/reader.py              # OpenCV `VideoCapture` wrapper trading grab-vs-seek and BGR-vs-luma for
-src/sieve/storage/__init__.py           # Sink writers: how results leave the pipeline for disk.
-src/sieve/storage/checkpoint_writer.py  # A checkpointed node's whole span at rest: one `.npy`, plus a manifest.
-src/sieve/storage/crop_writer.py        # FFV1 in Matroska, written frame by frame from arrays.
-src/sieve/mutual/__init__.py            # Dependency-shared resource readings and declarations.
-src/sieve/mutual/machine.py             # The machine is read once. Both resources, one home, importable headless.
-src/sieve/mutual/pool_meter.py          # The counters a worker pool exposes so its utilisation stops being a guess.
-src/sieve/mutual/shares.py              # How a session divides the machine among threads and bytes: one table,
-src/sieve/core/__init__.py              # The dimensioned types, the tool contract and registry, schema v1, spec-free `ops/`.
-src/sieve/core/pipeline_model.py        # Schema v1: the saved document a run is reproducible from.
-src/sieve/core/tool_base.py             # The tool contract, as data: `ToolSpec`, `ParamsBase`, `ArraySpec`, `Mode`.
-src/sieve/core/tool_registry.py         # The shelf tools put themselves on: a container keyed by `(id, version)`.
-src/sieve/core/types.py                 # Frame, ROI, quantities, and metadata value objects shared across all layers.
-scripts/doc_index.py                    # The derived docs: indexes, ARCHITECTURE, the scaffold, and `--next`.
-scripts/inherited_changes.py            # What a run inherited: uncommitted changes present before it wrote anything.
-scripts/mutation_sweep.py               # Mutation sweeps over one file: unique anchors, byte-exact restore, no stale bytecode.
+src/sieve/__init__.py                      # Signal isolation for ethological video events.
+src/sieve/gui/__init__.py                  # Rendering values, emitting intents, holding view state; computes nothing.
+src/sieve/gui/app.py                       # The window: what the parts are, and what the four navigation verbs mean.
+src/sieve/gui/canvas.py                    # The viewport: the frame the transport last handed over, drawn to fit.
+src/sieve/gui/control.py                   # Which of the three positions is showing, and the track that slides between.
+src/sieve/gui/hotkeys.py                   # Which keys exist and which verb each one calls.
+src/sieve/gui/layout.py                    # Where the main window's two halves sit and how big they start.
+src/sieve/gui/node_list.py                 # How one node is drawn, and how the ordered list of them is built.
+src/sieve/gui/param_form.py                # One control per parameter, chosen by how the parameter is populated.
+src/sieve/gui/project_select.py            # Picking one of the project files that already exist.
+src/sieve/gui/rail.py                      # One tick per node, down the left edge, marking where the walk is.
+src/sieve/gui/timeline/__init__.py         # The full-width band: where a frame lands on the strip, and what a click means.
+src/sieve/gui/timeline/bar.py              # The anchor: one full-width band across the bottom of the window.
+src/sieve/gui/timeline/geometry.py         # Where a frame lands on the strip, and which frame a pixel names.
+src/sieve/gui/timeline/window.py           # What survives an edit to the working window: its length, or one of its edges.
+src/sieve/gui/transport/__init__.py        # How a frame is asked for and how it arrives: request, decode, cache, pace.
+src/sieve/gui/transport/coalescer.py       # One frame request in flight, one waiting, everything between discarded.
+src/sieve/gui/transport/decode_worker.py   # The decode thread: a `VideoReader` that never blocks the event loop.
+src/sieve/gui/transport/pacing.py          # Where playback goes next inside the span it is confined to.
+src/sieve/gui/transport/player.py          # Playback and seek control on the GUI thread.
+src/sieve/gui/transport/proxy_cache.py     # A bounded LRU of decoded display proxies, keyed by frame index.
+src/sieve/gui/transport/request_intent.py  # Why a frame was asked for, and what that entitles it to.
+src/sieve/gui/transport/scrub_policy.py    # When to stop decoding every scrub target, and what to decode instead.
+src/sieve/gui/walk.py                      # The order Up and Down move through a graph.
+src/sieve/cli/__init__.py                  # The headless front end; with the saved file, the cluster handoff.
+src/sieve/cli/app.py                       # The `sieve` command: argument parsing and nothing else.
+src/sieve/cli/inspect_cmd.py               # `sieve inspect` — what is on the shelf, read off the declarations.
+src/sieve/cli/preview_cmd.py               # `sieve preview` — the tuning loop's inner step, with the timings printed.
+src/sieve/cli/run_cmd.py                   # `sieve run` — execute a saved project through the one executor.
+src/sieve/session/__init__.py              # The open project and its history: two stacks of whole immutable pipeline values.
+src/sieve/session/intents.py               # Every mutation of the open project, named by what it changes.
+src/sieve/session/session.py               # The open project, the file it came from, and the two stacks around it.
+src/sieve/bench/__init__.py                # The budget table and the metric bus: the loop's claims as numbers.
+src/sieve/bench/budgets.py                 # The latency budget table. Source of truth in code for both speed regimes.
+src/sieve/bench/metrics.py                 # The metric collection bus: where a timed interval goes and who hears it.
+src/sieve/pipeline/__init__.py             # The DAG, the plan, cache keys, and the one executor.
+src/sieve/pipeline/cache.py                # Where a computed frame is kept so it is not computed twice.
+src/sieve/pipeline/cache_key.py            # What makes two computations the same computation.
+src/sieve/pipeline/crop_binding.py         # Which record backs a box right now, and why one stopped.
+src/sieve/pipeline/dag.py                  # The graph, resolved: what runs, in what order, and whether it can run at all.
+src/sieve/pipeline/executor.py             # The single shared execution path: a plan, a reader, and a store go in.
+src/sieve/pipeline/materialize.py          # Cut one replicate's crop to a file, and refuse to register one that lies.
+src/sieve/pipeline/plan.py                 # Everything about a run that is knowable before a frame is decoded.
+src/sieve/pipeline/preview.py              # The preview session: one working window, one replicate, many revisions.
+src/sieve/pipeline/resolve_source.py       # Which file a run opens, and in whose frame numbering.
+src/sieve/pipeline/series_collector.py     # Assemble one node's per-frame outputs into the series a graph is drawn from.
+src/sieve/pipeline/source_home.py          # The frame of reference a crop record is read against: three facts, one value.
+src/sieve/tools/__init__.py                # Every pipeline step, one module each: a ToolSpec and one plain run function.
+src/sieve/tools/background_ema.py          # An exponential moving-average background model, and the difference from it.
+src/sieve/tools/block_signal.py            # Per-block motion signals from the structure tensor of consecutive frames.
+src/sieve/tools/crop.py                    # Take a region of every frame, with the whole frame as the identity value.
+src/sieve/tools/detect.py                  # Morlet band power, an in-band block count, and a centred detection gate.
+src/sieve/tools/downsample.py              # Reduce spatial resolution by an integer factor.
+src/sieve/tools/motion_history.py          # A causal leaky accumulator of per-block activity, with its neighbours.
+src/sieve/tools/normalize.py               # Per-frame contrast normalization: `off` or `zscore`.
+src/sieve/tools/rescale.py                 # Reduce spatial resolution by a float linear scale factor.
+src/sieve/tools/span.py                    # Keep a range of frames, with every frame there could be as the identity value.
+src/sieve/tools/temporal_baseline.py       # Each cell's own null distribution over time, and the signal in units of it.
+src/sieve/decode/__init__.py               # The codec boundary: lowering into ffmpeg, prefetch, decoder identity.
+src/sieve/decode/ffmpeg.py                 # FFmpeg rawvideo source for a crop/scale prefix lowered out of the graph.
+src/sieve/decode/identity.py               # Decoder identity string for cache key derivation.
+src/sieve/decode/lowered.py                # Pure value objects for source prefixes that have been lowered into decode.
+src/sieve/decode/prefetch.py               # N readers over one file, reading ahead in order, so the convert is not the rate.
+src/sieve/decode/quiet.py                  # Drop one known-benign OpenCV line from stderr, and pass everything else on.
+src/sieve/decode/reader.py                 # OpenCV `VideoCapture` wrapper trading grab-vs-seek and BGR-vs-luma for
+src/sieve/storage/__init__.py              # Sink writers: how results leave the pipeline for disk.
+src/sieve/storage/checkpoint_writer.py     # A checkpointed node's whole span at rest: one `.npy`, plus a manifest.
+src/sieve/storage/crop_writer.py           # FFV1 in Matroska, written frame by frame from arrays.
+src/sieve/mutual/__init__.py               # Dependency-shared resource readings and declarations.
+src/sieve/mutual/machine.py                # The machine is read once. Both resources, one home, importable headless.
+src/sieve/mutual/pool_meter.py             # The counters a worker pool exposes so its utilisation stops being a guess.
+src/sieve/mutual/shares.py                 # How a session divides the machine among threads and bytes: one table,
+src/sieve/core/__init__.py                 # The dimensioned types, the tool contract and registry, schema v1, spec-free `ops/`.
+src/sieve/core/pipeline_model.py           # Schema v1: the saved document a run is reproducible from.
+src/sieve/core/tool_base.py                # The tool contract, as data: `ToolSpec`, `ParamsBase`, `ArraySpec`, `Mode`.
+src/sieve/core/tool_registry.py            # The shelf tools put themselves on: a container keyed by `(id, version)`.
+src/sieve/core/types.py                    # Frame, ROI, quantities, and metadata value objects shared across all layers.
+scripts/doc_index.py                       # The derived docs: indexes, ARCHITECTURE, the scaffold, and `--next`.
+scripts/inherited_changes.py               # What a run inherited: uncommitted changes present before it wrote anything.
+scripts/mutation_sweep.py                  # Mutation sweeps over one file: unique anchors, byte-exact restore, no stale bytecode.
 ```
 
 ## Absent by decision

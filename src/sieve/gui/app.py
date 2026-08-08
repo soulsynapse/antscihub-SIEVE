@@ -11,9 +11,9 @@ nothing about the graph. The index into `walk.node_order` belongs to neither
 and would be duplicated into both if it lived in one of them, so the window
 keeps it and hands it down on every redraw.
 
-The canvas is a label naming the source. Playing it is `gui/transport/`'s, and
-it ports in behind this one (`PLAN.md`, Phase 7) — a video widget written here
-would be the thing that port has to delete.
+The canvas is `canvas.VideoCanvas`, fed frames by `transport/player.py`; the
+scrubber under both halves is `timeline/bar.py`, which owns the working window
+and is the only thing that tells the transport what it may reach.
 
 Nothing here computes: opening a project reads a document, and the order the
 graph walks in is `walk.py`'s, which is a question about the document's shape.
@@ -26,13 +26,16 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
+from PySide6.QtWidgets import QApplication, QMainWindow
 
 from sieve.core.pipeline_model import Node
+from sieve.gui.canvas import VideoCanvas
 from sieve.gui.control import Control
 from sieve.gui.hotkeys import bind_navigation_hotkeys
 from sieve.gui.layout import CanvasSlot, compose, size_window
 from sieve.gui.project_select import projects_in
+from sieve.gui.timeline.bar import TimelineBar
+from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.walk import node_order
 from sieve.session.session import Session
 
@@ -47,12 +50,27 @@ class MainWindow(QMainWindow):
         self._order: tuple[Node, ...] = ()
         self._at = 0
 
-        self._canvas = CanvasSlot(QLabel("Select a project"))
+        self._player = VideoPlayer(self)
+        self._viewport = VideoCanvas()
+        self._player.frame_changed.connect(self._viewport.set_frame)
+        self._timeline = TimelineBar(self._player)
+
+        self._canvas = CanvasSlot(self._viewport)
         self._control = Control(self._projects)
         self._control.project_chosen.connect(self.open_project)
-        self.setCentralWidget(compose(self._canvas, self._control))
+        self.setCentralWidget(compose(self._canvas, self._control, self._timeline))
 
         bind_navigation_hotkeys(self)
+
+    @property
+    def player(self) -> VideoPlayer:
+        """The transport. Exposed for the timeline's tests and for shutdown."""
+        return self._player
+
+    @property
+    def timeline(self) -> TimelineBar:
+        """The scrubber across the bottom."""
+        return self._timeline
 
     @property
     def session(self) -> Session | None:
@@ -90,9 +108,22 @@ class MainWindow(QMainWindow):
         self._session = Session.open(path)
         self._order = node_order(self._session.project.pipeline)
         self._at = 0
-        self._canvas.set_content(QLabel(self._session.project.source.path))
+        # The path is resolved against the project's own directory and handed
+        # over as a string: whether the file is there is the decode thread's
+        # answer to give, and a check here would be a second one that could
+        # disagree with it.
+        self._player.open(str(self._session.project.source.resolve(path.parent)))
         self._control.show_graph(self._order, self._at)
         self._control.show_pipeline()
+
+    def closeEvent(self, event: object) -> None:
+        """Stop the decode thread before the window goes.
+
+        A `QThread` still running when its `QObject` is finalised takes the
+        process down, which turns closing the app into a crash report.
+        """
+        self._player.shutdown()
+        super().closeEvent(event)  # type: ignore[arg-type]
 
     def go_back(self) -> None:
         """Left: step to pipeline, pipeline to project select.

@@ -179,3 +179,18 @@ def test_a_command_line_without_a_test_command_is_refused(repo: Path) -> None:
 def test_a_subject_that_is_not_a_file_is_refused(repo: Path) -> None:
     argv = ["--file", "src/absent.py", "--mutant", "a ==> b", "--", sys.executable, "-c", ""]
     assert main(argv, repo) == 2
+
+
+def test_a_refused_anchor_is_reported_rather_than_raised(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A mistyped anchor reaches the reviewer as exit 1 and a message, not a traceback.
+
+    The message is asserted because a survivor exits 1 too, and two paths sharing a
+    return value is exactly the shape that leaves both untested
+    (`docs/findings/loop/2026.08.07-two-refusals-that-return-the-same-code-shield-each-other-from-the-only-case.md`).
+    """
+    subject_with(repo, b"limit = 100\n")
+    argv = ["--file", "src/subject.py", "--mutant", "absent ==> x", "--", sys.executable, "-c", ""]
+    assert main(argv, repo) == 1
+    assert "not found" in capsys.readouterr().err

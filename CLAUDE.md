@@ -136,8 +136,9 @@ Traps each of which has cost a session, so they are named once here:
 
 - Commit messages go through a file — `Write` the message, then
   `git commit -F <file>` — never a PowerShell here-string piped through Bash,
-  which has twice put a quoting artefact into a pushed subject line, once as a
-  bare `@` and once as doubled apostrophes.
+  which has twice put a quoting artefact into a pushed commit message — once a
+  subject line of a bare `@` with the real subject demoted into the body, once
+  doubled apostrophes throughout the body.
 - The working tree is CRLF; text you match against it or restore into it goes
   through bytes, not `write_text`. A mutation sweep is
   `uv run python scripts/mutation_sweep.py` (its docstring is the contract),

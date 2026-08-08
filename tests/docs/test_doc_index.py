@@ -9,6 +9,7 @@ out of both lists silently.
 import re
 import subprocess
 from pathlib import Path
+from typing import NamedTuple
 
 import doc_index
 import pytest
@@ -968,6 +969,41 @@ def _parses(example: str) -> bool:
         return False
 
 
+TEMPLATES = (doc_index.TODO_DIR, doc_index.FINDINGS_DIR, doc_index.ADR_DIR)
+
+
+class Shown(NamedTuple):
+    """How one template teaches the rule: the count of each form it exhibits."""
+
+    stated: int
+    legal: int
+    illegal: int
+    wrong: list[str]
+
+
+def _shown(folder: Path) -> Shown:
+    template = folder / "_TEMPLATE.md"
+    doc_index.parse_frontmatter(template)
+    stated = legal = illegal = 0
+    wrong: list[str] = []
+    for sentence, spans in _sentences(template.read_text(encoding="utf-8")):
+        forbidding = all(marker.search(sentence) for marker in FORBIDS)
+        stated += forbidding
+        if forbidding and not QUALIFIED.search(sentence):
+            wrong.append(f"{folder.name}: forbids an opening quote outright — {sentence}")
+        for span in spans:
+            if not EXAMPLE.match(span):
+                continue
+            refused = bool(REFUSED.search(sentence))
+            legal += not refused
+            illegal += refused
+            if _parses(span) is refused:
+                claim = "shown as the failing form, but it" if refused else "offered as the fix,"
+                verdict = "parses" if refused else "does not parse"
+                wrong.append(f"{folder.name}: `{span}` is {claim} {verdict}")
+    return Shown(stated, legal, illegal, wrong)
+
+
 def test_the_templates_do_not_forbid_the_quoting_they_recommend():
     """A template's claim about YAML is checked as constructions, not wording.
 
@@ -975,33 +1011,26 @@ def test_the_templates_do_not_forbid_the_quoting_they_recommend():
     template that drops the qualifier forbids the remedy it offers in the same
     paragraph — in the file an author is reading while writing the field.
     """
-    wrong: list[str] = []
-    stated = legal = illegal = 0
-    for folder in (doc_index.TODO_DIR, doc_index.FINDINGS_DIR, doc_index.ADR_DIR):
-        template = folder / "_TEMPLATE.md"
-        doc_index.parse_frontmatter(template)
-        for sentence, spans in _sentences(template.read_text(encoding="utf-8")):
-            forbidding = all(marker.search(sentence) for marker in FORBIDS)
-            stated += forbidding
-            if forbidding and not QUALIFIED.search(sentence):
-                wrong.append(f"{folder.name}: forbids an opening quote outright — {sentence}")
-            for span in spans:
-                if not EXAMPLE.match(span):
-                    continue
-                refused = bool(REFUSED.search(sentence))
-                legal += not refused
-                illegal += refused
-                if _parses(span) is refused:
-                    claim = (
-                        "shown as the failing form, but it" if refused else "offered as the fix,"
-                    )
-                    verdict = "parses" if refused else "does not parse"
-                    wrong.append(f"{folder.name}: `{span}` is {claim} {verdict}")
+    assert [problem for folder in TEMPLATES for problem in _shown(folder).wrong] == []
 
-    assert wrong == []
-    # The three of them state the rule and show both forms; a rewrite that
-    # deleted the examples would satisfy everything above and teach nothing.
-    assert (stated, bool(legal), bool(illegal)) == (3, True, True)
+
+def test_each_template_shows_both_forms():
+    """Anti-vacuity, and per template rather than over the three of them.
+
+    A rewrite that deleted the examples satisfies every construction check
+    above and teaches nothing, so something has to demand they exist. Summing
+    the three folders and asking whether the total is nonzero demands only that
+    the corpus keep one example of each kind somewhere — two templates could
+    go silent under it, which is the state the tree was actually in. An author
+    reads one of these files, not three.
+    """
+    shown = {folder.name: _shown(folder) for folder in TEMPLATES}
+
+    assert {name: (s.stated, bool(s.legal), bool(s.illegal)) for name, s in shown.items()} == {
+        "todo": (1, True, True),
+        "findings": (1, True, True),
+        "adr": (1, True, True),
+    }
 
 
 def test_the_checked_in_indexes_are_current():

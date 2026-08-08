@@ -3,9 +3,11 @@ title: One sentence naming the outcome
 # An *unquoted* value may not open with a backtick or a quote: YAML reserves
 # both at the head of a plain scalar, so the file stops being YAML and the
 # error names a character rather than this field. Quote the whole scalar or
-# lead with a word — a quote that opens and closes is the ordinary quoted form,
-# which is what `done_when` below is. `title` and `gated_on` are the two here
-# that carry prose about code.
+# lead with a word. ``gated_on: `ruff` being pinned`` is not valid YAML; the
+# scanner stops on the backtick. The same value quoted whole,
+# ``gated_on: "`ruff` being pinned"``, parses — and so does
+# `done_when: "uv run pytest tests/... -q"` below, because its quote closes.
+# `title` and `gated_on` are the two here that carry prose about code.
 # Sequenced item: `step` orders it and its first component is the phase.
 # An aside that must precede the next planned step is inserted with a decimal
 # ("02.3.1" runs between "02.3" and "02.4"); an aside that can wait gets no

@@ -360,7 +360,9 @@ class TestInputs:
         with pytest.raises(NotCacheableError, match="epsilon warmup"):
             node_key(
                 node,
-                spec=make_spec(stateful=True, warmup_kind=WarmupKind.EPSILON),
+                spec=make_spec(
+                    stateful=True, warmup_kind=WarmupKind.EPSILON, settling_epsilon=0.25
+                ),
                 upstream=ROOT,
             )
         with pytest.raises(NotCacheableError, match="replaying frames rather than windows"):

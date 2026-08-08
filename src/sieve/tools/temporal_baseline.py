@@ -64,8 +64,15 @@ answered: two runs meeting at one frame hold different samples of the same span.
 They estimate the same median to within the sampling error the sampling argument
 above is denominated in, which is a tolerance and not zero — so
 `warmup_kind=WarmupKind.EPSILON` and no key
-(`adr/cache-admission-is-bounded-warmup.md`). The declared
-`settling_epsilon=0.0` predates that reading and understates it.
+(`adr/cache-admission-is-bounded-warmup.md`).
+
+**How far apart those two runs actually land is `SETTLED_EPSILON`, and it is
+not small.** The baseline half behaves the way the sampling argument predicts;
+the deviation half divides by a spread that is itself an estimate, so where a
+cell's MAD is near zero in one run and floored in the other the ratio moves by
+far more than the samples did — two orders of magnitude worse than the baseline,
+relative to each one's own scale
+(`findings/2026.08.08-temporal-baselines-two-runs-disagree-by-more-than-a-detection-threshold.md`).
 
 v2 declared a `CostEstimate` here; it is cut for `block_signal.py`'s reason — it
 fed machinery v3 has not built, and a declaration arrives with its consumer
@@ -111,6 +118,14 @@ WINDOW_SECONDS_MAX = 30.0
 #: The highest frame rate a window may be denominated against. High-speed insect
 #: footage runs here; the bound exists so the warmup bound is finite.
 FPS_MAX = 240.0
+
+#: How far apart two runs meeting at one frame may land, in the deviations the
+#: tool emits. A measured worst case rather than a proven bound — the finding the
+#: module docstring cites holds the sweep it came from, and the divisor argument
+#: there is why nothing smaller would be honest. `background_ema`'s constant by
+#: name and by how it was taken; three orders of magnitude apart by what the two
+#: tools do with their history, which is the whole content of the number.
+SETTLED_EPSILON = 100.0
 
 #: Samples the ring holds, however long the window is. See the module docstring:
 #: the median's standard error falls as `1/sqrt(n)`, so this is where more
@@ -288,7 +303,7 @@ def run(params: TemporalBaselineParams, window: FrameSpan, state: BaselineState,
     # frame, and either constant would be a lie in the other position.
     element=ElementRelation.PRESERVED,
     mode=Mode.STREAMING,
-    settling_epsilon=0.0,
+    settling_epsilon=SETTLED_EPSILON,
     # Epsilon despite the window being finite, and the residual is not the
     # window's: `run` counts the stride against `state.seen`, so which frames
     # the ring admitted depends on where the run started. Two runs meeting at

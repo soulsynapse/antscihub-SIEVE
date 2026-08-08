@@ -2,7 +2,7 @@
 title: temporal_baseline declares a zero epsilon its own docstring refutes
 priority: high
 phase: 4
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -k an_epsilon_warmup_declares_a_nonzero_epsilon -q"
 opened: 2026-08-07

@@ -247,9 +247,31 @@ class TestToolSpec:
         with pytest.raises(ValueError, match="nothing to settle"):
             make_spec(warmup_kind=WarmupKind.BOUNDED)
 
-        assert make_spec(stateful=True, warmup_kind=WarmupKind.EPSILON).warmup_kind is (
-            WarmupKind.EPSILON
+        assert (
+            make_spec(
+                stateful=True, warmup_kind=WarmupKind.EPSILON, settling_epsilon=0.25
+            ).warmup_kind
+            is WarmupKind.EPSILON
         )
+
+    @pytest.mark.parametrize("epsilon", [None, 0.0])
+    def test_an_epsilon_warmup_declares_a_nonzero_epsilon(self, epsilon: float | None) -> None:
+        """A tolerance of zero is bit-for-bit, which is the other kind.
+
+        `EPSILON` is the claim that two runs meeting at a frame agree to within
+        `settling_epsilon` and *not* exactly, so a zero there asserts the
+        bit-identity `BOUNDED` exists to mean — and `cache_key` prints the
+        number in the refusal a user reads, where it becomes "to within 0.0,
+        which is not to within nothing". Both spellings of the absence are
+        refused for the reason a nonzero `warmup_frames` with no epsilon is: the
+        number is a measurement, and the tool owes it before it may claim to
+        settle.
+        """
+        with pytest.raises(ValueError, match="settling claim with no tolerance"):
+            make_spec(stateful=True, warmup_kind=WarmupKind.EPSILON, settling_epsilon=epsilon)
+
+        measured = make_spec(stateful=True, warmup_kind=WarmupKind.EPSILON, settling_epsilon=0.25)
+        assert measured.settling_epsilon == 0.25
 
     @pytest.mark.parametrize("epsilon", [-0.1, float("inf"), float("nan")])
     def test_settling_epsilon_must_be_a_finite_non_negative_number(self, epsilon: float) -> None:
@@ -321,7 +343,12 @@ class TestState:
         with pytest.raises(ValueError, match="declares a state_factory but not stateful"):
             make_spec(state_factory=dict)
 
-        kept = make_spec(state_factory=dict, stateful=True, warmup_kind=WarmupKind.EPSILON)
+        kept = make_spec(
+            state_factory=dict,
+            stateful=True,
+            warmup_kind=WarmupKind.EPSILON,
+            settling_epsilon=0.25,
+        )
         assert kept.state_factory is dict
 
 
@@ -1145,10 +1172,13 @@ class TestDecoratorMatchesSpec:
             elif name == "state_factory":
                 values["stateful"] = True
                 values["warmup_kind"] = WarmupKind.EPSILON
+                values["settling_epsilon"] = 0.25
             elif name == "stateful":
                 values["warmup_kind"] = WarmupKind.EPSILON
+                values["settling_epsilon"] = 0.25
             elif name == "warmup_kind":
                 values["stateful"] = True
+                values["settling_epsilon"] = 0.25
             decorated = register_tool(**values, registry=registry)(model)
 
             spec = decorated.__tool_spec__

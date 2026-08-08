@@ -931,7 +931,9 @@ class ToolSpec:
     #: Absolute tolerance for comparing two runs once this tool's warmup has
     #: elapsed. `None` means the tool has no settling claim; any nonzero
     #: `warmup_frames` must declare a value here so the generic gate can assert
-    #: against data rather than a docstring sentence.
+    #: against data rather than a docstring sentence. A `WarmupKind.EPSILON`
+    #: warmup must declare a *nonzero* one: zero is bit-for-bit, which is what
+    #: the other kind means, and both are refused below.
     settling_epsilon: float | None = None
     #: Frames past its target this tool must have in hand before it may emit,
     #: counted in this tool's *input* frames — `warmup_frames`' unit, on the
@@ -1076,6 +1078,16 @@ class ToolSpec:
                 f"{self.tool_id}: declares warmup_kind={self.warmup_kind.value} with nothing to "
                 "settle — a tool with no warmup and no state is determined by the frame in front "
                 "of it, and a kind here would be a claim with no subject"
+            )
+        if self.warmup_kind is WarmupKind.EPSILON and not self.settling_epsilon:
+            raise ValueError(
+                f"{self.tool_id}: declares warmup_kind=epsilon and settling_epsilon="
+                f"{self.settling_epsilon!r} — a settling claim with no tolerance is not a "
+                "claim. EPSILON says two runs meeting at a frame agree to within that number "
+                "and not bit-for-bit, so zero there asserts exactly the bit-identity BOUNDED "
+                "is the word for, and cache_key prints it into the refusal a user reads. "
+                "Measure what two runs entering the frame from different origins actually "
+                "differ by, and declare that"
             )
         if self.lookahead_frames.frames > 0 and self.mode is not Mode.WINDOWED:
             raise ValueError(

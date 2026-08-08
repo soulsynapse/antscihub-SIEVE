@@ -129,6 +129,9 @@ def accumulate_run(params: AccumulateParams, window: FrameSpan, state: list[int]
     # the only honest kind is the refused one. What it declares *falsely* is
     # `max_warmup_frames`, which stays zero below — and that lie no longer
     # decides anything, which is the case this file's third section is about.
+    # The epsilon is arbitrary and unread here; what a sum's would really be is
+    # the whole prefix it never forgets.
+    settling_epsilon=1.0,
     warmup_kind=WarmupKind.EPSILON,
     stateful=True,
     state_factory=list,

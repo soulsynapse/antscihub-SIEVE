@@ -623,3 +623,14 @@ cannot: opening the popup and re-selecting the entry the combo already shows
 appends no `SetParam` and no undo entry. A review closing this item checks that
 assertion and not only the exit code
 (`findings/loop/2026.08.07-a-k-selector-and-the-prose-name-beside-it-are-two-criteria.md`).
+
+## The guard comment carries the finding's scope clause (2026-08-08)
+
+The residue the section above leaves is closed: `image_of`'s guard comment now
+scopes its verdict the way the finding it cites does — not visible in the pixels
+*on a constant frame carrying no positive infinity* — and names the exception in
+the comment rather than leaving it a click away, so a reader deciding whether the
+branch can go sees the one input on which it moves them. Prose only: no branch
+moved, and `tests/gui` is 113 passed either side. The item's status,
+`deferred_for` and `done_when` are untouched; what it is deferred on is still
+`param_form`'s combo signal and still Kendrick's.

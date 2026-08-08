@@ -54,9 +54,12 @@ def image_of(values: NDArray[np.float32]) -> QImage | None:
     low, high = float(finite.min()), float(finite.max())
     spread = high - low
     # A constant frame has no spread, so dividing by it is a division by zero.
-    # The guard is not visible in the pixels — `nan_to_num` below maps the 0/0
-    # it refuses onto the same zero it writes — so what it buys is the absence
-    # of the invalid operation, which is what the case over it asserts
+    # On a constant frame carrying no positive infinity the guard is not visible
+    # in the pixels — `nan_to_num` below maps the 0/0 it refuses onto the same
+    # zero it writes — so what it buys is the absence of the invalid operation,
+    # which is what the case over it asserts. One `inf` among the constants is
+    # the exception the finding leaves open: there the guard blacks the frame
+    # and the division whites that cell
     # (`findings/2026.08.08-the-constant-frame-guard-is-output-equivalent-to-the-division-it-refuses.md`).
     scaled = np.zeros_like(array) if spread <= 0.0 else (array - low) / spread
     # Every finite value is already inside 0..1 by construction — `low` and

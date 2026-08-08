@@ -178,7 +178,7 @@ forbidden_modules =
 unmatched_ignore_imports_alerting = error
 
 [importlinter:contract:opencv-containment]
-name = OpenCV stays out of core, bench, and the front ends
+name = OpenCV stays out of core, bench, the session, and the front ends
 type = forbidden
 # Direct imports only: reaching a decoded frame *through* `sieve.decode` is
 # the supported path. What this forbids is a second module learning to drive
@@ -200,5 +200,13 @@ source_modules =
     # driving `VideoCapture` on its own — a second seek strategy, and a second
     # decoder identity that no cache key would know about.
     sieve.cli
+    # The document layer, for that same reason and harder: what `session` holds
+    # is the pipeline value the front ends render, so a `VideoCapture` opened
+    # here would be a second decoder identity inside the thing whose identity
+    # the cache key is computed from. It is also the one package above `decode`
+    # that no other contract refused `cv2` to — `headless` names it, but only
+    # against `PySide6` — so this line is the teeth on the cv2-shaped half of
+    # VISION's session row, which never computes anything.
+    sieve.session
 forbidden_modules =
     cv2

@@ -2,7 +2,7 @@
 title: A tool's declaration is asserted by nothing
 priority: high
 phase: 2
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: 'uv run pytest tests/unit -k "mode_is_what_the_run_does or element_is_what_the_run_emits or a_version_bump_moves_the_key" -q'
 opened: 2026-08-07

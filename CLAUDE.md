@@ -27,7 +27,14 @@ plays. Architecture serves that or it does not belong.
   a review that mints per observation pays that cost on your behalf.
   A fold adds the paragraph to the existing item and never edits its
   `done_when` — say in your final message that the criterion may no longer
-  cover the whole of it, so the review can widen it.
+  cover the whole of it, so the review can widen it. A review that folds
+  widens in the same commit. Read the pool table in `docs/todo/.index.md`
+  before minting into it — a duplicate that paraphrases rather than collides
+  goes red nowhere.
+- `docs/findings/` folds the same way: one file per truth, not per
+  occurrence. A finding that recurs or gains a number takes a dated amendment
+  section in the file that holds it. `supersedes` is for a later truth
+  overturning an earlier one, not for the same truth measured again.
 - Comments record what the code cannot show. If a competent reader could
   derive the sentence from the code, delete it. Match the density of the
   file you're in.

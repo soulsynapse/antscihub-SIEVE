@@ -1,6 +1,6 @@
 ---
 title: A missing encoder skips the fixture and the gate stays green
-status: open
+status: awaiting-review
 priority: low
 phase: 0
 gated_on: nothing

@@ -165,19 +165,23 @@ def test_an_unguarded_fixture_skip_stays_a_skip(
     result.assert_outcomes(skipped=1, errors=0, failed=0, passed=0)
 
 
-def test_the_nested_runner_pins_the_child_encoding(
+def test_the_nested_runner_overrides_the_parents_encoding(
     pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`_nested_run` sets the child's text encoding rather than inheriting it.
+    """`_nested_run` overrides the child's text encoding rather than inheriting it.
 
-    Asserted from inside a child launched with the variable cleared, because
-    the environment that made the inherited value utf-8 is the orchestrator's,
-    and no incantation in an item's `done_when` is portable enough to stand in
-    for a test. `sys.__stdout__` rather than `sys.stdout`: pytest's capture
-    replaces the latter with a utf-8 file whatever the interpreter chose, so
-    only the startup object still reports what the child was told.
+    The parent is given a codec the assertion below fails under, rather than
+    none: a child that merely clears the variable falls back to the
+    interpreter's default, which is already utf-8 on the Linux runner that
+    gates a merge, so the cleared version distinguishes nothing there
+    (`docs/findings/loop/2026.08.07-a-test-that-clears-an-environment-variable-is-vacuous-where-the-platform-default-already-agrees.md`).
+    An inherited latin-1 is wrong on every platform.
+
+    `sys.__stdout__` rather than `sys.stdout`: pytest's capture replaces the
+    latter with a utf-8 file whatever the interpreter chose, so only the
+    startup object still reports what the child was told.
     """
-    monkeypatch.delenv("PYTHONIOENCODING", raising=False)
+    monkeypatch.setenv("PYTHONIOENCODING", "latin-1")
     result = _nested_run(
         pytester,
         monkeypatch,

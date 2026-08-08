@@ -116,3 +116,27 @@ the existing read-back cannot see this class: it compares the file against the
 passes it and a sweep that ends mutated after exiting is past it. A check with
 teeth would compare against the subject as git has it, which collides with
 running a sweep over uncommitted work under test.
+
+## A mutant that will not compile is the deterministic false KILLED (folded 2026-08-08)
+
+This item opened on a false KILLED that fires once in nine runs. There is one
+that fires every time, on any subject, under any oracle, and the review of
+`274278d` hit it while re-running a worker's sweep
+(`findings/loop/2026.08.08-a-crashing-test-command-is-indistinguishable-from-a-killed-mutant.md`,
+dated section). `parse_mutant` strips the separator's own padding from both
+sides, so a replacement written with the anchor's indentation loses one leading
+space and the subject stops parsing; `IndentationError` on import is a non-zero
+exit and prints KILLED. The correctly-indented form of the same mutant SURVIVED,
+which is the answer the review acted on — the two verdicts are one space apart
+and the output does not say which you got.
+
+The baseline this item's first section won cannot reach it: the baseline runs
+the *original* bytes, and every way a mutant makes the subject unparseable is
+downstream of that. So the class the item names has a deterministic member and
+a cheap gate for it — compile the mutated bytes and refuse the mutant, as a
+non-unique anchor is already refused, rather than scoring it. A `SyntaxError`
+is a mutant that was never applied, not one that was killed, and it is the same
+refusal-not-report shape the rest of this item argues for. Whether that gate is
+what lands, or whether the whole KILLED signal is re-founded on the mutant's own
+test failing (which subsumes it, and which the finding names as the real fix),
+is this item's decision and not a second item's.

@@ -62,3 +62,13 @@ whichever shape the `session` question above settles on, `decode` takes the
 same shape with `sieve.core.pipeline_model` as its forbidden module.
 
 The count behind both: `docs/findings/2026.08.08-vision-never-column-has-two-import-shaped-lines-no-contract-checks.md`.
+
+## The title's "two" is the walk's count, not the file's (2026-08-08, review of 44608be)
+
+Read as a closed count it is already wrong, which is what the title invites. It
+is two *import-shaped nevers in VISION's `Never` column that no contract
+checked* — the walk this item came from ran table-to-config only. Walking the
+other way at 44608be found three `opencv-containment` sources with no cv2 clause
+in their row, and one package the file refuses nothing codec-shaped to at all;
+`todo/the-cv2-refusal-skips-the-executor.md` holds that and nothing here needs
+reopening for it.

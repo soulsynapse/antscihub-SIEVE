@@ -98,3 +98,21 @@ and does not run: a bound that holds when the command has children, and a case
 over the derivation the sweep's own survivor exposes. The red-baseline refusal
 stays where it is; it is green from here on and a criterion nothing can turn red
 certifies nothing.
+
+## The subject came back mutated after the sweep exited (folded 2026-08-08)
+
+A third way the tree is left mutated, and this one is not a killed sweep: twice
+in twelve otherwise identical runs over `gui/timeline/geometry.py`, the subject
+carried the last mutant's bytes when the *next* command read it, after a sweep
+whose own `finally` and byte-exact read-back had both passed and which printed
+its results normally
+(`findings/loop/2026.08.08-a-restored-sweep-subject-came-back-mutated-after-the-sweep-had-exited.md`;
+the mechanism is unaccounted for and the usual external writers were checked and
+are absent). Both times the following sweep refused — an anchor it could not
+find, then a red baseline — so no verdict was computed against the dirty tree,
+which is the refusals above working. What the section adds to this item is that
+the existing read-back cannot see this class: it compares the file against the
+`original` the same process read at start, so a sweep that *begins* mutated
+passes it and a sweep that ends mutated after exiting is past it. A check with
+teeth would compare against the subject as git has it, which collides with
+running a sweep over uncommitted work under test.

@@ -2,7 +2,7 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/timeline/geometry.py --mutant \"MIN_BAND_PIXELS = 2.0 ==> MIN_BAND_PIXELS = 0.0\" --mutant \"index = int(x / self.width * self.frame_count) ==> index = int(x / (self.width - 1) * self.frame_count)\" -- uv run pytest -q tests/gui"
 opened: 2026-08-08
@@ -378,7 +378,23 @@ names the two the 07.6 section left on that module — `MIN_BAND_PIXELS`'s floor
 and `frame_at`'s denominator, the off-by-one its docstring spends four lines
 refusing — verified red at 0 killed / 2 survived under `uv run pytest -q
 tests/gui`. Both survive for one fixture reason, `STRIP_WIDTH == SOURCE_FRAMES`,
-so one file's fixtures answer both. The oracle stays the whole `tests/gui`
+so one file's fixtures answer both.
+
+**One residue on the sentence the second of those is written from, found in
+pinning it.** `frame_at`'s docstring charges the off-by-one denominator with two
+consequences — it "reaches the last frame a pixel early and never reaches it at
+all when the band is wider than the asset is long" — and the criterion's mutant
+has the first and not the second. Over ten frames in a 1000-px band, dividing by
+`width - 1` reaches frame 9 from x = 899.1 rather than from 900, which is the
+pixel-early half; it still reaches it, everywhere from there to the right edge.
+The clause that follows describes a different off-by-one, `x / width *
+(frame_count - 1)`, which puts frame 9's boundary at x = 1000 and so never names
+the last frame for any click inside the band. Two variants, one sentence, and
+the test written against the criterion's mutant can only hold the half that is
+its. The correction is to split the sentence or to drop the clause; the second
+variant is not currently swept.
+
+The oracle stays the whole `tests/gui`
 directory: `test_timeline.py` holds the module and a second file may not be what
 the fixtures want. Four mutants across four files are still unheld after this
 one — `graph_panel`'s negative floor, `window.moved_to`'s clamp, `app.py`'s

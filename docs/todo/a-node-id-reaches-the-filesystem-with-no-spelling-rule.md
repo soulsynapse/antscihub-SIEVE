@@ -1,6 +1,6 @@
 ---
 title: A node id reaches the filesystem with no spelling rule
-status: awaiting-review
+status: open
 priority: normal
 phase: 2
 gated_on: nothing
@@ -72,3 +72,21 @@ field arrives with that surface (`adr/declared-means-verified.md`), and until
 then the pattern is simply the rule for what may be typed where an id is
 typed. Phase 7's AddNode needs a spelling rule from somewhere regardless, and
 it should be the schema's, not the widget's.
+
+## Reopened 2026-08-08 — the pattern is anchored one character too loosely
+
+`e0da6ca` implements the ruling and its criterion passes, but the pattern it
+landed ends `$` where the writer's deleted `_SAFE_NODE_ID` ended `\Z`. Python's
+`$` matches before a final newline, so `node_id: "abc\n"` is refused by the tree
+before the commit and accepted by both the schema and the writer after it — a
+document that loads clean and reaches `open_memmap` with a newline in the file
+name. Measured in
+`findings/loop/2026.08.08-consolidating-two-guards-onto-one-constant-narrows-the-stricter-one.md`,
+which also records that the suite, the criterion, and three mutation sweeps are
+all green either way.
+
+The fix is `\Z` and a trailing-newline id added to the case the `done_when`
+already selects, so the criterion is unchanged. `TOOL_ID_PATTERN` and
+`SEMVER_PATTERN` anchor with `$` for the same reason and were the precedent
+followed here; whether either is reachable by a value with a trailing newline is
+a separate question and not this item's.

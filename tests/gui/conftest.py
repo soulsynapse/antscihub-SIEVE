@@ -11,15 +11,20 @@ The application is session-scoped because Qt permits exactly one per process
 and refuses to build a second; a fixture that made one per test would fail on
 the second test in the file.
 
-**Nothing under `tests/gui/` may import Qt, or a `sieve.gui` module, at module
-scope.** `tests/bench/test_loop_budget.py` asserts that no Qt module is
-resident while the headless loop budget is measured, and pytest imports every
-test module during collection — before the first test runs — so a top-level
-`from sieve.gui.app import ...` anywhere in this directory would make Qt
-resident for the entire session and take that assertion down with it. Deferring
-the import into the test body is enough: collection stays Qt-free, and
-`tests/bench` runs before `tests/gui` in the order pytest walks `testpaths`.
-It fails loudly rather than quietly if someone forgets.
+**Qt is imported inside test bodies here, and that is now a convention rather
+than a rule with teeth.** It was a rule: `tests/bench/test_loop_budget.py` used
+to assert that no Qt module was resident at the moment the headless budget was
+judged, and pytest imports every test module during collection, so one top-level
+`from sieve.gui.app import ...` anywhere in this directory took that assertion
+down. 07.11 measures the same ceilings *through* the GUI, in a session with a
+`QApplication` in it by construction, so the assertion was restated as a claim
+about what the measurement's own code imports — asked in a fresh interpreter,
+where no test module's ordering can reach it
+(`test_loop_budget.test_the_measurement_imports_no_qt`).
+
+What deferring the import still buys is worth keeping: collecting this directory
+costs nothing on a machine without a display, and a test that fails to import Qt
+fails as itself rather than as a collection error for the whole run.
 """
 
 from __future__ import annotations

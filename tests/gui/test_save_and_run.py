@@ -192,6 +192,49 @@ def test_the_run_button_issues_the_cli_command(qapp, tmp_path: Path) -> None:
     assert "source video is not where the project says" in screen.message()
 
 
+def test_a_second_click_while_a_run_is_in_flight_does_nothing(qapp, tmp_path: Path) -> None:
+    """One button, one run. An impatient click is not a second handoff.
+
+    Unguarded, the second click re-saves the document under the first run's feet,
+    clears the message that run is about to write into, and emits `run_issued`
+    for a process `QProcess` declines to start because one is already attached —
+    three wrong answers, none of which the user would connect to having clicked
+    twice.
+
+    Driven against the real `sieve`, because what makes the window between the
+    clicks real is a process that takes a beat to start and refuse; a program
+    that does not exist reports `FailedToStart` and there is nothing in flight to
+    click during.
+    """
+    del qapp
+    from sieve.gui.save_screen import SaveScreen
+
+    assert shutil.which("sieve") is not None, "the run button spawns the console script by name"
+    path = tmp_path / "clip.sieve.yaml"
+    discover()
+    spec = REGISTRY.latest("downsample")
+    project = Project(
+        source=SourceRef(path="clip.mp4"),
+        pipeline=Pipeline(nodes=(Node(node_id="n0", tool_id=spec.tool_id, version=spec.version),)),
+    )
+    session = Session(path, project)
+    screen = SaveScreen(session, {"n0": spec})
+    issued: list[tuple[str, ...]] = []
+    screen.run_issued.connect(issued.append)
+
+    screen.run_button.click()
+    assert screen.running()
+    screen.run_button.click()
+
+    assert issued == [("sieve", "run", str(path))]
+
+    driving.wait_until(lambda: not screen.running(), _RUN_TIMEOUT_MS)
+
+    # And the one run that did start still reported, rather than having had its
+    # message cleared out from under it.
+    assert "source video is not where the project says" in screen.message()
+
+
 def test_a_command_that_will_not_start_says_so(qapp, tmp_path: Path, monkeypatch) -> None:
     """The other way a run ends: no such program, and no `finished` to hear.
 

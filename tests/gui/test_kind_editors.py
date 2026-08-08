@@ -173,7 +173,7 @@ def test_a_drawn_region_enters_as_a_set_param(
     del qapp
     from sieve.gui.kind_editors import RegionEditor
 
-    editor = RegionEditor(canvas, session, _NODE, "region", REGION)
+    editor = RegionEditor(canvas, session, _NODE, "region", REGION, shown[0])
     driving.drag(editor, _widget_point(shown, 20, 20), _widget_point(shown, 100, 60))
 
     assert session.project.params_for(_NODE)["region"] == {
@@ -216,10 +216,10 @@ def test_an_overlay_is_the_rectangle_its_surface_is(
     the user meets by dragging the split rather than by doing anything to the
     editor.
     """
-    del qapp, shown
+    del qapp
     from sieve.gui.kind_editors import RegionEditor
 
-    editor = RegionEditor(canvas, session, _NODE, "region", REGION)
+    editor = RegionEditor(canvas, session, _NODE, "region", REGION, shown[0])
     # Shown, because Qt holds a hidden widget's resize event until it is: this
     # is the one case here whose subject is what happens when the size actually
     # changes, rather than what the size is.
@@ -260,7 +260,7 @@ def test_a_gesture_on_a_viewport_with_no_frame_writes_nothing(
     del qapp
     from sieve.gui.kind_editors import RegionEditor
 
-    editor = RegionEditor(canvas, session, _NODE, "region", REGION)
+    editor = RegionEditor(canvas, session, _NODE, "region", REGION, shown[0])
     driving.press(editor, *_widget_point(shown, 20, 20))
     canvas.clear()
     driving.release(editor, *_widget_point(shown, 100, 60))
@@ -274,7 +274,9 @@ def test_a_gesture_on_a_viewport_with_no_frame_writes_nothing(
     assert editor.shown_rect().isEmpty()
 
 
-def test_an_editor_per_kind_never_per_tool(qapp, session: Session, canvas: Any, band: Any) -> None:
+def test_an_editor_per_kind_never_per_tool(
+    qapp, session: Session, canvas: Any, band: Any, shown: Any
+) -> None:
     """Which parameters get an editor is the kinds' answer, and which surface too.
 
     The generator's asymmetry one surface out (`param_form.py`): a tool that
@@ -299,10 +301,81 @@ def test_an_editor_per_kind_never_per_tool(qapp, session: Session, canvas: Any, 
         session.project.params_for(_NODE),
         canvas=canvas,
         timeline=band,
+        region_extent=shown[0],
     )
 
     assert set(editors) == {"region", "frames"}
     assert isinstance(editors["region"], RegionEditor)
+    assert isinstance(editors["frames"], SpanEditor)
+
+
+def test_a_region_is_drawn_in_the_space_the_value_names_and_not_the_one_on_screen(
+    qapp, session: Session, canvas: Any, shown: Any
+) -> None:
+    """The proxy trap, and the whole of 07.11's answer to it.
+
+    The canvas is fed a display proxy of the footage
+    (`transport/decode_worker.PROXY_WIDTH`), while `crop.py` says a region
+    indexes the frame its own node is handed. On footage wider than the proxy the
+    two are different rectangles, and an editor reading the image's own width
+    writes a box that is a constant factor too small — silently, and only on
+    large footage.
+
+    So the extent is declared and the image's width is never read. Here the
+    extent is twice the shown image on both axes, which is the shape a 2560-wide
+    source meets a 1280-wide proxy in: every coordinate the gesture produces is
+    twice what the same drag would have named before the declaration existed.
+    """
+    del qapp
+    from sieve.gui.kind_editors import RegionEditor
+
+    (image_width, image_height), _, _ = shown
+    extent = (image_width * 2, image_height * 2)
+    editor = RegionEditor(canvas, session, _NODE, "region", REGION, extent)
+
+    driving.drag(editor, _widget_point(shown, 20, 20), _widget_point(shown, 100, 60))
+
+    # `_widget_point` places the cursor over *image* pixels (20, 20) and
+    # (100, 60); in the space the value is denominated in those are twice as far
+    # from the frame's origin.
+    assert session.project.params_for(_NODE)["region"] == {
+        "x": 40,
+        "y": 40,
+        "width": 160,
+        "height": 80,
+    }
+
+
+def test_a_node_whose_space_the_window_cannot_name_gets_no_region_editor(
+    qapp, session: Session, canvas: Any, band: Any
+) -> None:
+    """The other half of the same decision: no extent, no gesture.
+
+    The extent of a node's input is a fact about what its upstream produces, and
+    the only frame a window knows the size of is the footage's own — so a region
+    parameter on a node reading a cropped or rescaled frame is denominated in a
+    space nothing on screen is showing. `None` says so, and what the user gets is
+    the form's read-only restatement of the value: a parameter they must type is
+    better than a box that draws in units nobody can name.
+
+    The span editor is unaffected, which is the assertion that keeps this from
+    reading as "an editor was dropped": a span is denominated in source frames
+    whatever a node does to the pixels.
+    """
+    del qapp
+    from sieve.gui.kind_editors import SpanEditor, bind_editors
+
+    editors = bind_editors(
+        session,
+        _NODE,
+        _spec(),
+        session.project.params_for(_NODE),
+        canvas=canvas,
+        timeline=band,
+        region_extent=None,
+    )
+
+    assert set(editors) == {"frames"}
     assert isinstance(editors["frames"], SpanEditor)
 
 
@@ -347,7 +420,7 @@ def test_a_drag_is_announced_once_on_release(
 
     from sieve.gui.kind_editors import RegionEditor
 
-    editor = RegionEditor(canvas, session, _NODE, "region", REGION)
+    editor = RegionEditor(canvas, session, _NODE, "region", REGION, shown[0])
     start, end = _widget_point(shown, 20, 20), _widget_point(shown, 100, 60)
     driving.press(editor, *start)
     driving.move(editor, *end)
@@ -383,7 +456,7 @@ def test_a_region_drawn_off_the_frame_names_only_pixels_it_has(
     del qapp
     from sieve.gui.kind_editors import RegionEditor
 
-    editor = RegionEditor(canvas, session, _NODE, "region", REGION)
+    editor = RegionEditor(canvas, session, _NODE, "region", REGION, shown[0])
     driving.drag(editor, (0.0, 0.0), (float(CANVAS_SIZE[0]), float(CANVAS_SIZE[1])))
 
     assert session.project.params_for(_NODE)["region"] == {
@@ -406,7 +479,7 @@ def test_a_gesture_that_encloses_nothing_writes_nothing(
     del qapp
     from sieve.gui.kind_editors import RegionEditor
 
-    editor = RegionEditor(canvas, session, _NODE, "region", REGION)
+    editor = RegionEditor(canvas, session, _NODE, "region", REGION, shown[0])
     driving.click(editor, *_widget_point(shown, 20, 20))
 
     assert session.project.params_for(_NODE)["region"] == REGION
@@ -414,7 +487,7 @@ def test_a_gesture_that_encloses_nothing_writes_nothing(
 
 
 def test_building_an_editor_is_not_an_edit_of_the_document(
-    qapp, session: Session, canvas: Any, band: Any
+    qapp, session: Session, canvas: Any, band: Any, shown: Any
 ) -> None:
     """Showing a value must not write it back — the form's rule, on the overlays.
 
@@ -433,6 +506,7 @@ def test_building_an_editor_is_not_an_edit_of_the_document(
         session.project.params_for(_NODE),
         canvas=canvas,
         timeline=band,
+        region_extent=shown[0],
     )
 
     assert not session.can_undo()

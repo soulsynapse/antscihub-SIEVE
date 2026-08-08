@@ -1,15 +1,14 @@
 """Driving Qt from a test without pytest-qt: synthetic mouse input, and waiting.
 
-pytest-qt is not installed and cannot be. Its plugin imports the Qt binding at
-`pytest_configure`, before any test runs, and `tests/bench/test_loop_budget.py`
-asserts that no Qt module is resident while the headless loop budget is
-measured — the claim Phase 6 exists to make. So `qtbot` is unavailable and its
-two services are re-derived here.
+pytest-qt is not installed, so `qtbot` is unavailable and its two services are
+re-derived here. It was originally excluded for a reason that has since been
+restated — its plugin imports the Qt binding at `pytest_configure`, which broke
+the residency assertion Phase 6 made (`tests/gui/conftest.py` on where that went)
+— and it stays out now for the ordinary reason a dependency stays out: nothing
+here needs it. What is below is two functions and a loop.
 
-Every Qt import is inside a function for `tests/gui/conftest.py`'s reason: this
-module is imported at the top of a test module, which pytest executes during
-collection, and a Qt import at this file's top level would be the same
-residency by a longer route.
+Every Qt import is inside a function, which is what lets a bench module import
+this one without loading Qt to collect it.
 
 **Input is constructed and handed to the widget's handlers directly** rather
 than posted through `QTest.mouseMove`, which needs a real window under a real

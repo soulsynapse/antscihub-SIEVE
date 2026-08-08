@@ -35,9 +35,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import asdict
-from typing import Any
+from typing import Any, NamedTuple
 
-from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt
+from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -66,6 +66,11 @@ class _Editor(QWidget):
     following the host's own size is the only way to stay that way through a
     resize the splitter decides.
     """
+
+    #: The document has just been written to. `ParamForm.edited`, on the other
+    #: half of the same surface and for the same listener: a drawn box and a
+    #: typed number are one edit, so they say so the same way.
+    edited = Signal()
 
     def __init__(self, host: QWidget, session: Session, node_id: str, param: str) -> None:
         super().__init__(host)
@@ -97,20 +102,29 @@ class _Editor(QWidget):
     def _commit(self, value: Any) -> None:
         """The gesture's whole output: one parameter, through the command layer."""
         issue(self._session, SetParam(node_id=self._node_id, param=self._param, value=value))
+        self.edited.emit()
 
 
 class RegionEditor(_Editor):
-    """A rectangle dragged on the viewport, in the pixels of the frame it is drawn on.
+    """A rectangle dragged on the viewport, in the pixels of the space it names.
 
-    *Which* pixels those are is the surface's answer and not this module's. The
-    value is denominated in the image the canvas is showing, and whether that
-    image is the node's own input — `crop.py` says a region indexes the frame
-    its node is handed, while the viewport is fed a display proxy of the source
-    (`transport/decode_worker.PROXY_WIDTH`) — is a question about what gets fed
-    to the canvas, which belongs where the editors are placed
-    (`todo/the-first-cut-meets-its-gate.md`).
+    **Which space that is, is declared rather than read off the screen** (07.11).
+    `crop.py` says a region indexes the frame its own node is handed; the canvas
+    is fed a display proxy of the source, resampled whenever the footage is wider
+    than `transport/decode_worker.PROXY_WIDTH`. So the image on screen and the
+    space the value is denominated in are two different rectangles, and on 4K
+    footage they differ by a factor of three — silently, and only on large
+    footage, which is the worst shape a unit error can take. `extent` is the one
+    the value is in, and everything here scales through it.
 
-    Clamped to the image and not to the widget. The canvas centres the frame and
+    Placing the editor is therefore also the decision *not* to offer it: the
+    extent of a node's input is a fact about what its upstream produces, so
+    `bind_editors` is handed one only where the caller knows it, and a node
+    reading a rescaled or cropped frame gets no editor and keeps the form's
+    read-only restatement of the value. Better a parameter the user must type
+    than a box that draws in the wrong units.
+
+    Clamped to the extent and not to the widget. The canvas centres the frame and
     never enlarges it, so there is always a margin, and clamping to the widget
     would scale that overshoot into coordinates the frame does not have.
 
@@ -125,9 +139,12 @@ class RegionEditor(_Editor):
         node_id: str,
         param: str,
         value: Mapping[str, int] | None,
+        extent: tuple[int, int],
     ) -> None:
+        """Edit `param` of `node_id`, in the pixels of an `extent`-sized frame."""
         super().__init__(host, session, node_id, param)
         self._canvas = host
+        self._extent = extent
         self._region = None if value is None else ROI(**dict(value))
         self._anchor: QPointF | None = None
         self._draft: QRectF | None = None
@@ -159,23 +176,27 @@ class RegionEditor(_Editor):
         return self._draft if self._draft is not None else self.region_rect()
 
     def _scale(self) -> float:
-        """Screen pixels per image pixel, zero when there is no frame."""
-        image = self._canvas.frame
+        """Screen pixels per *extent* pixel, zero when there is no frame.
+
+        The painted rectangle over the extent, not over the image inside it: the
+        two agree only when the canvas is showing the space at its own
+        resolution, and the whole point of the extent is that it need not be.
+        """
         box = self._canvas.frame_rect()
-        if image is None or box.isEmpty():
+        width = self._extent[0]
+        if box.isEmpty() or width <= 0:
             return 0.0
-        return box.width() / image.width()
+        return box.width() / width
 
     def _image_point(self, point: QPointF) -> QPointF | None:
-        """`point` in the shown image's pixels, or None when nothing is shown."""
-        image = self._canvas.frame
+        """`point` in the extent's pixels, or None when nothing is shown."""
         scale = self._scale()
-        if image is None or scale <= 0.0:
+        if scale <= 0.0:
             return None
         box = self._canvas.frame_rect()
         return QPointF(
-            min(max((point.x() - box.left()) / scale, 0.0), float(image.width())),
-            min(max((point.y() - box.top()) / scale, 0.0), float(image.height())),
+            min(max((point.x() - box.left()) / scale, 0.0), float(self._extent[0])),
+            min(max((point.y() - box.top()) / scale, 0.0), float(self._extent[1])),
         )
 
     def _drawn(self, start: QPointF, end: QPointF) -> ROI | None:
@@ -351,14 +372,24 @@ class SpanEditor(_Editor):
         painter.end()
 
 
-def _on_the_canvas(canvas: VideoCanvas, band: TimelineStrip, *bound: Any) -> _Editor:
-    del band
-    return RegionEditor(canvas, *bound)
+class _Surfaces(NamedTuple):
+    """What an editor may be hung on, and what its value would be denominated in."""
+
+    canvas: VideoCanvas
+    timeline: TimelineStrip
+    #: The size of the frame this node is handed, or None when the caller cannot
+    #: say. `RegionEditor` explains why that is a refusal and not a default.
+    region_extent: tuple[int, int] | None
 
 
-def _on_the_band(canvas: VideoCanvas, band: TimelineStrip, *bound: Any) -> _Editor:
-    del canvas
-    return SpanEditor(band, *bound)
+def _on_the_canvas(surfaces: _Surfaces, *bound: Any) -> _Editor | None:
+    if surfaces.region_extent is None:
+        return None
+    return RegionEditor(surfaces.canvas, *bound, surfaces.region_extent)
+
+
+def _on_the_band(surfaces: _Surfaces, *bound: Any) -> _Editor:
+    return SpanEditor(surfaces.timeline, *bound)
 
 
 #: Kind to editor, and the whole of this module's tool knowledge. Partial over
@@ -379,6 +410,7 @@ def bind_editors(
     *,
     canvas: VideoCanvas,
     timeline: TimelineStrip,
+    region_extent: tuple[int, int] | None,
 ) -> dict[str, _Editor]:
     """An editor over every parameter of `node_id` whose kind is edited by gesture.
 
@@ -390,10 +422,19 @@ def bind_editors(
     mapping the form is built from, so the panel and the overlays cannot show
     two different answers, and a parameter the document is silent about arrives
     as `None` rather than as a default invented here.
+
+    `region_extent` is the size of the frame this node is handed, and `None`
+    says the caller does not know it — which is a region parameter with no
+    editor rather than one editing in whatever units the canvas happens to be
+    showing. See `RegionEditor`.
     """
     editors: dict[str, _Editor] = {}
+    surfaces = _Surfaces(canvas, timeline, region_extent)
     for name, kind in spec.param_stereotypes.items():
         build = _EDITORS.get(kind)
-        if build is not None:
-            editors[name] = build(canvas, timeline, session, node_id, name, values.get(name))
+        if build is None:
+            continue
+        editor = build(surfaces, session, node_id, name, values.get(name))
+        if editor is not None:
+            editors[name] = editor
     return editors

@@ -1,4 +1,4 @@
-"""Phase 6's gate: the loop's two regimes, measured, with no Qt in the process.
+"""Phase 6's gate: the loop's two regimes, measured, with no Qt in the code.
 
 Everything in `bench/` up to here declares. This file is the first thing in the
 repo that puts a clock on a ceiling and reports what the clock said, which is
@@ -79,6 +79,7 @@ is 160x120, and a ceiling met on it is not yet a ceiling met on 5.3K footage.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from collections import Counter
 from collections.abc import Iterator, Mapping
@@ -146,9 +147,24 @@ PLAYHEAD_STOPS = (5, 12, 20, 25, 8, 17, 2, 27)
 #: gesture.
 GRAPH_EDITS = (6, 10, 8, 12, 4)
 
-#: Qt in the process would make the whole measurement a different claim. Named
-#: rather than probed by prefix so the assertion says what it is looking for.
+#: Qt reached by anything this file measures through would make the whole
+#: measurement a different claim. Named rather than probed by prefix so the
+#: assertion says what it is looking for.
 QT_MODULES = ("PyQt6", "PyQt5", "PySide6", "PySide2")
+
+#: What the pass above runs on, as a fresh interpreter would have to import to
+#: run it. The four packages the fixture reaches into and no more: naming
+#: `sieve` whole would prove the tree is Qt-free rather than that the
+#: measurement is, which is a claim `.importlinter`'s `headless` contract
+#: already makes and this one deliberately does not repeat.
+MEASURED_MODULES = (
+    "sieve.bench.metrics",
+    "sieve.decode.prefetch",
+    "sieve.decode.reader",
+    "sieve.pipeline.preview",
+    "sieve.pipeline.series_collector",
+    "sieve.tools",
+)
 
 
 def within_budget(key: str, elapsed_ms: float) -> None:
@@ -525,12 +541,44 @@ def test_the_stack_share_of_a_refill(reading: Reading) -> None:
     assert [share for share in reading.stack_shares if share <= 0.0] == []
 
 
-def test_the_measurement_ran_with_no_qt_in_the_process(reading: Reading) -> None:
-    """The claim the phase is named for, and the only one a later run can lose.
+def test_the_measurement_imports_no_qt(reading: Reading) -> None:
+    """The claim the phase is named for, restated as a claim about *this* code.
 
-    Phase 7 measures these same ceilings through the GUI. If Qt were resident
-    here, a regression that appeared then could not be attributed to it — which
-    is the entire reason this number is taken before a widget exists.
+    It used to read `sys.modules` at assertion time, which was the whole of the
+    claim while nothing in the tree imported Qt. 07.11 measures these same
+    ceilings *through* the GUI, in a session where a `QApplication` exists by
+    construction, so the old form goes red for a reason that says nothing about
+    what was measured here — pytest imports every test module during collection,
+    and one Qt import anywhere in the suite made the assertion a statement about
+    file ordering rather than about this pass.
+
+    What the headless numbers actually need is that they were taken by code with
+    no Qt in it, which is a claim about one measurement's import closure and not
+    about the suite's process. So it is asked in a fresh interpreter that imports
+    exactly what this file's pass runs on, and nothing else. Stronger than the
+    original in the way that matters — a Qt import reaching any of these four
+    modules is red here whatever else the suite happens to have loaded — and it
+    survives every later phase, which the `sys.modules` form could not.
+
+    The `headless` contract in `.importlinter` forbids the same edge statically,
+    and this is not a duplicate of it: a contract holds `PySide6` out of the
+    packages it names, while this holds it out of whatever the measurement
+    imports, including the third-party path that would arrive under a
+    dependency's name rather than under `sieve`'s.
     """
     del reading
-    assert [name for name in QT_MODULES if name in sys.modules] == []
+    imports = "; ".join(f"import {name}" for name in MEASURED_MODULES)
+    probe_source = (
+        f"{imports}; import sys; "
+        f"print([n for n in sys.modules if n.split('.')[0] in {list(QT_MODULES)!r}])"
+    )
+    probe = subprocess.run(
+        [sys.executable, "-c", probe_source],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert probe.stdout.strip() == "[]", probe.stdout

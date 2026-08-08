@@ -31,6 +31,7 @@ from collections.abc import Callable, Mapping
 from functools import partial
 from typing import Any
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -176,6 +177,11 @@ class ParamForm(QWidget):
     made a `tool_id` branch possible to write.
     """
 
+    #: The document has just been written to. Carries nothing: what changed is
+    #: already in the session, and a payload here would be a second description
+    #: of the edit for a listener to disagree with.
+    edited = Signal()
+
     def __init__(
         self,
         session: Session,
@@ -217,3 +223,4 @@ class ParamForm(QWidget):
 
     def _edit(self, name: str, value: Any) -> None:
         issue(self._session, SetParam(node_id=self._node_id, param=name, value=value))
+        self.edited.emit()

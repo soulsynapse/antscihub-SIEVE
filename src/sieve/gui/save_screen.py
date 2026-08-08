@@ -185,7 +185,16 @@ class SaveScreen(QWidget):
         return self._running
 
     def run(self) -> None:
-        """Save the document, then run the saved file the way a node would."""
+        """Save the document, then run the saved file the way a node would.
+
+        A no-op while a run is in flight. A second click would re-save the
+        document under the first run's feet, clear the message that run is going
+        to write into, and emit `run_issued` for a process `QProcess` declines to
+        start — three wrong answers for one impatient click, and `running()` is
+        already the state that says so.
+        """
+        if self._running:
+            return
         self._session.save()
         command = run_command(str(self._session.path))
         self._message.setText("")

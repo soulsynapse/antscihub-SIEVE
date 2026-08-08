@@ -47,3 +47,28 @@ frame count commits `1`, then `12`, then `120` — three plans, two of them for
 values the user was in the middle of typing. Whether that is `editingFinished`
 or v2's own answer is this item's to settle; the loop budget is what makes it a
 real cost rather than a tidiness argument, since each of those is a preview.
+
+## The render each of those values costs is synchronous on the GUI thread (2026-08-08, from 07.11)
+
+07.11 wired the loop, and the cost this item argues about is now real rather
+than prospective: `gui/tuning.py` renders the working window on the GUI thread,
+synchronously, on the turn after an edit lands. Every pass-through value the
+cases above describe — three plans for a typed `120`, one per mode for a held
+Down key — is a whole window render, and the window is frozen for each of them.
+
+Two things keep that inside VISION's promise today and neither is the fix. A
+single-shot `QTimer` restarted per request collapses the edits that arrive
+within one turn of the event loop into one render, which is coalescing for a
+burst and not for a sequence of committed values; and the reference workload
+renders in ~5 ms
+(`findings/2026.08.08-the-loop-budget-is-met-through-the-gui.md`), so nothing
+freezes perceptibly on the fixture. On footage the scope note does not cover,
+each pass-through value is a visible stall — which is what makes the two cases
+above a product question rather than a tidiness one, and is the sentence this
+item's `done_when` does not yet reach.
+
+Moving the render off the GUI thread is deliberately *not* folded in here.
+`pipeline/preview.py` says coalescing belongs to the transport layer and that a
+caller rendering on a worker must hold one render in flight and one pending;
+that is a mechanism with a fence in it, and it is worth doing after the number
+of renders is right rather than as a way of hiding how many there are.

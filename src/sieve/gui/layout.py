@@ -10,6 +10,15 @@ The scrubber runs the full width under both halves rather than under the canvas
 alone. VISION calls it "the bottom area", and it is the one surface whose answer
 — where am I, and what stretch am I working on — must not depend on which
 position the control track is showing.
+
+**The graph is on the viewing half, under the canvas, and not on the step**
+(07.11). It is a second viewport rather than a control: what it shows is the
+footage measured, over the same frames the canvas is playing, and a user tuning
+a parameter watches the picture and the trace together. On the step position it
+would be visible only while the walk stood on that node — which is exactly the
+moment a slider is being dragged, and exactly not the moment the pipeline
+position is being read. Under the canvas it is a splitter away from being any
+size the user wants, including none.
 """
 
 from __future__ import annotations
@@ -79,19 +88,33 @@ class CanvasSlot(QWidget):
         widget.show()
 
 
-def compose(canvas: QWidget, control: QWidget, timeline: QWidget) -> QWidget:
-    """The canvas and the control side split evenly, the timeline under both.
+def compose(canvas: QWidget, graph: QWidget, control: QWidget, timeline: QWidget) -> QWidget:
+    """Canvas over graph on the left, the control side on the right, timeline under both.
 
     The timeline is not a layout section: it fixes its own height by design
     (`timeline/bar.STRIP_HEIGHT`), which is the declaration `_require_layout_section`
     refuses — vertically, though, and the splitter it must not fight is
     horizontal, so it is placed here rather than checked.
+
+    The graph is checked like the canvas even though the splitter above it is
+    vertical: it shares the left half's width, so a widget that fixed its own
+    would move the main split just as surely from one row down.
     """
     _require_layout_section(canvas)
+    _require_layout_section(graph)
     _require_layout_section(control)
 
+    viewing = QSplitter(Qt.Orientation.Vertical)
+    viewing.addWidget(canvas)
+    viewing.addWidget(graph)
+    viewing.setStretchFactor(0, 1)
+    viewing.setStretchFactor(1, 0)
+    # Pixels for `setSizes`' reason below, and two to one because the canvas is
+    # what is being judged and the trace is what is being read off it.
+    viewing.setSizes([_WINDOW_HEIGHT * 2 // 3, _WINDOW_HEIGHT // 3])
+
     split = QSplitter(Qt.Orientation.Horizontal)
-    split.addWidget(canvas)
+    split.addWidget(viewing)
     split.addWidget(control)
     split.setStretchFactor(0, 1)
     split.setStretchFactor(1, 1)

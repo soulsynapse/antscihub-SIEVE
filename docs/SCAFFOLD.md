@@ -13,7 +13,7 @@ src/sieve/__init__.py                      # Signal isolation for ethological vi
 src/sieve/gui/__init__.py                  # Rendering values, emitting intents, holding view state; computes nothing.
 src/sieve/gui/app.py                       # The window: what the parts are, and what the four navigation verbs mean.
 src/sieve/gui/canvas.py                    # The viewport: the frame the transport last handed over, drawn to fit.
-src/sieve/gui/control.py                   # Which of the three positions is showing, and the track that slides between.
+src/sieve/gui/control.py                   # Which of the four positions is showing, and the track that slides between.
 src/sieve/gui/expander.py                  # The down arrow on a step, and the tool's own guidance under it.
 src/sieve/gui/graph_panel.py               # The graph: one refill's series, drawn where its frames are.
 src/sieve/gui/hotkeys.py                   # Which keys exist and which verb each one calls.
@@ -24,6 +24,7 @@ src/sieve/gui/param_form.py                # One control per parameter, chosen b
 src/sieve/gui/project_select.py            # Picking one of the project files that already exist.
 src/sieve/gui/rail.py                      # One tick per node, down the left edge, marking where the walk is.
 src/sieve/gui/save_screen.py               # What the run keeps, and the command that runs it.
+src/sieve/gui/step_pane.py                 # The step position: one node's caption, its parameters, and its guidance.
 src/sieve/gui/timeline/__init__.py         # The full-width band: where a frame lands on the strip, and what a click means.
 src/sieve/gui/timeline/bar.py              # The anchor: one full-width band across the bottom of the window.
 src/sieve/gui/timeline/geometry.py         # Where a frame lands on the strip, and which frame a pixel names.
@@ -36,6 +37,7 @@ src/sieve/gui/transport/player.py          # Playback and seek control on the GU
 src/sieve/gui/transport/proxy_cache.py     # A bounded LRU of decoded display proxies, keyed by frame index.
 src/sieve/gui/transport/request_intent.py  # Why a frame was asked for, and what that entitles it to.
 src/sieve/gui/transport/scrub_policy.py    # When to stop decoding every scrub target, and what to decode instead.
+src/sieve/gui/tuning.py                    # The loop itself: an edit lands, the graph goes stale, a refill answers it.
 src/sieve/gui/walk.py                      # The order Up and Down move through a graph.
 src/sieve/cli/__init__.py                  # The headless front end; with the saved file, the cluster handoff.
 src/sieve/cli/app.py                       # The `sieve` command: argument parsing and nothing else.
@@ -59,6 +61,7 @@ src/sieve/pipeline/plan.py                 # Everything about a run that is know
 src/sieve/pipeline/preview.py              # The preview session: one working window, one replicate, many revisions.
 src/sieve/pipeline/resolve_source.py       # Which file a run opens, and in whose frame numbering.
 src/sieve/pipeline/series_collector.py     # Assemble one node's per-frame outputs into the series a graph is drawn from.
+src/sieve/pipeline/shelf.py                # Who fills the shelf, for a front end that may not reach a tool.
 src/sieve/pipeline/source_home.py          # The frame of reference a crop record is read against: three facts, one value.
 src/sieve/tools/__init__.py                # Every pipeline step, one module each: a ToolSpec and one plain run function.
 src/sieve/tools/background_ema.py          # An exponential moving-average background model, and the difference from it.

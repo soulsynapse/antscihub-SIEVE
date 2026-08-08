@@ -1,11 +1,25 @@
-"""Which of the three positions is showing, and the track that slides between.
+"""Which of the four positions is showing, and the track that slides between.
 
-Project, pipeline, step — VISION's walk, in that order, as one track three
-panes wide that moves by one pane-width. Nothing cuts instantly and nothing
-grows a tab bar: the slide is what tells the user the three are a line they are
-somewhere on rather than three unrelated screens.
+Project, pipeline, step, save — VISION's walk and what it ends in, in that
+order, as one track four panes wide that moves by one pane-width. Nothing cuts
+instantly and nothing grows a tab bar: the slide is what tells the user the four
+are a line they are somewhere on rather than four unrelated screens.
 
-Not what any of them contains — `project_select.py`, `node_list.py` own those.
+**Why save is a fourth position and not a dialog** (07.11). VISION puts it after
+the pipeline — the user "checks off the outputs they want persisted, and selects
+'process'" — and a modal over the workspace would make the last thing the user
+does the one thing that is not on the line they have been walking. It goes past
+`step` rather than between `pipeline` and `step` because the middle two are the
+node walk: Up and Down mean something at both of them and nothing here, and a
+position wedged between them would break the one gesture that ties them
+together. So the track reads as a zoom in and then a step out — which node,
+this node, and then what the whole run keeps.
+
+The rail is hidden here for the same reason it is hidden at the project
+position: it says where the walk is, and the save screen is not on the walk.
+
+Not what any of them contains — `project_select.py`, `node_list.py`,
+`step_pane.py`, `save_screen.py` own those.
 Not the canvas: `app.py` swaps that separately and this module never mentions
 it. Not which node is current: that is the window's, passed in on every rebuild
 rather than tracked here, so there is exactly one answer to "where is the walk"
@@ -42,14 +56,15 @@ from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QWidget
 
 from sieve.core.pipeline_model import Node
-from sieve.gui.node_list import NodeBox, build_node_list
+from sieve.gui.node_list import build_node_list
 from sieve.gui.project_select import ProjectSelect
 from sieve.gui.rail import NodeRail
+from sieve.gui.step_pane import StepPane
 
 _SLIDE_DURATION_MS = 260
 
-_POS_PROJECT, _POS_PIPELINE, _POS_STEP = range(3)
-POSITION_NAMES = ("project", "pipeline", "step")
+_POS_PROJECT, _POS_PIPELINE, _POS_STEP, _POS_SAVE = range(4)
+POSITION_NAMES = ("project", "pipeline", "step", "save")
 
 
 class _SlidingPanes(QWidget):
@@ -151,7 +166,9 @@ class Control(QWidget):
         self._rail = self._build_rail(node_count=0, current=0)
         self._rail.setVisible(False)
 
-        self._panes = _SlidingPanes([self._build_project_select(projects), QWidget(), QWidget()])
+        self._panes = _SlidingPanes(
+            [self._build_project_select(projects), QWidget(), QWidget(), QWidget()]
+        )
 
         self._layout = QHBoxLayout(self)
         # The rail is a left gutter, so equal margins are not symmetric: the
@@ -175,14 +192,19 @@ class Control(QWidget):
         return select
 
     @property
-    def step_pane(self) -> NodeBox | QWidget:
-        """The step position's content: a `NodeBox` once a graph is showing.
+    def step_pane(self) -> StepPane | QWidget:
+        """The step position's content: a `StepPane` once a graph is showing.
 
         A bare `QWidget` before that, and on an empty graph — a window with no
-        project open has a step position, because the track has three panes
-        whether or not two of them have anything to say yet.
+        project open has a step position, because the track has four panes
+        whether or not three of them have anything to say yet.
         """
         return self._panes.pane(_POS_STEP)
+
+    @property
+    def save_pane(self) -> QWidget:
+        """The save position's content: a `SaveScreen` once a project is open."""
+        return self._panes.pane(_POS_SAVE)
 
     def current_position(self) -> str:
         return POSITION_NAMES[self._panes.current_index()]
@@ -192,13 +214,19 @@ class Control(QWidget):
         self._rail.setVisible(False)
         self._panes.set_current(_POS_PROJECT)
 
-    def show_graph(self, nodes: Sequence[Node], current: int) -> None:
-        """Redraw both workspace positions for `nodes` with `current` selected.
+    def show_graph(self, nodes: Sequence[Node], current: int, step: QWidget) -> None:
+        """Redraw both walk positions for `nodes` with `current` selected.
 
         Called on every move of the walk as well as on open, because a whole
         rebuild is what the skeleton has: there is no incremental path yet and
         inventing one before the panes hold anything expensive would be
-        optimizing a rebuild of two labels.
+        optimizing a rebuild of two labels. It is also what a generated form
+        runs on — `param_form.py` reads the document once and never reads it
+        back, so a rebuild is how a new value arrives.
+
+        `step` is built by the caller and handed in, because what goes on the
+        step position needs the session and the node's spec and this module has
+        neither: it owns which position is showing and nothing about the graph.
         """
         old_rail = self._rail
         self._rail = self._build_rail(len(nodes), current)
@@ -212,10 +240,11 @@ class Control(QWidget):
         old_rail.deleteLater()
 
         self._panes.replace_pane(_POS_PIPELINE, build_node_list(nodes, current))
-        self._panes.replace_pane(
-            _POS_STEP,
-            NodeBox(current + 1, nodes[current]) if 0 <= current < len(nodes) else QWidget(),
-        )
+        self._panes.replace_pane(_POS_STEP, step)
+
+    def set_save_screen(self, screen: QWidget) -> None:
+        """Put `screen` on the save position. Built by the caller, for `show_graph`'s reason."""
+        self._panes.replace_pane(_POS_SAVE, screen)
 
     def show_pipeline(self) -> None:
         self._rail.setVisible(True)
@@ -224,6 +253,10 @@ class Control(QWidget):
     def show_step(self) -> None:
         self._rail.setVisible(True)
         self._panes.set_current(_POS_STEP)
+
+    def show_save(self) -> None:
+        self._rail.setVisible(False)
+        self._panes.set_current(_POS_SAVE)
 
     def _build_rail(self, node_count: int, current: int) -> NodeRail:
         rail = NodeRail(node_count=node_count, current=current)

@@ -2,7 +2,7 @@
 title: The registration hint names two of three ElementKinds
 priority: normal
 phase: 1
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -k element_hint_names_every_kind -q"
 opened: 2026-08-07

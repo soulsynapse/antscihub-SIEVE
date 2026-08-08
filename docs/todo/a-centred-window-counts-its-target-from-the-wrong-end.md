@@ -4,6 +4,7 @@ priority: normal
 phase: 3
 status: open
 gated_on: nothing
+done_when: "uv run pytest tests/unit/test_executor.py -q -k span_target && uv run pytest tests/unit/test_types.py tests/unit/test_executor.py -q"
 opened: 2026-08-07
 ---
 
@@ -47,3 +48,29 @@ answered. Read what it settled before weighing the two shapes above; if it
 ruled that the anchor holds and guards live at the declaration boundaries, then
 the `FrameSpan.centred_on` constructor is refused with it and what is left here
 is a target index carried by whoever builds the span.
+
+## The fallback did not fire, and the criterion is neutral between the shapes
+
+That item landed the guard in `FrameCount.__post_init__`, so the anchor admits
+what a change's own subject argues for and `FrameSpan.centred_on` is not refused
+— both shapes above are live and this item weighs them on their merits. What it
+may not do is add a constructor as a convenience beside other work; the change
+has to be this item's subject.
+
+The cases spell `span_target` and land in `tests/unit/test_executor.py`, which
+is where either shape is observable: a windowed tool declaring
+`lookahead_frames` reads the frame it must emit for off the span it was handed —
+not by counting `k` back from the end — and is not the mistake
+`test_a_lookahead_tool_that_answers_for_the_end_of_its_window_is_refused` names,
+while a trailing tool's target is still its last frame. They cannot land in
+`tests/unit/test_types.py`: that is 01.1's ported spec and the porting
+discipline refuses rewriting one, which is why the file that owns `FrameSpan`
+is the one file that may not carry the case for it. The second leg runs that
+ported spec beside the executor's, because a target index on the span is the
+branch that could land green while quietly moving what 01.1 froze.
+
+The fixture that declares its lookahead twice — the workaround the body names —
+is not in the criterion, because whether it collapses depends on which shape
+wins: a span that carries its target leaves the tool nothing to count with, and
+`node_lookahead_frames`' preference for the refinement stops being anything the
+tool reads.

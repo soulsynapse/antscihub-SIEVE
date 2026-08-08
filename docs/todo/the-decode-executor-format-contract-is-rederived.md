@@ -4,6 +4,7 @@ status: open
 priority: normal
 phase: 3
 gated_on: nothing
+done_when: "uv run pytest tests/unit/test_decode_format.py -q"
 opened: 2026-08-07
 ---
 
@@ -36,3 +37,18 @@ conversion is a wrong-but-green result of exactly the kind the loop cannot
 detect. It runs on a `_OneFrame` fake in v2, never on `synthetic_video`, and
 that should stay: the contract is about disagreement, and a real decode cannot
 be made to disagree with itself on demand.
+
+## The criterion is the file, because the file is what does not exist
+
+`tests/unit/test_decode_format.py` is named though nothing writes it yet, and a
+run of it fails on the missing path — which is this item's actual state: the
+handshake has no home, not a weak one. A criterion selecting by keyword inside
+an existing file would be satisfiable by adding one of the three assertions to
+whichever file was already open, and the three are one contract read together.
+
+`tests/unit` and not `tests/integration`, following the fake the body argues
+for: no container is opened, so the file belongs beside the other unit suites
+even though its three subjects sit in three modules. The whole file runs rather
+than a keyword, because a re-derivation cannot be selected for by name in
+advance — what must survive is the assertion and not the fixture, and pinning a
+test name here would pin v2's spelling of it.

@@ -4,6 +4,7 @@ priority: normal
 phase: 3
 status: open
 gated_on: nothing
+done_when: "uv run pytest tests/unit/test_tool_contract.py tests/unit/test_plan.py -q -k warmup_side"
 opened: 2026-08-07
 ---
 
@@ -28,3 +29,19 @@ merges, this closes as a duplicate of 03.5's case; if `input_warmup_frames`
 stays in `core`, its refusal wants a case in `tests/unit/test_tool_contract.py`
 beside the two that already assert the *declaration* rule — that a rate-changing
 tool must override `output_rate` and a streaming one must not.
+
+## The criterion names both files, because the home is the other item's
+
+The case spells `warmup_side`, mirroring
+`test_a_non_positive_output_rate_is_refused_on_the_lookahead_side` in
+`tests/unit/test_plan.py` — which is the twin's case, says in its own docstring
+that the warmup guard answers for both its graphs, and points here. Naming both
+files means the criterion is indifferent to where
+[the-lookahead-conversion-picks-a-home.md](the-lookahead-conversion-picks-a-home.md)
+puts the pair: the refusal is owed a case of its own either way, and if the two
+functions merge into one the case merges with them rather than the item lapsing.
+
+Asserted against `input_warmup_frames` directly and not through
+`source_warmup_frames` or `ExecutionPlan.build`, for the reason the twin's
+docstring already gives: reaching it through a fold proves whichever guard the
+fold hits first, which is how this one came to be the unproven side.

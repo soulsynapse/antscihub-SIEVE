@@ -4,6 +4,7 @@ status: open
 gated_on: nothing
 priority: normal
 phase: "03"
+done_when: "uv run pytest tests/unit/test_cache_key.py tests/unit/test_dag.py -q -k invalid_params"
 opened: 2026-08-07
 ---
 
@@ -29,3 +30,19 @@ Deliberately not in scope: making the walk survive it the way it survives
 `NotCacheableError`. Uncacheable is a property of a tool and not an error;
 invalid parameters are a document that cannot run at all, and swallowing them
 per node would hand the executor a graph it will fail on later and further away.
+
+## Both files, one keyword, and the walk's case carries the id
+
+The cases spell `invalid_params`, one in `tests/unit/test_cache_key.py` for
+`node_key` and one in `tests/unit/test_dag.py` for `node_keys`, and the
+criterion names both files because a single-file run would go green with either
+half written — which is the failure this item is about, a declared raise proven
+on one side and inherited on the other. The walk's case is the one that has to
+assert the message *contains the node id*, since that is the half pydantic does
+not supply and the half the interactive loop reads; whether the id arrives by
+wrapping or by re-raising is the work's to choose, and the criterion does not
+name an exception type for that reason.
+
+Not in the criterion, for the reason the paragraph above gives: nothing asserts
+that the walk survives an invalid node the way it survives `NotCacheableError`.
+A case pinning that would pin the behaviour this item refuses.

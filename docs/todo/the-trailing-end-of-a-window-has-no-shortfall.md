@@ -4,6 +4,7 @@ priority: normal
 phase: 3
 status: open
 gated_on: nothing
+done_when: "uv run pytest tests/unit/test_plan.py tests/unit/test_executor.py tests/integration/test_cli_run.py -q -k trailing_shortfall"
 opened: 2026-08-07
 ---
 
@@ -66,3 +67,26 @@ failure, the proposed reading, and the observation that
 `tests/integration/test_v2_oracle.py` already works around the gap by deriving
 its span from the declared lookahead. Whichever way this goes, that item is
 closed against it or narrowed to the message alone.
+
+## The criterion pins the report, which is what all three candidates end in
+
+Cases spelling `trailing_shortfall`, in whichever of
+`tests/unit/test_plan.py`, `tests/unit/test_executor.py` and
+`tests/integration/test_cli_run.py` the answer puts them — all three named, so
+the criterion does not pick the candidate. What it does pick is that the
+shortfall is *named*, because that is the one thing the three agree on: the
+executor discovering it reports it per run, `resolve_source` handing the plan a
+ceiling makes it a plan field beside `lead_in_shortfall`, and even the reading
+that a trailing shortfall is no defect was priced by the 03.6 amendment above
+into "somebody stops the loop at what the reader has and says how many frames
+that cost". A run that silently narrows its span is refused by this criterion
+as firmly as one that still dies with `Frame 40 out of range 0..39`.
+
+Deliberately not pinned: whether the run completes or refuses when nothing is
+left, and where the number is computed. The first is the phase-5 item's
+sentence — keep the refusal when the span empties — and the second is the
+choice among the three. The integration file is in the command so that the
+answer can be proven at the invocation that fails today rather than only at the
+layer that computes it; if the answer turns out to be entirely inside
+`plan.py`, the two unit files carry it and the third contributes nothing, which
+costs a collection and no coverage.

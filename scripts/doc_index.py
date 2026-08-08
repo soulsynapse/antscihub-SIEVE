@@ -194,12 +194,9 @@ PRIORITIES = ("high", "normal", "low", "unassessed")
 UNSPECIFIED_DEBT = frozenset(
     {
         "a-budget-miss-is-an-exit-code-once-something-can-force-one.md",
-        "a-centred-window-counts-its-target-from-the-wrong-end.md",
         "a-checkpoint-does-not-record-which-product-it-holds.md",
         "a-composite-parameter-prints-no-shape-and-no-bounds.md",
         "a-declared-lag-whose-only-reader-is-its-own-test.md",
-        "a-declared-refusal-that-only-the-lookahead-side-proves.md",
-        "a-declared-validationerror-names-the-node-it-refused.md",
         "a-detector-cannot-run-to-the-end-of-its-own-footage.md",
         "a-merge-keys-its-inputs-by-port.md",
         "a-node-id-reaches-the-filesystem-with-no-spelling-rule.md",
@@ -219,13 +216,9 @@ UNSPECIFIED_DEBT = frozenset(
         "temporal-baseline-pins-its-degenerate-paths.md",
         "the-admission-argument-is-retold-in-four-modules.md",
         "the-aperture-cutoff-holds-a-hundredfold-mutation.md",
-        "the-dag-propagation-cases-answer-a-mutation.md",
-        "the-decode-executor-format-contract-is-rederived.md",
         "the-detect-parity-target-is-named.md",
         "the-dilation-radius-runs-only-at-its-clamp.md",
-        "the-discover-ordering-claim-needs-a-second-tool.md",
         "the-first-gui-cut-names-its-surfaces.md",
-        "the-lookahead-conversion-picks-a-home.md",
         "the-narrowing-case-cannot-see-what-it-did-not-ask-for.md",
         "the-non-finite-guards-get-the-case-their-subject-needs.md",
         "the-offering-predicate-is-not-the-edge-legality-check.md",
@@ -234,8 +227,6 @@ UNSPECIFIED_DEBT = frozenset(
         "the-rss-floor-decides-its-fate.md",
         "the-second-failing-command-moves-the-shared-refusals.md",
         "the-series-collector-gives-slider-to-graph-a-subject.md",
-        "the-source-identity-has-no-consumer-and-no-case.md",
-        "the-trailing-end-of-a-window-has-no-shortfall.md",
         "two-items-name-the-same-crop-artifact-test-file.md",
     }
 )

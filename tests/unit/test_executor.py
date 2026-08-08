@@ -66,6 +66,11 @@ CALLS: list[tuple[int, int]] = []
 #: The frame indices of every window a windowed tool was handed, in call order.
 WINDOWS: list[tuple[int, ...]] = []
 
+#: `window.target.index` for each of those calls. Beside `WINDOWS` rather than
+#: derived from it, because what the span *says* its target is and where that
+#: frame sits in the window are the two halves of the claim.
+TARGETS: list[int] = []
+
 
 def tag_run(params: TagParams, window: FrameSpan, state: None) -> Frame:
     del state
@@ -133,16 +138,15 @@ class BareParams(ParamsBase):
 def _mean_run(params: ParamsBase, window: FrameSpan, state: None) -> Frame:
     """The mean of a window, emitted for the frame the executor centred it on.
 
-    The one place a tool has to know its own lookahead: the target sits that
-    many frames back from the end of what it was handed, because the frames
-    after it are the reason it was made to wait. A tool that took `window.target`
-    instead would answer for a frame it had not been asked about, which is what
-    `_run_node`'s index check is there to catch.
+    Read off the span rather than counted back from its end: the frames after
+    the target are the reason this tool was made to wait, and how many there are
+    is the executor's number rather than one the tool has to re-derive from
+    `params`.
     """
-    del state
-    lookahead = params.lookahead_frames().frames
-    target = window[len(window) - 1 - lookahead]
+    del params, state
+    target = window.target
     WINDOWS.append(tuple(int(frame.index) for frame in window))
+    TARGETS.append(int(target.index))
     data = np.mean([frame.data.astype(np.float32) for frame in window], axis=0).astype(np.uint8)
     return Frame(data=data, index=target.index, channels=target.channels)
 
@@ -151,10 +155,10 @@ def _windowed(tool_id: str, warmup: int, lookahead: int) -> type[ParamsBase]:
     """A windowed tool declaring both sides of its window, and a mean over it.
 
     The refinement is declared beside the bound rather than only as the bound,
-    which is what lets `_mean_run` read the number back: `ParamsBase.
-    lookahead_frames` is the per-configuration answer and `node_lookahead_frames`
-    prefers it, so a tool that states both is stating one number twice and a
-    tool that states only the bound cannot find its own target.
+    and since the span carries its own target it buys nothing the tool reads:
+    what it still pins is that the number the executor puts on the span is
+    `node_lookahead_frames`', which prefers the refinement. `wrong_end` below is
+    the other half — the bound alone, which is all a tool is obliged to state.
     """
 
     @register_tool(
@@ -199,12 +203,12 @@ _windowed("ahead1", 0, 1)
 def _last_frame_run(params: WrongEndParams, window: FrameSpan, state: None) -> Frame:
     """A centred tool that emits for the end of its window instead of its middle.
 
-    The mistake the convention invites: `FrameSpan.target` is the last frame,
-    which is the right answer for a trailing window and the wrong one for every
-    window with a lookahead side.
+    Reaching for the last frame by hand, which is the one way left to make this
+    mistake now that `window.target` is not that frame — and the shape any tool
+    written against the trailing convention has.
     """
     del params, state
-    return window.target
+    return window[len(window) - 1]
 
 
 @register_tool(
@@ -357,6 +361,7 @@ def plan_for(pipeline: Pipeline, *, span: SourceSpan = DEFAULT_SPAN) -> Executio
 def forget_calls() -> None:
     CALLS.clear()
     WINDOWS.clear()
+    TARGETS.clear()
 
 
 def run(
@@ -610,6 +615,43 @@ def test_a_lookahead_window_holds_the_frames_on_both_sides_of_its_target() -> No
     assert for_first[len(for_first) - 1 - 2] == int(results[0].index)
 
 
+def test_a_centred_windows_span_target_is_the_frame_it_answers_for() -> None:
+    """The span says which of its frames is the target, so no tool counts back.
+
+    `centre2` reads two frames past the frame it emits for, and the number that
+    says so is the executor's — `node_lookahead_frames`, which prefers the
+    per-configuration refinement over the bound. A tool deriving it instead needs
+    that same refinement declared on its own params, and one that stated only the
+    bound would count back zero and land on the end of its window.
+    """
+    plan = plan_for(Pipeline(nodes=(node("w", "centre2"),)))
+
+    results = run(plan, ListSource())
+
+    for_first = WINDOWS[len(WINDOWS) - len(results)]
+    assert for_first == (18, 19, 20, 21, 22)
+    # The target is the third of the five, not the last — which is the whole of
+    # what a lookahead side means, said by the span rather than by the tool.
+    assert TARGETS[-len(results) :] == [int(result.index) for result in results]
+    assert [window[-1] for window in WINDOWS[-len(results) :]] != TARGETS[-len(results) :]
+
+
+def test_a_trailing_windows_span_target_is_still_its_last_frame() -> None:
+    """What the accessor meant before there was a far side, unmoved.
+
+    Every reader of `target` outside a centred tool — `crop`, `span`, every
+    streaming tool handed a window of one — is correct only while this holds, so
+    the change that taught the span about a lookahead side is answerable for it.
+    """
+    plan = plan_for(Pipeline(nodes=(node("t"), node("w", "trail3")), edges=edges("t>w")))
+
+    results = run(plan, ListSource())
+
+    assert WINDOWS[-3:] == [(18, 19, 20), (19, 20, 21), (20, 21, 22)]
+    assert TARGETS[-3:] == [window[-1] for window in WINDOWS[-3:]]
+    assert TARGETS[-3:] == [int(result.index) for result in results]
+
+
 def test_the_lookahead_the_loop_delays_by_is_the_one_the_plan_decoded_for() -> None:
     """Two centred nodes in a chain delay by the sum, and the plan read for it.
 
@@ -639,8 +681,11 @@ def test_a_lookahead_tool_that_answers_for_the_end_of_its_window_is_refused() ->
     """The one place the two-sided window can be misread, made loud.
 
     A window's target is its last frame only while nothing is read ahead of it,
-    and `FrameSpan.target` cannot say otherwise — so a centred tool that reaches
-    for it answers every frame `k` early. Nothing downstream would notice: the
+    and `FrameSpan.target` now says which one it is — so what is left to refuse
+    is a tool taking the last frame anyway, which answers every frame `k` early.
+    That is the shape of every tool written before the far side existed, and the
+    executor is what stops it being a wrong answer. Nothing downstream would
+    notice on its own: the
     frames are adjacent, the shapes match, and the store would file each one
     under the number the loop asked for rather than the one the tool used.
     """

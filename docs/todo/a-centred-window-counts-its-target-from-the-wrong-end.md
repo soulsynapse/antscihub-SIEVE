@@ -2,7 +2,7 @@
 title: A centred window counts its target from the wrong end
 priority: normal
 phase: 3
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_executor.py -q -k span_target && uv run pytest tests/unit/test_types.py tests/unit/test_executor.py -q"
 opened: 2026-08-07

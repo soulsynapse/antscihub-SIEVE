@@ -724,13 +724,14 @@ class ToolRun(Protocol[ParamsT_contra, StateT_contra]):
     reads `window.target` and is handed exactly that; a windowed tool is handed
     the frames its declared window reaches, oldest first.
 
-    **The frame a windowed tool emits for is not always `window.target`.** With
-    a declared `lookahead_frames` of `k` the executor hands over a window whose
-    last `k` frames are *past* the target, so the target sits at
-    `window[len(window) - 1 - k]` — the tool knows `k`, because `params` is the
-    configuration it was derived from. `target` stays the last frame because a
-    span is also what a trailing window is, and the executor checks the index
-    that comes back either way.
+    **`window.target` is the frame to emit for, and it is not always the last
+    one.** With a declared `lookahead_frames` of `k` the executor hands over a
+    window whose last `k` frames are *past* the target, and it tells the span so
+    — `FrameSpan.lookahead` carries the number `node_lookahead_frames` gave, and
+    `target` counts back by it. So a tool reads the frame it was called about
+    rather than deriving it, which is what keeps a tool declaring only
+    `max_lookahead_frames` — with no per-configuration `k` of its own to count
+    with — from silently answering for the end of its window.
 
     `state` is `None` for a tool that keeps none, and otherwise whatever
     `ToolSpec.state_factory` made for *this run* — never something the tool

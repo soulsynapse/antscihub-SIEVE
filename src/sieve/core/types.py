@@ -604,17 +604,34 @@ class FrameSpan:
     """A consecutive, non-empty run of frames handed to a windowed kernel.
 
     The span is half-open by index: `start` is the first frame's source index
-    and `end` is one past the last. The final frame is the target the kernel is
-    expected to emit for; `Mode.WINDOWED` is still one output frame per source
-    frame, but the kernel is allowed to inspect the bounded history that founds
-    that output.
+    and `end` is one past the last. `Mode.WINDOWED` is still one output frame per
+    source frame, but the kernel is allowed to inspect the bounded history that
+    founds that output.
+
+    `target` is the frame the kernel must emit for, and the span carries which
+    one that is rather than leaving it to be counted. A window with a declared
+    lookahead has frames on *both* sides of its target, so "the last frame" is
+    the answer only while `lookahead` is zero — and a tool counting back for
+    itself needs its own `k` from `ParamsBase.lookahead_frames`, which a tool
+    declaring only the bound does not have. The number here is the one the
+    executor scheduled the call against, so the target cannot disagree with the
+    frame index the call is checked for on the way out.
     """
 
     frames: tuple[Frame, ...]
+    #: How many of the trailing frames sit *past* the target. Set by whoever
+    #: assembled the window; zero for the trailing windows that were once the
+    #: only kind, and for the one-frame span a streaming tool is handed.
+    lookahead: FrameCount = NO_FRAMES
 
     def __post_init__(self) -> None:
         if not self.frames:
             raise ValueError("a frame span must contain at least one frame")
+        if self.lookahead.frames >= len(self.frames):
+            raise ValueError(
+                f"a frame span of {len(self.frames)} cannot hold {self.lookahead} of lookahead — "
+                "the target is one of its own frames"
+            )
         previous = self.frames[0].index
         for frame in self.frames[1:]:
             if frame.index != previous + FrameCount(1):
@@ -643,6 +660,11 @@ class FrameSpan:
         return self.frames[-1].index + FrameCount(1)
 
     @property
+    def target_row(self) -> int:
+        """Where `target` sits in `frames`, for a kernel indexing a per-frame series."""
+        return len(self.frames) - 1 - self.lookahead.frames
+
+    @property
     def target(self) -> Frame:
         """The frame whose source index the windowed kernel must emit."""
-        return self.frames[-1]
+        return self.frames[self.target_row]

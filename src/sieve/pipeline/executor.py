@@ -86,7 +86,7 @@ from sieve.core.tool_base import (
     node_lookahead_frames,
     node_warmup_frames,
 )
-from sieve.core.types import ChannelSpec, Frame, FrameIndex, FrameSpan
+from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameIndex, FrameSpan
 from sieve.pipeline.cache import FrameStore, NullFrameStore
 from sieve.pipeline.plan import ExecutionPlan
 
@@ -471,13 +471,18 @@ def _window(incoming: Frame, bound: BoundNode, history: deque[Frame] | None) -> 
     including the steps before it may emit anything — those frames are the
     lookahead side of its first window, and skipping the append would hand it a
     window missing its own future.
+
+    The span is told how many of its trailing frames are past the target, which
+    is what makes `FrameSpan.target` the frame the tool was called about. The
+    number is this node's own, from `node_lookahead_frames` at bind time, so it
+    is the same one `_run_node` then checks the returned index against.
     """
     if history is None:
         return FrameSpan((incoming,))
     history.append(incoming)
     if len(history) <= bound.lookahead:
         return None
-    return FrameSpan(tuple(history))
+    return FrameSpan(tuple(history), lookahead=FrameCount(bound.lookahead))
 
 
 def _completed(

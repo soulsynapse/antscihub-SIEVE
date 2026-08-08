@@ -526,18 +526,17 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
 
     **The target is not the last frame of the window.** With a declared
     lookahead of `k` the executor hands over a window whose last `k` frames are
-    past the frame being answered for, so the target sits `k` back from the end
-    and `FrameSpan.target` is a frame this tool must not emit for
-    (`core/tool_base.py`, `ToolRun`). The number comes from `params`, which is
-    the configuration the declaration was derived from, so the count back cannot
-    disagree with what the executor scheduled.
+    past the frame being answered for, and the span says which frame that is
+    (`core/tool_base.py`, `ToolRun`) — so `target_row` indexes the derived series
+    at the same frame `FrameSpan.target` names, and neither can disagree with
+    what the executor scheduled.
 
     The window is shorter than the declared one at the start of a run, where
-    the history has not filled — the count back from the end still lands on the
-    target, and the chain over a short record is the same chain.
+    the history has not filled — the row still lands on the target, and the
+    chain over a short record is the same chain.
     """
     series = np.stack([np.asarray(frame.data, np.float32).reshape(-1) for frame in window])
-    row = len(window) - 1 - params.lookahead_frames().frames
+    row = window.target_row
     gate = gate_series(series, params)
     value = np.nan if gate is None else float(gate[row])
     return Frame(

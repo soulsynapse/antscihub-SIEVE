@@ -184,12 +184,20 @@ class BlockSource:
 
 
 def span_for(params: DetectParams, target: int) -> FrameSpan:
-    """The window the executor would hand `run` when answering for `target`."""
+    """The window the executor would hand `run` when answering for `target`.
+
+    Including the lookahead the executor puts on the span, without which this
+    would be a window that reaches ahead and does not say so — a shape the loop
+    never builds, and one that would move where `run` reads its answer.
+    """
     source = BlockSource()
     warmup = params.warmup_frames().frames
-    lookahead = params.lookahead_frames().frames
+    lookahead = params.lookahead_frames()
     return FrameSpan(
-        tuple(source.read(index) for index in range(target - warmup, target + lookahead + 1))
+        tuple(
+            source.read(index) for index in range(target - warmup, target + lookahead.frames + 1)
+        ),
+        lookahead=lookahead,
     )
 
 
@@ -278,18 +286,19 @@ def test_the_three_bands_declare_a_band_and_not_a_span() -> None:
 def test_the_emitted_frame_is_the_target_and_not_the_end_of_the_window() -> None:
     """The frame `k` back from the end, and the executor keys the cache on it.
 
-    `FrameSpan.target` is the last frame, which was the whole truth while every
-    window trailed. A centred tool that emitted for it would answer every frame
-    `k` early under a key that says otherwise — loud rather than silent, because
-    the executor checks the index, but only if the tool counts back at all.
+    The value emitted is the series row at that frame and not the one at the end
+    of the window, which is a different number rather than the same number late:
+    a tool answering for the end would report the gate `k` frames into the
+    future under a key that says otherwise.
     """
     params = golden_params()
     window = span_for(params, target=120)
 
     produced = detect_run(params, window, None)
 
-    assert produced.index != window.target.index
     assert int(produced.index) == 120
+    assert produced.index == window.target.index
+    assert window.target.index != window[len(window) - 1].index
     assert produced.data.shape == (1, 1)
     assert produced.data.dtype == np.float32
 

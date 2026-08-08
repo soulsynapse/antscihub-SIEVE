@@ -68,8 +68,10 @@ _TRACK_INSET = 4.0
 
 #: How far either side of a window edge counts as grabbing that edge. Wider than
 #: the painted line, because the line is a claim about a frame and the handle is
-#: a target for a hand.
-_EDGE_GRAB = 6.0
+#: a target for a hand. Public because a span parameter's handles are dragged on
+#: this same band (`gui/kind_editors.py`): how big a target is, is a fact about
+#: the hand and not about which of the two the hand is reaching for.
+EDGE_GRAB = 6.0
 
 #: Depth of the darker band along the window's top that moves it whole.
 _HEADER_HEIGHT = 9.0
@@ -270,9 +272,9 @@ class TimelineStrip(QWidget):
         if window.isEmpty():
             return Grab.SCRUB
         x = position.x()
-        if abs(x - window.left()) <= _EDGE_GRAB:
+        if abs(x - window.left()) <= EDGE_GRAB:
             return Grab.START
-        if abs(x - window.right()) <= _EDGE_GRAB:
+        if abs(x - window.right()) <= EDGE_GRAB:
             return Grab.END
         if self.header_rect().contains(position):
             return Grab.BODY

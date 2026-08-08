@@ -16,6 +16,7 @@ src/sieve/gui/canvas.py                    # The viewport: the frame the transpo
 src/sieve/gui/control.py                   # Which of the three positions is showing, and the track that slides between.
 src/sieve/gui/graph_panel.py               # The graph: one refill's series, drawn where its frames are.
 src/sieve/gui/hotkeys.py                   # Which keys exist and which verb each one calls.
+src/sieve/gui/kind_editors.py              # One editor per composite kind, on the surface the value is about.
 src/sieve/gui/layout.py                    # Where the main window's two halves sit and how big they start.
 src/sieve/gui/node_list.py                 # How one node is drawn, and how the ordered list of them is built.
 src/sieve/gui/param_form.py                # One control per parameter, chosen by how the parameter is populated.

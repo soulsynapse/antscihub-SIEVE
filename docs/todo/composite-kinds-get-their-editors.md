@@ -1,7 +1,7 @@
 ---
 title: Composite kinds get their editors
 step: "07.8"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_kind_editors.py -q -k 'a_drawn_region_enters_as_a_set_param or a_dragged_span_enters_as_a_set_param'"
 opened: 2026-08-08

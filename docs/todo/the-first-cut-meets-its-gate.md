@@ -43,6 +43,27 @@ where the surface it sits on lives: measuring `slider_to_graph` through the GUI
 is what forces a panel that a param edit actually refills, and the two calls it
 needs are already the ones a `SeriesCollector.refill()` block brackets.
 
+## And so are the two kind editors, which is where a region's space is decided (2026-08-08, from 07.8)
+
+07.8 landed `gui/kind_editors.py` on the same terms and for the same reason:
+`bind_editors` is called by its own test and by nothing else, because what a
+`MainWindow` would hand it — the node the walk is on, its spec, its params, and
+the two surfaces — is assembled nowhere yet.
+
+Placing them settles a question the editors cannot. A `RegionEditor` produces a
+rectangle in the pixels of the image the canvas is showing, which is the only
+space it can see; `crop.py` says a region parameter indexes the frame *its own
+node* is handed; and what the viewport is fed today is a display proxy of the
+source, resampled to `transport/decode_worker.PROXY_WIDTH` whenever the footage
+is wider than that. So a box drawn on a 4K clip today would name proxy pixels
+and `crop` would read them as source pixels — a factor of three, silently, and
+only on large footage. The three ways out are all on this side of the seam:
+feed the canvas full-resolution frames for the node being edited, hand the
+editor the extent of the space its value is denominated in, or declare the
+proxy's scale where the frame is handed over. Which one is this item's to pick,
+along with the harder half `crop.py` states and 07.8 did not touch — that a
+crop below a `rescale` is denominated in a frame nothing on screen is showing.
+
 ## 06.3's headless claim now rests on collection order (2026-08-08, from 07.4)
 
 `tests/bench/test_loop_budget.py::test_the_measurement_ran_with_no_qt_in_the_process`

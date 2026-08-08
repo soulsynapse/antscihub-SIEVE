@@ -66,9 +66,20 @@ DEAD_IDENTIFIERS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     # `-filter_threads` and `-filter_complex_threads` are FFmpeg's CLI, and a
     # filtergraph is what `-vf` takes; none of the three is a step in a SIEVE
     # pipeline, and all three would survive a word-boundary match anyway.
+    # `eventFilter` is the same shape one toolkit over: it is the name Qt
+    # dispatches on, so a widget watching another's events overrides it by that
+    # spelling or not at all. Two tokens because the strip is case-sensitive and
+    # the verb capitalizes what the hook does not.
     (
         "filter",
-        ("tools-not-filters", "filter_complex_threads", "filter_threads", "filtergraph"),
+        (
+            "tools-not-filters",
+            "filter_complex_threads",
+            "filter_threads",
+            "filtergraph",
+            "installEventFilter",
+            "eventFilter",
+        ),
         "adr/tools-not-filters.md",
     ),
     ("clip", (), "adr/v2-does-not-import.md"),

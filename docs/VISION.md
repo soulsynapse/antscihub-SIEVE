@@ -85,7 +85,7 @@ In six months, I realize that I'm getting a lot of feedback that the UI really d
 
 Another user opens SIEVE. They are trying a background subtraction isolation method but they have two different generated backgrounds and they want to know which one does better. One is from the pipeline, and auto hooks up to the background subtraction step. They decide they don't like it, and swap that step with a file picker tool. The file picker tool lets them select a general case match like *_bg.png. They do that and select what type of output it should broadcast as. As soon as they select generated background, the background subtraction step picks it up and displays it.
 
-Another user just opened SIEVE: it shows the project select folder and they select the folder. It has a bunch of videos in it. Because the inputs from the folder match both the concatenate videos tool and a folder of pre-cropped videos, he is offered both options with the tool picker display: the user decides how the input is interpreted.
+Another user just opened SIEVE: it shows the project select folder and they select the folder. It has a bunch of videos in it. Because the inputs from the folder match both the concatenate videos tool and a folder of pre-cropped videos, they are offered both options with the tool picker display: the user decides how the input is interpreted.
 
 ## What binds where
 

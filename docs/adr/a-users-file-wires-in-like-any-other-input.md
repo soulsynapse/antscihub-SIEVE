@@ -38,6 +38,47 @@ inputs is what [one-execution-path](one-execution-path.md) refuses on the
 preview/production axis, for the reason that applies here unchanged: with two
 routes, the one that was tuned against is not the one that runs.
 
+**The two existing cases are instances, not neighbours.** Read the other way,
+crop serving and checkpoint read-back are the same argument against themselves.
+Each stands a file where a node stood by a path of its own: `resolve_source`
+matches a `CropRecord` against a region the caller derived from the graph and
+returns a file plus a frame numbering, after which the caller has to neutralise
+the node whose output that file already holds; a checkpoint reader would match a
+manifest entry against a node's key and stand in for everything above it. Neither
+is wrong about its case. Both are a second answer to where a node's frames come
+from, reached while a run is planned and recorded nowhere the user can see — and
+one-execution-path's reason survives being lifted from the executor to the
+document: the graph that was tuned against is not the graph that runs, and what
+the store keys agrees with what the reader sees only because two modules were
+written to agree. Under this decision the substitution *is* the document edit. A
+written crop that backs a region is a source tool wired to that crop node's
+consumers, and the crop node is not upstream of the run at all — nothing to
+elide, because nothing in the executed graph names it. A checkpoint is the same
+edit further down. Matching becomes wiring; a plan-time decision becomes a
+mutation the project holds, that the user can see and undo, and that the next run
+does not have to re-derive.
+
+Deciding whether a record still backs a box is real work and none of it is lost —
+the four states are facts about records
+([crop_binding](../todo/a-written-crop-serves-the-run-that-would-have-cut-it.md)),
+and a stale record must still fail toward the parent. What changes is what that
+work produces: an edge to offer, rather than a run already routed. Nor does this
+move Phase 5's gate, and it is the gate that makes the collapse safe to attempt —
+under the child-source model a run against a written artifact already roots off
+that file's own identity with no region in the key, so the keys a source tool
+produces are the keys the bespoke path produces, and "every cache key unmoved"
+([PLAN.md](../PLAN.md)) is the assertion that catches it if that is wrong.
+
+**What forced it is a case with nothing to hang on.** A folder of pre-cropped
+videos has no crop node: no region for `resolve` to be handed, no record for it to
+match, no node for the caller to elide. The substitution mechanism needs the node
+it substitutes for to exist, so a third bespoke path would not be a third of the
+same thing — it would be the first one that could not be written. The general
+mechanism has nothing to ask: the folder is a source tool whose file param
+resolves per replicate, and a project that never cropped anything reads it exactly
+as a project that did. When the edit is made, and by what — an import action, an
+offer a reader accepts — is the migration's question, not this one.
+
 What the key is derived *from* is the whole difference. A node fed by the graph
 keys from the graph, so an edit propagates. A source tool has nothing upstream
 to constrain it, so its key is the file's own content identity — `source_key`

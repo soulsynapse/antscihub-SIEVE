@@ -136,3 +136,24 @@ no case reads.
 
 Written up as a vacuity shape in
 `findings/loop/2026.08.08-a-widgets-state-accessor-reads-the-toggle-and-not-the-thing-toggled.md`.
+
+## Two of the tuning loop's accessors have no reader at all, from 07.11's review (2026-08-08)
+
+The assembly cut is the first Phase 7 module that is fully driven — every
+branch in `gui/tuning.py` that the parity file and the GUI budget file walk is
+held by a real gesture — with two exceptions, and they are past the
+guard-with-no-caller shape above rather than an instance of it.
+`TuningLoop.refill_now` is a whole second entry point ("`request_refill` without
+the deferral, for a caller with no event loop") and `TuningLoop.is_open` is a
+one-line state read; neither is called from `src/` or from `tests/`, so deleting
+either is green everywhere and nothing states what they are for. A method
+written for a caller that does not exist is not covered by a fixture that could
+be added — the question is whether the caller is coming.
+
+The same section's other half is a count. `test_gui_loop_budget`'s scrub case is
+docstringed "over the same twelve stops the headless pass took", where `SCRUBS`
+two screens above it is `SCRUB_STOPS` filtered to the working window and holds
+nine — the constant's own comment says so and the docstring contradicts it. The
+assertion is `0 < len(...) <= len(SCRUBS)`, so nothing goes red for the
+sentence; what it costs is a reader comparing this file's median to the headless
+one on the belief that the two passes took the same stops.

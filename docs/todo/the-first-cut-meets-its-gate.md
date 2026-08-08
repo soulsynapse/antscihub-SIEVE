@@ -1,7 +1,7 @@
 ---
 title: The first cut meets its gate — parity, both regimes, the list still empty
 step: "07.11"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_gui_cli_parity.py -q && uv run pytest tests/bench/test_gui_loop_budget.py -q"
 opened: 2026-08-08

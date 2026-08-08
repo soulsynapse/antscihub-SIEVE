@@ -16,13 +16,17 @@ leave every other key standing. Schema v1 gives a node one input and an edge no
 port (`core/tool_base.py`), so the case has no subject and was dropped from
 03.3's table and again from 03.4.1's — this is where it lives until it has one.
 
-The shape the inputs arrive in is settled and is not a left and a right —
-[a node's inputs are labeled and
-variadic](a-nodes-inputs-are-labeled-and-variadic.md), which is the half of
-this that could be answered against today's tree and was split off to be. `a -
-b` versus `b - a` stays the case *this* claim is about regardless: swapping two
-labels is what has to move exactly one key and leave the rest standing, and two
-is the smallest crossing that can show it.
+The shape the inputs arrive in is settled and is not a left and a right: an
+edge carries a port label and a node's inputs are an ordered mapping of them,
+which is what [VISION.md](../VISION.md)'s folder scenario asks for when it
+offers a concatenate-videos tool over a folder. Most of the tree already
+predicts that shape rather than a pair; what does not agree is what the sites
+*do* with a second upstream, and that half could be answered against today's
+tree and was split off to be — [two raise, two fold the
+first](a-nodes-inputs-are-labeled-and-variadic.md). `a - b` versus `b - a`
+stays the case *this* claim is about regardless: swapping two labels is what
+has to move exactly one key and leave the rest standing, and two is the
+smallest crossing that can show it.
 
 The gate does not move. A scenario naming a tool is not the tool, and what this
 item needs is a node that actually has two inputs to cross over.

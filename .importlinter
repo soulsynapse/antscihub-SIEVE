@@ -101,6 +101,35 @@ forbidden_modules =
 # any entry added later is a reviewed widening rather than a debt inherited.
 unmatched_ignore_imports_alerting = error
 
+[importlinter:contract:session-computes-nothing]
+name = the session holds pipeline values and asks for runs; it computes nothing
+type = forbidden
+# The third instance of the shape `gui-computes-nothing` was minted for, and it
+# sits between the two that already have one: `session` is above `tools` and
+# `core`, so a session module importing a tool's `run` points downward and is
+# legal under every other contract here. `headless` names `sieve.session` too,
+# but only against `PySide6`, so the row's "computing anything" was unenforced
+# while the package was empty
+# (findings/2026.08.08-vision-never-column-has-two-import-shaped-lines-no-contract-checks.md).
+#
+# Its own contract rather than a second source under `gui-computes-nothing`,
+# which forbids the same two modules: the sets coincide today and the reasons
+# do not. `gui`'s line doubles as adr/gui-knows-kinds-not-tools.md's gate, which
+# says nothing about a document layer, and one contract over both rows would
+# need a name that describes neither.
+#
+# Direct imports only. `session -> pipeline -> tools` is the supported path —
+# holding what `gui` renders and asking `pipeline` for the rest is the whole of
+# what this layer does. What this forbids is `session/` *holding* a
+# computation, which is only ever a direct import.
+allow_indirect_imports = True
+source_modules =
+    sieve.session
+forbidden_modules =
+    sieve.tools
+    sieve.core.ops
+unmatched_ignore_imports_alerting = error
+
 [importlinter:contract:pipeline-computes-nothing]
 name = the pipeline runs tools; it holds no array math of its own
 type = forbidden
@@ -126,6 +155,26 @@ source_modules =
     sieve.pipeline
 forbidden_modules =
     sieve.core.ops
+unmatched_ignore_imports_alerting = error
+
+[importlinter:contract:decode-knows-no-schema]
+name = decode knows frames and time; it does not know what a schema is
+type = forbidden
+# The other half of the same walk. `decode` must never know "what a tool or a
+# schema is": the tool half is free, since `tools` sits above `decode` and the
+# layers contract refuses it, and the schema half points downward into `core`
+# and so needs saying. What the row grants `decode` of `core` is the
+# dimensioned types, which is what it imports.
+#
+# No `allow_indirect_imports` here, unlike the three contracts above: each of
+# those keeps a supported route open — the layer reaches the forbidden module
+# through the one below it — and `decode` has no route to a schema at all. A
+# chain that arrived at one would be the same knowledge, so the strict form is
+# the one that matches the row.
+source_modules =
+    sieve.decode
+forbidden_modules =
+    sieve.core.pipeline_model
 unmatched_ignore_imports_alerting = error
 
 [importlinter:contract:opencv-containment]

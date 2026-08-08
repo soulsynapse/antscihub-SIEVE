@@ -7,10 +7,11 @@ drift away from what the code enforces, in either direction.
 
 **A ceiling nothing publishes is a number, not a budget**, which is the half of
 the claim this table cannot state by itself. It is stated by `WITHOUT_PRODUCER`
-below and checked by `tests/bench/test_budget_producers.py`. Two of the twelve
-have left that set — `pipeline/preview.py` publishes both sides of a render —
-and the set is where the remaining ten are written down rather than left to be
-inferred from the absence of a call.
+below and checked by `tests/bench/test_budget_producers.py`. Three of the twelve
+have left that set — `pipeline/preview.py` publishes both sides of a render and
+`pipeline/series_collector.py` the refill of the series a graph is drawn from —
+and the set is where the rest are written down rather than left to be inferred
+from the absence of a call.
 
 Every limit carries an **anchor** comment saying which perceptual band the
 number came from (~100 ms reads as instantaneous, ~1 s holds the flow of
@@ -220,8 +221,11 @@ BUDGETS: dict[str, Budget] = _table(
 #: `slider_to_preview` around a render's first frame and `full_preview_render`
 #: around a whole window, as string literals — it sits below `bench` and may not
 #: import this table — so those two ceilings can now be missed by something a
-#: user runs. The other ten are the honest reading of a repo with no GUI and no
-#: graph plotting: nothing under `src/` outside this package names them.
+#: user runs. 06.6 took the third for the same reason and from the same layer:
+#: `pipeline/series_collector.py` publishes `slider_to_graph` around the refill
+#: that carries a render on to the array a graph is drawn from. The rest are the
+#: honest reading of a repo that plots nothing and has no GUI: nothing under
+#: `src/` outside this package names them.
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
     {
         "open_to_first_frame",
@@ -229,7 +233,6 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
         "scrub_settle",
         "cut_to_ready",
         "tool_to_first_tick",
-        "slider_to_graph",
         "band_drag_repaint",
         "knob_to_graphs",
         "density_rebuild",
@@ -253,9 +256,15 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
 #: ceiling is timed by a benchmark while nothing in `src/` publishes it, because
 #: what publishes a scrub's latency is a player and there is no player yet.
 #:
-#: The seven absent from this set are absent for one of two reasons, neither of
+#: 06.6 put a clock on the sixth in the same file. `slider_to_graph` was the
+#: half of Phase 6's gate 06.3 could not reach — a graph needs a series and
+#: nothing assembled one — and a collector gave it a subject headless, which is
+#: the only place the number is attributable to the pipeline rather than to a
+#: widget.
+#:
+#: The six absent from this set are absent for one of two reasons, neither of
 #: them oversight: `cut_to_ready` has no headless referent
-#: (`docs/todo/cut-to-ready-gets-a-headless-referent.md`), and the other six are
+#: (`docs/todo/cut-to-ready-gets-a-headless-referent.md`), and the other five are
 #: graph-drawing and tool-adding intervals whose subject arrives with the GUI.
 TIMED: frozenset[str] = frozenset(
     {
@@ -263,6 +272,7 @@ TIMED: frozenset[str] = frozenset(
         "scrub_to_repaint",
         "scrub_settle",
         "slider_to_preview",
+        "slider_to_graph",
         "full_preview_render",
     }
 )

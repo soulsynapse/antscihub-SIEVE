@@ -2,7 +2,7 @@
 
 `test_budget_table.py` pins the table against VISION.md, so the two cannot
 disagree about what a limit *is*. Neither of them can say whether anything ever
-measures against it, and ten of the twelve are still measured by nothing while
+measures against it, and most of the twelve are still measured by nothing while
 the table reads as twelve enforced ceilings. A budget with no producer cannot be
 missed, which is indistinguishable from compliance.
 
@@ -10,11 +10,12 @@ missed, which is indistinguishable from compliance.
 published budget shows a session it was missed, a timed one catches the miss
 before it ships. Both are declared as sets and both are checked in both
 directions, so paying either down is a deletion here rather than a silently
-truer tree — 06.2 deleted the preview session's two from `WITHOUT_PRODUCER`, and
-06.3's `test_loop_budget.py` put five keys into `TIMED`. The two gaps do not
-line up, which is the point of keeping them apart: three of those five are
-pre-pipeline ceilings that a benchmark times through `decode/reader.py` while
-nothing in `src/` publishes them, so they are timed and producerless at once.
+truer tree — 06.2 deleted the preview session's two from `WITHOUT_PRODUCER`,
+06.3's `test_loop_budget.py` put five keys into `TIMED`, and 06.6's collector
+paid one key down on both sides at once. The two gaps do not line up, which is
+the point of keeping them apart: three of those five are pre-pipeline ceilings
+that a benchmark times through `decode/reader.py` while nothing in `src/`
+publishes them, so they are timed and producerless at once.
 
 Checks, one per direction a key can go wrong:
 
@@ -33,8 +34,8 @@ nobody wired up — does not need the stronger claim to be caught.
 
 The two scanners are exercised against planted text as well as against the
 tree, because a scanner that reached nothing would report the same emptiness the
-tree nearly has: two produced keys and no timed ones is close enough to nothing
-that a broken scanner still reads as green.
+tree nearly has: while most of the table is unproduced and untimed, a broken
+scanner and an honest one are hard to tell apart by their output.
 """
 
 from __future__ import annotations
@@ -97,7 +98,7 @@ def test_the_walk_reaches_the_modules_that_exist() -> None:
 
 
 def test_a_named_key_is_seen_as_a_producer() -> None:
-    """With ten of twelve budgets unproduced, the scanner's own sight needs a case."""
+    """With most of the table unproduced, the scanner's own sight needs a case."""
     assert _keys_named_in(['bus.publish("slider_to_preview", elapsed)']) == {"slider_to_preview"}
     assert _keys_named_in(["bus.publish(slider_to_preview, elapsed)"]) == set()
 
@@ -153,9 +154,12 @@ def test_the_call_site_pattern_matches_a_call_and_not_a_mention() -> None:
 
     The positive case is assembled rather than written out because the
     `asserted` fixture scans this file too: a literal call site here would be a
-    budget claiming a clock that no benchmark runs.
+    budget claiming a clock that no benchmark runs. The key is one of the
+    untimed ones for the same reason — planting a key that `TIMED` already names
+    would make the assembly a formality rather than the thing keeping this file
+    out of the census.
     """
-    call = "    within_" + 'budget("slider_to_graph", median)'
+    call = "    within_" + 'budget("knob_to_graphs", median)'
 
-    assert TIMED_CALL.findall(call) == ["slider_to_graph"]
+    assert TIMED_CALL.findall(call) == ["knob_to_graphs"]
     assert TIMED_CALL.findall("    within_budget(key)") == []

@@ -30,6 +30,7 @@ src/sieve/pipeline/materialize.py       # Cut one replicate's crop to a file, an
 src/sieve/pipeline/plan.py              # Everything about a run that is knowable before a frame is decoded.
 src/sieve/pipeline/preview.py           # The preview session: one working window, one replicate, many revisions.
 src/sieve/pipeline/resolve_source.py    # Which file a run opens, and in whose frame numbering.
+src/sieve/pipeline/series_collector.py  # Assemble one node's per-frame outputs into the series a graph is drawn from.
 src/sieve/pipeline/source_home.py       # The frame of reference a crop record is read against: three facts, one value.
 src/sieve/tools/__init__.py             # Every pipeline step, one module each: a ToolSpec and one plain run function.
 src/sieve/tools/background_ema.py       # An exponential moving-average background model, and the difference from it.

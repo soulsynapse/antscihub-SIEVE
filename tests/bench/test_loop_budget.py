@@ -18,8 +18,10 @@ What is *not* imported is its replicates and checkpoints: those are about a run
 leaving files behind, and a preview is one viewport that writes nothing.
 
 **Both regimes, and only one of them has a pipeline in it.** The in-pipeline
-pair is the preview session's own — `full_preview_render` around a window and
-`slider_to_preview` around the single frame a drag asks for. The pre-pipeline
+budgets are the preview session's own — `full_preview_render` around a window,
+`slider_to_preview` around the single frame a drag asks for, and
+`slider_to_graph` around a `SeriesCollector` refill, which is the same render
+carried on to the array a graph is drawn from. The pre-pipeline
 budgets are measured through `decode/reader.py` and not through a session,
 because *pre-pipeline means before a pipeline exists*: opening a file and
 scrubbing it are a player's gestures, and a session over an empty graph would be
@@ -72,6 +74,7 @@ from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import graph_needs_chroma
 from sieve.pipeline.preview import PreviewSession
+from sieve.pipeline.series_collector import SeriesCollector
 from sieve.tools import discover
 from tests.integration.test_v2_oracle import DETECTOR, SPAN, graph
 
@@ -109,6 +112,16 @@ WINDOWS = (9, 7, 11, 5, 13)
 #: being asked for.
 PLAYHEAD_STOPS = (5, 12, 20, 25, 8, 17, 2, 27)
 
+#: Detection windows dragged through again, with a collector on the detector —
+#: the same gesture as `WINDOWS` above, asked the other half of the question.
+#: Values none of `WINDOWS` used, so every one of these is a real post-edit
+#: render; the store is warm by the time they run, which is when a user drags.
+#: No cold render among them, and that is the difference from `WINDOWS`: the 3 s
+#: ceiling is judged including the cold one because a user meets it, while
+#: `slider_to_graph` is a per-gesture ceiling and the first render is not a
+#: gesture.
+GRAPH_EDITS = (6, 10, 8, 12, 4)
+
 #: Qt in the process would make the whole measurement a different claim. Named
 #: rather than probed by prefix so the assertion says what it is looking for.
 QT_MODULES = ("PyQt6", "PyQt5", "PySide6", "PySide2")
@@ -141,6 +154,11 @@ class Reading:
     """
 
     samples: Mapping[str, tuple[Sample, ...]]
+    #: Rows each `GRAPH_EDITS` refill assembled, in order. Not a timing and here
+    #: anyway: `slider_to_graph` is the one gate whose subject can be fast by
+    #: being empty, because a collector that assembled nothing publishes the
+    #: same span shape as one that assembled the window.
+    rows_per_refill: tuple[int, ...]
 
     def median_ms(self, key: str) -> float:
         """Median interval published under `key`.
@@ -221,7 +239,7 @@ def _pre_pipeline(bus: MetricBus, video: Path) -> None:
 
 @pytest.fixture(scope="module")
 def reading(stirred_clip: Path) -> Iterator[Reading]:
-    """One pass over the reference workload: open, scrub, render, drag.
+    """One pass over the reference workload: open, scrub, render, drag, refill.
 
     Module-scoped and run once. Each gate below reads one key out of it, so the
     file measures the loop a single time and then asks it several questions —
@@ -263,7 +281,17 @@ def reading(stirred_clip: Path) -> Iterator[Reading]:
             session.render_frame(_edited(pipeline, WINDOWS[-1]), index)
         collected["slider_to_preview"] = recorder.samples("slider_to_preview")
 
-    yield Reading(samples=collected)
+        recorder.clear()
+        collector = SeriesCollector(DETECTOR, measure=bus.measure)
+        rows: list[int] = []
+        for window_frames in GRAPH_EDITS:
+            with collector.refill() as consume:
+                session.render_window(_edited(pipeline, window_frames), on_frame=consume)
+            series = collector.series
+            rows.append(0 if series is None else int(series.data.shape[0]))
+        collected["slider_to_graph"] = recorder.samples("slider_to_graph")
+
+    yield Reading(samples=collected, rows_per_refill=tuple(rows))
 
 
 # ---- pre-pipeline: the video-editor regime -------------------------------
@@ -319,6 +347,25 @@ def test_the_slider_path_repaints_inside_one_perceived_beat(reading: Reading) ->
     """
     assert len(reading["slider_to_preview"]) == len(PLAYHEAD_STOPS)
     within_budget("slider_to_preview", reading.median_ms("slider_to_preview"))
+
+
+def test_the_graph_refills_within_two_perceived_beats(reading: Reading) -> None:
+    """200 ms, and the other half of PLAN.md's Phase 6 gate.
+
+    The span is a post-edit window render plus the stack that makes it drawable,
+    which is what a user's drag actually costs once the store is warm. Judged
+    over five edits and never over the cold render, because the ceiling is a
+    per-gesture one and the first render of a window is not a gesture — the 3 s
+    ceiling above is where that render is answered for.
+
+    The row count is asserted for the reason the module docstring gives about
+    empty series, one layer down: every other gate here goes vacuous only if the
+    *samples* vanish, while this one also goes vacuous if the samples arrive
+    around a collector that assembled nothing.
+    """
+    assert len(reading["slider_to_graph"]) == len(GRAPH_EDITS)
+    assert reading.rows_per_refill == (SPAN.frame_count,) * len(GRAPH_EDITS)
+    within_budget("slider_to_graph", reading.median_ms("slider_to_graph"))
 
 
 # ---- what the medians above cannot say -----------------------------------

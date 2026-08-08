@@ -1,7 +1,7 @@
 ---
 title: The series collector gives slider_to_graph a subject
 step: "06.6"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/bench/test_loop_budget.py tests/bench/test_budget_producers.py -q && uv run python -c \"from sieve.bench.budgets import TIMED, WITHOUT_PRODUCER; assert 'slider_to_graph' in TIMED and 'slider_to_graph' not in WITHOUT_PRODUCER\""
 opened: 2026-08-07

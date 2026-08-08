@@ -1,6 +1,6 @@
 ---
 title: What earns a place on the gate line is argued in three files and settled in none
-status: awaiting-review
+status: done
 gated_on: nothing
 priority: normal
 phase: "00"
@@ -133,6 +133,24 @@ No finding this session. Nothing new was measured — the ADRs rest on
 `findings/2026.08.07-actionlint-is-seven-tenths-of-a-percent-of-the-gate.md`,
 and the two mutation reds above are the criterion being shown non-vacuous,
 which is a worker note's job rather than a finding's.
+
+## Review note, 2026-08-07
+
+`done_when` re-run green (`1 passed in 0.04s`), the whole gate green at the
+same state (contracts 6 kept, `709 passed`, actionlint exit 0), and the
+worker's hand-run reds reproduced under `scripts/mutation_sweep.py` over the
+`ci.yml` lines the commit changed — both citations replaced by prose, each one
+misspelled alone, and the step's own `name:` renamed: 4 killed, 0 survived.
+The last of those is what pins the test to *this* step's comment rather than
+any comment in the file, which the walk-back's docstring claims and no
+assertion did.
+
+Two ADRs is the right call and the supersession argument is the one that
+carries it. What it left standing is a separate item:
+[the-gate-line-has-a-live-second-copy-adr-19-forbids.md](the-gate-line-has-a-live-second-copy-adr-19-forbids.md).
+ADR 19's own worked example — 00.3's `done_when` — is a live second copy under
+the ADR's own test for one, and the ADR names it as evidence without saying
+what becomes of it.
 
 `filter` is buried by `adr/tools-not-filters.md`, so both ADRs say `paths:`
 entry — the same collision

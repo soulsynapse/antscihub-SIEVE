@@ -929,6 +929,18 @@ class Project(_Artifact):
         """
         return self.model_validate(self.model_copy(update={"pipeline": pipeline}))
 
+    def with_outputs(self, checkpoints: Iterable[str], outputs: Iterable[Sink]) -> Self:
+        """Copy carrying a different set of results to keep.
+
+        Both lists together, because they are one decision made on one screen:
+        what is written out and what is kept along the way. Validated rather
+        than assigned — both name nodes, and a checkoff arriving from a stale
+        view is exactly when a name has gone.
+        """
+        return self.model_validate(
+            self.model_copy(update={"checkpoints": tuple(checkpoints), "outputs": tuple(outputs)})
+        )
+
     def with_crop(self, record: CropRecord) -> Self:
         """Copy that records `record`, replacing any earlier record of that cut.
 
@@ -1028,6 +1040,23 @@ class Project(_Artifact):
         updated_node, edited = edited_params(node, target, params)
         return self._replacing(node, updated_node, target, edited)
 
+    def with_param_default(self, node_id: str, params: Mapping[str, Any]) -> Self:
+        """Move `node_id`'s baseline, pinning nothing.
+
+        `with_param_edit`'s second write on its own, for an edit made outside
+        any replicate — a project with no fan-out, or the node's own defaults
+        being tuned before regions are drawn. Every replicate that has not
+        pinned the submitted parameters follows, which is the same inheritance
+        rule read from the other end.
+
+        Raises:
+            KeyError: if `node_id` names nothing.
+        """
+        node = self.pipeline.node(node_id)
+        return self._replacing(
+            node, node.model_copy(update={"params": frozen_value({**node.params, **params})})
+        )
+
     def with_param_reset(self, node_id: str, replicate_id: str) -> Self:
         """Drop one replicate's deviation at `node_id`, so it follows again.
 
@@ -1042,9 +1071,13 @@ class Project(_Artifact):
         return self._replacing(node, node, target, target.without_override(node_id))
 
     def _replacing(
-        self, node: Node, new_node: Node, replicate: Replicate, new_replicate: Replicate
+        self,
+        node: Node,
+        new_node: Node,
+        replicate: Replicate | None = None,
+        new_replicate: Replicate | None = None,
     ) -> Self:
-        """Copy with one node and one replicate substituted in place.
+        """Copy with one node, and optionally one replicate, substituted in place.
 
         Positional substitution because both collections are ordered and the
         order is meaningful — replicate order is the order outputs are written
@@ -1060,7 +1093,9 @@ class Project(_Artifact):
                         )
                     }
                 ),
-                "replicates": tuple(
+                "replicates": self.replicates
+                if replicate is None
+                else tuple(
                     new_replicate if candidate is replicate else candidate
                     for candidate in self.replicates
                 ),

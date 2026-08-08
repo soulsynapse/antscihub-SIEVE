@@ -1,9 +1,11 @@
 ---
 title: The command layer is the document's only writer, keyed by intent kind
 step: "07.3"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_intents.py -q -k 'a_set_param_intent_lands_as_a_new_whole_value or set_outputs_moves_no_cache_key'"
+cases:
+  tests/unit/test_intents.py: 4
 opened: 2026-08-08
 ---
 

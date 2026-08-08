@@ -17,6 +17,7 @@ src/sieve/cli/inspect_cmd.py            # `sieve inspect` — what is on the she
 src/sieve/cli/preview_cmd.py            # `sieve preview` — the tuning loop's inner step, with the timings printed.
 src/sieve/cli/run_cmd.py                # `sieve run` — execute a saved project through the one executor.
 src/sieve/session/__init__.py           # The open project and its history: two stacks of whole immutable pipeline values.
+src/sieve/session/intents.py            # Every mutation of the open project, named by what it changes.
 src/sieve/session/session.py            # The open project, the file it came from, and the two stacks around it.
 src/sieve/bench/__init__.py             # The budget table and the metric bus: the loop's claims as numbers.
 src/sieve/bench/budgets.py              # The latency budget table. Source of truth in code for both speed regimes.

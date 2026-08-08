@@ -1,7 +1,7 @@
 ---
 title: awaiting-review returns to the selection rule
 priority: normal
-status: open
+status: done
 gated_on: nothing
 opened: 2026-08-07
 ---
@@ -26,3 +26,16 @@ the role, and the queue starts the session that role belongs to.
 What this cannot fix from inside the repo is a review that never gets run.
 That is the harness's half, and this item's job is to make the omission
 visible in `--next` rather than only in a stalled index.
+
+## Closed on code that landed under other work (2026-08-07)
+
+`next_action` in `scripts/doc_index.py` is this item built: it returns a role
+beside the path, answers `review` ahead of the queue head when one is pending,
+and its docstring cites the same finding this item does. The item never moved
+because it carries no criterion, so nothing re-read it once the code existed —
+which is the shape the merge-first rule in CLAUDE.md exists to reduce and the
+argument for a criterion being what closes an item rather than a reader.
+
+The harness half above is unchanged and is not owed here: a review that is
+never queued is invisible to `--next` by construction, and it is the
+orchestrator that would notice.

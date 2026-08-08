@@ -1,6 +1,6 @@
-"""The gate runs the formatter, at a pinned version, over the code and not the docs.
+"""The gate's line holds the formatter and the workflow linter, and reaches the code only.
 
-Three claims that were prose until this file, and each was wrong as prose at
+Four claims that were prose until this file, and each was wrong as prose at
 some point. `ruff` sat in the dev group with no bound, so a lock refresh
 restyled files nobody edited; the gate ran `ruff check` and never `ruff format
 --check`, so the tree disagreed with its own formatter for two commits; and the
@@ -8,6 +8,12 @@ commit that fixed both stated that the formatter "has no opinion about `.md`",
 which
 `findings/2026.08.07-ruff-format-check-over-the-root-formats-the-python-in-docs.md`
 measured as false — 219 of the 330 files that run scanned were documents.
+
+The fourth is `actionlint`, and it is here because the formatter's two-commit
+absence is the precedent: a command can leave this line and nothing notices.
+Nothing else in the tree reads `.github/workflows/`, and the errors actionlint
+catches are the ones that stop the job — so a CI green cannot stand in for it
+(`findings/2026.08.07-actionlint-is-seven-tenths-of-a-percent-of-the-gate.md`).
 
 The third test is the one with content. `docs/findings/` exists to quote code
 that does not work, and a Markdown file is not a place a formatter gets a vote,
@@ -61,6 +67,11 @@ def _gate_line() -> str:
         if step.get("name") == GATE_STEP:
             return str(step["run"])
     raise AssertionError(f"no step named {GATE_STEP!r} in {WORKFLOW.name}")
+
+
+def _gate_commands() -> list[list[str]]:
+    """The gate line's `&&`-separated commands, tokenised."""
+    return [shlex.split(command) for command in _gate_line().split("&&")]
 
 
 def _format_targets() -> list[str]:
@@ -122,6 +133,16 @@ def test_the_gate_line_runs_the_formatter() -> None:
     assert "ruff format --check" in line, (
         f"the {GATE_STEP!r} line runs {line!r}; `ruff check` and `ruff format --check` "
         f"are unrelated commands and green on one says nothing about the other"
+    )
+
+
+def test_the_gate_line_lints_the_workflow() -> None:
+    commands = _gate_commands()
+
+    assert ["uv", "run", "actionlint"] in commands, (
+        f"the {GATE_STEP!r} line runs {commands}; nothing else in the tree reads "
+        f"`.github/workflows/`, and a step added to `ci.yml` to check `ci.yml` is a step the "
+        f"errors worth catching stop from running, so the pre-push line is the only reader"
     )
 
 

@@ -40,6 +40,18 @@ because both are about who spells a refusal and where:
   two spellings this item exists to end, over an error that now names the node
   and so is worth printing. It was a traceback before the wrap too; what
   changed is that there is now a sentence worth showing.
+  **Corrected 2026-08-08 (review of f6508d7):** the first sentence no longer
+  describes the tree. `run_cmd` now wraps the `ExecutionPlan.build`
+  comprehension in `except ValueError`, and `GraphError` is a `ValueError`, so
+  `InvalidParamsError` reaches a user as a one-line refusal from both commands
+  and the two spellings this bullet named have converged. What is left of the
+  bullet for the `cli/common.py` move is the *breadth*: the catch is stated in
+  its own comment as being for a span the plan cannot answer for, while it in
+  fact swallows every `ValueError` raised anywhere under `build` — so a
+  programming error inside the plan walk now exits 1 with a bare `str(error)`
+  and reads as a deliberate refusal. One spelling per refusal is the property
+  the move preserves, and a catch that cannot tell a refusal from a defect is
+  the one place that property costs something.
 - `ValidationError` in `preview_cmd._render`'s except tuple no longer catches
   anything: the plan was the one thing under `render_*` that raised a raw one,
   and it now raises a `GraphError` already in the list. `_render`'s docstring

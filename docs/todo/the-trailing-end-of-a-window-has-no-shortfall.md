@@ -4,7 +4,7 @@ priority: normal
 phase: 8
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_plan.py tests/unit/test_executor.py tests/integration/test_cli_run.py -q -k trailing_shortfall"
+done_when: "uv run pytest tests/integration/test_cli_preview.py -q -k \"trailing_shortfall and preview\""
 opened: 2026-08-07
 ---
 
@@ -85,7 +85,14 @@ as firmly as one that still dies with `Frame 40 out of range 0..39`.
 ## Folded in 2026-08-08: the decision is made, and two callers did not get it
 
 The phase-5 item above landed first, as its own last section said it would, and
-it took the second candidate: `ExecutionPlan.build` takes an optional
+it took the *shape* of the second candidate under the actor the first names —
+the section above says that item "argues the first candidate", and both readings
+are partly right, which is why neither number is the useful sentence. What
+landed is: a caller with a container already open hands the plan a ceiling
+(candidate two's mechanism), and the caller is `cli/run_cmd`, not
+`resolve_source` (candidate one's actor). `resolve_source` handing a crop
+artifact's ceiling over is still unbuilt and is part of what this item has left.
+Concretely: `ExecutionPlan.build` takes an optional
 `source_end`, `sieve run` opens the container once to supply it, and given one
 the span narrows to the last frame the lookahead can be filled behind while
 `ExecutionPlan.trailing_shortfall` says how many frames that cost. The empty case
@@ -102,6 +109,11 @@ finding is still exactly what happens:
   and cannot ask one how long the footage is, so this is the question of whether
   `FrameSource` grows a length — which is also what `resolve_source` would need
   to hand a *crop artifact's* ceiling over, the candidate this one names.
+  `preview_cmd` makes this visible from the outside: it now calls
+  `run_cmd.footage_end` on every invocation to feed `span_for`, so it opens a
+  container, learns the one number `PreviewSession`'s plan is missing, and
+  discards it — and it pays that open even when `--frames` made the fallback
+  moot, where before the container was opened only for the fallback.
 - `tests/integration/test_v2_oracle.py` still derives `SPAN` from the declared
   lookahead, and its module docstring and
   `test_the_span_is_the_widest_the_footage_can_answer_for` both explain that
@@ -110,9 +122,34 @@ finding is still exactly what happens:
   passing nothing now produce the same run, and the workaround has become a
   pinning of a number that the run would arrive at by itself.
 
-Neither is covered by the criterion below, which is about the shortfall being
-named — a thing that now happens, in one of the three files, under the other
+Neither was covered by the criterion, which was about the shortfall being named
+— a thing that now happens, in one of the three files it listed, under the other
 item's spelling.
+
+### The criterion is widened to what is left (review of f6508d7, 2026-08-08)
+
+`-k trailing_shortfall` over `test_plan.py`, `test_executor.py` and
+`test_cli_run.py` selected nothing when this review ran it, so it was not
+falsely green — but it had stopped bounding anything real. A single unit case
+in `test_plan.py` spelling the new field would turn it green over work that is
+already committed, and `-k` cannot require a second file to contribute, so
+lengthening the list does not help: whichever file answers first satisfies it.
+
+So the criterion is now the invocation that still fails —
+`tests/integration/test_cli_preview.py`, a case spelling both
+`trailing_shortfall` and `preview` — for the reason the paragraph below already
+gives for choosing an integration file: the answer is proven where a user meets
+it. `sieve run` is proven and out of the criterion; `sieve preview` is the one
+left. Still not pinned, and deliberately: whether `FrameSource` grows a length,
+whether `PreviewSession` takes a ceiling argument, or whether `preview_cmd`
+passes the `footage_end` it already computes.
+
+The oracle's stale prose is not criterion-shaped and rides along with this:
+`test_v2_oracle.py`'s module docstring and
+`test_the_span_is_the_widest_the_footage_can_answer_for` both explain `SPAN`
+by "the plan does not clamp it", and `SPAN.end` is 29 — the number `sieve run`
+now derives by itself — so the sentences are false about the command even
+though the arithmetic they assert still holds.
 
 Deliberately not pinned: whether the run completes or refuses when nothing is
 left, and where the number is computed. The first is the phase-5 item's

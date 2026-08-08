@@ -107,7 +107,9 @@ because the spec is where the answer is spent.
 
 ### Noted, not owed here
 
-`ElementKind`'s docstring opens its third paragraph with "Two members" while the
-enum defines three. That is a defect independent of everything above and it
-survives whichever way the axis question goes. Fixing it is a docstring change
-with its own reason and must not ride along with this item.
+`ElementKind`'s docstring miscounted its own members and promised a third that
+had already landed, which is what the reading above leaned on until the enum was
+checked. That was a defect independent of everything above and it survived
+whichever way the axis question goes; it was fixed on its own reason in
+[its own item](elementkind-counts-two-members-over-three.md), not here. The axis
+question is untouched by that fix.

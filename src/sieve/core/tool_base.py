@@ -177,10 +177,10 @@ class ElementKind(StrEnum):
     fell inside a value band, and the noun in that sentence comes from here or
     it is invented.
 
-    Two members, and the second is not speculative padding: `block_signal`
-    emits one float per block and `downsample` emits one per pixel, both under
-    `ArraySpec(dtypes=("float32",))`. A third member arrives with the tool
-    that needs it and not before.
+    Three members, and none of them is speculative padding: `PIXEL` is what a
+    root's cropped source frames already are and enters in `PipelineDag`
+    rather than from any tool, `block_signal` declares `BLOCK`, and `detect`
+    declares `FRAME`.
     """
 
     #: One value per pixel of the frame it was measured from. What a decoded

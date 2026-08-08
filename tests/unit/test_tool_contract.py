@@ -9,6 +9,7 @@ wrong version of a tool an old pipeline named.
 from __future__ import annotations
 
 import inspect
+import re
 from dataclasses import fields
 from enum import StrEnum
 from fractions import Fraction
@@ -528,6 +529,21 @@ class TestLookahead:
 
 
 class TestElementMeaning:
+    def test_element_kind_docstring_counts_its_own_members(self) -> None:
+        # The docstring shipped a count two members under the enum's length,
+        # and was read as evidence about which axis a meaning belongs on
+        # before it was read as a defect. Reading the number back out of the
+        # prose is what makes the paragraph answerable to the enum: a literal
+        # ban on the old wording would pass the moment the count is wrong
+        # again in different words, and would fail on the fourth member.
+        words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+        assert ElementKind.__doc__ is not None
+        counts = re.findall(
+            rf"\b({'|'.join(words)}) members?\b", ElementKind.__doc__, flags=re.IGNORECASE
+        )
+        assert len(counts) == 1, f"docstring should state its member count exactly once: {counts}"
+        assert words[counts[0].lower()] == len(ElementKind)
+
     def test_an_array_emitter_without_an_element_is_refused_at_registration(self) -> None:
         # The whole enforcement. A default here would be free today — every
         # tool on the shelf that preserves would be right by accident — and

@@ -2,7 +2,7 @@
 title: The reuse figure the loop budget rests on is produced by no committed probe
 phase: 6
 priority: normal
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/bench/test_loop_budget.py -k reuse_on_a_post_edit_render -q && uv run pytest tests/bench/test_loop_budget.py -k stack_share_of_a_refill -q"
 opened: 2026-08-08

@@ -57,6 +57,18 @@ therefore carries a sample count assertion, and the samples come from the metric
 bus rather than from local `perf_counter` arithmetic, so a key the session
 stopped publishing is an empty series and a red test rather than a silent one.
 
+**Two of the readings here are judged by no ceiling, and that is deliberate.**
+The reuse split and the collector's share of a refill are numbers the finding's
+argument rests on — which mechanism makes a post-edit render cheap, and whether a
+longer window would cost the render or the assembly — and neither has a ceiling
+anyone has argued for. They are produced by this pass anyway, because the
+alternative is what happened three times: a session builds a scratch probe,
+reports the number, and deletes it, so no review can re-run it and the next
+change to what may be keyed re-orders the same harness from nothing
+(`todo/the-reuse-figure-has-no-committed-probe.md`). What they assert is the
+shape the mechanism forces, so a change to the admission rule is red here rather
+than unmeasured.
+
 The numbers themselves do not live here — a passing budget test tells the next
 reader nothing about the margin, and margin is what says whether the GUI has
 room to spend. They are in
@@ -85,7 +97,7 @@ from sieve.decode.reader import VideoReader
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import graph_needs_chroma
-from sieve.pipeline.preview import PreviewSession
+from sieve.pipeline.preview import PreviewRender, PreviewSession
 from sieve.pipeline.series_collector import SeriesCollector
 from sieve.tools import discover
 from tests.integration.test_v2_oracle import DETECTOR, SPAN, graph
@@ -178,6 +190,33 @@ class Reading:
     #: being empty, because a collector that assembled nothing publishes the
     #: same span shape as one that assembled the window.
     rows_per_refill: tuple[int, ...]
+    #: What each `WINDOWS` render did, in order — the cold one first. Per render
+    #: and not summed over the run, because the reuse row's claim is about one
+    #: post-edit render and a total would average the cold one into it.
+    window_renders: tuple[PreviewRender, ...]
+    #: The window render nested inside each `GRAPH_EDITS` refill, in order. Held
+    #: apart from `gated["full_preview_render"]`, which is the second stage's
+    #: series: the subtraction below is only meaningful against the render a
+    #: refill's own span contained.
+    refill_renders: tuple[Sample, ...]
+
+    @property
+    def stack_shares(self) -> tuple[float, ...]:
+        """Milliseconds each refill spent outside the render it wrapped.
+
+        The collector's own cost, by subtraction rather than by a second clock:
+        a refill publishes `slider_to_graph` around a render that publishes
+        `full_preview_render` inside it, so the difference is already measured
+        and only needs pairing.
+
+        Raises:
+            ValueError: if the two series are different lengths, which means the
+                samples being subtracted are not one gesture's.
+        """
+        return tuple(
+            refill.elapsed_ms - render.elapsed_ms
+            for refill, render in zip(self["slider_to_graph"], self.refill_renders, strict=True)
+        )
 
     def median_ms(self, key: str) -> float:
         """Median interval published under `key`.
@@ -299,8 +338,9 @@ def reading(stirred_clip: Path) -> Iterator[Reading]:
             store=MemoryFrameStore(),
         )
         recorder.clear()
-        for window_frames in WINDOWS:
-            session.render_window(_edited(pipeline, window_frames))
+        renders = [
+            session.render_window(_edited(pipeline, window_frames)) for window_frames in WINDOWS
+        ]
         collected["full_preview_render"] = recorder.samples("full_preview_render")
 
         recorder.clear()
@@ -317,8 +357,17 @@ def reading(stirred_clip: Path) -> Iterator[Reading]:
             series = collector.series
             rows.append(0 if series is None else int(series.data.shape[0]))
         collected["slider_to_graph"] = recorder.samples("slider_to_graph")
+        # After this stage's clear, so these are the refills' own renders and not
+        # the second stage's — which is what `stack_shares` may subtract.
+        refill_renders = recorder.samples("full_preview_render")
 
-    yield Reading(gated=collected, published=tuple(run), rows_per_refill=tuple(rows))
+    yield Reading(
+        gated=collected,
+        published=tuple(run),
+        rows_per_refill=tuple(rows),
+        window_renders=tuple(renders),
+        refill_renders=tuple(refill_renders),
+    )
 
 
 # ---- pre-pipeline: the video-editor regime -------------------------------
@@ -429,6 +478,51 @@ def test_every_sample_the_run_published_is_gated(reading: Reading) -> None:
         if sample.key not in IN_DEBT
     ]
     assert missed == []
+
+
+def test_reuse_on_a_post_edit_render(reading: Reading) -> None:
+    """What the store served, per render, and it is not a ceiling.
+
+    The finding's reuse row, produced by the same pass the timings come from
+    rather than by a scratch probe a session deletes — which is what lets a
+    change to `cache_key.cache_policy` land as a red line here instead of as a
+    number nobody re-took.
+
+    Exact counts and not an inequality, because the interesting thing about this
+    row is which outputs recompute rather than how many. The cold render has
+    nothing to serve. A post-edit render recomputes the edited detector at every
+    frame, since an edit gives it a key nothing has ever written, plus
+    `block_signal` at the span's first frame, where `decode_start` is clamped and
+    the one frame of warmup its key is admitted for has nowhere to come from —
+    which is why this is `frame_count + 1` and not `frame_count`, and why a
+    window away from the start of the footage would be one lower.
+    """
+    cold, *post_edit = reading.window_renders
+    outputs = SPAN.frame_count * len(cold.plan.dag.order)
+    recomputed = SPAN.frame_count + 1
+
+    assert (cold.computed, cold.from_cache) == (outputs, 0)
+    assert [(render.computed, render.from_cache) for render in post_edit] == [
+        (recomputed, outputs - recomputed)
+    ] * (len(WINDOWS) - 1)
+
+
+def test_the_stack_share_of_a_refill(reading: Reading) -> None:
+    """How much of a refill is the assembly rather than the render inside it.
+
+    A reading and not a gate: `slider_to_graph` is the ceiling and it is judged
+    above, while the split between the render and the stack has no ceiling anyone
+    has argued for. What it decides is where a longer working window would first
+    cost — the render or the assembly — and it needs no clock of its own, because
+    a refill's own window render publishes inside the refill's span.
+
+    Positive per refill is the whole assertion: the render is nested, so a
+    non-positive share is a subtraction over two spans that were not the same
+    gesture. `stack_shares` pairs strictly, so a stage that stopped publishing
+    one of the two is red here rather than silently paired off by one.
+    """
+    assert len(reading.refill_renders) == len(GRAPH_EDITS)
+    assert [share for share in reading.stack_shares if share <= 0.0] == []
 
 
 def test_the_measurement_ran_with_no_qt_in_the_process(reading: Reading) -> None:

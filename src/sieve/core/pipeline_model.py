@@ -94,9 +94,10 @@ _SINK_FORMAT_PATTERN = TOOL_ID_PATTERN
 #: sanitized per consumer: two ids that sanitize alike are one file, and a
 #: result silently overwriting another is the failure the reviewer-rerun promise
 #: cannot survive. Looser than `TOOL_ID_PATTERN`, which a generated id would
-#: fail — `uuid4().hex` may start with a digit. Anchored `\Z` and not `$`, which
-#: its neighbours in `tool_base` use: `$` is `(?=\n?\Z)`, so it admits an id
-#: ending in a newline, and this one becomes a file name.
+#: fail — `uuid4().hex` may start with a digit. Anchored `\Z` and not `$`: `$` is
+#: `(?=\n?\Z)`, so it admits an id ending in a newline, and this one becomes a
+#: file name. Its neighbours in `tool_base` anchor the same way, for consequences
+#: of their own.
 NODE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
 

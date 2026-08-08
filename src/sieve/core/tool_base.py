@@ -100,13 +100,22 @@ from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, FrameSpa
 #: from YAML. That is not registry awareness — it never asks whether the tool
 #: exists — but it is the same syntactic contract, and a second copy of the
 #: regex is a second thing to keep in step.
-SEMVER_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+#:
+#: Anchored `\Z` and not `$`, with `NODE_ID_PATTERN` and for its reason: `$` is
+#: `(?=\n?\Z)`, so it admits a version ending in a newline, and this one reaches
+#: `version_tuple` and the cache key — where `1.0.0` and `"1.0.0\n"` are one
+#: tool version keying two entries.
+SEMVER_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)\Z")
 
 #: Lowercase identifier. It appears in cache keys, YAML, and CLI arguments, so
 #: it may not depend on case folding or shell quoting to stay itself. The
 #: *values* it admits are v2's unchanged — only the field's name renamed
 #: (`adr/tools-not-filters.md`).
-TOOL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+#:
+#: `SEMVER_PATTERN`'s anchor, and this constant reaches further: `Emission.name`
+#: and a sink format spell themselves by it and both become file names, so `$`
+#: would be `NODE_ID_PATTERN`'s hole again rather than only a lookup that misses.
+TOOL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\Z")
 
 
 class Mode(StrEnum):

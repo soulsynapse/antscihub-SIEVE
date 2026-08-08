@@ -187,6 +187,33 @@ pipeline:
         with pytest.raises(ValidationError, match=re.escape("version must be MAJOR.MINOR.PATCH")):
             Node(tool_id="downsample", version="1.0")
 
+    def test_a_tool_id_or_version_ending_in_a_newline_is_refused(self) -> None:
+        # `node_id`'s trailing-newline hole, in the two fields that were the
+        # precedent for spelling it `$`. Neither becomes a path, so the
+        # consequences are not that one: a `tool_id` misses the registry and is
+        # named back in a message whose two spellings are indistinguishable on a
+        # terminal, and a `version` reaches `SEMVER_PATTERN.match(...).group()`
+        # on the cache-key path, where one tool version keys two entries and the
+        # reviewer-rerun promise quietly holds a duplicate.
+        with pytest.raises(ValidationError, match="tool_id must match"):
+            Node(tool_id="downsample\n", version="1.0.0")
+        with pytest.raises(ValidationError, match=re.escape("version must be MAJOR.MINOR.PATCH")):
+            Node(tool_id="downsample", version="1.0.0\n")
+        # A *bare* newline in a quoted scalar folds to a space, so writing one
+        # takes the escape — which is what a hand edit is.
+        with pytest.raises(ValidationError, match="tool_id must match"):
+            Project.from_yaml(
+                "source: {path: arena.MP4}\n"
+                "pipeline:\n"
+                '  nodes: [{node_id: n1, tool_id: "downsample\\n", version: 1.0.0}]\n'
+            )
+        with pytest.raises(ValidationError, match=re.escape("version must be MAJOR.MINOR.PATCH")):
+            Project.from_yaml(
+                "source: {path: arena.MP4}\n"
+                "pipeline:\n"
+                '  nodes: [{node_id: n1, tool_id: downsample, version: "1.0.0\\n"}]\n'
+            )
+
 
 class TestPurity:
     def test_front_end_state_cannot_be_stashed_in_the_document(self) -> None:

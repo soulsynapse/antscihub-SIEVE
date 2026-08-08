@@ -2,7 +2,7 @@
 title: The template example guard counts across all three, and the todo template shows neither form
 priority: high
 phase: "00"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest \"tests/docs/test_doc_index.py::test_each_template_shows_both_forms\" -q"
 opened: 2026-08-07

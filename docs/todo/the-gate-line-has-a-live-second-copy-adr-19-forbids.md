@@ -1,7 +1,7 @@
 ---
 title: The gate line has a live second copy, and ADR 19 names it without ruling on it
 priority: normal
-status: awaiting-review
+status: open
 gated_on: nothing
 done_when: "uv run pytest \"tests/unit/test_gate_line.py::test_no_restatement_of_the_gate_line_drifts_from_it\" -q"
 phase: "00"
@@ -111,3 +111,27 @@ ADR 19 gains two sentences rather than an amendment: its account of the copy
 moves to the past tense, because the copy is gone and a settled ADR that
 describes the tree as it no longer is decays into the thing it was written
 against. The clause itself is untouched.
+
+## Review, 2026-08-07
+
+Reopened. The criterion passes and the strike is the right call, but the walk
+is green on one of the two drifts this item's opening paragraph names. Measured
+in
+`docs/findings/2026.08.07-the-gate-line-walk-catches-one-of-the-two-drifts-the-item-cites.md`:
+the `actionlint` episode left the copy as the line's prefix and the walk is red
+on it; the `ruff format --check` episode left a hole in the middle and the walk
+is silent. The worker note's "both recorded drifts were the line minus its
+newest command" is false for the first of them, and the commit it cites for its
+red-before-green, `ae6e499`, is the repair rather than the drift — the copy
+there is five commands and in step, and the four-command copy is
+`e9d1db4`..`2e64785`.
+
+What this item is short of is either a rule that reaches the interior-omission
+shape or a stated argument for why it cannot. The second is live:
+`the-gate-has-no-opinion-about-the-workflow.md`'s `done_when` is byte-identical
+to the first drift's copy and is not a copy of anything, so no rule reading only
+the string separates them, and the alternative is a marker in front matter
+saying an item's `done_when` is meant to be the line. That marker is a decision,
+not a criterion — see the finding's open question. A run that concludes the
+narrow rule is the best available says so in the worker note, corrects the two
+false sentences, and leaves the walk as it is.

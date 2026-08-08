@@ -1,6 +1,6 @@
 ---
 title: A frame count does not enforce its own int
-status: awaiting-review
+status: done
 priority: normal
 phase: 1
 gated_on: nothing

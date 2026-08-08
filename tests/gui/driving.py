@@ -33,6 +33,9 @@ from typing import Any
 #: mid-sleep is noticed promptly, long enough not to spin a core.
 _POLL_SECONDS = 0.002
 
+#: One wheel notch, in eighths of a degree — Qt's unit for `angleDelta`.
+_DETENT = 120
+
 
 def _event(kind: Any, x: float, y: float, *, held: bool) -> Any:
     from PySide6.QtCore import QPointF, Qt
@@ -80,6 +83,49 @@ def drag(widget: Any, start: tuple[float, float], end: tuple[float, float]) -> N
 def click(widget: Any, x: float, y: float) -> None:
     """Press and release without travelling."""
     drag(widget, (x, y), (x, y))
+
+
+def wheel(widget: Any, notches: int = -1) -> None:
+    """`notches` wheel detents over `widget`, delivered as Qt delivers them.
+
+    Sent rather than handed to `wheelEvent` directly, unlike the mouse above: a
+    control that declines the wheel does so by ignoring the event, and only a
+    dispatched event carries the accepted flag that says so.
+    """
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QApplication
+
+    origin = QPointF(0.0, 0.0)
+    QApplication.sendEvent(
+        widget,
+        QWheelEvent(
+            origin,
+            origin,
+            QPoint(0, 0),
+            QPoint(0, notches * _DETENT),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        ),
+    )
+
+
+def key(widget: Any, code: Any, text: str = "") -> None:
+    """One key press on `widget`, whether or not it holds focus.
+
+    Focus is not arranged because the offscreen platform does not reliably
+    grant it to an unshown window, and every handler these tests exercise reads
+    the key rather than the focus.
+    """
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QApplication
+
+    QApplication.sendEvent(
+        widget, QKeyEvent(QEvent.Type.KeyPress, code, Qt.KeyboardModifier.NoModifier, text)
+    )
 
 
 def leave(widget: Any) -> None:

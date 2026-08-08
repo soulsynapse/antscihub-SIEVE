@@ -2,7 +2,7 @@
 title: A generated control commits on intent, and a value passed through is not one
 priority: normal
 phase: "7"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_param_generator.py -q -k 'a_wheel_over_a_control_does_not_edit_the_document or arrowing_a_closed_choice_commits_once'"
 opened: 2026-08-08
@@ -72,3 +72,12 @@ Moving the render off the GUI thread is deliberately *not* folded in here.
 caller rendering on a worker must hold one render in flight and one pending;
 that is a mechanism with a fence in it, and it is worth doing after the number
 of renders is right rather than as a way of hiding how many there are.
+
+## The signal swap this item predicted a case would pin is equivalent instead (2026-08-08)
+
+All three cases are answered in `gui/param_form.py` and the two above are the
+`done_when`'s. The prediction in the paragraph above them did not hold:
+`findings/2026.08.08-removing-the-arrow-case-makes-the-combos-signal-choice-unpinnable-rather-than-pinned.md`
+measures `activated ==> currentIndexChanged` surviving still, now because a
+closed combo has no arrow behaviour left for the two signals to disagree about.
+The other four rules die under the sweep.

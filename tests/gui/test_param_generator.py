@@ -30,6 +30,7 @@ from sieve.core.tool_base import (
 )
 from sieve.core.types import ROI
 from sieve.session.session import Session
+from tests.gui import driving
 
 _NODE = "n0"
 
@@ -184,3 +185,110 @@ def test_building_a_form_is_not_an_edit_of_the_document_it_was_built_from(
     ParamForm(session, _NODE, _spec())
 
     assert not session.can_undo()
+
+
+def test_a_wheel_over_a_control_does_not_edit_the_document(qapp, session: Session) -> None:
+    """Scrolling down the panel is navigation, and navigation is not an edit.
+
+    Qt's `wheelEvent` steps a spin box and a combo without consulting focus, so
+    a flick down a column of them commits every control it passes — each notch
+    a re-plan, a cache key and a synchronous window render. Every generated
+    form lives in a scroll area (`gui/step_pane.py`), so the gesture always has
+    somewhere better to go.
+
+    The focus policy is asserted because it is where the rule would otherwise
+    leak: Qt grants focus by policy before the event reaches `wheelEvent`, so a
+    control left at Qt's `WheelFocus` default would focus itself on the first
+    notch and step on it.
+    """
+    from PySide6.QtCore import Qt
+
+    from sieve.gui.param_form import ParamForm
+
+    form = ParamForm(session, _NODE, _spec())
+    for name in ("count", "fraction", "flavour"):
+        assert form.widget(name).focusPolicy() is not Qt.FocusPolicy.WheelFocus
+        # Both directions: a control already at one end of its range is not
+        # stepped by a notch toward that end, and `flavour` defaults to the
+        # last of its two choices — a downward flick over it passes for the
+        # wrong reason.
+        driving.wheel(form.widget(name), -1)
+        driving.wheel(form.widget(name), 1)
+
+    assert not session.can_undo()
+    assert form.widget("count").value() == 4
+    assert form.widget("flavour").currentText() == "peppered"
+
+    # The other half of the rule for a knob: someone who means to step it still
+    # can. A combo has no step that is not a commit, so it has no such half.
+    # Shown, because the offscreen platform grants focus only inside a window
+    # that exists.
+    form.show()
+    driving.pump()
+    form.widget("count").setFocus()
+    driving.pump()
+    driving.wheel(form.widget("count"))
+
+    assert session.project.params_for(_NODE) == {"count": 3}
+
+
+def test_arrowing_a_closed_choice_commits_once(qapp, session: Session) -> None:
+    """Holding Down through a mode list chooses one mode, not every mode.
+
+    Qt counts arrowing a *closed* combo as an act of selection, so `activated`
+    — its "the user chose this" signal — fires per key repeat. The case is
+    removed rather than filtered: navigation keys open the popup, where
+    highlighting and selecting are distinct states and only the second reaches
+    the document. One undo is what proves it committed once; two values on the
+    stack would leave the first behind.
+    """
+    from PySide6.QtCore import Qt
+
+    from sieve.gui.param_form import ParamForm
+
+    form = ParamForm(session, _NODE, _spec())
+    combo = form.widget("flavour")
+
+    driving.key(combo, Qt.Key.Key_Down)
+    view = combo.view()
+
+    assert view.isVisible()
+    assert not session.can_undo()
+
+    # The rest of the walk, which the open popup is now the receiver of: a
+    # highlight moves and the document does not.
+    driving.key(view, Qt.Key.Key_Home)
+
+    assert not session.can_undo()
+
+    driving.key(view, Qt.Key.Key_Return)
+
+    assert session.project.params_for(_NODE) == {"flavour": "salt"}
+    assert session.undo().params_for(_NODE) == {}
+
+
+def test_typing_a_number_commits_the_number_and_not_its_prefixes(qapp, session: Session) -> None:
+    """An edit runs from the first keystroke to a commit, and nothing between.
+
+    `QSpinBox.valueChanged` fires per keystroke by default, so typing `12` into
+    a frame count commits `1` on the way — a whole plan and render for a value
+    that was never a choice, and the first of them clamped to the field's
+    minimum besides.
+    """
+    from PySide6.QtCore import Qt
+
+    from sieve.gui.param_form import ParamForm
+
+    form = ParamForm(session, _NODE, _spec())
+    count = form.widget("count")
+    count.setFocus()
+    count.selectAll()
+    driving.key(count, Qt.Key.Key_1, "1")
+    driving.key(count, Qt.Key.Key_2, "2")
+
+    assert not session.can_undo()
+
+    driving.key(count, Qt.Key.Key_Return)
+
+    assert session.project.params_for(_NODE) == {"count": 12}
+    assert session.undo().params_for(_NODE) == {}

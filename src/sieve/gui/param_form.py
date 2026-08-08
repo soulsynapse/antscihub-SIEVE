@@ -18,6 +18,14 @@ document back: a rebuilt form is how new values arrive, which is the same rule
 the session layer's whole-value history runs on — a form that patched itself in
 place would be a second writer of the value it is showing.
 
+And they flow on intent. Every value a control emits is a re-plan, a cache key
+and a window render on the GUI thread, so *when* a widget counts as edited is a
+product question rather than a Qt detail: Qt's obvious signals commit a value
+scrolled past, arrowed past, and half typed. `_CommittedSpin` and
+`_ChoiceCombo` are where the three are answered, and the answers are the
+generator's rather than a widget's written beside it because they are rules
+about what a control is.
+
 The four composite kinds have no editor yet, only a restatement of the value
 they hold: `region` wants the canvas, `span` the timeline, and `band` an axis
 the spec does not yet name (`todo/composite-kinds-get-their-editors.md`). They
@@ -31,7 +39,8 @@ from collections.abc import Callable, Mapping
 from functools import partial
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeyEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -62,6 +71,119 @@ _NUDGE = 10.0**-_DECIMALS
 _Edit = Callable[[Any], None]
 _Builder = Callable[[Mapping[str, Any], Any, Mapping[str, str], _Edit], QWidget]
 
+#: The keys `QComboBox` walks a *closed* list with. Each steps the value and
+#: emits `activated` on the way past; each opens the popup here instead.
+_NAVIGATION_KEYS = frozenset(
+    {
+        Qt.Key.Key_Up,
+        Qt.Key.Key_Down,
+        Qt.Key.Key_PageUp,
+        Qt.Key.Key_PageDown,
+        Qt.Key.Key_Home,
+        Qt.Key.Key_End,
+    }
+)
+
+
+def _keep_focus_off_the_wheel(control: QWidget) -> None:
+    """Stop a wheel from *granting* the focus that licenses it.
+
+    Both spin boxes and combos default to `Qt.WheelFocus`, and Qt gives focus
+    by policy inside `QApplication.notify`, before the event reaches any
+    handler below. Left alone, the first notch over an unfocused control would
+    focus it and then arrive already focused, and the rules here would be true
+    and useless.
+
+    Only the exact default is rewritten: `WheelFocus` on a knob is Qt's choice
+    rather than an author's, which is what makes it a default to replace rather
+    than a preference to honour.
+    """
+    if control.focusPolicy() is Qt.FocusPolicy.WheelFocus:
+        control.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+
+class _CommittedSpin:
+    """A number that reaches the document on intent, not on the way past.
+
+    Two of the three pass-through cases the generated controls have, both
+    re-derived from v2 (`gui/wheel_steps.py`, `gui/block_spin.py`) rather than
+    ported:
+
+    A **wheel** over an unfocused knob is a scroll, not an edit. Qt's own
+    `wheelEvent` steps without consulting focus, so a flick down the panel
+    commits every control it passes — each one a re-plan, a cache key and a
+    synchronous window render (`gui/tuning.py`). Declining is enough to hand
+    the gesture on: `step_pane.py` puts every generated form inside a
+    `QScrollArea`, so the enclosing thing a wheel could mean instead always
+    exists, and v2's event hook had to forward by hand only because it sat
+    above the `wheelEvent` it was replacing rather than inside it.
+
+    **Keyboard tracking** is off, so an edit runs from the first keystroke to a
+    commit and nothing in between reaches the document. With it on, typing
+    `120` into a frame count commits `1`, then `12`, then `120` — two of those
+    for values the user was in the middle of typing.
+
+    Programmatic `setValue` still emits, which is what the construction rule
+    relies on being ordered around rather than screened out.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        _keep_focus_off_the_wheel(self)
+        self.setKeyboardTracking(False)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        if self.hasFocus():
+            super().wheelEvent(event)
+        else:
+            event.ignore()
+
+
+class _IntegerSpin(_CommittedSpin, QSpinBox):
+    pass
+
+
+class _RealSpin(_CommittedSpin, QDoubleSpinBox):
+    pass
+
+
+class _ChoiceCombo(QComboBox):
+    """A drop list whose value changes when the user says it does.
+
+    The third pass-through case, and the one with a decision in it. `activated`
+    is Qt's "the user chose this", but Qt counts arrowing a *closed* combo as
+    an act of selection, so holding Down through a tool's mode list commits
+    every mode on the way past. v2 removed the case rather than screening the
+    signal (`gui/commit_combo.py`), and that is what is re-derived here:
+    navigation keys open the popup, where highlighting and selecting are
+    distinct states, and `activated` becomes a complete statement of intent.
+
+    Screening it was the alternative, and it costs a pending-value display — a
+    combo that has chosen something it has not committed must *show* that, or
+    it looks more live than it is.
+
+    A wheel is declined outright rather than gated on focus like a spin box's.
+    A knob still has to step for someone who means to step it; a combo has no
+    step that is not a commit.
+
+    Type-to-search is left alone: a keystroke naming an entry says *which*
+    entry rather than walking past the ones between.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        _keep_focus_off_the_wheel(self)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() in _NAVIGATION_KEYS and not self.view().isVisible():
+            self.showPopup()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        event.ignore()
+
 
 def _scalar_range(
     described: Mapping[str, Any], value: Any, labels: Mapping[str, str], on_edit: _Edit
@@ -75,7 +197,7 @@ def _scalar_range(
     """
     if described.get("type") == "integer":
         low, high = _bounds(described, nudge=1)
-        spin = QSpinBox()
+        spin = _IntegerSpin()
         spin.setRange(int(low), int(high))
         spin.setValue(int(value))
         # After `setValue`, so building a form is not an edit of the document
@@ -84,12 +206,12 @@ def _scalar_range(
         return spin
 
     low, high = _bounds(described, nudge=_NUDGE)
-    real = QDoubleSpinBox()
+    real = _RealSpin()
     real.setDecimals(_DECIMALS)
     real.setRange(low, high)
-    # A tenth of the range, to two significant figures, so a bounded fraction
-    # and a frame rate are both reachable by arrow key. Unbounded fields keep
-    # the default step of 1.
+    # A range a step of 1 would cross in one press needs a finer one, or a
+    # bounded fraction is unreachable by arrow key. Wide and unbounded fields
+    # keep Qt's default step.
     real.setSingleStep(0.05 if high - low <= 2.0 else 1.0)
     real.setValue(float(value))
     real.valueChanged.connect(on_edit)
@@ -127,12 +249,10 @@ def _enum(
 
     `activated` is Qt's "the user chose this", and a parameter edit has to be
     exactly that: every value merely passed through is a re-plan, a new cache
-    key and a render. It is not the whole of that claim — Qt activates a
-    *closed* combo on arrow keys too, which is the pass-through v2 removed with
-    a combo of its own
-    (`todo/the-generated-controls-commit-on-intent-not-on-pass-through.md`).
+    key and a render. `_ChoiceCombo` is what makes the signal say the whole of
+    that.
     """
-    combo = QComboBox()
+    combo = _ChoiceCombo()
     for choice in described.get("enum", (True, False)):
         combo.addItem(labels.get(str(choice), str(choice)), choice)
     index = combo.findData(value)

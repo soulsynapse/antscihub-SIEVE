@@ -78,6 +78,13 @@ the rail, the slide and `POSITION_NAMES` all count three today.
 That decision belongs here, with the two panels above, because this item is the
 one that has to render a whole GUI a user can walk end to end.
 
+Wherever it is placed, Run needs the guard the screen already has the accessor
+for (07.9 review): `SaveScreen.run()` calls `QProcess.start` unconditionally, so
+a second click while a run is in flight re-saves the document, clears the
+message the first run will write into, and emits `run_issued` for a process Qt
+declines to start. `running()` is the state that should gate the button, and
+nothing gates it today.
+
 ## 06.3's headless claim now rests on collection order (2026-08-08, from 07.4)
 
 `tests/bench/test_loop_budget.py::test_the_measurement_ran_with_no_qt_in_the_process`

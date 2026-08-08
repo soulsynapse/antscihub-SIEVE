@@ -2,7 +2,7 @@
 title: The config-to-table walk has only ever covered one contract, and three sources answer to no cell
 priority: high
 phase: 0
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/docs/test_vision_table.py -q -k config_source_answers_to_a_row"
 opened: 2026-08-08

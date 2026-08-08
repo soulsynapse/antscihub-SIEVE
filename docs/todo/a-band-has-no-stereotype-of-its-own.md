@@ -2,7 +2,7 @@
 title: A band has no stereotype of its own, and three of detect's params are one
 priority: normal
 phase: 1
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_detect_tool.py -k the_three_bands_declare -q"
 opened: 2026-08-07

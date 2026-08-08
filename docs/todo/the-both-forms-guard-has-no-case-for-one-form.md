@@ -2,7 +2,7 @@
 title: The guard's "both forms" is a conjunction no subject has ever tested one leg of
 priority: normal
 phase: "00"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest \"tests/docs/test_doc_index.py::test_a_template_that_shows_one_form_is_reported\" -q"
 opened: 2026-08-07

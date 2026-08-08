@@ -1063,6 +1063,46 @@ whole value.
 """
 
 
+#: States the rule once and offers the fix without ever showing the form that
+#: fails. The half-taught state the guard's docstring says an author must not be
+#: handed, and the one a template reaches by trimming the example that reads
+#: like a mistake.
+ONE_FORM_TEMPLATE = (
+    SILENT_TEMPLATE + '\nWrite `gated_on: "the pin"` and the value is read as written.\n'
+)
+
+#: Shows both forms and states nothing. `stated` is the only element of the
+#: tuple this moves, so it is the subject that element has a case from.
+UNSTATED_TEMPLATE = """---
+title: A question nobody has settled
+status: open
+---
+
+# The question, restated
+
+`gated_on: "the pin` is not valid YAML.
+
+Write `gated_on: "the pin"` and the value is read as written.
+"""
+
+
+def _docs_with_template(tmp_path: Path, text: str) -> Path:
+    """A docs tree holding the three real templates and one synthetic folder.
+
+    The real three are copied rather than stubbed so their passing here is the
+    passing they do in the repo — a synthetic corpus alone would let the
+    reported line be the only line because nothing else was ever a subject.
+    """
+    docs = tmp_path / "docs"
+    for folder in _templates(DOCS):
+        copied = docs / folder.name
+        copied.mkdir(parents=True)
+        shutil.copyfile(folder / "_TEMPLATE.md", copied / "_TEMPLATE.md")
+    (docs / "questions").mkdir()
+    (docs / "questions" / "_TEMPLATE.md").write_text(text, encoding="utf-8")
+    return docs
+
+
 def test_the_template_guard_covers_every_template(tmp_path):
     """The subject set is the tree's, so a fourth template arrives covered.
 
@@ -1072,15 +1112,30 @@ def test_the_template_guard_covers_every_template(tmp_path):
     someone listed reports nothing here, and the day such a folder is real
     nothing goes red either.
     """
-    docs = tmp_path / "docs"
-    for folder in _templates(DOCS):
-        copied = docs / folder.name
-        copied.mkdir(parents=True)
-        shutil.copyfile(folder / "_TEMPLATE.md", copied / "_TEMPLATE.md")
-    (docs / "questions").mkdir()
-    (docs / "questions" / "_TEMPLATE.md").write_text(SILENT_TEMPLATE, encoding="utf-8")
+    docs = _docs_with_template(tmp_path, SILENT_TEMPLATE)
 
     assert _silent(docs) == ["questions: states it 1x, 0 legal / 0 illegal"]
+
+
+def test_a_template_that_shows_one_form_is_reported(tmp_path):
+    """The leg the conjunction has never been tested one of.
+
+    Every subject the guard had sat at a pole — the real templates satisfy all
+    three claims, the silent one fails two at once — so weakening the
+    conjunction to `legal or illegal` passed the suite, and under it a template
+    offering the fix and never showing the failure is compliant.
+    """
+    docs = _docs_with_template(tmp_path, ONE_FORM_TEMPLATE)
+
+    assert _silent(docs) == ["questions: states it 1x, 1 legal / 0 illegal"]
+
+
+def test_a_template_that_shows_the_rule_without_stating_it_is_reported(tmp_path):
+    """Two examples and no sentence: the examples are the rule for whoever
+    already knows which one is which."""
+    docs = _docs_with_template(tmp_path, UNSTATED_TEMPLATE)
+
+    assert _silent(docs) == ["questions: states it 0x, 1 legal / 1 illegal"]
 
 
 def test_the_checked_in_indexes_are_current():

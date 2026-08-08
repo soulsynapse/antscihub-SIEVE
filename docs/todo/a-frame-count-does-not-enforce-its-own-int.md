@@ -4,6 +4,7 @@ status: open
 priority: normal
 phase: 1
 gated_on: nothing
+done_when: "uv run pytest tests/unit/test_tool_contract.py -q -k whole_frames && uv run pytest tests/unit/test_tool_contract.py tests/unit/test_types.py tests/unit/test_quantities.py -q"
 opened: 2026-08-07
 ---
 
@@ -40,3 +41,17 @@ there because `bool` subclasses `int`, so `FrameCount(True)` passes the int
 check alone; 01.3's review found that deleting the clause leaves all 57
 contract tests green, which makes it the one line of the guard nothing
 distinguishes. Whether `True` is worth refusing is part of the same decision.
+
+## The criterion is neutral between the two ways out
+
+The cases land in `tests/unit/test_tool_contract.py` and spell `whole_frames`,
+whichever way the decision goes. They cannot land in `tests/unit/test_types.py`:
+that file is 01.1's ported spec and the porting discipline refuses rewriting a
+ported test, so the file that would be the obvious home for a `FrameCount`
+constructor case is the one file the work may not add one to. What the criterion
+pins is therefore the hole rather than the fix — a fractional `warmup_frames`
+declared on a `ToolSpec` is refused, and so is every other declaration boundary
+the body names — which is true if the guard moves into `FrameCount.__post_init__`
+and true if it stays at the boundaries. The second half runs the ported spec
+beside the contract, because widening the anchor is the branch that could land
+green while quietly moving what 01.1 froze.

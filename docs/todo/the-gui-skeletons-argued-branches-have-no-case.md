@@ -66,6 +66,12 @@ rule the module docstring argues from the proxy width — and `self._frame = Non
 The item's headline promise, that the canvas plays and scrubs footage through
 the decode path, is carried by the player's tests up to the signal and by
 nothing past it.
+(07.12 has since landed a case that reads `window.viewport.frame` and compares
+its pixels to an independent render, so `self._frame = image ==> pass` now dies
+under `tests/gui tests/bench/test_gui_loop_budget.py`. `frame_rect`'s two —
+the never-upscale clamp and `clear` — are untouched by it and stand. The
+paragraph above is corrected, not withdrawn; the section below is what the same
+commit left open.)
 
 `gui/timeline/geometry.py` loses its two argued numbers to one fixture choice.
 Under `uv run pytest -q tests/gui`, `MIN_BAND_PIXELS = 2.0 ==> 0.0` survives and
@@ -157,3 +163,33 @@ nine — the constant's own comment says so and the docstring contradicts it. Th
 assertion is `0 < len(...) <= len(SCRUBS)`, so nothing goes red for the
 sentence; what it costs is a reader comparing this file's median to the headless
 one on the belief that the two passes took the same stops.
+
+## The viewport's own refusal, from 07.12's review (2026-08-08)
+
+07.12 fed the canvas the watched node's render, and the two decisions the item
+had flagged as unsettled were answered in `gui/app.py` and `gui/canvas.py`. One
+of the two is held and the other is not. Under
+`uv run pytest -q tests/gui tests/bench/test_gui_loop_budget.py`:
+
+- `if spec.element is not ElementKind.FRAME: ==> if True:` and
+  `if values is None or not self._viewport.set_values(index, values): ==> if
+  values is None:` both die, so the climb past a `FRAME` node and the
+  fall-back-to-source path are real.
+- `and node.node_id in source_fed_nodes(pipeline) ==> and False` survives.
+  That clause *is* the second answer — a source-fed node carrying a `region`
+  parameter keeps the source on the canvas, so a `RegionEditor`'s box is not
+  drawn over a rectangle the value does not index. Every case walks to the
+  detector, so nothing ever stands on `crop` with an editor bound and the
+  refusal is unfalsifiable. The fixture is a walk that stops on the source-fed
+  node and asks `viewport_node`.
+- `scaled = np.zeros_like(array) if spread <= 0.0 else (array - low) / spread
+  ==> scaled = (array - low) / spread` survives in `canvas.image_of`. The
+  constant-frame branch is argued in a comment ("a constant frame is flat rather
+  than saturated") and no fixture holds a frame whose values do not vary; the
+  mutant divides by zero and the suite is green. Same shape as `value_range`'s
+  degenerate span two sections above, on the other surface.
+
+`image_of`'s two `None` returns — a non-2-D array and one with no finite value
+in it — are the guard-with-no-case shape rather than a missing fixture: the only
+producer of a non-picture on this graph is `detect`, and `frame_bearing` climbs
+past it before `image_of` is ever asked.

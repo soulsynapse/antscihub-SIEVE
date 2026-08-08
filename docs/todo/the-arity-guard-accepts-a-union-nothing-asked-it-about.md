@@ -2,7 +2,7 @@
 title: The arity guard's union and variadic branches have no case
 priority: low
 phase: 7
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py -q -k arity_the_shelf_does_not_declare"
 opened: 2026-08-08
@@ -31,26 +31,14 @@ point: a composite kind on `int | tuple[int, int]`, and a composite kind on
 `tuple[int, ...]`. Naming them for the shelf they are absent from is what keeps
 the next reader from deleting them as redundant with the shapes already tested.
 
-07.5 added two more of the same shape to the same module, found in review of
-`b19599f`. `ENUM` is checked for nothing at registration: `_ONE_FIELD_STEREOTYPES`
-admits it beside `SCALAR_RANGE` and no check asks whether the annotation under it
-can be enumerated at all. The generator's fallback is
-`described.get("enum", (True, False))`, so a `str` field declared `ENUM` gets a
-two-item True/False drop list rather than a refusal — the one silent degradation
-in a module whose whole argument is that an unmapped kind is loud. A third
-refusal case, `ENUM` over an annotation with no choices, closes it where the two
-above close the composite side. And `core.tool_base._dereference` argues in its
-docstring that a `$ref` it does not understand degrades to the unresolved
-property rather than raising; `if not ref.startswith(prefix): ==> if False:`
-survives `tests/unit/test_inspect_cmd.py` and `tests/gui/test_param_generator.py`,
-because pydantic writes no other pointer. Same disposition as the two above: the
-case is written against a schema the shelf does not produce, or the branch is
-unfalsifiable.
+## Split, 2026-08-08
 
-The two paragraphs above this one — the `ENUM` refusal and `_dereference`'s
-`$ref` — are `enum-is-refused-by-nothing-at-registration.md`, split off because
-this item's criterion selects only on the arity cases and the `ENUM` half wants
-a refusal the module does not make yet.
+The `ENUM`-at-registration and `_dereference` `$ref` paragraphs 07.5 added here
+in review of `b19599f` are `enum-is-refused-by-nothing-at-registration.md`,
+which carries them in full. `5819504` wrote them into that item and left them
+here as well; this review removed the copy, because this item's criterion never
+selected on them and a `done` item holding open work in its body is a second
+place to read the same claim.
 
 The variadic rule's spelling is the open question the finding records: the
 docstring argues an editor drawing a fixed number of handles cannot be handed an

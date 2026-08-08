@@ -99,6 +99,19 @@ dev = [
     # deliberately bumps the number.
     "ruff==0.16.1",
     "import-linter>=2.13",
+    # The gate's only check that reads `.github/workflows/` rather than `src/`.
+    # A dev-group entry rather than a `uvx --from actionlint-py` line because
+    # the gate is what a contributor runs before pushing: `uvx` resolves the
+    # index on a cold cache, so the one command that must run identically on a
+    # laptop and on a runner would be the one command that needs the network to
+    # start. Here it is in `uv.lock` with everything else the gate calls.
+    #
+    # The distribution vendors the Go binary; the version is actionlint's own,
+    # and it is floored rather than pinned exactly (unlike `ruff`) because it
+    # checks a file against GitHub's schema instead of deciding what the tree
+    # is — a newer release knows about more of GitHub, and knowing less is the
+    # only failure mode worth avoiding.
+    "actionlint-py>=1.7",
 ]
 
 [tool.ruff]

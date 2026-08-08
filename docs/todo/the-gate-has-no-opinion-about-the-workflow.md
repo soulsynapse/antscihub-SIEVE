@@ -2,7 +2,7 @@
 title: The gate has no opinion about the workflow that runs it
 priority: low
 phase: 0
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run ruff check . && uv run lint-imports && uv run pytest -q"
 opened: 2026-08-07
@@ -26,3 +26,59 @@ push too late for the push that introduced it.
 
 Whichever way it goes, the tool arrives with it: `actionlint-py` in the dev
 group rather than a `uvx` line that resolves the network on every run.
+
+## Worker note, 2026-08-07
+
+The gate line, as a fifth command: `uv run actionlint`, with no path argument.
+`actionlint-py>=1.7` is in the dev group.
+
+`done_when` run, all three green — `All checks passed!`, `Contracts: 6 kept, 0
+broken.`, `707 passed in 26.57s` after `doc_index.py` was re-run for the two
+new documents. It cannot see the item's subject, the same way 00.3's could not:
+it proves the gate still passes, not that the gate now holds a fifth check. The
+`run:` line and the criterion have diverged twice over — the criterion is still
+missing `ruff format --check` from 00.3's amendment as well as this addition —
+and both are the reviewer's to fix, so both are left alone here.
+
+The placement argument, measured rather than reasoned
+(`findings/2026.08.07-actionlint-is-seven-tenths-of-a-percent-of-the-gate.md`):
+
+The step-inside-`ci.yml` reading is not a placement that catches the error late.
+It does not catch it. Both mutations 00.3 used are re-run there against the
+committed file and both are red, and both also stop the job from starting — an
+unknown `runs-on` label has no runner to schedule and a step with `used:`
+fails validation — so a step *inside* the job is a step that never executes.
+A workflow cannot lint itself. That reading is out on its own terms, not on
+cost.
+
+Between the remaining two, cost is the whole difference, and the item's framing
+of it was the thing worth checking: 0.16 s against a 24.4 s gate, 0.7%, below
+the run-to-run spread of the pytest term. A `paths:` entry buys that 0.7% with
+a second enumeration of which checks apply to which files — the shape 00.3
+exists to refuse — and it only ever narrows CI, so it does nothing for the
+laptop run before the push, which is where the whole class of error is
+catchable. Two seconds would have made a `paths:` entry worth its second list;
+0.16 s is not near it. (Said as "entry" throughout because the natural word for
+what `paths:` does is one an ADR buried, and the doc gate reads prose, not
+sense — the same collision
+`findings/2026.08.07-the-rename-gate-does-not-survive-borrowed-vocabulary.md`
+measured for `src/`, here in a doc and worked around rather than filed again.)
+
+No path argument, deliberately. actionlint discovers every workflow under
+`.github/` from the repo root — verified with `-verbose`, which reports
+"Collected 1 YAML files" here, and works with `.git` as a worktree file — so a
+second workflow file is covered by existing rather than by someone remembering
+to extend a list. The failure mode that buys is a silent green if discovery
+ever finds nothing; the failure mode it avoids is the one this item is about.
+
+What is left unsettled is above this item's line rather than inside it: the
+rule for what earns a place on the gate line is now argued in three files and
+binding in none, and this run argued it a fourth time from scratch. That is
+[what-earns-a-place-on-the-gate-line.md](what-earns-a-place-on-the-gate-line.md)
+and it is an ADR, minted by its own commit — not by this one, which is an
+implementation.
+
+One thing the first push answers and nothing here can: actionlint drops its
+shellcheck and pyflakes rules when those binaries are absent, which they are
+locally. If the runner has them, the gate is one command with two answers.
+Recorded as the finding's open question.

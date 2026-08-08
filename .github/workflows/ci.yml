@@ -54,5 +54,19 @@ jobs:
       # (findings/2026.08.06-every-contract-goes-red-on-one-line.md), so Qt is
       # absent and OpenCV is present only because the video fixture writes an
       # mp4, and neither fact weakens a contract.
+      #
+      # `actionlint` is the one member whose subject is this file. It is on the
+      # line rather than a sixth step below because a step cannot check the
+      # workflow it is a step of: `runs-on: ubuntu-latests` is what actionlint
+      # catches and also what stops the job that would have run it. On the line
+      # it runs on a laptop before the push, which is the only place that error
+      # is catchable at all. It takes no path argument — it discovers every
+      # workflow under `.github/` from the repo root, so a second workflow file
+      # is covered by existing without anyone updating a list here. What it
+      # costs the four checks that cannot fail on a `.github/`-only commit is
+      # 0.7% of the gate
+      # (findings/2026.08.07-actionlint-is-seven-tenths-of-a-percent-of-the-gate.md),
+      # and that measurement is why it is here and not behind a `paths:` entry
+      # that would have been a second copy of the gate's membership.
       - name: Run the gate
-        run: uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run pytest -q
+        run: uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run pytest -q && uv run actionlint

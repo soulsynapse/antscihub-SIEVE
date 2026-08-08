@@ -1,7 +1,7 @@
 ---
 title: The skeleton launches and opens a project
 step: "07.4"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_skeleton.py -q -k opens_a_project_and_walks_to_a_step"
 opened: 2026-08-08

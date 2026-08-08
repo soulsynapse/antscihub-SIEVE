@@ -33,6 +33,18 @@ jobs:
           version: "0.11.32"
           enable-cache: true
 
+      # The PySide6 wheel carries Qt's own libraries but not the system ones
+      # they link against, and the runner image has no desktop stack. These five
+      # are what `libQt6Gui` resolves against before the offscreen platform
+      # plugin can load at all — a `tests/gui/` session without them dies at the
+      # first `QApplication` with "could not load the Qt platform plugin", which
+      # is a red about the runner and not about the tree.
+      - name: Install the libraries offscreen Qt links against
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+
       # No Python version here: .python-version already pins it, and a second
       # copy is a second thing to keep in step.
       - name: Sync the uv environment
@@ -54,9 +66,10 @@ jobs:
       # Nothing here has
       # to be installed for `lint-imports` to have an opinion about it — grimp
       # reads import statements, not the environment
-      # (findings/2026.08.06-every-contract-goes-red-on-one-line.md), so Qt is
-      # absent and OpenCV is present only because the video fixture writes an
-      # mp4, and neither fact weakens a contract.
+      # (findings/2026.08.06-every-contract-goes-red-on-one-line.md). That is
+      # why the `headless` contract kept its force through the phases when Qt
+      # was not installed here, and why it still has exactly the same force now
+      # that `gui/` has put it in the lock file.
       #
       # `actionlint` is the one member whose subject is this file, and the one
       # the membership rule was written against

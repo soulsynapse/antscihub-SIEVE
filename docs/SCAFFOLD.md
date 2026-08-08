@@ -11,6 +11,14 @@ listed below it.
 ```tree
 src/sieve/__init__.py                   # Signal isolation for ethological video events.
 src/sieve/gui/__init__.py               # Rendering values, emitting intents, holding view state; computes nothing.
+src/sieve/gui/app.py                    # The window: what the parts are, and what the four navigation verbs mean.
+src/sieve/gui/control.py                # Which of the three positions is showing, and the track that slides between.
+src/sieve/gui/hotkeys.py                # Which keys exist and which verb each one calls.
+src/sieve/gui/layout.py                 # Where the main window's two halves sit and how big they start.
+src/sieve/gui/node_list.py              # How one node is drawn, and how the ordered list of them is built.
+src/sieve/gui/project_select.py         # Picking one of the project files that already exist.
+src/sieve/gui/rail.py                   # One tick per node, down the left edge, marking where the walk is.
+src/sieve/gui/walk.py                   # The order Up and Down move through a graph.
 src/sieve/cli/__init__.py               # The headless front end; with the saved file, the cluster handoff.
 src/sieve/cli/app.py                    # The `sieve` command: argument parsing and nothing else.
 src/sieve/cli/inspect_cmd.py            # `sieve inspect` — what is on the shelf, read off the declarations.

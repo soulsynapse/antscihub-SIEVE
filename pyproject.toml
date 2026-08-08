@@ -75,6 +75,18 @@ dependencies = [
     # arithmetic over an array the graph already produced, and the pin that
     # matters for it is the tool's declared version.
     "scipy>=1.14",
+    # `gui/` is written against it, and the whole package is one distribution,
+    # so it sits here with the rest rather than behind an extra. What keeps the
+    # cluster handoff true is the `headless` contract, not the absence of this
+    # wheel: `sieve run` on a node imports `cli`, `pipeline`, `decode` and
+    # `tools`, and `.importlinter` refuses a Qt import from any of them — so an
+    # install that carries Qt still cannot execute a line of it headless.
+    #
+    # Floored at 6.8, which is where the wheels for this project's Python
+    # (`requires-python` above) begin — below it there is nothing to resolve,
+    # and a floor that only the lock file knows about is a floor that stops
+    # binding the day someone regenerates it on a different interpreter.
+    "PySide6>=6.8",
 ]
 
 # One command, and the console script exists from the first one: `sieve run`

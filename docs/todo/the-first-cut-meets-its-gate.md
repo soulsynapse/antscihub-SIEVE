@@ -29,3 +29,25 @@ not exist. A miss inside the scope is a defect or a declared debt in
 
 And the `gui-computes-nothing` exception list is as empty as Phase 0 left it,
 now that there is a GUI for it to be empty about.
+
+## 06.3's headless claim now rests on collection order (2026-08-08, from 07.4)
+
+`tests/bench/test_loop_budget.py::test_the_measurement_ran_with_no_qt_in_the_process`
+reads `sys.modules` at assertion time, which was the whole of the claim while
+nothing in the tree imported Qt. 07.4 gave the tree a `tests/gui/`, and pytest
+imports every test module during collection — before the first test runs — so
+one top-level `from sieve.gui.app import ...` makes Qt resident for the entire
+session and that assertion goes red no matter which directory it sits in.
+
+07.4 held the claim exactly as written by keeping `tests/gui/` free of
+module-scope Qt imports (the rule, with the reason, is in
+`tests/gui/conftest.py`): collection stays Qt-free and `tests/bench` runs
+before `tests/gui` in the order pytest walks `testpaths`. That is discipline
+plus an ordering, not a mechanism, and this item is where both stop being
+tenable — it measures the same keys *through* the GUI, in a session where a
+`QApplication` exists by construction. So the residency assertion has to be
+restated here rather than carried: what the headless numbers need is that
+*they* were taken with no Qt loaded, which is a claim about one measurement's
+process and not about the suite's. Whether that means a subprocess, a separate
+invocation, or retiring the runtime check in favour of `headless`'s static
+guarantee is this item's to decide.

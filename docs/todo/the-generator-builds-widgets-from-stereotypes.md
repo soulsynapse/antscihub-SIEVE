@@ -1,7 +1,7 @@
 ---
 title: The generator builds widgets from stereotypes, and the constraint walk is written once
 step: "07.5"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_param_generator.py -q -k 'a_widget_per_kind_never_per_tool or an_unknown_kind_is_refused_by_name' && uv run pytest tests/unit/test_inspect_cmd.py -q -k a_composite_param_prints_its_bounds"
 opened: 2026-08-08

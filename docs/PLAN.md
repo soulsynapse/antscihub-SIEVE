@@ -32,7 +32,11 @@ restating it.
   worktree can hold uncommitted edits.
 - Verbatim means identical modulo import paths and ADR-1's renames. Diff the
   ported file against the v2 blob before claiming done; any other difference
-  is a decision, and a decision never rides along with a port.
+  is a decision, and a decision never rides along with a port. The claim is
+  spent at the port's review: nothing gates a ported file to v2's blob
+  afterwards, and later work citing "the verbatim anchor" as a live
+  constraint is citing a state that ended
+  (`todo/whether-a-verbatim-port-stays-verbatim-after-its-review.md`).
 - The ported v2 tests are the spec. Port the test file first and do not
   rewrite it: a test that must *change* to pass is a decision — stop and
   write the question at the bottom of the item. Deleting a case whose subject
@@ -314,8 +318,11 @@ GUI code unless it declares a new stereotype. Handoff services generalize
 crop-as-contract: a `region` param gets the canvas-draw surface, `span` gets
 timeline handles, a future stamp tool declares `point`; a handoff's output is
 only a param value, entering through the same command path as a spinbox edit.
-One command layer is the document's only writer, keyed by intent kind
-(SetParam, DrawRegion, SetSpan, AddNode) — dissolving the document/commands
+One command layer is the document's only writer, keyed by intent kind —
+SetParam addressed by node, param, and an optional replicate (an override is
+the same mutation at a longer address); SetOutputs; AddNode and RemoveNode
+arriving with the surfaces that emit them; a drawn region or dragged span
+enters as SetParam through its editor — dissolving the document/commands
 co-change. Undo/redo is two stacks of whole immutable pipeline values in a
 Qt-free session layer, not command inversion — the v2.5 spike proved the
 shape (`proto_sieve/docs/DECISIONS.md`, 2026-08-03): moving a pointer through
@@ -363,6 +370,7 @@ re-argued against the tree as Phase 7 left it.
 | Rate-changing kernels | a tool that needs one |
 | A retention policy for the cache — which ranges survive when it is full | a scrub pattern from a real session to tune against. v1 evicted oldest-first (`../antscihub-optical-flow-detector`, `core/stream_buffer.py`), which is recency rather than interest, and picking between them without a session to replay is a guess with a policy's authority |
 | `pipeline/lowering.py` — crop and scale pushed into the decoder | a loop budget missed without it (Phase 6's measurement), which is the only evidence that would justify 215 lines reaching across the graph, the schema and `decode/lowered` |
+| An A/B of two backgrounds — both roots alive, a comparison surface (`todo/whether-vision-states-the-background-ab.md`) | a real tuning ask with a workload attached, restored as its own VISION paragraph saying outright what it costs |
 | v2 project import (`compat/`) | a real v2 project that must come over (`adr/v2-does-not-import.md`) |
 | nox, completion tool, graph-system | something here concretely needing the mechanism |
 | `bench/retention_trace.py` — recording a tuning session and replaying it through candidate proxy-retention policies | a Phase-7 proxy ring plus a proposal to change its policy; the module exists because a reasoned guess about retention is not adoptable without a replay, and there is nothing to replay until the ring is built |

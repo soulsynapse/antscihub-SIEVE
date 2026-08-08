@@ -19,7 +19,11 @@ answers to the same fixture from the other side.
 Both budget regimes measured through the GUI, against the same
 `bench/budgets.py` keys 06.3 measured headless — which is the attribution
 Phase 6 existed to buy: a number that regresses here is the GUI's, and
-nothing else's. A miss inside the scope is a defect or a declared debt in
+nothing else's. Scoped to the keys whose producers this cut builds:
+`density_rebuild` has none — the band-power density strip is a later cut,
+since it drags band-power caching behind it — so it stays declared in
+`budgets.WITHOUT_PRODUCER` rather than measured through a surface that does
+not exist. A miss inside the scope is a defect or a declared debt in
 `budgets.IN_DEBT` with the item that repays it, never a widened ceiling
 (VISION.md's scope clause).
 

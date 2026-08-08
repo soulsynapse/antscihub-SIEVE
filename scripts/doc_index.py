@@ -199,7 +199,6 @@ UNSPECIFIED_DEBT = frozenset(
         "a-declared-lag-whose-only-reader-is-its-own-test.md",
         "a-detector-cannot-run-to-the-end-of-its-own-footage.md",
         "a-merge-keys-its-inputs-by-port.md",
-        "a-node-id-reaches-the-filesystem-with-no-spelling-rule.md",
         "a-per-replicate-setting-is-asserted-against-the-whole-document.md",
         "a-record-survives-the-rename-it-is-built-to-survive.md",
         "a-run-commits-what-it-wrote.md",

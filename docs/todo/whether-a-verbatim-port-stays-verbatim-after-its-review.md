@@ -1,8 +1,8 @@
 ---
 title: Whether a verbatim port stays verbatim after its review, since nothing checks it
-status: deferred
-deferred_for: decision
-gated_on: Kendrick deciding whether "verbatim" is a claim about a port's arrival that lapses on the next commit, or a property of the file that a gate holds — and if the second, which files carry it and what an intended edit does to the row
+status: done
+gated_on: nothing
+done_when: "uv run python -c \"import pathlib, sys; sys.exit('spent at the port' not in pathlib.Path('docs/PLAN.md').read_text(encoding='utf-8'))\""
 priority: normal
 phase: "00"
 opened: 2026-08-07
@@ -50,3 +50,15 @@ either a second home for the ruling or the only home for it. Three shapes:
 Not urgent while the remaining verbatim ports are unlanded (`decode/` at Phase
 3, `bench/` at Phase 6), and worth deciding before they are, since the third
 shape is free only until somebody relies on the second again.
+
+## Ruled 2026-08-08 — the third shape: verbatim is spent at the port
+
+An arrival claim that lapses at its review, not a property a gate holds. A
+blob gate freezes exactly the files v3 intends to evolve, charges every
+intended edit ceremony for it, and enshrines a current-state equality as a
+rule — while the durable form of "still behaves like v2" already exists and
+is behavioral: the parity goldens, keyed to what was tuned against rather
+than to bytes. PLAN.md's porting discipline now says it outright, which is
+what the third shape costs; any later item wanting to cite "the verbatim
+anchor" as live reads the sentence that says it cannot. This file stays as
+the ruling's home rather than as work to do, so no criterion is owed.

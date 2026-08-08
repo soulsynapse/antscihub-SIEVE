@@ -1,10 +1,10 @@
 ---
 title: A node id reaches the filesystem with no spelling rule
-status: deferred
-deferred_for: decision
+status: open
 priority: normal
 phase: 2
-gated_on: Kendrick deciding whether a node id is a filesystem-safe name that schema v1 refuses at load, or a free-form string each consumer sanitises on its own terms
+gated_on: nothing
+done_when: "uv run pytest tests/unit/test_pipeline_model.py -q -k a_node_id_the_filesystem_cannot_hold_is_refused_at_load"
 opened: 2026-08-07
 ---
 
@@ -53,3 +53,22 @@ next writer does not carry its own guard — so every consumer written while
 the pattern held has to get one back the day it is widened. The freedom to
 loosen is bought from the consumers, not free, and that is the half of the
 asymmetry the recommendation does not price.
+
+## Ruled 2026-08-08 — the pattern goes on the field
+
+Schema v1 refuses at load. Node ids reach the filesystem through the
+checkpoint writer, the manifest, and crop artifacts, and per-consumer
+sanitisation mints N mappings that can collide — two ids sanitising to one
+file is a rename the record does not survive, which quietly breaks the
+reviewer-rerun promise. One pattern on the model, refusal naming the node,
+in the `extra=forbid` culture; the checkpoint writer's own guard stays (a
+defense at the write is not wrong for existing at the load too), and the
+review-fold's price is accepted knowingly: loosening later is bought back
+from the consumers.
+
+The GUI half settles the other way than a second field: no label field now.
+Nothing displays one — when a Phase 7 surface wants a readable name, the
+field arrives with that surface (`adr/declared-means-verified.md`), and until
+then the pattern is simply the rule for what may be typed where an id is
+typed. Phase 7's AddNode needs a spelling rule from somewhere regardless, and
+it should be the schema's, not the widget's.

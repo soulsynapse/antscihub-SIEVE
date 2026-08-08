@@ -1,8 +1,9 @@
 ---
 title: Whether an external input carries a portable identity, so substitution is not silent
 status: deferred
-deferred_for: decision
-gated_on: Kendrick deciding whether SIEVE records something that identifies an external input across machines — a content hash and a home for it — or the reproducibility promise stays one that detects absence and not substitution
+deferred_for: subject
+gated_on: the first source tool, which is what gives an external input a node to hang its identity on — the decision itself is ruled below, and only the build waits
+done_when: "uv run pytest tests/unit/test_pipeline_model.py -q -k a_swapped_external_input_is_refused_by_recorded_hash"
 priority: high
 phase: "03"
 opened: 2026-08-07
@@ -52,3 +53,21 @@ that a mismatch stops a run — so this waits on Kendrick, and no phase boundary
 waits on it. The cheap half is available either way and is where the derived-list
 item already points: whatever reports "nothing missing" says what it checked, so
 that sentence is never read as "the same files".
+
+## Ruled 2026-08-08 — yes, and it lands with the first source tool
+
+An external input carries a content hash, recorded at attach, homed on
+`Project` keyed by node id (the shape `checkpoints`, `outputs` and `crops`
+already use, and for the same reason: it must not move a key), checked at run
+start. A mismatch **refuses** — reporting would make the reviewer promise
+advisory, and "It outputs the same results" is the product's sharpest claim,
+grounded in VISION's reviewer paragraph as written — so the staleness surface
+is required, not optional: a colleague who regenerates the background on
+purpose gets a path that says "yes, this one" and re-records.
+
+The build waits for its subject: the first source tool is what gives the
+project a second root and a node for the identity to hang on, so the schema
+field and the check arrive with their consumer like every other declaration.
+Deciding now and building there is the point — the deferral no longer shapes
+schema work in the meantime, and the criterion above is owed the day the
+subject lands.

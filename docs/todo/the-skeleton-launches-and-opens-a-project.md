@@ -17,7 +17,10 @@ the document. Up/down walking a spanning tree over the DAG is the GUI's
 choice, not a fact the pipeline holds (same ADR).
 
 PySide6 enters `pyproject.toml` here — the first Qt dependency the tree has —
-and the GUI tests run offscreen so CI keeps its say. Rendering only: no param
+and the GUI tests run offscreen so CI keeps its say. CI is ubuntu-latest, so
+whatever system libraries offscreen Qt needs there enter `ci.yml` with the
+dependency: a red from a missing libEGL is this item's to fix, not to
+discover. Rendering only: no param
 widgets, no canvas playback, no graphs; those are the steps behind this one.
 The `gui-computes-nothing` exception list is empty at the start of this item
 and empty at the end of it, which from here on every Phase 7 item inherits as

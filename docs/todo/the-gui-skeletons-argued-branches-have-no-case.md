@@ -2,7 +2,7 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/gui/walk.py --mutant \"if node.node_id not in fed:==>if True:\" --mutant \"for child in children[node.node_id]:==>for child in ():\" --mutant \"return tuple(ordered)==>return tuple(pipeline.nodes)\" -- uv run pytest -q tests/gui"
 opened: 2026-08-08

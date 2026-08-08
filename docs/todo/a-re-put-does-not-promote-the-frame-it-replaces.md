@@ -1,6 +1,6 @@
 ---
 title: Re-caching a held frame does not promote it, and the line that would is a live survivor
-status: awaiting-review
+status: done
 gated_on: nothing
 priority: low
 phase: 7

@@ -55,14 +55,15 @@ The **bold** spans in "Owns" are the enumeration inside the prose, and each one 
 | Package | Owns | Never |
 |---|---|---|
 | `core` | the **dimensioned types**, the **tool contract and registry**, **schema v1**, **`ops/`** — membership closed ([adr/core-membership-is-closed.md](adr/core-membership-is-closed.md)), and `ops/` waits for its second caller ([adr/ops-admission-is-two-tools.md](adr/ops-admission-is-two-tools.md)) | Qt, cv2, codecs, processes (`core-purity`); a v2 field name; a new child without revising the ADR |
-| `tools` | **every pipeline step**, **one module each** ([adr/a-tool-is-one-file.md](adr/a-tool-is-one-file.md)); the one place outside `decode` where cv2 is legal | a second file per tool; reaching the runtime — `run` is a plain function handed its inputs |
+| `mutual` | the **resource readings** every layer sizes itself against and the **declarations** that divide them among threads and bytes; the one import `core` may not hold — `psutil` | Qt, cv2, codecs, processes (`core-purity`) — a layer of its own is what buys the one permission, at the price of the same five refusals |
+| `tools` | **every pipeline step**, **one module each** ([adr/a-tool-is-one-file.md](adr/a-tool-is-one-file.md)); the one place outside `decode` where cv2 is legal | Qt (`headless`); a second file per tool; reaching the runtime — `run` is a plain function handed its inputs |
 | `pipeline` | **the DAG**, **the plan**, **cache keys**, **the one executor** | a `tool_id` branch ([adr/no-kernel-apparatus.md](adr/no-kernel-apparatus.md)); reaching into `ops/`; Qt (`headless`); cv2 (`opencv-containment`) — it computes the cache keys, so a second seek strategy here is a decoder identity its own keys could not name |
 | `decode` | **the codec boundary** — **lowering into ffmpeg**, **prefetch**, **decoder identity**; v2 verbatim | Qt; knowing what a tool or a schema is |
 | `cli` | **the headless front end**; with the saved file it is **the cluster handoff** | Qt (`headless`); cv2 — a frame is reached through `decode`, never by a second seek strategy |
 | `gui` | **rendering values**, **emitting intents**, **holding view state** | computing anything — the `gui-computes-nothing` exception list is empty from commit one; a `tool_id` branch ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)); cv2 |
 | `session` | **the open project** and **its history** — undo/redo as two stacks of whole immutable pipeline values ([adr/gui-base-is-the-v25-spike.md](adr/gui-base-is-the-v25-spike.md)) | Qt (`headless`); command inversion — undo moves a pointer, never reverses an edit; computing anything — it holds what `gui` renders and asks `pipeline` for the rest; cv2 (`opencv-containment`) |
 | `bench` | **the budget table** and **the metric bus** — the loop's claims as numbers | Qt; sitting in the execution path it measures; cv2 (`opencv-containment`) |
-| `storage` | **sink writers** (`crop_writer`, `checkpoint_writer`) | a second output format before someone asks ([PLAN.md](PLAN.md), revival table) |
+| `storage` | **sink writers** (`crop_writer`, `checkpoint_writer`) | Qt (`headless`); a second output format before someone asks ([PLAN.md](PLAN.md), revival table) |
 
 ## Vision
 

@@ -16,14 +16,19 @@ the copy a person runs falling behind the copy that gates the push. That is
 not a hypothetical about a noxfile nobody wrote; it happened on the copy
 nobody counted as one. `docs/todo/ci-runs-what-a-commit-must-pass.md`'s
 `done_when` held the line character-for-character as its stated content, and
-it fell a command behind twice, each time for exactly one commit, each time
-repaired by a reviewer noticing rather than by a check. So the rule is about
-live copies: a dated record of a gate run is not one — nobody reads a worker
-note to decide whether to push — and it becomes one exactly when something
-requires it to stay identical to the line. That copy is struck under this
-clause rather than exempted from it, and
+it fell a command behind twice — once for one commit and once for three, each
+time repaired by a reviewer noticing rather than by a check. So the rule is
+about live copies: a dated record of a gate run is not one — nobody reads a
+worker note to decide whether to push — and it becomes one exactly when
+something requires it to stay identical to the line. That copy is struck under
+this clause rather than exempted from it, and
 `tests/unit/test_gate_line.py::test_no_restatement_of_the_gate_line_drifts_from_it`
-is what stands where the reviewer stood.
+stands where the reviewer stood for the next copy that falls behind an appended
+command. It cannot reach a copy that falls behind an inserted one, because the
+requirement this clause turns on lives in an item's prose and the two strings
+are equal without it —
+`docs/findings/2026.08.07-the-gate-line-walk-catches-one-of-the-two-drifts-the-item-cites.md`
+measures which of the recorded drifts each shape is.
 
 What this rule costs is that every commit pays for every check, including
 checks it cannot fail. That price is weighed at

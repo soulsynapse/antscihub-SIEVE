@@ -91,10 +91,11 @@ to read.
 The walk is `test_no_restatement_of_the_gate_line_drifts_from_it`, and what it
 calls a restatement is a `done_when` whose commands are a prefix of the gate
 line's or a superset with the line as its prefix. The prefix half is the one
-that carries weight: both recorded drifts were the line minus its newest command, so a
-rule that only caught an equal-length copy would be blind to the shape the
-failure actually takes. Checked by simulation before striking — restoring the
-four-command copy of `ae6e499` turns the walk red and names both lines. Two
+that carries weight: the `actionlint` drift was the line minus its newest
+command, so a rule that only caught an equal-length copy would be blind to the
+shape that failure took. Checked by simulation before striking — restoring the
+four-command copy that stood from `e9d1db4` to `2e64785` turns the walk red and
+names both lines. Two
 neighbours stay out and should: `the-gate-has-no-opinion-about-the-workflow.md`
 is checked by three gate commands that were never the line (they skip
 `ruff format --check`), and `mutual-comes-over-with-its-layer.md` by two in the
@@ -135,3 +136,43 @@ saying an item's `done_when` is meant to be the line. That marker is a decision,
 not a criterion — see the finding's open question. A run that concludes the
 narrow rule is the best available says so in the worker note, corrects the two
 false sentences, and leaves the walk as it is.
+
+## Worker note, 2026-08-07, after review
+
+The narrow rule is the best available to a walk, and the reason is not that a
+wider one is unattractive — it is that the strings do not carry the
+distinction. Episode 1's copy, at `a7efe4b`, is
+`uv run ruff check . && uv run lint-imports && uv run pytest -q`, and that is
+`the-gate-has-no-opinion-about-the-workflow.md`'s `done_when` byte for byte.
+One is the forbidden copy of the line and the other restates nothing, so any
+rule reading only a `done_when` must return the same verdict for both and one
+of the two verdicts is wrong. Length thresholds do not separate them either;
+they are the same three commands. That is not a gap to be closed by a cleverer
+predicate — it is a proof that a content-shape rule reaching episode 1 does not
+exist.
+
+What does carry the distinction is the requirement itself: 00.3's body said the
+`done_when` was the gate line, and this item's body says nothing of the kind.
+The two candidates for reading that are a walk that greps item prose for the
+claim, and a front-matter marker. The first is the same guess one level up,
+matching sentences instead of commands, and it goes stale the way the prose it
+reads does. The second is the finding's open question and Kendrick's to answer:
+a boolean is a second enumeration in ADR 19's sense, and the argument for it is
+that a boolean cannot fall a command behind, which is a different failure mode
+from the one the clause was written against. That argument is worth making and
+it is not a worker's to settle, so nothing here presumes it.
+
+Corrected rather than argued: the note above said both drifts were the line
+minus its newest command, which is false of `ruff format --check` — it joined
+the line second and left the copy a hole in the middle — and it cited
+`ae6e499` for the four-command copy, which is the commit that repaired it; the
+copy stood from `e9d1db4` to `2e64785`. The same false sentence was in
+`_restates_the_gate_line`'s docstring and in the companion test's, and both now
+say which drift the shape is and why the other is unreachable. ADR 19's "each
+time for exactly one commit" is corrected to one and three, and its claim that
+the walk stands where the reviewer stood is narrowed to the shape it reaches,
+citing the finding for which that is.
+
+The walk is unchanged. Verified with the criterion's own command and by
+replaying episode 1 as the finding did: still green, still for the reason the
+finding gives.

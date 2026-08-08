@@ -134,9 +134,17 @@ def _restates_the_gate_line(criterion: str) -> bool:
     """Whether a `done_when` stands in for the gate line rather than naming a check.
 
     A stand-in is the line, the line with commands appended, or the line with
-    commands missing off its end. The last is the shape both recorded drifts
-    took — a command joined the line and not the copy — so a rule that only
-    caught an exact-length copy would be blind to the failure it exists for.
+    commands missing off its end. The last is the shape one of the two recorded
+    drifts took — `actionlint` joined the line's end and not the copy — so a
+    rule keyed on equal length would be blind to it.
+
+    The other drift is out of reach of any rule reading the string alone, and
+    widening this one to "the copy's commands in order" does not help: `ruff
+    format --check` joined the line *second*, so that copy has a hole in the
+    middle, and it is byte-identical to
+    `the-gate-has-no-opinion-about-the-workflow.md`'s `done_when`, which
+    restates nothing. Two equal strings, opposite verdicts
+    (`findings/2026.08.07-the-gate-line-walk-catches-one-of-the-two-drifts-the-item-cites.md`).
 
     Sharing commands with the gate is not restating it. Most items are checked
     by some arrangement of `pytest` and `lint-imports`, and nothing in their
@@ -267,9 +275,9 @@ def test_no_restatement_of_the_gate_line_drifts_from_it() -> None:
 def test_a_copy_a_command_behind_the_gate_line_is_the_thing_that_walk_looks_for() -> None:
     """What the walk above would catch, since today it passes over an empty set.
 
-    Both recorded drifts were the line minus its newest command. The second
-    case is the one that has to stay out: an item checked by two of the gate's
-    commands is not keeping a copy of the line.
+    The shape is the `actionlint` drift's, the line minus its newest command.
+    The second case is the one that has to stay out: an item checked by two of
+    the gate's commands is not keeping a copy of the line.
     """
     assert _restates_the_gate_line(" && ".join(_gate_line().split("&&")[:-1]))
     assert not _restates_the_gate_line("uv run pytest -q && uv run lint-imports")

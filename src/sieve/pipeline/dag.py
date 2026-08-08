@@ -452,7 +452,14 @@ class Dag:
         resolved: dict[str, ElementKind | None] = {}
         for node in order:
             fed = upstreams[node.node_id]
-            upstream = ElementKind.PIXEL if not fed else resolved[fed[0]]
+            # Unpacked rather than indexed, for `node_keys`' reason: folding
+            # the first of two upstreams would carry a meaning nothing chose
+            # to every node downstream of the merge.
+            if fed:
+                (parent,) = fed
+                upstream: ElementKind | None = resolved[parent]
+            else:
+                upstream = ElementKind.PIXEL
             resolved[node.node_id] = node_element(specs[node.node_id].element, upstream)
         return resolved
 
@@ -476,8 +483,9 @@ class Dag:
                 upstream: ElementKind | None = ElementKind.PIXEL
                 upstream_names: ElementNames | None = SOURCE_ELEMENT_NAMES
             else:
-                upstream = elements[fed[0]]
-                upstream_names = names[fed[0]]
+                (parent,) = fed
+                upstream = elements[parent]
+                upstream_names = names[parent]
             spec = specs[node.node_id]
             elements[node.node_id] = node_element(spec.element, upstream)
             names[node.node_id] = node_element_names(

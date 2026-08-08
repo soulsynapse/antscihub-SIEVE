@@ -490,6 +490,22 @@ class TestElementMeaning:
 
         assert Dag.build(graph, SHELF).elements["b"] is None
 
+    def test_a_second_upstream_is_refused_rather_than_folded_from_the_first(self) -> None:
+        # The posture `node_keys` states and these two folds have to keep: a
+        # node with two inputs is a graph neither knows how to answer for, and
+        # answering from `fed[0]` would be the silent wrong meaning propagated
+        # to every node after it. `Dag.build` cannot construct the mapping —
+        # `Pipeline` refuses two edges into one node — so the folds are called
+        # directly, which is the only place the difference is reachable.
+        order = (node("a"), node("b", "gridify"), node("c"))
+        specs = Dag.build(Pipeline(nodes=order), SHELF).specs
+        upstreams = {"a": (), "b": (), "c": ("a", "b")}
+
+        with pytest.raises(ValueError):
+            Dag._elements(order, specs, upstreams)
+        with pytest.raises(ValueError):
+            Dag._element_names(order, specs, upstreams)
+
 
 class TestSourceIndexing:
     def test_a_rate_change_unindexes_itself_and_everything_after_it(self) -> None:

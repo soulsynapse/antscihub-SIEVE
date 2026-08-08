@@ -80,6 +80,22 @@ class InterpolateParams(ParamsBase):
         return Fraction(self.numerator, self.denominator)
 
 
+class StalledParams(ParamsBase):
+    """Declares a rate no quantity of input could supply.
+
+    Reachable through the declaration rule rather than in spite of it: a
+    `rate_changing` tool *must* override `output_rate`, and nothing constrains
+    what the override returns. `rate` is a field so one model covers both
+    non-positive directions — zero, which makes `at_input_of` divide by zero,
+    and negative, which points the window the wrong way.
+    """
+
+    rate: int = 0
+
+    def output_rate(self) -> Fraction:
+        return Fraction(self.rate)
+
+
 class SpanningParams(ParamsBase):
     """Keeps a range of the frames it is handed: neither the rate nor the size.
 
@@ -182,6 +198,7 @@ IIR = make_spec(
     warmup_kind=WarmupKind.BOUNDED,
 )
 INTERPOLATOR = make_spec(tool_id="interpolate", params_model=InterpolateParams, rate_changing=True)
+STALLED = make_spec(tool_id="stalled", params_model=StalledParams, rate_changing=True)
 #: Declares a bound of 99 and refines it per configuration.
 WINDOWED = make_spec(
     tool_id="window",
@@ -368,6 +385,29 @@ class TestRate:
         # The bound itself is legal — it is a bound, not a strict one.
         at_bound = (WINDOWED, WindowParams(length=100))
         assert input_warmup_frames(at_bound, NO_FRAMES) == FrameCount(99)
+
+    def test_a_non_positive_output_rate_is_refused_on_the_warmup_side(self) -> None:
+        """The conversion's own `Raises:`, which only its lookahead twin proved.
+
+        Asserted against `input_warmup_frames` directly rather than through
+        `source_warmup_frames`: reaching it through a fold proves whichever
+        guard the fold hits first, which is how this side came to be the
+        unproven one — `plan.py` folds warmup before lookahead, so
+        `test_a_non_positive_output_rate_is_refused_on_the_lookahead_side` in
+        `tests/unit/test_plan.py` is answered by this function and its own
+        refusal survives its deletion.
+
+        What the guard buys over letting `at_input_of` refuse the same rate one
+        call later is the tool's name: a graph of fifteen nodes reports which
+        one stalled instead of only the number.
+        """
+        with pytest.raises(ValueError, match=r"stalled: output_rate must be positive"):
+            input_warmup_frames((STALLED, StalledParams()), NO_FRAMES)
+        # The other non-positive direction, and the one `at_input_of` would not
+        # divide by: a negative rate runs the whole graph with the window
+        # pointing backwards, which arrives as frames rather than as an error.
+        with pytest.raises(ValueError, match=r"stalled: output_rate must be positive"):
+            input_warmup_frames((STALLED, StalledParams(rate=-1)), FrameCount(5))
 
     def test_undeclared_rate_change_is_refused_at_registration(self) -> None:
         # Without this the gap reopens silently: a decimator whose spec forgot

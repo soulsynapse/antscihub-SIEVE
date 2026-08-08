@@ -2,7 +2,7 @@
 title: A declared refusal that only the lookahead side proves
 priority: normal
 phase: 3
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_tool_contract.py tests/unit/test_plan.py -q -k warmup_side"
 opened: 2026-08-07
@@ -45,3 +45,15 @@ Asserted against `input_warmup_frames` directly and not through
 `source_warmup_frames` or `ExecutionPlan.build`, for the reason the twin's
 docstring already gives: reaching it through a fold proves whichever guard the
 fold hits first, which is how this one came to be the unproven side.
+
+## What the proof of red measured
+
+`input_warmup_frames` stayed where it is, so the case landed in
+`tests/unit/test_tool_contract.py` as `TestRate`'s
+`test_a_non_positive_output_rate_is_refused_on_the_warmup_side`, over a
+`StalledParams` whose `rate` field covers zero and negative. Deleting the two
+guard lines does not make the call succeed — `at_input_of` refuses the same
+rate one line later — so the case is red on the *message*, `output rate must be
+positive to convert frames, got 0` in place of `stalled: output_rate must be
+positive`. That is the guard's whole subject: it names the node, and the one
+below it names only the number.

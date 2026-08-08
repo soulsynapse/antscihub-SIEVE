@@ -504,6 +504,18 @@ def resolved_params(node: Node, replicate: Replicate | None = None) -> dict[str,
     return {**node.params, **replicate.overrides.get(node.node_id, {})}
 
 
+def moved_default(node: Node, params: Mapping[str, Any]) -> Node:
+    """`node` with `params` written into its baseline.
+
+    Schema v1's whole answer to how a node's default moves, in one place because
+    it is reached from two: `Project.with_param_default` is this and nothing
+    else, and `edited_params` is this plus the pin. Written out twice the two
+    would agree until the first change made through one of them, and no test
+    can see a disagreement between two definitions of a value both compute.
+    """
+    return node.model_copy(update={"params": frozen_value({**node.params, **params})})
+
+
 def edited_params(
     node: Node, replicate: Replicate, params: Mapping[str, Any]
 ) -> tuple[Node, Replicate]:
@@ -524,8 +536,7 @@ def edited_params(
     changed = {
         name: value for name, value in params.items() if name not in before or before[name] != value
     }
-    updated = node.model_copy(update={"params": frozen_value({**node.params, **params})})
-    return updated, replicate.with_override(node.node_id, changed)
+    return moved_default(node, params), replicate.with_override(node.node_id, changed)
 
 
 class Edge(_Artifact):
@@ -1038,7 +1049,7 @@ class Project(_Artifact):
         node = self.pipeline.node(node_id)
         target = self.replicate(replicate_id)
         updated_node, edited = edited_params(node, target, params)
-        return self._replacing(node, updated_node, target, edited)
+        return self._replacing(node, updated_node, (target, edited))
 
     def with_param_default(self, node_id: str, params: Mapping[str, Any]) -> Self:
         """Move `node_id`'s baseline, pinning nothing.
@@ -1053,9 +1064,7 @@ class Project(_Artifact):
             KeyError: if `node_id` names nothing.
         """
         node = self.pipeline.node(node_id)
-        return self._replacing(
-            node, node.model_copy(update={"params": frozen_value({**node.params, **params})})
-        )
+        return self._replacing(node, moved_default(node, params))
 
     def with_param_reset(self, node_id: str, replicate_id: str) -> Self:
         """Drop one replicate's deviation at `node_id`, so it follows again.
@@ -1068,21 +1077,32 @@ class Project(_Artifact):
         """
         node = self.pipeline.node(node_id)
         target = self.replicate(replicate_id)
-        return self._replacing(node, node, target, target.without_override(node_id))
+        return self._replacing(node, node, (target, target.without_override(node_id)))
 
     def _replacing(
         self,
         node: Node,
         new_node: Node,
-        replicate: Replicate | None = None,
-        new_replicate: Replicate | None = None,
+        replicate: tuple[Replicate, Replicate] | None = None,
     ) -> Self:
         """Copy with one node, and optionally one replicate, substituted in place.
 
         Positional substitution because both collections are ordered and the
         order is meaningful — replicate order is the order outputs are written
         in, so rebuilding either by selection and append would reorder the run.
+
+        The replicate substitution is one `(old, new)` argument rather than two
+        optional ones so that half of it is unconstructible: this builds with
+        `model_copy`, which validates nothing, so an old without a new would
+        write `None` into `replicates` and the invalid document would reach
+        whatever read it next.
         """
+        replicates = self.replicates
+        if replicate is not None:
+            old, new = replicate
+            replicates = tuple(
+                new if candidate is old else candidate for candidate in self.replicates
+            )
         return self.model_copy(
             update={
                 "pipeline": self.pipeline.model_copy(
@@ -1093,11 +1113,6 @@ class Project(_Artifact):
                         )
                     }
                 ),
-                "replicates": self.replicates
-                if replicate is None
-                else tuple(
-                    new_replicate if candidate is replicate else candidate
-                    for candidate in self.replicates
-                ),
+                "replicates": replicates,
             }
         )

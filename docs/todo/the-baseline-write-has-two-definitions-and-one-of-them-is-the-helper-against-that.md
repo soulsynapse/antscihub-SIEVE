@@ -2,7 +2,7 @@
 title: The baseline write has two definitions and one of them is the helper against that
 priority: low
 phase: "7"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run python scripts/mutation_sweep.py --file src/sieve/core/pipeline_model.py --mutant 'node.model_copy(update={\"params\": frozen_value({**node.params, **params})}) ==> node' -- uv run pytest -q tests/unit/test_pipeline_model.py tests/unit/test_intents.py"
 opened: 2026-08-08

@@ -24,6 +24,7 @@ type = layers
 # adr/detector-is-a-node.md).
 layers =
     sieve.gui | sieve.cli
+    sieve.session
     sieve.bench
     sieve.pipeline
     sieve.tools
@@ -56,6 +57,12 @@ source_modules =
     # not installed — a cluster node, a container, a login shell. It sits at the
     # same layer as `sieve.gui` and so the layers contract cannot say this.
     sieve.cli
+    # `session` is Qt-free by decision, not by layer position: it sits directly
+    # under `gui`, so the layers contract permits the import this line forbids —
+    # undo/redo as whole pipeline values is the shape that keeps history out of
+    # the widgets (adr/gui-base-is-the-v25-spike.md), and a Qt import here would
+    # be view state moving in with the document.
+    sieve.session
     sieve.pipeline
     sieve.bench
     sieve.decode

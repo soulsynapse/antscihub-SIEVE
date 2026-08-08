@@ -126,6 +126,7 @@ FORBIDDEN = (
 LAYER_ORDER = (
     "gui",
     "cli",
+    "session",
     "bench",
     "pipeline",
     "tools",
@@ -195,7 +196,6 @@ UNSPECIFIED_DEBT = frozenset(
     {
         "a-budget-miss-is-an-exit-code-once-something-can-force-one.md",
         "a-checkpoint-does-not-record-which-product-it-holds.md",
-        "a-composite-parameter-prints-no-shape-and-no-bounds.md",
         "a-declared-lag-whose-only-reader-is-its-own-test.md",
         "a-detector-cannot-run-to-the-end-of-its-own-footage.md",
         "a-merge-keys-its-inputs-by-port.md",

@@ -3,7 +3,7 @@ title: The session layer holds the project and its two stacks
 step: "07.2"
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_session.py -q -k 'undo_restores_the_prior_whole_value or a_reopened_project_round_trips' && uv run pytest tests/unit/test_import_contracts.py -q -k session"
+done_when: "uv run pytest tests/unit/test_session.py -q -k 'undo_restores_the_prior_whole_value or a_reopened_project_round_trips'"
 opened: 2026-08-08
 ---
 
@@ -20,11 +20,10 @@ porting discipline: the spike's value types are not schema v1, so every spike
 case is a row that survives, is replaced by a named v3 case, or is dropped
 citing the decision that removed its subject.
 
-The package is new to the tree, so its admission is part of the item: a layers
-row below `sieve.gui` in `.importlinter`, membership in the `headless`
-contract with the proof of red that a new contract line is owed
-(`proof-of-red-covers-every-line-of-a-contract.md`), a component-table row in
-VISION.md recording what ADR-14 already adopted, and the `__init__.py`
-ownership line the table's bold spans demand. Owns the document and its
-history; never Qt, never a computation — the GUI renders what this holds, the
-pipeline computes what this asks for.
+The package's admission is already whole — the VISION.md row, the ownership
+line on a declared-but-empty package (the Phase-0 pattern), the layers row
+below `sieve.gui`, and `headless` membership, whose reds
+`tests/unit/test_contract_lines_go_red.py` generates from the config — so
+this item adds only contents. The row's never-cell is the standard: never Qt,
+never a computation — the GUI renders what this holds, the pipeline computes
+what this asks for.

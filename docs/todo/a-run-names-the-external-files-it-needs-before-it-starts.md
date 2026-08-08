@@ -1,7 +1,8 @@
 ---
 title: A run names the external files it needs before it starts, deriving the list from the graph
-status: open
-gated_on: nothing
+status: deferred
+deferred_for: subject
+gated_on: the first source tool, which is what gives a project a second root to walk and the path stereotype to recognise it by — two of the three cases below have no subject until it lands
 priority: normal
 phase: "03"
 done_when: 'uv run pytest tests/unit/test_external_inputs.py -k "every_named_external_input_is_reported_missing_before_execution or a_project_with_no_source_tool_owes_nothing or the_list_follows_a_rewired_graph_with_nothing_to_migrate" -q'
@@ -49,4 +50,11 @@ what is added is when and how the reviewer hears it, not whether the run is
 stopped. This follows
 [the first source tool](the-first-source-tool-moves-the-three-single-root-assumptions.md):
 until a project can have a second root there is no external input to report,
-and that item is where the roots stop being one.
+and that item is where the roots stop being one. It is also where the walk
+above gets the thing it walks by. "The roots' path params" names no field
+today — `ParamStereotype`'s vocabulary is closed at five and none of them is a
+path — so a walk written before that sixth member exists could only find a
+file param by branching on `tool_id`, which is what
+[gui-knows-kinds-not-tools](../adr/gui-knows-kinds-not-tools.md) and
+[a-tool-is-one-file](../adr/a-tool-is-one-file.md) each refuse. The source-tool
+item spends that decision; this one reads the result.

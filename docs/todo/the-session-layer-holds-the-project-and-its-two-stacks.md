@@ -1,7 +1,7 @@
 ---
 title: The session layer holds the project and its two stacks
 step: "07.2"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_session.py -q -k 'undo_restores_the_prior_whole_value or a_reopened_project_round_trips'"
 table_rows: 17

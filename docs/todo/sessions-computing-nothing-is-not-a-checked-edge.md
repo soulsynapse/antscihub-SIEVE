@@ -1,5 +1,5 @@
 ---
-title: The session row's "computing anything" never has no contract behind it
+title: The two VISION never-lines no contract checks get one each
 priority: normal
 phase: "7"
 status: open
@@ -39,3 +39,26 @@ Whether this is a fourth contract or a widening of `gui-computes-nothing`'s
 source list is the item's to decide: the two rows forbid the same modules for
 the same reason, and a shared contract would put `gui` and `session` under one
 name that says neither.
+
+## `decode` has the same hole, and it is not inert (2026-08-08, review of 07.2)
+
+Walking the whole `Never` column rather than the `session` row found a second
+unchecked import-shaped never, so this item is the two of them:
+`decode` must never know "what a tool or a schema is". The tool half is free —
+`sieve.tools` sits above `sieve.decode`, so the layers contract already refuses
+it. The schema half is not: `sieve.core` is the bottom layer, so
+`sieve.decode` importing `sieve.core.pipeline_model` points downward and is
+legal under all six contracts. `decode/` today imports `sieve.core.types` only,
+which is the dimensioned-types half the row grants it, so the edge is open and
+unused rather than crossed.
+
+It differs from the `session` line in the way that matters for ordering: the
+module it names exists today, so a contract added for it can go red against the
+real tree instead of against a copy
+(`findings/2026.08.06-a-forbidden-module-that-does-not-exist-is-inert.md`), and
+nothing has to happen first. Both are one edit to `.importlinter` and one case
+in `tests/unit/test_import_contracts.py`, which is why they are one item —
+whichever shape the `session` question above settles on, `decode` takes the
+same shape with `sieve.core.pipeline_model` as its forbidden module.
+
+The count behind both: `docs/findings/2026.08.08-vision-never-column-has-two-import-shaped-lines-no-contract-checks.md`.

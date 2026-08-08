@@ -4,6 +4,7 @@ priority: high
 phase: 5
 status: open
 gated_on: nothing
+done_when: "uv run pytest tests/integration/test_cli_run.py -q -k end_of_footage"
 opened: 2026-08-07
 ---
 
@@ -49,8 +50,31 @@ no user can be expected to.
 The general form of the question — who answers for a window that runs off the
 end, given `plan.py` cannot open a container — is
 [the-trailing-end-of-a-window-has-no-shortfall.md](the-trailing-end-of-a-window-has-no-shortfall.md),
-which enumerates three candidates and is phase 3, so it drains first. The
-reading proposed above is that item's first candidate, and this item is the
-failure that prices it rather than a second decision about the same thing. If
-that one settles on narrow-and-report, what is left here is the message; if it
-settles otherwise, this closes against it.
+which enumerates three candidates. The reading proposed above is that item's
+first candidate, and this item is the failure that prices it rather than a
+second decision about the same thing.
+
+Both files say that one drains first, on the strength of its being phase 3. It
+is phase 8 now, so the order has inverted: this item reaches the head of the
+queue first, and the session that takes it makes the choice among the three
+rather than inheriting it.
+
+## The criterion pins the invocation, not the layer that answers it
+
+Two cases spelling `end_of_footage` in
+`tests/integration/test_cli_run.py`, which is the file that already holds both
+halves of "the flag or the whole video" — and both halves of this item are only
+visible where a user types it. One is the default invocation over a graph with a
+declared read-ahead: it must complete, and what it prints must name how many
+frames it could not answer for and the node whose read-ahead cost them. A
+message-only fix is refused by that as firmly as the `Frame 40 out of range
+0..39` it replaces, because the run still answers for nothing; so is a silent
+narrowing, which prints the count of frames it did run and nothing about the
+ones it dropped. The other is the span short enough that nothing survives the
+read-ahead, which still refuses — the sentence above about keeping the refusal
+is the clause the trailing item's criterion deliberately left to this one.
+
+Not pinned: where the number is computed. `span_for` is named above as the
+caller that has a container open and is still the argument, but a plan handed a
+ceiling some other way that prints the same sentence passes this. That is the
+choice among the three candidates, and it stays with the work.

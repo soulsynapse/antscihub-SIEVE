@@ -53,15 +53,27 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from sieve.bench.budgets import IN_DEBT
-from sieve.bench.metrics import METRICS, Recorder, Sample
+from sieve.bench.metrics import METRICS, MetricBus, Recorder, Sample
 from sieve.core.pipeline_model import Project, SourceSpan
+from sieve.decode.prefetch import PrefetchFrameSource
+from sieve.pipeline.cache import MemoryFrameStore
+from sieve.pipeline.cache_key import source_identity
+from sieve.pipeline.dag import graph_needs_chroma
+from sieve.pipeline.preview import PreviewSession
 from sieve.tools import discover
-from tests.bench.test_loop_budget import GRAPH_EDITS, SCRUB_STOPS, within_budget
+from tests.bench.test_loop_budget import (
+    GRAPH_EDITS,
+    PLAYHEAD_STOPS,
+    SCRUB_STOPS,
+    within_budget,
+)
 from tests.gui import driving
-from tests.integration.test_v2_oracle import DETECTOR, SPAN, graph
+from tests.integration.test_v2_oracle import BLOCKS, DETECTOR, SPAN, graph
 
 # Set before the first `QGuiApplication` is constructed, for the reason
 # `tests/gui/conftest.py` gives: a laptop with a display would otherwise open a
@@ -88,6 +100,13 @@ _PARAM = "window_frames"
 #: a wait for it never ends. The order is preserved, so the median is still over
 #: both of the reader's strategies rather than over a monotone sweep.
 SCRUBS = tuple(index for index in SCRUB_STOPS if SPAN.start <= index < SPAN.end)
+
+#: Where the playhead is put after the edits, as source indices, filtered to the
+#: working window for `SCRUBS`' reason. The headless pass's own stops: this is
+#: the gesture `slider_to_preview` is gated on there, and now here too — a
+#: playhead move is what asks the pipeline for one frame, which is the render the
+#: canvas paints.
+PLAYHEADS = tuple(index for index in PLAYHEAD_STOPS if SPAN.start <= index < SPAN.end)
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +171,16 @@ def _settle_graph(window: Any) -> None:
 
 @pytest.fixture(scope="module")
 def reading(stirred_clip: Path, tmp_path_factory: pytest.TempPathFactory) -> Iterator[Reading]:
-    """Open, scrub, and drag a parameter — one pass, asked several questions.
+    """Open, scrub, drag a parameter, then move the playhead — one pass.
+
+    Three gestures and not two, because the picture and the graph are refilled by
+    different renders: an edit runs the window, and a playhead move runs the one
+    frame the canvas paints (`gui/app._paint_viewport`). `slider_to_preview` is
+    therefore gated on the third stage, which is where the headless pass gates it
+    too — the window render's own first frame keeps publishing under that key and
+    keeps being judged per sample, and is kept out of the median for the reason
+    every clear here exists.
+
 
     Module-scoped and run once, for `test_loop_budget.py`'s reason: the file
     measures the loop a single time so the gates cannot disagree about which
@@ -195,8 +223,14 @@ def reading(stirred_clip: Path, tmp_path_factory: pytest.TempPathFactory) -> Ite
             _settle_graph(window)
             series = window.graph.series
             rows.append(0 if series is None else int(series.data.shape[0]))
-        for key in ("slider_to_graph", "full_preview_render", "slider_to_preview"):
+        for key in ("slider_to_graph", "full_preview_render"):
             collected[key] = recorder.samples(key)
+
+        recorder.clear()
+        for index in PLAYHEADS:
+            window.player.seek(index)
+            driving.wait_until(lambda i=index: window.player.current_index == i, _TIMEOUT_MS)
+        collected["slider_to_preview"] = recorder.samples("slider_to_preview")
     finally:
         window.close()
         stop_recording()
@@ -244,25 +278,19 @@ def test_the_window_renders_inside_the_attention_band(reading: Reading) -> None:
     within_budget("full_preview_render", reading.median_ms("full_preview_render"))
 
 
-def test_the_first_frame_of_an_edited_window_lands_inside_one_perceived_beat(
+def test_the_picture_under_the_playhead_repaints_inside_one_perceived_beat(
     reading: Reading,
 ) -> None:
     """100 ms, and the ceiling VISION's whole argument rests on.
 
-    Published around the first frame of each window render —
-    `test_loop_budget.py` answers there why a window render's first frame is
-    judged under the drag ceiling rather than exempted from it.
-
-    **What this is not, in this cut: a repaint.** The canvas is fed decoded
-    source frames by the transport and nothing paints a rendered one, so the key
-    is measured on the render that would feed a repaint and not on the repaint
-    itself — which is why it reads *lower* here than headless rather than higher,
-    the first frame of a window on a warm store being nearly free where
-    `render_frame`'s was not. In scope because its producer is one this cut
-    drives, and the gap is written down rather than left to be inferred from a
-    green line: `todo/the-viewport-shows-the-source-and-not-the-render.md`.
+    A repaint, and the same gesture the headless pass gates this key on: the
+    playhead moves, `preview.render_frame` answers for that one frame, and the
+    canvas paints the watched node's output out of it. What the window adds over
+    the headless number is the transport round trip the render now sits inside
+    and the greyscale mapping the viewport does with the array — which is the
+    difference this file exists to attribute.
     """
-    assert len(reading["slider_to_preview"]) == len(GRAPH_EDITS)
+    assert len(reading["slider_to_preview"]) == len(PLAYHEADS)
     within_budget("slider_to_preview", reading.median_ms("slider_to_preview"))
 
 
@@ -295,13 +323,15 @@ def test_every_sample_the_session_published_is_gated(reading: Reading) -> None:
     on the way past, so this is one pass over what arrived.
 
     The count assertion is this gate's own, and it is the one that fails if
-    `published` had quietly become `gated` — the cold render publishes a
-    `full_preview_render` and a `slider_to_preview` that no median above sees, so
-    the run has strictly more of both than the five edits produced.
+    `published` had quietly become `gated`. The cold render publishes a
+    `full_preview_render` no median above sees, and every window render publishes
+    a `slider_to_preview` around its own first frame on top of the one each
+    playhead move publishes — so the run has strictly more of both than its
+    gated series holds.
     """
     published = _counted(reading.published)
     assert published["full_preview_render"] > len(GRAPH_EDITS)
-    assert published["slider_to_preview"] > len(GRAPH_EDITS)
+    assert published["slider_to_preview"] > len(PLAYHEADS)
 
     missed = [
         f"{sample.key} took {sample.elapsed_ms:.1f} ms, over by {sample.over_ms:.1f}"
@@ -309,6 +339,92 @@ def test_every_sample_the_session_published_is_gated(reading: Reading) -> None:
         if sample.key not in IN_DEBT
     ]
     assert missed == []
+
+
+# ---- what the ceiling above is a ceiling on ------------------------------
+
+
+#: Where the playhead is parked for the case below. Away from the span's start,
+#: where `block_signal`'s one admitted warmup frame has nowhere to come from and
+#: the grid is all zeros — a picture that would pass a geometry check while
+#: saying nothing about whether the pipeline ran.
+_VIEWED = 12
+
+
+def _rendered(video: Path, index: int, node_id: str) -> NDArray[np.float32]:
+    """`node_id`'s output for source frame `index`, rendered outside any window.
+
+    `test_gui_cli_parity.py`'s move on a smaller subject: a claim that the
+    picture is the pipeline's has to be checked against a render the window had
+    no hand in, or it is the window agreeing with itself. A private bus, so this
+    render's spans are not pooled with the pass above.
+    """
+    pipeline = graph()
+    held: list[NDArray[np.float32]] = []
+    with PrefetchFrameSource(video, luma=not graph_needs_chroma(pipeline)) as reader:
+        PreviewSession(
+            source=source_identity(video),
+            reader=reader,
+            window=SourceSpan(start=SPAN.start, end=SPAN.end),
+            measure=MetricBus().measure,
+            store=MemoryFrameStore(),
+        ).render_frame(
+            pipeline,
+            index,
+            on_frame=lambda result: held.append(np.asarray(result[node_id].data, np.float32)),
+        )
+    return held[0]
+
+
+def test_the_frame_under_the_playhead_is_the_pipelines_and_not_the_sources(
+    stirred_clip: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """What `slider_to_preview` is now a ceiling on, asked of the pixels.
+
+    A window of its own rather than the pass above's, because the pass is
+    module-scoped and closed by the time any gate reads it — and because this
+    asks nothing about a clock, so pooling it with a benchmark would put a
+    comparison against a second decode inside a measured session.
+
+    The walk stands on the detector, which is where the pass above drags. Its
+    gate is one value for the whole frame, so what the viewport paints is the
+    block signal the band is drawn over (`gui/app.frame_bearing`) — the
+    pipeline's frame at two removes from the footage, which is the strongest
+    form the claim takes on this graph.
+    """
+    discover()
+    directory = tmp_path_factory.mktemp("gui_viewport")
+    window = _window(stirred_clip, directory)
+    try:
+        window.go_down()
+        window.go_down()
+        assert window.current_node is not None and window.current_node.node_id == DETECTOR
+        _settle_graph(window)
+        window.player.seek(_VIEWED)
+        driving.wait_until(lambda: window.player.current_index == _VIEWED, _TIMEOUT_MS)
+        driving.wait_until(lambda: window.viewport.frame is not None, _TIMEOUT_MS)
+
+        shown = window.viewport_node
+        painted = window.viewport.frame
+        metadata = window.player.metadata
+    finally:
+        window.close()
+
+    assert shown == BLOCKS
+    assert painted is not None and metadata is not None
+
+    expected = _rendered(directory / stirred_clip.name, _VIEWED, BLOCKS)
+    # Not a constant, so the equality below is two renders agreeing about a
+    # signal rather than about a flat frame.
+    assert float(expected.max()) > float(expected.min())
+    assert (painted.width(), painted.height()) == (expected.shape[1], expected.shape[0])
+    assert (painted.width(), painted.height()) != (metadata.width, metadata.height)
+
+    # Imported here rather than at module scope, for `tests/gui/conftest.py`'s
+    # rule about what collection may load.
+    from sieve.gui.canvas import image_of
+
+    assert painted == image_of(expected)
 
 
 def _counted(samples: Sequence[Sample]) -> dict[str, int]:

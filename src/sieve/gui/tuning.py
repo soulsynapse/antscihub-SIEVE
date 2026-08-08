@@ -5,6 +5,12 @@ product — a document a user edits, and a panel that draws the answer. The
 session, the collector and the store are the pipeline layer's; what is here is
 *when* a refill happens and what it does to the widget in between.
 
+**Two surfaces, one store.** An edit moves the graph and the picture, and both
+come out of the same `PreviewSession` — the window render for the trace, a
+single-frame render for the viewport. The playhead the picture is at is not
+held here: the transport owns it, and a copy would be the stale one, so
+`render_at` is asked for a frame rather than told to keep up.
+
 **A refill is deferred by one turn of the event loop, and that is the whole of
 the coalescing.** The stale mark has to be painted before the render begins or
 it is a state nothing can ever see, and a burst of edits — a spin box counting
@@ -37,7 +43,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QTimer
+import numpy as np
+from numpy.typing import NDArray
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from sieve.bench.metrics import METRICS
 from sieve.core.pipeline_model import Pipeline, SourceSpan
@@ -59,6 +67,14 @@ _DEFER_MS = 0
 
 class TuningLoop(QObject):
     """One footage, one window, one watched node, and the panel it fills."""
+
+    #: A refill has produced a series. What it is for is the *other* surface the
+    #: same edit moved: the viewport shows a rendered frame too, and the window
+    #: is where the two are kept in step because only it knows where the
+    #: playhead is. Emitted after the panel is handed the series, and not at all
+    #: for a refill that raised — a render that could not produce a graph cannot
+    #: produce a picture either.
+    refilled = Signal()
 
     def __init__(
         self,
@@ -193,6 +209,34 @@ class TuningLoop(QObject):
             self._timer.stop()
             self._render()
 
+    def render_at(self, pipeline: Pipeline, node_id: str, index: int) -> NDArray[np.float32] | None:
+        """`node_id`'s output for source frame `index`, off the store the graph uses.
+
+        `preview.render_frame` and not a second `render_window`: the picture
+        under the playhead is one frame, and re-running the whole window to move
+        it is what that method's docstring calls the end of direct manipulation.
+        The store is the session's, so everything above the edited node is served
+        rather than recomputed — the same mechanism the graph's refill rests on.
+
+        `None` when there is no footage open, and `None` for a render that
+        raised, which is held in `last_error` on the module docstring's terms:
+        the previous frame stays on the viewport, because it is the only thing
+        the next render can be compared against.
+        """
+        if self._session is None:
+            return None
+        held: list[NDArray[np.float32]] = []
+        try:
+            self._session.render_frame(
+                pipeline,
+                index,
+                on_frame=lambda result: held.append(np.asarray(result[node_id].data, np.float32)),
+            )
+        except Exception as error:  # noqa: BLE001 — held, not swallowed; see the docstring
+            self._error = error
+            return None
+        return held[0] if held else None
+
     def _render(self) -> None:
         pipeline, self._pending = self._pending, None
         if pipeline is None or self._session is None or self._collector is None:
@@ -205,3 +249,4 @@ class TuningLoop(QObject):
             self._error = error
             return
         self._panel.set_series(self._collector.series)
+        self.refilled.emit()

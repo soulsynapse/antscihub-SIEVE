@@ -11,11 +11,21 @@ nothing about the graph. The index into `walk.node_order` belongs to neither
 and would be duplicated into both if it lived in one of them, so the window
 keeps it and hands it down on every redraw.
 
-The canvas is `canvas.VideoCanvas`, fed frames by `transport/player.py`; the
-scrubber under both halves is `timeline/bar.py`, which owns the working window
-and is the only thing that tells the transport what it may reach. The graph
-under the canvas is `graph_panel.py`, filled by `tuning.py` — which is where an
-edit becomes a render and a render becomes a series.
+The canvas is `canvas.VideoCanvas`; the scrubber under both halves is
+`timeline/bar.py`, which owns the working window and is the only thing that
+tells the transport what it may reach. The graph under the canvas is
+`graph_panel.py`, filled by `tuning.py` — which is where an edit becomes a
+render and a render becomes a series.
+
+**Both halves of the left column answer to the same edit, and this is where
+that is arranged.** The canvas shows the watched node's output for the frame
+under the playhead, not the footage: a viewport fed by `transport/player.py`
+while the graph under it is fed by the preview means moving a parameter changes
+one of the two, and the ceiling named for a repaint is then measured on a render
+nobody sees. The transport still decides *which index* is current and still
+supplies the frame shown where the pipeline cannot; `_paint_viewport` is the one
+place the two are put together, because it needs the playhead, the walk, and the
+session at once and none of the three may hold a copy of another.
 
 **This module is where the Phase 7 surfaces meet, and it is the only place that
 can decide what they could not.** Which position the save screen is (`control.py`
@@ -44,10 +54,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
 from sieve.core.pipeline_model import Node, Pipeline
-from sieve.core.tool_base import ToolSpec
+from sieve.core.tool_base import ElementKind, ParamStereotype, ToolSpec
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
@@ -95,6 +106,35 @@ def source_fed_nodes(pipeline: Pipeline) -> frozenset[str]:
     return frozenset(node.node_id for node in pipeline.nodes if node.node_id not in fed)
 
 
+def frame_bearing(pipeline: Pipeline, specs: Mapping[str, ToolSpec], node_id: str) -> str | None:
+    """The nearest node at or above `node_id` whose output is a picture.
+
+    `node_id` itself, ordinarily. `detect` declares `ElementKind.FRAME` — one
+    value describing the whole frame — so its output is a 1x1 gate with no image
+    in it, and the viewport climbs to what that gate was derived *from* rather
+    than back to the footage: a user tuning a detection band is deciding about
+    the signal it is drawn over, and the source frame is the one picture that
+    cannot say whether the band is in the right place.
+
+    `None` when nothing on that path has an image either, and when the walk
+    stands on a tool this install does not have — the source is what is shown
+    for both, being the one frame the window can produce without a spec.
+
+    Schema v1 refuses two edges into one node (`walk.py`), so the path upward is
+    a chain and there is no parent to choose between.
+    """
+    upstream = {edge.downstream: edge.upstream for edge in pipeline.edges}
+    current: str | None = node_id
+    while current is not None:
+        spec = specs.get(current)
+        if spec is None:
+            return None
+        if spec.element is not ElementKind.FRAME:
+            return current
+        current = upstream.get(current)
+    return None
+
+
 class MainWindow(QMainWindow):
     def __init__(self, projects: Sequence[Path], registry: ToolRegistry | None = None) -> None:
         super().__init__()
@@ -110,10 +150,14 @@ class MainWindow(QMainWindow):
         # be torn down and reconnected; nothing in this module reads one.
         self._editors: dict[str, Any] = {}
         self._source_extent: tuple[int, int] | None = None
+        # The last frame the transport delivered, held so a refill or a walk can
+        # repaint the viewport without asking the decode thread for a frame it
+        # has already sent.
+        self._source_frame: tuple[int, QImage] | None = None
 
         self._player = VideoPlayer(self)
         self._viewport = VideoCanvas()
-        self._player.frame_changed.connect(self._viewport.set_frame)
+        self._player.frame_changed.connect(self._on_frame_changed)
         self._timeline = TimelineBar(self._player)
         # Connected after the bar, because Qt delivers to subscribers in
         # subscription order and the preview is opened over the bar's working
@@ -124,6 +168,7 @@ class MainWindow(QMainWindow):
 
         self._graph = GraphPanel()
         self._tuning = TuningLoop(self._graph, self, registry=self._registry)
+        self._tuning.refilled.connect(self._paint_viewport)
 
         self._canvas = CanvasSlot(self._viewport)
         self._control = Control(self._projects)
@@ -141,6 +186,38 @@ class MainWindow(QMainWindow):
     def timeline(self) -> TimelineBar:
         """The scrubber across the bottom."""
         return self._timeline
+
+    @property
+    def viewport(self) -> VideoCanvas:
+        """The picture over the trace."""
+        return self._viewport
+
+    @property
+    def viewport_node(self) -> str | None:
+        """The node whose output the viewport paints, or `None` for the source.
+
+        `None` in two cases, and they are one rule: the viewport shows a frame
+        the window can say what space it is in. A region parameter is denominated
+        in the frame its own node is handed, and `bind_editors` is offered an
+        extent only where that frame is the source — so while such an editor is
+        on the canvas the canvas has to be showing the source, or the box is
+        drawn over a rectangle the value does not index (`kind_editors`,
+        `RegionEditor`). Otherwise it is whatever `frame_bearing` finds, which is
+        `None` when the walk stands somewhere with no picture above it at all.
+        """
+        node = self.current_node
+        session = self._session
+        if node is None or session is None:
+            return None
+        pipeline = session.project.pipeline
+        spec = self._specs.get(node.node_id)
+        if (
+            spec is not None
+            and ParamStereotype.REGION in spec.param_stereotypes.values()
+            and node.node_id in source_fed_nodes(pipeline)
+        ):
+            return None
+        return frame_bearing(pipeline, self._specs, node.node_id)
 
     @property
     def graph(self) -> GraphPanel:
@@ -192,6 +269,7 @@ class MainWindow(QMainWindow):
         """
         self._tuning.close()
         self._source_extent = None
+        self._source_frame = None
         self._session = Session.open(path)
         self._specs = resolved_specs(self._session.project.pipeline, self._registry)
         self._order = node_order(self._session.project.pipeline)
@@ -274,6 +352,33 @@ class MainWindow(QMainWindow):
 
     # ---- internals -------------------------------------------------------
 
+    def _on_frame_changed(self, index: int, image: QImage) -> None:
+        """The transport has reached a frame. Hold it, and decide what to show."""
+        self._source_frame = (index, image)
+        self._paint_viewport()
+
+    def _paint_viewport(self) -> None:
+        """The watched node's output for the frame under the playhead.
+
+        The source frame is the fallback and not the subject: it is what the
+        window shows before a pipeline can answer for that index, for a node
+        with no picture, and for a render that failed — which the tuning loop
+        reports through `last_error` rather than by handing over a blank.
+        """
+        held = self._source_frame
+        if held is None:
+            return
+        index, image = held
+        node = self.viewport_node
+        session = self._session
+        values = (
+            None
+            if node is None or session is None
+            else self._tuning.render_at(session.project.pipeline, node, index)
+        )
+        if values is None or not self._viewport.set_values(index, values):
+            self._viewport.set_frame(index, image)
+
     def _walk_to(self, index: int) -> None:
         # Clamped rather than wrapped, and silent at either end: a held key
         # reaching the last node is ordinary use, and wrapping would move the
@@ -291,6 +396,12 @@ class MainWindow(QMainWindow):
         node = self.current_node
         self._tuning.watch(None if node is None else node.node_id)
         self.refill_graph()
+        # Ahead of the refill this move just asked for, because that one is
+        # deferred by a turn of the event loop and the picture is about the node
+        # the walk is on *now* — a viewport still showing the previous node's
+        # output until the graph comes back is the stale-mark interval leaking
+        # onto a surface that has no mark.
+        self._paint_viewport()
 
     def _build_step(self) -> QWidget:
         """The step position's content for the node the walk is on.
@@ -371,6 +482,7 @@ class MainWindow(QMainWindow):
     def _on_failed(self, message: str) -> None:
         del message
         self._source_extent = None
+        self._source_frame = None
         self._tuning.close()
         self._rebind_editors()
 

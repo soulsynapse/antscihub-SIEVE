@@ -2,7 +2,7 @@
 title: The viewport shows the source, so the repaint ceiling is measured on a render nobody sees
 priority: high
 phase: "7"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/bench/test_gui_loop_budget.py -q -k the_frame_under_the_playhead_is_the_pipelines_and_not_the_sources"
 opened: 2026-08-08

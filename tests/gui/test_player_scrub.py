@@ -44,6 +44,23 @@ class Recorder:
         self.indices.append(index)
 
 
+class Kinds:
+    """Collects why the player says each frame it displayed was asked for.
+
+    Separate from `Recorder` above rather than a third field on it: what the
+    cases below assert about is the provenance the frame arrives with, and the
+    two never want the same list.
+    """
+
+    def __init__(self, player: Any) -> None:
+        self.seen: list[Any] = []
+        player.frame_changed.connect(self._on_frame)
+
+    def _on_frame(self, index: int, image: Any, kind: Any) -> None:
+        del index, image
+        self.seen.append(kind)
+
+
 def open_player(video: Path, policy: Any | None = None) -> tuple[Any, Recorder]:
     """An opened player parked on frame 0, with its first frame already shown."""
     from sieve.gui.transport.player import VideoPlayer
@@ -293,6 +310,56 @@ class TestPreferences:
             assert not instance.is_scrub_degraded
         finally:
             instance.shutdown()
+
+
+class TestRenderOnSettle:
+    """A drag is answered with the raw frame; the settle is what pays for a render.
+
+    Nothing here renders — `gui/app.py` does, in the slot connected to
+    `frame_changed` — so what is pinned is the permission each frame carries
+    with it. The player is where that has to be decided: 07.12 put the render
+    inside this round trip and `scrub_to_repaint` is both what the round trip
+    publishes and `ScrubPolicy`'s degradation trigger, so a drag frame carrying
+    the permission lets a slow pipeline snap the *transport* onto a coarse
+    grid — a remedy aimed at decode, applied to something else.
+    """
+
+    def test_render_on_settle_refuses_a_drag_frame(self, player: Any) -> None:
+        kinds = Kinds(player)
+        player.scrub(13)
+        driving.wait_until(lambda: player.current_index == 13, FRAME_TIMEOUT_MS)
+
+        assert kinds.seen and not kinds.seen[-1].may_be_rendered
+
+    def test_render_on_settle_pays_on_the_release(self, player: Any) -> None:
+        """The release is a commitment, and what it commits to is the exact picture."""
+        kinds = Kinds(player)
+        player.scrub(13)
+        driving.wait_until(lambda: player.current_index == 13, FRAME_TIMEOUT_MS)
+        player.seek(27)
+        driving.wait_until(lambda: player.current_index == 27, FRAME_TIMEOUT_MS)
+
+        assert kinds.seen[-1].may_be_rendered
+
+    def test_render_on_settle_leaves_playback_alone(self, player: Any) -> None:
+        """Outside the ruling: a playback tick is not a drag in flight.
+
+        Playback already drops the frames it cannot decode, so the render is
+        charged against the achieved rate rather than against a gesture's
+        latency, and the alternative — a moving picture of the footage under a
+        graph of the pipeline — is the split the viewport exists to close.
+        """
+        from sieve.gui.transport.request_intent import RequestKind
+
+        kinds = Kinds(player)
+        player.play()
+        try:
+            driving.wait_until(lambda: RequestKind.PLAYBACK in kinds.seen, FRAME_TIMEOUT_MS)
+        finally:
+            player.pause()
+
+        ticks = [kind for kind in kinds.seen if kind is RequestKind.PLAYBACK]
+        assert ticks and all(kind.may_be_rendered for kind in ticks)
 
 
 class TestMetrics:

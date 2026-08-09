@@ -427,6 +427,52 @@ def test_the_frame_under_the_playhead_is_the_pipelines_and_not_the_sources(
     assert painted == image_of(expected)
 
 
+def test_a_drag_shows_the_decoded_frame_and_the_release_shows_the_render(
+    stirred_clip: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Which of the two pictures each half of the gesture gets, asked of the pixels.
+
+    The case above is the settled half; this is the pair it belongs to. The
+    render is skipped while a drag is in flight, so `scrub_to_repaint` measures
+    the decode leg and the thread hop — which is what `ScrubPolicy` degrades on,
+    and coarse mode is a decode remedy
+    (`todo/the-scrub-round-trip-now-carries-a-pipeline-render.md`).
+
+    The release lands on the frame the drag ended on, so it is served out of the
+    proxy cache without a decode: the two pictures below are the same source
+    index, and the only thing that differs is what the window was willing to pay
+    for it.
+    """
+    discover()
+    directory = tmp_path_factory.mktemp("gui_drag")
+    window = _window(stirred_clip, directory)
+    delivered: list[Any] = []
+    try:
+        window.go_down()
+        window.go_down()
+        _settle_graph(window)
+        window.player.frame_changed.connect(lambda index, image, kind: delivered.append(image))
+
+        window.player.scrub(_VIEWED)
+        driving.wait_until(lambda: window.player.current_index == _VIEWED, _TIMEOUT_MS)
+        dragged = window.viewport.frame
+
+        # Synchronous: the frame the drag decoded is in the proxy cache, so the
+        # settle repaints inside this call rather than through the thread.
+        window.player.seek(_VIEWED)
+        settled = window.viewport.frame
+    finally:
+        window.close()
+
+    from sieve.gui.canvas import image_of
+
+    expected = image_of(_rendered(directory / stirred_clip.name, _VIEWED, BLOCKS))
+    assert dragged is not None and settled is not None and expected is not None
+    assert dragged == delivered[0], "the drag painted something other than the decoded frame"
+    assert dragged != expected
+    assert settled == expected
+
+
 def _counted(samples: Sequence[Sample]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for sample in samples:

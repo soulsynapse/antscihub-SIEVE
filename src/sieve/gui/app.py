@@ -72,6 +72,7 @@ from sieve.gui.save_screen import SaveScreen
 from sieve.gui.step_pane import StepPane
 from sieve.gui.timeline.bar import TimelineBar
 from sieve.gui.transport.player import VideoPlayer
+from sieve.gui.transport.request_intent import RequestKind
 from sieve.gui.tuning import TuningLoop
 from sieve.gui.walk import node_order
 from sieve.pipeline.shelf import loaded_shelf
@@ -352,18 +353,24 @@ class MainWindow(QMainWindow):
 
     # ---- internals -------------------------------------------------------
 
-    def _on_frame_changed(self, index: int, image: QImage) -> None:
+    def _on_frame_changed(self, index: int, image: QImage, kind: RequestKind) -> None:
         """The transport has reached a frame. Hold it, and decide what to show."""
         self._source_frame = (index, image)
-        self._paint_viewport()
+        self._paint_viewport(render=kind.may_be_rendered)
 
-    def _paint_viewport(self) -> None:
+    def _paint_viewport(self, render: bool = True) -> None:
         """The watched node's output for the frame under the playhead.
 
         The source frame is the fallback and not the subject: it is what the
         window shows before a pipeline can answer for that index, for a node
         with no picture, and for a render that failed — which the tuning loop
         reports through `last_error` rather than by handing over a blank.
+
+        It is also what a drag in flight gets, which is the one caller that
+        passes `render=False`: the render would otherwise sit inside the round
+        trip `ScrubPolicy` degrades on (`transport/request_intent.py`). A refill
+        and a walk render by default because neither is a frame arriving — they
+        are the window redrawing the position it is already on.
         """
         held = self._source_frame
         if held is None:
@@ -373,7 +380,7 @@ class MainWindow(QMainWindow):
         session = self._session
         values = (
             None
-            if node is None or session is None
+            if not render or node is None or session is None
             else self._tuning.render_at(session.project.pipeline, node, index)
         )
         if values is None or not self._viewport.set_values(index, values):

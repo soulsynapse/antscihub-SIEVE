@@ -77,7 +77,14 @@ class VideoPlayer(QObject):
 
     opened = Signal(VideoMetadata)
     failed = Signal(str)
-    frame_changed = Signal(int, QImage)
+    #: Index, picture, and why it was asked for. The third is what lets a
+    #: subscriber decide what the frame is allowed to cost it —
+    #: `request_intent.py` holds the predicates and the window reads
+    #: `may_be_rendered`. Typed `object` because a `StrEnum` crossing a Qt
+    #: signature declared `str` would arrive as one, and the member is the
+    #: point. A subscriber that only paints connects a two-argument slot and Qt
+    #: drops the rest, which is what `timeline/bar.py` does.
+    frame_changed = Signal(int, QImage, object)
     playing_changed = Signal(bool)
 
     #: Emitted once per session, when sustained scrub latency has forced the
@@ -310,7 +317,7 @@ class VideoPlayer(QObject):
 
         self._coalescer.served_without_decode(kind)
         self._current_index = index
-        self.frame_changed.emit(index, image)
+        self.frame_changed.emit(index, image, kind)
         return True
 
     def _anchor_playback(self, index: int) -> None:
@@ -380,7 +387,7 @@ class VideoPlayer(QObject):
 
         if arrival.display:
             self._current_index = index
-            self.frame_changed.emit(index, image)
+            self.frame_changed.emit(index, image, arrival.request.kind)
 
         # Measured after the emit so the synchronous view update counts. The
         # repaint itself is asynchronous and is not captured here.

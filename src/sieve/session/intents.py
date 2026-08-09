@@ -98,6 +98,33 @@ class SetOutputs:
         return project.with_outputs(self.checkpoints, self.outputs)
 
 
+@dataclass(frozen=True, slots=True)
+class RemoveNode:
+    """One step out of the chain, with whatever read it reading past it.
+
+    The read-past is the document mutation and not a display over a graph the
+    file still holds: a stack drawing a chain the document disagrees with would
+    be a second answer to what the project computes, and the next `sieve run`
+    would run the step the user watched disappear.
+
+    Whether a step *may* go is not asked here. The one refusal the mockup draws
+    is the source's, and that is an affordance on a card — a disabled button
+    with a sentence — rather than a document rule; a graph whose root has been
+    dropped is structurally ordinary, and it is the front end that knows the
+    chain has to read something (`gui/app.py`).
+    """
+
+    node_id: str
+
+    def applied_to(self, project: Project) -> Project:
+        """The document without this step, and without whatever named it.
+
+        Raises:
+            KeyError: if `node_id` names no node.
+        """
+        return project.without_node(self.node_id)
+
+
 def issue(session: Session, intent: Intent) -> bool:
     """Apply `intent` to `session`'s project and commit the result.
 

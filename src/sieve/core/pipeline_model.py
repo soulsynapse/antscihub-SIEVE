@@ -830,6 +830,43 @@ class Pipeline(_Artifact):
                 return candidate
         raise KeyError(node_id)
 
+    def without_node(self, node_id: str) -> Self:
+        """Copy with `node_id` gone and whatever read it reading past it.
+
+        The chain closes over the gap rather than breaking at it: every edge
+        out of the removed node is re-run from every edge into it, so a reader
+        inherits the removed step's inputs — both of them on the day a merging
+        tool gives a node two (`Edge`), which is why the bridge is a product
+        and not a substitution. Dropping the subtraction instead would leave
+        the tail of the chain as a second root reading the footage, which is a
+        different document from the one the user asked for.
+
+        Raises:
+            KeyError: if `node_id` names no node.
+        """
+        self.node(node_id)
+        feeding = tuple(edge.upstream for edge in self.edges if edge.downstream == node_id)
+        rewired: list[Edge] = []
+        for edge in self.edges:
+            if edge.downstream == node_id:
+                continue
+            if edge.upstream == node_id:
+                # In place of the edge it replaces, so a fan-out keeps the
+                # sibling order the walk breaks its ties on (`gui/walk.py`).
+                rewired.extend(
+                    Edge(upstream=source, downstream=edge.downstream) for source in feeding
+                )
+                continue
+            rewired.append(edge)
+        return self.model_validate(
+            self.model_copy(
+                update={
+                    "nodes": tuple(node for node in self.nodes if node.node_id != node_id),
+                    "edges": tuple(rewired),
+                }
+            )
+        )
+
 
 class Project(_Artifact):
     """A source video, what runs on it, and what comes out.
@@ -1027,6 +1064,36 @@ class Project(_Artifact):
         when those names go stale.
         """
         return self.model_validate(self.model_copy(update={"pipeline": pipeline}))
+
+    def without_node(self, node_id: str) -> Self:
+        """Copy with the step dropped and everything that named it dropped too.
+
+        Not `with_pipeline` over `Pipeline.without_node`: `_references_resolve`
+        refuses a checkpoint, a sink, an input hash or an override on a node the
+        graph has lost, so a document where the step is gone and its references
+        are not is one this model cannot hold. Clearing them here is therefore
+        what removing a step *is* rather than tidying after it — and what the
+        user loses with the step is the output it was writing, which is the
+        honest consequence of dropping the thing that computed it.
+
+        Raises:
+            KeyError: if `node_id` names no node.
+        """
+        return self.model_validate(
+            self.model_copy(
+                update={
+                    "pipeline": self.pipeline.without_node(node_id),
+                    "replicates": tuple(
+                        replicate.without_override(node_id) for replicate in self.replicates
+                    ),
+                    "checkpoints": tuple(kept for kept in self.checkpoints if kept != node_id),
+                    "outputs": tuple(sink for sink in self.outputs if sink.node_id != node_id),
+                    "input_hashes": FrozenMapping(
+                        {key: value for key, value in self.input_hashes.items() if key != node_id}
+                    ),
+                }
+            )
+        )
 
     def with_outputs(self, checkpoints: Iterable[str], outputs: Iterable[Sink]) -> Self:
         """Copy carrying a different set of results to keep.

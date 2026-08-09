@@ -184,3 +184,36 @@ def test_pinned_slot_p_pins_the_current_step_and_leaves_the_document_alone(windo
     session = window.session
     assert not session.can_undo()
     assert session.project.params_for("n1") == {}
+
+
+# Below the P case and not beside its neighbours, because a case that pins
+# leaves the next window's activation on an orphaned pane rather than on the
+# window, and the P case is the one that needs it
+# (`findings/2026.08.09-an-orphaned-pane-takes-activation-from-the-window-offscreen.md`).
+def test_pinned_slot_card_and_slot_never_disagree_about_where_the_surface_is(
+    window: Any,
+) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    from sieve.gui.pinned import CANVAS_NOTE, NO_SURFACE_NOTE, PINNED_ELSEWHERE_NOTE
+
+    def notes(widget: Any) -> list[str]:
+        return [label.text() for label in widget.findChildren(QLabel)]
+
+    # Two sentences about one step, on one screen. Keyed on `position == pinned`
+    # alone the card said the surface had gone below the canvas while the slot
+    # was telling the user to drag the boxes on the canvas, and for `downsample`
+    # it announced a surface that does not exist anywhere.
+    for position, sentence in ((0, CANVAS_NOTE), (1, NO_SURFACE_NOTE)):
+        window.pin(position)
+        card = window.control.pipeline_pane.cards[position]
+        assert sentence in notes(card)
+        assert sentence in notes(window.viewing.pinned)
+        assert PINNED_ELSEWHERE_NOTE not in notes(card)
+
+    window.pin(2)
+
+    # The one step whose surface really is below the canvas, which is the only
+    # step the sentence was ever true of.
+    assert PINNED_ELSEWHERE_NOTE in notes(window.control.pipeline_pane.cards[2])
+    assert window.viewing.pinned.surface is window.graph

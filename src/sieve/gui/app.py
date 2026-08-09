@@ -73,7 +73,7 @@ from sieve.core.tool_base import ElementKind, ParamStereotype, ToolSpec
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
-from sieve.gui.chain_stack import PipelinePane
+from sieve.gui.chain_stack import PipelinePane, Step
 from sieve.gui.chrome import darken_title_bar, window_stylesheet
 from sieve.gui.control import Control
 from sieve.gui.graph_panel import GraphPanel
@@ -84,6 +84,7 @@ from sieve.gui.param_form import ParamForm
 from sieve.gui.pinned import (
     EmptySlot,
     PinnedStep,
+    card_note,
     default_pinned,
     draws_a_trace,
     element_kinds,
@@ -98,6 +99,7 @@ from sieve.gui.transport.request_intent import RequestKind
 from sieve.gui.tuning import TuningLoop
 from sieve.gui.walk import node_order
 from sieve.pipeline.shelf import loaded_shelf
+from sieve.session.intents import RemoveNode, issue
 from sieve.session.session import Session
 
 
@@ -127,6 +129,33 @@ def source_fed_nodes(pipeline: Pipeline) -> frozenset[str]:
     """
     fed = {edge.downstream for edge in pipeline.edges}
     return frozenset(node.node_id for node in pipeline.nodes if node.node_id not in fed)
+
+
+def removable(spec: ToolSpec | None) -> bool:
+    """Whether the chain would still have something to read without this step.
+
+    A source tool is where the footage enters the graph
+    (`adr/a-users-file-wires-in-like-any-other-input.md`), and dropping it
+    leaves the steps below reading nothing — so its ✕ is offered disabled, the
+    mockup's one refusal read off the declaration that makes it derivable
+    rather than off a tool id. A node whose tool this install does not have is
+    removable: nothing can say it is a source, and a step naming a missing tool
+    is one of the things a user most needs to be able to drop.
+    """
+    return spec is None or spec.source is None
+
+
+def _after_removing(position: int, index: int) -> int:
+    """Where a walk or a pin standing at `position` lands once `index` is gone.
+
+    The step above, where it was standing on the removed step itself — that
+    neighbour is what the removed step read, so it is the nearest surviving
+    place the user was standing, and it is not whatever slid into the gap. One
+    expression covers the other case because a stack renumbers under a removal:
+    a position below the gap keeps the node it was already on by counting one
+    lower.
+    """
+    return max(0, position - 1) if position >= index else position
 
 
 def frame_bearing(pipeline: Pipeline, specs: Mapping[str, ToolSpec], node_id: str) -> str | None:
@@ -318,9 +347,7 @@ class MainWindow(QMainWindow):
         self._source_extent = None
         self._source_frame = None
         self._session = Session.open(path)
-        self._specs = resolved_specs(self._session.project.pipeline, self._registry)
-        self._order = node_order(self._session.project.pipeline)
-        self._elements = element_kinds(self._order, self._session.project.pipeline, self._specs)
+        self._reread_graph()
         self._at = 0
         self._pinned = default_pinned(self._order, self._elements)
         self._show_pinned()
@@ -401,6 +428,39 @@ class MainWindow(QMainWindow):
         if self._control.current_position() in ("pipeline", "step"):
             self.pin(self._at)
 
+    def remove_step(self, index: int) -> None:
+        """A card's ✕: drop step `index`, and let whatever read it read past it.
+
+        The mutation is the document's (`session/intents.RemoveNode`) and
+        everything after it here is the three view-state answers that were
+        indices into a list one shorter now: the walk, the pin, and the save
+        screen — which is rebuilt because a sink on the removed step went with
+        the step, and a checkoff still showing it would be offering a result
+        nothing computes.
+
+        Refused rather than clamped where the step is the chain's source: the
+        card offers a disabled ✕ there and this is the same predicate, because
+        a caller reaching the method directly is the case where the button was
+        not the gesture.
+        """
+        session = self._session
+        if session is None or not 0 <= index < len(self._order):
+            return
+        node = self._order[index]
+        if not removable(self._specs.get(node.node_id)):
+            return
+        issue(session, RemoveNode(node.node_id))
+        self._reread_graph()
+        self._at = _after_removing(self._at, index)
+        self._pinned = (
+            _after_removing(self._pinned, index)
+            if self._order and self._pinned is not None
+            else None
+        )
+        self._show_pinned()
+        self._control.set_save_screen(self._build_save_screen(session))
+        self._redraw()
+
     def go_up(self) -> None:
         """Up: the previous node in the walk, or stay on the first."""
         self._walk_to(self._at - 1)
@@ -426,6 +486,22 @@ class MainWindow(QMainWindow):
         self._tuning.request_refill(self._session.project.pipeline)
 
     # ---- internals -------------------------------------------------------
+
+    def _reread_graph(self) -> None:
+        """The three facts about the document's shape, taken together.
+
+        Together because they are one derivation in three steps — the fold that
+        gives each node its element kind reads the specs and the walk — and
+        because every caller that invalidates one has invalidated all three: a
+        project opening, and a step leaving the chain.
+        """
+        session = self._session
+        if session is None:
+            return
+        pipeline = session.project.pipeline
+        self._specs = resolved_specs(pipeline, self._registry)
+        self._order = node_order(pipeline)
+        self._elements = element_kinds(self._order, pipeline, self._specs)
 
     def _on_frame_changed(self, index: int, image: QImage, kind: RequestKind) -> None:
         """The transport has reached a frame. Hold it, and decide what to show."""
@@ -543,7 +619,7 @@ class MainWindow(QMainWindow):
         session = self._session
         if session is None:
             return QWidget()
-        steps: list[tuple[Node, QWidget | None]] = []
+        steps: list[Step] = []
         for node in self._order:
             spec = self._specs.get(node.node_id)
             knobs = None
@@ -551,16 +627,29 @@ class MainWindow(QMainWindow):
                 form = ParamForm(session, node.node_id, spec)
                 form.edited.connect(self.refill_graph)
                 knobs = form
-            steps.append((node, knobs))
+            steps.append(Step(node=node, knobs=knobs, removable=removable(spec)))
         return PipelinePane(
             session.path.name.removesuffix(PROJECT_SUFFIX),
             steps,
             self._at,
             self._pinned,
+            self._pinned_note(),
             on_select=self._walk_to,
             on_open=self._open_step,
             on_pin=self.pin,
+            on_remove=self.remove_step,
         )
+
+    def _pinned_note(self) -> str:
+        """The sentence the pinned step's card carries, or nothing to carry it.
+
+        Empty for an empty graph, which is the case where no card is drawn to
+        put it on.
+        """
+        node = self.pinned_node
+        if node is None:
+            return ""
+        return card_note(self._elements.get(node.node_id), self._specs.get(node.node_id))
 
     def _open_step(self, index: int) -> None:
         """A card's arrow: select that step, then slide to its form.

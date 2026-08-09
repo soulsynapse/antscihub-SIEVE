@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from sieve.core.pipeline_model import (
+    Edge,
     Node,
     Pipeline,
     Project,
@@ -30,7 +31,7 @@ from sieve.core.tool_base import (
     ToolSpec,
 )
 from sieve.pipeline.cache_key import node_key
-from sieve.session.intents import SetOutputs, SetParam, issue
+from sieve.session.intents import RemoveNode, SetOutputs, SetParam, issue
 from sieve.session.session import Session
 
 
@@ -119,6 +120,32 @@ def test_set_outputs_moves_no_cache_key(tmp_path: Path) -> None:
     assert session.project.checkpoints == ("n1",)
     assert len(session.project.outputs) == 1
     assert _key(session.project) == before
+
+
+def test_removing_a_node_is_a_whole_value_like_any_other_edit(tmp_path: Path) -> None:
+    path = tmp_path / "arena.sieve.yaml"
+    Project(
+        source=SourceRef(path="arena.MP4"),
+        pipeline=Pipeline(
+            nodes=tuple(
+                Node(node_id=node_id, tool_id="threshold", version="1.0.0")
+                for node_id in ("n1", "n2", "n3")
+            ),
+            edges=(Edge(upstream="n1", downstream="n2"), Edge(upstream="n2", downstream="n3")),
+        ),
+    ).save(path)
+    session = Session.open(path)
+    before = session.project
+
+    issue(session, RemoveNode(node_id="n2"))
+
+    # A structural edit lands the same way a parameter does — one new document
+    # on the stack — which is what keeps the session ignorant of what an edit
+    # was. Undo does not have to know how to put a node back.
+    pipeline = session.project.pipeline
+    assert [node.node_id for node in pipeline.nodes] == ["n1", "n3"]
+    assert [(edge.upstream, edge.downstream) for edge in pipeline.edges] == [("n1", "n3")]
+    assert session.undo() == before
 
 
 def test_an_intent_naming_no_node_leaves_the_session_where_it_was(tmp_path: Path) -> None:

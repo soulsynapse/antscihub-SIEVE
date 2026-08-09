@@ -49,3 +49,29 @@ as a probe.
     $ uv run pytest tests/gui -q -k dropped_player
     132 deselected in 0.90s
     exit: 5
+
+## Folded 2026-08-09 at 09.4: the panes a rebuild discards are top-level windows
+
+The sentence above about the object graph at exit has a second, measured
+symptom, and it is not the thread's:
+[findings/2026.08.09-an-orphaned-pane-takes-activation-from-the-window-offscreen.md](../findings/2026.08.09-an-orphaned-pane-takes-activation-from-the-window-offscreen.md).
+`control.py` replaces a pane by reparenting the old one to nothing and deferring
+its deletion, and a widget whose parent is `None` is a *top-level widget* — one
+open project leaves a screenful of them alive at once, counted in the finding.
+Offscreen Qt then hands
+`activeWindow()` to one of those rather than to the `MainWindow` that was just
+shown and activated, which silently retires every `Qt.WindowShortcut` in the
+window for the next case that runs.
+
+It belongs here because the remedy is the same decision this item is already
+holding open: whether a discarded child is reached through something that
+survives, or is never orphaned in the first place. Reparenting a replaced pane
+to the window rather than to `None` hides it instead of promoting it, and would
+close both the stray-activation symptom and one class of what is alive at exit
+— but which handle a torn-down child should be reachable through is exactly what
+the finding behind this item says is not understood yet, so it is one answer and
+not two.
+
+`done_when` (`-k dropped_player`) is not widened here and does not reach this: a
+case asserting that a rebuild leaves no new top-level widget is the part of this
+paragraph a criterion can hold.

@@ -119,6 +119,20 @@ def surface_note(spec: ToolSpec | None) -> str:
     )
 
 
+def card_note(kind: ElementKind | None, spec: ToolSpec | None) -> str:
+    """What the pinned step's own card says about where its surface is.
+
+    Off the same predicate the slot is filled by, so the two sentences the
+    screen carries about one step cannot disagree: the card says the surface is
+    below the canvas only where the thing below the canvas is this step's
+    trace, and otherwise repeats the sentence the slot itself is showing.
+    Keyed on `position == pinned` alone, the card told a `REGION` step its
+    surface had gone below the canvas while the slot was telling it to drag the
+    boxes on the canvas.
+    """
+    return PINNED_ELSEWHERE_NOTE if draws_a_trace(kind) else surface_note(spec)
+
+
 def default_pinned(order: Sequence[Node], kinds: Mapping[str, ElementKind | None]) -> int | None:
     """Which step holds the slot before the user pins anything. `None` if empty.
 

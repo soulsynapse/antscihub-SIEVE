@@ -397,6 +397,76 @@ class TestLookup:
         assert pipeline.node("n2").tool_id == "threshold"
 
 
+class TestRemovingAStep:
+    """Dropping a node, and the two things that makes it more than a filter.
+
+    The chain has to close over the gap rather than break at it, and every
+    reference the document holds to the node has to go with it — the second
+    because `_references_resolve` refuses the halfway state outright, so a
+    caller that forgot one gets a `ValidationError` naming a field rather than
+    a document with a dangling name in it.
+    """
+
+    @staticmethod
+    def _chain(*edges: tuple[str, str]) -> Pipeline:
+        ids = sorted({end for edge in edges for end in edge})
+        return Pipeline(
+            nodes=tuple(Node(node_id=node_id, tool_id="blur", version="1.0.0") for node_id in ids),
+            edges=tuple(Edge(upstream=up, downstream=down) for up, down in edges),
+        )
+
+    def test_what_read_the_removed_step_reads_what_it_read(self) -> None:
+        closed = self._chain(("a", "b"), ("b", "c")).without_node("b")
+
+        assert [node.node_id for node in closed.nodes] == ["a", "c"]
+        assert [(edge.upstream, edge.downstream) for edge in closed.edges] == [("a", "c")]
+
+    def test_every_reader_inherits_the_inputs_in_the_order_it_read_them(self) -> None:
+        # The bridge is placed where the edge it replaces stood, because the
+        # walk breaks its sibling ties on edge order (`gui/walk.py`) and a
+        # removal that appended would reorder branches the user did not touch.
+        closed = self._chain(("a", "b"), ("b", "d"), ("b", "c")).without_node("b")
+
+        assert [(edge.upstream, edge.downstream) for edge in closed.edges] == [
+            ("a", "d"),
+            ("a", "c"),
+        ]
+
+    def test_removing_a_root_leaves_what_it_fed_as_a_root(self) -> None:
+        # Nothing to inherit, so the subtraction is the whole of it — and the
+        # readers become roots rather than the graph keeping an edge from a
+        # node that is gone.
+        closed = self._chain(("a", "b"), ("a", "c")).without_node("a")
+
+        assert [node.node_id for node in closed.nodes] == ["b", "c"]
+        assert closed.edges == ()
+
+    def test_everything_that_named_the_step_goes_with_the_step(self) -> None:
+        without = make_project().without_node("n2")
+
+        assert "n2" not in without.pipeline
+        # The sink and the input hash named `n2` and nothing else can; the
+        # checkpoint and the second replicate's deviation named `n1` and stay.
+        assert without.outputs == ()
+        assert without.input_hashes == {}
+        assert without.checkpoints == ("n1",)
+        assert without.replicate("r1").override_for("n2") == {}
+        assert without.replicate("r2").override_for("n1") == {
+            "region": {"x": 64, "y": 0, "width": 64, "height": 64}
+        }
+
+    def test_removing_a_step_that_is_not_there_raises_keyerror(self) -> None:
+        # `Pipeline.node`'s refusal, reached through both methods: a front end
+        # holding a stale index would otherwise get a document quietly missing
+        # nothing, and no sign that the removal it thought it made did not.
+        project = make_project()
+
+        with pytest.raises(KeyError):
+            project.pipeline.without_node("ghost")
+        with pytest.raises(KeyError):
+            project.without_node("ghost")
+
+
 class TestPerReplicateDeviation:
     def _project(self) -> Project:
         """Two regions and one node carrying two parameters."""

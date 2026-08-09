@@ -32,7 +32,18 @@ over with a reconciliation this module would own.
 surface is drawn is the pinned one, and it is drawn under the canvas
 (`pinned.py`) — so its card says where the surface went rather than drawing it a
 second time, and every other card says nothing because there is nothing of its
-step to draw here. That is the whole of what a card holds beside its knobs.
+step to draw here. Which sentence that is arrives as `pinned_note`, because the
+slot has to be saying the same thing and one of the two would otherwise be a
+copy going stale against the other. That is the whole of what a card holds
+beside its knobs.
+
+**The card's three verbs are the walk's, the pin's, and the chain's.** Removal
+is the third and it is unlike the other two: selecting and pinning are view
+state this module's caller holds, and the ✕ mutates the document. So the button
+emits a position and nothing more — what a removal *means* to the chain is the
+command layer's (`session/intents.RemoveNode`), and a stack that closed the
+chain on screen over a document still holding the step would be the second
+answer the fence exists to prevent.
 
 Not the chrome: `chrome.py` holds the palette and the sheet this pane wears.
 Not the stage headers the referent draws between groups — what a stage *is* has
@@ -42,6 +53,7 @@ no derivation in the tree (`todo/a-stage-header-groups-by-nothing-the-tree-decla
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QMouseEvent, QPainter, QPaintEvent, QPen
@@ -56,7 +68,24 @@ from PySide6.QtWidgets import (
 
 from sieve.core.pipeline_model import Node
 from sieve.gui.chrome import ACCENT, DIM, LINE, PANEL, TEXT, rgb, stack_stylesheet
-from sieve.gui.pinned import PINNED_ELSEWHERE_NOTE
+
+
+@dataclass(frozen=True)
+class Step:
+    """One card's worth of what the window derived about a step.
+
+    A record rather than a tuple because none of the three is guessable from
+    its position, and none of them is derivable here: the knobs are generated
+    from a spec this module is not given, and whether the chain would still
+    read something without this step is a fact about the graph (`app.py`).
+    """
+
+    node: Node
+    #: `None` where the tool is one this install does not have.
+    knobs: QWidget | None
+    #: Whether the ✕ is offered live. Offered disabled otherwise rather than
+    #: left out, so the buttons hold their positions down the whole stack.
+    removable: bool
 
 
 class ChainCard(QWidget):
@@ -135,6 +164,28 @@ def _pin_button(pinned: bool, on_pin: Callable[[], None]) -> QToolButton:
     return button
 
 
+def _remove_button(removable: bool, on_remove: Callable[[], None]) -> QToolButton:
+    """Drop this step: the chain closes over it rather than breaking at it.
+
+    Disabled on the step nothing may take away rather than left off, for the
+    pin button's reason one row up — a chain with nothing to read is not a
+    shorter chain, which is what the tooltip says instead of the button being
+    missing.
+    """
+    button = QToolButton()
+    button.setText("✕")
+    button.setAutoRaise(True)
+    button.setEnabled(removable)
+    button.setToolTip(
+        "Remove this step — what read it reads past it"
+        if removable
+        else "The chain has to read something"
+    )
+    button.setStyleSheet(f"color: {rgb(DIM)}; border: 0;")
+    button.clicked.connect(on_remove)
+    return button
+
+
 def _note(text: str) -> QLabel:
     label = QLabel(text)
     label.setStyleSheet(f"color: {rgb(DIM)};")
@@ -162,12 +213,14 @@ class PipelinePane(QWidget):
     def __init__(
         self,
         project: str,
-        steps: Sequence[tuple[Node, QWidget | None]],
+        steps: Sequence[Step],
         current: int,
         pinned: int | None,
+        pinned_note: str,
         on_select: Callable[[int], None],
         on_open: Callable[[int], None],
         on_pin: Callable[[int], None],
+        on_remove: Callable[[int], None],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -175,8 +228,18 @@ class PipelinePane(QWidget):
 
         self.project_card = _fixed_card(f"project — {project}")
         self.cards = tuple(
-            self._build_card(position, node, knobs, current, pinned, on_select, on_open, on_pin)
-            for position, (node, knobs) in enumerate(steps)
+            self._build_card(
+                position,
+                step,
+                current,
+                pinned,
+                pinned_note,
+                on_select,
+                on_open,
+                on_pin,
+                on_remove,
+            )
+            for position, step in enumerate(steps)
         )
 
         # Plain `QWidget`, so the stack's sheet reaches it: a subclass here would
@@ -203,13 +266,14 @@ class PipelinePane(QWidget):
     @staticmethod
     def _build_card(
         position: int,
-        node: Node,
-        knobs: QWidget | None,
+        step: Step,
         current: int,
         pinned: int | None,
+        pinned_note: str,
         on_select: Callable[[int], None],
         on_open: Callable[[int], None],
         on_pin: Callable[[int], None],
+        on_remove: Callable[[int], None],
     ) -> ChainCard:
         card = ChainCard(selected=position == current, on_select=lambda: on_select(position))
         layout = QVBoxLayout(card)
@@ -217,13 +281,17 @@ class PipelinePane(QWidget):
         layout.setSpacing(4)
 
         head = QHBoxLayout()
-        head.addWidget(_title(f"{position + 1}. {node.tool_id}"))
+        head.addWidget(_title(f"{position + 1}. {step.node.tool_id}"))
         head.addStretch(1)
         head.addWidget(_settings_button(lambda: on_open(position)))
         head.addWidget(_pin_button(position == pinned, lambda: on_pin(position)))
+        head.addWidget(_remove_button(step.removable, lambda: on_remove(position)))
         layout.addLayout(head)
-        if knobs is not None:
-            layout.addWidget(knobs)
+        if step.knobs is not None:
+            layout.addWidget(step.knobs)
         if position == pinned:
-            layout.addWidget(_note(PINNED_ELSEWHERE_NOTE))
+            # Handed over rather than chosen here: which of the three sentences
+            # the pinned step gets is `pinned.card_note`'s, and the slot under
+            # the canvas is filled from the same answer.
+            layout.addWidget(_note(pinned_note))
         return card

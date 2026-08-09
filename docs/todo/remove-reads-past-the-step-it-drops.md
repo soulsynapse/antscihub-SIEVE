@@ -1,7 +1,7 @@
 ---
 title: Remove reads past the step it drops
 step: "09.4"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k reads_past"
 opened: 2026-08-09

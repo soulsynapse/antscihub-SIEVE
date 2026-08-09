@@ -140,6 +140,17 @@ def test_offering_drops_the_tool_whose_elements_would_lose_their_meaning() -> No
     assert "narrow" in [spec.tool_id for spec in over_blocks]
 
 
+def test_offering_without_an_element_refuses_nothing_the_element_leg_would() -> None:
+    # `None` is every position downstream of an aggregator over blocks —
+    # `node_element` never recovers it — and the leg that refuses an aggregator
+    # over blocks has nothing to say there: the noun was lost upstream, so no
+    # tool here can lose it.
+    lost_the_noun = offered_tools(GRAY_FLOAT, None, SHELF)
+
+    assert [spec.tool_id for spec in lost_the_noun] == ["aggregator", "narrow", "wide"]
+    assert lost_the_noun == offered_tools(GRAY_FLOAT, ElementKind.PIXEL, SHELF)
+
+
 def test_offering_keeps_the_table_reader_that_declares_no_elements() -> None:
     offered = offered_tools(TableSpec(columns=("x", "y", "frame")), None, SHELF)
 

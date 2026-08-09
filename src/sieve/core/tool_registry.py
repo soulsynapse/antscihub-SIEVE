@@ -159,7 +159,10 @@ def offered_tools(
     tool that aggregates is implausible over blocks, because a mean of blocks
     is a quantity no count threshold is denominated in, and `node_element`
     already says so by resolving to `None`. A tool declaring no element meaning
-    at all emits a table and is exempt: it has nothing to lose.
+    at all emits a table and is exempt: it has nothing to lose. So is every
+    tool at a position whose own element meaning is `None` — the noun was lost
+    upstream and never recovers, so there is none left here for a tool to lose,
+    and the leg that exists to protect it has no subject.
 
     The source site is not here. Offering against a folder of picked files
     needs their count and extension class, which arrive with
@@ -190,7 +193,11 @@ def offered_tools(
         slack = spec.accepts.match_slack(produced)
         if slack is None:
             continue
-        if spec.element is not None and node_element(spec.element, element) is None:
+        if (
+            element is not None
+            and spec.element is not None
+            and node_element(spec.element, element) is None
+        ):
             continue
         scored.append((slack, spec.tool_id, spec))
     return tuple(spec for _, _, spec in sorted(scored, key=lambda row: row[:2]))

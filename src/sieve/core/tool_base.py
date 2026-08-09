@@ -645,11 +645,58 @@ class ArraySpec:
             self.channels, produced.channels
         )
 
+    def matches(self, produced: StreamSpec) -> bool:
+        """Whether this input is *plausibly* what `produced` should feed.
+
+        `admits`' dual, and the reason it is a second method rather than a
+        threshold on the first: `admits` is false only on proven disjointness,
+        this is true only on proven compatibility, and a wildcard is the input
+        that separates them. Ignorance is legal and never plausible, so an
+        empty `dtypes` on either side admits and does not match
+        (`todo/the-offering-predicate-is-not-the-edge-legality-check.md`).
+        The failure modes are opposite too — legality must never refuse a graph
+        that would have run, an offer must refuse most of the shelf to be worth
+        displaying — which is why one function tuned for both would be wrong for
+        each.
+
+        Proven, here, is containment rather than overlap: every dtype and
+        channel this position can produce is one the input declares it takes. A
+        partial overlap admits, because the graph may run on the frames in the
+        intersection, and does not match, because the offer would be a tool the
+        source can feed only some of the time.
+        """
+        return self.match_slack(produced) is not None
+
+    def match_slack(self, produced: StreamSpec) -> int | None:
+        """How much of what this input allows the position does not produce.
+
+        The display order `matches` is read for, derived from the same
+        comparison rather than from a score: a tool declaring exactly what
+        arrives and nothing else fits the position more tightly than one that
+        would also have taken three dtypes it will never see, and lower comes
+        first. `None` where nothing is proven, which is what `matches` reads.
+        """
+        if not isinstance(produced, ArraySpec):
+            return None
+        dtypes = self._unused(self.dtypes, produced.dtypes)
+        channels = self._unused(self.channels, produced.channels)
+        if dtypes is None or channels is None:
+            return None
+        return dtypes + channels
+
     @staticmethod
     def _compatible(required: tuple[Any, ...], produced: tuple[Any, ...]) -> bool:
         if not required or not produced:
             return True
         return bool(set(required) & set(produced))
+
+    @staticmethod
+    def _unused(required: tuple[Any, ...], produced: tuple[Any, ...]) -> int | None:
+        if not required or not produced:
+            return None
+        if not set(produced) <= set(required):
+            return None
+        return len(set(required) - set(produced))
 
 
 @dataclass(frozen=True, slots=True)
@@ -685,11 +732,31 @@ class TableSpec:
             return True
         return set(self.columns) <= set(produced.columns)
 
+    def matches(self, produced: StreamSpec) -> bool:
+        """`ArraySpec.matches` for rows: proven compatibility, never ignorance."""
+        return self.match_slack(produced) is not None
+
+    def match_slack(self, produced: StreamSpec) -> int | None:
+        """Columns the table carries that this input has no use for.
+
+        `ArraySpec.match_slack`'s quantity read off the conjunctive side: an
+        input requiring `("x", "y", "frame")` of a table that has exactly those
+        fits it more tightly than one requiring only `("x",)`, and slack counts
+        the difference the same way in both.
+        """
+        if not isinstance(produced, TableSpec):
+            return None
+        if not self.columns or not produced.columns:
+            return None
+        if not set(self.columns) <= set(produced.columns):
+            return None
+        return len(set(produced.columns) - set(self.columns))
+
 
 #: What an edge may carry. A union rather than a base class with two subclasses:
-#: there is no shared field to inherit, and the one shared operation — `admits`
-#: — has no shared implementation either, since columns and dtypes are compared
-#: on opposite logics. `kind` exists so a rejection can be *named* ("an array
+#: there is no shared field to inherit, and the shared operations — `admits` and
+#: its dual `matches` — have no shared implementation either, since columns and
+#: dtypes are compared on opposite logics. `kind` exists so a rejection can be *named* ("an array
 #: cannot feed a table input"); the narrowing itself goes through `isinstance`,
 #: which is what a type checker can follow.
 #:

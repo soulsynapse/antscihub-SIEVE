@@ -8,17 +8,23 @@ has to edit, and an import would invert the layer stack.
 Both id *and* version are part of the key. A pipeline saved against 1.0.0 has
 to keep reproducing 1.0.0's output after 1.1.0 ships, so the two coexist rather
 than the newer one shadowing the older.
+
+`offered_tools` is the one question asked *of* the shelf rather than about one
+entry, and it lives here rather than in a module of its own because a new direct
+child of `core` is a revision of `adr/core-membership-is-closed.md` and this is
+not a decision an offer needs.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any, TypeVar
 
 from sieve.core.tool_base import (
     CaptionPart,
     DisplaySurface,
     ElementDeclaration,
+    ElementKind,
     ElementNames,
     Emission,
     Mode,
@@ -29,6 +35,7 @@ from sieve.core.tool_base import (
     ToolRun,
     ToolSpec,
     WarmupKind,
+    node_element,
 )
 
 #: The decorator returns the class it was given, not `ParamsBase` — erasing the
@@ -121,6 +128,72 @@ class ToolRegistry:
 
 #: The process-wide shelf. `sieve.tools` modules populate it on import.
 REGISTRY = ToolRegistry()
+
+
+def offered_tools(
+    produced: StreamSpec,
+    element: ElementKind | None,
+    shelf: Iterable[ToolSpec],
+) -> tuple[ToolSpec, ...]:
+    """The shelf narrowed to what could plausibly go after `produced`.
+
+    VISION's new-project scenario puts an add-tool box below the last step
+    "holding what could go there", and its swap sibling asks the same of a
+    position that already has a tool in it. Neither is the question
+    `Dag._edge_faults` asks: that one is legality, false only on proven
+    disjointness, and a shortlist computed from it would hold nearly every
+    registered tool — which is a tool list, and the user already has one
+    (`todo/the-offering-predicate-is-not-the-edge-legality-check.md`).
+
+    **Derived, never declared.** No tool carries a plausibility field and
+    nothing here reads a `tool_id`. The offer is computed from what the
+    position resolved to — the stream flowing in, and the element meaning
+    `Dag.elements` folded forward to it — against declarations tools already
+    carry for other reasons, so a tool arrives offerable without having said
+    anything about offers. That is `adr/gui-knows-kinds-not-tools.md`'s
+    asymmetry one layer down, and this is the layer: `gui` renders the
+    shortlist it is handed (`gui-computes-nothing`).
+
+    Two refusals, both about the position rather than about the tool.
+    `StreamSpec.matches` is the first. The second is the element meaning — a
+    tool that aggregates is implausible over blocks, because a mean of blocks
+    is a quantity no count threshold is denominated in, and `node_element`
+    already says so by resolving to `None`. A tool declaring no element meaning
+    at all emits a table and is exempt: it has nothing to lose.
+
+    The source site is not here. Offering against a folder of picked files
+    needs their count and extension class, which arrive with
+    `todo/the-first-source-tool-moves-the-three-single-root-assumptions.md`;
+    the add-tool and swap sites have their facts already.
+
+    Args:
+        produced: What flows into the position — the upstream node's `emits`,
+            or a source's.
+        element: What one value of that stream is a value of. `None` where the
+            walk lost it or the stream is a table, and a `None` refuses
+            nothing: a position whose elements have no meaning is one where
+            this leg has no opinion, not one where every tool is implausible.
+        shelf: The specs to consider. Passed rather than taken from `REGISTRY`
+            because which shelf — the process-wide one, one version per tool, a
+            scratch one in a test — is not a question the predicate has an
+            opinion about.
+
+    Returns:
+        The plausible specs, tightest `match_slack` first and ties broken by
+        id, so the display is a function of the declarations and not of
+        registration order. Empty is a real answer and the common one where the
+        position produced a wildcard: nothing was proven, so nothing is
+        offered.
+    """
+    scored: list[tuple[int, str, ToolSpec]] = []
+    for spec in shelf:
+        slack = spec.accepts.match_slack(produced)
+        if slack is None:
+            continue
+        if spec.element is not None and node_element(spec.element, element) is None:
+            continue
+        scored.append((slack, spec.tool_id, spec))
+    return tuple(spec for _, _, spec in sorted(scored, key=lambda row: row[:2]))
 
 
 def register_tool(

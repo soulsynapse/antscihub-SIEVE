@@ -139,9 +139,14 @@ LUMA_WORKER_CAP = 2
 #: as a regression against not threading at all: two workers cost 16.12 ms/frame
 #: on four CPUs against a sequential 12.08, and 31.08 on two against 20.37.
 #:
-#: Four reproduces the sweep's optimum at every luma core set it read, which is
-#: the whole of what chose the number — one arithmetic constant measured on one
-#: machine, exactly as the caps are, and no more transferable than they are.
+#: Four agrees with the sweep's luma optimum at five of the six core sets it
+#: read, and misses the sixth — `class1[:8]`, where the measured optimum is
+#: sequential and the floor hands out two workers — by 2.1%, inside the
+#: agreement band that sweep's own instrument note declares. Nothing measured
+#: there beats four: eight cores per worker would match `class1[:8]` at the cost
+#: of `class0[:8]`, and would drop the colour path off its measured optimum on
+#: the whole allocation. One arithmetic constant measured on one machine,
+#: exactly as the caps are, and no more transferable than they are.
 #: `docs/findings/2026.08.09-the-luma-worker-cap-is-right-at-sixteen-cores-and-a-third-slower-at-four.md`.
 CORES_PER_WORKER = 4
 
@@ -174,7 +179,9 @@ def resolve_workers(requested: int | None = None, *, luma: bool = False) -> int:
     count at all.
 
     The floor applies to both paths and the two have different standing behind
-    them. On the luma path it is measured, at every core set the sweep read. On
+    them. On the luma path it is measured, at five of the six core sets the
+    sweep read; at the sixth the measured optimum is sequential and the floor
+    hands out two workers, by a margin `CORES_PER_WORKER`'s comment sizes. On
     the colour path only the whole-allocation sizes were read — 16 and 32, where
     the floor is slack and the answer is `INFERRED_WORKER_CAP` either way — so
     what is claimed below those sizes is the mechanism and not a reading: a

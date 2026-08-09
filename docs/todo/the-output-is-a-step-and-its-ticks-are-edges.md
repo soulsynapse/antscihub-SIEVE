@@ -40,3 +40,23 @@ shape by a private route that leaves the deferral standing.
     $ uv run pytest tests -q -k ticks_are_edges
     1000 deselected in 0.93s
     exit: 5
+
+## 2026-08-09 (review): the one-input posture is hardened at five sites, not one
+
+Folded in rather than minted, because it is the same work this item already
+owns. "The contract and the executor" is where the port-keyed form goes, but
+the shape it replaces is not a default that a wider one quietly supersedes —
+it is a refusal, installed deliberately and in five places.
+`Pipeline._check` raises `two edges feed {node}` before any of the rest sees a
+graph (`core/pipeline_model.py`); `Dag.node_keys`, `Dag._elements` and
+`Dag._element_names` each unpack `(parent,) = fed` (`pipeline/dag.py`), and
+`executor.py` does the same. `dag.py`'s own header cites the `Pipeline`
+refusal as the reason it may assume one, and the last three of those unpacks
+were *put there* by
+[a-nodes-inputs-are-labeled-and-variadic.md](a-nodes-inputs-are-labeled-and-variadic.md),
+now `done`, on the argument that silently keying on the first of two is the
+failure being prevented. So the first ticked second product is a raise at
+graph-construction time, well before anything can draw it, and unwinding the
+five is inside this step rather than discovered by it. What replaces each is
+the port-keyed read, not a drop of the check: the invariant that survives is
+that an unlabeled second edge is still refused.

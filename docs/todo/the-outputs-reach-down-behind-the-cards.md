@@ -35,3 +35,13 @@ into one node; this one runs after it and paints what it built.
     $ uv run pytest tests/gui -q -k reaches_down
     119 deselected in 0.67s
     exit: 5
+
+## 2026-08-09 (review): the falsifiability argument now has two homes
+
+The paragraph above and `PLAN.md`'s Phase 9 ordering sentence make the same
+argument in the same words — schema v1's one input per node, so no edge has a
+card to occlude until 09.2 lands. One fact, one home: when this step is built,
+one of the two becomes a link to the other, and PLAN is the one that should
+shrink, since the reason a step sits where it does belongs to the step. While
+both stand, PLAN's version also overstates its own sequence: it says the edges
+are "drawn under all of it last", and 09.8's crop fan lands after this step.

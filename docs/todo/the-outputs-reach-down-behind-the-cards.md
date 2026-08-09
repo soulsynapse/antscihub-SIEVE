@@ -1,7 +1,7 @@
 ---
 title: The outputs reach down behind the cards
 step: "09.7"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k reaches_down"
 opened: 2026-08-09
@@ -82,3 +82,32 @@ same thing at the site. So the review that closes this should decide whether an
 unbuilt clause of the body leaves the item open behind 09.2 or closes with the
 clause handed over; `done_when` reaches the four clauses that were buildable and
 was not edited here.
+
+## 2026-08-09 (review): done, with the port name handed to 09.2
+
+`done`. The criterion is untouched and passes here (5 passed, 157 deselected),
+the full suite is green at 1122, `ruff check`/`format --check` and
+`doc_index --check` are clean, and the worktree was clean at the start of this
+review. The schema reading the work section corrects checks out against
+`Pipeline._check` and `walk.node_order`, and the four clauses `done_when`
+reaches are all mutation-sensitive: `drawLine`, the arrowhead's shoulders, the
+lane loop, the start point, and the column's own `fillRect` are each killed by
+`tests/gui/test_chain_edges.py`.
+
+The fork the work run left is answered by the rule
+[the-review-has-a-path-for-a-partial-deferral.md](the-review-has-a-path-for-a-partial-deferral.md)
+already states: the residue is a *subject* this item could not have built, not
+an assertion it was supposed to satisfy, and it has a home — so `done` plus a
+carried clause, not `open` behind a deferral that would serve a work run a green
+criterion and an incentive to justify itself. 09.2 now names the arrowhead's
+port explicitly in a section of its own; what makes this the third instance of
+that shape, and the first where nothing was amended because the criterion was
+never wrong, is
+[findings/loop/2026.08.07-the-review-prompt-has-no-path-for-a-partial-deferral.md](../findings/loop/2026.08.07-the-review-prompt-has-no-path-for-a-partial-deferral.md).
+
+Two lines of the painter are argued and held by nothing — the `drawPolygon` that
+puts the arrowhead on the picture at all, and the guard that drops an upward
+edge in a cyclic document. Both survive mutation under all of `tests/gui`.
+Folded into
+[the-seam-height-and-the-travel-flag-have-no-case.md](the-seam-height-and-the-travel-flag-have-no-case.md),
+which is the same claim about 09.6's two lines.

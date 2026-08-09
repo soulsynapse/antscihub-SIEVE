@@ -37,3 +37,33 @@ The `done_when` above is the seam half, because it is the one with a wrong
 assertion rather than a missing one; the travel case is the second half and its
 own sweep, `--mutant "self._travelled = self._travelled or self._hover != self._grab_from ==> pass"`
 over the same file, is what closes it.
+
+## 09.7's painter has the same two shapes (2026-08-09, review)
+
+Two more lines of Phase 9 GUI, from `173d535`, whose reason is written down at
+length and whose value no case under `tests/gui` can see. Same claim, same
+remedy, so they are folded here rather than minted beside.
+
+`ChainColumn._paint_edge`'s `painter.drawPolygon(arrowhead(end))` is the line
+that puts an arrowhead on the picture at all. `arrowhead()` itself is asserted
+as a function — the shoulders are above the point, the apex is the point — and
+that case never renders, so `==> pass  # ` survives the whole of
+`tests/gui/test_chain_edges.py`: every edge in the stack loses its head and
+nothing goes red. What the occlusion case reads at the passed card is the
+line's pixels, not the head's. The case this needs is the arrowhead's own
+pixels in the gap, a few rows above where the line ends.
+
+`ChainColumn.__init__`'s `tuple(edge for edge in edges if edge[0] < edge[1])` is
+the cycle guard, and its comment argues it: a walk that puts a producer below
+its reader is a cycle, which `walk.py` still has to draw and which no downward
+line describes. `==> tuple(edges)` survives all of `tests/gui` — no fixture
+anywhere has an upward edge, so the clause runs only in the branch nothing
+takes. The case is a pane whose `reads` name a later position: the guard drops
+the edge, and the mutant draws an arrowhead pointing down at the card that
+produced it.
+
+Both sweeps are over `src/sieve/gui/chain_stack.py` against
+`uv run pytest -q tests/gui/test_chain_edges.py`, and neither is in `done_when`
+above, which sweeps `gui/layout.py`: `mutation_sweep.py` takes one `--file`, so
+the union of the four is not a single command. Whoever closes this closes all
+four and says so — the criterion certifies the seam alone.

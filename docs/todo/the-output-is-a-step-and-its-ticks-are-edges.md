@@ -122,3 +122,23 @@ writing is a node at all: MOCKUP-MAP's "Output is a step" row presumes it is,
 and the only writer the tree has says it is not. Answering the narrow question
 without that one would admit a shape into the contract that the existing writer
 did not need.
+
+## 2026-08-09 (review): the arrowhead's port name is now this item's, in the picture as well as the form
+
+Folded in rather than minted, because it is the same clause this item already
+owns from the other end. 09.7 built the chain's edges and closed
+([the-outputs-reach-down-behind-the-cards.md](the-outputs-reach-down-behind-the-cards.md))
+with one clause of its body unbuilt: *a port is named at the arrowhead only
+where the destination has more than one input.* Nothing in the tree produces a
+name for a port — `Edge` has no port field and `Pipeline._check` refuses the
+second inbound edge — so an implementation would have invented both the fan-in
+and the word beside it. This item is where the two arrive together: "the edges
+into the card are labeled by product" is that name, and it has to be drawn at
+the arrowhead in `gui/chain_stack.py`'s painter, not only listed on the output
+form. The painter's seams for it are `arrowhead` and `ChainColumn._paint_edge`,
+both module-level or public for that reason.
+
+`done_when` is unchanged. The reviewer that closes this should check that
+`-k ticks_are_edges` reaches the drawn label and not only the derivation — a
+case that asserts the tick-to-edge mapping and never renders the stack would
+leave the picture's half of this clause exactly as unheld as it is today.

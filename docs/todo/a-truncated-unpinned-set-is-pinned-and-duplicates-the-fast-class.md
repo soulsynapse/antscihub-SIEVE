@@ -90,3 +90,19 @@ reading away.
 This is a measurement, not a criterion: the `done_when` above is about the axis
 and does not cover the sweep, so a review may want to widen it or split the
 reading out.
+
+## Review note 2026-08-09: this item's criterion cannot witness the section above
+
+The colour sweep folded above is a measurement, and `done_when` is a unit test
+on the core-count axis that will be green whether or not the sweep is ever run.
+This is a second instance of
+[a folded item outgrows a criterion that cannot be widened to match](../findings/loop/2026.08.08-a-folded-item-outgrows-a-criterion-that-cannot-be-widened-to-match.md),
+and the remedy that finding settled is the one to apply: the review that finds
+the axis test green rotates the criterion rather than setting `done`. The
+reading has no executable form — it produces a finding, not a green command —
+so the rotation is to leave the item `open` with the sweep named, and it closes
+when the colour core-count cells are in `docs/findings/`.
+
+It was not split into an item of its own because the ordering argument above is
+the whole reason it has a home here: run before the axis fix, a third of its
+rows are the duplicate mask this item exists to end.

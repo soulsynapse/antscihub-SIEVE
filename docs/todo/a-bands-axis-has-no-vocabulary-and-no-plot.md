@@ -2,9 +2,9 @@
 title: A band's axis has no vocabulary and no plot to be dragged on
 priority: normal
 phase: "07"
-status: deferred
-deferred_for: decision
-gated_on: how a band names its axis, which one enum cannot carry across Hz, a runtime-dependent unit, and a fraction — and which two of detect's three bands have no plot to name at all
+status: open
+gated_on: nothing
+done_when: "uv run pytest tests -q -k declared_surface"
 opened: 2026-08-08
 ---
 
@@ -53,3 +53,32 @@ no handoff surface and the tuning loop's `Band drag → graphs repaint` row in
 VISION's budget table is answered by the value band alone. That is a decision,
 which is why this carries no criterion: what the command would assert is the
 thing being decided.
+
+## Ruled 2026-08-09: declared display surfaces
+
+Kendrick's ruling: SIEVE grows the display surface, as a declaration. A band
+param names the surface kind that edits it — scalogram, threshold-on-trace,
+count — and the execution side grows a preview-only display channel the tool
+fills: not a product, not cache-keyed, never selectable. The enum names the
+surface and not the unit; units ride with the data at runtime, which is what
+the phase-1 vocabulary objection cannot reach. `gui` stays kinds-not-tools —
+a surface kind is a kind — and `declared-means-verified` holds by refusing at
+registration a declared surface nothing fills, or a filled channel nothing
+declared. The referent's tuning centerpiece
+([adr/the-mockup-is-the-gui-end-state.md](../adr/the-mockup-is-the-gui-end-state.md))
+is what this mechanism feeds.
+
+Boundaries the ruling sets rather than leaves open: splitting detect into
+smaller tools is *not* part of this — if the display channel makes that
+attractive later it is a separate decision against 04.8. And the mechanism is
+minted once: the canvas-ownership problem (what a tool shows on the canvas,
+MOCKUP-MAP.md's first non-settlement) should be answered by this same
+declaration vocabulary or by a revision of it, not by a second parallel one.
+The review that lands the mechanism mints the ADR; this section is the
+holding text until then.
+
+`done_when` at minting, red because nothing matches:
+
+    $ uv run pytest tests -q -k declared_surface
+    1000 deselected in 0.89s
+    exit: 5

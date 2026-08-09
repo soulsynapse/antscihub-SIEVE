@@ -99,7 +99,7 @@ sieve = "sieve.cli.app:main"
 # PySide6 import anywhere under `sieve.cli`, and import-linter reads
 # function-level imports too, so there is no lazy spelling that would make the
 # subcommand legal. Two entry points is the honest shape of one distribution
-# holding two front ends — `sieve-gui.cmd` at the root is what a person
+# holding two front ends — `SIEVE.py` at the root is what a person
 # double-clicks, and this is what it runs.
 sieve-gui = "sieve.gui.app:main"
 

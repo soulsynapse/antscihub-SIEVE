@@ -6,9 +6,10 @@ slider, watch the graphs refill faster than the video plays.
 
 ## Running it
 
-`sieve-gui.cmd` at the root opens the window — double-click it, or run it from
-any shell. It needs [uv](https://docs.astral.sh/uv/) and nothing else: no
-`python` on PATH, no venv to activate, no install step first.
+`SIEVE.py` at the root opens the window — double-click it, or run it from any
+shell. It needs [uv](https://docs.astral.sh/uv/) and a Python to open the file
+itself (any one — uv owns the interpreter the app actually runs on): no venv
+to activate, no install step first.
 
 The window opens on the projects in whatever directory you launched it from, so
 run it from the folder your `.sieve.yaml` projects are in. The headless half is the

@@ -3539,8 +3539,9 @@ class Control(QWidget):
 #
 # The strip is the tree's paint and hit test with the player and the bar's
 # window replaced by the constants below, so the zones announce themselves and
-# the bubble follows the cursor. Nothing here writes a window: a drag has no
-# owner to tell, and the sample span is what the band shows.
+# the bubble follows the cursor. The strip does write the window: a drag on the
+# body carries the whole of it, and the boxes in the control row read back what
+# the drag left. Nothing else downstream reads the span, so the band is unmoved.
 
 # 200 s at 30 fps, and a window and a playhead on it. `_PLAYHEAD_AT` is the
 # fraction the plots draw their playhead at, so the strip and they agree.
@@ -3563,6 +3564,7 @@ _HEADER_HEIGHT = 9.0
 _TRACK_INSET = 4.0
 _EDGE_GRAB = 6.0
 _MIN_BAND_PIXELS = 2.0
+_MIN_BAND_FRAMES = 1
 
 
 def format_timecode(seconds: float) -> str:
@@ -3608,21 +3610,42 @@ class Geometry:
 
 
 class MockStrip(QWidget):
-    """bar.py's band: the whole asset, the window on it, the playhead, the bubble."""
+    """bar.py's band: the whole asset, the window on it, the playhead, the bubble.
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    Two gestures, and the toggle decides which the edges answer to. The body
+    always moves the whole window, keeping its length; the edges resize it only
+    while HANDLES is pressed, so the common gesture cannot land on a handle by
+    six pixels and stretch the window the user meant to slide.
+    """
+
+    def __init__(self, on_window_change=lambda span: None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._hover: int | None = None
+        self._span = WINDOW_SPAN
+        self._handles = False
+        self._on_window_change = on_window_change
+        # What the press grabbed — "lo", "hi", "move" — with the span and the
+        # frame it began at, so every move reads from the press rather than
+        # from the last one and a slow drag cannot accumulate the rounding.
+        self._grab: str | None = None
+        self._grab_from = 0
+        self._grab_span = self._span
         self.setFixedHeight(STRIP_HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.SizeHorCursor)
         self.setMouseTracking(True)
 
+    def set_handles_enabled(self, on: bool) -> None:
+        self._handles = on
+        if not on and self._grab in ("lo", "hi"):
+            self._grab = None
+        self.update()
+
     def geometry_now(self) -> Geometry:
         return Geometry(frame_count=SOURCE_FRAMES, width=float(self.width()))
 
     def window_rect(self) -> QRectF:
-        left, right = self.geometry_now().span(*WINDOW_SPAN)
+        left, right = self.geometry_now().span(*self._span)
         return QRectF(left, _TRACK_INSET, right - left, self.height() - 2.0 * _TRACK_INSET)
 
     def header_rect(self) -> QRectF:
@@ -3657,6 +3680,10 @@ class MockStrip(QWidget):
         painter.fillRect(self.header_rect(), _WINDOW_HEADER)
         painter.setPen(QPen(_WINDOW_EDGE, 1.0))
         painter.drawRect(window.adjusted(0.5, 0.5, -0.5, -0.5))
+        if self._handles:
+            painter.setPen(QPen(_WINDOW_EDGE, 3.0))
+            for x in (window.left() + 1.0, window.right() - 1.0):
+                painter.drawLine(QPointF(x, window.top()), QPointF(x, window.bottom()))
 
         painter.setPen(QPen(_PLAYHEAD, 1.0))
         x = self.geometry_now().centre_of_frame(PLAYHEAD_FRAME)
@@ -3671,11 +3698,63 @@ class MockStrip(QWidget):
             painter.drawText(box, int(Qt.AlignmentFlag.AlignCenter), self.bubble_text())
         painter.end()
 
+    def grab_at(self, position: QPointF) -> str | None:
+        """What a press at `position` takes hold of.
+
+        Edges before containment, as the hit test has it: an edge is inside too.
+        With HANDLES up the edges are not there to be found, and a press six
+        pixels inside the boundary is a move like any other.
+        """
+        window = self.window_rect()
+        x = position.x()
+        if self._handles:
+            if abs(x - window.left()) <= _EDGE_GRAB:
+                return "lo"
+            if abs(x - window.right()) <= _EDGE_GRAB:
+                return "hi"
+        if window.left() <= x <= window.right():
+            return "move"
+        return None
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        position = event.position()
+        self._grab = self.grab_at(position)
+        self._grab_from = self.geometry_now().frame_at(position.x())
+        self._grab_span = self._span
+        self._follow_cursor(position)
+
     def mouseMoveEvent(self, event) -> None:
         position = event.position()
         self._hover = self.geometry_now().frame_at(position.x())
+        if self._grab is not None:
+            self._drag(position)
         self._follow_cursor(position)
         self.update()
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mouseReleaseEvent(event)
+            return
+        self._grab = None
+        self._follow_cursor(event.position())
+
+    def _drag(self, position: QPointF) -> None:
+        frame = self.geometry_now().frame_at(position.x())
+        start, end = self._grab_span
+        if self._grab == "lo":
+            span = (min(frame, end - _MIN_BAND_FRAMES), end)
+        elif self._grab == "hi":
+            span = (start, max(frame, start + _MIN_BAND_FRAMES))
+        else:
+            length = end - start
+            moved = min(max(start + frame - self._grab_from, 0), SOURCE_FRAMES - length)
+            span = (moved, moved + length)
+        if span != self._span:
+            self._span = span
+            self._on_window_change(span)
 
     def leaveEvent(self, event) -> None:
         super().leaveEvent(event)
@@ -3684,13 +3763,15 @@ class MockStrip(QWidget):
             self.update()
 
     def _follow_cursor(self, position: QPointF) -> None:
-        """Edges before containment, as the hit test has it: an edge is inside too."""
-        window = self.window_rect()
-        x = position.x()
-        if abs(x - window.left()) <= _EDGE_GRAB or abs(x - window.right()) <= _EDGE_GRAB:
+        grab = self._grab if self._grab is not None else self.grab_at(position)
+        if grab in ("lo", "hi"):
             shape = Qt.CursorShape.SizeHorCursor
-        elif self.header_rect().contains(position):
-            shape = Qt.CursorShape.OpenHandCursor
+        elif grab == "move":
+            shape = (
+                Qt.CursorShape.ClosedHandCursor
+                if self._grab == "move"
+                else Qt.CursorShape.OpenHandCursor
+            )
         else:
             shape = Qt.CursorShape.PointingHandCursor
         self.setCursor(shape)
@@ -3739,6 +3820,22 @@ def build_timeline() -> QWidget:
     timecode.setTextFormat(Qt.TextFormat.PlainText)
     timecode.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
+    handles = QPushButton("HANDLES")
+    handles.setCheckable(True)
+    handles.setToolTip(
+        "Arm the window's edges: pressed, an edge drag resizes;"
+        " up, only the whole window moves"
+    )
+
+    def show_span(span: tuple[int, int]) -> None:
+        for box, seconds in ((start_box, span[0]), (length_box, span[1] - span[0])):
+            box.blockSignals(True)
+            box.setValue(seconds / SOURCE_FPS)
+            box.blockSignals(False)
+
+    strip = MockStrip(on_window_change=show_span)
+    handles.toggled.connect(strip.set_handles_enabled)
+
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(6)
@@ -3748,6 +3845,7 @@ def build_timeline() -> QWidget:
     row.addWidget(start_box)
     row.addWidget(QLabel("+"))
     row.addWidget(length_box)
+    row.addWidget(handles)
     row.addWidget(timecode)
 
     timeline = QWidget()
@@ -3756,7 +3854,7 @@ def build_timeline() -> QWidget:
     column.setContentsMargins(8, 2, 8, 4)
     column.setSpacing(2)
     column.addLayout(row)
-    column.addWidget(MockStrip())
+    column.addWidget(strip)
     return timeline
 
 
@@ -3807,6 +3905,10 @@ def _chrome_stylesheet() -> str:
             padding: 2px 4px;
         }}
         #timeline QPushButton:hover {{
+            border-color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});
+        }}
+        #timeline QPushButton:checked {{
+            color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});
             border-color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});
         }}
         #timeline QDoubleSpinBox {{

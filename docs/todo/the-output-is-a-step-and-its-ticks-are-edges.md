@@ -1,7 +1,7 @@
 ---
 title: The output is a step, and its ticks are edges
 step: "09.2"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests -q -k ticks_are_edges && uv run pytest tests/gui -q -k names_do_not_collide"
 opened: 2026-08-09
@@ -265,3 +265,25 @@ One mutant of the five swept survives and is argued rather than fixed:
 together, and a clause about two names not colliding is invariant to a
 transformation applied to both. What the criterion holds is relative placement;
 the box's own vertical origin is only how it is expressed.
+
+## 2026-08-09 (review): done — the clause has a geometric referent and mutants die on it
+
+Criterion re-run on the committed tree: both legs green (7 passed / 1 passed),
+`done_when` untouched, and the worker left `status` at `awaiting-review`. Three
+mutants run independently of the worker's sweep: the lift zeroed
+(`rank * lineSpacing() ==> rank * 0.0`) is KILLED on the disjointness assertion,
+at exactly the two boxes the prior review measured; `label_headroom ==> 0.0` is
+KILLED on the clear-of-the-card-above assertion; the lane ordering reversed is
+KILLED, though by the older bare-arrowhead case rather than by the new one — with
+two names the only permutation is the one that lifts the wrong lane, so the
+ordering clause has an oracle only for this arity. A shrunk `label_rect` width is
+KILLED by the wider-than-`EDGE_LANE` guard, which is what stops the disjointness
+claim being arithmetic.
+
+Not a defect, recorded because it is the shape a later caller would meet:
+`_lifts` ranks across all of `self._labels` and `label_headroom` is the max over
+all of them, while `PipelinePane` reserves that headroom above the output card
+alone. Today every label is an edge into the foot, so the two agree; a caller
+that named an edge into a mid-stack card would stack the names by a global rank
+and open the gap in the wrong place. Nothing in the tree can reach it and the
+item did not ask for it.

@@ -25,7 +25,12 @@ import numpy.typing as npt
 import pytest
 
 from sieve.core.pipeline_model import Node, Pipeline, SourceSpan
-from sieve.core.tool_base import ParamStereotype, node_lookahead_frames, node_warmup_frames
+from sieve.core.tool_base import (
+    DisplaySurface,
+    ParamStereotype,
+    node_lookahead_frames,
+    node_warmup_frames,
+)
 from sieve.core.tool_registry import REGISTRY
 from sieve.core.types import ChannelSpec, Frame, FrameCount, FrameSpan
 from sieve.pipeline.dag import Dag
@@ -43,9 +48,12 @@ from sieve.tools.detect import (
     gate_series,
     inband_count,
     morlet_band_power,
+    morlet_power,
+    morlet_power_profile,
     wavelet_edge_frames,
     windowed_mean,
 )
+from sieve.tools.detect import display as detect_display
 from sieve.tools.detect import run as detect_run
 
 SPEC = DetectParams.spec()
@@ -419,3 +427,68 @@ def test_the_regeneration_command_names_every_golden_and_the_package() -> None:
     assert written == sorted(f"{GOLDEN_PREFIX}{name}.npy" for name in GOLDEN_NAMES)
     for value in ("(4.0, 8.0)", "(60.0, np.inf)", "(0.25, np.inf)", "window_frames=15"):
         assert value in REGENERATE
+
+
+def test_detect_fills_its_three_declared_surfaces() -> None:
+    """Every band's picture, at the frame the window is centred on.
+
+    The three pairs of handles are the reason this channel exists: `freq_band`
+    is in Hz, `value_band` in the incoming signal's own units and `count_frac`
+    is dimensionless, so no one plot holds two of them and no axis enum could
+    have named all three (`todo/a-band-has-no-stereotype-of-its-own.md`).
+
+    What each surface is checked against is the chain itself, not a recomputed
+    lookalike: the trace is the array `inband_count` compares, and the count is
+    the windowed mean in the same fraction `count_frac` stores. A picture the
+    detection was not computed from would be handles cutting one series while
+    the gate answered for another.
+    """
+    params = golden_params()
+    window = span_for(params, target=120)
+    row = window.target_row
+    series = np.stack([np.asarray(frame.data, np.float32).reshape(-1) for frame in window])
+    freqs = default_freqs(params.fps)
+    i, j = band_indices(freqs, params.freq_band[0], params.freq_band[1])
+    power = morlet_band_power(series, params.fps, freqs, i, j, workers=1)
+    windowed = windowed_mean(
+        inband_count(power, params.value_band[0], params.value_band[1]),
+        params.window_frames,
+        params.centered,
+    )
+
+    drawn = detect_display(params, window)
+
+    assert set(drawn) == SPEC.display_surfaces
+    assert set(drawn) == {DisplaySurface.SCALOGRAM, DisplaySurface.TRACE, DisplaySurface.COUNT}
+    assert all(int(frame.index) == 120 for frame in drawn.values())
+    # The whole bank, not the band: the handles have to be draggable to a
+    # frequency the tool is not currently summing over.
+    assert drawn[DisplaySurface.SCALOGRAM].data.shape == (len(freqs), 1)
+    assert j - i < len(freqs)
+    assert np.array_equal(drawn[DisplaySurface.TRACE].data.reshape(-1), power[row])
+    assert drawn[DisplaySurface.COUNT].data.shape == (1, 1)
+    assert drawn[DisplaySurface.COUNT].data[0, 0] == pytest.approx(windowed[row] / BLOCKS)
+
+
+def test_the_declared_surface_scalogram_is_the_cube_averaged_over_blocks() -> None:
+    """`morlet_power_profile` is `morlet_power`'s cube, reduced inside the loop.
+
+    The two share a pad length and a daughter and differ only in where the mean
+    over blocks is taken, so this is the case that keeps the second loop from
+    drifting from the first — a scalogram cut with a different pad is a picture
+    of a transform the gate was not computed from. The cube exists here and
+    nowhere in the tool: at a real block grid it is the memory this reduction
+    is written to avoid.
+    """
+    series = golden_series()[:64]
+    freqs = default_freqs(FPS)
+
+    profile = morlet_power_profile(series, FPS, freqs, workers=1)
+    cube = morlet_power(series, FPS, freqs, workers=1)
+
+    assert profile.shape == (len(freqs), 64)
+    assert profile.dtype == np.float32
+    # Not bit-equality: the reduction is the same operation over the same
+    # values, but numpy is free to pair them differently when the axis it sums
+    # over is not the one it was handed.
+    np.testing.assert_allclose(profile, cube.mean(axis=2), rtol=1e-6, atol=1e-6)

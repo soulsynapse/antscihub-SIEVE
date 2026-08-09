@@ -62,6 +62,16 @@ loop reads in step and the graph answers behind it, so one `FrameResult` is
 assembled from outputs computed at different steps and is complete only when the
 slowest node in the graph has reached that frame.
 
+**The display channel is the one thing here that is not a product.** A node
+named in `show` fills the surfaces its band parameters declare
+(`core/tool_base.py`, `ToolDisplay`), and those go out beside `outputs` rather
+than in it: nothing downstream reads them, no key names them, and no save screen
+can offer them. Two properties keep that honest. The fill is refused unless it
+is exactly the declared set, so a surface cannot quietly stop being drawn; and a
+watched node is never *served* from the store, because a hit skips the call and
+the display was never in the store to be skipped with it — the alternative is a
+plot with holes in it exactly where the run went fastest.
+
 Two consequences worth naming. The result for a frame is yielded *after* the
 frames its lookahead reaches have been read, which costs latency rather than
 decode — a preview of a centred detector arrives `k` frames later than one of a
@@ -74,14 +84,16 @@ served back later as a different frame's result.
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from sieve.core.pipeline_model import Node
 from sieve.core.tool_base import (
     ArraySpec,
+    DisplaySurface,
     Mode,
+    ToolDisplay,
     ToolRun,
     ToolSpec,
     node_lookahead_frames,
@@ -117,6 +129,21 @@ class UnrunnableNodeError(RuntimeError):
     the enumeration belongs beside the signature and a second copy in this
     docstring would be the one that went stale. The message this carries is that
     function's clause with the node's identity in front of it.
+    """
+
+
+class UndrawableNodeError(RuntimeError):
+    """A node this run was asked to show cannot fill the channel it declared.
+
+    `UnrunnableNodeError`'s sibling for the preview-only side, and separate from
+    it because the two are recoverable in different ways: a graph containing an
+    uncallable node computes nothing, while a caller that asked to watch the
+    wrong node can drop the request and still get every product the run was for.
+
+    Both directions of "declared means filled" land here (`ToolDisplay`): a node
+    asked to show that declares no surface at all, checked up front for
+    `_bind`'s reason, and a fill that is not exactly the declared set, which is
+    checkable only once the tool has answered.
     """
 
 
@@ -166,6 +193,17 @@ class FrameResult:
     #: of its own (`adr/detector-is-a-node.md`), so what is decoded is whole
     #: footage either way and there is no flag left to carry.
     source: Frame | None = None
+    #: What the nodes this run was asked to *show* filled their declared display
+    #: surfaces with, by node id then surface. Empty for every node nobody asked
+    #: about, which is every node of a headless run: the channel costs a second
+    #: derivation per frame, so it is filled on request and never by default.
+    #:
+    #: Beside `outputs` and emphatically not in it. What a node emits is a
+    #: product — typed by `emits`, offered by `emissions`, keyed by the store,
+    #: read by the node below — and a surface is none of those. A scalogram
+    #: arriving in `outputs` would be a second stream the graph never declared,
+    #: and the first thing that happened to it is that a save screen offered it.
+    displays: Mapping[str, Mapping[DisplaySurface, Frame]] = field(default_factory=dict)
 
     def __init__(
         self,
@@ -173,11 +211,13 @@ class FrameResult:
         outputs: Mapping[str, Frame],
         from_cache: frozenset[str],
         source: Frame | None = None,
+        displays: Mapping[str, Mapping[DisplaySurface, Frame]] | None = None,
     ) -> None:
         object.__setattr__(self, "index", FrameIndex.of(index))
         object.__setattr__(self, "outputs", outputs)
         object.__setattr__(self, "from_cache", from_cache)
         object.__setattr__(self, "source", source)
+        object.__setattr__(self, "displays", {} if displays is None else displays)
 
     def __getitem__(self, node_id: str) -> Frame:
         """That node's output.
@@ -257,6 +297,7 @@ class _Partial:
     outputs: dict[str, Frame] = field(default_factory=dict)
     from_cache: set[str] = field(default_factory=set)
     source: Frame | None = None
+    displays: dict[str, Mapping[DisplaySurface, Frame]] = field(default_factory=dict)
 
 
 def execute(
@@ -264,6 +305,7 @@ def execute(
     reader: FrameSource,
     *,
     store: FrameStore | None = None,
+    show: Collection[str] = (),
 ) -> Iterator[FrameResult]:
     """Run `plan` against `reader`, yielding one result per frame of the span.
 
@@ -286,6 +328,17 @@ def execute(
         store: Where computed frames are looked up and kept. Defaults to
             keeping nothing, so a caller that has not thought about caching gets
             correct results rather than an unbounded dict it did not ask for.
+        show: Nodes whose declared display surfaces to fill — the panel a user
+            is dragging a band on, and nothing else. Empty by default because
+            the fill is a second derivation of the same window and a run nobody
+            is watching is asked to draw nothing. **A node in here is not served
+            from the store**: a hit skips the call, the display is not in the
+            store to be skipped with it, and a surface with holes in it where
+            the cache answered is a plot that lies about the footage rather than
+            one that is missing. The node is still *written* to the store, so
+            watching a node costs this run its own re-use and costs the next run
+            nothing (`adr/cache-admission-is-bounded-warmup.md` decides what may
+            be keyed; this decides only what is read back).
 
     Yields:
         One `FrameResult` per frame in `plan.span`, in order.
@@ -295,11 +348,14 @@ def execute(
             front, so a graph that cannot finish does not first decode half of
             it — or if a node's output does not carry the frame index it was
             asked to answer for.
+        UndrawableNodeError: if a node in `show` declares no surfaces, or fills
+            them with something other than exactly what it declared.
         FormatMismatchError: if the reader's format is not the plan's.
         VideoDecodeError: if a frame in the range cannot be read.
     """
     keep = NullFrameStore() if store is None else store
     bindings = _bind(plan)
+    watched = _watched(plan, show)
     histories: dict[str, deque[Frame]] = {
         node_id: deque(maxlen=bound.window)
         for node_id, bound in bindings.items()
@@ -358,13 +414,18 @@ def execute(
             # handed a better-warmed frame than it would have computed, which is
             # still a range that does not equal its cold run.
             reusable = key is not None and answers_for - first >= bound.lead_in
+            # A watched node computes: what the store holds is the output, and
+            # the display channel beside it was never in there to be served.
+            # Reading anyway would fill the surface only on the frames that
+            # missed, which is a plot with holes where the run went fastest.
+            servable = reusable and node.node_id not in watched
             # Where the one lookup happens. A node whose history the hit does
             # not fill can be asked before its input is fetched, which is what
             # keeps a warm re-render from decoding; every other node is asked
             # after, so that the frames it was going to skip still land in the
             # window or the feed behind it.
-            eager = reusable and node.node_id in reads_regardless
-            if reusable and not eager:
+            eager = servable and node.node_id in reads_regardless
+            if servable and not eager:
                 cached = keep.get(key, answers_for)
                 if cached is not None:
                     _serve(node.node_id, cached, answers_for, emitted, pending)
@@ -397,7 +458,11 @@ def execute(
             produced = _run_node(node, window, bound, plan, answers_for)
             fed_through[node.node_id] = answers_for
             emitted[node.node_id] = produced
-            pending.setdefault(answers_for, _Partial()).outputs[node.node_id] = produced
+            held = pending.setdefault(answers_for, _Partial())
+            held.outputs[node.node_id] = produced
+            fill = watched.get(node.node_id)
+            if fill is not None:
+                held.displays[node.node_id] = _drawn(node, fill, window, plan, answers_for)
             _remember(feeds, node.node_id, incoming)
             if reusable:
                 keep.put(key, answers_for, produced)
@@ -530,6 +595,7 @@ def _completed(
                 outputs=held.outputs,
                 from_cache=frozenset(held.from_cache),
                 source=held.source,
+                displays=held.displays,
             )
 
 
@@ -653,6 +719,82 @@ def _bind(plan: ExecutionPlan) -> dict[str, BoundNode]:
             ),
         )
     return bindings
+
+
+def _watched(plan: ExecutionPlan, show: Collection[str]) -> dict[str, ToolDisplay[Any]]:
+    """The fillers for the nodes this run was asked to show, or refuse.
+
+    Resolved up front for `_bind`'s reason and with a smaller version of its
+    argument: a caller watching a node that draws nothing has asked for a
+    picture this graph cannot produce, and finding that out after the lead-in
+    has decoded is a minute of work to deliver a message that was available
+    immediately.
+
+    Raises:
+        UndrawableNodeError: if a watched node declares no display surfaces —
+            which is every node whose tool carries no band, since the two
+            halves are one declaration (`ToolSpec.param_surfaces`).
+        KeyError: if a watched node is not in this plan's graph. The caller
+            named a node id that does not exist, and there is no reading of
+            that which the run should quietly ignore.
+    """
+    fillers: dict[str, ToolDisplay[Any]] = {}
+    for node_id in show:
+        spec = plan.dag.spec(node_id)
+        if spec.display is None:
+            raise UndrawableNodeError(
+                f"{node_id} ({spec.tool_id} {spec.version}) declares no display surface, so there "
+                "is nothing for it to show — a tool fills the channel for the bands that are "
+                "dragged on it, and this one has none"
+            )
+        fillers[node_id] = spec.display
+    return fillers
+
+
+def _drawn(
+    node: Node,
+    fill: ToolDisplay[Any],
+    window: FrameSpan,
+    plan: ExecutionPlan,
+    answers_for: int,
+) -> Mapping[DisplaySurface, Frame]:
+    """One node's surfaces for one frame, with the declaration checked.
+
+    `_run_node`'s treatment for the channel beside the output, and the check is
+    the same shape for a different reason. There, an index that disagrees with
+    the frame the executor scheduled would be stored under a key that names
+    another frame; here nothing is stored, and what a wrong index costs is a
+    plot whose x axis is not the footage — the surface is drawn against the
+    frames the run yielded, so a value filed under the end of its own window
+    shifts the whole picture by the lookahead.
+
+    The set is checked in both directions, which registration cannot do: a
+    missing surface is a band whose handles have no plot after all, and a
+    surplus one is a picture nothing declared and no parameter reads.
+
+    Raises:
+        UndrawableNodeError: if the fill is not exactly the declared surfaces,
+            or if a filled frame does not carry the index it was drawn for.
+    """
+    spec = plan.dag.spec(node.node_id)
+    drawn = fill(plan.params[node.node_id], window)
+    if set(drawn) != spec.display_surfaces:
+        missing = sorted(surface.value for surface in spec.display_surfaces - set(drawn))
+        surplus = sorted(str(surface) for surface in set(drawn) - spec.display_surfaces)
+        raise UndrawableNodeError(
+            f"{node.node_id} ({spec.tool_id} {spec.version}) filled {surplus} and left {missing} "
+            "empty; a display fills exactly the surfaces its bands declare, since a surface "
+            "nothing draws on is a pair of handles over no plot and one nothing declared is a "
+            "derivation no parameter reads"
+        )
+    wrong = sorted(surface.value for surface, frame in drawn.items() if frame.index != answers_for)
+    if wrong:
+        raise UndrawableNodeError(
+            f"{node.node_id} ({spec.tool_id} {spec.version}) drew {wrong} for a frame other than "
+            f"{answers_for}, which is the frame this call answers for — a surface is plotted "
+            "against the frames the run yielded, so one filed elsewhere shifts the picture"
+        )
+    return drawn
 
 
 def _run_node(

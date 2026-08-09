@@ -71,6 +71,7 @@ from scipy import fft as _fft
 from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
+    DisplaySurface,
     ElementKind,
     ElementNames,
     Emission,
@@ -265,6 +266,45 @@ def _daughter(
     """One scale's frequency-domain Morlet daughter, T&C-normalized."""
     norm = np.sqrt(2.0 * np.pi * scale / dt) * np.pi**-0.25
     return (norm * heavi * np.exp(-0.5 * (scale * omega - W0) ** 2)).astype(np.complex64)
+
+
+def morlet_power_profile(
+    x: FloatArray, fs: float, freqs_hz: FloatArray, *, workers: int = ALL_CORES
+) -> NDArray[np.float32]:
+    """Band power per frequency row, averaged over elements. (T, B) → (F, T).
+
+    The scalogram a frequency band's handles are placed on: `morlet_power`'s
+    cube with the element axis already averaged away. Written as its own loop
+    rather than as that function plus a `.mean(axis=2)` because the cube is what
+    it cannot afford to exist — a 24-row bank over a whole detection window of a
+    block grid is hundreds of megabytes, spent on a picture. The two loops are
+    otherwise the same loop, and the pad length is derived identically, so a row
+    of this equals the same row of the cube averaged.
+
+    The mean is over the *power* rather than the transform of a mean signal, and
+    the difference is not cosmetic: transforming a mean cancels blocks moving out
+    of phase with each other, which is most of what a dish of animals looks like.
+    It is also the reduction that agrees with the chain — `inband_count` counts
+    blocks whose own power is in band.
+    """
+    x32 = np.asarray(x, np.float32)
+    if x32.ndim == 1:
+        x32 = x32[:, None]
+    n_frames = x32.shape[0]
+    dt = 1.0 / fs
+    scales = morlet_scales(freqs_hz)
+    support = int(np.ceil(coi_efolding_s(freqs_hz).max() / dt * PAD_EFOLDINGS))
+    n = _fast_len(n_frames + support)
+    xf = _fft_time_axis(x32, n, workers)
+    omega = 2.0 * np.pi * np.fft.fftfreq(n, d=dt)
+    heavi = omega > 0
+    out = np.empty((len(scales), n_frames), np.float32)
+    buf = np.empty_like(xf)
+    for i, s in enumerate(scales):
+        np.multiply(xf, _daughter(float(s), omega, heavi, dt)[:, None], out=buf)
+        w = _ifft_time_axis(buf, workers)[:n_frames]
+        out[i] = (w.real**2 + w.imag**2).mean(axis=1)
+    return out
 
 
 def band_indices(freqs_hz: FloatArray, flo: float, fhi: float) -> tuple[int, int]:
@@ -521,10 +561,12 @@ def gate_series(series: FloatArray, params: DetectParams) -> NDArray[np.bool_] |
     v2's `detect/` package in one function, and `run` below is its only caller —
     the composition is what the tool *is*, so there is nothing left for a
     package to hold. What v2's version also returned was the intermediates a
-    live tab plotted and a cheap-tier flag saying which of them could be
-    reused; both are scheduling and presentation concerns of a front end that
-    does not exist yet, and a declaration arrives with its consumer
-    (`adr/declared-means-verified.md`).
+    live tab plotted and a cheap-tier flag saying which of them could be reused.
+    The intermediates are back, through `display` below and not through here:
+    they are the pictures this tool's three bands are dragged on, and they leave
+    on a channel that is not a product rather than as a second return value the
+    executor would have to route. The cheap-tier flag stays cut — it is
+    scheduling for a coalescer that does not exist.
 
     Returns:
         The per-frame gate, or `None` when the count threshold is unplaced —
@@ -534,16 +576,29 @@ def gate_series(series: FloatArray, params: DetectParams) -> NDArray[np.bool_] |
         ValueError: if `series` is not a two-dimensional, non-empty
             `(frames, elements)` array.
     """
-    series2d = _series2d(series)
-    freqs = default_freqs(params.fps)
-    i, j = band_indices(freqs, params.freq_band[0], params.freq_band[1])
-    power = morlet_band_power(series2d, params.fps, freqs, i, j, workers=DETECTOR_WORKERS)
-    count = inband_count(power, params.value_band[0], params.value_band[1])
-    windowed = windowed_mean(count, params.window_frames, params.centered)
+    power, _, windowed = _chain(_series2d(series), params)
     if params.count_frac is None:
         return None
     lo, hi = count_band_to_counts(params.count_frac[0], params.count_frac[1], power.shape[1])
     return detect_gate(windowed, lo, hi)
+
+
+def _chain(
+    series2d: NDArray[np.float32], params: DetectParams
+) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
+    """Per-block band power, the in-band count, and its windowed mean.
+
+    Everything the chain derives before the threshold is applied, which is
+    exactly what the gate and the display surfaces share. Two copies of these
+    four lines would be two places for the transform's arguments to drift apart,
+    and the drift would show as a value band whose handles cut a picture the
+    detection was not computed from.
+    """
+    freqs = default_freqs(params.fps)
+    i, j = band_indices(freqs, params.freq_band[0], params.freq_band[1])
+    power = morlet_band_power(series2d, params.fps, freqs, i, j, workers=DETECTOR_WORKERS)
+    count = inband_count(power, params.value_band[0], params.value_band[1])
+    return power, count, windowed_mean(count, params.window_frames, params.centered)
 
 
 def _series2d(series: FloatArray) -> NDArray[np.float32]:
@@ -569,7 +624,7 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
     the history has not filled — the row still lands on the target, and the
     chain over a short record is the same chain.
     """
-    series = np.stack([np.asarray(frame.data, np.float32).reshape(-1) for frame in window])
+    series = _stacked(window)
     row = window.target_row
     gate = gate_series(series, params)
     value = np.nan if gate is None else float(gate[row])
@@ -580,6 +635,68 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
     )
 
 
+def _stacked(window: FrameSpan) -> NDArray[np.float32]:
+    """The window as one ``(T, B)`` series, one row per frame."""
+    return np.stack([np.asarray(frame.data, np.float32).reshape(-1) for frame in window])
+
+
+def display(params: DetectParams, window: FrameSpan, /) -> dict[DisplaySurface, Frame]:
+    """The three pictures this tool's bands are dragged on, at the target frame.
+
+    One column of each surface per frame, which is the shape the loop can carry:
+    the executor fills the channel frame by frame beside the output, and a front
+    end assembles the picture from a span exactly as `SeriesCollector` assembles
+    a trace. A surface delivered whole, once, would have to come from somewhere
+    that has the whole span in hand, and the only such thing is the caller.
+
+    Which band lands on which is the declaration, not this function's choice
+    (`param_surfaces` below):
+
+    - `freq_band` cuts rows out of the scalogram, so that surface is the whole
+      bank rather than the band — the handles have to be draggable to somewhere
+      they are not.
+    - `value_band` cuts the per-block band power, which is many values per frame
+      on one value axis. Those *are* the numbers `inband_count` compares, so the
+      picture is the comparison rather than a summary of it.
+    - `count_frac` cuts the windowed count, divided by the blocks it counts over
+      so the handles read in the same fraction the parameter stores
+      (`count_band_to_counts`).
+
+    Costs a second derivation of the window on top of `run`'s, and the scalogram
+    is the whole bank where the gate needs only the band's rows. That is why the
+    channel is filled on request: a headless run draws nothing, and an
+    interactive one draws for the node whose panel is open.
+    """
+    series = _stacked(window)
+    row = window.target_row
+    index = window[row].index
+    power, _, windowed = _chain(_series2d(series), params)
+    profile = morlet_power_profile(
+        series, params.fps, default_freqs(params.fps), workers=DETECTOR_WORKERS
+    )
+    blocks = power.shape[1]
+    return {
+        DisplaySurface.SCALOGRAM: Frame(
+            data=profile[:, row].reshape(-1, 1).astype(np.float32),
+            index=index,
+            channels=ChannelSpec.GRAY,
+        ),
+        DisplaySurface.TRACE: Frame(
+            data=power[row].reshape(-1, 1).astype(np.float32),
+            index=index,
+            channels=ChannelSpec.GRAY,
+        ),
+        DisplaySurface.COUNT: Frame(
+            # Zero blocks is a region with nothing in it, which `_series2d`
+            # admits and every count over it is honestly nothing rather than a
+            # division to guard.
+            data=np.array([[float(windowed[row]) / blocks if blocks else 0.0]], np.float32),
+            index=index,
+            channels=ChannelSpec.GRAY,
+        ),
+    }
+
+
 @register_tool(
     tool_id="detect",
     version="1.0.0",
@@ -587,8 +704,10 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
     accepts=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
     emits=ArraySpec(dtypes=("float32",), channels=(ChannelSpec.GRAY,)),
     # Band power, the in-band count and the windowed mean are computed and none
-    # of them leaves the node — what a tool computes and what it can emit are
-    # different lists, and this is the tool where they differ most.
+    # of them leaves the node as a *product* — what a tool computes and what it
+    # can emit are different lists, and this is the tool where they differ most.
+    # The pictures they make do leave, on the display channel below, which is
+    # not a product and is not on this list for that reason.
     emissions=(Emission("gate"),),
     run=run,
     # One value describing the source frame as a whole: the noun a count over
@@ -623,6 +742,17 @@ def run(params: DetectParams, window: FrameSpan, state: None, /) -> Frame:
         "centered": ParamStereotype.ENUM,
         "fps": ParamStereotype.SCALAR_RANGE,
     },
+    # Three bands, three pictures, and no two of them the same picture — which
+    # is why the surface is declared per parameter rather than once per tool.
+    # The member names the plot and never the unit: Hz, the upstream node's own
+    # units, and a fraction have no enum that could hold all three
+    # (`core/tool_base.py`, `DisplaySurface`).
+    param_surfaces={
+        "freq_band": DisplaySurface.SCALOGRAM,
+        "value_band": DisplaySurface.TRACE,
+        "count_frac": DisplaySurface.COUNT,
+    },
+    display=display,
 )
 class DetectParams(ParamsBase):
     """The bands, the count threshold, and the window a detection is claimed on."""

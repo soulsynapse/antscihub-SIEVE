@@ -59,6 +59,18 @@ total over `params_model`, a composite kind must stand over an annotation that
 holds the whole value, and all three are refused at registration, so the check
 is the consumer until the generator is.
 
+`param_surfaces` and `display` are the one declaration here that is about
+something the graph does *not* carry: the pictures a tool's band handles are
+dragged on. A band is an ordered pair on an axis that is not the timeline, and
+until this pair existed nothing said which plot the handles were grabbed on — so
+`detect` declared three bands the generator could build controls for and could
+not place. The surface is a kind, not a unit (`DisplaySurface`), and the channel
+that fills it is preview-only: not typed by `emits`, not offered by `emissions`,
+never keyed by the store, and therefore nothing a save screen can put a tick in
+front of. Both halves are refused in the absence of the other, at registration
+and again where the fill happens, which is what keeps it from being a
+declaration stored against a consumer that has not arrived.
+
 `emissions` is the one declaration here that says something `emits` cannot:
 which *products* a tool can be configured to compute, where `emits` types the
 single stream one node produces. VISION's save screen offers all the possible
@@ -783,6 +795,45 @@ class ParamStereotype(StrEnum):
     POINT = "point"
 
 
+class DisplaySurface(StrEnum):
+    """The picture a `BAND`'s handles are grabbed on. A surface, never a unit.
+
+    `ParamStereotype.BAND` says a parameter is an ordered lo/hi pair on an axis
+    that is not the timeline. It does not say *where* that pair is dragged, and
+    the three bands on the shelf are dragged on three different pictures:
+    `detect`'s `freq_band` cuts rows out of a scalogram, its `value_band` cuts a
+    band-power trace, its `count_frac` cuts a count of the region's blocks. A
+    generator handed only the kind can build the control and has nowhere to put
+    the handles, which is the half of `adr/gui-knows-kinds-not-tools.md` a
+    stereotype alone cannot supply.
+
+    **The member names the surface and not the unit**, which is what makes this
+    vocabulary honest where the axis enum refused at phase 1 could not be: Hz is
+    a fixed physical unit, a value band is in the upstream node's output units
+    and unknowable at spec time, and a fraction is dimensionless
+    (`todo/a-band-has-no-stereotype-of-its-own.md`). Units ride with the data
+    the tool fills the surface with, at run time, where the upstream node has
+    already run and can be asked.
+
+    Closed for `ParamStereotype`'s reason and with its asymmetry: a fourth
+    member is a decision about what SIEVE can plot at all, forced by a band that
+    cannot be expressed in the three, and never a place to put one tool's own
+    drawing.
+    """
+
+    #: Power over a bank of frequencies against time. The handles are two cuts
+    #: on the frequency axis and what they select is a set of rows.
+    SCALOGRAM = "scalogram"
+    #: Values against time on one common value axis — one trace or many. The
+    #: handles are two horizontal cuts and what they select are the values
+    #: between them.
+    TRACE = "trace"
+    #: A count against the whole it is a count *of*, so the handles are cuts on
+    #: a fraction rather than on a tally. That is what lets the pair survive a
+    #: change of denominator (`tools/detect.count_band_to_counts`).
+    COUNT = "count"
+
+
 #: Contravariant because a `run` is *consumed* with params: a function written
 #: against `DownsampleParams` is a legal `ToolRun` wherever one taking a narrower
 #: params type is expected, and a spec stores them all as `ToolRun[Any, Any]`.
@@ -831,7 +882,42 @@ class ToolRun(Protocol[ParamsT_contra, StateT_contra]):
     ) -> Frame: ...
 
 
+class ToolDisplay(Protocol[ParamsT_contra]):
+    """What fills a tool's declared display surfaces for one frame.
+
+    A second pointer beside `ToolRun` rather than a widening of it, because the
+    two produce different sorts of thing. `run` produces the node's output,
+    which is a *product*: typed by `emits`, offered by `emissions`, keyed and
+    served by the store, and read by every node downstream. This produces the
+    pictures the tool's own band handles are dragged on, which nothing
+    downstream reads, nothing keys, and nobody can ask to keep. Widening `run`
+    to return both would make a preview-only picture part of what a node emits,
+    and the first consequence would be a save screen offering it.
+
+    **No `state` argument**, and that is the preview-only claim made structural
+    rather than promised: a display derived by advancing the tool's run state
+    would move the answer the run is about to give, so a surface is a function
+    of the window and the parameters alone. That also makes it callable twice on
+    one frame — which is what a front end asking for a picture it did not ask
+    for on the previous drag does.
+
+    Returns exactly the surfaces `ToolSpec.param_surfaces` declares, each as a
+    `Frame` at the window's target index. The executor refuses a missing one and
+    a surplus one alike, which is where "declared means filled" is checked at
+    the one moment registration cannot see it
+    (`adr/declared-means-verified.md`).
+    """
+
+    def __call__(
+        self, params: ParamsT_contra, window: FrameSpan, /
+    ) -> Mapping[DisplaySurface, Frame]: ...
+
+
 def _empty_param_value_labels() -> Mapping[str, Mapping[str, str]]:
+    return {}
+
+
+def _empty_param_surfaces() -> Mapping[str, DisplaySurface]:
     return {}
 
 
@@ -1156,6 +1242,28 @@ class ToolSpec:
     param_stereotypes: Mapping[str, ParamStereotype] = field(
         default_factory=_empty_param_stereotypes
     )
+    #: Which picture each band-shaped parameter's handles are grabbed on, one
+    #: entry per `ParamStereotype.BAND` field and refused on every other kind.
+    #: Total over the bands rather than optional, for `param_stereotypes`'
+    #: reason and one narrower: a band with no surface is the one stereotype the
+    #: generator can build a control for and cannot place, so the omission ends
+    #: as a pair of handles floating over no plot.
+    #:
+    #: Every kind but `BAND` is populated on a surface the GUI already owns — a
+    #: timeline, the frame under the canvas, a spin box — and declaring one for
+    #: those would be a second answer competing with that ownership.
+    param_surfaces: Mapping[str, DisplaySurface] = field(default_factory=_empty_param_surfaces)
+    #: What fills those surfaces for one frame, or `None` for a tool with no
+    #: band to place. Required exactly when `param_surfaces` is non-empty, both
+    #: directions refused below: a surface nothing fills is a declared plot that
+    #: never draws, and a filler for a surface nothing declared is a computation
+    #: the executor would run every frame and no parameter would read.
+    #:
+    #: Preview-only, and every property of the channel follows from that. It is
+    #: not a product — `emissions` is the list of those and this is not on it —
+    #: so nothing selects it, nothing writes it to a file, and the store never
+    #: sees it. See `ToolDisplay`.
+    display: ToolDisplay[Any] | None = None
     #: What one value of an emitted frame is a value of — a kind outright, or a
     #: relation to what arrived. Required of every array emitter and refused of
     #: every table emitter; `__post_init__` enforces both, which is what makes
@@ -1349,6 +1457,7 @@ class ToolSpec:
                     "field that holds the whole value, so an interval is one pair-shaped "
                     "parameter and never two bounds each wearing the kind"
                 )
+        self._check_surfaces(known)
         # Comparing the function objects, not calling them: a params model with
         # required fields cannot be instantiated here, and the question is
         # whether an override exists at all rather than what it returns.
@@ -1377,6 +1486,74 @@ class ToolSpec:
                 "the spec does not declare selecting, so the plan never asks and the run covers "
                 "the whole video the node was written to cut down"
             )
+
+    def _check_surfaces(self, known: set[str]) -> None:
+        """Refuse a band with no picture, or a picture with no band.
+
+        Four refusals, and they are the two halves of one rule seen from each
+        end. A `BAND` is the one stereotype whose control the generator can
+        build and cannot place, so every band names a surface and nothing else
+        may; and a surface is filled by running machinery or it is a declaration
+        stored against a consumer that does not exist, which is what
+        `adr/declared-means-verified.md` refuses outright.
+
+        Raises:
+            ValueError: for a surface on no such field, a surface on a
+                parameter that is not a band, a band with no surface, or either
+                half of the declaration/filler pair standing alone.
+        """
+        unknown = [name for name in self.param_surfaces if name not in known]
+        if unknown:
+            raise ValueError(
+                f"{self.tool_id}: param_surfaces names no such field: {sorted(unknown)}"
+            )
+        misplaced = sorted(
+            name
+            for name in self.param_surfaces
+            if self.param_stereotypes.get(name) is not ParamStereotype.BAND
+        )
+        if misplaced:
+            raise ValueError(
+                f"{self.tool_id}: declares a display surface for {misplaced}, which is not a band "
+                "— every other kind is populated on a surface the GUI already owns, and a second "
+                "answer here would compete with that ownership rather than add to it"
+            )
+        placeless = sorted(
+            name
+            for name, kind in self.param_stereotypes.items()
+            if kind is ParamStereotype.BAND and name not in self.param_surfaces
+        )
+        if placeless:
+            kinds = "/".join(member.name for member in DisplaySurface)
+            raise ValueError(
+                f"{self.tool_id}: declares a band on {placeless} and no surface for it — pass "
+                f"param_surfaces={{{placeless[0]!r}: DisplaySurface.{kinds}}}. A band is an "
+                "ordered pair on an axis that is not the timeline, so which plot its handles are "
+                "grabbed on is the one thing the generator has no way to derive"
+            )
+        if self.param_surfaces and self.display is None:
+            raise ValueError(
+                f"{self.tool_id}: declares surfaces {sorted(self.param_surfaces.values())} and "
+                "points at nothing that fills them — a surface nothing draws on is a declared "
+                "plot with no data and a pair of handles over it"
+            )
+        if self.display is not None and not self.param_surfaces:
+            raise ValueError(
+                f"{self.tool_id}: points at a display filler and declares no surface — the "
+                "channel is filled for the bands that are dragged on it, so a filler nothing "
+                "declared is a computation run every frame that no parameter reads"
+            )
+
+    @property
+    def display_surfaces(self) -> frozenset[DisplaySurface]:
+        """Exactly the surfaces this tool's `display` must fill.
+
+        Derived rather than declared beside `param_surfaces`, because a second
+        field holding the same set is a field that can disagree with it — and
+        the disagreement would be a tool whose bands name one picture while its
+        filler is checked against another.
+        """
+        return frozenset(self.param_surfaces.values())
 
     @property
     def emission_names(self) -> tuple[str, ...]:
@@ -1480,6 +1657,17 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     # a key at all.
     "state_factory": Channel.EXECUTION,
     "deterministic": Channel.EXECUTION,
+    # Execution rather than presentation, and this pair is the third placement
+    # worth arguing — a surface *kind* is presentation vocabulary in every other
+    # respect, and a front end is exactly who looks at it. What decides it is
+    # this channel's own second sentence against presentation's: the loop reads
+    # both, fills the channel, and refuses a tool that fills the wrong one, so
+    # two builds disagreeing here run the same graph to the same products at
+    # different cost. Presentation's row says outright that the executor never
+    # reads it, and a field placed there that the executor does read would make
+    # that sentence false for every field it stands over.
+    "param_surfaces": Channel.EXECUTION,
+    "display": Channel.EXECUTION,
     "primary_params": Channel.PRESENTATION,
     "caption": Channel.PRESENTATION,
     "param_value_labels": Channel.PRESENTATION,

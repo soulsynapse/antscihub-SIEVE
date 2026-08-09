@@ -22,13 +22,14 @@ from pydantic import Field
 from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef
 from sieve.core.tool_base import (
     ArraySpec,
+    DisplaySurface,
     ElementRelation,
     Emission,
     ParamsBase,
     ParamStereotype,
     ToolSpec,
 )
-from sieve.core.types import ROI
+from sieve.core.types import ROI, ChannelSpec, Frame, FrameSpan
 from sieve.session.session import Session
 from tests.gui import driving
 
@@ -60,6 +61,25 @@ class EveryKindParams(ParamsBase):
     point: tuple[int, int] = (0, 0)
 
 
+def _display(params: EveryKindParams, window: FrameSpan, /) -> dict[DisplaySurface, Frame]:
+    """The one surface the fixture's band declares, filled with nothing much.
+
+    A band names the picture its handles are grabbed on and a picture is filled
+    by running machinery or refused (`adr/declared-means-verified.md`), so a
+    spec declaring a band cannot be built without one. What it draws is not this
+    file's subject — the generator builds a control from the kind and never
+    looks at the data.
+    """
+    import numpy as np
+
+    target = window[window.target_row]
+    return {
+        DisplaySurface.TRACE: Frame(
+            data=np.zeros((1, 1), np.float32), index=target.index, channels=ChannelSpec.GRAY
+        )
+    }
+
+
 def _spec() -> ToolSpec:
     return ToolSpec(
         tool_id="stereotypical",
@@ -81,6 +101,8 @@ def _spec() -> ToolSpec:
             "point": ParamStereotype.POINT,
         },
         param_value_labels={"flavour": {"salt": "salted", "pepper": "peppered"}},
+        param_surfaces={"band": DisplaySurface.TRACE},
+        display=_display,
     )
 
 

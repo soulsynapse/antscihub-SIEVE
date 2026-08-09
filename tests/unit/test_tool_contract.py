@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import inspect
 import re
+from collections.abc import Mapping
 from dataclasses import fields
 from enum import StrEnum
 from fractions import Fraction
@@ -23,6 +24,7 @@ from sieve.core.tool_base import (
     ArraySpec,
     CaptionPart,
     Channel,
+    DisplaySurface,
     ElementKind,
     ElementNames,
     ElementRelation,
@@ -240,6 +242,22 @@ class ForeignPointerParams(ParamsBase):
         return super().model_json_schema(*args, **kwargs)
 
 
+def stub_display(params: ParamsBase, window: FrameSpan, /) -> dict[DisplaySurface, Frame]:
+    """A filler for the fixtures that declare a band and are not about drawing.
+
+    Never called in this module: what registration reads is that the pointer is
+    there, and what it draws is checked where it is drawn
+    (`tests/unit/test_executor.py`). It exists because a fixture cannot simply
+    omit one — a band names a picture and a picture nothing fills is refused,
+    which is the rule these fixtures are built under rather than an obstacle to
+    them.
+    """
+    target = window[window.target_row]
+    return {
+        DisplaySurface.TRACE: Frame(data=target.data, index=target.index, channels=target.channels)
+    }
+
+
 def make_spec(**overrides: object) -> ToolSpec:
     model = overrides.get("params_model", SampleParams)
     assert isinstance(model, type) and issubclass(model, ParamsBase)
@@ -258,6 +276,20 @@ def make_spec(**overrides: object) -> ToolSpec:
         "param_stereotypes": dict.fromkeys(model.model_fields, ParamStereotype.SCALAR_RANGE),
     }
     fields.update(overrides)
+    # Derived for the stereotypes' reason one step on: a band declares the
+    # picture its handles are grabbed on and a picture declares what fills it,
+    # so a fixture about arity or about a union would otherwise carry two maps
+    # and a function before it could say the thing it is about. Both are
+    # `setdefault`, so a test *about* the pair still states it.
+    stereotypes = fields["param_stereotypes"]
+    bands = (
+        [name for name, kind in stereotypes.items() if kind is ParamStereotype.BAND]
+        if isinstance(stereotypes, Mapping)
+        else []
+    )
+    if bands:
+        fields.setdefault("param_surfaces", dict.fromkeys(bands, DisplaySurface.TRACE))
+        fields.setdefault("display", stub_display)
     return ToolSpec(**fields)  # pyright: ignore[reportArgumentType]
 
 
@@ -1085,6 +1117,102 @@ class TestParamStereotypes:
         assert SPEC_CHANNELS["param_stereotypes"] is Channel.PRESENTATION
 
 
+class TestDisplaySurfaces:
+    """A band names the picture it is dragged on, and the picture names a filler.
+
+    One rule with two ends, and each end is a different silence. A band with no
+    surface is a control the generator can build and cannot place — the failure
+    `detect` carried for two phases, three pairs of handles over no plot. A
+    surface with nothing behind it is `adr/declared-means-verified.md`'s own
+    case: a declaration stored against a consumer that never arrives, which
+    nothing goes red for because a picture that is never drawn looks exactly
+    like one nobody opened.
+    """
+
+    def test_a_band_with_no_declared_surface_is_refused(self) -> None:
+        with pytest.raises(ValueError, match=r"declares a band on \['band'\].*no surface"):
+            make_spec(
+                params_model=CompositeParams,
+                param_stereotypes=COMPOSITE_KINDS,
+                param_surfaces={"optional_band": DisplaySurface.COUNT},
+                display=stub_display,
+            )
+
+        placed = {"band": DisplaySurface.SCALOGRAM, "optional_band": DisplaySurface.COUNT}
+        spec = make_spec(
+            params_model=CompositeParams,
+            param_stereotypes=COMPOSITE_KINDS,
+            param_surfaces=placed,
+            display=stub_display,
+        )
+
+        # Both bands, and only the bands: `region` is populated on the canvas,
+        # which the GUI already owns.
+        assert spec.param_surfaces == placed
+        assert spec.display_surfaces == {DisplaySurface.SCALOGRAM, DisplaySurface.COUNT}
+
+    def test_a_declared_surface_on_a_kind_that_is_not_a_band_is_refused(self) -> None:
+        # A region is drawn on the frame and a span on the timeline, and both of
+        # those surfaces are the GUI's own. A tool naming a picture for one of
+        # them would be a second answer to where it is edited, competing with
+        # the editor that already exists for the kind.
+        with pytest.raises(ValueError, match=r"surface for \['region'\].*not a band"):
+            make_spec(
+                params_model=CompositeParams,
+                param_stereotypes=COMPOSITE_KINDS,
+                param_surfaces={
+                    "band": DisplaySurface.TRACE,
+                    "optional_band": DisplaySurface.TRACE,
+                    "region": DisplaySurface.TRACE,
+                },
+                display=stub_display,
+            )
+
+    def test_a_declared_surface_for_no_such_field_is_refused(self) -> None:
+        # `param_stereotypes`' rename case: a band renamed with the surface map
+        # left behind would otherwise leave the tool declaring a picture for a
+        # parameter that no longer exists, and the band that replaced it
+        # unplaced.
+        with pytest.raises(ValueError, match=r"param_surfaces names no such field.*hz"):
+            make_spec(
+                params_model=CompositeParams,
+                param_stereotypes=COMPOSITE_KINDS,
+                param_surfaces={
+                    "band": DisplaySurface.TRACE,
+                    "optional_band": DisplaySurface.TRACE,
+                    "hz": DisplaySurface.SCALOGRAM,
+                },
+                display=stub_display,
+            )
+
+    def test_a_declared_surface_nothing_fills_is_refused(self) -> None:
+        with pytest.raises(ValueError, match=r"points at nothing that fills them"):
+            make_spec(
+                params_model=CompositeParams,
+                param_stereotypes=COMPOSITE_KINDS,
+                param_surfaces={
+                    "band": DisplaySurface.TRACE,
+                    "optional_band": DisplaySurface.COUNT,
+                },
+                display=None,
+            )
+
+    def test_a_filler_for_no_declared_surface_is_refused(self) -> None:
+        # The other end, and the one that is pure cost rather than a missing
+        # picture: the executor would call it every frame of every watched run
+        # and no parameter would read what came back.
+        with pytest.raises(ValueError, match=r"declares no surface"):
+            make_spec(display=stub_display)
+
+    def test_a_declared_surface_is_an_execution_channel_declaration(self) -> None:
+        # Not presentation, though a surface kind is presentation vocabulary in
+        # every other respect. That row says the executor never reads it, and
+        # the executor reads both of these: it fills the channel and refuses a
+        # tool that fills the wrong one.
+        assert SPEC_CHANNELS["param_surfaces"] is Channel.EXECUTION
+        assert SPEC_CHANNELS["display"] is Channel.EXECUTION
+
+
 class TestResolvedSchema:
     """The pointer walk's degradation, which is not `sieve inspect`'s claim.
 
@@ -1357,6 +1485,10 @@ PROBES: dict[str, Any] = {
     },
     "element": ElementKind.BLOCK,
     "element_names": ElementNames("block", "blocks"),
+    # A co-required pair, like the two element rows: neither half may stand
+    # alone, so each probe carries the other in the loop below.
+    "param_surfaces": {"band": DisplaySurface.SCALOGRAM},
+    "display": stub_display,
 }
 
 
@@ -1397,10 +1529,20 @@ class TestDecoratorMatchesSpec:
         class SelectProbeParams(SpanningParams):
             pass
 
+        class BandProbeParams(ParamsBase):
+            """A pair-shaped field, which is what a band may stand over."""
+
+            band: tuple[float, float] = (0.0, 1.0)
+
         # The two probes that cannot ride on the shared params model: each names
         # a flag the spec refuses unless the decorated class overrides the
         # matching method, and refuses the override without.
-        models = {"rate_changing": RateProbeParams, "selecting": SelectProbeParams}
+        models = {
+            "rate_changing": RateProbeParams,
+            "selecting": SelectProbeParams,
+            "param_surfaces": BandProbeParams,
+            "display": BandProbeParams,
+        }
 
         for name, probe in PROBES.items():
             registry = ToolRegistry()
@@ -1425,6 +1567,15 @@ class TestDecoratorMatchesSpec:
             elif name == "warmup_kind":
                 values["stateful"] = True
                 values["settling_epsilon"] = 0.25
+            elif name in ("param_surfaces", "display"):
+                # The one probe pair that also moves the stereotype map: a
+                # surface may only stand over a band, and the derived map above
+                # declares every field a scalar.
+                values["param_stereotypes"] = {"band": ParamStereotype.BAND}
+                if name == "display":
+                    values["param_surfaces"] = {"band": DisplaySurface.TRACE}
+                else:
+                    values["display"] = stub_display
             decorated = register_tool(**values, registry=registry)(model)
 
             spec = decorated.__tool_spec__

@@ -2,7 +2,7 @@
 title: A band's axis has no vocabulary and no plot to be dragged on
 priority: normal
 phase: "07"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests -q -k declared_surface"
 opened: 2026-08-08

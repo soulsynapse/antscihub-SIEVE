@@ -20,6 +20,7 @@ never reaches this module.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from fractions import Fraction
 
 import numpy as np
@@ -28,6 +29,7 @@ import pytest
 from sieve.core.pipeline_model import Edge, Node, Pipeline, SourceSpan
 from sieve.core.tool_base import (
     ArraySpec,
+    DisplaySurface,
     ElementRelation,
     Emission,
     Mode,
@@ -43,6 +45,7 @@ from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import (
     FrameResult,
     FrameSource,
+    UndrawableNodeError,
     UnrunnableNodeError,
     _bind,
     execute,
@@ -198,6 +201,119 @@ _windowed("trail3", 2, 0)
 _windowed("centre2", 2, 2)
 #: The smallest window with a trailing side, for chaining two of them.
 _windowed("ahead1", 0, 1)
+
+
+class Flaw(StrEnum):
+    """The three ways a filler can disagree with what its tool declared.
+
+    One tool with a parameter for the flaw rather than three tools, because the
+    subject is one rule and the cases are what breaking it looks like from each
+    side.
+    """
+
+    NONE = "none"
+    #: Draws nothing at all, which is the surface silently ceasing to exist.
+    EMPTY = "empty"
+    #: Draws a picture no band names, which nothing would ever read.
+    SURPLUS = "surplus"
+    #: Draws for the end of its window rather than the frame it answers for.
+    OFFSET = "offset"
+
+
+#: The frames a display filler was called for, in call order. Beside `CALLS`
+#: and for its reason: whether the channel was filled on a frame is not
+#: answerable by counting.
+DRAWN: list[int] = []
+
+
+def _band_run(params: BandParams, window: FrameSpan, state: None) -> Frame:
+    del params, state
+    frame = window.target
+    CALLS.append((int(frame.index), 0))
+    return frame
+
+
+def _band_display(
+    params: BandParams | AheadBandParams, window: FrameSpan, /
+) -> dict[DisplaySurface, Frame]:
+    """One trace column per frame, or one of the three ways to get it wrong."""
+    target = window.target
+    DRAWN.append(int(target.index))
+    if params.flaw is Flaw.EMPTY:
+        return {}
+    index = window[len(window) - 1].index if params.flaw is Flaw.OFFSET else target.index
+    drawn = {
+        DisplaySurface.TRACE: Frame(
+            data=np.full((1, 1), int(index), np.float32),
+            index=index,
+            channels=ChannelSpec.GRAY,
+        )
+    }
+    if params.flaw is Flaw.SURPLUS:
+        drawn[DisplaySurface.SCALOGRAM] = drawn[DisplaySurface.TRACE]
+    return drawn
+
+
+@register_tool(
+    tool_id="banded",
+    version="1.0.0",
+    summary="Carries a band, and draws the trace the band is cut on.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    emissions=(Emission("out"),),
+    run=_band_run,
+    display=_band_display,
+    element=ElementRelation.PRESERVED,
+    param_stereotypes={
+        "band": ParamStereotype.BAND,
+        "flaw": ParamStereotype.ENUM,
+    },
+    param_surfaces={"band": DisplaySurface.TRACE},
+    registry=SHELF,
+)
+class BandParams(ParamsBase):
+    band: tuple[float, float] = (0.0, 1.0)
+    flaw: Flaw = Flaw.NONE
+
+
+def _ahead_band_run(params: AheadBandParams, window: FrameSpan, state: None) -> Frame:
+    del params, state
+    return window.target
+
+
+@register_tool(
+    tool_id="banded_ahead",
+    version="1.0.0",
+    summary="`banded` with a frame of read-ahead, so its target is not its end.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    emissions=(Emission("out"),),
+    run=_ahead_band_run,
+    display=_band_display,
+    element=ElementRelation.PRESERVED,
+    mode=Mode.WINDOWED,
+    param_stereotypes={
+        "band": ParamStereotype.BAND,
+        "flaw": ParamStereotype.ENUM,
+    },
+    param_surfaces={"band": DisplaySurface.TRACE},
+    registry=SHELF,
+)
+class AheadBandParams(ParamsBase):
+    """The only shape in which "the end of the window" is the wrong frame.
+
+    A streaming node is handed one frame, so its target *is* its last frame and
+    a filler reaching for the end of the span cannot be caught being wrong. The
+    mistake needs a window with a far side to exist at all — which is the same
+    reason `wrong_end` above is windowed.
+    """
+
+    band: tuple[float, float] = (0.0, 1.0)
+    flaw: Flaw = Flaw.NONE
+
+    @classmethod
+    def max_lookahead_frames(cls) -> FrameCount:
+        return FrameCount(1)
 
 
 def _last_frame_run(params: WrongEndParams, window: FrameSpan, state: None) -> Frame:
@@ -362,13 +478,18 @@ def forget_calls() -> None:
     CALLS.clear()
     WINDOWS.clear()
     TARGETS.clear()
+    DRAWN.clear()
 
 
 def run(
-    plan: ExecutionPlan, source: FrameSource, *, store: FrameStore | None = None
+    plan: ExecutionPlan,
+    source: FrameSource,
+    *,
+    store: FrameStore | None = None,
+    show: tuple[str, ...] = (),
 ) -> list[FrameResult]:
     """Drain the generator."""
-    return list(execute(plan, source, store=store))
+    return list(execute(plan, source, store=store, show=show))
 
 
 def test_the_lead_in_reaches_the_run_and_not_the_caller() -> None:
@@ -732,3 +853,131 @@ def test_a_node_that_lags_the_loop_files_its_entry_under_the_frame_it_answered_f
     # The two lagging nodes are the ones that would collide, so they have to
     # disagree between adjacent frames or the check above proves nothing.
     assert not np.array_equal(results[0]["u"].data, results[1]["u"].data)
+
+
+def test_a_declared_surface_is_filled_for_every_frame_the_run_yields() -> None:
+    """The channel beside the output, filled for the node the caller watched.
+
+    A picture assembled from a run has to be a picture of the whole span, so the
+    property is per frame and not per run: a surface filled on some frames is a
+    plot with holes in it, and a plot with holes reads as footage that was quiet
+    there. The unwatched node is the other half — the fill costs a second
+    derivation of the window, so a run nobody is watching draws nothing at all.
+    """
+    plan = plan_for(Pipeline(nodes=(node("d", "banded"), node("b", "bare"))))
+
+    results = run(plan, ListSource(), show=("d",))
+
+    assert [result.index for result in results] == [20, 21, 22]
+    assert DRAWN == [20, 21, 22]
+    for result in results:
+        assert set(result.displays) == {"d"}
+        drawn = result.displays["d"]
+        assert set(drawn) == {DisplaySurface.TRACE}
+        assert drawn[DisplaySurface.TRACE].index == result.index
+    # Nothing was asked of `b`, and the surface is not something a node emits:
+    # what it computed is in `outputs` and there is no picture beside it.
+    assert all("b" not in result.displays for result in results)
+    assert all(set(result.outputs) == {"d", "b"} for result in results)
+
+
+def test_a_run_nobody_watches_draws_no_declared_surface() -> None:
+    """The default is empty, which is every headless run of the same graph.
+
+    `sieve run` and the oracle execute the same plan through the same loop, and
+    a channel filled by default would charge both of them a derivation whose
+    only consumer is a panel that is not open.
+    """
+    plan = plan_for(Pipeline(nodes=(node("d", "banded"),)))
+
+    results = run(plan, ListSource())
+
+    assert not DRAWN
+    assert all(result.displays == {} for result in results)
+
+
+def test_a_declared_surface_the_tool_leaves_empty_is_refused() -> None:
+    """Declared and not filled, caught where registration cannot see it.
+
+    The spec says which pictures this tool draws; only the call can say whether
+    it drew them. A filler that quietly stopped returning one would leave the
+    band's handles over a plot that never repaints, which looks like footage
+    that is not moving.
+    """
+    plan = plan_for(Pipeline(nodes=(node("d", "banded", flaw="empty"),)))
+
+    with pytest.raises(UndrawableNodeError, match=r"left \['trace'\] empty"):
+        run(plan, ListSource(), show=("d",))
+
+
+def test_a_declared_surface_is_the_whole_of_what_a_tool_may_draw() -> None:
+    """The other direction: a picture no band names is refused too.
+
+    Symmetry with the emission list and for its reason — a surface nothing
+    declared is a derivation run every frame that no parameter reads, and the
+    only way to notice it is to be told.
+    """
+    plan = plan_for(Pipeline(nodes=(node("d", "banded", flaw="surplus"),)))
+
+    with pytest.raises(UndrawableNodeError, match=r"filled \['scalogram'\]"):
+        run(plan, ListSource(), show=("d",))
+
+
+def test_a_declared_surface_drawn_for_another_frame_is_refused() -> None:
+    """`_run_node`'s index check for the channel that is never stored.
+
+    Nothing here can be served back later as the wrong frame's result, because
+    nothing here is stored. What a wrong index costs instead is the picture's x
+    axis: a surface is plotted against the frames the run yielded, so a column
+    filed at the end of its own window shifts the whole plot by the lookahead
+    while the trace it is compared against does not move.
+    """
+    plan = plan_for(Pipeline(nodes=(node("d", "banded_ahead", flaw="offset"),)))
+
+    with pytest.raises(UndrawableNodeError, match=r"drew \['trace'\] for a frame other than"):
+        run(plan, ListSource(), show=("d",))
+
+
+def test_a_node_with_no_declared_surface_cannot_be_watched() -> None:
+    """Refused up front, before a frame is read — `_bind`'s argument.
+
+    A caller watching a node that draws nothing has asked for a picture this
+    graph cannot produce, and the answer was available before the lead-in
+    decoded. `RefusingSource` is what says "before": a counter would be
+    satisfied by a reader that was called and ignored.
+    """
+    plan = plan_for(Pipeline(nodes=(node("b", "bare"),)))
+
+    with pytest.raises(UndrawableNodeError, match=r"b \(bare 1.0.0\) declares no display surface"):
+        run(plan, RefusingSource(), show=("b",))
+
+
+def test_a_declared_surface_is_never_served_from_the_store() -> None:
+    """Watching a node costs it its cache, and that is the cheaper wrong answer.
+
+    A hit skips the call, and the display channel was never in the store to be
+    skipped with it — so a watched node reading the store would draw only the
+    frames that missed. The run still *writes* what it computed, so the cost is
+    this run's re-use and not the next one's.
+    """
+    plan = plan_for(Pipeline(nodes=(node("d", "banded"),)))
+    store = MemoryFrameStore()
+
+    first = run(plan, ListSource(), store=store)
+    assert len(store) == 3
+    assert [result.from_cache for result in first] == [frozenset()] * 3
+    CALLS.clear()
+    DRAWN.clear()
+
+    # Unwatched, the same plan over the same store is answered entirely from it.
+    assert [result.from_cache for result in run(plan, ListSource(), store=store)] == [
+        frozenset({"d"})
+    ] * 3
+    assert not CALLS
+    CALLS.clear()
+
+    watched = run(plan, ListSource(), store=store, show=("d",))
+
+    assert [call[0] for call in CALLS] == [20, 21, 22]
+    assert [result.from_cache for result in watched] == [frozenset()] * 3
+    assert DRAWN == [20, 21, 22]

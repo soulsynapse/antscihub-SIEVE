@@ -1,7 +1,8 @@
 ---
 title: Crop serving and checkpoint read-back become source tools
-status: open
-gated_on: nothing
+status: deferred
+deferred_for: decision
+gated_on: whether an artifact's source tool folds source_key so ADR-18's crop half stays free in keys, or whether both halves are accepted as key-moving and Phase 5's second gate is re-stated for the crop half too
 priority: high
 phase: "05"
 done_when: 'uv run pytest tests/integration/test_crop_serving.py -k "the_served_graph_holds_no_crop_node or a_pre_cropped_folder_needs_no_crop_record or a_preview_is_served_by_the_written_crop or a_served_source_root_reaches_every_front_ends_plan_keyed" -q'
@@ -124,3 +125,37 @@ end builds a plan without `picked`, so it cannot be satisfied by asserting
 `run_cmd`'s behaviour a second time. It deliberately does not prejudge which of
 the two shapes the paragraph names is picked; a shared run-start step and a
 threaded argument both pass it.
+
+## 2026-08-09 review: the key paragraph's premise is gone, and the fork is Kendrick's
+
+A work run selected this item, proved the criterion red for the right reason
+(exit 5, none of the four cases exist), and stopped without touching the tree
+rather than pick a reading. It was right to. The paragraph above that begins
+"Cache keys are not one guard over both halves" rests on `dag.node_keys` folding
+`source_key(<file>, decode_format)` into every root, and since `44b6456` it does
+not: a root with a `source` spec folds `picked_key(identity)` instead —
+different flavour literal, different arity, unequal digest for one file. Measured
+in
+[findings/2026.08.09-a-source-tool-root-keys-in-a-different-flavour-than-the-footage-it-replaces.md](../findings/2026.08.09-a-source-tool-root-keys-in-a-different-flavour-than-the-footage-it-replaces.md),
+which also carries the two live readings and the argument for each.
+
+So the criterion's first case is not merely unwritten — the equality it asks for
+is unsatisfiable on this tree, and the item cannot be worked without settling a
+question ADR-18 does not rule and that would otherwise ride along inside an
+implementation. `status` is `deferred` on that ruling. `done_when` is left
+untouched: which cases it should name depends on which way the fork goes, and
+widening it now would prejudge it.
+
+The same sentence sits in the ADR itself
+([a-users-file-wires-in-like-any-other-input.md](../adr/a-users-file-wires-in-like-any-other-input.md),
+under "The two halves pay differently in keys"). Amending a settled ADR is not a
+reviewer's edit; the finding names the divergence and the ADR is Kendrick's to
+correct or to re-decide.
+
+One stale sentence while it is deferred, corrected here rather than in place:
+the opening paragraph says
+[a-served-run-elides-the-node-its-file-already-holds.md](a-served-run-elides-the-node-its-file-already-holds.md)
+"is open". It is `done`. So the collision that paragraph guards against has
+already resolved in the direction it anticipated — 05.10 landed first, and this
+item is the one that unwinds it. Nothing about that is re-decided by the
+deferral; it is what this item will do whenever the fork above is settled.

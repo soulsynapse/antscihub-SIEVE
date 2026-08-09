@@ -48,3 +48,24 @@ with no way to make a second replicate has no case that discriminates it.
     $ uv run pytest tests/gui -q -k 'adding_a_region_selects_it or a_knob_edits_the_selected_regions_own_value'
     169 deselected in 0.94s
     exit: 5
+
+## 2026-08-09 (review of 09.8): − has to move the selection, or the fan aborts the process
+
+`MainWindow._region` is clamped in `select_region` and reset to 0 in
+`open_project`, and nothing else moves it, so today it cannot exceed the
+replicate count. The − verb this item adds is what makes it able to.
+`ChainColumn.fanned_edge` indexes `tiles[self.fan.selected]` unguarded and runs
+inside `paintEvent`: a `PipelinePane` built offscreen over two regions with
+`selected=3` segfaults on `show()` rather than raising, because the IndexError
+is thrown inside a Qt virtual override and PySide6 aborts. The same
+construction at `selected=0` exits 0. So dropping a region while standing on
+the last one is a process abort and not a stale picture — either − moves
+`_region` on the way down or the fan clamps what it is handed, and the case for
+it belongs with the verb that makes it reachable.
+
+The other half of the same seam: `app.cuts_regions` decides which card the fan
+hangs under, and its roots-only clause (`node_id in source_fed_nodes(pipeline)`)
+is killed by nothing — replacing it with `True` survives
+`uv run pytest -q tests/gui`. The + verb writes an override keyed on a node id
+and that has to be the node the fan hangs under, so whatever pins the keying
+pins the clause.

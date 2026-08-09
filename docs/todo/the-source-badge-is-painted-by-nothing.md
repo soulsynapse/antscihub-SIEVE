@@ -63,3 +63,30 @@ item already prescribes — a `grab()` of the strip with the toggle down must
 differ in pixels from the same window with it up. Whatever satisfies the badge
 half should satisfy this one in the same commit; the criterion above names only
 the badge and does not reach it.
+
+## 2026-08-09: the crop fan is the third, and two of its clauses live only in paint
+
+09.8 (`3b22c20`) draws a numbered square per region and holds the run and the
+drops describing an unwalked one back to a lower alpha. Seven cases landed and
+every one of them reads geometry — `tile_rects`, `fanned_edge`, the hit test —
+which is the module's own stated division (`FannedEdge`: "what the picture
+claims is geometry, and geometry is the thing a test can read"). Under
+`uv run pytest -q tests/gui -k crop_fan`, three mutants of `chain_stack.py`
+survive:
+
+    str(index + 1)                        ==> str(index)
+    colour = LINE if chosen else unlit    ==> colour = LINE
+    QPen(ACCENT if chosen else LINE, 1.6 if chosen else 1.0)
+                                          ==> QPen(LINE, 1.0)
+
+So the squares can be numbered from zero, every branch can be drawn at the
+walked weight, and the selected square can lose its accent, with the criterion
+green. Two of those are the item's own words — "numbered squares" and "the
+others are the same chain, unwalked" — and neither has a geometric referent to
+assert in place of the paint: the numbering and the dimming *are* the clauses.
+
+The fixture is the one this item already prescribes, one layer in — a `grab()`
+of the `RegionFan` with region 1 selected differing in pixels from the same
+widget with region 0 selected — except the numbering, which wants the ordinal
+read back rather than a pixel diff. The criterion above names only the badge and
+reaches neither this nor the armed edges.

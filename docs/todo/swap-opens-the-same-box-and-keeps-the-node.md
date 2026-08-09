@@ -1,26 +1,64 @@
 ---
-title: The swap menu holds what matches, not what admits
+title: Swap opens the same box, and keeps the node it is
+step: "09.10"
 status: open
 gated_on: nothing
-priority: normal
-phase: "9"
-done_when: "uv run pytest tests/gui -q -k swap_menu"
+done_when: "uv run pytest tests/gui -q -k 'swap_box or keeps_the_node'"
 opened: 2026-08-09
 ---
 
-# The swap menu holds what matches, not what admits
+# Swap opens the same box, and keeps the node it is
 
-Each card carries a ⇄ button whose menu is the offering for that position:
-what could stand there, derived by `matches` from what flows into the
-position against the shelf's declarations, displayed by match specificity.
-Choosing an entry swaps the step through the ordinary command path.
-MOCKUP-MAP.md row "Swap is a dropdown" — `_swap_button` in the referent,
-whose `SWAPPABLE` table is sample data standing in for exactly this
-derivation, and whose menu-only behaviour is the mock shortcut the map
-names. No wizard, no dialog; the add-tool box (VISION's new-project
-scenario, the gap ADR 22 carves out of its popup default) renders the same
-shortlist at the foot of the stack, and lands with this or immediately
-after it, whichever the tree makes cheaper.
+There is no swap menu. A card's ⇄ opens the box
+[09.9](a-gap-is-a-position-and-the-box-fills-it.md) builds, standing where that
+card is instead of in a gap, lit on the tool already there — the checked entry
+the menu was going to carry. Anchored: ↑/↓ have nothing to move, ←/→ still walk
+the offer, esc restores the card. MOCKUP-MAP.md row "Swap is the same box";
+`_swap_button`, `offer_at`, `retool` and `Control.swap_here` in the referent.
+
+**Taking an offer here keeps the node's identity, and that is the whole of what
+distinguishes it from removing a step and adding one.** `Project.without_node`
+(`core/pipeline_model.py`) drops the node's replicate overrides, its
+checkpoints, its sinks and its `input_hashes` entry, and `node_id` is what names
+the artifact on disk and what `bench/` addresses — so a swap done as a remove
+and an add would break every one of those references with nothing going red: the
+run writes different files and the output card is quietly emptier. This needs a
+mutation that replaces the tool and holds the id, a third intent beside
+`RemoveNode` and 09.9's splice, under a gesture that looks identical to both.
+
+What does *not* survive is the params, and that is right rather than a
+shortfall: they were the departed tool's. The referent shows it by dropping a
+swapped position's knobs, plots and guidance (`RETOOLED`) while its edges and
+the ticks naming it stay.
+
+The empty offer is sharper here than in 09.9: a ⇄ on a position offering
+nothing would take the card away and leave esc as the only exit, where an empty
+menu is merely useless. Whether the button is shown at all at such a position is
+this item's to answer, on the same measurement 09.9 faces.
+
+`done_when` at minting, red because nothing matches:
+
+    $ uv run pytest tests/gui -q -k 'swap_box or keeps_the_node'
+    181 deselected in 0.66s
+    exit: 5
+
+## The row this item was minted as, now overtaken
+
+Kept because the folds below answer to it, and because what changed is worth
+seeing: this began as a dropdown, and merging it into the box is Kendrick's
+ruling of 2026-08-09 rather than a restatement of it.
+
+> Each card carries a ⇄ button whose menu is the offering for that position:
+> what could stand there, derived by `matches` from what flows into the
+> position against the shelf's declarations, displayed by match specificity.
+> Choosing an entry swaps the step through the ordinary command path.
+> MOCKUP-MAP.md row "Swap is a dropdown" — `_swap_button` in the referent,
+> whose `SWAPPABLE` table is sample data standing in for exactly this
+> derivation, and whose menu-only behaviour is the mock shortcut the map
+> names. No wizard, no dialog; the add-tool box (VISION's new-project
+> scenario, the gap ADR 22 carves out of its popup default) renders the same
+> shortlist at the foot of the stack, and lands with this or immediately
+> after it, whichever the tree makes cheaper.
 
 ## Folded 2026-08-09: the menu is empty at eight of ten positions today
 
@@ -43,8 +81,9 @@ question the mock does not answer.
 
 ## Folded 2026-08-09: the referent now has the box, and it is not at the foot
 
-The paragraph above says the add-tool box "renders the same shortlist at the
-foot of the stack". The mockup has it now and it does not stand there: ADD STEP
+The overtaken row above says the add-tool box "renders the same shortlist at
+the foot of the stack". The mockup has it now and it does not stand there: ADD
+STEP
 on the project card opens a card-shaped box in whichever gap the walk is on,
 ↑/↓ move it through the gaps, and the offer rewrites per position. The foot is
 where VISION's scenario stands, not what a position is — the derivation is the

@@ -375,11 +375,15 @@ what the cards show, then the edges drawn under all of it and the crop branch
 that hangs off them. Why the painter comes after the cards rather than beside
 them is the step's own to argue, and it does:
 [todo/the-outputs-reach-down-behind-the-cards.md](todo/the-outputs-reach-down-behind-the-cards.md).
-Three surfaces are deliberately absent,
+The box the offering fills is last of the sequenced rows because it mutates
+what every earlier row draws, and it brings the third and fourth writes of the
+chain with it: 09.4 gave the command layer `RemoveNode`, and 09.9 and 09.10 owe
+it the splice that is its inverse and the tool replacement that keeps a node's
+id — one gesture over two kinds of position, two mutations underneath.
+Two surfaces are deliberately absent,
 parked with their gates rather than sequenced: the source card waits on the
-first source tool, the swap menu's contents wait on the offering predicate's
-`matches`, and the canvas's contents remain the open ownership problem the
-map names — the display-surface, scrub-render and no-op-commit items reopened
+first source tool, and the canvas's contents remain the open ownership problem
+the map names — the display-surface, scrub-render and no-op-commit items reopened
 by the 2026-08-09 rulings sit in Phase 7's pool and run ahead of this phase
 under the selector's ordering, which is the intended order: they are the
 mechanisms these surfaces draw on.

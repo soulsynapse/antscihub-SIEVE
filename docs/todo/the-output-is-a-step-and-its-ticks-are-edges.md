@@ -1,9 +1,9 @@
 ---
 title: The output is a step, and its ticks are edges
 step: "09.2"
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests -q -k ticks_are_edges"
+done_when: "uv run pytest tests -q -k ticks_are_edges && uv run pytest tests/gui -q -k names_do_not_collide"
 opened: 2026-08-09
 ---
 
@@ -195,3 +195,43 @@ One thing measured that outlives the item is folded into
 [a-checkpoint-does-not-record-which-product-it-holds.md](a-checkpoint-does-not-record-which-product-it-holds.md):
 the card draws both of the document's write lists and the form ticks only one of
 them, so a sink draws an edge no box is ticked for.
+
+## 2026-08-09 (review): the names are painted, and painted over each other
+
+The derivation holds and is proved rather than asserted. Six mutants over the two
+files the work landed in were all killed by `-k ticks_are_edges` alone: reading
+`checkpoints` without `outputs`, returning the emission's bare name instead of the
+tool's label, dropping `checked.emit()`, widening the name rule to `fan_in > 0`,
+deleting the `drawText`, and collapsing `port_label_origin` onto the arrowhead.
+So the 09.7 handover's condition is met — the criterion reaches the drawn label
+and not only the mapping, and the pixel assertion is what kills the `drawText`
+mutant.
+
+What it does not reach is the two names *together*, and that is where the clause
+fails. Both edges into the card land on its top edge, so `port_label_origin`
+gives both labels the same baseline, and the origins are one lane apart while the
+names are several lanes wide. Measured on the same fixture the tests use
+(`cropped` and `downsampled`, into a 420-wide pane): baseline y 145 for both,
+origins at x 34 and x 68, advances 132 and 84, so the two run to x 166 and x 152
+and the shorter name is painted through the middle of the longer one. `EDGE_LANE`
+is 34; no product name in the tree is that narrow. The one case the whole clause
+exists for — more than one input, so the arrowheads need naming — is the case
+that renders unreadable.
+
+The tests pass over it because both look at one lane: `_ink` is asserted in a
+14-pixel window at one origin, and the absence assertion sits in the three pixels
+between an arrowhead's shoulder and its own label. Neither window is anywhere the
+neighbouring name's glyphs land. That is the `_NAME_WINDOW` comment's own
+reasoning applied one step short — it bounds the window so the *neighbouring
+arrowhead* is not read as this name, having established that the neighbour is
+close enough to be confused for it, and the neighbour's *name* is closer still.
+
+`done_when` gains a second command rather than a widened `-k`, for
+[the reason 09.5.1's review gives](the-library-mints-a-project-and-the-selected-card-opens-its-folder.md):
+a disjunction is green for whatever it names and does not have. The new leg is
+`-k names_do_not_collide`, red today at exit 5. What it has to hold is that two
+named arrowheads on one card produce two readable names — the placement rule is
+the work run's to choose (stagger the baselines by lane, right-align each name
+into the gap its own lane owns, elide against the next lane's origin), and this
+review does not pick one. The rest of the item stands as built; the status goes
+back to `open` for this clause and nothing else.

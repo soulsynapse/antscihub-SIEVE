@@ -244,8 +244,10 @@ def _external_inputs(
     that would have been keyed on it.
 
     Per replicate rather than once, because a path parameter is an ordinary
-    parameter and a replicate may deviate it: an A/B of two backgrounds is that
-    deviation, which is the case VISION states.
+    parameter: `Replicate.overrides` is sparse over arbitrary names and asks
+    nothing about what a parameter means, so a source root's path resolves per
+    replicate whether or not any pipeline deviates it, and one walk would answer
+    for the wrong file the day one does.
 
     The two refusals are ordered as the reports read, and each is complete
     across the fan-out before the next runs: a missing file has no hash to

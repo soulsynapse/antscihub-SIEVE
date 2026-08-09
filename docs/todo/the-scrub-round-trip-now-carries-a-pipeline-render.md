@@ -2,7 +2,7 @@
 title: The scrub round trip now carries a pipeline render, and the degradation it can trigger is a decode remedy
 priority: high
 phase: "7"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_player_scrub.py -q -k render_on_settle"
 opened: 2026-08-08

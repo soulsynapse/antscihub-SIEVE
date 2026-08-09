@@ -42,3 +42,23 @@ of the two forms was ever built.
     $ uv run pytest tests/gui -q -k both_forms_agree
     132 deselected in 0.66s
     exit: 5
+
+## 2026-08-09 (review): `_open_step`'s ordering is a repaint, not a state
+
+`app._open_step` calls `_walk_to(index)` and then `_control.show_step()`, and
+its docstring says "both halves, in that order, because … arriving there
+without having moved the walk would open the form of whichever step the user
+was standing on before". As an end state that is false. Reversed under
+`scripts/mutation_sweep.py` — `show_step()` first, then `_walk_to(index)` —
+`tests/gui/test_chain_cards.py` is green (`0 killed, 1 survived`), because
+`_walk_to` redraws through `show_graph`, which replaces the step position's
+pane after the slide has already started. What the order actually buys is that
+the wrong form is never *painted*, which is a transient and not the claim the
+sentence makes.
+
+It lands here rather than as its own item because it is the same fact this item
+is about: the panes are rebuilt wholesale on a walk move and never otherwise,
+so which surface is current at the moment of a rebuild is invisible to state
+and visible only to the eye. Whichever of the two shapes above is chosen, the
+docstring is restated to say transient — or the ordering stops mattering, and
+the sentence goes.

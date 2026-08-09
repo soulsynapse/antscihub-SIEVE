@@ -44,3 +44,24 @@ a thing a work run picks on the way past.
     $ uv run pytest tests/gui -q -k stage_header
     132 deselected in 0.68s
     exit: 5
+
+## 2026-08-09 (review): the module that defers to this item cites a slug that does not exist
+
+`gui/chain_stack.py`'s docstring closes by pointing here —
+`todo/a-stage-header-groups-by-nothing-the-tree-declares.md` — and that file
+has never existed; the item is `...groups-cards-by-nothing...`. The reader the
+docstring was written for lands nowhere, which is the whole of what the
+sentence was for. Correct it in the commit that answers this item, since that
+commit is already in both files.
+
+Nothing in the tree checks a reference like this. `doc_index.py` reads
+frontmatter and `tests/docs/test_doc_index.py` asserts ordering; neither
+resolves a `docs/`-relative link out of a source docstring, so a misspelled
+one is silent. A crude scan over `src/**/*.py` and `docs/**/*.md` at this
+commit turns up on the order of thirty candidates, most of them v2-relative
+paths into a tree this repo does not hold and one of them a deliberately
+misspelled example inside
+[what-earns-a-place-on-the-gate-line.md](what-earns-a-place-on-the-gate-line.md).
+Whether a checker is worth its false-positive rate is not this item's call and
+is not minted as one; what is recorded here is that the class exists and goes
+red nowhere.

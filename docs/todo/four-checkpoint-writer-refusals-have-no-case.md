@@ -55,3 +55,27 @@ today only because `run_cmd` is the single caller and feeds it the executor's
 stream directly. It is the guard that would fire the day something else drives a
 writer, which is an argument for keeping it and giving it a unit case rather than
 for cutting it.
+
+Fold, 2026-08-09, from the review of `760a849`: a seventh failure of the same
+commit path, and this one is live rather than dead. The first bullet above now
+names a parameter that has been renamed — `__init__` takes `kept`, not `keys` —
+which is cosmetic; what is not is that `close` can fail on a rename and has no
+refusal for it at all.
+[findings/2026.08.09-a-read-back-memmap-blocks-the-writers-rename-on-windows.md](../findings/2026.08.09-a-read-back-memmap-blocks-the-writers-rename-on-windows.md)
+measures it: `tools/checkpoint.py` maps its file through a module-scope
+`lru_cache` that nothing evicts, Windows refuses a rename onto a mapped file, so
+a process that previewed a checkpoint and later writes one to that path raises
+`PermissionError` — an `OSError`, not a `CheckpointWriteError` — from inside
+`close`'s rename loop. `abandon` then unlinks the parts that had not been
+renamed yet, and the folder is left holding this run's output for the nodes
+before the failure, nothing for the nodes after it, and the *previous* run's
+manifest describing both.
+
+It belongs here because it is the same question this item asks in the other
+direction: this item rules on refusals nothing can provoke, and this is a
+provokable failure with no refusal. Deciding it means ruling on both sides —
+whether the reader should map at all or evict on some signal it does not
+currently get, and whether `close` should treat a failed rename as a reportable
+refusal and roll back rather than tear halfway through. The read side is
+`tools/checkpoint.py` and not this module, which is the one respect in which
+this fold reaches past the item's title.

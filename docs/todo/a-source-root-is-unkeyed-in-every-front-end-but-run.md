@@ -1,6 +1,6 @@
 ---
 title: A source root is unkeyed in every front end but run
-status: awaiting-review
+status: done
 gated_on: nothing
 priority: high
 phase: "03"
@@ -39,3 +39,19 @@ source node with no identity. The `continue` is right for a node that is
 genuinely uncacheable, but here it converts a caller's omission into a silent
 performance cliff with no symptom, which is the same shape as the wrong-answer
 failure `cache_key.py` opens against — one register quieter.
+
+## 2026-08-09: closed, and the alongside question was ruled on rather than dropped
+
+Recorded by the review of `2f2917e` so that `done` here does not read as an
+answer by omission. The work kept `Dag.node_keys`' silent `continue`, and the
+run's reason was that it stops being a caller-omission trap once every front
+end resolves, and that `cli/materialize_cmd.py` is now a legitimate caller
+relying on it — a cut opens the footage and never a picked file, so it hands
+`{}` deliberately. The review accepts the ruling and records one distinction the
+argument runs together: `materialize_cmd` needs *absence per node*, while the
+trap this paragraph named is the *parameter default* on `ExecutionPlan.build`
+and `node_keys`. Those are separable, so the cliff is still reachable by a front
+end that omits `picked` rather than passing `{}`. Not reopened and not minted —
+every front end in the tree resolves today, and the reasoning is in
+`2026.08.09-an-items-alongside-question-is-answered-only-in-the-run-log.md`
+where a later reader can weigh it against what the tree then holds.

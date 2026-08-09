@@ -2,7 +2,7 @@
 title: An undeclarable element refuses every tool the docstring exempts
 priority: normal
 phase: 7
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests -q -k offering_without_an_element"
 opened: 2026-08-09

@@ -1,8 +1,7 @@
 ---
 title: The source is a card in the walk
-status: deferred
-deferred_for: subject
-gated_on: the first source tool landing (the-first-source-tool-moves-the-three-single-root-assumptions.md) — until every input is a node, a source card would be a picture of an edge the graph does not hold
+status: open
+gated_on: nothing
 priority: high
 phase: "9"
 done_when: "uv run pytest tests/gui -q -k source_card"
@@ -32,3 +31,12 @@ rather than treating the map row as licence.
     $ uv run pytest tests/gui -q -k source_card
     119 deselected in 0.68s
     exit: 5
+
+## 2026-08-09: the gate lifted
+
+`44b6456` landed `pick`, so a project can hold an input that is a node and a
+source card is a picture of something the graph carries. `gui/param_form.py`
+already builds a `PATH` field as the value the document holds, which is the
+placeholder this card replaces with a chooser. `status` and `gated_on` moved on
+that; the work below is unchanged, including the append-on-browse row that is
+still Kendrick's to confirm in review.

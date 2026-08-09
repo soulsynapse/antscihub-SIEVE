@@ -1,6 +1,6 @@
 ---
 title: The first source tool moves the three places one root is assumed
-status: awaiting-review
+status: done
 gated_on: nothing
 priority: high
 phase: 8

@@ -1,8 +1,7 @@
 ---
 title: Whether an external input carries a portable identity, so substitution is not silent
-status: deferred
-deferred_for: subject
-gated_on: the first source tool, which is what gives an external input a node to hang its identity on — the decision itself is ruled below, and only the build waits
+status: open
+gated_on: nothing
 done_when: "uv run pytest tests/unit/test_pipeline_model.py -q -k a_swapped_external_input_is_refused_by_recorded_hash"
 priority: high
 phase: "03"
@@ -71,3 +70,14 @@ field and the check arrive with their consumer like every other declaration.
 Deciding now and building there is the point — the deferral no longer shapes
 schema work in the meantime, and the criterion above is owed the day the
 subject lands.
+
+## 2026-08-09: the subject landed, so the build is owed
+
+`44b6456` landed `pick`, and with it the node the identity hangs on. What that
+commit keys a source root on is `cache_key.picked_key` over
+`source_identity` — `abspath|size|mtime_ns`, the same cache-key-not-an-identity
+this item was raised against, now applied to a second kind of file. So the gap
+the ruling below closes is live rather than hypothetical, and the shape is
+already visible in the tree: `ToolSource.file` is what resolves the path, and
+whatever hash the schema field records is taken from what it returns.
+`status` and `gated_on` moved on the gate lifting; the ruling is unchanged.

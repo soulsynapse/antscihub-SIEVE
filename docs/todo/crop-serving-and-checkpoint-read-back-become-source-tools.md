@@ -1,8 +1,7 @@
 ---
 title: Crop serving and checkpoint read-back become source tools
-status: deferred
-deferred_for: subject
-gated_on: the-first-source-tool-moves-the-three-single-root-assumptions.md landing, because there is no source tool to migrate onto until it does
+status: open
+gated_on: nothing
 priority: high
 phase: "05"
 done_when: 'uv run pytest tests/integration/test_crop_serving.py -k "the_served_graph_holds_no_crop_node or a_pre_cropped_folder_needs_no_crop_record or a_preview_is_served_by_the_written_crop" -q'
@@ -79,3 +78,17 @@ Where the clause work goes is open and is this item's call.
 state that used to mean "this run will be served" now means "this edit is
 offerable", and the reader that displays them is downstream of a decision
 somebody makes rather than of one the planner already made.
+
+## 2026-08-09: the gate lifted, and the site it unwinds grew a clause
+
+`44b6456` landed the first source tool, so there is something to migrate onto:
+`ToolSpec.source`, `ToolSource`, and `Dag.source_roots`, with `pick` as the
+worked example of a root that opens its own file. `status` and `gated_on` moved
+on that.
+
+The plan-time route this item unwinds gained a clause in the same commit:
+`resolve_source.crop_bound` now also declines when the footage feeds more than
+one root, because serving replaces the whole reader and the second root asked
+for whole frames. That clause is part of what retires here — a source tool
+wired to the crop node's place needs no `_route` and no count of roots — so the
+migration removes it rather than carrying it over.

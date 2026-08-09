@@ -1,8 +1,7 @@
 ---
 title: A run names the external files it needs before it starts, deriving the list from the graph
-status: deferred
-deferred_for: subject
-gated_on: the first source tool, which is what gives a project a second root to walk and the path stereotype to recognise it by — two of the three cases below have no subject until it lands
+status: open
+gated_on: nothing
 priority: normal
 phase: "03"
 done_when: 'uv run pytest tests/unit/test_external_inputs.py -k "every_named_external_input_is_reported_missing_before_execution or a_project_with_no_source_tool_owes_nothing or the_list_follows_a_rewired_graph_with_nothing_to_migrate" -q'
@@ -60,3 +59,25 @@ exists could only find a file param by branching on `tool_id`, which is what
 [gui-knows-kinds-not-tools](../adr/gui-knows-kinds-not-tools.md) and
 [a-tool-is-one-file](../adr/a-tool-is-one-file.md) each refuse. The source-tool
 item spends that decision; this one reads the result.
+
+## 2026-08-09: the gate lifted, and the walk it waited for exists
+
+`44b6456` landed the first source tool. `ParamStereotype.PATH` is the member
+this item's walk was owed, `ToolSpec.path_params` derives the names off it, and
+`Dag.source_roots` is the roots split by the declaration — so "the roots' path
+params" names something today and the deferral's stated subject is here.
+`status` and `gated_on` moved on that; nothing about the work below changed.
+
+**And the same walk owes `picked` to the plan.** `resolve_source.picked_identities`
+resolves each source root's file and returns what `ExecutionPlan.build` wants as
+`picked`, but nothing under `src/` calls it — `run_cmd.py`, `preview.py` and
+`materialize_cmd.py` all build plans without it. A source root handed no
+identity is left unkeyed by `dag.node_keys`, and an unkeyed node takes its whole
+subtree with it, so today a picker and everything below it recompute on every
+run and on every preview — the tuning loop `CLAUDE.md` names as the product
+constraint. It is not a wrong answer, only an uncached one, which is why it goes
+here rather than into a defect item: this is the item whose walk already visits
+every source root at run start, and the identity it resolves for the missing-file
+report is the identity the keys want. `done_when` above was written for the
+absence check alone and does not reach this; widen it or add a case when this is
+worked.

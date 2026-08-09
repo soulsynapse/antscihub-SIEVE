@@ -19,6 +19,13 @@ would be visible only while the walk stood on that node — which is exactly the
 moment a slider is being dragged, and exactly not the moment the pipeline
 position is being read. Under the canvas it is a splitter away from being any
 size the user wants, including none.
+
+**What is under the canvas is a step, and the graph is inside it** (09.3). The
+slot is sized to what its step asks for rather than to a share of the window: a
+strip for a step whose surface is a sentence, the plot's own height for one that
+draws, and the scalogram pair's room if a step ever asks for two. A fixed split
+gives the same height to all three, which is either a plot squeezed or a
+sentence with a hand's width of empty under it.
 """
 
 from __future__ import annotations
@@ -28,6 +35,11 @@ from PySide6.QtWidgets import QMainWindow, QSizePolicy, QSplitter, QVBoxLayout, 
 
 _WINDOW_WIDTH = 960
 _WINDOW_HEIGHT = 540
+
+#: The most of the viewing column the pinned slot may take, in percent. The
+#: footage is the thing being tuned against, so a step asking for more than this
+#: gets its own scroll area instead of the canvas' room.
+PIN_MAX_SHARE = 60
 
 _FIXED_POLICIES = (QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
 
@@ -88,30 +100,83 @@ class CanvasSlot(QWidget):
         widget.show()
 
 
-def compose(canvas: QWidget, graph: QWidget, control: QWidget, timeline: QWidget) -> QWidget:
-    """Canvas over graph on the left, the control side on the right, timeline under both.
+class ViewingColumn(QSplitter):
+    """The left half: the canvas over the pinned step, and how tall each is.
+
+    The slot is a splitter pane the window keeps for good, its step swapped
+    inside it — so a pin that moves re-fits the split rather than rebuilding the
+    column, and the canvas above never flickers for a change that is not about
+    it. A drag of the handle is the user's answer and stands until the next pin,
+    which is the only thing that re-fits.
+
+    All this module knows about what fills the slot is that it answers
+    `natural_height()` — the fence the file's first paragraph draws, kept for a
+    pane whose size is this module's business and whose contents are not.
+    """
+
+    def __init__(self, canvas: QWidget, pinned: QWidget, parent: QWidget | None = None) -> None:
+        super().__init__(Qt.Orientation.Vertical, parent)
+        _require_layout_section(canvas)
+        _require_layout_section(pinned)
+        self.addWidget(canvas)
+        self.addWidget(pinned)
+        self.setStretchFactor(0, 1)
+        self.setStretchFactor(1, 0)
+        self._pinned = pinned
+        # The window's own height rather than this splitter's, which is zero
+        # until it is shown — `compose` gives the reason at length.
+        self.fit_pin(_WINDOW_HEIGHT)
+
+    @property
+    def pinned(self) -> QWidget:
+        """The step in the slot."""
+        return self._pinned
+
+    def set_pinned(self, widget: QWidget) -> None:
+        """Put `widget` in the slot and give it the height it asks for.
+
+        The old one is destroyed, so anything inside it that outlives the pin —
+        the one graph panel the tuning loop fills — has to have been taken out
+        by the caller that owns it (`app.py`).
+        """
+        _require_layout_section(widget)
+        old = self._pinned
+        self.replaceWidget(1, widget)
+        self._pinned = widget
+        widget.show()
+        old.setParent(None)
+        old.deleteLater()
+        self.fit_pin()
+
+    def pin_height(self, total: int) -> int:
+        """How much of `total` the slot takes: what its step asks for, capped."""
+        return min(self._pinned.natural_height(), total * PIN_MAX_SHARE // 100)
+
+    def fit_pin(self, total: int | None = None) -> None:
+        """Give the slot its height and the canvas the rest of `total`.
+
+        `total` defaults to what the column currently holds, which is the height
+        a user's own drag of the handle divided — the fit re-divides it rather
+        than reaching for the window's.
+        """
+        height = sum(self.sizes()) if total is None else total
+        wanted = self.pin_height(height)
+        self.setSizes([height - wanted, wanted])
+
+
+def compose(viewing: QWidget, control: QWidget, timeline: QWidget) -> QWidget:
+    """The viewing column on the left, the control side on the right, timeline under both.
 
     The timeline is not a layout section: it fixes its own height by design
     (`timeline/bar.STRIP_HEIGHT`), which is the declaration `_require_layout_section`
     refuses — vertically, though, and the splitter it must not fight is
     horizontal, so it is placed here rather than checked.
 
-    The graph is checked like the canvas even though the splitter above it is
-    vertical: it shares the left half's width, so a widget that fixed its own
-    would move the main split just as surely from one row down.
+    The column's two halves are checked where they enter it rather than here:
+    they share the left half's width, so a widget that fixed its own would move
+    the main split just as surely from one row down.
     """
-    _require_layout_section(canvas)
-    _require_layout_section(graph)
     _require_layout_section(control)
-
-    viewing = QSplitter(Qt.Orientation.Vertical)
-    viewing.addWidget(canvas)
-    viewing.addWidget(graph)
-    viewing.setStretchFactor(0, 1)
-    viewing.setStretchFactor(1, 0)
-    # Pixels for `setSizes`' reason below, and two to one because the canvas is
-    # what is being judged and the trace is what is being read off it.
-    viewing.setSizes([_WINDOW_HEIGHT * 2 // 3, _WINDOW_HEIGHT // 3])
 
     split = QSplitter(Qt.Orientation.Horizontal)
     split.addWidget(viewing)

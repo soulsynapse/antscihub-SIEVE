@@ -23,6 +23,7 @@ src/sieve/gui/kind_editors.py              # One editor per composite kind, on t
 src/sieve/gui/layout.py                    # Where the main window's two halves sit and how big they start.
 src/sieve/gui/node_list.py                 # How one node is captioned: its place in the walk, and the tool it applies.
 src/sieve/gui/param_form.py                # One control per parameter, chosen by how the parameter is populated.
+src/sieve/gui/pinned.py                    # The one step held under the canvas: which step it is, and what it shows.
 src/sieve/gui/project_select.py            # Picking one of the project files that already exist.
 src/sieve/gui/rail.py                      # One tick per node, down the left edge, marking where the walk is.
 src/sieve/gui/save_screen.py               # What the run keeps, and the command that runs it.

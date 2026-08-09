@@ -1,15 +1,25 @@
 """The window: what the parts are, and what the four navigation verbs mean.
 
 The central widget is built exactly once — the viewing half on the left (canvas
-over graph), the control track on the right (`layout.compose`). The track is
-never rebuilt either, so which of its four positions is current survives every
-navigation; only its contents are replaced.
+over the pinned step), the control track on the right (`layout.compose`). The
+track is never rebuilt either, so which of its four positions is current
+survives every navigation; only its contents are replaced.
 
 **Where the walk is, is here.** The session layer holds the open project and
 nothing about being looked at; the track holds which position is showing and
 nothing about the graph. The index into `walk.node_order` belongs to neither
 and would be duplicated into both if it lived in one of them, so the window
 keeps it and hands it down on every redraw.
+
+**Which step is pinned is here too, and it is not the walk.** The slot under the
+canvas holds one step's surface and the walk is somewhere else — that is what
+the slot is for, a trace to tune *against* while the knobs being turned are
+upstream of it. So the tuning loop watches the pinned node rather than the
+current one, and a move of the walk leaves the trace alone: `watch` is called
+only when the answer changes, because a fresh collector throws away the rows
+already assembled (`tuning.watch`). The pin is view state and never reaches the
+document — nothing in `session/` has a word for it, and a `sieve run` of the
+same project cannot tell which step the window was looking at.
 
 The canvas is `canvas.VideoCanvas`; the scrubber under both halves is
 `timeline/bar.py`, which owns the working window and is the only thing that
@@ -69,8 +79,16 @@ from sieve.gui.control import Control
 from sieve.gui.graph_panel import GraphPanel
 from sieve.gui.hotkeys import bind_navigation_hotkeys
 from sieve.gui.kind_editors import bind_editors
-from sieve.gui.layout import CanvasSlot, compose, size_window
+from sieve.gui.layout import CanvasSlot, ViewingColumn, compose, size_window
 from sieve.gui.param_form import ParamForm
+from sieve.gui.pinned import (
+    EmptySlot,
+    PinnedStep,
+    default_pinned,
+    draws_a_trace,
+    element_kinds,
+    surface_note,
+)
 from sieve.gui.project_select import projects_in
 from sieve.gui.save_screen import SaveScreen
 from sieve.gui.step_pane import StepPane
@@ -151,8 +169,17 @@ class MainWindow(QMainWindow):
         self._registry = loaded_shelf() if registry is None else registry
         self._session: Session | None = None
         self._specs: Mapping[str, ToolSpec] = {}
+        # What one value of each node's output is a value of, which decides
+        # which steps have a trace to draw. Derived beside the specs and for the
+        # same reason: it is a fact about the graph's shape, and a parameter
+        # moves no tool onto or off the graph (`tuning.open`).
+        self._elements: Mapping[str, ElementKind | None] = {}
         self._order: tuple[Node, ...] = ()
         self._at = 0
+        # Which step holds the slot under the canvas. `None` until a project is
+        # open, and an index into `_order` after — one slot, so pinning is a
+        # move of this number and eviction is what that means.
+        self._pinned: int | None = None
         # The overlays are `kind_editors`' own private type, held here only to
         # be torn down and reconnected; nothing in this module reads one.
         self._editors: dict[str, Any] = {}
@@ -178,9 +205,10 @@ class MainWindow(QMainWindow):
         self._tuning.refilled.connect(self._paint_viewport)
 
         self._canvas = CanvasSlot(self._viewport)
+        self._viewing = ViewingColumn(self._canvas, EmptySlot())
         self._control = Control(self._projects)
         self._control.project_chosen.connect(self.open_project)
-        self.setCentralWidget(compose(self._canvas, self._graph, self._control, self._timeline))
+        self.setCentralWidget(compose(self._viewing, self._control, self._timeline))
 
         bind_navigation_hotkeys(self)
 
@@ -228,8 +256,20 @@ class MainWindow(QMainWindow):
 
     @property
     def graph(self) -> GraphPanel:
-        """The trace under the canvas."""
+        """The trace under the canvas, drawn for whichever step is pinned."""
         return self._graph
+
+    @property
+    def viewing(self) -> ViewingColumn:
+        """The left half: the canvas over the slot the pinned step holds."""
+        return self._viewing
+
+    @property
+    def pinned_node(self) -> Node | None:
+        """The step under the canvas, or `None` before a project is open."""
+        if self._pinned is None or not self._order:
+            return None
+        return self._order[self._pinned]
 
     @property
     def tuning(self) -> TuningLoop:
@@ -280,7 +320,10 @@ class MainWindow(QMainWindow):
         self._session = Session.open(path)
         self._specs = resolved_specs(self._session.project.pipeline, self._registry)
         self._order = node_order(self._session.project.pipeline)
+        self._elements = element_kinds(self._order, self._session.project.pipeline, self._specs)
         self._at = 0
+        self._pinned = default_pinned(self._order, self._elements)
+        self._show_pinned()
         self._control.set_save_screen(self._build_save_screen(self._session))
         # The path is resolved against the project's own directory and handed
         # over as a string: whether the file is there is the decode thread's
@@ -332,6 +375,31 @@ class MainWindow(QMainWindow):
             self._control.show_step()
         elif position == "step":
             self._control.show_save()
+
+    def pin(self, index: int) -> None:
+        """Give the slot under the canvas to step `index`, evicting what held it.
+
+        One slot, so this is a move and not a toggle: there is no gesture that
+        leaves the slot empty while a project is open, because a step is always
+        the thing the canvas is being read against.
+        """
+        if not self._order or index == self._pinned:
+            return
+        self._pinned = max(0, min(index, len(self._order) - 1))
+        self._show_pinned()
+        self._redraw()
+
+    def pin_current(self) -> None:
+        """P: pin the step the walk is standing on.
+
+        Only where the walk is what the position is about. At the project
+        position there is no current step in view, and at the save position the
+        walk is not what the user is looking at (`control.py`) — a key that
+        silently repointed the slot from either would be a change to the one
+        surface they were not reading.
+        """
+        if self._control.current_position() in ("pipeline", "step"):
+            self.pin(self._at)
 
     def go_up(self) -> None:
         """Up: the previous node in the walk, or stay on the first."""
@@ -412,8 +480,7 @@ class MainWindow(QMainWindow):
             self._order, self._at, self._build_pipeline_pane(), self._build_step()
         )
         self._rebind_editors()
-        node = self.current_node
-        self._tuning.watch(None if node is None else node.node_id)
+        self._watch_the_pin()
         self.refill_graph()
         # Ahead of the refill this move just asked for, because that one is
         # deferred by a turn of the event loop and the picture is about the node
@@ -421,6 +488,47 @@ class MainWindow(QMainWindow):
         # showing the previous node's output: it says the picture is the source,
         # and that picture is a render — of a node the walk has left.
         self._paint_viewport()
+
+    def _watch_the_pin(self) -> None:
+        """Point the loop at the pinned step, or at nothing if it draws no trace.
+
+        Nothing rather than the walk's node: the panel is inside the slot, so a
+        trace drawn there for any other step would be captioned with this one's
+        name. And only on a change, because `watch` starts a fresh collector —
+        a walk that re-pointed it at the node it was already on would blank the
+        graph on every Up and Down.
+        """
+        node = self.pinned_node
+        watched = (
+            node.node_id
+            if node is not None and draws_a_trace(self._elements.get(node.node_id))
+            else None
+        )
+        if self._tuning.watching != watched:
+            self._tuning.watch(watched)
+
+    def _show_pinned(self) -> None:
+        """Rebuild the slot for the step now pinned, and re-fit it to that step.
+
+        The panel is taken out of the old slot first: `set_pinned` destroys what
+        it replaces, and the one `GraphPanel` the loop fills has to outlive every
+        pin the user makes.
+        """
+        self._graph.setParent(None)
+        self._viewing.set_pinned(self._build_pinned())
+
+    def _build_pinned(self) -> QWidget:
+        """The pinned step's caption over its surface, or over a sentence.
+
+        The surface is the graph for a step whose values are coarser than a
+        pixel, and nothing for one whose output is a picture — `pinned.py` holds
+        both that predicate and the sentence a step without one gets.
+        """
+        node = self.pinned_node
+        if node is None or self._pinned is None:
+            return EmptySlot()
+        surface = self._graph if draws_a_trace(self._elements.get(node.node_id)) else None
+        return PinnedStep(self._pinned, node, surface, surface_note(self._specs.get(node.node_id)))
 
     def _build_pipeline_pane(self) -> QWidget:
         """The pipeline position's content: a card per node of the walk.
@@ -448,8 +556,10 @@ class MainWindow(QMainWindow):
             session.path.name.removesuffix(PROJECT_SUFFIX),
             steps,
             self._at,
+            self._pinned,
             on_select=self._walk_to,
             on_open=self._open_step,
+            on_pin=self.pin,
         )
 
     def _open_step(self, index: int) -> None:

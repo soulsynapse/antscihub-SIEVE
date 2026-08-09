@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import numpy as np
 from numpy.typing import NDArray
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -53,6 +53,13 @@ _BACKGROUND = QColor(18, 18, 22)
 _TRACE = QColor(120, 200, 255)
 _STALE_TRACE = QColor(120, 200, 255, 90)
 _HINT = QColor(120, 120, 130)
+
+#: What the panel asks for when something sizes itself to its contents — the
+#: pinned slot does (`layout.ViewingColumn`), and without an answer here a plot
+#: asks for nothing and gets it. Tall enough that a trace has a shape rather
+#: than a thickness; the ceiling on how much of the window it may take is the
+#: slot's, not the panel's.
+_PLOT_HEIGHT = 160
 
 _EMPTY_HINT = "No series yet"
 _STALE_NOTICE = "stale — refilling"
@@ -105,6 +112,9 @@ class GraphPanel(QWidget):
         return ""
 
     # ---- geometry --------------------------------------------------------
+
+    def sizeHint(self) -> QSize:
+        return QSize(super().sizeHint().width(), _PLOT_HEIGHT)
 
     def value_range(self) -> tuple[float, float]:
         """Floor and ceiling of the value axis, `(0.0, 1.0)` with nothing to draw.

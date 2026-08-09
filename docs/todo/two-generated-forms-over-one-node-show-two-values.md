@@ -62,3 +62,19 @@ so which surface is current at the moment of a rebuild is invisible to state
 and visible only to the eye. Whichever of the two shapes above is chosen, the
 docstring is restated to say transient — or the ordering stops mattering, and
 the sentence goes.
+
+## 2026-08-09 (09.3): the slot under the canvas is where a third would land
+
+The mockup's `PinnedStep` carries the pinned step's knobs in its head row, and
+09.3 left them out: a form there would be a third generated form over one node,
+divergent from the other two by exactly the rule above and reachable without
+even pressing a key — the slot is on screen at every position of the walk, so
+its copy of a value goes stale the moment either of the others is edited, and
+stays visible while it does. What landed is the caption and the surface only.
+
+So the two shapes above are now choosing for three surfaces rather than two, and
+the pinned slot is the one that cannot be dismissed by moving the walk. Whichever
+lands, the knobs the mockup puts in the slot are owed the same answer — the
+mockup row is settled surface (`MOCKUP-MAP.md`, "The pinned step"), and what is
+missing in the tree is not the widget but the reconciliation that makes a third
+one honest.

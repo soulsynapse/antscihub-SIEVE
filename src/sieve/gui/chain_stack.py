@@ -28,6 +28,12 @@ arrives is the session layer's, and a second writer here would be exactly what i
 was written to prevent — so the divergence is left standing rather than papered
 over with a reconciliation this module would own.
 
+**A card carries a note where the mockup's carries a plot.** The one step whose
+surface is drawn is the pinned one, and it is drawn under the canvas
+(`pinned.py`) — so its card says where the surface went rather than drawing it a
+second time, and every other card says nothing because there is nothing of its
+step to draw here. That is the whole of what a card holds beside its knobs.
+
 Not the chrome: `chrome.py` holds the palette and the sheet this pane wears.
 Not the stage headers the referent draws between groups — what a stage *is* has
 no derivation in the tree (`todo/a-stage-header-groups-by-nothing-the-tree-declares.md`).
@@ -50,6 +56,7 @@ from PySide6.QtWidgets import (
 
 from sieve.core.pipeline_model import Node
 from sieve.gui.chrome import ACCENT, DIM, LINE, PANEL, TEXT, rgb, stack_stylesheet
+from sieve.gui.pinned import PINNED_ELSEWHERE_NOTE
 
 
 class ChainCard(QWidget):
@@ -111,6 +118,29 @@ def _settings_button(on_open: Callable[[], None]) -> QToolButton:
     return button
 
 
+def _pin_button(pinned: bool, on_pin: Callable[[], None]) -> QToolButton:
+    """Take the slot under the canvas, or say this step already holds it.
+
+    Disabled on the step that holds it rather than left out: one slot means
+    pinning is a move and not a toggle, and a button that unpinned would leave
+    the slot with nothing in it.
+    """
+    button = QToolButton()
+    button.setText("◆" if pinned else "◇")
+    button.setAutoRaise(True)
+    button.setToolTip("Already pinned below the canvas" if pinned else "Pin below the canvas")
+    button.setEnabled(not pinned)
+    button.setStyleSheet(f"color: {rgb(ACCENT if pinned else DIM)}; border: 0;")
+    button.clicked.connect(on_pin)
+    return button
+
+
+def _note(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setStyleSheet(f"color: {rgb(DIM)};")
+    return label
+
+
 def _fixed_card(title: str) -> ChainCard:
     """The card that stands above the stack and does not scroll with it."""
     card = ChainCard(selected=False)
@@ -134,8 +164,10 @@ class PipelinePane(QWidget):
         project: str,
         steps: Sequence[tuple[Node, QWidget | None]],
         current: int,
+        pinned: int | None,
         on_select: Callable[[int], None],
         on_open: Callable[[int], None],
+        on_pin: Callable[[int], None],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -143,7 +175,7 @@ class PipelinePane(QWidget):
 
         self.project_card = _fixed_card(f"project — {project}")
         self.cards = tuple(
-            self._build_card(position, node, knobs, current, on_select, on_open)
+            self._build_card(position, node, knobs, current, pinned, on_select, on_open, on_pin)
             for position, (node, knobs) in enumerate(steps)
         )
 
@@ -174,8 +206,10 @@ class PipelinePane(QWidget):
         node: Node,
         knobs: QWidget | None,
         current: int,
+        pinned: int | None,
         on_select: Callable[[int], None],
         on_open: Callable[[int], None],
+        on_pin: Callable[[int], None],
     ) -> ChainCard:
         card = ChainCard(selected=position == current, on_select=lambda: on_select(position))
         layout = QVBoxLayout(card)
@@ -186,7 +220,10 @@ class PipelinePane(QWidget):
         head.addWidget(_title(f"{position + 1}. {node.tool_id}"))
         head.addStretch(1)
         head.addWidget(_settings_button(lambda: on_open(position)))
+        head.addWidget(_pin_button(position == pinned, lambda: on_pin(position)))
         layout.addLayout(head)
         if knobs is not None:
             layout.addWidget(knobs)
+        if position == pinned:
+            layout.addWidget(_note(PINNED_ELSEWHERE_NOTE))
         return card

@@ -1,7 +1,7 @@
 ---
 title: The pinned step holds the slot under the canvas
 step: "09.3"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k pinned_slot"
 opened: 2026-08-09

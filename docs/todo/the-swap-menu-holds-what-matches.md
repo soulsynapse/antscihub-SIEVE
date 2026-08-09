@@ -72,3 +72,45 @@ landing … the ⇄ menu renders the `matches` shortlist, and building the
 button before the predicate would ship a menu with either everything or a
 hardcoded list in it."* The empty-menu fold above stands: eight of ten
 positions offer nothing today, so the empty case is still the first case.
+
+## Ruled 2026-08-09 (Kendrick): one surface, two mutations
+
+There is no swap menu. ⇄ opens the same box the gaps get, standing where the
+card is instead of between two — the card ghosts under it, the tool already
+there is the lit offer, esc restores. Both are the same question asked of a
+position, and two widgets rendering one derivation was the duplication this
+dissolves.
+
+**The box never writes on open.** Opening is picker behaviour: the provisional
+removal is surface state, one mutation is issued when an offer is taken, and
+esc costs nothing. Already true of add; this makes it the rule, and it is what
+the "esc restores" above is standing on.
+
+**A swap keeps the node's identity, so it is not remove-then-add.** They look
+identical and are not the same write. `Project.without_node`
+(`core/pipeline_model.py`) drops the node's replicate overrides, its
+checkpoints, its sinks and its `input_hashes` entry, and `node_id` is what
+names the artifact on disk and what `bench/` addresses — so a swap that minted
+a new id would break every reference silently, with the run writing different
+files and the output card quietly emptier. In the referent the same thing shows
+as the write list: swapping `count-1` would untick both of its products. So the
+swap site needs a mutation that replaces the tool and keeps the id, and it is a
+third thing beside `RemoveNode` and the add splice this item already owes —
+three intents under two gestures on one widget.
+
+**An anchored box has one fewer axis, not a different keyboard.** A box opened
+by ⇄ does not move: it is standing at a position that exists, and letting ↑/↓
+walk it into the gaps would flip it between replacing and inserting as it
+travelled, which the user could not read off the screen. ←/→ still walk the
+offer in both, and ↑/↓ have nothing to move in this one — the reading to
+check when it is built, not a second key map to write.
+
+The empty offer gets sharper here than it is for add: ⇄ on a position with
+nothing to offer would ghost the card and leave esc as the only exit, where an
+empty menu is merely useless. Same answer needed, worse failure.
+
+Building this deletes `_swap_button`'s menu from the referent and rewrites
+`MOCKUP-MAP.md`'s "Swap is a dropdown" row. That is a licensed revision of
+[a-position-is-asked-for-in-the-chain](../adr/a-position-is-asked-for-in-the-chain.md),
+not a succession of it: the ADR rules that a question about a place is asked in
+the chain, and this is that rule reaching a second gesture.

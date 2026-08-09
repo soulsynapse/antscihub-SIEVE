@@ -2,9 +2,9 @@
 title: The scrub round trip now carries a pipeline render, and the degradation it can trigger is a decode remedy
 priority: high
 phase: "7"
-status: deferred
-deferred_for: decision
-gated_on: whether the viewport's render belongs inside the transport round trip — which cannot be settled without saying what `slider_to_preview` then measures, and which of the four readings below the ceiling is meant to hold
+status: open
+gated_on: nothing
+done_when: "uv run pytest tests/gui/test_player_scrub.py -q -k render_on_settle"
 opened: 2026-08-08
 ---
 
@@ -56,3 +56,26 @@ Deferred on the decision rather than left open with a criterion: what a test
 would assert here *is* the fork — a case pinning the render out of the round
 trip and a case pinning `slider_to_preview` to a repaint are the same test with
 opposite signs, so writing one now rules by the back door.
+
+## Ruled 2026-08-09: render on settle
+
+Kendrick's ruling, from the four above: the render is skipped while a drag is
+in flight and painted on the settle — the shape `RequestKind.SCRUB` already
+expresses. Consequences the work carries out:
+
+- A drag's repaint is the raw frame; `scrub_to_repaint` again measures the
+  decode leg and the hop, and its ceiling stays `ScrubPolicy`'s trigger, so
+  coarse mode once more remedies only what caused it.
+- The settled request paints the exact render, charged to the ceiling that
+  already means the settled, correct picture — scrub release → exact frame.
+- The stale-during-drag frame falls under the honesty half of the budget
+  scope: input never blocks, and a stale frame is labeled stale.
+- Playback is outside the ruling: a playback request is not a drag in
+  flight, so render-fed playback keeps paying its render per displayed frame
+  and drops rate by design, as the transport port item recorded.
+
+`done_when` at minting, red because nothing matches:
+
+    $ uv run pytest tests/gui/test_player_scrub.py -q -k render_on_settle
+    14 deselected in 0.02s
+    exit: 5

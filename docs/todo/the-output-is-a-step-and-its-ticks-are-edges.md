@@ -60,3 +60,40 @@ graph-construction time, well before anything can draw it, and unwinding the
 five is inside this step rather than discovered by it. What replaces each is
 the port-keyed read, not a drop of the check: the invariant that survives is
 that an unlabeled second edge is still refused.
+
+## 2026-08-09 (work): the output node is a shape the contract has no word for
+
+Read before picking this up again: the run that measured this did not build,
+and what stopped it is not size.
+
+Every other clause here has a home in the tree already. `Edge` grows a port and
+`Pipeline` keys its refusal on `(downstream, port)`; the five one-input sites
+unwind against that; `window` grows the port-keyed form, which
+[adr/no-kernel-apparatus.md](../adr/no-kernel-apparatus.md) names in advance as
+"a contract-plus-executor change" and therefore licenses. The output *node* is
+the clause with nothing behind it. It consumes one stream per ticked product
+and emits none, and `ToolSpec` has no way to say that: `emits` is required and
+typed, `_edge_faults` reads it, `Dag.elements` folds it, `ArraySpec.matches`
+offers on it, and `executor._unrunnable_reason` refuses a spec that emits rows
+because "a run returns a frame". A node that returns nothing is a member of the
+declarable shape space that no ADR admits and this item does not rule on —
+`adr/declared-means-verified.md` and the repo's ADR succession both put that
+ruling ahead of the commit that spends it, not inside it.
+
+The item is also not separable ahead of that ruling, which is worth stating
+because the obvious split is the one that is closed.
+[a-nodes-inputs-are-labeled-and-variadic.md](a-nodes-inputs-are-labeled-and-variadic.md)
+argues that the schema may not grow a port field before a tool has ports — "the
+distinction-nothing-can-make that `Edge` refuses" — so ports cannot land first.
+And the five folds cannot unwind first either: what `_elements` reads once a
+node has two upstreams is the merge semantics
+[a-merge-keys-its-inputs-by-port.md](a-merge-keys-its-inputs-by-port.md) is
+deferred on, and the only thing that dissolves the question is a node with no
+element meaning to fold — the sink again. Every route in runs through the one
+declaration nobody has made.
+
+So the order is: rule on the sink shape, then this item builds in one piece —
+ports, the five sites, the tool, the tick-to-edge derivation — with the GUI half
+(the card at the foot of the stack, Run on its form, `gui/save_screen.py`
+dissolving into it) a second job behind it. `done_when` is untouched and still
+covers the whole; nothing here narrows it.

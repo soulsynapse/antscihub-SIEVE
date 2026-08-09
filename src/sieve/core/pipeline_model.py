@@ -41,6 +41,13 @@ checkpoint off for a cluster with the memory to skip it must not move a single
 key or the handoff stops being the same run. Keeping them off the node makes
 that mistake unavailable rather than merely documented.
 
+`input_hashes` is on `Project` under the same rule and is worth reading twice,
+because it looks like the exception and is not. *Which* file a source tool reads
+does change what it computes, and it already reaches the key that way — as the
+file's identity, resolved at run time (`cache_key.picked_key`). What is recorded
+here is the document's *claim* about which file that ought to be, checked before
+a run starts, and making a claim or dropping one changes no pixel.
+
 The line reads one clause longer under per-replicate deviation: `Node.params`
 is the *default for replicates that have not been configured*, and what a key
 is built from is `resolved_params`. Hashing `Node.params` on its own would
@@ -55,6 +62,7 @@ report keys against them from outside — and that is all it owes.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -99,6 +107,56 @@ _SINK_FORMAT_PATTERN = TOOL_ID_PATTERN
 #: file name. Its neighbours in `tool_base` anchor the same way, for consequences
 #: of their own.
 NODE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+
+#: What a recorded external input is hashed with, written into the document
+#: beside the digits so that changing the function is a readable diff rather
+#: than a string that silently stops comparing. 32 bytes of BLAKE2b for
+#: `cache_key.DIGEST_BYTES`' reason — not a security boundary, sized against
+#: accidental collision — and spelt again here rather than imported, because
+#: `core` sits under `pipeline` and sharing the constant would be the import
+#: that says otherwise.
+INPUT_HASH_ALGORITHM = "blake2b-256"
+
+#: Bytes per read while hashing. An external input is a background frame most
+#: of the time and a video in the folder-of-sources case, and the second is what
+#: this is sized for.
+_HASH_BLOCK = 1 << 20
+
+
+class ExternalInputChanged(ValueError):
+    """A recorded external input is not the file that was recorded.
+
+    Raised rather than reported, which is the half of the decision that costs
+    something: reporting would leave a stale project runnable and make VISION's
+    reviewer promise advisory, and "It outputs the same results" is the sharpest
+    claim the product makes. What it buys is that the staleness surface —
+    `Project.with_input_hash`, re-recording a file that was regenerated on
+    purpose — is required rather than optional.
+    """
+
+
+def content_hash(file: Path) -> str:
+    """What identifies an external input, portably.
+
+    The whole difference from `cache_key.source_identity`, which is
+    `path|size|mtime` and is a cache key rather than an identity: this one is a
+    fact about the bytes, so the file a colleague carries to another machine,
+    under another path, restored with a new mtime, is recognised as the same
+    file — and one swapped for another at the matching name is not. That is the
+    trip the reviewer promise makes and the three cheap facts cannot.
+
+    It is paid for in a full read, at attach and again at check, which is why
+    `source_identity` is still what a *key* is built from: keys are derived
+    every time a project opens, and this is derived when a run starts.
+
+    Raises:
+        OSError: if `file` cannot be read.
+    """
+    digest = hashlib.blake2b(digest_size=32)
+    with file.open("rb") as handle:
+        while block := handle.read(_HASH_BLOCK):
+            digest.update(block)
+    return f"{INPUT_HASH_ALGORITHM}:{digest.hexdigest()}"
 
 
 def project_path_for(video: Path) -> Path:
@@ -795,6 +853,25 @@ class Project(_Artifact):
     #: naming a replicate is deliberately not how they are associated either —
     #: `CropRecord.backs` matches on geometry and parentage.
     crops: tuple[CropRecord, ...] = ()
+    #: `content_hash` of the file each node that reads its own is expected to
+    #: read, keyed by node id. On `Project` for `checkpoints`' reason and it is
+    #: the same test read from the other end: *which* file a source root reads
+    #: already changes its key, through the identity resolved at run time
+    #: (`cache_key.picked_key`), and this is the document's claim about which
+    #: one that ought to be. Recording a claim, or dropping it, must not move an
+    #: entry — otherwise pinning a background would recompute a graph nothing
+    #: about the pixels had changed.
+    #:
+    #: Keyed by node and not by path because the path is already a parameter and
+    #: resolves per replicate; what is being claimed is what a *node* reads.
+    #: Which nodes may carry one is not asked here — that a node reads a file at
+    #: all is a registry question, and this layer does not ask them.
+    input_hashes: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("input_hashes")
+    @classmethod
+    def _unwritable(cls, value: dict[str, str]) -> dict[str, str]:
+        return frozen_value(value)
 
     @field_validator("schema_version")
     @classmethod
@@ -837,6 +914,12 @@ class Project(_Artifact):
         for sink in self.outputs:
             if sink.node_id not in self.pipeline:
                 raise ValueError(f"sink names no such node: {sink.node_id!r}")
+        for node_id in self.input_hashes:
+            # `checkpoints`' clause, for its reason: a claim about a node the
+            # graph has lost is a claim nothing will ever check, and it would
+            # survive every save until a new node happened to take the id.
+            if node_id not in self.pipeline:
+                raise ValueError(f"input hash names no such node: {node_id!r}")
         # Two records for one cut are two files claiming to be the same thing,
         # and nothing downstream could choose between them — `backs` would
         # answer yes for both. Refused rather than deduplicated silently,
@@ -995,6 +1078,89 @@ class Project(_Artifact):
                 )
             }
         )
+
+    # ---- external inputs -------------------------------------------------
+
+    def with_input_hash(self, node_id: str, file: Path) -> Self:
+        """Copy recording what `node_id` reads right now.
+
+        Both halves of the promise in one method, because they are one act: the
+        record made when a file is attached, and the answer to "yes, this one"
+        after a colleague regenerates the background on purpose. Without the
+        second, refusing a mismatch would make a legitimate regeneration a
+        project nothing can run again.
+
+        The file is hashed here rather than a digest being passed in, so a
+        recorded hash cannot be anything but a fact about a file that existed.
+
+        Raises:
+            KeyError: if `node_id` names no node.
+            OSError: if `file` cannot be read.
+        """
+        self.pipeline.node(node_id)
+        return self.model_copy(
+            update={
+                "input_hashes": FrozenMapping({**self.input_hashes, node_id: content_hash(file)})
+            }
+        )
+
+    def without_input_hash(self, node_id: str) -> Self:
+        """Copy that claims nothing about what `node_id` reads.
+
+        The way back, and what an edit rewiring a node away from a file leaves
+        behind: a hash for a node that reads no file is compared against nothing
+        and would sit in the document until someone read it as a promise.
+        """
+        if node_id not in self.input_hashes:
+            return self
+        return self.model_copy(
+            update={
+                "input_hashes": FrozenMapping(
+                    {key: value for key, value in self.input_hashes.items() if key != node_id}
+                )
+            }
+        )
+
+    def check_input_hashes(self, files: Mapping[str, Path]) -> None:
+        """Refuse unless every recorded input is the file that was recorded.
+
+        **The rule, stated once here and called where a run starts.** A second
+        place deciding whether a file is the right one is a second answer to
+        what a project computes, and this one has to be reached before any key
+        is built: the run key folds `cache_key.source_identity`, which a
+        substitution at the same path, size and mtime passes through unchanged.
+
+        Only what was recorded is compared. A node in `files` carrying no
+        recorded hash is one the document makes no claim about, and refusing it
+        would make this a statement about which build wrote the project rather
+        than about the files; what a run is *owed* and what is *absent* is the
+        derived list's question next door, not this one. A recorded node absent
+        from `files` is one that reads no file this run — a rewire — and cannot
+        have been substituted.
+
+        Args:
+            files: The file each node actually resolved to, by node id. The run
+                start already walks its source roots to resolve exactly this
+                (`pipeline/resolve_source.picked_identities`), so the mapping is
+                a by-product of a walk that had to happen.
+
+        Raises:
+            ExternalInputChanged: naming every node whose file differs rather
+                than the first, so a reviewer holding two swapped inputs fixes
+                two.
+            OSError: if a named file cannot be read.
+        """
+        changed = sorted(
+            node_id
+            for node_id, recorded in self.input_hashes.items()
+            if node_id in files and content_hash(files[node_id]) != recorded
+        )
+        if changed:
+            raise ExternalInputChanged(
+                f"external input changed since it was recorded: {', '.join(changed)} — the run "
+                "would not output the same results; re-record deliberately if this is the file "
+                "you meant"
+            )
 
     # ---- per-replicate deviation -----------------------------------------
 

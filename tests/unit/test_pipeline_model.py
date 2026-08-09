@@ -18,6 +18,7 @@ from sieve.core.pipeline_model import (
     SCHEMA_VERSION,
     CropRecord,
     Edge,
+    ExternalInputChanged,
     Node,
     Pipeline,
     Project,
@@ -73,6 +74,7 @@ def make_project() -> Project:
                 decoder="ffmpeg-7.0",
             ),
         ),
+        input_hashes={"n2": "blake2b-256:0f1e"},
     )
 
 
@@ -351,14 +353,18 @@ class TestReferentialIntegrity:
         with pytest.raises(ValidationError, match="checkpoint names no such node"):
             following.with_pipeline(replacement)
 
-        # Each of the three is checked separately, so clearing them together
+        # Each of the four is checked separately, so clearing them together
         # would leave the last one named here asserted about only by this case's
         # title.
         without_checkpoints = following.model_copy(update={"checkpoints": ()})
         with pytest.raises(ValidationError, match="sink names no such node"):
             without_checkpoints.with_pipeline(replacement)
 
-        bare = without_checkpoints.model_copy(update={"outputs": ()})
+        without_outputs = without_checkpoints.model_copy(update={"outputs": ()})
+        with pytest.raises(ValidationError, match="input hash names no such node"):
+            without_outputs.with_pipeline(replacement)
+
+        bare = without_outputs.without_input_hash("n2")
         assert bare.with_pipeline(replacement).pipeline == replacement
 
     def test_an_override_naming_no_node_is_refused(self) -> None:
@@ -545,6 +551,50 @@ class TestCropRecords:
 
         assert recorded.crops == (first, other)
         assert recorded.without_crop(first).crops == (other,)
+
+
+class TestExternalInputs:
+    def _project(self) -> Project:
+        return Project(
+            source=SourceRef(path="arena.MP4"),
+            pipeline=Pipeline(nodes=(Node(node_id="bg", tool_id="pick", version="1.0.0"),)),
+        )
+
+    def test_a_swapped_external_input_is_refused_by_recorded_hash(self, tmp_path: Path) -> None:
+        # The gap the derived list of external inputs cannot close: a reviewer
+        # whose own `arena_bg.png` sits at the matching name resolves it, the run
+        # completes, and the numbers differ with no symptom. What is recorded is
+        # the bytes, so it survives the trip the run key's `source_identity`
+        # does not — another machine, another path, another mtime, same file.
+        background = tmp_path / "arena_bg.png"
+        background.write_bytes(b"the background this project was tuned against")
+        project = self._project().with_input_hash("bg", background)
+
+        project.check_input_hashes({"bg": background})
+
+        elsewhere = tmp_path / "reviewers-copy"
+        elsewhere.mkdir()
+        carried = elsewhere / "arena_bg.png"
+        carried.write_bytes(background.read_bytes())
+        project.check_input_hashes({"bg": carried})
+
+        background.write_bytes(b"a colleague's own background, at the matching name")
+        with pytest.raises(ExternalInputChanged, match="bg"):
+            project.check_input_hashes({"bg": background})
+
+        # The staleness surface the refusal makes mandatory: regenerating the
+        # background on purpose is a legitimate act, and without a way to say
+        # "yes, this one" every later run would refuse.
+        rerecorded = project.with_input_hash("bg", background)
+        rerecorded.check_input_hashes({"bg": background})
+        assert rerecorded.without_input_hash("bg").input_hashes == {}
+
+    def test_an_input_hash_naming_no_node_is_refused(self) -> None:
+        # `checkpoints`' rule, for `checkpoints`' reason: a claim about a node
+        # the graph has lost is a claim nothing will ever check, and it would
+        # survive every save until a new node happened to take the id.
+        with pytest.raises(ValidationError, match="input hash names no such node"):
+            Project(source=SourceRef(path="arena.MP4"), input_hashes={"bg": "blake2b-256:0"})
 
 
 class TestBlankStringsAreRefused:

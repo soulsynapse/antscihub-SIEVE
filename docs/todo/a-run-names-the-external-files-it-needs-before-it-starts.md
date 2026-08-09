@@ -81,3 +81,22 @@ every source root at run start, and the identity it resolves for the missing-fil
 report is the identity the keys want. `done_when` above was written for the
 absence check alone and does not reach this; widen it or add a case when this is
 worked.
+
+**And the same walk is where the recorded hash is checked.**
+[The portable identity](whether-an-external-input-carries-a-portable-identity.md)
+landed its model half: `Project.input_hashes` records a `content_hash` per node,
+`with_input_hash` re-records the file a colleague regenerated on purpose, and
+`Project.check_input_hashes` refuses — naming every node whose file differs — when
+a recorded input is not the file that was recorded. Nothing calls it. The call
+belongs here rather than in a third place, for the reason the two paragraphs
+above already give: this is the item whose walk resolves every source root's file
+at run start, so the mapping `check_input_hashes` wants is a by-product of a walk
+that had to happen, and a second walk would be a second answer to which file a run
+reads. The order at the call site is the one the reports read in — absent first,
+since a missing file has no hash to compare, then changed — and both are refusals
+before any key is built. The same amendment applies: `done_when` was written for
+the absence check alone and does not reach this.
+
+`core/pipeline_model.py`'s opening sentence is still narrower than VISION's and
+is still this item's second statement to move; the portable-identity work
+deliberately left it, growing only the identity line where its new field sits.

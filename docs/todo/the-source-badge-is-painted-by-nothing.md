@@ -43,3 +43,23 @@ and `_paint` returns before asking when there is no frame. It is the
 guard-with-no-caller shape rather than a missing fixture — the case above will
 not separate it — so the choice is a comment saying which caller it is for or
 its removal, settled with the fixture rather than beside it.
+
+## 2026-08-09: the armed edge lines are the same defect on the timeline strip
+
+09.6 (`65a7c83`) gave `TimelineStrip.paintEvent` a block that draws a 3 px line
+down each edge of the window while the HANDLES toggle is down, with a comment
+saying why it must exist: "a user who reaches for an edge has to be able to
+see, on the thing they are reaching for, whether it will answer." Seven cases
+landed for the toggle and all of them read the hit test. Under
+`uv run pytest -q tests/gui/test_timeline.py`, replacing that block's
+`if self._handles_armed:` with `if False:` survives — the band can arm its
+edges and show nothing, and the state the toggle exists to make visible is
+carried by no case.
+
+It is this item's shape rather than the expander's: `handles_armed` reads the
+strip's own field, not the button's, and every mutant of the hit test dies. The
+unheld layer is the one past the accessor, and the fixture is the same one this
+item already prescribes — a `grab()` of the strip with the toggle down must
+differ in pixels from the same window with it up. Whatever satisfies the badge
+half should satisfy this one in the same commit; the criterion above names only
+the badge and does not reach it.

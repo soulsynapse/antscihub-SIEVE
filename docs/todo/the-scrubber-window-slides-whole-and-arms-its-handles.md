@@ -1,9 +1,9 @@
 ---
 title: The scrubber window slides whole, and its handles answer only when armed
 step: "09.6"
-status: awaiting-review
+status: done
 gated_on: nothing
-done_when: "uv run pytest tests/gui -q -k handles_toggle"
+done_when: "uv run pytest -q tests/gui/test_timeline.py::TestTheHandlesToggle tests/gui/test_timeline.py::TestTheWindowBodySlidesItWhole tests/gui/test_timeline.py::TestTheSeamUnderThePanes"
 opened: 2026-08-09
 ---
 
@@ -24,3 +24,15 @@ only which gestures may write it, never where it lives.
     $ uv run pytest tests/gui -q -k handles_toggle
     119 deselected in 0.68s
     exit: 5
+
+## 2026-08-09: the criterion is widened to the item's other two claims
+
+The minted `-k handles_toggle` selects `TestTheHandlesToggle` and nothing else,
+so the body-drag sentence and the seam sentence — two of the item's three —
+were outside it. Widened at the closing review to the three classes as node
+ids rather than as a `-k` disjunction, because a disjunct naming nothing is
+green and a node id naming nothing exits 4
+(`findings/loop/2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing.md`,
+whose open question this answers). All three classes existed when the widening
+landed, so this covers work already done rather than certifying work nobody
+did.

@@ -3044,6 +3044,28 @@ def build_pipeline_pane(
 # the first thing the user sees the one thing that doesn't look like SIEVE.
 
 
+def _chrome_button(text: str, tip: str) -> QPushButton:
+    """The timeline button's dress (HANDLES, ▶), carried inline: these live in
+    panes whose stylesheet has no QPushButton rule, and the affordance should
+    not differ by pane."""
+    button = QPushButton(text)
+    button.setToolTip(tip)
+    button.setStyleSheet(
+        f"""
+        QPushButton {{
+            background: rgb({PANEL_HOT.red()},{PANEL_HOT.green()},{PANEL_HOT.blue()});
+            color: rgb({TEXT.red()},{TEXT.green()},{TEXT.blue()});
+            border: 1px solid rgb({LINE.red()},{LINE.green()},{LINE.blue()});
+            padding: 2px 4px;
+        }}
+        QPushButton:hover {{
+            border-color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});
+        }}
+        """
+    )
+    return button
+
+
 def _reveal_project(name: str) -> None:
     """The project's folder in the system's file manager — the sample path here."""
     QDesktopServices.openUrl(QUrl.fromLocalFile(f"{LIBRARY_ROOT}/{name}"))
@@ -3064,14 +3086,18 @@ def _project_card(index: int, current: int, on_select, on_open) -> ChainCard:
     head.addWidget(_title_label(name))
     head.addStretch(1)
     head.addWidget(_dim_label(opened))
+    layout.addLayout(head)
+
+    foot = QHBoxLayout()
+    foot.addWidget(_dim_label(holds))
+    foot.addStretch(1)
     # On the selected card alone: it acts on the selection, and the pane is
     # rebuilt when that moves, so the button travels with the highlight.
     if index == current:
-        reveal = _mini_button("…", "Open this project's folder on disk")
+        reveal = _chrome_button("OPEN LOCATION", "Open this project's folder on disk")
         reveal.clicked.connect(lambda: _reveal_project(name))
-        head.addWidget(reveal)
-    layout.addLayout(head)
-    layout.addWidget(_dim_label(holds))
+        foot.addWidget(reveal)
+    layout.addLayout(foot)
     return card
 
 
@@ -3081,25 +3107,9 @@ def build_project_pane(current: int, on_select, on_open, on_new) -> QWidget:
 
     # The button is on the library card, not at the foot of the list: a new
     # project is added to the library, the way another region is added on the
-    # crop card and not in the fan that shows them. It wears the timeline
-    # button's dress (HANDLES, ▶) inline, because this pane's stylesheet has no
-    # QPushButton rule and the affordance should not differ by pane.
+    # crop card and not in the fan that shows them.
     library = _fixed_card(LIBRARY, f"{len(PROJECTS)} projects on disk")
-    new = QPushButton("NEW PROJECT")
-    new.setToolTip("New project — empty until sources are added")
-    new.setStyleSheet(
-        f"""
-        QPushButton {{
-            background: rgb({PANEL_HOT.red()},{PANEL_HOT.green()},{PANEL_HOT.blue()});
-            color: rgb({TEXT.red()},{TEXT.green()},{TEXT.blue()});
-            border: 1px solid rgb({LINE.red()},{LINE.green()},{LINE.blue()});
-            padding: 2px 4px;
-        }}
-        QPushButton:hover {{
-            border-color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});
-        }}
-        """
-    )
+    new = _chrome_button("NEW PROJECT", "New project — empty until sources are added")
     new.clicked.connect(on_new)
     library.layout().addWidget(new)
 

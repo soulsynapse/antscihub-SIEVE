@@ -2,7 +2,7 @@
 title: The third BOUNDED tool is keyed and gated by nothing
 priority: high
 phase: 8
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_admission.py -k every_bounded_tool_is_covered -q"
 opened: 2026-08-07
@@ -41,3 +41,37 @@ happened rather than what the file says it does.
 The epsilon half stays named by hand and this does not touch it. That tuple
 asserts a measurement nobody has taken has not been quietly assumed, which is a
 claim about three specific tools and not a property of the shelf.
+
+## What landed
+
+`test_every_bounded_tool_is_covered_by_a_served_case`, and the restructuring
+that lets it read what ran. The two served-equals-cold comparisons were three
+inlined calls apiece; they are now a frozen `ServedCase` — a fill span, a
+compared span, and a callable returning the graph — with `run()` filling the
+store, answering from it, and computing the same span cold. `OVER_THE_CHAIN`
+and `UNDER_A_WARMED_NODE` are the two, and `SERVED_EQUALS_COLD` holds them. The
+three tests that built those runs by hand now take them from the case, so the
+gate and the cases cannot drift apart: a case dropped from the tuple is a tool
+uncovered.
+
+The gate runs every case, unions `node.tool_id` over the plans it executed, and
+subtracts that from the `BOUNDED` specs `discover()` returns. Every version
+rather than `latest`, since an entry is keyed on the version that wrote it.
+Nothing in it names a tool.
+
+Shown red twice by `scripts/mutation_sweep.py` against `done_when` as the
+oracle, there being no implementation to revert — the gate passing on a correct
+tree is the point, and what has to fail is the thing it exists to catch.
+`temporal_baseline`'s `warmup_kind=WarmupKind.EPSILON ==> BOUNDED` is the third
+tool arriving keyed and ungated: KILLED. `SERVED_EQUALS_COLD` losing
+`OVER_THE_CHAIN` is the other end — coverage claimed for a comparison that no
+longer runs: KILLED.
+
+```
+$ uv run pytest tests/unit/test_cache_admission.py -k every_bounded_tool_is_covered -q
+.                                                                        [100%]
+1 passed, 6 deselected in 0.62s
+```
+
+Beside it: `ruff check`, `ruff format --check`, `lint-imports` (8 contracts
+kept), 1053 tests.

@@ -49,6 +49,8 @@ is under test is a declaration two shipped tools make, and a fixture declaring
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 import pytest
@@ -192,11 +194,43 @@ def outputs(plan: ExecutionPlan, store: MemoryFrameStore | None = None) -> list[
     return list(execute(plan, NoiseSource(), store=store))
 
 
-def served_over_a_narrower_run() -> list[FrameResult]:
-    """`WIDE`, against a store that only ever saw `NARROW`."""
-    store = MemoryFrameStore()
-    outputs(plan_over(NARROW), store)
-    return outputs(plan_over(WIDE), store)
+@dataclass(frozen=True)
+class ServedCase:
+    """A store filled by one run, a second run over it, and that run cold.
+
+    Data rather than three calls inlined per test, because
+    `test_every_bounded_tool_is_covered_by_a_served_case` has to know which tools
+    these comparisons reach and the only honest source is the plans they
+    executed: a case names a graph, the graph names its nodes, and the run says
+    which of them the executor was handed. A list of tool ids written beside the
+    cases would be a declaration checked by a copy of itself.
+    """
+
+    #: The span the store is filled from, before the comparison runs.
+    fill: SourceSpan
+    #: The span compared: answered from that store, then computed cold.
+    span: SourceSpan
+    #: Called per run rather than held, so the two runs share no `Pipeline`
+    #: instance and a node cannot carry anything between them.
+    pipeline: Callable[[], Pipeline]
+
+    def run(self) -> tuple[ExecutionPlan, list[FrameResult], list[FrameResult]]:
+        store = MemoryFrameStore()
+        outputs(plan_over(self.fill, self.pipeline()), store)
+        plan = plan_over(self.span, self.pipeline())
+        return plan, outputs(plan, store), outputs(plan)
+
+
+#: `WIDE` against a store that only ever saw `NARROW`, so the transition from
+#: served to computed sits inside the span.
+OVER_THE_CHAIN = ServedCase(fill=NARROW, span=WIDE, pipeline=graph)
+
+#: `EARLIER` against a store filled from `WIDE`: the served run begins behind the
+#: filling one, which is what lets it notice an entry filed out of a lead-in.
+UNDER_A_WARMED_NODE = ServedCase(fill=WIDE, span=EARLIER, pipeline=under_a_warmed_node)
+
+#: The comparison the ADR admits a tool on, in every shape this file has one.
+SERVED_EQUALS_COLD = (OVER_THE_CHAIN, UNDER_A_WARMED_NODE)
 
 
 def test_a_bounded_warmup_tool_served_from_the_store_equals_its_cold_run() -> None:
@@ -206,8 +240,7 @@ def test_a_bounded_warmup_tool_served_from_the_store_equals_its_cold_run() -> No
     `FrameResult` carrying both, and splitting it would run the same two renders
     twice to make two halves of one claim.
     """
-    cold = outputs(plan_over(WIDE))
-    served = served_over_a_narrower_run()
+    _, served, cold = OVER_THE_CHAIN.run()
 
     assert [result.index for result in served] == [result.index for result in cold]
     for from_store, from_scratch in zip(served, cold, strict=True):
@@ -227,7 +260,7 @@ def test_the_served_range_stops_inside_the_span_and_both_tools_carry_on() -> Non
     differently — `block_signal`'s state stops advancing, `detect`'s window
     fills with frames it was never handed.
     """
-    served = served_over_a_narrower_run()
+    _, served, _ = OVER_THE_CHAIN.run()
 
     for node_id in (BLOCKS, DETECTOR):
         cached = {int(r.index) for r in served if node_id in r.from_cache}
@@ -319,12 +352,7 @@ def test_an_entry_is_never_a_lead_in_frames_under_warmed_output() -> None:
     `block_signal` that had seen one frame rather than two — and hands it back
     here as the settled answer.
     """
-    store = MemoryFrameStore()
-    outputs(plan_over(WIDE, under_a_warmed_node()), store)
-
-    plan = plan_over(EARLIER, under_a_warmed_node())
-    served = outputs(plan, store)
-    cold = outputs(plan)
+    plan, served, cold = UNDER_A_WARMED_NODE.run()
 
     assert plan.lead_in_shortfall.frames == 0
     for node_id in (BLOCKS, NORMALIZED):
@@ -352,3 +380,41 @@ def test_the_two_epsilon_warmup_tools_are_still_refused() -> None:
 
     for tool_id in ("block_signal", "detect"):
         assert REGISTRY.latest(tool_id).warmup_kind is WarmupKind.BOUNDED
+
+
+def test_every_bounded_tool_is_covered_by_a_served_case() -> None:
+    """A third tool declaring `BOUNDED` would be keyed, served, and gated here by nothing.
+
+    The graphs above are hand-built and the shelf is not. A tool landing with
+    `warmup_kind=WarmupKind.BOUNDED` is keyed by `cache_policy` and served by the
+    executor on the strength of its own say-so, and every case in this file stays
+    green having never called it — the rule that recomputes is named by tool id
+    in the test above, but that is the side of the gate that refuses.
+
+    So both ends are derived rather than listed: the tool ids the comparisons
+    actually put through the executor, read off the plans they ran, against the
+    `BOUNDED` set `discover()` returns. Every version, not `latest` — a served
+    entry is keyed on the version that wrote it, so an old one declaring
+    `BOUNDED` is admitted on the same terms as the newest.
+
+    The failure message is what this exists for. A row per tool would be the
+    shared list `adr/a-tool-is-one-file.md` refuses, and a count would tell the
+    next tool's author nothing; naming the tool tells them that a case here is
+    part of admitting it.
+    """
+    covered: set[str] = set()
+    for case in SERVED_EQUALS_COLD:
+        plan, served, cold = case.run()
+        assert served and cold, f"{case} compared nothing, so it covers nothing"
+        covered |= {node.tool_id for node in plan.dag.order}
+
+    uncovered = sorted(
+        spec.tool_id
+        for spec in discover()
+        if spec.warmup_kind is WarmupKind.BOUNDED and spec.tool_id not in covered
+    )
+    assert not uncovered, (
+        f"{', '.join(uncovered)}: declares BOUNDED, no served case. The declaration "
+        f"is what keys the tool, and nothing here runs it — put the tool in a graph "
+        f"a `ServedCase` compares served against cold."
+    )

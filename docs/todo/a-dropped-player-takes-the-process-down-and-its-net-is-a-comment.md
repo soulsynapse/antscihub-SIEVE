@@ -4,7 +4,7 @@ priority: normal
 phase: 9
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/gui -q -k 'dropped_player or no_orphaned_pane'"
+done_when: "uv run pytest tests/gui -q -k dropped_player && uv run pytest tests/gui -q -k no_orphaned_pane && uv run pytest tests/gui -q && uv run pytest tests/gui -q && uv run pytest tests/gui -q"
 opened: 2026-08-09
 ---
 
@@ -102,3 +102,22 @@ rather than certifying the thread teardown alone. Both disjuncts name nothing in
 the tree today and the criterion stays red at exit 5, which is what it was
 before — the widening adds a second thing the work has to make green, not a
 green one it can hide behind.
+
+## Rewritten 2026-08-09 at 09.5's review: a disjunction cannot hold two claims
+
+The paragraph above is wrong on its own terms, and
+[findings/loop/2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing.md](../findings/loop/2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing.md)
+was already in the tree when it was written. `-k "a or b"` is red at exit 5
+only while *both* names match nothing; the moment either case lands the command
+exits 0 and certifies the other half as done. So the widening added a second
+thing the work has to make green for exactly as long as the work has done
+neither.
+
+`done_when` is now one command per claim, chained — which is the form that goes
+red for the absence of any one of them, since a `-k` that selects nothing exits
+5 and breaks the chain. The last three links are the same command three times,
+which is the repetition the fold above asks for: the abort is at process exit
+and a single green run is what the current tree already produces three times in
+five, so a criterion that runs the directory once cannot see the thing this item
+is about. `tests/gui` is a few seconds, so three runs is not a cost worth
+trading the claim for.

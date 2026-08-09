@@ -68,3 +68,25 @@ command prints. One case with unequal samples closes it.
 
 Neither is a defect the port introduced; both are v2's, carried across intact
 (`findings/loop/2026.08.07-a-verbatim-test-port-inherits-the-blind-spots-of-the-file-it-ports.md`).
+
+## The colour core-count reading is now owed, and this fix is what makes it worth taking (folded 2026-08-09)
+
+Folded from the run that put a `CORES_PER_WORKER` floor under `resolve_workers`
+(`the-luma-cap-is-slower-than-sequential-on-a-small-allocation.md`). That floor
+applies to both paths, and below 16 CPUs the colour side of it rests on the
+mechanism rather than on a reading — the sweep's core-count axis was run on the
+luma path only. `sieve sweep --colour --core-counts 2,4,8` is the command that
+settles it, and the constant is one number either way, so this is a sweep to run
+rather than a design to decide.
+
+It lands here because running it first would spend a third of its rows on the
+duplicate treatment this item exists to end: `unpinned[:N]` and the fast class's
+first N are the same mask, so a colour run taken before the fix reports the same
+cells twice under labels that say otherwise, and the row a reader would most want
+— a genuinely unpinned small allocation — is the one it would not contain. Fixing
+the axis and then reading the colour path is one ordering; the reverse throws the
+reading away.
+
+This is a measurement, not a criterion: the `done_when` above is about the axis
+and does not cover the sweep, so a review may want to widen it or split the
+reading out.

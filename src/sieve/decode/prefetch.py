@@ -132,6 +132,19 @@ INFERRED_WORKER_CAP = 4
 #: `docs/findings/2026.07.28-the-luma-path-has-almost-nothing-left-to-thread.md`.
 LUMA_WORKER_CAP = 2
 
+#: Cores a worker needs before it is worth starting, and the term that lets the
+#: resolver see the *bottom* of the allocation range. A cap bounds a guess from
+#: above only, so under `min(available_cpus(), cap)` the smaller the allocation
+#: the worse the guess — and on the luma path the 2026-08-09 sweep measured that
+#: as a regression against not threading at all: two workers cost 16.12 ms/frame
+#: on four CPUs against a sequential 12.08, and 31.08 on two against 20.37.
+#:
+#: Four reproduces the sweep's optimum at every luma core set it read, which is
+#: the whole of what chose the number — one arithmetic constant measured on one
+#: machine, exactly as the caps are, and no more transferable than they are.
+#: `docs/findings/2026.08.09-the-luma-worker-cap-is-right-at-sixteen-cores-and-a-third-slower-at-four.md`.
+CORES_PER_WORKER = 4
+
 
 def resolve_workers(requested: int | None = None, *, luma: bool = False) -> int:
     """How many decode threads to run: the request, else what the machine allows.
@@ -142,14 +155,32 @@ def resolve_workers(requested: int | None = None, *, luma: bool = False) -> int:
     and compute processes disagreed about how much of a node they had would
     oversubscribe it, and the symptom is a slow job rather than a failure.
 
-    A request always wins and is never capped: the caps bound a guess about a
-    machine this code cannot see, and a cluster node passing 32 can see it.
+    A request always wins and is never capped or floored: the bounds fence a
+    guess about a machine this code cannot see, and a cluster node passing 32 can
+    see it.
 
     `luma` picks which cap, because the two paths have measurably different
     optima — four and two. It is a keyword rather than a second function so that
     a caller cannot resolve a count for the wrong format by picking the wrong
     name, and it defaults to the colour path for the same reason `frame_source`
     does: a caller that has not been taught to pass it is slow, never wrong.
+
+    **The inference is fenced at both ends, and the floor is the half a cap
+    cannot do.** A ceiling that lets 2 through on a 2-CPU allocation hands every
+    worker a core the decoder was already using, which the sweep measured on the
+    luma path as slower than the sequential path the threading exists to beat.
+    `CORES_PER_WORKER` is the term that sees that end of the range; the caps
+    still hold the top, where the curve turns for reasons that are not core
+    count at all.
+
+    The floor applies to both paths and the two have different standing behind
+    them. On the luma path it is measured, at every core set the sweep read. On
+    the colour path only the whole-allocation sizes were read — 16 and 32, where
+    the floor is slack and the answer is `INFERRED_WORKER_CAP` either way — so
+    what is claimed below those sizes is the mechanism and not a reading: a
+    colour worker contends for a core exactly as a luma one does, and it moves
+    three times the bytes doing it. `sieve sweep --colour --core-counts` is what
+    would turn that into a number.
 
     **Deliberately does not read the environment.** An earlier version consulted
     `SLURM_CPUS_PER_TASK` and a `SIEVE_DECODE_WORKERS` override, and both were
@@ -167,7 +198,8 @@ def resolve_workers(requested: int | None = None, *, luma: bool = False) -> int:
     """
     if requested is not None:
         return max(requested, 1)
-    return min(available_cpus(), LUMA_WORKER_CAP if luma else INFERRED_WORKER_CAP)
+    cap = LUMA_WORKER_CAP if luma else INFERRED_WORKER_CAP
+    return max(min(available_cpus() // CORES_PER_WORKER, cap), 1)
 
 
 class PrefetchFrameSource:

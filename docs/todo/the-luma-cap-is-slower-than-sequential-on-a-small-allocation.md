@@ -2,7 +2,7 @@
 title: The luma cap is slower than sequential on a small allocation
 priority: high
 phase: 8
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_decode_workers.py -q -k 'a_small_allocation_is_not_handed_more_workers_than_it_can_overlap'"
 opened: 2026-08-09

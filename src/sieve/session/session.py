@@ -82,7 +82,18 @@ class Session:
         return bool(self._future)
 
     def commit(self, project: Project) -> None:
-        """`project` becomes the present value.
+        """`project` becomes the present value, if it is not already.
+
+        A value equal to the present one is dropped whole: nothing appended,
+        nothing to undo, and no new value for anything downstream to re-plan
+        from. That is part of what being the document's only writer means rather
+        than an exception to it — a write is a change, and a value identical to
+        the one held is not one. It has to live here for the same reason the
+        writes do: every surface that can produce a no-op would otherwise need
+        its own guard, and Qt hands them out freely — re-selecting the entry a
+        combo already shows, arrowing a spin box away and back. A live drag is
+        untouched, because its stream is distinct values and every one of them
+        is real.
 
         The redo branch is dropped: an edit made after an undo is a divergence,
         and keeping the abandoned side reachable would offer a redo that lands on
@@ -92,6 +103,8 @@ class Session:
         with the intent layer above — it knows what a SetParam means, this knows
         only that a new document has arrived.
         """
+        if project == self._present:
+            return
         self._past.append(self._present)
         self._present = project
         self._future.clear()

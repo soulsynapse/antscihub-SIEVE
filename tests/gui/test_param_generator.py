@@ -289,6 +289,49 @@ def test_arrowing_a_closed_choice_commits_once(qapp, session: Session) -> None:
     assert session.undo().params_for(_NODE) == {}
 
 
+def test_reselecting_the_shown_choice_is_not_an_edit(qapp, session: Session) -> None:
+    """Choosing the entry the combo already shows leaves the document alone.
+
+    `activated` is a complete statement of intent and the intent here is real —
+    the user opened the list and picked something. What is not real is the
+    *edit*: the value picked is the value held, and a document written with it
+    is the document already on screen. Committing it anyway costs an undo entry
+    that steps back to an identical document, plus the re-plan and render that
+    ride on any write.
+
+    The gesture cannot be filtered at the combo — Qt has no signal for "chose a
+    different one", and the same shape reaches the session from a spin box
+    arrowed away and back. So the refusal is the writer's, and the case is
+    written through the widget to prove it arrives there.
+    """
+    from PySide6.QtCore import Qt
+
+    from sieve.gui.param_form import ParamForm
+
+    form = ParamForm(session, _NODE, _spec())
+    combo = form.widget("flavour")
+
+    # A real choice first: the fixture's node carries no `flavour` at all, so
+    # re-selecting the *default* the combo opens on would be a write of a key
+    # the document does not hold, and equal to nothing.
+    driving.key(combo, Qt.Key.Key_Down)
+    driving.key(combo.view(), Qt.Key.Key_Home)
+    driving.key(combo.view(), Qt.Key.Key_Return)
+    chosen = session.project
+
+    assert chosen.params_for(_NODE) == {"flavour": "salt"}
+
+    driving.key(combo, Qt.Key.Key_Down)
+    driving.key(combo.view(), Qt.Key.Key_Return)
+
+    # Identity, not equality: a committed no-op is a *different* document that
+    # compares equal, and equality would pass on the stack this case exists to
+    # keep empty.
+    assert session.project is chosen
+    assert session.undo().params_for(_NODE) == {}
+    assert not session.can_undo()
+
+
 def test_typing_a_number_commits_the_number_and_not_its_prefixes(qapp, session: Session) -> None:
     """An edit runs from the first keystroke to a commit, and nothing between.
 

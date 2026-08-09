@@ -2,7 +2,7 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest -q tests/gui/test_param_generator.py -k reselect"
 opened: 2026-08-08
@@ -647,3 +647,17 @@ where it lands, rather than as an exception to session's computing-nothing
 line. A live drag is untouched: its stream is distinct values, all real; only
 exact no-ops die. The criterion below is already fix-agnostic and red, and is
 unchanged by this ruling.
+
+One residue the work run leaves, folded here rather than minted because it is
+the same gesture one layer up. The guard is in `Session.commit` as ruled and the
+document half of the ruling holds — nothing appended, no undo entry — but the
+*re-plan* half does not, because the refill is not driven by the document.
+`ParamForm._edit` emits `edited` after `issue` returns and `app.py` connects
+that to `refill_graph` unconditionally, so a re-selected entry still marks the
+graph stale and renders a window whose pipeline has not moved. The keys are
+identical, so nothing recomputes and the store serves it; what the user sees is
+the stale mark flashing for an edit that was dropped. The same is true of
+`kind_editors.py`'s `edited`. Closing that means the widgets learning whether
+the write took — which is a second question about what `issue` returns, not a
+per-editor guard — and it is deliberately not done here: the criterion does not
+reach it and the ruling put the refusal in one place on purpose.

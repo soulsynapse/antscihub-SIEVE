@@ -1449,6 +1449,16 @@ class ToolSpec:
     #: the default of `None` a spelling of "this emits rows" rather than a
     #: tool that forgot.
     #:
+    #: **A source tool is the one array emitter that may leave it `None`**, and
+    #: it means undeclarable rather than absent. A relation is unavailable to a
+    #: node with nothing upstream, and a kind is a claim about a file the tool
+    #: has not opened — `tools/checkpoint.py` stands where any node stood, and a
+    #: `.npy` records dtype and shape and never what one value is a value of.
+    #: `node_element` already sends `None` onward as "nothing can honestly say",
+    #: so the noun is lost rather than invented, which is the polarity this
+    #: field's refusal exists to hold. A source tool that *does* know — `pick`
+    #: and `footage` hand over pixels — declares the kind like anyone else.
+    #:
     #: **Defaulting this to `PRESERVED` is the shortcut to refuse.** It costs
     #: nothing today — every tool on the shelf that preserves would be
     #: correct by accident — and it converts the *next* element-redefining
@@ -1523,7 +1533,7 @@ class ToolSpec:
                 "cache_key.py would give the node a key and serve its output to a run that "
                 "started somewhere else"
             )
-        if isinstance(self.emits, ArraySpec) and self.element is None:
+        if isinstance(self.emits, ArraySpec) and self.element is None and self.source is None:
             # The message carries the argument because this is where somebody
             # meets the rule: a test fixture author who wanted to register a
             # tool and got a raise wants to know why it cannot simply default,
@@ -1966,6 +1976,50 @@ def caption_for_params(spec: ToolSpec, params: ParamsBase) -> str:
         value = presented_param_value(spec, params, part.param, format_spec=part.format_spec)
         rendered.append(f"{part.label} {value}" if part.label else value)
     return " · ".join(piece for piece in rendered if piece)
+
+
+def selects_emission(spec: ToolSpec, emission: Emission, params: Mapping[str, object]) -> bool:
+    """Whether `emission` is the product `params` currently picks under `spec`.
+
+    Takes a raw mapping rather than a `ParamsBase` because both callers have
+    one: a save screen holds the document's dict, and the schema's default is
+    what an omitted selector resolves to. `_check_emissions` has already refused
+    a spec whose emissions name a field that is not a closed set of strings, so
+    the comparison below is against a value the model can only hold as one.
+    """
+    if emission.selected_by is None:
+        return True
+    described = resolved_schema(spec.params_model)["properties"][emission.selected_by]
+    value = params.get(emission.selected_by, described.get("default"))
+    return str(value) == emission.name
+
+
+def selected_emission(spec: ToolSpec, params: Mapping[str, object]) -> str:
+    """Which of `spec`'s products a node with these parameters computes.
+
+    The one answer to a question two layers ask — a save screen ticking the row
+    a run would write, and the writer recording what the file it just wrote
+    holds. Two derivations would let a checkoff and a manifest name different
+    products of one node, which is precisely the fact the manifest exists to
+    pin.
+
+    Raises:
+        ValueError: if no emission matches. Unreachable through a validated
+            params model, whose selector can only hold a value one emission
+            names, and raised rather than defaulted for that reason: a fallback
+            to the first product would record a confident wrong name.
+    """
+    for emission in spec.emissions:
+        if selects_emission(spec, emission, params):
+            # `str`, not the value as declared: a tool names its emissions with
+            # the members of the enum that selects them, and a `StrEnum` member
+            # reaching a manifest is a value `yaml.safe_dump` refuses. What is
+            # being returned is a name, and a name is a string.
+            return str(emission.name)
+    raise ValueError(
+        f"{spec.tool_id}: no emission matches these parameters, so there is no product to name — "
+        f"its emissions are selected by {spec.emissions[0].selected_by!r}"
+    )
 
 
 def node_warmup_frames(step: PathStep) -> FrameCount:

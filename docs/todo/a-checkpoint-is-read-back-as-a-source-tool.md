@@ -1,6 +1,6 @@
 ---
 title: A checkpoint is read back as a source tool
-status: open
+status: awaiting-review
 gated_on: nothing
 priority: high
 phase: "05"

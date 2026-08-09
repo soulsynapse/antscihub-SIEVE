@@ -178,7 +178,9 @@ def test_the_trace_the_window_drew_is_what_the_command_computes(
 
     video = Project.load(project_file).source.resolve(tmp_path)
     base = replicate_dir(checkpoints_dir(video, tmp_path), None)
-    computed = np.load(base / f"{DETECTOR}.npy")
+    # Node and product, which is what a checkpoint file is named for
+    # (`storage/checkpoint_writer.py`); `detect` has the one.
+    computed = np.load(base / f"{DETECTOR}.gate.npy")
 
     assert np.array_equal(drawn.data, computed)
     # And it is a detection rather than a flat line, so the equality above is two

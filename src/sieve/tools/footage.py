@@ -103,10 +103,13 @@ class FootageFile:
     questions the graph asks about a source root — which file, and what is in it
     — so the resolution is written once and cannot come back with two answers.
 
-    Stateless in the sense that matters: the reader pool below is shared and is
-    keyed on what a file is, so two concurrent renders over one file share a
-    reader and neither can advance the other's position — `VideoReader.read`
-    seeks per call.
+    Stateless in itself, and the pool below is not: it is shared, it takes no
+    lock, and `decode/reader.py` says a reader belongs to one thread. So two
+    threads missing together open two readers and leak one, and an eviction can
+    close a reader another thread is mid-read on. Nothing reaches it today —
+    the GUI refills on the GUI thread and the transport's `QThread` holds its
+    own `PrefetchFrameSource` — and the honest statement of that is here rather
+    than a claim of safety this package's own decode header refutes.
     """
 
     #: Through `decode/`, so this root keys `source_key`

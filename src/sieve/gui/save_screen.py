@@ -56,7 +56,7 @@ from PySide6.QtWidgets import (
 )
 
 from sieve.core.pipeline_model import Pipeline
-from sieve.core.tool_base import Emission, ToolSpec, resolved_schema
+from sieve.core.tool_base import Emission, ToolSpec, selects_emission
 from sieve.gui.walk import node_order
 from sieve.session.intents import SetOutputs, issue
 from sieve.session.session import Session
@@ -95,15 +95,6 @@ def output_rows(pipeline: Pipeline, specs: Mapping[str, ToolSpec]) -> tuple[Outp
         for node in node_order(pipeline)
         for emission in specs[node.node_id].emissions
     )
-
-
-def _selected(spec: ToolSpec, emission: Emission, params: Mapping[str, object]) -> bool:
-    """Whether `emission` is the product this node's parameters currently pick."""
-    if emission.selected_by is None:
-        return True
-    described = resolved_schema(spec.params_model)["properties"][emission.selected_by]
-    value = params.get(emission.selected_by, described.get("default"))
-    return str(value) == emission.name
 
 
 class SaveScreen(QWidget):
@@ -146,7 +137,7 @@ class SaveScreen(QWidget):
             box = QCheckBox(self._label(row, spec))
             box.setChecked(
                 row.node_id in kept
-                and _selected(spec, row.emission, session.project.params_for(row.node_id))
+                and selects_emission(spec, row.emission, session.project.params_for(row.node_id))
             )
             # Connected after the initial state is set: the document already
             # holds it, and writing it back would push a value onto the undo

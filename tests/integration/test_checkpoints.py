@@ -44,6 +44,7 @@ from sieve.storage.checkpoint_writer import (
     MANIFEST_NAME,
     CheckpointWriteError,
     CheckpointWriter,
+    Kept,
     checkpoints_dir,
 )
 from sieve.tools import discover
@@ -54,6 +55,10 @@ runner = CliRunner()
 PROJECT_NAME = "arena.sieve.yaml"
 CUT = "cut"
 DOWN = "down"
+#: `downsample`'s one emission. It names the file the writer produces, so a
+#: reviewer opening the folder — and a read-back root keyed off the path — sees
+#: which product it is (`storage/checkpoint_writer.py`).
+DOWN_PRODUCT = "downsampled"
 SPAN = SourceSpan(start=10, end=16)
 
 #: Two nodes, so that checkpointing one of them is a real selection rather than a
@@ -206,7 +211,9 @@ class TestAPersistedRunComputesWhatAnUnpersistedOneDoes:
 
         _run(project_path)
 
-        written = np.load(checkpoints_dir(synthetic_video, kept) / "a" / f"{DOWN}.npy")
+        written = np.load(
+            checkpoints_dir(synthetic_video, kept) / "a" / f"{DOWN}.{DOWN_PRODUCT}.npy"
+        )
         assert written.shape == (SPAN.frame_count, *expected[0].shape)
         for row, frame in enumerate(expected):
             assert np.array_equal(written[row], frame), f"frame {SPAN.start + row}"
@@ -236,8 +243,16 @@ class TestAPersistedRunComputesWhatAnUnpersistedOneDoes:
         _run(project_path)
 
         base = checkpoints_dir(synthetic_video, tmp_path)
-        assert np.load(base / "aaa" / f"{DOWN}.npy").shape == (SPAN.frame_count, 24, 32)
-        assert np.load(base / "bbb" / f"{DOWN}.npy").shape == (SPAN.frame_count, 12, 16)
+        assert np.load(base / "aaa" / f"{DOWN}.{DOWN_PRODUCT}.npy").shape == (
+            SPAN.frame_count,
+            24,
+            32,
+        )
+        assert np.load(base / "bbb" / f"{DOWN}.{DOWN_PRODUCT}.npy").shape == (
+            SPAN.frame_count,
+            12,
+            16,
+        )
 
     def test_a_project_with_no_fan_out_writes_the_baseline_folder(
         self, synthetic_video: Path, tmp_path: Path
@@ -255,7 +270,7 @@ class TestAPersistedRunComputesWhatAnUnpersistedOneDoes:
         output = _run(project_path)
 
         directory = checkpoints_dir(synthetic_video, tmp_path) / BASELINE_DIR
-        assert np.load(directory / f"{DOWN}.npy").shape[0] == SPAN.frame_count
+        assert np.load(directory / f"{DOWN}.{DOWN_PRODUCT}.npy").shape[0] == SPAN.frame_count
         assert f"checkpointed {DOWN} as npy in synthetic.checkpoints" in output
 
 
@@ -315,7 +330,7 @@ class TestAnUnfinishedRunLeavesNothingToBelieve:
 
         assert result.exit_code == 1
         directory = checkpoints_dir(synthetic_video, tmp_path) / BASELINE_DIR
-        assert not (directory / f"{DOWN}.npy").exists()
+        assert not (directory / f"{DOWN}.{DOWN_PRODUCT}.npy").exists()
         assert not (directory / MANIFEST_NAME).exists()
 
 
@@ -363,4 +378,9 @@ def test_the_writer_refuses_an_id_no_document_could_have_carried(
     document — and a defense nothing exercises is one that rots.
     """
     with pytest.raises(CheckpointWriteError, match="cannot be a file name"):
-        CheckpointWriter(synthetic_video, project_dir=tmp_path, keys={"a/b": "deadbeef"}, span=SPAN)
+        CheckpointWriter(
+            synthetic_video,
+            project_dir=tmp_path,
+            kept={"a/b": Kept(key="deadbeef", emission=DOWN_PRODUCT)},
+            span=SPAN,
+        )

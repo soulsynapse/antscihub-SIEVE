@@ -92,7 +92,7 @@ from sieve.core.pipeline_model import (
     Sink,
     SourceSpan,
 )
-from sieve.core.tool_base import SourceFileError
+from sieve.core.tool_base import SourceFileError, selected_emission
 from sieve.core.types import NO_FRAMES, FrameIndex
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
@@ -102,7 +102,7 @@ from sieve.pipeline.dag import Dag, GraphError, InvalidParamsError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan, validated_params
 from sieve.pipeline.resolve_source import picked_identities, source_files
-from sieve.storage.checkpoint_writer import CheckpointWriteError, CheckpointWriter
+from sieve.storage.checkpoint_writer import CheckpointWriteError, CheckpointWriter, Kept
 from sieve.tools import discover
 
 
@@ -335,13 +335,28 @@ def _checkpoints(
     the manifest's key the key this run actually looked entries up under. A node
     the cache may not hold is carried with a `None` key rather than dropped: it
     is still a result someone asked to keep.
+
+    The product comes from the plan too, and for the same reason: `plan.params`
+    is what the kernels were called with, so the name recorded is the product
+    this replicate computed rather than the one the document's baseline would
+    have. This is the only site that holds both the checkpoint list and the
+    resolved parameters, which is why the derivation is here and the writer is
+    handed the answer (`storage/checkpoint_writer.py`).
     """
     if not project.checkpoints:
         return None
     return CheckpointWriter(
         video,
         project_dir=project_path.parent,
-        keys={node_id: plan.key(node_id) for node_id in project.checkpoints},
+        kept={
+            node_id: Kept(
+                key=plan.key(node_id),
+                emission=selected_emission(
+                    plan.dag.specs[node_id], plan.params[node_id].model_dump()
+                ),
+            )
+            for node_id in project.checkpoints
+        },
         span=plan.span,
         replicate=plan.replicate,
     )

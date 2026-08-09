@@ -42,11 +42,13 @@ from sieve.core.tool_base import (
     ElementKind,
     ElementRelation,
     Mode,
+    SourceFileError,
     ToolSpec,
     node_warmup_frames,
 )
 from sieve.core.tool_registry import ToolRegistry
-from sieve.core.types import ChannelSpec, Frame
+from sieve.core.types import ChannelSpec, Frame, FrameIndex
+from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import NotCacheableError, is_cacheable, node_key
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import FrameResult, execute
@@ -199,25 +201,30 @@ def observe(
 
 
 @pytest.fixture(scope="module")
-def picked(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
-    """One file per kind of source reader, for every path parameter on the shelf.
+def picked(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, ...]:
+    """Every format a source tool on the shelf can open, in one folder.
 
-    Derived from `ToolSpec.path_params` and `ToolSource.decoded` — kinds, never a
-    tool id — so this is the same shape as everything else here: a tool that
-    lands tomorrow with a file to read is handed one without this file learning
-    its name. Two files rather than one because the declaration that splits the
-    key flavours also splits what a file has to *be*
-    (`adr/a-root-keys-by-its-reader.md`): a tool reading with its own code is
-    handed the picture, and one reading through `decode/` is handed a container,
-    and a picture offered to the second decodes as a single frame and fails on
-    the next one the run asks for.
+    Offered rather than assigned, and `_readable` below is why: there is no
+    declaration that says which *file format* a source tool reads.
+    `ToolSource.decoded` splits the key flavour (`adr/a-root-keys-by-its-
+    reader.md`) and used to split the file with it, back when the own-code
+    reader was `pick` alone; `tools/checkpoint.py` is a second own-code reader
+    over a different format, so the split no longer decides. A table from tool
+    id to file would be the branch this module exists not to contain, so each
+    tool is asked instead.
 
-    Both are the size `Footage` hands every other tool, so a case comparing an
-    emitted frame against its input is comparing like with like, and the video
-    is long enough for `NEIGHBOURHOOD`.
+    Ordered narrowest first, so a probe stops at the format meant for it: a
+    still is a container a video reader will open, and a run asking for a second
+    frame of it is the failure this ordering keeps out of the fixture.
+
+    All three are the size `Footage` hands every other tool, so a case comparing
+    an emitted frame against its input compares like with like, and both the
+    video and the stack are long enough for `NEIGHBOURHOOD`.
     """
     directory = tmp_path_factory.mktemp("picked")
     rng = np.random.default_rng(7)
+    stack = directory / "plate.npy"
+    np.save(stack, rng.integers(0, 256, (NEIGHBOURHOOD.end, HEIGHT, WIDTH), dtype=np.uint8))
     still = directory / "plate.png"
     cv2.imwrite(str(still), rng.integers(0, 256, (HEIGHT, WIDTH), dtype=np.uint8))
     clip = directory / "plate.mp4"
@@ -227,15 +234,37 @@ def picked(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
     for index in range(NEIGHBOURHOOD.end):
         writer.write(np.full((HEIGHT, WIDTH, 3), index * 5, dtype=np.uint8))
     writer.release()
-    return {"path": still, "decoded_path": clip}
+    return (stack, clip, still)
 
 
-def params_for(spec: ToolSpec, picked: dict[str, object]) -> dict[str, object]:
+def _readable(spec: ToolSpec, candidates: tuple[Path, ...]) -> Path:
+    """The first of `candidates` this tool's own reader accepts.
+
+    Asked in the tool's words rather than looked up: a source tool that refuses
+    a file refuses it the same way whatever the format, so the probe is the one
+    question that needs no declaration to exist first.
+    """
+    assert spec.source is not None
+    for candidate in candidates:
+        params = spec.params_model.model_validate(
+            {name: str(candidate) for name in spec.path_params}
+        )
+        try:
+            spec.source.read(params, FrameIndex.of(SPAN.start), luma=True)
+        except (SourceFileError, VideoDecodeError):
+            continue
+        return candidate
+    raise AssertionError(
+        f"{spec.tool_id} declares a source and read none of {[p.name for p in candidates]} — "
+        "the fixture above owes every source tool on the shelf a file it can open"
+    )
+
+
+def params_for(spec: ToolSpec, picked: tuple[Path, ...]) -> dict[str, object]:
     """This tool's node params: nothing, or the file its source can read."""
     if spec.source is None:
         return {}
-    key = "decoded_path" if spec.source.decoded else "path"
-    return {name: str(picked[key]) for name in spec.path_params}
+    return {name: str(_readable(spec, picked)) for name in spec.path_params}
 
 
 def node_for(spec: ToolSpec) -> Node:
@@ -248,7 +277,7 @@ def golden_for(spec: ToolSpec) -> Path:
 
 
 @pytest.mark.parametrize("spec", SHELF, ids=lambda spec: spec.tool_id)
-def test_mode_is_what_the_run_does(spec: ToolSpec, picked: dict[str, object]) -> None:
+def test_mode_is_what_the_run_does(spec: ToolSpec, picked: tuple[Path, ...]) -> None:
     """A windowed tool is handed a span, and a streaming one the frame in front of it.
 
     `Mode` is what the executor branches on, so a tool declaring the wrong one
@@ -305,7 +334,7 @@ def _by_index(results: list[FrameResult]) -> list[tuple[int, Frame]]:
 
 
 @pytest.mark.parametrize("spec", SHELF, ids=lambda spec: spec.tool_id)
-def test_element_is_what_the_run_emits(spec: ToolSpec, picked: dict[str, object]) -> None:
+def test_element_is_what_the_run_emits(spec: ToolSpec, picked: tuple[Path, ...]) -> None:
     """The dtype, the channels and the element kind, against the frame handed back.
 
     `emits` is what `dag.py` chains an edge on and `element` is the noun a count

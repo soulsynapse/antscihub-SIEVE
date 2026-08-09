@@ -308,8 +308,17 @@ def produced(stirred_clip: Path, tmp_path_factory: pytest.TempPathFactory) -> di
 
 
 def checkpoint(produced: dict[str, Path], replicate_id: str, node_id: str) -> NDArray[np.float32]:
-    """One node's checkpointed stack for one replicate."""
-    return np.load(produced[replicate_id] / f"{node_id}.npy")
+    """One node's checkpointed stack for one replicate.
+
+    Found through the manifest rather than by composing the name, which is what
+    the manifest is for: the file is named for its node *and* the product that
+    node computed (`storage/checkpoint_writer.py`), and an oracle spelling that
+    join itself would agree with a writer that had stopped recording it.
+    """
+    directory = produced[replicate_id]
+    manifest = yaml.safe_load((directory / MANIFEST_NAME).read_text(encoding="utf-8"))
+    (entry,) = (item for item in manifest["entries"] if item["node_id"] == node_id)
+    return np.load(directory / entry["file"])
 
 
 def gate(produced: dict[str, Path], replicate_id: str) -> NDArray[np.float32]:

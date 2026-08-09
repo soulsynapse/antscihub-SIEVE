@@ -70,6 +70,7 @@ src/sieve/pipeline/source_home.py          # The frame of reference a crop recor
 src/sieve/tools/__init__.py                # Every pipeline step, one module each: a ToolSpec and one plain run function.
 src/sieve/tools/background_ema.py          # An exponential moving-average background model, and the difference from it.
 src/sieve/tools/block_signal.py            # Per-block motion signals from the structure tensor of consecutive frames.
+src/sieve/tools/checkpoint.py              # A checkpointed node's `.npy`, standing back in the graph as the node it was.
 src/sieve/tools/crop.py                    # Take a region of every frame, with the whole frame as the identity value.
 src/sieve/tools/detect.py                  # Morlet band power, an in-band block count, and a centred detection gate.
 src/sieve/tools/downsample.py              # Reduce spatial resolution by an integer factor.

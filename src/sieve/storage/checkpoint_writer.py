@@ -42,11 +42,22 @@ no such field.
 result lives and never what it is (`cache_key.py`), so the file has to be
 findable without one — and recording the key beside it is what lets a reader
 later ask whether the file still describes what the project would now compute.
+
+**The product is in the path, and it is the one fact that has to be.** A node of
+`block_signal` can emit any of four measurements and the file is what a reviewer
+opens; a `.npy` of float32 named for its node alone could be coherence or flow
+speed, recoverable only by looking up a parameter in a document that has since
+moved on. It is in the name rather than only in the manifest because the name is
+what `cache_key.source_identity` sees: `tools/checkpoint.py` reads a checkpoint
+back as a source root keyed off its file, so a name that skipped the product
+would key two products of one node alike. Handed in rather than derived — this
+module takes frames and knows nothing about tools.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
@@ -86,6 +97,25 @@ class CheckpointWriteError(RuntimeError):
     """A checkpoint could not be written, or was not written whole."""
 
 
+@dataclass(frozen=True, slots=True)
+class Kept:
+    """What the caller says about one checkpointed node, per replicate.
+
+    One value rather than two parallel mappings, so a node cannot be in the key
+    list and out of the product list — the two are asked of the same node at the
+    same moment and a writer reconciling them would be reconciling a caller's
+    bookkeeping.
+    """
+
+    #: This node's cache key for this replicate, or `None` where the node may
+    #: not be keyed at all (`cache_key.NotCacheableError`).
+    key: str | None
+    #: Which of the tool's products the run computed —
+    #: `tool_base.selected_emission`. Not derived here: this module takes
+    #: outputs and knows nothing about tools.
+    emission: str
+
+
 def checkpoints_dir(video: Path, project_dir: Path) -> Path:
     """The folder checkpoints of `video` belong in. Need not exist."""
     return project_dir / checkpoints_name(video)
@@ -120,7 +150,7 @@ class CheckpointWriter:
         video: Path,
         *,
         project_dir: Path,
-        keys: Mapping[str, str | None],
+        kept: Mapping[str, Kept],
         span: SourceSpan,
         replicate: Replicate | None = None,
     ) -> None:
@@ -129,26 +159,26 @@ class CheckpointWriter:
         Args:
             video: The footage the project is about. Names the folder only.
             project_dir: What the recorded sink paths are relative to.
-            keys: Checkpointed `node_id` to that node's cache key, `None` where
-                the node may not be keyed at all. The mapping's key set *is* the
-                checkpoint list — order is preserved into the manifest.
+            kept: Checkpointed `node_id` to that node's key and product. The
+                mapping's key set *is* the checkpoint list — order is preserved
+                into the manifest.
             span: The source frames the run answers for, which is `plan.span`
                 and not what the caller asked for: a selecting node narrows it,
                 and a file sized on the wider range would end in zeros.
             replicate: Whose run this is, or `None` for the baseline.
 
         Raises:
-            CheckpointWriteError: if `keys` is empty — a writer with nothing to
+            CheckpointWriteError: if `kept` is empty — a writer with nothing to
                 write would create an empty folder and report success — or if a
                 node id cannot be a file name.
         """
-        if not keys:
+        if not kept:
             raise CheckpointWriteError("a checkpoint writer was built with no checkpointed nodes")
         # The schema's rule checked a second time rather than a second rule: a
         # document is refused at load for an id that cannot be a file name, and
         # ids also reach here from callers that assembled a mapping instead of
         # loading one. A regex match per checkpointed node, once per run.
-        for node_id in keys:
+        for node_id in kept:
             if not NODE_ID_PATTERN.match(node_id):
                 raise CheckpointWriteError(
                     f"node id {node_id!r} is checkpointed but cannot be a file name; ids reaching "
@@ -156,7 +186,7 @@ class CheckpointWriter:
                 )
         self._name = checkpoints_name(video)
         self._directory = replicate_dir(project_dir / self._name, replicate)
-        self._keys = dict(keys)
+        self._kept = dict(kept)
         self._span = span
         self._replicate = replicate
         self._arrays: dict[str, NDArray[Any]] = {}
@@ -226,7 +256,7 @@ class CheckpointWriter:
         # replaced, and a rename that half-succeeded would leave one node's
         # result in place and the next node's beside it under a part name.
         self._release()
-        for node_id in self._keys:
+        for node_id in self._kept:
             self._part(node_id).replace(self._final(node_id))
         (self._directory / MANIFEST_NAME).write_text(
             yaml.safe_dump(self._manifest(), sort_keys=False, allow_unicode=True), encoding="utf-8"
@@ -234,7 +264,7 @@ class CheckpointWriter:
         self._closed = True
         return tuple(
             Sink(node_id=node_id, format=CHECKPOINT_FORMAT, path=self._name)
-            for node_id in self._keys
+            for node_id in self._kept
         )
 
     def abandon(self) -> None:
@@ -249,7 +279,7 @@ class CheckpointWriter:
         if self._closed:
             return
         self._release()
-        for node_id in self._keys:
+        for node_id in self._kept:
             try:
                 self._part(node_id).unlink(missing_ok=True)
             except OSError:
@@ -277,7 +307,7 @@ class CheckpointWriter:
         declaration on the tool states them.
         """
         self._directory.mkdir(parents=True, exist_ok=True)
-        for node_id in self._keys:
+        for node_id in self._kept:
             data = _output(outputs, node_id, index).data
             self._arrays[node_id] = open_memmap(
                 self._part(node_id),
@@ -294,17 +324,29 @@ class CheckpointWriter:
         self._arrays.clear()
 
     def _part(self, node_id: str) -> Path:
-        return self._directory / f"{node_id}.part.npy"
+        return self._directory / f"{self._stem(node_id)}.part.npy"
 
     def _final(self, node_id: str) -> Path:
-        return self._directory / f"{node_id}.npy"
+        return self._directory / f"{self._stem(node_id)}.npy"
+
+    def _stem(self, node_id: str) -> str:
+        """Node and product, which is what makes two products two files.
+
+        Both parts follow the tool-id spelling rule — `NODE_ID_PATTERN` above,
+        `Emission.name`'s own check — so the join needs no quoting and the name
+        cannot depend on case folding. Nothing parses it back: the manifest
+        names the file, and this is what a reviewer reads in the folder and what
+        a read-back root's identity carries (this module's header).
+        """
+        return f"{node_id}.{self._kept[node_id].emission}"
 
     def _manifest(self) -> dict[str, Any]:
         """What a reader needs to know what these files are.
 
         The cache key is here and the display name is here, and neither is in a
         path: the key because a checkpoint may never enter one (`cache_key.py`),
-        the name because it is not identity.
+        the name because it is not identity. The product is in both, and the
+        header says why it is the one fact that must also be in the name.
         """
         return {
             "manifest_version": MANIFEST_VERSION,
@@ -314,13 +356,14 @@ class CheckpointWriter:
             "entries": [
                 {
                     "node_id": node_id,
-                    "key": self._keys[node_id],
+                    "key": self._kept[node_id].key,
+                    "emission": self._kept[node_id].emission,
                     "file": self._final(node_id).name,
                     "format": CHECKPOINT_FORMAT,
                     "dtype": self._layout[node_id][0],
                     "shape": [self._span.frame_count, *self._layout[node_id][1]],
                 }
-                for node_id in self._keys
+                for node_id in self._kept
             ],
         }
 

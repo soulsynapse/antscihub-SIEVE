@@ -53,3 +53,38 @@ is at the head of the queue and mints the checkpoint file's key-bearing
 identity under `adr/a-root-keys-by-its-reader.md`, so the schema question is
 answered there — a paragraph in that item now points back here. This one
 stays open as the record of the gap until the answer exists to point at.
+
+## 2026-08-09: the artifact half landed; the document half did not
+
+From [a-checkpoint-is-read-back-as-a-source-tool.md](a-checkpoint-is-read-back-as-a-source-tool.md).
+`tool_base.selected_emission` derives the product a node's resolved parameters
+compute, `cli/run_cmd.py` hands it to the writer per checkpointed node, and
+`storage/checkpoint_writer.py` puts it in the manifest entry *and* in the file
+name — `<node>.<emission>.npy`. The name is where it had to be rather than the
+manifest alone: a read-back root is keyed off
+`cache_key.source_identity` of its file, which is a path and two stats, so a
+name that skipped the product would key two products of one node alike. The
+first paragraph's "a `.npy` of float32 that could be coherence or flow speed" is
+therefore no longer a file a reader cannot check.
+
+**What is left is the half the save screen ran into, and it is unchanged.**
+`Project.checkpoints` is still `tuple[str, ...]`, so the *document* still cannot
+ask for two products of one node — and it turns out it never needed to for the
+artifact to be honest, because the selecting parameter picks one product per
+node per run and the writer records what that run computed. The open question is
+narrower than the second section states: not "which product is this file", which
+is answered, but whether a user checking two products of one node is asking for
+two runs, two nodes, or a schema that can hold both. `gui/save_screen.py` still
+carries the rendering rule and its docstring still points here.
+
+**A second fact the manifest does not record, and it arrived with the reader.**
+`tools/checkpoint.py` declares `element=None` — undeclarable — because a `.npy`
+records dtype and shape and never what one value is a value of, and a source
+tool has no upstream to preserve a meaning from. `ToolSpec` now admits that for
+a source tool and for no other kind. So a detector wired over a read-back signal
+has no noun to count in and `Dag.element_lost_at` names the checkpoint node.
+Recovering it is this item's shape exactly: an element field the writer is
+handed, and a parameter on the read-back tool that carries it. Not urgent for
+the same reason as the rest — nothing outside `dag.py` reads `Dag.elements`
+yet — and folded here rather than minted because it is the same manifest, the
+same writer, and the same sentence about what a checkpoint fails to record.

@@ -2,7 +2,7 @@
 title: The first source tool moves the three places one root is assumed
 status: open
 gated_on: nothing
-priority: normal
+priority: high
 phase: 8
 done_when: 'uv run pytest tests/unit/test_source_tool.py -k "two_roots_order_and_execute or swapping_the_picked_file_moves_only_its_own_key or a_pattern_matching_several_files_is_refused or the_picker_emits_a_concrete_stream_type" -q && uv run pytest tests/integration/test_crop_serving.py -k a_second_root_beside_the_crop_is_not_one_the_artifact_can_serve -q'
 opened: 2026-08-07
@@ -140,3 +140,18 @@ it is writable today rather than waiting on the picker.
 is where `_route` is unwound, and unwinding it retires this site with the rest
 of the plan-time route — but that migration is gated on this item, so the site
 is live until this one lands.
+
+## 2026-08-09: raised to `priority: high`, because the tree behind it grew
+
+Not a change of scope. What changed is how much is queued behind it: four items
+name it in `gated_on` — the migration above, [the external files a run needs
+before it starts](a-run-names-the-external-files-it-needs-before-it-starts.md),
+[the source card in the walk](the-source-is-a-card-in-the-walk.md), and
+[whether an external input carries a portable
+identity](whether-an-external-input-carries-a-portable-identity.md) — and
+[the offering predicate](the-offering-predicate-is-not-the-edge-legality-check.md)
+cannot finish its plausibility half without the path stereotype this item
+spends. That is five things whose subject does not exist until this one lands,
+against a phase-8 pool position that sorts it after every stepped item in the
+phase. The priority is what corrects for that; the count is the reason and will
+move, so read `gated_on` rather than this number.

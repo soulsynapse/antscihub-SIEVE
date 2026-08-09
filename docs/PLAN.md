@@ -369,8 +369,13 @@ resemblance: "matches the mockup" is not executable and the referent is read
 for shape, not imported or pixel-diffed.
 
 The sequence runs stack-first because the later rows stand on it: the cards
-and their chrome, then the edges drawn under them, then the verbs and slots
-that mutate what the cards show. Three surfaces are deliberately absent,
+and their chrome, then the output card whose ticked products are the first
+edges arriving on one node from several, then the verbs and slots that mutate
+what the cards show, and the edges drawn under all of it last. The painter
+comes last rather than second because a picture cannot be checked against a
+chain that has no branch in it: schema v1 gives a node one input, so until the
+output step lands there is no edge with a card to pass behind and the occlusion
+clause has nothing that could show it false. Three surfaces are deliberately absent,
 parked with their gates rather than sequenced: the source card waits on the
 first source tool, the swap menu's contents wait on the offering predicate's
 `matches`, and the canvas's contents remain the open ownership problem the

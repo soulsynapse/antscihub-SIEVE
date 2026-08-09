@@ -1,6 +1,6 @@
 ---
 title: The output is a step, and its ticks are edges
-step: "09.7"
+step: "09.2"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests -q -k ticks_are_edges"
@@ -23,6 +23,17 @@ bounds it: the `into` folder and format combo on the referent's form are
 an output tool on the shelf, the tick-to-edge derivation beside the graph,
 the GUI rendering both — and the ticked list is what 07.9's checkoff becomes,
 entering as the output node's param through the ordinary command path.
+
+One edge per ticked product means this is the step where a node first has more
+than one input, so it is the step that spends the extension ADR-2 anticipated:
+`window` grows the port-keyed form [VISION.md](../VISION.md)'s scene calls for,
+in the contract and the executor, not improvised tool-side by whatever tool
+happens to be first to want two upstreams. That is also the event that gives
+[a-merge-keys-its-inputs-by-port.md](a-merge-keys-its-inputs-by-port.md) the
+subject it is deferred for — `a - b` versus `b - a` becomes crossable the
+moment two labeled edges land on one node — so the run that builds this should
+expect that item to come off its gate behind it, and should not reach the same
+shape by a private route that leaves the deferral standing.
 
 `done_when` at minting, red because nothing matches:
 

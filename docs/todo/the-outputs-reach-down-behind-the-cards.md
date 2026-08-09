@@ -1,6 +1,6 @@
 ---
 title: The outputs reach down behind the cards
-step: "09.2"
+step: "09.7"
 status: open
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k reaches_down"
@@ -21,6 +21,14 @@ shortest-span-first so the trunk stays with the neighbour edges, and geometry
 is read off the cards at paint time because the stack is rebuilt on every
 walk move. The multi-input picture this draws first is the background/
 threshold/subtract branch VISION's scene describes.
+
+This sits late in the phase rather than beside the cards because its subject
+arrives late. Every edge long enough to pass behind a card comes from a merge
+or from the output step's ticks, and schema v1 gives a node one input — so on
+the linear chain the earlier steps draw, no edge ever has a card to occlude
+and the occlusion clause cannot be shown false. 09.2, which makes the output a
+node with one edge per ticked product, is the first step that puts two edges
+into one node; this one runs after it and paints what it built.
 
 `done_when` at minting, red because nothing matches:
 

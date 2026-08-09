@@ -141,6 +141,16 @@ def test_chain_cards_carry_the_generated_form_and_write_through_it(window: Any) 
     assert window.session.project.params_for("n1")["factor"] == 4
 
 
+def test_the_stack_reaches_down_the_documents_own_edges(window: Any) -> None:
+    """Which card reads which is the graph's, carried over as positions.
+
+    The drawing is `test_chain_edges.py`'s; what is asserted here is the wiring,
+    because a stack handed no sources at all would draw a chain with no edges in
+    it and every claim about the lines would still hold.
+    """
+    assert window.control.pipeline_pane.column.edges == ((0, 1), (1, 2))
+
+
 def test_chain_cards_wear_a_sheet_that_leaves_the_scrollbars_alone(qapp) -> None:
     from sieve.gui.chrome import stack_stylesheet, window_stylesheet
 

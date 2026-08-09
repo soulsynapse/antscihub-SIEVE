@@ -55,8 +55,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QMouseEvent, QPainter, QPaintEvent, QPen
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtGui import QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -67,7 +67,7 @@ from PySide6.QtWidgets import (
 )
 
 from sieve.core.pipeline_model import Node
-from sieve.gui.chrome import ACCENT, DIM, LINE, PANEL, TEXT, rgb, stack_stylesheet
+from sieve.gui.chrome import ACCENT, DIM, LINE, PANEL, STACK_BG, TEXT, rgb, stack_stylesheet
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,12 @@ class Step:
     #: Whether the ✕ is offered live. Offered disabled otherwise rather than
     #: left out, so the buttons hold their positions down the whole stack.
     removable: bool
+    #: The positions in the same stack whose output this step reads, in the
+    #: document's own order. Positions rather than node ids because the picture
+    #: is drawn between cards and the caller is the one holding the walk that
+    #: numbered them. Required rather than defaulted to nothing: a stack whose
+    #: caller forgot would draw a chain of unconnected cards and look finished.
+    reads: tuple[int, ...]
 
 
 class ChainCard(QWidget):
@@ -218,6 +224,127 @@ def fixed_card(title: str) -> ChainCard:
     return card
 
 
+# ---------------------------------------------------------------------------
+# The outputs reaching down: the chain's edges, drawn under the cards.
+#
+# VISION's scene is a picture and not a diagram — an output leaves the bottom of
+# the card that made it and arrives at the top of the card that reads it, and
+# where the step in between reads neither, the line passes *behind* that card
+# rather than around it. Occlusion is the whole of that: the cards paint an
+# opaque panel, the column paints before its children, so a line crossing a card
+# is hidden for exactly as long as it is not that card's business. Routing a
+# skip around the stack in a gutter would say the opposite — that the output
+# left the chain and came back.
+#
+# The lines are geometry read off the cards at paint time rather than anything
+# stored, because the stack is rebuilt on every move of the walk; an edge layer
+# holding its own coordinates would draw the previous selection's stack.
+#
+# One clause of the referent's is not here: the port named at an arrowhead where
+# a step has more than one input. Schema v1 gives an edge no port and refuses two
+# edges into one node, so there is nothing in the tree a name could be read off —
+# `todo/the-output-is-a-step-and-its-ticks-are-edges.md` is where both the second
+# input and the product that names it arrive together.
+
+#: The trunk's inset from a card's left edge, and the step out to the next lane.
+EDGE_STUB = 16.0
+EDGE_LANE = 34.0
+ARROW_WIDTH = 4.0
+ARROW_HEIGHT = 6.0
+
+
+def edge_lanes(edges: Sequence[tuple[int, int]]) -> dict[tuple[int, int], int]:
+    """One x per edge, so every line is vertical and none is two lines' worth.
+
+    An edge that changed x while it was hidden would come out the far side as
+    something the eye has no reason to join to what went in. Vertical is what
+    makes the occlusion read as one line behind a card rather than as two stubs,
+    so the offset is spent on lanes rather than on the descent: an edge holds
+    its lane the whole way down, and only edges whose spans overlap need
+    different ones. Shortest span first hands the trunk to the steps that read
+    the one above them, which is most of the chain.
+    """
+
+    def overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
+        return a[0] < b[1] and b[0] < a[1]
+
+    lanes: dict[tuple[int, int], int] = {}
+    for edge in sorted(edges, key=lambda e: (e[1] - e[0], e[0])):
+        taken = {lane for other, lane in lanes.items() if overlaps(edge, other)}
+        lane = 0
+        while lane in taken:
+            lane += 1
+        lanes[edge] = lane
+    return lanes
+
+
+def lane_x(left: float, lane: int) -> float:
+    """Where `lane` runs, beside a card whose left edge is at `left`."""
+    return left + EDGE_STUB + EDGE_LANE * lane
+
+
+def arrowhead(end: QPointF) -> QPolygonF:
+    """The head that lands on `end`, apex last.
+
+    Always a descent: the two shoulders are above the point, and there is no
+    variant that points any other way, because every edge in this stack runs
+    from a card to one below it.
+    """
+    return QPolygonF(
+        [
+            QPointF(end.x() - ARROW_WIDTH, end.y() - ARROW_HEIGHT),
+            QPointF(end.x() + ARROW_WIDTH, end.y() - ARROW_HEIGHT),
+            QPointF(end.x(), end.y()),
+        ]
+    )
+
+
+class ChainColumn(QWidget):
+    """The stack's column, with the chain's edges drawn under its cards.
+
+    It fills its own background: the stack's sheet reaches plain `QWidget` and
+    not a subclass — deliberately, so the scrollbars keep the platform's
+    (`chrome.py`) — and a column that inherited nothing would leave the edges on
+    the platform's grey.
+
+    `cards` is set by the caller after the cards are in the layout, because what
+    this paints is where they landed and it has no part in putting them there.
+    """
+
+    def __init__(self, edges: Sequence[tuple[int, int]], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        # Only the edges that descend. A walk that puts a producer below its
+        # reader has a cycle in it, which the window still has to draw
+        # (`walk.py`) and which no downward line describes.
+        self.edges = tuple(edge for edge in edges if edge[0] < edge[1])
+        self._lanes = edge_lanes(self.edges)
+        self.cards: tuple[ChainCard, ...] = ()
+
+    def edge_line(self, src: int, dst: int) -> tuple[QPointF, QPointF]:
+        """Where the edge from `src` to `dst` starts and ends, in this widget."""
+        above, below = self.cards[src].geometry(), self.cards[dst].geometry()
+        x = lane_x(above.left(), self._lanes[(src, dst)])
+        return QPointF(x, above.bottom() + 1), QPointF(x, below.top())
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        del event
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), STACK_BG)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        for src, dst in self.edges:
+            self._paint_edge(painter, src, dst)
+        painter.end()
+
+    def _paint_edge(self, painter: QPainter, src: int, dst: int) -> None:
+        start, end = self.edge_line(src, dst)
+        painter.setPen(QPen(LINE, 1.0))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLine(start, end)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(LINE)
+        painter.drawPolygon(arrowhead(end))
+
+
 class PipelinePane(QWidget):
     """The whole position: the project it belongs to, then the steps in it.
 
@@ -258,18 +385,22 @@ class PipelinePane(QWidget):
             for position, step in enumerate(steps)
         )
 
-        # Plain `QWidget`, so the stack's sheet reaches it: a subclass here would
-        # leave the gaps between the cards on the platform's grey.
-        column = QWidget()
-        stack = QVBoxLayout(column)
+        self.column = ChainColumn(
+            [(source, position) for position, step in enumerate(steps) for source in step.reads]
+        )
+        stack = QVBoxLayout(self.column)
         stack.setContentsMargins(6, 6, 6, 6)
+        # The gap between cards is the only place an edge between neighbours
+        # shows, so it is sized for the arrowhead rather than for the rhythm of
+        # the cards.
         stack.setSpacing(18)
         for card in self.cards:
             stack.addWidget(card)
         stack.addStretch(1)
+        self.column.cards = self.cards
 
         scroll = QScrollArea()
-        scroll.setWidget(column)
+        scroll.setWidget(self.column)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
 

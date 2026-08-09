@@ -682,10 +682,18 @@ class MainWindow(QMainWindow):
         generated from a spec and there is nothing honest to draw without one.
         The card itself still stands, because a document naming a missing tool is
         still a chain the user has to be able to walk.
+
+        Each card also carries where its input came from, as positions in this
+        same stack: the edges are the document's and the numbering is the walk's,
+        and the pane draws the lines from the pair (`chain_stack.ChainColumn`).
         """
         session = self._session
         if session is None:
             return QWidget()
+        at = {node.node_id: position for position, node in enumerate(self._order)}
+        reads: dict[str, tuple[int, ...]] = {node.node_id: () for node in self._order}
+        for edge in session.project.pipeline.edges:
+            reads[edge.downstream] += (at[edge.upstream],)
         steps: list[Step] = []
         for node in self._order:
             spec = self._specs.get(node.node_id)
@@ -694,7 +702,14 @@ class MainWindow(QMainWindow):
                 form = ParamForm(session, node.node_id, spec)
                 form.edited.connect(self.refill_graph)
                 knobs = form
-            steps.append(Step(node=node, knobs=knobs, removable=removable(spec)))
+            steps.append(
+                Step(
+                    node=node,
+                    knobs=knobs,
+                    removable=removable(spec),
+                    reads=reads[node.node_id],
+                )
+            )
         return PipelinePane(
             session.path.name.removesuffix(PROJECT_SUFFIX),
             steps,

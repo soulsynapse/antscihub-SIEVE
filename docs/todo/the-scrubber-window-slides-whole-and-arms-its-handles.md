@@ -1,7 +1,7 @@
 ---
 title: The scrubber window slides whole, and its handles answer only when armed
 step: "09.6"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k handles_toggle"
 opened: 2026-08-09

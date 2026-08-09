@@ -43,6 +43,10 @@ PIN_MAX_SHARE = 60
 
 _FIXED_POLICIES = (QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
 
+#: The seam's thickness. A splitter handle's, so the one divider that cannot be
+#: dragged is not the one that looks different.
+_SEAM_HEIGHT = 3
+
 
 def _require_layout_section(widget: QWidget) -> None:
     """Refuse a widget that would take the splitter's decision away from it.
@@ -164,6 +168,20 @@ class ViewingColumn(QSplitter):
         self.setSizes([height - wanted, wanted])
 
 
+def build_seam() -> QWidget:
+    """A splitter handle's line where there is no splitter.
+
+    The timeline's height is the strip's plus one control row; nothing about it
+    is the user's to trade against the panes, so the boundary reads like the
+    other section dividers without answering the cursor. A real splitter here
+    would offer a resize that the fixed height would then refuse.
+    """
+    seam = QWidget()
+    seam.setObjectName("seam")
+    seam.setFixedHeight(_SEAM_HEIGHT)
+    return seam
+
+
 def compose(viewing: QWidget, control: QWidget, timeline: QWidget) -> QWidget:
     """The viewing column on the left, the control side on the right, timeline under both.
 
@@ -195,6 +213,7 @@ def compose(viewing: QWidget, control: QWidget, timeline: QWidget) -> QWidget:
     column.setContentsMargins(0, 0, 0, 0)
     column.setSpacing(0)
     column.addWidget(split, 1)
+    column.addWidget(build_seam())
     column.addWidget(timeline)
     return stacked
 

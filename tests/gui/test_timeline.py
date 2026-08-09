@@ -45,12 +45,13 @@ STRIP_WIDTH = 1000
 #: The window every bar fixture opens with: the whole source.
 WHOLE = SourceSpan(start=0, end=SOURCE_FRAMES)
 
-#: A y inside the track but *below* the window's header band, so a press there
-#: is a scrub. Named because the difference between this and `HEADER_Y` is the
-#: whole distinction between seeking and grabbing the window.
+#: A y inside the track, below the window's header stripe. Every gesture here is
+#: decided by x alone — the stripe is paint, not a zone — so this is simply
+#: "somewhere on the band" and is what nearly every case drives through.
 SCRUB_Y = 30.0
 
-#: A y inside the header band along the window's top edge.
+#: A y inside the header stripe along the window's top edge. Kept as a separate
+#: name because the claim that it is *not* its own zone needs a y to make it at.
 HEADER_Y = 8.0
 
 
@@ -223,19 +224,23 @@ class TestTheBarDrivesTheWindow:
 
 
 class TestTheWindowBracketIsGrabbable:
-    """The drag, and the four ways it can be wrong.
+    """The armed drag, and the four ways it can be wrong.
 
     A press on a handle can seek before it resizes, which throws the playhead
     across the asset on the way to a resize. Containment can be tested before
     the handles, which makes the handles unreachable. A drag can announce itself
     per mouse-move, which is a window edit per pixel travelled. And it can
     commit a window shorter than anything anybody tunes against.
+
+    Every case here arms the handles, because none of them is reachable
+    otherwise — which is `TestTheHandlesToggle`'s subject and not this one's.
     """
 
     @pytest.fixture
     def held(self, bar: Any) -> Any:
-        """The bar over a window at frames 400-700: left edge at x=400, right at x=700."""
+        """The bar over frames 400-700 — left edge at x=400, right at x=700 — armed."""
         bar.set_window(SourceSpan(start=400, end=700))
+        bar.handles.setChecked(True)
         return bar
 
     def test_a_press_on_an_edge_does_not_seek(self, held: Any) -> None:
@@ -257,18 +262,6 @@ class TestTheWindowBracketIsGrabbable:
     def test_the_right_handle_resizes_and_pins_the_start(self, held: Any) -> None:
         driving.drag(held.strip, (700.0, SCRUB_Y), (899.0, SCRUB_Y))
         assert held.window == SourceSpan(start=400, end=900)
-
-    def test_the_header_moves_the_window_whole(self, held: Any) -> None:
-        """Length held: this is the same edit as typing a new start."""
-        driving.drag(held.strip, (500.0, HEADER_Y), (600.0, HEADER_Y))
-        assert held.window == SourceSpan(start=500, end=800)
-
-    def test_a_press_below_the_header_is_still_a_scrub(self, held: Any) -> None:
-        """Most of the window's area is not a handle, or the band could not be seeked."""
-        sought: list[int] = []
-        held.strip.pressed.connect(sought.append)
-        driving.press(held.strip, 500.0, SCRUB_Y)
-        assert sought == [500]
 
     def test_a_drag_shorter_than_a_second_stops_at_a_second(self, held: Any) -> None:
         """Thirty frames at 30 fps. The floor is a duration, not a frame count."""
@@ -310,6 +303,176 @@ class TestTheWindowBracketIsGrabbable:
         assert length_seconds == pytest.approx(500.0 / SOURCE_FPS, abs=0.01)
         assert held.strip.window_rect().left() == pytest.approx(400.0)
         assert held.strip.window_rect().right() == pytest.approx(900.0)
+
+
+class TestTheWindowBodySlidesItWhole:
+    """The interior is one surface, and it moves the window — except when it does not.
+
+    Two claims that have to hold together. The whole interior slides the window,
+    so the gesture the user makes most often cannot be lost to a handle six
+    pixels wide. And a press there that never travels is still a seek, because
+    the bar opens with the window over the whole source and there would
+    otherwise be nowhere left on the band to ask for a frame.
+    """
+
+    @pytest.fixture
+    def body(self, bar: Any) -> Any:
+        """The bar over frames 400-700, handles up — the state the user is in by default."""
+        bar.set_window(SourceSpan(start=400, end=700))
+        return bar
+
+    def test_a_drag_on_the_body_slides_the_window_whole(self, body: Any) -> None:
+        """Length held: this is the same edit as typing a new start."""
+        driving.drag(body.strip, (500.0, SCRUB_Y), (600.0, SCRUB_Y))
+        assert body.window == SourceSpan(start=500, end=800)
+
+    def test_the_header_stripe_is_not_a_zone_of_its_own(self, body: Any) -> None:
+        """It marks which band the interior belongs to; it does not divide it.
+
+        Asserted as the two heights agreeing rather than as an outcome, because
+        an outcome is what the stripe would satisfy while still being the only
+        place that satisfied it.
+        """
+        driving.drag(body.strip, (500.0, HEADER_Y), (600.0, HEADER_Y))
+        on_the_stripe = body.window
+
+        body.set_window(SourceSpan(start=400, end=700))
+        driving.drag(body.strip, (500.0, SCRUB_Y), (600.0, SCRUB_Y))
+        assert body.window == on_the_stripe
+
+    def test_a_click_on_the_body_seeks_on_release_and_not_on_press(self, body: Any) -> None:
+        """The seek survives the body drag, and arrives once the gesture is known.
+
+        On press there is no telling the two apart, and `pressed` *is* the seek —
+        so announcing it there would throw the playhead at the start of every
+        slide.
+        """
+        sought: list[int] = []
+        landed: list[int] = []
+        body.strip.pressed.connect(sought.append)
+        body.strip.committed.connect(landed.append)
+
+        driving.press(body.strip, 500.0, SCRUB_Y)
+        assert sought == []
+        assert landed == []
+
+        driving.release(body.strip, 500.0, SCRUB_Y)
+        assert landed == [500]
+        assert body.window == SourceSpan(start=400, end=700)
+
+    def test_one_body_drag_is_one_window_edit(self, body: Any) -> None:
+        """The two-tier rule, on the gesture that is now the common one."""
+        announced: list[int] = []
+        body.strip.window_moved.connect(announced.append)
+
+        driving.press(body.strip, 500.0, SCRUB_Y)
+        for x in (520.0, 560.0, 600.0):
+            driving.move(body.strip, x, SCRUB_Y)
+        assert announced == []
+        assert body.window == SourceSpan(start=400, end=700)
+
+        driving.release(body.strip, 600.0, SCRUB_Y)
+        assert announced == [500]
+
+    def test_a_travelled_body_drag_does_not_also_seek(self, body: Any) -> None:
+        """Otherwise sliding the window would throw the playhead to where it landed."""
+        landed: list[int] = []
+        body.strip.committed.connect(landed.append)
+        driving.drag(body.strip, (500.0, SCRUB_Y), (600.0, SCRUB_Y))
+        assert landed == []
+
+
+class TestTheHandlesToggle:
+    """What the toggle buys, and what it costs while it is up.
+
+    Up, the edges are not there to be found: a press six pixels inside the
+    boundary is a body press like any other, which is the whole point — the
+    common gesture cannot land on a handle and stretch the span the user meant
+    to slide. Down, the bracket behaves as `TestTheWindowBracketIsGrabbable`
+    has it.
+    """
+
+    @pytest.fixture
+    def held(self, bar: Any) -> Any:
+        """The bar over frames 400-700: left edge at x=400, right at x=700."""
+        bar.set_window(SourceSpan(start=400, end=700))
+        return bar
+
+    def test_the_handles_toggle_starts_up(self, held: Any) -> None:
+        """Armed is the exception, so it is not what the bar opens in."""
+        assert not held.handles.isChecked()
+        assert not held.strip.handles_armed
+
+    def test_without_the_handles_toggle_an_edge_drag_slides_the_window_whole(
+        self, held: Any
+    ) -> None:
+        """x=400 is the left edge, and disarmed there is no edge there to find."""
+        driving.drag(held.strip, (400.0, SCRUB_Y), (250.0, SCRUB_Y))
+        assert held.window == SourceSpan(start=250, end=550)
+
+    def test_the_handles_toggle_arms_the_left_edge(self, held: Any) -> None:
+        held.handles.setChecked(True)
+        driving.drag(held.strip, (400.0, SCRUB_Y), (250.0, SCRUB_Y))
+        assert held.window == SourceSpan(start=250, end=700)
+
+    def test_the_handles_toggle_arms_the_right_edge(self, held: Any) -> None:
+        held.handles.setChecked(True)
+        driving.drag(held.strip, (700.0, SCRUB_Y), (899.0, SCRUB_Y))
+        assert held.window == SourceSpan(start=400, end=900)
+
+    def test_dropping_the_handles_toggle_disarms_them_again(self, held: Any) -> None:
+        """The state is the button's to hold, not a latch the first drag clears."""
+        held.handles.setChecked(True)
+        held.handles.setChecked(False)
+        driving.drag(held.strip, (400.0, SCRUB_Y), (250.0, SCRUB_Y))
+        assert held.window == SourceSpan(start=250, end=550)
+
+    def test_dropping_the_handles_toggle_mid_drag_abandons_the_resize(self, held: Any) -> None:
+        """A window the user is midway through sizing is not one they asked for.
+
+        The alternative — committing whatever the draft had reached — writes a
+        span from a gesture whose surface stopped existing under it.
+        """
+        held.handles.setChecked(True)
+        driving.press(held.strip, 400.0, SCRUB_Y)
+        driving.move(held.strip, 250.0, SCRUB_Y)
+        held.handles.setChecked(False)
+        driving.release(held.strip, 250.0, SCRUB_Y)
+
+        assert held.window == SourceSpan(start=400, end=700)
+        assert held.strip.window_rect().left() == pytest.approx(400.0)
+
+    def test_the_handles_toggle_goes_dead_with_the_rest_of_the_bar(self, bar: Any) -> None:
+        """No source is no window, and no window is nothing to arm the edges of."""
+        bar.bind_source(0, 0.0)
+        assert not bar.handles.isEnabled()
+
+
+class TestTheSeamUnderThePanes:
+    """The boundary above the timeline, which reads like a divider and is not one.
+
+    The timeline fixes its own height, so a splitter there would offer the user
+    a resize the fixed height then refuses.
+    """
+
+    def test_the_seam_is_not_a_splitter(self, qapp) -> None:
+        del qapp
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QSplitter, QWidget
+
+        from sieve.gui.layout import build_seam, compose
+
+        stacked = compose(QWidget(), QWidget(), QWidget())
+        seam = stacked.findChild(QWidget, "seam")
+        assert seam is not None
+        # Exactly `QWidget`, not a subclass: a splitter handle is what this is
+        # imitating, and a handle is the one thing it must not be.
+        assert type(seam) is QWidget
+        assert seam.maximumHeight() == build_seam().maximumHeight()
+        assert not any(
+            split.orientation() is Qt.Orientation.Vertical
+            for split in stacked.findChildren(QSplitter)
+        )
 
 
 class TestTheHoverBubble:

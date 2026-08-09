@@ -55,6 +55,7 @@ def window_stylesheet() -> str:
         QSplitter::handle:horizontal {{ width: 3px; }}
         QSplitter::handle:vertical {{ height: 3px; }}
         QSplitter::handle:hover {{ background: {rgb(ACCENT)}; }}
+        #seam {{ background: {rgb(LINE)}; }}
     """
 
 

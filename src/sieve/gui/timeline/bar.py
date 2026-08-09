@@ -25,6 +25,16 @@ move because a guess is what the user is asking to see. A window drag paints
 from a local draft and announces itself exactly once, on release. The draft is
 the one piece of window state the strip holds, and it exists only between a
 press and its release.
+
+**Why the edges are armed and the body is not.** The whole interior of the
+window slides it, so the common gesture cannot land on a handle by six pixels
+and stretch the span the user meant to move; the edges answer only while the
+HANDLES toggle is down, which is what leaves those six pixels free to be the
+body. The cost is that the interior can no longer *begin* a scrub, so a press
+there is provisional: travel makes it a move, and a release that never
+travelled is the seek it would have been. That is the one place the two
+gestures can both keep the same pixels, and it matters most in the state the
+bar opens in, where the window is the whole source and there is no outside.
 """
 
 from __future__ import annotations
@@ -73,8 +83,13 @@ _TRACK_INSET = 4.0
 #: the hand and not about which of the two the hand is reaching for.
 EDGE_GRAB = 6.0
 
-#: Depth of the darker band along the window's top that moves it whole.
+#: Depth of the darker band along the window's top. A stripe that says which
+#: band the interior belongs to, not a zone of its own: the whole interior moves
+#: the window, and the bubble sits below this so it clears the top edge.
 _HEADER_HEIGHT = 9.0
+
+#: Width of the line drawn down an armed edge.
+_ARMED_HANDLE_WIDTH = 3.0
 
 #: Shortest window a drag may produce. A window under a second is a misclick,
 #: and the floor is in seconds rather than frames so it means the same thing at
@@ -108,13 +123,15 @@ class Grab(Enum):
     through, because the window it is testing against is moving under it.
     """
 
-    #: Neither edge nor header: the position itself, which is a seek.
+    #: Outside the window: the position itself, which is a seek.
     SCRUB = auto()
-    #: The window's left edge. Resizes, pinning the right.
+    #: The window's left edge, and only while the handles are armed. Resizes,
+    #: pinning the right.
     START = auto()
-    #: The window's right edge. Resizes, pinning the left.
+    #: The window's right edge, armed likewise. Resizes, pinning the left.
     END = auto()
-    #: The header band. Moves the window whole, holding its length.
+    #: Anywhere else inside the window. Moves it whole, holding its length —
+    #: unless the press never travels, which is a seek.
     BODY = auto()
 
 
@@ -141,9 +158,10 @@ class TimelineStrip(QWidget):
     pressed = Signal(int)
     #: A drag position. A guess, which the player may serve approximately.
     scrubbed = Signal(int)
-    #: Mouse-up. The commitment again: land here exactly.
+    #: Mouse-up. The commitment again: land here exactly. Also what a press on
+    #: the window's body turns out to have been, when it never travelled.
     committed = Signal(int)
-    #: A finished header drag, as the window's new origin. Release only.
+    #: A finished body drag, as the window's new origin. Release only.
     window_moved = Signal(int)
     #: A finished handle drag, as the window's new span. Release only.
     window_resized = Signal(int, int)
@@ -160,6 +178,12 @@ class TimelineStrip(QWidget):
         self._draft: SourceSpan | None = None
         self._grab: Grab | None = None
         self._grab_offset = 0
+        # The frame the press named, and whether the cursor has since named
+        # another. A body press that never travels is a seek, so "did it move"
+        # has to be a fact and not a guess made from the release position.
+        self._grab_from = 0
+        self._travelled = False
+        self._handles_armed = False
         self._hover: int | None = None
         self.setFixedHeight(STRIP_HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -194,6 +218,24 @@ class TimelineStrip(QWidget):
         """Move the playhead to `frame`."""
         self._playhead = frame
         self.update()
+
+    def set_handles_armed(self, armed: bool) -> None:
+        """Arm or disarm the window's edges.
+
+        Disarming drops a resize already under way rather than letting it finish
+        on a handle that has stopped existing: the drag is abandoned, not
+        committed, because a window the user is midway through sizing is not one
+        they have asked for.
+        """
+        self._handles_armed = armed
+        if not armed and self._grab in (Grab.START, Grab.END):
+            self._grab, self._draft = None, None
+        self.update()
+
+    @property
+    def handles_armed(self) -> bool:
+        """Whether an edge drag would resize. View state, and only the strip's."""
+        return self._handles_armed
 
     # ---- geometry --------------------------------------------------------
 
@@ -264,19 +306,20 @@ class TimelineStrip(QWidget):
 
         **Edges before containment**: a point on an edge is inside the window
         too, so a containment test run first makes the edges unreachable and
-        leaves the user resizing by typing. The header is tested after both,
-        because it is the only zone whose claim is about a region rather than a
-        line.
+        leaves the user resizing by typing. Disarmed there are no edges to find,
+        and a press six pixels inside the boundary is a body press like any
+        other — which is the whole of what the toggle buys.
         """
         window = self.window_rect()
         if window.isEmpty():
             return Grab.SCRUB
         x = position.x()
-        if abs(x - window.left()) <= EDGE_GRAB:
-            return Grab.START
-        if abs(x - window.right()) <= EDGE_GRAB:
-            return Grab.END
-        if self.header_rect().contains(position):
+        if self._handles_armed:
+            if abs(x - window.left()) <= EDGE_GRAB:
+                return Grab.START
+            if abs(x - window.right()) <= EDGE_GRAB:
+                return Grab.END
+        if window.left() <= x <= window.right():
             return Grab.BODY
         return Grab.SCRUB
 
@@ -342,6 +385,13 @@ class TimelineStrip(QWidget):
             edge = 2.0 if self._grab in (Grab.START, Grab.END) else 1.0
             painter.setPen(QPen(_WINDOW_EDGE, edge))
             painter.drawRect(window.adjusted(0.5, 0.5, -0.5, -0.5))
+            if self._handles_armed:
+                # Armed is a state of the band, not of the button alone: a user
+                # who reaches for an edge has to be able to see, on the thing
+                # they are reaching for, whether it will answer.
+                painter.setPen(QPen(_WINDOW_EDGE, _ARMED_HANDLE_WIDTH))
+                for x in (window.left() + 1.0, window.right() - 1.0):
+                    painter.drawLine(QPointF(x, window.top()), QPointF(x, window.bottom()))
 
         x = self.playhead_x()
         painter.setPen(QPen(_PLAYHEAD, 1.0))
@@ -387,7 +437,9 @@ class TimelineStrip(QWidget):
             return
         self._grab = grab
         self._draft = window
-        self._grab_offset = self.geometry_now().frame_at(event.position().x()) - window.start
+        self._grab_from = self.geometry_now().frame_at(event.position().x())
+        self._grab_offset = self._grab_from - window.start
+        self._travelled = False
         self.update()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
@@ -397,6 +449,7 @@ class TimelineStrip(QWidget):
         if self._dragging:
             self.scrubbed.emit(self._hover)
         elif self._grab is not None:
+            self._travelled = self._travelled or self._hover != self._grab_from
             self._draft = self._dragged_to(position.x())
         else:
             self._follow_cursor(position)
@@ -412,13 +465,21 @@ class TimelineStrip(QWidget):
             return
         if self._grab is None:
             return
+        frame = self.geometry_now().frame_at(event.position().x())
+        travelled = self._travelled or frame != self._grab_from
         window = self._dragged_to(event.position().x())
         grab, self._grab, self._draft = self._grab, None, None
         self.update()
-        if grab is Grab.BODY:
+        if grab is not Grab.BODY:
+            self.window_resized.emit(window.start, window.end)
+        elif travelled:
             self.window_moved.emit(window.start)
         else:
-            self.window_resized.emit(window.start, window.end)
+            # A press that stayed put was never a move, and the interior is the
+            # only place a seek has left to be asked for once the window is the
+            # whole source. Announced here rather than on the press, because
+            # which of the two it was is not known until the button comes up.
+            self.committed.emit(frame)
 
     def leaveEvent(self, event: QEvent) -> None:
         """Drop the bubble. A cursor that has left names no frame."""
@@ -497,6 +558,11 @@ class TimelineBar(QWidget):
         return self._strip
 
     @property
+    def handles(self) -> QPushButton:
+        """The HANDLES toggle. Exposed for the same reason `strip` is."""
+        return self._handles_button
+
+    @property
     def window(self) -> SourceSpan | None:
         """The working window: what the transport is confined to."""
         return self._window
@@ -516,7 +582,7 @@ class TimelineBar(QWidget):
     # ---- construction ----------------------------------------------------
 
     def _build_controls(self) -> QHBoxLayout:
-        """Play, window start, window length, timestamp — hard right."""
+        """Play, window start, window length, the handles toggle, timestamp — hard right."""
         self._play_button = QPushButton(_PLAY_GLYPH)
         self._play_button.setFixedWidth(40)
         self._play_button.setToolTip("Play / pause (Space)")
@@ -532,6 +598,12 @@ class TimelineBar(QWidget):
         self._length_box.setSingleStep(1.0)
         self._length_box.setSuffix(" s")
         self._length_box.setToolTip("How long the working window is")
+
+        self._handles_button = QPushButton("HANDLES")
+        self._handles_button.setCheckable(True)
+        self._handles_button.setToolTip(
+            "Arm the window's edges: pressed, an edge drag resizes; up, only the whole window moves"
+        )
 
         self._timecode = QLabel("—")
         self._timecode.setTextFormat(Qt.TextFormat.PlainText)
@@ -549,6 +621,7 @@ class TimelineBar(QWidget):
         row.addWidget(self._start_box)
         row.addWidget(QLabel("+"))
         row.addWidget(self._length_box)
+        row.addWidget(self._handles_button)
         row.addWidget(self._timecode)
         return row
 
@@ -560,11 +633,15 @@ class TimelineBar(QWidget):
         self._play_button.clicked.connect(self._player.toggle_play)
         self._start_box.valueChanged.connect(self._on_start_typed)
         self._length_box.valueChanged.connect(self._on_length_typed)
+        # Straight at the strip: armed is view state and the band is the view.
+        # A copy held on the bar would be the second answer to "will the edge
+        # answer" that the strip's paint and its hit test are already one of.
+        self._handles_button.toggled.connect(self._strip.set_handles_armed)
 
         self._strip.pressed.connect(self._on_pressed)
         self._strip.scrubbed.connect(self._player.scrub)
         self._strip.committed.connect(self._on_committed)
-        # Straight at the bar's own window verbs: a header drag holds the length
+        # Straight at the bar's own window verbs: a body drag holds the length
         # and so is the same edit as a typed start, and a handle drag has
         # already resolved both edges. Neither needs a translation here.
         self._strip.window_moved.connect(self.move_window_to)
@@ -599,7 +676,13 @@ class TimelineBar(QWidget):
         self._strip.set_source_frames(self._frame_count)
         self._strip.set_timebase(self._fps)
         enabled = self._frame_count > 0
-        for widget in (self._play_button, self._start_box, self._length_box, self._strip):
+        for widget in (
+            self._play_button,
+            self._start_box,
+            self._length_box,
+            self._handles_button,
+            self._strip,
+        ):
             widget.setEnabled(enabled)
         self._push_window()
         self._update_timecode(self._player.current_index if enabled else 0)

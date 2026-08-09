@@ -263,10 +263,11 @@ class RegionEditor(_Editor):
 class SpanEditor(_Editor):
     """Two handles on the band, dragged to the frames a span keeps.
 
-    Two handles and nothing between them. The strip means "seek here" everywhere
-    it is not a handle, so the body of the band is left to it: an editor owning
-    the middle would take scrubbing away for as long as a span node is on screen,
-    and a span has no body gesture of its own — moving one whole is a
+    Two handles and nothing between them. Every press that is not one of them is
+    handed to the strip, whose own reading of that pixel — a seek, or the
+    working window's body — is not this editor's to second-guess: an editor
+    owning the middle would take both away for as long as a span node is on
+    screen, and a span has no body gesture of its own. Moving one whole is a
     reinterpretation nobody asked for, where the working window's is the
     "keep the ten seconds, move them" `timeline/window.py` argues for.
 

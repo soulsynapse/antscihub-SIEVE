@@ -321,6 +321,61 @@ def test_the_waiting_section_separates_a_deferral_from_an_unspecified_item(tmp_p
     assert [i.path.name for i in unspecified_items] == ["vague.md"]
 
 
+#: The same deferral twice over: the gate cited as a filename, and the gate
+#: said in prose. Nothing else about the item differs, so the pair is what
+#: separates "the scan can see it" from "the trigger has fired".
+GATE_CITED = DEFERRED.replace(
+    "gated_on: whether the formatter is in the gate",
+    "gated_on: the offering predicate landing (offering-predicate.md)",
+)
+GATE_IN_PROSE = GATE_CITED.replace(" (offering-predicate.md)", "")
+
+
+def test_a_named_gate_that_is_done_flags_the_deferral(tmp_path):
+    write_item(tmp_path, "offering-predicate", SEQUENCED.replace("status: open", "status: done"))
+    write_item(tmp_path, "parked", GATE_CITED)
+
+    flagged = doc_index.named_gate_done(collect(tmp_path))
+
+    assert [(i.path.name, g.path.name) for i, g in flagged] == [
+        ("parked.md", "offering-predicate.md")
+    ]
+
+
+def test_a_named_gate_said_in_prose_matches_nothing(tmp_path):
+    # By design, not as a gap: a deferral whose trigger no item names may be a
+    # functionally-never one, and nagging that open is a ruling the scan does
+    # not get to make.
+    write_item(tmp_path, "offering-predicate", SEQUENCED.replace("status: open", "status: done"))
+    write_item(tmp_path, "parked", GATE_IN_PROSE)
+
+    assert doc_index.named_gate_done(collect(tmp_path)) == []
+
+
+def test_a_named_gate_that_is_not_done_yet_flags_nothing(tmp_path):
+    write_item(tmp_path, "offering-predicate", SEQUENCED)
+    write_item(tmp_path, "parked", GATE_CITED)
+
+    assert doc_index.named_gate_done(collect(tmp_path)) == []
+
+
+def test_a_named_gate_informs_and_neither_fails_nor_flips(tmp_path):
+    """The whole point of the table, and the reason it is a table: a lifted
+    gate is answered by re-arguing as often as by opening, so the run that
+    notices may not decide."""
+    todo = tmp_path / "docs" / "todo"
+    todo.mkdir(parents=True)
+    (tmp_path / "docs" / "findings").mkdir()
+    write_item(todo, "offering-predicate", SEQUENCED.replace("status: open", "status: done"))
+    write_item(todo, "parked", GATE_CITED)
+
+    assert doc_index.main([], repo=tmp_path) == 0
+    assert doc_index.main(["--check"], repo=tmp_path) == 0
+    index = (todo / ".index.md").read_text(encoding="utf-8")
+    assert "## The named gate is done" in index and "parked.md" in index
+    assert doc_index.parse_frontmatter(todo / "parked.md")["status"] == "deferred"
+
+
 def test_a_pool_item_without_a_criterion_is_refused(tmp_path, monkeypatch):
     """The hole this closes: `validate` asked a `step` for its criterion and
     asked a pool item for nothing, so forty-nine landed without one."""

@@ -30,6 +30,12 @@ status: open          # open | awaiting-review | deferred | done
 # contradicts the tree. Only a review sets done or edits done_when.
 # `deferred` requires a real trigger in gated_on.
 gated_on: nothing
+# When the trigger is another item, cite that item's filename
+# (`the-offering-predicate-is-not-the-edge-legality-check.md`) rather than
+# naming it in prose: the index scans deferrals for a filename and lists the
+# ones whose named item now reads `done`. A prose trigger stays legal and
+# matches nothing, which is what a deferral on something that may never
+# happen wants.
 # Required on every item: the executable completion criterion, written when
 # the item is written and never edited by the session doing the work. The
 # worker runs it and pastes its output; the reviewer re-runs it. A pool item

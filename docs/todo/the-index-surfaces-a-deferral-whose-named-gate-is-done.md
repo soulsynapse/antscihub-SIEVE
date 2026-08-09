@@ -1,6 +1,6 @@
 ---
 title: The index surfaces a deferral whose named gate is done
-status: open
+status: awaiting-review
 priority: normal
 phase: 0
 gated_on: nothing
@@ -51,3 +51,15 @@ whether a-merge-keys-its-inputs-by-port is a blocker or a PLAN revival row.
     $ uv run pytest tests/docs/test_doc_index.py -q -k named_gate
     95 deselected in 0.04s
     exit: 5
+
+Green, with the fourth case the outcome asked for beside the three the item
+named — the flag informs, so a run of `--check` over a tree holding a flagged
+deferral exits 0 and leaves its status where it was:
+
+    $ uv run pytest tests/docs/test_doc_index.py -q -k named_gate
+    4 passed, 95 deselected in 0.95s
+
+The table renders empty against this tree: all three live deferrals state
+prose triggers, and the two dispositions that would fill it (the swap-menu
+item — since flipped to `open` by another hand — and a-merge's) were out of
+scope here because each is a ruling.

@@ -757,6 +757,7 @@ def render(items: list[Item], titles: dict[int, str]) -> str:
         lines.append("")
 
     lines += _render_waiting(items)
+    lines += _render_named_gates(items)
 
     open_count = sum(1 for item in items if item.status == "open")
     lines.append(f"*{len(items)} items, {open_count} open.*")
@@ -832,6 +833,59 @@ def _render_waiting(items: list[Item]) -> list[str]:
             ],
         )
         lines.append("")
+    return lines
+
+
+def named_gate_done(items: list[Item]) -> list[tuple[Item, Item]]:
+    """Deferrals whose `gated_on` cites an item that has since gone `done`.
+
+    A deferral states its trigger and nothing watches for the trigger firing,
+    so a gate lifts and the item stays parked until somebody happens to look —
+    diligence, where the noticing belongs to machinery. What a scan can see is
+    a citation: another item's filename inside the sentence. A prose gate
+    ("the first multi-input tool") holds no filename and matches nothing, by
+    design rather than as a gap — a functionally-never deferral must not be
+    nagged open, and recognizing one is a ruling whose home is PLAN's revival
+    table.
+
+    Informs, never fails. Not a `--check` failure and not an auto-flip: the
+    right answer to a lifted gate is as often "re-argue, don't build" as
+    "open", and either is somebody's ruling rather than this function's.
+    """
+    done = {item.path.name: item for item in items if item.status == "done"}
+    flagged: list[tuple[Item, Item]] = []
+    for item in sorted((i for i in items if i.status == "deferred"), key=queue_key):
+        gate = str(item.fields.get("gated_on", ""))
+        flagged += [(item, done[name]) for name in sorted(done) if name in gate]
+    return flagged
+
+
+def _render_named_gates(items: list[Item]) -> list[str]:
+    flagged = named_gate_done(items)
+    if not flagged:
+        return []
+    lines = [
+        "## The named gate is done",
+        "",
+        "Each row is deferred on an item that now reads `done`. The table is a",
+        "notice and nothing else — it fails no check and moves no status,",
+        "because the answer to a lifted gate is as often re-argue as open, and",
+        "either is a ruling. A deferral whose trigger is prose cites no file",
+        "and never appears here.",
+        "",
+    ]
+    lines += _table(
+        ("Phase", "Item", "The gate, done"),
+        [
+            (
+                _cell(item.phase),
+                f"[{_cell(item.fields.get('title'))}]({item.path.name})",
+                f"[{_cell(gate.fields.get('title'))}]({gate.path.name})",
+            )
+            for item, gate in flagged
+        ],
+    )
+    lines.append("")
     return lines
 
 

@@ -34,12 +34,18 @@ its `src/sieve/gui` counterpart and was reshaped from there.
 
 ## What the mockup does not settle
 
-- **The canvas contents.** The magnifier, the block-grid overlay, the solo
-  gesture, the heat rings — indicative, not final. Who owns the surface is
-  no longer open: the walk does, and emission display generates per kind
-  ([adr/the-walked-step-owns-the-canvas.md](adr/the-walked-step-owns-the-canvas.md))
-  — but the kind vocabulary waits for its first consumer. The crop boxes
-  are the exception: a rect param's generated editor is settled
+- **The canvas contents.** The heat rings and the in-band grid are still
+  indicative, and now for a stated reason: they read a mask no node emits, so
+  the mockup draws a picture of a decision that has not been made
+  ([todo/a-declared-surface-is-drawn-by-nothing.md](todo/a-declared-surface-is-drawn-by-nothing.md)
+  carries it). The rest is no longer sample. The walk owns the surface and
+  emission display generates per kind
+  ([adr/the-walked-step-owns-the-canvas.md](adr/the-walked-step-owns-the-canvas.md)),
+  the kind is `ElementKind`
+  ([adr/an-outputs-kind-is-the-picture-it-makes.md](adr/an-outputs-kind-is-the-picture-it-makes.md)),
+  and Phase 10 builds the composite, the magnifier and the solo gesture from
+  the mockup as shape. The crop boxes were always the exception: a rect
+  param's generated editor is settled
   ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)).
 - **The tool lists.** `NODES`, `STAGES`' membership, `SWAPPABLE`'s entries,
   the per-step knob sets and guidance strings are sample data. What is

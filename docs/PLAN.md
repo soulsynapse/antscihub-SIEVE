@@ -388,6 +388,67 @@ Gate: the walk, verbs and panes behave as the referent does under
 `tests/gui`; both budget regimes still measured green through the GUI; the
 `gui-computes-nothing` exception list still empty.
 
+## Phase 10 — The canvas contents
+
+Phase 7 ported the transport and Phase 9 reshaped the surfaces around it; the
+one surface neither touched is the picture. `gui/canvas.py` paints one image it
+was handed and `app._paint_viewport` chooses which — the watched node's render,
+or the decoded frame — and a viewport that shows one of two things is not the
+composite
+[adr/the-walked-step-owns-the-canvas.md](adr/the-walked-step-owns-the-canvas.md)
+settled. That ADR ruled who owns the surface and what it shows; this phase is
+the ruling given a painter.
+
+The composite costs no second render, which is what makes it affordable rather
+than a second answer to the budget. `FrameResult` already carries every node's
+output for one source frame — "the GUI shows intermediates" is its own
+docstring's reason for holding them all — so the walked step's input is the
+parent entry of the result `render_frame` already produced, and `render_at` was
+indexing for one node and leaving the other on the floor. What the canvas gains
+is a second array out of one render and a second `drawImage` into the same
+rectangle. That rectangle needs two mappings, and they come from v2 because two
+widgets in different units already shared them there for this reason:
+`gui/zoom.py` verbatim and `video_view`'s fit/view pair port-with-rename,
+carrying the rule that gives them their point — what is drawn on the canvas is
+denominated in source pixels and never in the proxy the viewport happens to be
+showing, since the proxy's resolution can change between frames and a saved
+region cannot.
+
+Emission display generates per kind and the kind is `ElementKind`
+([adr/an-outputs-kind-is-the-picture-it-makes.md](adr/an-outputs-kind-is-the-picture-it-makes.md)):
+a `PIXEL` result is an image over its input, a `BLOCK` result is its own cells
+over its input, and `FRAME` has no picture at all — which is the climb
+`app.frame_bearing` already makes past a gate, restated as that kind's entry
+rather than left standing as a second rule beside it. Soloing a cell lands with
+the field rather than after it, because it is what gives a `BLOCK` step a trace
+at all: `graph_panel` refuses a series carrying more than one value per frame,
+and the solo is the reduction that makes it one. The gesture is emitted and
+never self-applied, so the drawn marker moves only when the model confirms it.
+
+What does not land is the half that cannot be drawn from an output. v2's in-band
+ring reads `detect`'s gate mask, which is no node's product — `emissions` is
+`("gate",)` and the mask never leaves the node — so a painter drawing it would
+import the tool's module, which is ADR 28's named violation spelled out. Its
+home is a `DisplaySurface` member on the preview-only channel, the licensed
+revision of
+[adr/a-band-declares-the-surface-it-is-dragged-on.md](adr/a-band-declares-the-surface-it-is-dragged-on.md)
+rather than a second vocabulary beside it, and it waits behind
+[todo/a-declared-surface-is-drawn-by-nothing.md](todo/a-declared-surface-is-drawn-by-nothing.md)
+for a measured reason: a watched node is never served from the store, so asking
+the walked step for a fill costs it its re-use on every frame of every drag, and
+that number is that item's to take. The three alpha sliders wait with the ring
+they modulate, and Shift-to-peek with them — with one opacity control and no
+ring, the control is peek. So does the ancestor-emission toggle, which ADR 28
+already settles as view state: what it lacks is not a ruling but a subject, and
+it gains one with a second picture-bearing ancestor, or with the ring.
+
+Gate: on the stirred-clip chain the canvas is the walked step's result over its
+input off one render, matching an independent composite of the two arrays that
+render produced; a region drawn at maximum magnification round-trips to the same
+source pixels as the same region drawn at the fit; `slider_to_preview` and
+`scrub_to_repaint` still measured green through the GUI at the reference block
+count; the `gui-computes-nothing` exception list still empty.
+
 ## Not built, and what revives it
 
 | Not built | Revived by |
@@ -430,6 +491,15 @@ everything else under `gui/`.
 `source_home.py` and `crop_binding.py` re-derived against schema v1 — they
 are the read-back path, and a written crop that nothing can read back is a
 file, not an artifact.
+
+**Phase 10, the canvas:** `gui/zoom.py` verbatim. `gui/composite_view.py`
+splits — the pane's paint, its grid arithmetic and its solo gesture
+port-with-rename into `gui/canvas.py` and `gui/emission_paint.py`, while
+`_paint_grid`'s in-band half is deferred rather than re-derived because it
+reads a mask no node emits, and `StepCompositeView`'s chrome is
+`PinnedStep`'s already. From `gui/video_view.py` only the coordinate mapping
+comes over; its rects, handles and selection are `kind_editors.py`'s and do
+not arrive twice.
 
 **Landing later than v2 would suggest:** `pipeline/series_collector.py` in
 Phase 6 — it assembles a node's per-frame outputs into the series a graph is

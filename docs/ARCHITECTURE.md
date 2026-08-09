@@ -48,5 +48,6 @@ and its file in `docs/adr/` but leaves this index.
 - [The mockup is the GUI's end state](adr/the-mockup-is-the-gui-end-state.md) — `mockup/mockup.py` is the settled v3 surface: layout, hotkeys, and interactions are final; the fake back end transfers nothing; what it does not show lands in a popup, never as a new region.
 - [The output card is a picture of the write list, not a node](adr/the-output-card-is-a-picture-of-the-write-list.md) — The output step at the foot of the chain is drawn, not modeled: the GUI renders a card over `Project.outputs` with edges derived from the ticks — no output node, no sink shape in the tool contract.
 - [The walked step owns the canvas](adr/the-walked-step-owns-the-canvas.md) — The walked step owns the canvas — its result over its input, its emissions drawn by kind; an ancestor's emissions are a view toggle; the pin owns only the slot below.
+- [An output's kind is the picture it makes](adr/an-outputs-kind-is-the-picture-it-makes.md) — The canvas paints an output by its `ElementKind` — `PIXEL` an image, `BLOCK` a field of cells over its frame, `FRAME` no picture — and no member is ever added for a tool.
 
-*27 settled, 1 superseded.*
+*28 settled, 1 superseded.*

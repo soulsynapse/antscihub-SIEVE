@@ -1,7 +1,7 @@
 ---
 title: The library mints a project and the selected card opens its folder
 step: "09.5.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k \"new_project or open_location\""
 opened: 2026-08-09
@@ -45,3 +45,43 @@ selection, not the open session.
     $ uv run pytest tests/gui -q -k "new_project or open_location"
     169 deselected in 0.67s
     exit: 5
+
+## OPEN LOCATION landed; NEW PROJECT cannot be written (2026-08-09)
+
+Half of this is built. `chrome.chrome_button` is the dress's one home,
+`project_select.reveal` opens the document's folder, the pane's third signal
+carries which card was pressed, and `MainWindow.reveal_project` turns it into
+a path. The folder and not the file, because no file manager can be asked
+portably to open with one entry selected, and because a project on disk *is*
+its folder (`PROJECT_SUFFIX`'s note: the document sits beside its footage and
+above the child folders a run wrote). One consequence the referent could not
+show: `projects_in` scans a single directory, so every card in one library
+answers with the same folder. That is a fact about a scanned library, not a
+defect in a per-card verb — the button says where *this* project lives, and in
+a library they live together.
+
+**NEW PROJECT is not built, and the criterion above is green without it.**
+`Project.source` is a required `SourceRef` whose `path` validator refuses an
+empty string, so "an empty project — no sources, no chain" has no valid
+document under schema v1. The item hands that decision to v3; it is a schema
+decision and not a widget's, so it stops here rather than riding along with a
+GUI step. The three ways out, and why none is a run's judgement call:
+
+- **A document may name no footage** — `source: SourceRef | None`. Honest, and
+  the state is real: the mockup's walk is mint, then add sources on the card
+  the selection landed on. It changes what a valid document is for every
+  reader, which is few sites (`Project.source_path`, `relocated`, `for_video`,
+  `app.open_project`, `_holds`, and the three CLI commands that go through
+  `source_path` and would each owe a refusal naming the file) but is an ADR's
+  ruling, since `Project`'s own docstring calls itself the whole reproducible
+  unit.
+- **Mint nothing on disk, hold a pending row in the window** — no schema
+  change, and "the pane lists it" holds until the app is relaunched, at which
+  point the row is gone and the library card's count was never counting it.
+- **Ask for footage up front** — a file dialog, which `PLAN.md` Phase 7 defers
+  ("does not build one from a folder of videos") and which the no-modal
+  argument above leans against for the name.
+
+So: the criterion no longer covers the whole of the item, and the review owes
+it either a widening plus a ruling on the first bullet, or a strike that sends
+NEW PROJECT out as its own item behind that decision.

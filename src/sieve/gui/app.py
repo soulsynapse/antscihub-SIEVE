@@ -93,7 +93,7 @@ from sieve.gui.pinned import (
     element_kinds,
     surface_note,
 )
-from sieve.gui.project_select import ProjectSelect, listings, projects_in
+from sieve.gui.project_select import ProjectSelect, listings, projects_in, reveal
 from sieve.gui.save_screen import SaveScreen
 from sieve.gui.step_pane import StepPane
 from sieve.gui.timeline.bar import TimelineBar
@@ -542,6 +542,18 @@ class MainWindow(QMainWindow):
         self.select_project(index)
         self.open_project(self._projects[self._project_at])
 
+    def reveal_project(self, index: int) -> None:
+        """Show project `index` on disk, and move nothing.
+
+        Not routed through `select_project` first, though the button only
+        appears on the selected card: the index is the pane's answer to which
+        card was pressed, and a select on the way past would make the one verb
+        in the surface that acts on the selection also able to change it.
+        """
+        if not 0 <= index < len(self._projects):
+            return
+        reveal(self._projects[index])
+
     @property
     def region(self) -> int:
         """Which of the project's regions the stack is drawn for."""
@@ -593,6 +605,7 @@ class MainWindow(QMainWindow):
         select = ProjectSelect(listings(self._projects), self._project_at)
         select.selected.connect(self.select_project)
         select.opened.connect(self.enter_project)
+        select.revealed.connect(self.reveal_project)
         return select
 
     def _reread_graph(self) -> None:

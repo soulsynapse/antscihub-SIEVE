@@ -26,7 +26,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QPushButton, QWidget
 
 #: The gap between cards, and every surface behind them.
 STACK_BG = QColor(24, 26, 30)
@@ -72,6 +72,33 @@ def stack_stylesheet() -> str:
         }}
         QScrollArea {{ border: 0; }}
     """
+
+
+def chrome_button(text: str, tip: str) -> QPushButton:
+    """A labelled button in the window's dress rather than the platform's.
+
+    Here rather than as a `QPushButton` rule inside `stack_stylesheet`, so that
+    wearing this dress is something a button asks for. The sheet is worn by
+    every pane that holds cards, and a class rule in it would reach every button
+    any of them ever grows — including the generated param widgets, whose
+    affordance is a form field's and not a verb's.
+
+    The tooltip is a parameter and not optional because a button in a pane of
+    cards has no menu bar or status line to explain it, and the label alone is
+    the only other thing that could.
+    """
+    button = QPushButton(text)
+    button.setToolTip(tip)
+    button.setStyleSheet(f"""
+        QPushButton {{
+            background: {rgb(PANEL_HOT)};
+            color: {rgb(TEXT)};
+            border: 1px solid {rgb(LINE)};
+            padding: 2px 4px;
+        }}
+        QPushButton:hover {{ border-color: {rgb(ACCENT)}; }}
+    """)
+    return button
 
 
 def darken_title_bar(window: QWidget) -> None:

@@ -33,7 +33,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QScrollArea,
@@ -43,7 +44,7 @@ from PySide6.QtWidgets import (
 
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Project
 from sieve.gui.chain_stack import ChainCard, fixed_card, note_label, title_label
-from sieve.gui.chrome import stack_stylesheet
+from sieve.gui.chrome import chrome_button, stack_stylesheet
 
 #: Beyond this many days the relative phrasing stops being read as a duration
 #: and starts being counted, so the card gives the date instead.
@@ -60,6 +61,24 @@ def projects_in(directory: Path) -> tuple[Path, ...]:
     make the same keystrokes open different projects.
     """
     return tuple(sorted(directory.glob(f"*{PROJECT_SUFFIX}")))
+
+
+def reveal(project: Path) -> None:
+    """Show the project's folder in whatever the system uses to browse files.
+
+    The folder and not the file, because there is no cross-platform way to ask
+    a file manager to open with one entry selected — `QDesktopServices` opens
+    a location, and selecting would be a subprocess per platform. The folder is
+    also what a project *is* on disk: the document sits beside the footage it
+    names and above the child folders holding what a run wrote
+    (`core/pipeline_model.PROJECT_SUFFIX`), so the folder is the whole of the
+    thing and the file is one entry in it.
+
+    Nothing is reported back. The one failure a caller could act on — the folder
+    is gone — is the same news the file manager gives, and the alternative to
+    letting it say so is a second check here that could disagree with it.
+    """
+    QDesktopServices.openUrl(QUrl.fromLocalFile(str(project.parent)))
 
 
 @dataclass(frozen=True)
@@ -165,6 +184,7 @@ def _project_card(
     current: int,
     on_select: Callable[[int], None],
     on_open: Callable[[int], None],
+    on_reveal: Callable[[int], None],
 ) -> ChainCard:
     """One project's card. Takes its own index because a card knows what it is
     and not where it stands, and binding here is what gives each closure a
@@ -183,7 +203,19 @@ def _project_card(
     head.addStretch(1)
     head.addWidget(note_label(listing.when))
     layout.addLayout(head)
-    layout.addWidget(note_label(listing.holds))
+
+    foot = QHBoxLayout()
+    foot.addWidget(note_label(listing.holds))
+    foot.addStretch(1)
+    # On the selected card alone: it acts on the selection, and the pane is
+    # rebuilt when that moves, so the button travels with the highlight. A
+    # labelled button rather than a glyph beside the note, which was tried in
+    # the referent and read as nothing.
+    if index == current:
+        button = chrome_button("OPEN LOCATION", "Open this project's folder on disk")
+        button.clicked.connect(lambda: on_reveal(index))
+        foot.addWidget(button)
+    layout.addLayout(foot)
     return card
 
 
@@ -212,6 +244,11 @@ class ProjectSelect(QWidget):
     selected = Signal(int)
     #: This card was double-clicked — enter it.
     opened = Signal(int)
+    #: The selected card's OPEN LOCATION was pressed — show it on disk. A third
+    #: signal and not a call to `reveal` from the button, for the reason the
+    #: other two are signals: which project an index means is the window's
+    #: answer, and a pane that answered it would be holding the selection twice.
+    revealed = Signal(int)
 
     def __init__(
         self,
@@ -224,7 +261,14 @@ class ProjectSelect(QWidget):
 
         self.library_card = fixed_card(_library_title([row.path for row in rows]))
         self.cards = tuple(
-            _project_card(index, row, current, self.selected.emit, self.opened.emit)
+            _project_card(
+                index,
+                row,
+                current,
+                self.selected.emit,
+                self.opened.emit,
+                self.revealed.emit,
+            )
             for index, row in enumerate(rows)
         )
 

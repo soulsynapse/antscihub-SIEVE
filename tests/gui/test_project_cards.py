@@ -180,6 +180,68 @@ def test_project_cards_double_click_enters_the_pipeline_position(
     assert len(window.control.pipeline_pane.cards) == _LIBRARY["colony"]
 
 
+def _reveal_buttons(cards: Any) -> list[Any]:
+    from PySide6.QtWidgets import QPushButton
+
+    return [card.findChild(QPushButton) for card in cards]
+
+
+def test_open_location_is_on_the_selected_card_alone_and_travels_with_it(window: Any) -> None:
+    pane = window.control.project_select
+
+    assert [button is not None for button in _reveal_buttons(pane.cards)] == [True, False, False]
+    assert _reveal_buttons(pane.cards)[0].text() == "OPEN LOCATION"
+
+    window.go_down()
+
+    # The pane is rebuilt when the selection moves, so the button is not moved
+    # between cards — it is drawn on whichever card the accent landed on.
+    moved = window.control.project_select
+    assert [button is not None for button in _reveal_buttons(moved.cards)] == [False, True, False]
+
+
+def test_open_location_opens_that_projects_folder_and_moves_nothing(
+    window: Any, library: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sieve.gui.app as app_module
+
+    shown: list[Path] = []
+    # The real one hands a URL to the desktop, which on a test machine either
+    # opens a file manager or does nothing depending on what is installed —
+    # neither of which is the claim. That `reveal` is called with this project
+    # is; what it does with a folder is its own case below.
+    monkeypatch.setattr(app_module, "reveal", shown.append)
+
+    window.go_down()
+    _reveal_buttons(window.control.project_select.cards)[1].click()
+
+    assert shown == [library / "colony.sieve.yaml"]
+    # The one verb in the surface that acts on the selection and cannot change
+    # it: nothing is opened, and the track has not moved.
+    assert window.session is None
+    assert [card.selected for card in window.control.project_select.cards] == [False, True, False]
+    assert window.control.current_position() == "project"
+
+
+def test_open_location_asks_for_the_folder_the_document_sits_in(
+    qapp: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del qapp
+    from PySide6.QtGui import QDesktopServices
+
+    from sieve.gui import project_select
+
+    asked: list[Any] = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", asked.append)
+
+    project_select.reveal(tmp_path / "lib" / "arena.sieve.yaml")
+
+    # The folder, not the file: a project on disk is the document beside its
+    # footage and above what a run wrote, and no file manager can be asked
+    # portably to open with one entry picked out.
+    assert [url.toLocalFile() for url in asked] == [(tmp_path / "lib").as_posix()]
+
+
 def test_project_cards_up_and_down_move_the_selection_not_the_walk(window: Any) -> None:
     driving.double_click(window.control.project_select.cards[0], 4.0, 4.0)
     window.go_down()

@@ -107,3 +107,25 @@ shape this item exists to end.
 Nothing was moved by 08.5, deliberately: that item named two files, and adding
 a third would be the decision-riding-along-with-a-port its own second paragraph
 refuses.
+
+## 2026-08-09: the run-start refusals are multi-line, and only their first line is labelled
+
+Folded from the review of `a50027a`, which added `run_cmd._external_inputs` and
+with it the first refusals this command builds by joining several complaints
+into one message. `resolve_source.source_files` raises with one line per absent
+source root; `_external_inputs` catches that and prefixes `_label(target)` —
+which lands on the first line only, so a fan-out where two replicates each miss
+two files prints four node lines under two replicate names, and lines two and
+four say nothing about whose they are. `Project.check_input_hashes` has the same
+shape one level down, naming every changed node in one string.
+
+It is a small defect and it is precisely against the promise these refusals are
+built to make — a reviewer with several unmounted inputs learns about all of
+them *and which run wants which*. It goes here rather than in its own item
+because the fix is a spelling decision about how this command composes a
+multi-part refusal, which is the vocabulary this item moves: whatever
+`cli/common.py` ends up holding, one function that labels every line of a
+collected refusal is the natural member, and solving it in `run_cmd` first would
+be the second spelling to reconcile.
+
+This item has no `done_when`, so nothing was widened.

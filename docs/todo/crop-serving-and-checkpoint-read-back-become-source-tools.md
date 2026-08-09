@@ -4,7 +4,7 @@ status: open
 gated_on: nothing
 priority: high
 phase: "05"
-done_when: 'uv run pytest tests/integration/test_crop_serving.py -k "the_served_graph_holds_no_crop_node or a_pre_cropped_folder_needs_no_crop_record or a_preview_is_served_by_the_written_crop" -q'
+done_when: 'uv run pytest tests/integration/test_crop_serving.py -k "the_served_graph_holds_no_crop_node or a_pre_cropped_folder_needs_no_crop_record or a_preview_is_served_by_the_written_crop or a_served_source_root_reaches_every_front_ends_plan_keyed" -q'
 opened: 2026-08-07
 ---
 
@@ -113,3 +113,14 @@ Whether the fix is a shared run-start step the three front ends call or a
 that decides what a front end has to know about artifacts at all. Not minted
 separately for that reason: an item for "preview passes `picked`" would be
 answered by whichever shape this one picks.
+
+### 2026-08-09 review: `done_when` widened for the paragraph above
+
+The fold arrived with the criterion untouched, as CLAUDE.md requires, and its
+author said so. Widened here to a fourth case —
+`a_served_source_root_reaches_every_front_ends_plan_keyed` — which is the shape
+the case has to take and not a spelling to obey: it must fail while any front
+end builds a plan without `picked`, so it cannot be satisfied by asserting
+`run_cmd`'s behaviour a second time. It deliberately does not prejudge which of
+the two shapes the paragraph names is picked; a shared run-start step and a
+threaded argument both pass it.

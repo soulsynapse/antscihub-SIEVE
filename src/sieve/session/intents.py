@@ -98,16 +98,25 @@ class SetOutputs:
         return project.with_outputs(self.checkpoints, self.outputs)
 
 
-def issue(session: Session, intent: Intent) -> Project:
+def issue(session: Session, intent: Intent) -> bool:
     """Apply `intent` to `session`'s project and commit the result.
 
     The new value is built before anything is committed, so an intent that
     cannot apply leaves the history where it was rather than pushing a value
     the document never held.
 
+    The session's answer is passed straight back: an intent whose result equals
+    the document already held is dropped there (`Session.commit`), and a surface
+    that announced the edit anyway would be announcing a write that did not
+    happen. The present value is not returned because it is `session.project` to
+    anyone holding the session, and returning it made a dropped write and a real
+    one indistinguishable to every caller.
+
+    Returns:
+        Whether the document moved.
+
     Raises:
         KeyError: if the intent addresses something the document does not hold.
         ValidationError: if the result would not be a valid document.
     """
-    session.commit(intent.applied_to(session.project))
-    return session.project
+    return session.commit(intent.applied_to(session.project))

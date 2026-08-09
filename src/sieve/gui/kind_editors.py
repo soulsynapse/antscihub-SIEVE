@@ -100,9 +100,15 @@ class _Editor(QWidget):
         return False
 
     def _commit(self, value: Any) -> None:
-        """The gesture's whole output: one parameter, through the command layer."""
-        issue(self._session, SetParam(node_id=self._node_id, param=self._param, value=value))
-        self.edited.emit()
+        """The gesture's whole output: one parameter, through the command layer.
+
+        Announced only if it landed. A gesture that ends where the value already
+        was is dropped by the writer (`session/session.py`), and `edited` is what
+        the window re-plans and re-renders from — emitting it regardless would
+        put the graph's stale mark up for a document that has not moved.
+        """
+        if issue(self._session, SetParam(node_id=self._node_id, param=self._param, value=value)):
+            self.edited.emit()
 
 
 class RegionEditor(_Editor):

@@ -342,5 +342,5 @@ class ParamForm(QWidget):
         return self._widgets[name]
 
     def _edit(self, name: str, value: Any) -> None:
-        issue(self._session, SetParam(node_id=self._node_id, param=name, value=value))
-        self.edited.emit()
+        if issue(self._session, SetParam(node_id=self._node_id, param=name, value=value)):
+            self.edited.emit()

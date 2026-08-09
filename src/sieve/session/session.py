@@ -81,7 +81,7 @@ class Session:
     def can_redo(self) -> bool:
         return bool(self._future)
 
-    def commit(self, project: Project) -> None:
+    def commit(self, project: Project) -> bool:
         """`project` becomes the present value, if it is not already.
 
         A value equal to the present one is dropped whole: nothing appended,
@@ -95,6 +95,13 @@ class Session:
         untouched, because its stream is distinct values and every one of them
         is real.
 
+        **Whether the write took is the return value, because the drop is not
+        otherwise observable.** A caller that announced its edit regardless would
+        tell the rest of the window something happened that did not — a graph
+        marked stale and re-rendered for a document that has not moved. Reading
+        it back off the session instead would mean every caller re-deriving the
+        equality this method just computed.
+
         The redo branch is dropped: an edit made after an undo is a divergence,
         and keeping the abandoned side reachable would offer a redo that lands on
         a document the user has since edited away from.
@@ -102,12 +109,16 @@ class Session:
         The caller supplies the whole value, already built. That is the split
         with the intent layer above — it knows what a SetParam means, this knows
         only that a new document has arrived.
+
+        Returns:
+            Whether the document moved.
         """
         if project == self._present:
-            return
+            return False
         self._past.append(self._present)
         self._present = project
         self._future.clear()
+        return True
 
     def undo(self) -> Project:
         """Step back one value, or stay put at the bottom of the stack.

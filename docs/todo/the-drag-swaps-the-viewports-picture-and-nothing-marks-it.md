@@ -2,9 +2,9 @@
 title: The drag swaps the viewport's picture for the source, and the surface has no mark
 priority: normal
 phase: "7"
-status: deferred
-deferred_for: decision
-gated_on: whether the viewport gets a mark of its own for the interval it is showing the source instead of the watched node's output, or whether an unrendered frame at the right index is ruled not to be the thing VISION's honesty half calls stale
+status: open
+gated_on: nothing
+done_when: "uv run pytest tests/gui -q -k source_badge"
 opened: 2026-08-09
 ---
 
@@ -50,3 +50,25 @@ raise, so the answer should rule on all four causes at once rather than on the
 drag by itself. `the-viewport-shows-the-source-and-not-the-render.md` (done)
 settled that `_paint_viewport` is the single place the transport and the
 pipeline meet, which is where any mark would be decided.
+
+## 2026-08-09: ruled — the viewport gets the mark, over all four causes
+
+Kendrick took the mark, with the vocabulary that dissolves the fork's other
+half: the mark names *what is shown* ("source"), not "stale". A frame at the
+correct index is not temporally stale, so VISION's sentence is not narrowed —
+it gains a referent on this surface instead of losing its subject. One state,
+decided at `_paint_viewport`, on whenever the picture is not the watched
+node's current output: brief for a drag (release plus one settle render) and
+for the first render in flight, indefinite after a failed render — which is
+the honesty payoff, a failure no longer leaves plausible source frames up
+unmarked — and permanent for a node with no picture. `status`, `gated_on`,
+and `done_when` moved on that; the criterion is red at the ruling
+(`124 deselected`, exit 5).
+
+Two edges are the work's to settle, not re-decisions: whether the badge or
+the mockup's `NO_SURFACE_NOTE` owns the no-picture case (two chromes saying
+one thing would be a collision, and the referent's note predates this
+ruling), and whether the badge doubles as the settle render's
+progress-visible signal, which
+`findings/2026.08.09-the-settles-render-is-charged-to-a-ceiling-the-gui-does-not-publish.md`
+is adjacent to but does not rule.

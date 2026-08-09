@@ -67,7 +67,7 @@ from sieve.tools import discover
 
 SOURCE = "footage|1|2"
 
-BLOCKS, DETECTOR, NORMALIZED = "blocks", "detector", "norm"
+BLOCKS, DETECTOR, NORMALIZED, FLOW = "blocks", "detector", "norm", "flow"
 
 #: Big enough that `block_signal`'s grid has several cells and small enough that
 #: two hundred frames of it cost nothing.
@@ -178,6 +178,36 @@ def under_a_warmed_node() -> Pipeline:
     )
 
 
+def dense_flow() -> Pipeline:
+    """`farneback -> normalize`: the other two-frame estimator, served.
+
+    `block_signal`'s graph cannot stand in for this one. The two reach one frame
+    back for the same declared reason and by different arithmetic — a differenced
+    structure tensor against a pyramid of polynomial expansions — and what the
+    comparison is looking for is a state re-settled over the wrong predecessor,
+    which is a property of the estimator rather than of the declaration they
+    share. `normalize` below it for `under_a_warmed_node`'s reason: it declares
+    no warmup of its own, so every frame of lead-in behind it is its parent's.
+    """
+    return Pipeline(
+        nodes=(
+            Node(
+                node_id=FLOW,
+                tool_id="farneback",
+                version="1.0.0",
+                params={"winsize": 9, "levels": 2, "fps": 30.0},
+            ),
+            Node(
+                node_id=NORMALIZED,
+                tool_id="normalize",
+                version="1.0.0",
+                params={"mode": "zscore"},
+            ),
+        ),
+        edges=(Edge(upstream=FLOW, downstream=NORMALIZED),),
+    )
+
+
 @pytest.fixture(scope="module", autouse=True)
 def shelf() -> None:
     """The process-wide registry, populated. These are the real tools."""
@@ -229,8 +259,11 @@ OVER_THE_CHAIN = ServedCase(fill=NARROW, span=WIDE, pipeline=graph)
 #: filling one, which is what lets it notice an entry filed out of a lead-in.
 UNDER_A_WARMED_NODE = ServedCase(fill=WIDE, span=EARLIER, pipeline=under_a_warmed_node)
 
+#: `EARLIER` under a store filled from `WIDE`, over the dense-flow estimator.
+OVER_A_DENSE_FLOW = ServedCase(fill=WIDE, span=EARLIER, pipeline=dense_flow)
+
 #: The comparison the ADR admits a tool on, in every shape this file has one.
-SERVED_EQUALS_COLD = (OVER_THE_CHAIN, UNDER_A_WARMED_NODE)
+SERVED_EQUALS_COLD = (OVER_THE_CHAIN, UNDER_A_WARMED_NODE, OVER_A_DENSE_FLOW)
 
 
 def test_a_bounded_warmup_tool_served_from_the_store_equals_its_cold_run() -> None:

@@ -77,6 +77,7 @@ src/sieve/tools/checkpoint.py              # A checkpointed node's `.npy`, stand
 src/sieve/tools/crop.py                    # Take a region of every frame, with the whole frame as the identity value.
 src/sieve/tools/detect.py                  # Morlet band power, an in-band block count, and a centred detection gate.
 src/sieve/tools/downsample.py              # Reduce spatial resolution by an integer factor.
+src/sieve/tools/farneback.py               # Dense per-pixel optical flow speed, by Farneback polynomial expansion.
 src/sieve/tools/footage.py                 # A video file standing in the graph as a node with no upstream.
 src/sieve/tools/motion_history.py          # A causal leaky accumulator of per-block activity, with its neighbours.
 src/sieve/tools/normalize.py               # Per-frame contrast normalization: `off` or `zscore`.

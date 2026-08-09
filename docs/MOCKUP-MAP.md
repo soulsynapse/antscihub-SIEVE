@@ -26,6 +26,7 @@ its `src/sieve/gui` counterpart and was reshaped from there.
 | Settings is the right pane | Three sliding positions: project ⟷ pipeline ⟷ step. A card's → button selects that step and slides right; the step pane is caption card, generated form, guidance expander, in one scrolling column | `Control`, `_SlidingPanes`, `_settings_button`, `build_step_pane` |
 | Swap is a dropdown | The ⇄ button on the card opens a menu of what could stand at this position; the offering is keyed on the position's type signature, not declared by the tool standing there. No wizard, no dialog | `_swap_button`, `SWAPPABLE` |
 | Card verbs | Click selects (the same selection ↑/↓ moves); ◆ pins — one slot, pinning evicts; ✕ removes — the chain reads past the removed step (its readers inherit its inputs), and the walk and pin land on the step above; the project card opens on double-click | `ChainCard`, `_sources_of`, `Control.remove`, `_project_card` |
+| Adding a step | ADD STEP on the project card opens a box in the chain — card-shaped, card-numbered, dashed on two provisional edges, holding the offer for the gap it stands in. ↑/↓ move the box through the gaps and the offer rewrites with it, ←/→ walk the offer, enter takes it, esc closes. The gap under the output is not a position. What lands is spliced: the new step reads the gap's step and whatever read past the gap reads it | `_AddBox`, `_add_box`, `offer_after`, `add_node`, `Control.add_here`, `_ChainColumn.hold_box` |
 | The pinned step | One step held under the canvas at full width, detection by default; the slot re-fits to what natural height the step asks for; its card in the stack says where the surface went; steps with no plots state their surface in words | `PinnedStep`, `MockWindow._fit_pin`, `NO_SURFACE_NOTE` |
 | Project selector | The same stack surface as the pipeline — library card above, one `ChainCard` per project, selection accent, ↑/↓ move it, double-click enters. Not a platform list widget. The library card carries NEW PROJECT (mint an empty project, the selection lands on it without entering the pipeline) and the selected card alone carries OPEN LOCATION at its foot, both in the timeline button's dress | `build_project_pane`, `_project_card`, `_chrome_button`, `add_project`, `Control.new_project`, `_reveal_project` |
 | Hotkeys | ←/→ move the position (project/pipeline/step), ↑/↓ move whichever selection the position owns, P pins the current step; the rail shows only on pipeline and step | `MockWindow` shortcuts, `Control.go` |
@@ -53,12 +54,18 @@ its `src/sieve/gui` counterpart and was reshaped from there.
   from the position's signature, the write list from what the chain can
   emit — and the open questions about those derivations stay open
   (`docs/todo/the-offering-predicate-is-not-the-edge-legality-check.md`).
-- **Adding a tool.** The mockup has no affordance for it — a deliberate
-  gap, not a settlement, and the one place ADR 22's popup default does not
-  apply. VISION's add-tool box (the new-project scenario) is the binding
-  wording: a box below the last step holding what could go there, the offer
-  derived from what the source resolved to. What an offer is keyed on stays
-  open (`docs/todo/the-offering-predicate-is-not-the-edge-legality-check.md`).
+- **What an added step's form holds.** The box settles where a step is added
+  and what is offered there; the card it becomes has no knobs, because the
+  mockup writes those per position and a step that arrived at run time was
+  never one of them. The real form is generated from the tool's params
+  ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)), so
+  this is a mock limitation rather than a shape — the one card in the referent
+  whose form is empty instead of sampled.
+- **An offer that is empty.** Every stage in `SWAPPABLE` has entries, so the
+  referent never draws a position with nothing to stand in it. The tree's
+  first case is the other one
+  ([findings/2026.08.09-the-shelf-declares-too-little-for-eight-of-ten-positions-to-offer-anything.md](findings/2026.08.09-the-shelf-declares-too-little-for-eight-of-ten-positions-to-offer-anything.md)),
+  and what a box with an empty offer says is not settled here.
 - **The output step's file rows.** The `into` folder and the format combo
   on the output form arrived with no instruction behind them; the format
   choice in particular collides with `storage`'s one-format rule and will

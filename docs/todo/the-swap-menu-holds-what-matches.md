@@ -41,6 +41,27 @@ question the mock does not answer.
     119 deselected in 0.66s
     exit: 5
 
+## Folded 2026-08-09: the referent now has the box, and it is not at the foot
+
+The paragraph above says the add-tool box "renders the same shortlist at the
+foot of the stack". The mockup has it now and it does not stand there: ADD STEP
+on the project card opens a card-shaped box in whichever gap the walk is on,
+↑/↓ move it through the gaps, and the offer rewrites per position. The foot is
+where VISION's scenario stands, not what a position is — the derivation is the
+same at every gap, so a box fixed to the last one would be the same computation
+displayed at one of the places it applies. `MOCKUP-MAP.md` row "Adding a step"
+is the shape; `_AddBox`, `offer_after` and `add_node` are the referent's.
+
+Two things that changes for this item. The offering must be answerable for a
+gap that holds no tool, not only for a card that does — the referent keys both
+on the same stage signature, and `offered_tools` already takes the upstream's
+`emits` rather than anything about the tool standing there, so this is a
+naming question and not a second predicate. And the splice the box implies —
+the new step reads the gap's step, whatever read past the gap reads it — has no
+intent under it: `session/intents.py` has `RemoveNode` and
+`pipeline_model` has `without_node` with no counterpart, so the add site needs
+the inverse built before any surface can emit it.
+
 ## Ruled 2026-08-09 (Kendrick): the gate lifted, the item opens
 
 The deferral was on the offering predicate landing, and it has:

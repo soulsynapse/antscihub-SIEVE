@@ -29,6 +29,13 @@ not a screen beside it, so the write list is that step's param and the edges
 into its card are what is ticked. The save position went with it — a pane whose
 whole content was one step's form is that step's form.
 
+`_AddBox` is the fifth, and it is the gap ADR 22 carved out of its own popup
+default: a step that is not one yet, opened into the chain by the project
+card's ADD STEP and moved through it with the same ↑/↓ that move the walk.
+VISION's add-tool box is "below the last step" because that is where its
+scenario stands; what a position *is* does not change further up, so the box
+goes wherever the chain has a gap, and the offer it holds is the position's.
+
 Run: `uv run python mockup/mockup.py`
 """
 
@@ -75,6 +82,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -202,7 +210,15 @@ REMOVED: set[int] = set()
 
 
 def live_nodes() -> list[int]:
-    return [index for index in range(len(NODES)) if index not in REMOVED]
+    """The chain in the order the stack draws it, which is the stages' order.
+
+    Not `range(len(NODES))`: an added step is appended to `NODES` so that no
+    existing position moves, and where it *stands* is which stage's members it
+    was spliced into. The two agreed until a step could be added; taking the
+    order from the stages is what keeps the rail's ticks, the walk's ↑/↓, and
+    the numbers on the cards saying the same thing about where a step is.
+    """
+    return [index for _name, _chip, members in STAGES for index in members if index not in REMOVED]
 
 
 # VISION: the slot under the canvas holds the detection step until the user
@@ -243,6 +259,57 @@ SWAPPABLE = {
     "detection": ["windowed count", "threshold crossings"],
     "output": ["output", "event table", "labelled clips"],
 }
+
+def stage_after(site: int) -> int:
+    """Which stage a step added after `site` would stand in.
+
+    A gap inside a stage's run belongs to that stage; the gap at its foot is
+    the next stage's first position. That is the whole rule, and it is what
+    makes the offer under the source the spatial tools VISION's scenario names
+    rather than a second source — the source's stage is a stage of one, so the
+    only gap it has is its last.
+    """
+    holder = next(i for i, (_n, _c, members) in enumerate(STAGES) if site in members)
+    live = [member for member in STAGES[holder][2] if member not in REMOVED]
+    return holder if site != live[-1] else min(holder + 1, len(STAGES) - 1)
+
+
+def offer_after(site: int) -> list[str]:
+    """What could stand in the gap under `site`: the position's signature.
+
+    The same derivation the ⇄ menu runs, asked of a position that has no tool
+    in it yet — which is why adding and swapping are one question here and not
+    two. `SWAPPABLE` stands in for it (the tool lists are sample data), but
+    what it stands in for is keyed on the stage's `in -> out` chip and never on
+    the tool above the gap.
+    """
+    return SWAPPABLE[STAGES[stage_after(site)][0]]
+
+
+def add_node(site: int, tool: str) -> int:
+    """Splice a step into the gap under `site`, and hand back where it landed.
+
+    Appended to `NODES` rather than inserted, for the reason `REMOVED` exists:
+    every table here is keyed by position, and an insertion that renumbered
+    would have to rewrite all of them to say what adding one step means. What
+    it means is the inverse of `_sources_of` — the new step reads what the gap
+    reads and whatever read past the gap now reads it, which is `without_node`
+    run backwards. The output is exempt: its inputs are the ticked products
+    (`refresh_output_inputs`), so a step spliced above it does not steal them.
+    """
+    index = len(NODES)
+    NODES.append((f"{tool.replace(' ', '-')}-{index}", tool))
+    INPUTS[index] = (site,)
+    for dst, sources in list(INPUTS.items()):
+        if dst not in (index, _OUTPUT_INDEX) and site in sources:
+            INPUTS[dst] = tuple(index if src == site else src for src in sources)
+
+    stage = stage_after(site)
+    name, chip, members = STAGES[stage]
+    at = members.index(site) + 1 if site in members else 0
+    STAGES[stage] = (name, chip, members[:at] + (index,) + members[at:])
+    return index
+
 
 GUIDANCE = {
     "source-1": (
@@ -2440,7 +2507,11 @@ def _knobs_for(index: int, on_source_change=lambda: None) -> list[tuple[str, QWi
         8: lambda: [],
         9: lambda: [("D", _int_spin(12))],
         10: lambda: [("writes", _dim_label(_writes_summary()))],
-    }[index]()
+        # An added step has none: the mock's knobs are written per position and
+        # a step that arrived at run time was never one of them. The real form
+        # is generated from the tool's params, so this is the one thing the
+        # referent cannot show about a step it just made.
+    }.get(index, list)()
 
 
 def _plots_for(index: int) -> list[QWidget]:
@@ -2730,6 +2801,108 @@ class _CropFan(QWidget):
         painter.end()
 
 
+#: The box's key in `_ChainColumn.cards`, so the two edge painters reach it the
+#: way they reach a card. Negative because every real key is a position.
+_ADD_SLOT = -2
+
+#: How many offers stand in a row before the next one wraps. The stage with the
+#: most of them is spatial prep, and a single row of those is wider than the
+#: pane the stack is half of.
+_OFFER_COLUMNS = 3
+
+
+class _AddBox(ChainCard):
+    """The step that is not one yet: where it would go, and what could fill it.
+
+    Card-shaped and card-numbered, standing in the chain rather than beside it,
+    because the question it is asking is *which position* — and a panel in the
+    chrome asking that would have to name the position in words the stack is
+    already drawing. Dashed for the same reason its edges are: nothing has been
+    written, and the solid chain under it is still what the project holds.
+
+    It does not build its own contents. The offer is the position's
+    (`offer_after`), and which of them is lit is the pane's state, so the box
+    is rebuilt as the site moves rather than holding a selection of its own —
+    the same reason the cards are rebuilt when the walk does.
+
+    A `ChainCard` so the column's edge painters reach it by the one path they
+    reach everything: `cards[_ADD_SLOT].geometry()`. It takes no selection —
+    the walk cannot stand on a step that does not exist.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(selected=False, parent=parent)
+
+    def paintEvent(self, event) -> None:
+        del event
+        painter = QPainter(self)
+        fill = QColor(ACCENT)
+        fill.setAlpha(14)
+        painter.fillRect(self.rect(), PANEL)
+        painter.fillRect(self.rect(), fill)
+        pen = QPen(ACCENT, 1)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        painter.end()
+
+
+def _offer_button(name: str, lit: bool, on_take) -> QPushButton:
+    """One offer. The chrome dress, with the lit one wearing the accent."""
+    button = _chrome_button(name, f"Add {name} at this position")
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    # Its own width, not a third of the box's: the offering is a set of names
+    # and a grid of equal bars would be reading as a set of slots.
+    button.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+    if lit:
+        button.setStyleSheet(
+            button.styleSheet()
+            + f"""
+            QPushButton {{
+                border-color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});
+                color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});
+            }}
+            """
+        )
+    button.clicked.connect(lambda: on_take(name))
+    return button
+
+
+def _add_box(site: int, number: int, offer: int, on_take) -> _AddBox:
+    box = _AddBox()
+    layout = QVBoxLayout(box)
+    layout.setContentsMargins(8, 6, 8, 8)
+    layout.setSpacing(4)
+
+    head = QHBoxLayout()
+    title = _title_label(f"{number}. new step")
+    title.setStyleSheet(f"color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});")
+    head.addWidget(title)
+    head.addStretch(1)
+    # What the splice does, in the two names the picture cannot show until it
+    # happens: the box reads one step and is read by whatever read past it.
+    readers = [NODES[dst][0] for dst in live_nodes() if site in _sources_of(dst)]
+    reads = f" · {', '.join(readers)} would read it" if readers else ""
+    head.addWidget(_dim_label(f"after {NODES[site][0]}{reads}"))
+    layout.addLayout(head)
+
+    names = offer_after(site)
+    grid = QGridLayout()
+    grid.setContentsMargins(0, 2, 0, 0)
+    grid.setSpacing(4)
+    for position, name in enumerate(names):
+        grid.addWidget(
+            _offer_button(name, position == offer % len(names), on_take),
+            position // _OFFER_COLUMNS,
+            position % _OFFER_COLUMNS,
+        )
+    grid.setColumnStretch(_OFFER_COLUMNS, 1)
+    layout.addLayout(grid)
+    layout.addWidget(_dim_label("↑↓ move the box · ←→ the offer · enter takes it · esc cancels"))
+    return box
+
+
 class _ChainColumn(QWidget):
     """The stack's column, with the chain's edges drawn under its cards.
 
@@ -2746,6 +2919,8 @@ class _ChainColumn(QWidget):
         self._lanes = _lanes()
         self.cards: dict[int, ChainCard] = {}
         self.fan: _CropFan | None = None
+        #: The open add box and the gap it stands in, or `-1` for no box.
+        self.box_site = -1
         # Which region is selected moves an arrowhead here, so this repaints on
         # the same notification the canvas and the spin boxes do.
         watch_crop(self, self.update)
@@ -2757,11 +2932,49 @@ class _ChainColumn(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         for src, dst in _edges():
             if src in self.cards and dst in self.cards:
+                # The edges out of the gap's step are not drawn while a box
+                # stands in it: what is on screen has to be one chain, and a
+                # solid line running past the box beside the dashed pair that
+                # replaces it would be the picture saying both.
+                if src == self.box_site:
+                    continue
                 if src == _CROP_INDEX and self.fan is not None:
                     self._paint_fanned_edge(painter, src, dst)
                 else:
                     self._paint_edge(painter, src, dst)
+        if self.box_site >= 0:
+            self._paint_provisional(painter)
         painter.end()
+
+    def _paint_provisional(self, painter: QPainter) -> None:
+        """The two edges the box would be spliced on, dashed because it is not.
+
+        Out of the gap's step into the box, and out of the box into whatever
+        read past the gap — which is `_sources_of` inverted, and the picture of
+        what taking an offer would write.
+        """
+        if self.box_site == _CROP_INDEX and self.fan is not None:
+            self._paint_fanned_edge(painter, self.box_site, _ADD_SLOT, dashed=True)
+        else:
+            self._paint_edge(painter, self.box_site, _ADD_SLOT, dashed=True)
+        for dst in live_nodes():
+            if dst in self.cards and self.box_site in _sources_of(dst):
+                self._paint_edge(painter, _ADD_SLOT, dst, dashed=True)
+
+    def hold_box(self, site: int, box: _AddBox) -> None:
+        """Give the box a position, so the edge painters reach it as a card.
+
+        Its lanes are the site's own: the box stands where that step's output
+        already ran, and an edge that moved sideways to enter it would be
+        saying the chain had been rerouted rather than interrupted.
+        """
+        self.box_site = site
+        self.cards[_ADD_SLOT] = box
+        lane = min((lane for (src, _), lane in self._lanes.items() if src == site), default=0)
+        self._lanes[(site, _ADD_SLOT)] = lane
+        for dst in live_nodes():
+            if site in _sources_of(dst):
+                self._lanes[(_ADD_SLOT, dst)] = lane
 
     def trunk_x(self, src: int) -> float:
         """Where `src`'s outgoing edge runs, in the x of any row beside its card.
@@ -2772,9 +2985,16 @@ class _ChainColumn(QWidget):
         lanes = [lane for (source, _), lane in self._lanes.items() if source == src]
         return _lane_x(0.0, min(lanes, default=0))
 
-    def _pen_for(self, src: int, dst: int) -> tuple[QColor, float]:
-        live = self._current in (src, dst)
-        return QColor(ACCENT if live else EDGE), 1.4 if live else 1.0
+    def _pen_for(self, src: int, dst: int, dashed: bool = False) -> tuple[QColor, float]:
+        live = dashed or self._current in (src, dst)
+        return QColor(ACCENT if live else EDGE), 1.4 if live and not dashed else 1.0
+
+    @staticmethod
+    def _stroke(color: QColor, width: float, dashed: bool) -> QPen:
+        pen = QPen(color, width)
+        if dashed:
+            pen.setStyle(Qt.PenStyle.DashLine)
+        return pen
 
     def _arrowhead(self, painter: QPainter, end: QPointF, color: QColor) -> None:
         painter.setPen(Qt.PenStyle.NoPen)
@@ -2789,14 +3009,14 @@ class _ChainColumn(QWidget):
             )
         )
 
-    def _paint_edge(self, painter: QPainter, src: int, dst: int) -> None:
+    def _paint_edge(self, painter: QPainter, src: int, dst: int, dashed: bool = False) -> None:
         above, below = self.cards[src].geometry(), self.cards[dst].geometry()
         x = _lane_x(above.left(), self._lanes[(src, dst)])
         start = QPointF(x, above.bottom() + 1)
         end = QPointF(x, below.top())
 
-        color, width = self._pen_for(src, dst)
-        painter.setPen(QPen(color, width))
+        color, width = self._pen_for(src, dst, dashed)
+        painter.setPen(self._stroke(color, width, dashed))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawLine(start, end)
         self._arrowhead(painter, end, color)
@@ -2809,7 +3029,9 @@ class _ChainColumn(QWidget):
                 QPointF(end.x() + _ARROW_W + 3, end.y() - _ARROW_H + 1), name
             )
 
-    def _paint_fanned_edge(self, painter: QPainter, src: int, dst: int) -> None:
+    def _paint_fanned_edge(
+        self, painter: QPainter, src: int, dst: int, dashed: bool = False
+    ) -> None:
         """Out of the crop card into every region, and on out of the one selected.
 
         One run across the gap and a vertical drop off it into each tile: what
@@ -2848,10 +3070,15 @@ class _ChainColumn(QWidget):
             self._arrowhead(painter, head, color if chosen else dim)
             painter.setBrush(Qt.BrushStyle.NoBrush)
 
+        # Only the way out is provisional when the box is what it reaches: crop
+        # cuts those regions whether or not a step is being added under them,
+        # so the arrows into the tiles stay the solid ones they are.
         out = tiles[SELECTED_CROP]
         end = QPointF(x, below.top())
         rejoin = end.y() - _FAN_STUB
-        painter.setPen(QPen(color, width))
+        if dashed:
+            color, width = self._pen_for(src, dst, dashed)
+        painter.setPen(self._stroke(color, width, dashed))
         painter.drawLine(
             QPointF(out.center().x(), out.bottom()), QPointF(out.center().x(), rejoin)
         )
@@ -2968,6 +3195,10 @@ def build_pipeline_pane(
     on_select,
     on_open,
     on_source_change,
+    adding: int = -1,
+    offer: int = 0,
+    on_add: object = None,
+    on_take: object = None,
 ) -> QWidget:
     pane = QWidget()
     pane.setStyleSheet(_stack_stylesheet())
@@ -2976,6 +3207,14 @@ def build_pipeline_pane(
     # it: the project, as the library card is above the project list.
     name, holds, _opened = PROJECTS[project]
     project_card = _fixed_card(f"project — {name}", holds)
+    # ADD STEP where NEW PROJECT is, and for the same reason: what mints into a
+    # container sits on the container's own card, not at the foot of the list
+    # it mints into. A gap is not a widget with a button on it, so the only
+    # place that is always there to press is here.
+    add = _chrome_button("ADD STEP", "Add a step to this chain — A")
+    if on_add is not None:
+        add.clicked.connect(on_add)
+    project_card.layout().addWidget(add)
 
     column = _ChainColumn(current)
     stack = QVBoxLayout(column)
@@ -2988,10 +3227,14 @@ def build_pipeline_pane(
     # The pinned step's plots are drawn once, below the canvas — its card keeps
     # the knobs and says where the surface went.
     order = live_nodes()
+    # The box counts as a step for numbering: it is standing in the chain, and
+    # the cards below it would move down by one if it were taken, so a number
+    # that skipped it would be telling the user the position is free.
+    below_box = order.index(adding) + 1 if adding >= 0 else len(order)
     cards: dict[int, ChainCard] = {
         index: _card(
             index,
-            number,
+            number + (1 if number > below_box else 0),
             current,
             NODES[index][1],
             _knobs_for(index, on_source_change),
@@ -3024,6 +3267,12 @@ def build_pipeline_pane(
             ):
                 column.fan = _CropFan(column.trunk_x(_CROP_INDEX))
                 stack.addWidget(column.fan)
+            # Below the fan when there is one: the box stands in the gap this
+            # step's output crosses, and the fan is the first thing in it.
+            if index == adding:
+                box = _add_box(index, below_box + 1, offer, on_take)
+                stack.addWidget(box)
+                column.hold_box(index, box)
     stack.addStretch(1)
 
     layout = QVBoxLayout(pane)
@@ -3294,6 +3543,14 @@ def build_step_form(node_id: str, on_source_change=lambda: None, on_writes_chang
     return form
 
 
+#: A step the user added has no written guidance here, and inventing one per
+#: tool would be inventing the shelf. The real pane reads the tool's own.
+_ADDED_GUIDANCE = (
+    "Added to this position from what it offered. Its params generate this form "
+    "the way every other step's do — the mockup writes its knobs per position, "
+    "so this is the one card here whose form is empty rather than mocked."
+)
+
 _EXPANDER_BODY_HEIGHT = 200
 
 
@@ -3385,7 +3642,7 @@ def build_step_pane(
     inside = QVBoxLayout(column)
     inside.setContentsMargins(6, 6, 6, 6)
     inside.addWidget(build_step_form(node_id, on_source_change, on_writes_change))
-    inside.addWidget(GuidanceExpander(GUIDANCE[node_id]))
+    inside.addWidget(GuidanceExpander(GUIDANCE.get(node_id, _ADDED_GUIDANCE)))
     inside.addStretch(1)
 
     scroll = QScrollArea()
@@ -3414,6 +3671,11 @@ class Control(QWidget):
         self._current_node = len(NODES) - 1
         self._current_project = 0
         self._pinned = PINNED_DEFAULT
+        #: The gap the add box stands in, or `-1`, and which offer is lit. Held
+        #: here and not on the box: the box is rebuilt as the site moves, and a
+        #: widget that owned the state would be rebuilding what it was told.
+        self._adding = -1
+        self._offer = 0
         self.on_pinned_changed = lambda index: None
         self.on_current_changed = lambda index: None
         self.on_source_changed = lambda: None
@@ -3491,8 +3753,9 @@ class Control(QWidget):
         """
         if index == _SOURCE_INDEX or index in REMOVED:
             return
+        order = live_nodes()
+        above = order[order.index(index) - 1]
         REMOVED.add(index)
-        above = max(other for other in live_nodes() if other < index)
         unpinned = self._pinned == index
         unselected = self._current_node == index
         if unpinned:
@@ -3504,6 +3767,74 @@ class Control(QWidget):
             self.on_pinned_changed(self._pinned)
         if unselected:
             self.on_current_changed(self._current_node)
+
+    def adding(self) -> bool:
+        """Whether a box is standing in the chain waiting to be filled."""
+        return self._adding >= 0
+
+    def _slots(self) -> list[int]:
+        """The gaps a step can be added into: under every step but the last.
+
+        Under the output is not a gap — nothing reads past the foot of the
+        chain, so there is no position there to offer anything for. The refusal
+        is the surface's, the way the source's un-removability is.
+        """
+        return live_nodes()[:-1]
+
+    def add_here(self) -> None:
+        """Open a box under the walk, or take back the one that is open."""
+        if self.adding():
+            self.cancel_add()
+            return
+        slots = self._slots()
+        self._adding = self._current_node if self._current_node in slots else slots[-1]
+        self._offer = 0
+        self._rebuild_walk()
+
+    def cancel_add(self) -> None:
+        if not self.adding():
+            return
+        self._adding = -1
+        self._rebuild_walk()
+
+    def move_add(self, delta: int) -> None:
+        """↑/↓ while a box is open move the box, not the walk."""
+        slots = self._slots()
+        position = slots.index(self._adding) + delta
+        moved = slots[max(0, min(len(slots) - 1, position))]
+        if moved == self._adding:
+            return
+        # The lit offer does not travel: the new position's offering is a
+        # different list, and an index carried into it would light whatever
+        # happened to be third.
+        self._adding, self._offer = moved, 0
+        self._rebuild_walk()
+
+    def move_offer(self, delta: int) -> None:
+        """←/→ while a box is open walk its offers, not the panes."""
+        names = offer_after(self._adding)
+        if not names:
+            return
+        self._offer = (self._offer + delta) % len(names)
+        self._rebuild_walk()
+
+    def take_offer(self) -> None:
+        names = offer_after(self._adding)
+        if names:
+            self.add_step(self._adding, names[self._offer % len(names)])
+
+    def add_step(self, tool_site: int, tool: str) -> None:
+        """Fill the box: the chain grows a step and the walk lands on it.
+
+        On the new step rather than back where it was, for the reason removal
+        lands on the step above: what the user did was put something there, and
+        the next thing they will do is set it up.
+        """
+        index = add_node(tool_site, tool)
+        self._adding = -1
+        self._current_node = index
+        self._rebuild_walk()
+        self.on_current_changed(index)
 
     def move_walk(self, delta: int) -> None:
         order = live_nodes()
@@ -3597,6 +3928,10 @@ class Control(QWidget):
             self.select_node,
             self.open_settings,
             self.source_changed,
+            self._adding,
+            self._offer,
+            self.add_here,
+            lambda tool: self.add_step(self._adding, tool),
         )
 
     def _build_rail(self) -> NodeRail:
@@ -4073,6 +4408,10 @@ class MockWindow(QMainWindow):
             (Qt.Key.Key_Up, self.go_up),
             (Qt.Key.Key_Down, self.go_down),
             (Qt.Key.Key_P, self.pin_current),
+            (Qt.Key.Key_A, self.add_step),
+            (Qt.Key.Key_Return, self.take_offer),
+            (Qt.Key.Key_Enter, self.take_offer),
+            (Qt.Key.Key_Escape, self.control.cancel_add),
         ):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.setAutoRepeat(False)
@@ -4122,14 +4461,44 @@ class MockWindow(QMainWindow):
         if self.control.current_position() in (_POS_PIPELINE, _POS_STEP):
             self.control.pin(self.control.current_node())
 
+    def add_step(self) -> None:
+        """A: open a box in the chain, or take back the one that is open.
+
+        On the pipeline alone, where the box is a row of the stack. The other
+        positions would be growing a chain out of sight — and P is bound on
+        both because pinning is a step's property wherever you are standing,
+        while a gap only exists in the picture of the gaps.
+        """
+        if self.control.current_position() == _POS_PIPELINE:
+            self.control.add_here()
+
+    def take_offer(self) -> None:
+        if self.control.adding():
+            self.control.take_offer()
+
     def go_back(self) -> None:
+        if self.control.adding():
+            self.control.move_offer(-1)
+            return
         self.control.go(max(0, self.control.current_position() - 1))
 
     def go_forward(self) -> None:
+        if self.control.adding():
+            self.control.move_offer(+1)
+            return
         self.control.go(min(_POS_LAST, self.control.current_position() + 1))
 
     def _move_selection(self, delta: int) -> None:
-        """↑/↓ move whichever selection the position in view owns."""
+        """↑/↓ move whichever selection the position in view owns.
+
+        An open box owns them outright: it is a position in the chain that the
+        walk cannot stand on, so while it is up the arrows move it and nothing
+        else — which is the same rule as the rest of this, one selection per
+        pair of keys, with the box counted as the selection while it exists.
+        """
+        if self.control.adding():
+            self.control.move_add(delta)
+            return
         position = self.control.current_position()
         if position in (_POS_PIPELINE, _POS_STEP):
             self.control.move_walk(delta)

@@ -26,10 +26,11 @@ take them is the caller's, because only a caller knows what else it has promised
 that node's output to. `cli/run_cmd.py` is the one that takes it today.
 
 **Two kinds of file, one module.** `resolve` answers which file the *footage*
-resolves to; `picked_identities` answers which file each root that reads its own
-resolves to. They are here together because a run needs both before it is keyed
-and because both are the same question — what is this run actually reading —
-asked of the two ways a node can come by frames.
+resolves to; `source_files` answers which file each root that reads its own
+resolves to, and `picked_identities` turns that into what the keys want. They
+are here together because a run needs both before it is keyed and because both
+are the same question — what is this run actually reading — asked of the two
+ways a node can come by frames.
 
 **A plan-time route with a known expiry.**
 `adr/a-users-file-wires-in-like-any-other-input.md` settles that the substitution
@@ -70,7 +71,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sieve.core.pipeline_model import CropRecord, Pipeline, SourceSpan
-from sieve.core.tool_base import ParamsBase
+from sieve.core.tool_base import ParamsBase, SourceFileError
 from sieve.core.types import ROI, Frame, FrameIndex
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
@@ -248,7 +249,56 @@ def crop_roots(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[tuple[str, R
     )
 
 
-def picked_identities(dag: Dag, params: Mapping[str, ParamsBase]) -> dict[str, str]:
+def source_files(dag: Dag, params: Mapping[str, ParamsBase]) -> dict[str, Path]:
+    """The external file each source root reads, or every one that is not there.
+
+    **The derived list VISION's reviewer is owed, and it is derived on every
+    call.** A source tool is a root whose file is a path parameter, so the graph
+    already names every external file a run opens; a field on `Project`
+    repeating them would be a second copy that can disagree with the nodes it
+    describes and would need a migration this has nothing to migrate. A rewired
+    graph is answered for the moment it is rewired.
+
+    Nothing here knows what a picked file is. The tool resolves its own pattern
+    (`ToolSource.file`), which is what keeps `pipeline` from globbing a second
+    time and disagreeing, and what keeps this walk from branching on a tool id.
+
+    Every root is asked before any refusal is raised, because the promise is
+    that a reviewer with three unmounted inputs learns about three. `ToolSource.
+    file` refuses one file at a time and cannot know there is a second.
+
+    Args:
+        dag: The graph about to run.
+        params: Resolved parameters per node id — `plan.validated_params`, so a
+            replicate that deviated its own pattern resolves its own file.
+
+    Returns:
+        `node_id` to the file it reads, for the source roots only. `{}` for a
+        graph with no source tool, which owes nothing and is the shape every
+        project had before one existed.
+
+    Raises:
+        SourceFileError: naming every source root whose pattern names no file or
+            several, rather than the first. Raised rather than skipped: a run
+            that cannot say which file it is reading cannot be keyed *or*
+            executed, and the executor would reach the same refusal one decode
+            later — after the reviewer has waited for it.
+    """
+    files: dict[str, Path] = {}
+    faults: list[str] = []
+    for node in dag.source_roots:
+        spec = dag.specs[node.node_id]
+        assert spec.source is not None  # `source_roots` is defined by it
+        try:
+            files[node.node_id] = spec.source.file(params[node.node_id])
+        except SourceFileError as absent:
+            faults.append(f"{node.node_id}: {absent}")
+    if faults:
+        raise SourceFileError("\n".join(faults))
+    return files
+
+
+def picked_identities(files: Mapping[str, Path]) -> dict[str, str]:
     """What identifies each source root's file, for the run's keys.
 
     The other half of `resolve` — that one answers which file the *footage*
@@ -257,32 +307,23 @@ def picked_identities(dag: Dag, params: Mapping[str, ParamsBase]) -> dict[str, s
     there: a plan is derivable where nothing is mounted, and both of these stat
     a file.
 
-    Nothing here knows what a picked file is. The tool resolves its own pattern
-    (`ToolSource.file`), which is what keeps `pipeline` from globbing a second
-    time and disagreeing, and what keeps this walk from branching on a tool id.
+    Takes `source_files`' answer rather than re-walking the graph, so the file a
+    run is keyed on is the file it reported present. The two questions a run
+    start asks of an external input — is it there, and is it the one that was
+    recorded (`Project.check_input_hashes`) — read from that same walk for the
+    same reason.
 
     Args:
-        dag: The graph about to run.
-        params: Resolved parameters per node id — `ExecutionPlan.params`, so a
-            replicate that deviated its own pattern resolves its own file.
+        files: `source_files`' mapping of source root to the file it reads.
 
     Returns:
-        `node_id` to `cache_key.source_identity`, for the source roots only.
-        Hand it to `ExecutionPlan.build` as `picked`.
+        `node_id` to `cache_key.source_identity`. Hand it to
+        `ExecutionPlan.build` as `picked`.
 
     Raises:
-        SourceFileError: if any source root's pattern names no file or several.
-            Raised rather than skipped: a run that cannot say which file it is
-            reading cannot be keyed *or* executed, and the executor would reach
-            the same refusal one decode later.
-        OSError: if the file resolves and then cannot be statted.
+        OSError: if a file that resolved cannot then be statted.
     """
-    identities: dict[str, str] = {}
-    for node in dag.source_roots:
-        spec = dag.specs[node.node_id]
-        assert spec.source is not None  # `source_roots` is defined by it
-        identities[node.node_id] = source_identity(spec.source.file(params[node.node_id]))
-    return identities
+    return {node_id: source_identity(file) for node_id, file in files.items()}
 
 
 def crop_bound(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[str, ROI] | None:

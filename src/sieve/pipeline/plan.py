@@ -121,6 +121,33 @@ from sieve.pipeline.dag import Dag, InvalidParamsError
 SOURCE_FRAME_ZERO = FrameIndex(0)
 
 
+def validated_params(dag: Dag, replicate: Replicate | None = None) -> dict[str, ParamsBase]:
+    """Every node's resolved parameters, as its tool's own model.
+
+    `pipeline_model.resolved_params` merges the override; this is that merge
+    validated against the registry, which is the form everything downstream of a
+    document takes parameters in. Module-level rather than folded into `build`
+    because a run start asks the same question before it has a plan — which file
+    each source root's path parameter names, so a missing one is reported before
+    anything is keyed (`resolve_source.source_files`) — and two spellings of the
+    merge-and-validate would be two answers to what a run computes.
+
+    Raises:
+        InvalidParamsError: if any node's resolved parameters are not valid for
+            its tool, naming that node — pydantic's own message names a field
+            and not the node it belongs to.
+    """
+    params: dict[str, ParamsBase] = {}
+    for node in dag.order:
+        try:
+            params[node.node_id] = dag.specs[node.node_id].params_model.model_validate(
+                resolved_params(node, replicate)
+            )
+        except ValidationError as invalid:
+            raise InvalidParamsError(node.node_id, invalid) from invalid
+    return params
+
+
 @dataclass(frozen=True, slots=True)
 class ExecutionPlan:
     """One run of one graph, over one span, for one replicate.
@@ -210,14 +237,7 @@ class ExecutionPlan:
                 than it is, and the message names the ranges that disagree so the
                 reader can see which one to move.
         """
-        params: dict[str, ParamsBase] = {}
-        for node in dag.order:
-            try:
-                params[node.node_id] = dag.specs[node.node_id].params_model.model_validate(
-                    resolved_params(node, replicate)
-                )
-            except ValidationError as invalid:
-                raise InvalidParamsError(node.node_id, invalid) from invalid
+        params = validated_params(dag, replicate)
         lookahead = _fold(dag, params, _input_lookahead_frames)
         answerable, dropped = _within_footage(_selected(dag, params, span), lookahead, source_end)
         return cls(

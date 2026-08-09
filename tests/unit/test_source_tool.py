@@ -39,7 +39,7 @@ from sieve.core.types import ChannelSpec, Frame
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
 from sieve.pipeline.plan import ExecutionPlan
-from sieve.pipeline.resolve_source import picked_identities
+from sieve.pipeline.resolve_source import picked_identities, source_files
 from sieve.tools import discover
 from sieve.tools.pick import PickParams
 
@@ -124,15 +124,15 @@ def plan_for(directory: Path) -> ExecutionPlan:
         dag,
         source=SOURCE,
         span=SPAN,
-        picked=picked_identities(dag, _params(dag)),
+        picked=picked_identities(source_files(dag, _params(dag))),
     )
 
 
 def _params(dag: Dag) -> dict[str, object]:
     """Resolved params without a plan, since a plan is what needs them.
 
-    `ExecutionPlan.build` derives the same map; `picked_identities` is handed
-    that one in production. Here it would be a plan built to build a plan.
+    `ExecutionPlan.build` derives the same map; `source_files` is handed that
+    one in production. Here it would be a plan built to build a plan.
     """
     return {
         node.node_id: dag.specs[node.node_id].params_model.model_validate(node.params)
@@ -196,7 +196,7 @@ class TestTwoRootsAreOneGraph:
             )
         )
         plan = ExecutionPlan.build(
-            dag, source=SOURCE, span=SPAN, picked=picked_identities(dag, _params(dag))
+            dag, source=SOURCE, span=SPAN, picked=picked_identities(source_files(dag, _params(dag)))
         )
 
         results = list(execute(plan, RefusingSource()))
@@ -262,7 +262,7 @@ class TestThePatternResolvesToOneFileOrRefuses:
         dag = Dag.build(two_roots(tmp_path))
 
         with pytest.raises(SourceFileError) as refused:
-            picked_identities(dag, _params(dag))
+            source_files(dag, _params(dag))
 
         assert "monday_bg.png" in str(refused.value)
         assert "tuesday_bg.png" in str(refused.value)
@@ -278,7 +278,7 @@ class TestThePatternResolvesToOneFileOrRefuses:
         dag = Dag.build(two_roots(tmp_path))
 
         with pytest.raises(SourceFileError) as refused:
-            picked_identities(dag, _params(dag))
+            source_files(dag, _params(dag))
 
         assert PATTERN in str(refused.value)
 

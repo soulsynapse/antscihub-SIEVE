@@ -1,10 +1,15 @@
 """Schema v1: the saved document a run is reproducible from.
 
-Given this document and the source video it names, any executor — CLI, GUI, or
-a batch job on a cluster — performs the same run and writes the same files.
-That is the whole contract, and it is why nothing here may depend on anything
-that exists in only one of those three: no widget geometry, no zoom, no scrub
-position, no cache directory, no thread count. `extra="forbid"` throughout is
+Given this document, the source video it names, and the external files its
+nodes name, any executor — CLI, GUI, or a batch job on a cluster — performs the
+same run and writes the same files. The external files are in that sentence
+because a source tool is a root whose file is a parameter, so a project may read
+pictures the video knows nothing about; *which* files those are is derived from
+the graph and never recorded here (`pipeline/resolve_source.source_files`), and
+what is recorded is only `input_hashes`, the claim that the file found is the
+file that was meant. That is the whole contract, and it is why nothing here may
+depend on anything that exists in only one of those three: no widget geometry,
+no zoom, no scrub position, no cache directory, no thread count. `extra="forbid"` throughout is
 the machine-checked form of it — stashing front-end state in the artifact
 requires editing this file, which is the review the rule exists to force.
 
@@ -1141,8 +1146,8 @@ class Project(_Artifact):
         Args:
             files: The file each node actually resolved to, by node id. The run
                 start already walks its source roots to resolve exactly this
-                (`pipeline/resolve_source.picked_identities`), so the mapping is
-                a by-product of a walk that had to happen.
+                (`pipeline/resolve_source.source_files`), so the mapping is what
+                a walk that had to happen returns rather than a second one.
 
         Raises:
             ExternalInputChanged: naming every node whose file differs rather

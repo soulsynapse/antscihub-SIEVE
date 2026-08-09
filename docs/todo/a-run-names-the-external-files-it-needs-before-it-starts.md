@@ -1,6 +1,6 @@
 ---
 title: A run names the external files it needs before it starts, deriving the list from the graph
-status: open
+status: awaiting-review
 gated_on: nothing
 priority: normal
 phase: "03"

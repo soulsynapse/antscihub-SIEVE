@@ -36,6 +36,18 @@ records no span of its own (`adr/detector-is-a-node.md`) so a dry run needs
 `--frames`, and the plan it prints is unclamped at the trailing end, so a graph
 that reads ahead is described over a span a real run would narrow.
 
+**The external files are named before anything else happens.** VISION's
+reviewer is told by name what is missing before a run starts, and `_external_
+inputs` is where. The list is walked out of the graph rather than read off the
+document (`resolve_source.source_files`), so it cannot come to disagree with the
+nodes it describes; it runs beside the "source video is not where the project
+says" refusal above, before the container is opened and before any key is built,
+and it reports every absent input rather than the first. What it buys is naming
+and absence *plus* identity, which is one clause more than the derived list
+alone: a recorded `Project.input_hashes` entry is compared here too, so a file
+swapped for another at the matching name is refused rather than run over. A node
+the document records nothing about is still only named, not recognised.
+
 **A replicate is routed before it is planned, in two passes.** The source
 resolution v2 did per replicate — which written crop can serve this run, in
 whose frame numbering — is `pipeline/resolve_source.py`, and `_route` is the
@@ -73,23 +85,39 @@ refusal that has nothing to do with running a graph.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated
 
 import typer
 from pydantic import ValidationError
 
-from sieve.core.pipeline_model import Project, Replicate, Sink, SourceSpan
+from sieve.core.pipeline_model import (
+    ExternalInputChanged,
+    Project,
+    Replicate,
+    Sink,
+    SourceSpan,
+)
+from sieve.core.tool_base import SourceFileError
 from sieve.core.types import NO_FRAMES, FrameIndex
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoDecodeError, VideoReader
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
-from sieve.pipeline.dag import Dag, GraphError
+from sieve.pipeline.dag import Dag, GraphError, InvalidParamsError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
-from sieve.pipeline.plan import ExecutionPlan
-from sieve.pipeline.resolve_source import ResolvedSource, crop_bound, elided, resolve
+from sieve.pipeline.plan import ExecutionPlan, validated_params
+from sieve.pipeline.resolve_source import (
+    ResolvedSource,
+    crop_bound,
+    elided,
+    picked_identities,
+    resolve,
+    source_files,
+)
 from sieve.pipeline.source_home import SourceHome
 from sieve.storage.checkpoint_writer import CheckpointWriteError, CheckpointWriter
 from sieve.tools import discover
@@ -134,6 +162,12 @@ def run_project(
     except OSError as error:
         raise refuse(f"source video is not where the project says: {video}") from error
 
+    targets = _targets(project)
+    try:
+        picked = _external_inputs(project, dag, targets)
+    except (SourceFileError, ExternalInputChanged, InvalidParamsError) as error:
+        raise refuse(str(error)) from error
+
     end = None if dry_run else footage_end(video)
     span = span_for(frames, end)
     home = SourceHome(video=video, project_dir=project_path.parent, identity=source)
@@ -143,8 +177,16 @@ def run_project(
     # traceback would be this command's only refusal a user cannot read.
     try:
         runs = [
-            _route(project, dag, home, span=span, replicate=target, source_end=end)
-            for target in _targets(project)
+            _route(
+                project,
+                dag,
+                home,
+                span=span,
+                replicate=target,
+                source_end=end,
+                picked=identities,
+            )
+            for target, identities in zip(targets, picked, strict=True)
         ]
     except ValueError as error:
         raise refuse(str(error)) from error
@@ -189,6 +231,79 @@ def frame_source(video: Path, *, luma: bool) -> PrefetchFrameSource:
     return PrefetchFrameSource(video, luma=luma)
 
 
+def _external_inputs(
+    project: Project, dag: Dag, targets: Sequence[Replicate | None]
+) -> tuple[dict[str, str], ...]:
+    """What every replicate's source roots read, checked before anything is keyed.
+
+    One walk, three readers. It answers what the run is owed and what is absent
+    (`resolve_source.source_files`), whether what is there is what the document
+    recorded (`Project.check_input_hashes`), and what identifies each file for
+    the keys (`resolve_source.picked_identities`) — a second walk would be a
+    second answer to which file this run reads, and the third reader is the one
+    that would have been keyed on it.
+
+    Per replicate rather than once, because a path parameter is an ordinary
+    parameter and a replicate may deviate it: an A/B of two backgrounds is that
+    deviation, which is the case VISION states.
+
+    The two refusals are ordered as the reports read, and each is complete
+    across the fan-out before the next runs: a missing file has no hash to
+    compare, so every absent input is named first, and only then is every
+    recorded input that changed named. Refusing the first replicate's absence
+    would leave a reviewer fixing one file per run.
+
+    Raises:
+        SourceFileError: naming every source root, in every replicate, whose
+            pattern names no file or several.
+        ExternalInputChanged: naming every recorded input that is not the file
+            that was recorded.
+        InvalidParamsError: if a replicate's resolved parameters are not valid
+            for their tool. Reached here rather than at the plan because this is
+            now the first thing that resolves them.
+        OSError: if a file that resolved cannot then be read or statted.
+    """
+    files: list[dict[str, Path]] = []
+    absent: list[str] = []
+    for target in targets:
+        try:
+            files.append(source_files(dag, validated_params(dag, target)))
+        except SourceFileError as error:
+            absent.append(f"{_label(target)}: {error}")
+    if absent:
+        raise SourceFileError("\n".join(absent))
+    changed = [
+        f"{_label(target)}: {error}"
+        for target, resolved in zip(targets, files, strict=True)
+        if (error := _recorded_fault(project, resolved)) is not None
+    ]
+    if changed:
+        raise ExternalInputChanged("\n".join(changed))
+    return tuple(picked_identities(resolved) for resolved in files)
+
+
+def _recorded_fault(project: Project, files: Mapping[str, Path]) -> ExternalInputChanged | None:
+    """`project`'s complaint about `files`, or `None` if it has none.
+
+    The exception caught and handed back so `_external_inputs` can collect one
+    per replicate; the rule itself is the model's and is not restated here.
+    """
+    try:
+        project.check_input_hashes(files)
+    except ExternalInputChanged as error:
+        return error
+    return None
+
+
+def _label(replicate: Replicate | None) -> str:
+    """What a replicate is called in output, the baseline included.
+
+    One spelling, because a refusal that named a replicate differently from the
+    line reporting its frames would be two names for one run.
+    """
+    return "baseline" if replicate is None else replicate.name
+
+
 def _route(
     project: Project,
     dag: Dag,
@@ -197,6 +312,7 @@ def _route(
     span: SourceSpan,
     replicate: Replicate | None,
     source_end: FrameIndex | None,
+    picked: Mapping[str, str] = MappingProxyType({}),
 ) -> tuple[ExecutionPlan, ResolvedSource]:
     """The plan one replicate runs, and the file it runs against.
 
@@ -212,11 +328,20 @@ def _route(
     not cover the read range, so nothing is clamped in practice and the argument
     is the honest one rather than the reachable one.
 
+    `picked` is this replicate's, and reaches both plans unchanged: eliding the
+    crop node moves no source root, and a root left out of it is a subtree that
+    recomputes on every run.
+
     Raises:
         ValueError: from either plan, for `run_project`'s reasons.
     """
     parent = ExecutionPlan.build(
-        dag, source=home.identity, span=span, replicate=replicate, source_end=source_end
+        dag,
+        source=home.identity,
+        span=span,
+        replicate=replicate,
+        source_end=source_end,
+        picked=picked,
     )
     bound = crop_bound(dag, parent.params)
     if bound is not None and bound[0] in project.checkpoints:
@@ -242,6 +367,7 @@ def _route(
             span=span,
             replicate=replicate,
             source_end=FrameIndex(resolved.record.span.end),
+            picked=picked,
         ),
         resolved,
     )
@@ -299,7 +425,7 @@ def _execute_one(
             if the footage cannot supply a frame the plan asked for, or if a
             declared checkpoint cannot be written whole.
     """
-    label = "baseline" if plan.replicate is None else plan.replicate.name
+    label = _label(plan.replicate)
     if not plan.warmed:
         typer.echo(
             f"{label}: warning — {plan.lead_in_shortfall.frames} of "
@@ -378,7 +504,7 @@ def _describe(plan: ExecutionPlan) -> str:
     user checks before committing a cluster to it — how much gets decoded that is
     not asked for, and which nodes will be looked up rather than computed.
     """
-    label = "baseline" if plan.replicate is None else plan.replicate.name
+    label = _label(plan.replicate)
     lines = [
         f"{label}: frames {plan.span.start}:{plan.span.end}, "
         f"decoding {plan.decode_range.start}:{plan.decode_range.stop} "

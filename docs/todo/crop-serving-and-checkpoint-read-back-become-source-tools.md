@@ -92,3 +92,24 @@ one root, because serving replaces the whole reader and the second root asked
 for whole frames. That clause is part of what retires here — a source tool
 wired to the crop node's place needs no `_route` and no count of roots — so the
 migration removes it rather than carrying it over.
+
+## 2026-08-09: the one-front-end gap now costs a key as well as a decode
+
+Folded from the run that landed the external-input walk at run start
+(`todo/a-run-names-the-external-files-it-needs-before-it-starts.md`). That walk
+resolves every source root's file and hands `ExecutionPlan.build` the `picked`
+identities that key those roots, and it is in `cli/run_cmd.py` and nowhere else:
+`pipeline/preview.py` and `cli/materialize_cmd.py` still build plans with no
+`picked`, so a source root in either is left out of `Dag.node_keys` and takes its
+whole subtree with it. That is the same "only one front end" gap the paragraph
+above names about serving, one layer down — and under this migration it stops
+being a gap about pickers and becomes one about crops, because a written crop
+*is* a source root here. A preview whose crop root is unkeyed recomputes the
+graph below it on every drag, which is the product constraint `CLAUDE.md` states
+rather than an efficiency note.
+
+Whether the fix is a shared run-start step the three front ends call or a
+`picked` argument each threads is this item's to settle, since it is the item
+that decides what a front end has to know about artifacts at all. Not minted
+separately for that reason: an item for "preview passes `picked`" would be
+answered by whichever shape this one picks.

@@ -36,3 +36,35 @@ about where its `source` came from, which is why it is not obviously the second.
 
 Not urgent: it costs sweep time and a reader's confusion, never a wrong reading
 of a cell that was actually taken.
+
+## Two of `bench/sweep.py`'s own guards have no case either (folded 2026-08-09, review of 47bf42c)
+
+The ported test file is faithful to v2 and two of the module's claims are
+unasserted in both trees, found by a six-mutant sweep over
+`src/sieve/bench/sweep.py` against `uv run pytest -q tests/unit/test_sweep.py`
+(4 killed, 2 survived). They land here because the fix is cases in
+`tests/unit/test_sweep.py`, which is the file this item's criterion already
+adds to.
+
+`process.cpu_affinity(original) ==> pass` SURVIVED — deleting the `finally`
+that unpins the process leaves all seven cases green, including
+`test_affinity_is_restored_when_the_objective_raises`, which is named for it.
+Every cell in the file pins to `available_cpu_ids()`, so the mask the sweep
+sets is the mask already in force and restoring is indistinguishable from not.
+The test module's docstring states this as a design constraint and it is a
+sound one — a suite that pinned itself to four cores would be what
+`bench/sweep.py` refuses — but the property is still checkable without ever
+changing a real mask, because `sweep` constructs its own `psutil.Process()`:
+a seam there, or `psutil.Process` patched in the module, lets a double record
+the restore. This is the more serious of the two; the guard exists because the
+failure is silent and outlives the run, and nothing would notice its removal.
+
+`return min(self.samples) ==> return max(self.samples)` SURVIVED — `Reading.best`
+and `Reading.typical` are argued apart at length in the docstring and no
+fixture holds two samples that differ, so `min`, `max` and `median` are
+interchangeable across the whole file. `curvature` reads `best` and
+`sweep_cmd` reports both, so the distinction is load-bearing in the report the
+command prints. One case with unequal samples closes it.
+
+Neither is a defect the port introduced; both are v2's, carried across intact
+(`findings/loop/2026.08.07-a-verbatim-test-port-inherits-the-blind-spots-of-the-file-it-ports.md`).

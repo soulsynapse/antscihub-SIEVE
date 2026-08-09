@@ -91,15 +91,27 @@ def crops_dir(video: Path, project_dir: Path) -> Path:
     return project_dir / f"{video.stem}{CROPS_SUFFIX}"
 
 
-def artifact_filename(name: str, fmt: CropFormat, span: SourceSpan) -> str:
-    """`<name slug>-<format>-<start>-<end>.mkv`.
+def artifact_filename(name: str, fmt: CropFormat, span: SourceSpan, region: ROI) -> str:
+    """`<name slug>-<format>-<start>-<end>-<x>x<y>-<w>x<h>.mkv`.
 
-    Convenience, never identity: two replicates named the same produce the same
-    stem, and what distinguishes their artifacts is the region on the record, so
-    the name is disambiguated on the way out rather than trusted on the way in.
+    The name is convenience and never identity — two replicates named the same,
+    or named nothing, produce the same slug — so every other component of the
+    record that a folder can hold is in the stem too, and the path is a pure
+    function of the record rather than of what the folder already contains. That
+    is what keeps two distinct cuts off one file
+    (`findings/2026.08.07-two-crops-of-one-name-and-span-write-one-file-and-backs-still-says-yes.md`)
+    while leaving one cut written twice on one file, which is `CropRecord.identity`'s
+    rule: the second write replaces the first rather than accumulating beside it.
+    A suffix counted off the folder would have satisfied the first and broken the
+    second.
+
+    `cut_from` is the one component absent, and the folder carries it instead:
+    artifacts live under the parent's stem, so a crop of a different source is
+    already elsewhere.
     """
     slug = _SLUG_STRIP.sub("-", name.lower()).strip("-") or "replicate"
-    return f"{slug}-{fmt}-{span.start}-{span.end}.mkv"
+    box = f"{region.x}x{region.y}-{region.width}x{region.height}"
+    return f"{slug}-{fmt}-{span.start}-{span.end}-{box}.mkv"
 
 
 def materialize_crop(
@@ -156,7 +168,7 @@ def materialize_crop(
 
     destination = crops_dir(video, project_dir)
     destination.mkdir(parents=True, exist_ok=True)
-    final = destination / artifact_filename(name, fmt, span)
+    final = destination / artifact_filename(name, fmt, span, region)
     part = final.with_name(f"{final.stem}.part.mkv")
 
     fed = _FedFrames()

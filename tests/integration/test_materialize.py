@@ -208,6 +208,44 @@ class TestAFileThatDoesNotReadBackIsRefused:
         assert not list(tmp_path.glob("**/*.mkv"))
 
 
+class TestTwoCutsThatShareANameAndSpan:
+    def test_two_regions_under_one_name_and_span_do_not_collide_on_one_file(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """Distinct cuts get distinct files, and the older record keeps telling the truth.
+
+        The verification pass cannot reach this: at the moment it runs the file
+        genuinely is what was fed to it, and the lie appears afterwards in the
+        *first* record, which nothing re-checks
+        (`findings/2026.08.07-two-crops-of-one-name-and-span-write-one-file-and-backs-still-says-yes.md`).
+        So what is asserted is the write, not the guard.
+
+        The two regions differ in size and not only in origin because
+        `synthetic_video` is spatially uniform
+        (`findings/2026.08.06-the-synthetic-fixture-identifies-frames-by-order.md`):
+        under it a read-back shape is the only thing that can tell one region's
+        pixels from another's.
+        """
+        other = ROI(x=0, y=0, width=32, height=24)
+
+        first = materialize_crop(
+            synthetic_video, ARENA, SPAN, name=NAME, project_dir=tmp_path, luma=True
+        )
+        second = materialize_crop(
+            synthetic_video, other, SPAN, name=NAME, project_dir=tmp_path, luma=True
+        )
+
+        assert first.identity() != second.identity()
+        assert first.path != second.path
+        for record, region in ((first, ARENA), (second, other)):
+            with VideoReader(record.resolve(tmp_path), luma=True) as reader:
+                assert (reader.metadata.width, reader.metadata.height) == (
+                    region.width,
+                    region.height,
+                )
+            assert record.backs(region, source=record.cut_from, luma=True, project_dir=tmp_path)
+
+
 class TestTheTwoCallbacksALongWriteOffers:
     def test_withdrawing_mid_write_reports_its_progress_and_leaves_no_part_file(
         self, synthetic_video: Path, tmp_path: Path

@@ -89,23 +89,30 @@ class Step:
 
 
 class ChainCard(QWidget):
-    """One card of the stack: panel fill, hairline edge, accent when current.
+    """One card of a stack: panel fill, hairline edge, accent when current.
 
     It paints its own background rather than taking the stack's sheet, because
     the sheet's `.QWidget` selector reaches exactly `QWidget` and not a subclass
     (`chrome.py`) — which is the arrangement that keeps the scrollbars the
     platform's, and this is the side of it that has to paint.
+
+    `on_open` is the pointer's Right, where the card has no arrow to carry it:
+    the project position hands one over (`project_select.py`) and the pipeline
+    position does not, because a step's arrow is a button on the card and a
+    second gesture for the same verb would be a second thing to explain.
     """
 
     def __init__(
         self,
         selected: bool,
         on_select: Callable[[], None] | None = None,
+        on_open: Callable[[], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._selected = selected
         self._on_select = on_select
+        self._on_open = on_open
         if on_select is not None:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -121,6 +128,13 @@ class ChainCard(QWidget):
         event.accept()
         self._on_select()
 
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        if self._on_open is None or event.button() != Qt.MouseButton.LeftButton:
+            super().mouseDoubleClickEvent(event)
+            return
+        event.accept()
+        self._on_open()
+
     def paintEvent(self, event: QPaintEvent) -> None:
         del event
         painter = QPainter(self)
@@ -130,7 +144,8 @@ class ChainCard(QWidget):
         painter.end()
 
 
-def _title(text: str) -> QLabel:
+def title_label(text: str) -> QLabel:
+    """A card's own name, in the colour a card's name is. Shared with `project_select.py`."""
     label = QLabel(text)
     label.setStyleSheet(f"color: {rgb(TEXT)};")
     return label
@@ -186,18 +201,19 @@ def _remove_button(removable: bool, on_remove: Callable[[], None]) -> QToolButto
     return button
 
 
-def _note(text: str) -> QLabel:
+def note_label(text: str) -> QLabel:
+    """A line about a card that is not its name. Shared with `project_select.py`."""
     label = QLabel(text)
     label.setStyleSheet(f"color: {rgb(DIM)};")
     return label
 
 
-def _fixed_card(title: str) -> ChainCard:
-    """The card that stands above the stack and does not scroll with it."""
+def fixed_card(title: str) -> ChainCard:
+    """The card that stands above a stack and does not scroll with it."""
     card = ChainCard(selected=False)
     row = QHBoxLayout(card)
     row.setContentsMargins(8, 6, 8, 6)
-    row.addWidget(_title(title))
+    row.addWidget(title_label(title))
     row.addStretch(1)
     return card
 
@@ -226,7 +242,7 @@ class PipelinePane(QWidget):
         super().__init__(parent)
         self.setStyleSheet(stack_stylesheet())
 
-        self.project_card = _fixed_card(f"project — {project}")
+        self.project_card = fixed_card(f"project — {project}")
         self.cards = tuple(
             self._build_card(
                 position,
@@ -281,7 +297,7 @@ class PipelinePane(QWidget):
         layout.setSpacing(4)
 
         head = QHBoxLayout()
-        head.addWidget(_title(f"{position + 1}. {step.node.tool_id}"))
+        head.addWidget(title_label(f"{position + 1}. {step.node.tool_id}"))
         head.addStretch(1)
         head.addWidget(_settings_button(lambda: on_open(position)))
         head.addWidget(_pin_button(position == pinned, lambda: on_pin(position)))
@@ -293,5 +309,5 @@ class PipelinePane(QWidget):
             # Handed over rather than chosen here: which of the three sentences
             # the pinned step gets is `pinned.card_note`'s, and the slot under
             # the canvas is filled from the same answer.
-            layout.addWidget(_note(pinned_note))
+            layout.addWidget(note_label(pinned_note))
         return card

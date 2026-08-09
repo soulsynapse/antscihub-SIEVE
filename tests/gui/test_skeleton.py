@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
+from tests.gui import driving
 
 _TOOLS = ("downsample", "crop", "detect")
 
@@ -62,8 +63,7 @@ def test_opens_a_project_and_walks_to_a_step(qapp, project_file: Path) -> None:
     assert window.session is None
     assert window.control.current_position() == "project"
 
-    select = window.control.project_select
-    select.list_widget.itemClicked.emit(select.list_widget.item(0))
+    driving.double_click(window.control.project_select.cards[0], 4.0, 4.0)
 
     assert window.session is not None
     assert window.session.path == project_file

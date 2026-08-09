@@ -1,7 +1,7 @@
 ---
 title: The project pane is the same stack with projects for cards
 step: "09.5"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k project_cards"
 opened: 2026-08-09

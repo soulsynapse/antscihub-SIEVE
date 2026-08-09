@@ -43,20 +43,17 @@ and the step position shows the one node the walk is on.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 
 from PySide6.QtCore import (
     Property,
     QAbstractAnimation,
     QEasingCurve,
     QPropertyAnimation,
-    Signal,
 )
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QWidget
 
 from sieve.core.pipeline_model import Node
-from sieve.gui.project_select import ProjectSelect
 from sieve.gui.rail import NodeRail
 from sieve.gui.step_pane import StepPane
 
@@ -156,18 +153,14 @@ class _SlidingPanes(QWidget):
 
 
 class Control(QWidget):
-    project_chosen = Signal(object)  # forwarded from the project position
-
-    def __init__(self, projects: Sequence[Path], parent: QWidget | None = None) -> None:
+    def __init__(self, project_select: QWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._rail = self._build_rail(node_count=0, current=0)
         self._rail.setVisible(False)
 
-        self._panes = _SlidingPanes(
-            [self._build_project_select(projects), QWidget(), QWidget(), QWidget()]
-        )
+        self._panes = _SlidingPanes([project_select, QWidget(), QWidget(), QWidget()])
 
         self._layout = QHBoxLayout(self)
         # The rail is a left gutter, so equal margins are not symmetric: the
@@ -185,10 +178,9 @@ class Control(QWidget):
         return self._rail
 
     @property
-    def project_select(self) -> ProjectSelect:
-        select = self._panes.pane(_POS_PROJECT)
-        assert isinstance(select, ProjectSelect)
-        return select
+    def project_select(self) -> QWidget:
+        """The project position's content: a `ProjectSelect` over the library."""
+        return self._panes.pane(_POS_PROJECT)
 
     @property
     def pipeline_pane(self) -> QWidget:
@@ -213,8 +205,16 @@ class Control(QWidget):
     def current_position(self) -> str:
         return POSITION_NAMES[self._panes.current_index()]
 
-    def show_project_select(self, projects: Sequence[Path]) -> None:
-        self._panes.replace_pane(_POS_PROJECT, self._build_project_select(projects))
+    def set_project_select(self, select: QWidget) -> None:
+        """Put `select` on the project position. Built by the caller, for `show_graph`'s reason.
+
+        Separate from the slide because the two happen apart: moving the
+        selection redraws the pane without going anywhere, and Left arrives at
+        a pane that has just been redrawn for the state it is arriving in.
+        """
+        self._panes.replace_pane(_POS_PROJECT, select)
+
+    def show_project_select(self) -> None:
         self._rail.setVisible(False)
         self._panes.set_current(_POS_PROJECT)
 
@@ -276,8 +276,3 @@ class Control(QWidget):
         policy.setRetainSizeWhenHidden(True)
         rail.setSizePolicy(policy)
         return rail
-
-    def _build_project_select(self, projects: Sequence[Path]) -> ProjectSelect:
-        select = ProjectSelect(projects)
-        select.project_chosen.connect(self.project_chosen)
-        return select

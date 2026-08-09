@@ -76,6 +76,24 @@ not two.
 case asserting that a rebuild leaves no new top-level widget is the part of this
 paragraph a criterion can hold.
 
+## Folded 2026-08-09 at 09.5: the suite is not green today, it is green sometimes
+
+"What keeps the suite green today is that every window but `test_skeleton.py`'s
+is closed by hand" is the sentence this item opens on, and it is measured false
+in the amendment dated 09.5 on the finding above. Five consecutive
+`uv run pytest tests/gui -q` on the pristine tree, nothing edited between them,
+abort twice with the same `0xC0000409` after every test has passed. The
+discipline did not remove the abort; it made it a per-run coin flip, which is
+why it reads as green — nobody runs the directory five times.
+
+What that changes about this item is its urgency and one of its constraints, not
+its subject. The urgency: a random abort is a CI red attributed to whatever
+commit was pushed, and no bisect finds it. The constraint: a case that "drops a
+player without closing its window and survives" cannot be judged by one run of
+itself, because a passing run is what the current tree already produces three
+times in five — whatever lands has to be checked over repeated runs, and the
+criterion as written does not say so.
+
 ## Widened 2026-08-09 at 09.4's review
 
 Taking the sentence above at its word: `done_when` now selects

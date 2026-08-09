@@ -9,7 +9,10 @@ survives every navigation; only its contents are replaced.
 nothing about being looked at; the track holds which position is showing and
 nothing about the graph. The index into `walk.node_order` belongs to neither
 and would be duplicated into both if it lived in one of them, so the window
-keeps it and hands it down on every redraw.
+keeps it and hands it down on every redraw. Which project the shelf's accent is
+on is held here too and for the same reason — it is a second selection, one
+position earlier, and Up and Down move whichever of the two the position showing
+is about (`go_up`).
 
 **Which step is pinned is here too, and it is not the walk.** The slot under the
 canvas holds one step's surface and the walk is somewhere else — that is what
@@ -90,7 +93,7 @@ from sieve.gui.pinned import (
     element_kinds,
     surface_note,
 )
-from sieve.gui.project_select import projects_in
+from sieve.gui.project_select import ProjectSelect, listings, projects_in
 from sieve.gui.save_screen import SaveScreen
 from sieve.gui.step_pane import StepPane
 from sieve.gui.timeline.bar import TimelineBar
@@ -205,6 +208,11 @@ class MainWindow(QMainWindow):
         self._elements: Mapping[str, ElementKind | None] = {}
         self._order: tuple[Node, ...] = ()
         self._at = 0
+        # Which project card wears the accent. The walk's number one position
+        # earlier, and held here for the same reason: a click on a card and an
+        # Up are two ways to move one number, and a widget that kept its own
+        # would be the second answer to which project is being looked at.
+        self._project_at = 0
         # Which step holds the slot under the canvas. `None` until a project is
         # open, and an index into `_order` after — one slot, so pinning is a
         # move of this number and eviction is what that means.
@@ -235,8 +243,7 @@ class MainWindow(QMainWindow):
 
         self._canvas = CanvasSlot(self._viewport)
         self._viewing = ViewingColumn(self._canvas, EmptySlot())
-        self._control = Control(self._projects)
-        self._control.project_chosen.connect(self.open_project)
+        self._control = Control(self._build_project_select())
         self.setCentralWidget(compose(self._viewing, self._control, self._timeline))
 
         bind_navigation_hotkeys(self)
@@ -346,6 +353,12 @@ class MainWindow(QMainWindow):
         self._tuning.close()
         self._source_extent = None
         self._source_frame = None
+        if path in self._projects:
+            # The accent follows what is open, so Left lands on a shelf whose
+            # selection is the project the user is in rather than wherever it
+            # was left. A path from outside the library moves nothing: there is
+            # no card for it to move to.
+            self._project_at = self._projects.index(path)
         self._session = Session.open(path)
         self._reread_graph()
         self._at = 0
@@ -385,7 +398,11 @@ class MainWindow(QMainWindow):
         elif position == "step":
             self._control.show_pipeline()
         elif position == "pipeline":
-            self._control.show_project_select(self._projects)
+            # Rebuilt on the way out rather than left as it was: a project saved
+            # since the shelf was last drawn has a different date on it, and the
+            # card is what says so.
+            self._control.set_project_select(self._build_project_select())
+            self._control.show_project_select()
 
     def go_forward(self) -> None:
         """Right: project select to pipeline, pipeline to step, step to save.
@@ -462,12 +479,49 @@ class MainWindow(QMainWindow):
         self._redraw()
 
     def go_up(self) -> None:
-        """Up: the previous node in the walk, or stay on the first."""
+        """Up: the previous card of whichever stack the position showing is.
+
+        Two selections exist at once — which project the shelf is on and where
+        the walk is — and the key moves the one the user is looking at. Moving
+        both would leave the walk somewhere the user never went, in a graph they
+        may not have opened yet.
+        """
+        if self._control.current_position() == "project":
+            self.select_project(self._project_at - 1)
+            return
         self._walk_to(self._at - 1)
 
     def go_down(self) -> None:
-        """Down: the next node in the walk, or stay on the last."""
+        """Down: the next card of whichever stack the position showing is."""
+        if self._control.current_position() == "project":
+            self.select_project(self._project_at + 1)
+            return
         self._walk_to(self._at + 1)
+
+    def select_project(self, index: int) -> None:
+        """Move the accent to project `index`, and open nothing.
+
+        Clamped rather than wrapped, for `_walk_to`'s reason. Nothing is read
+        off disk here beyond what redrawing the shelf reads: selecting is the
+        pointer's Up/Down, and a selection that opened a document would make
+        arrowing down a library the most expensive keystroke in the app.
+        """
+        if not self._projects:
+            return
+        self._project_at = max(0, min(index, len(self._projects) - 1))
+        self._control.set_project_select(self._build_project_select())
+
+    def enter_project(self, index: int) -> None:
+        """A project card's double click: select it, then open it and slide.
+
+        Both halves, in `_open_step`'s order and for its reason — arriving at
+        the pipeline position without having moved the selection would open
+        whichever project the accent was on before.
+        """
+        if not self._projects:
+            return
+        self.select_project(index)
+        self.open_project(self._projects[self._project_at])
 
     def refill_graph(self) -> None:
         """Redraw the trace for the document as it now stands.
@@ -486,6 +540,19 @@ class MainWindow(QMainWindow):
         self._tuning.request_refill(self._session.project.pipeline)
 
     # ---- internals -------------------------------------------------------
+
+    def _build_project_select(self) -> QWidget:
+        """The project position's content: a card per project file in the library.
+
+        Built here rather than in `control.py` for `_build_pipeline_pane`'s
+        reason — the track owns which position is showing and nothing about what
+        is on one — and rebuilt whole on every move of the selection, because
+        that is what the rest of the window does with a redraw.
+        """
+        select = ProjectSelect(listings(self._projects), self._project_at)
+        select.selected.connect(self.select_project)
+        select.opened.connect(self.enter_project)
+        return select
 
     def _reread_graph(self) -> None:
         """The three facts about the document's shape, taken together.

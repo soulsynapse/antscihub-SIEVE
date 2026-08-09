@@ -85,6 +85,20 @@ def click(widget: Any, x: float, y: float) -> None:
     drag(widget, (x, y), (x, y))
 
 
+def double_click(widget: Any, x: float, y: float) -> None:
+    """The second click of a double, on its own.
+
+    On its own because the press that precedes it in a real double selects, and
+    a handler that selects rebuilds the pane the card is in — so a caller that
+    wanted both gestures would be delivering the second one to a widget the
+    first has already replaced. A verb reached by double click has to carry the
+    selection itself, and driving this event alone is what says so.
+    """
+    from PySide6.QtCore import QEvent
+
+    widget.mouseDoubleClickEvent(_event(QEvent.Type.MouseButtonDblClick, x, y, held=True))
+
+
 def wheel(widget: Any, notches: int = -1) -> None:
     """`notches` wheel detents over `widget`, delivered as Qt delivers them.
 

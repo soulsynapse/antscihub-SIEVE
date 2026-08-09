@@ -89,3 +89,21 @@ things move on this item and neither is a defect in that commit:
   settled, the replicate lookup is one of the things that has to end up in one
   place. `Project.replicate` is the model's own lookup and neither command's
   name branch goes through it.
+
+## The trigger the new paragraph named has now fired, on both of its clauses
+
+Folded 2026-08-09, from 08.5 (`47bf42c`), which added `cli/sweep_cmd.py`.
+`run_cmd.py`'s rewritten paragraph names two triggers for the move — a fourth
+caller, or a refusal that has nothing to do with running a graph — and
+`sweep_cmd` is both at once. It imports `refuse` and nothing else from
+`run_cmd`, because it opens no project, builds no plan and runs no graph: what
+it refuses is an unparseable `--workers` list, a design with no cell in it, and
+a platform that will not pin a process. So the argument for leaving the
+vocabulary in `run_cmd` — that its callers are all running graphs and the
+module they import from is the one that does it — no longer describes the tree,
+and a bench command reaching into the run command for the word "refuse" is the
+shape this item exists to end.
+
+Nothing was moved by 08.5, deliberately: that item named two files, and adding
+a third would be the decision-riding-along-with-a-port its own second paragraph
+refuses.

@@ -1,6 +1,6 @@
 ---
 title: A served project has no way back to its crop node
-status: awaiting-review
+status: done
 gated_on: nothing
 priority: high
 phase: "05"

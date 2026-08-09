@@ -40,6 +40,25 @@ rule takes, the answer wants to cover all three at once, and this one is the
 cheapest to act on: it is promoted to a front end that reads it or cut with its
 cases.
 
+## A fourth, and it is a branch rather than a symbol
+
+`crop_serving.py`'s pair of edits each carry a no-fan-out branch — the one that
+writes the record into the node's own parameters, because there is no replicate
+to carry it — and no document can be in that state: `Project.with_crop` has one
+caller under `src/`, `materialize_replicate`, whose `--replicate` is required,
+so a project holding a crop record always has replicates
+([finding](../findings/2026.08.09-the-no-fan-out-half-of-the-serving-pair-cannot-be-reached-or-killed.md)).
+A mutation sweep disables either branch and the module's suite stays green.
+
+It widens the question the same way `linear_order` did rather than repeating
+it. The three above are symbols with a test and no caller; this is a branch
+with neither, inside a function every front end calls — so "cut it with its
+cases" has no cases to cut, and the reading that keeps it has to say what a
+replicate-less served project is for. `serving_edit`'s half has been in the
+tree since `b63f43f` and `unserving_edit`'s arrived in `ac29c6c` mirroring it,
+which is the right way to write an inverse; the answer that covers all four is
+still one answer.
+
 The consumer, when it arrives, is an onset time leaving the process: a CSV of
 detections wants its frame numbers corrected by this many frames, and the delay
 matters most against a centred window, which has none of its own — mixing the

@@ -28,7 +28,8 @@ case that forced the ADR — so a run asking for frames the file does not hold i
 a decode error naming the file (`tools/footage.py`). What replaces the clause is
 that `materialize_cmd` cuts the whole video's read range, so the file covers
 every narrower invocation, and the edit is reversible: the records stay in the
-document, so re-wiring the crop node back costs nothing but the edit.
+document, so re-wiring the crop node back costs nothing but the edit —
+`unserving_edit`, which is the one that performs it.
 
 **The records are not consumed.** `Project.crops` still holds them after the
 edit, because they are still where the files are and what they were cut from —
@@ -40,9 +41,17 @@ will be served. What changed is who acts on the answer.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from glob import escape
 
-from sieve.core.pipeline_model import CropRecord, Node, Pipeline, Project, Replicate
+from sieve.core.pipeline_model import (
+    CropRecord,
+    Node,
+    Pipeline,
+    Project,
+    Replicate,
+    resolved_params,
+)
 from sieve.core.tool_base import ParamsBase
 from sieve.core.types import ROI
 from sieve.pipeline.dag import Dag
@@ -56,6 +65,13 @@ from sieve.tools.crop import CropParams
 #: read it back find the node by `ToolSpec.source`, which is the kind.
 FOOTAGE_TOOL = "footage"
 FOOTAGE_VERSION = "1.0.0"
+
+#: What the reverse edit writes back. The version the node was replaced *at* is
+#: not in the document any more — `_wired` stamped `FOOTAGE_VERSION` over it — so
+#: an unserved node comes back at the version this build cuts with, which is the
+#: version a graph drawn today would carry.
+CROP_TOOL = "crop"
+CROP_VERSION = "1.0.0"
 
 
 def serving_edit(project: Project, home: SourceHome, *, dag: Dag | None = None) -> Project | None:
@@ -109,6 +125,110 @@ def serving_edit(project: Project, home: SourceHome, *, dag: Dag | None = None) 
             if target is not None  # every target is a replicate on this branch
         )
     )
+
+
+def unserving_edit(project: Project, home: SourceHome, *, dag: Dag | None = None) -> Project | None:
+    """`project` with each served `footage` node cut back into the crop it stood for.
+
+    The inverse of `serving_edit`, and the reason this module's header can call
+    that edit reversible: the records are not consumed, so the node's tool and
+    every replicate's box are still readable out of them.
+
+    **Read per node and per replicate rather than whole-document.** The offer is
+    all-or-nothing because a pipeline cannot be a crop for one arena and a
+    `footage` node for another; the way back has no such constraint, because
+    every state it has to undo was written by the forward edit and the forward
+    edit served every arena at once. What it must survive instead is the arena
+    that was drawn *after* — a replicate carrying a `region` override of a node
+    whose tool has no such parameter, which is the document that saves and then
+    fails every plan. That replicate resolves no `path`, so nothing here matches
+    it and its override is left exactly where the front end wrote it, valid
+    again the moment the node is a crop node.
+
+    `cut_from` is deliberately not matched, where `serving_edit` matches it: a
+    record that no longer backs anything — the parent was re-exported, the box
+    moved — is precisely the state a user needs the way out of, and a reverse
+    edit that declined for it would refuse the case it exists for.
+
+    Args:
+        project: The document to unwire, served or not.
+        home: What its records are read against; only `project_dir` is read, and
+            the whole value is taken so the pair of edits take one argument.
+        dag: The graph, if the caller already built it.
+
+    Returns:
+        The edited project, or `None` when no node in it is a written crop
+        standing where a crop node stood — an unserved project, or a folder of
+        files somebody else cut, which has no crop node to go back to.
+    """
+    graph = Dag.build(project.pipeline) if dag is None else dag
+    written = {escape(str(record.resolve(home.project_dir))): record for record in project.crops}
+    targets: tuple[Replicate | None, ...] = tuple(project.replicates) or (None,)
+    backing: dict[str, dict[str | None, CropRecord]] = {}
+    for node in graph.source_roots:
+        if node.tool_id != FOOTAGE_TOOL:
+            continue
+        for target in targets:
+            path = resolved_params(node, target).get("path")
+            record = written.get(path) if isinstance(path, str) else None
+            if record is not None:
+                backing.setdefault(node.node_id, {})[
+                    None if target is None else target.replicate_id
+                ] = record
+    if not backing:
+        return None
+    unwired = project.with_pipeline(_uncut(project.pipeline, backing))
+    if targets == (None,):
+        return unwired
+    return unwired.with_replicates(tuple(_undeviated(target, backing) for target in targets))
+
+
+def _uncut(pipeline: Pipeline, backing: Mapping[str, Mapping[str | None, CropRecord]]) -> Pipeline:
+    """`pipeline` with each node in `backing` turned back into a `crop` node.
+
+    Mirrors `_wired` on both counts: the node id and its edges survive, and the
+    node's own parameters carry the box only when there is no fan-out to carry
+    it — a fanned-out project's boxes differ per replicate, so the baseline goes
+    back to `crop`'s own default and `_undeviated` writes the pins.
+    """
+    return Pipeline(
+        nodes=tuple(
+            Node(
+                node_id=node.node_id,
+                tool_id=CROP_TOOL,
+                version=CROP_VERSION,
+                params=(
+                    {"region": asdict(backing[node.node_id][None].region)}
+                    if None in backing[node.node_id]
+                    else {}
+                ),
+            )
+            if node.node_id in backing
+            else node
+            for node in pipeline.nodes
+        ),
+        edges=pipeline.edges,
+    )
+
+
+def _undeviated(
+    replicate: Replicate, backing: Mapping[str, Mapping[str | None, CropRecord]]
+) -> Replicate:
+    """`replicate` pinning each unwired node's box again instead of its file.
+
+    `_deviated`'s inverse and its mirror image: the path and offset are dropped
+    rather than left beside the region, because they name parameters `crop` does
+    not have. A node this replicate was not served at is untouched — that is the
+    arena drawn after the edit, which already carries the override it needs.
+    """
+    undeviated = replicate
+    for node_id, records in backing.items():
+        record = records.get(replicate.replicate_id)
+        if record is not None:
+            undeviated = undeviated.without_override(node_id).with_override(
+                node_id, {"region": asdict(record.region)}
+            )
+    return undeviated
 
 
 def crop_roots(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[tuple[str, ROI], ...]:

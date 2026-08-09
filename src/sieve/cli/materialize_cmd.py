@@ -46,6 +46,12 @@ with a `footage` node over each. Before that it answers `None` and the document 
 saved with the record alone. Cutting one replicate per invocation is what makes
 that a real state rather than a formality.
 
+The unwiring is the same sentence read backwards and lands at the other end of
+the same call, in `_unwired`. A served project has no crop node, so cutting one
+would otherwise be impossible — no re-cut after the parent moves, no thirteenth
+arena on twelve — and the way out has to be the command that is already being
+asked for the state it produces.
+
 The refusals `load_project`, `refuse`, `span_for` and `footage_end` speak with are
 `run_cmd`'s own rather than respelled, as in `preview_cmd`: two commands refusing
 in two spellings would be two spellings of every error message a user sees.
@@ -64,7 +70,7 @@ from sieve.core.tool_base import SourceFileError
 from sieve.core.types import ROI
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
-from sieve.pipeline.crop_serving import crop_roots, serving_edit
+from sieve.pipeline.crop_serving import crop_roots, serving_edit, unserving_edit
 from sieve.pipeline.dag import Dag, GraphError
 from sieve.pipeline.materialize import (
     CropVerificationError,
@@ -102,17 +108,19 @@ def materialize_replicate(
     discover()
     project = load_project(project_path)
     video = project.source_path(project_path)
-    target = _target(project, replicate)
 
-    try:
-        dag = Dag.build(project.pipeline)
-    except GraphError as error:
-        raise refuse(str(error)) from error
     try:
         source = source_identity(video)
         end = footage_end(video)
     except (OSError, VideoDecodeError) as error:
         raise refuse(f"source video will not open: {video}: {error}") from error
+    home = SourceHome(video=video, project_dir=project_path.parent, identity=source)
+    project = _unwired(project, home)
+    target = _target(project, replicate)
+    try:
+        dag = Dag.build(project.pipeline)
+    except GraphError as error:
+        raise refuse(str(error)) from error
     # The whole video before the graph has its say, which is what `span_for`
     # answers with no `--frames` — and there is no `--frames` here, because which
     # frames are in the answer is the `span` tool's to declare and a flag would be
@@ -153,7 +161,6 @@ def materialize_replicate(
         raise refuse(f"could not write the crop: {error}") from error
 
     recorded = project.with_crop(record)
-    home = SourceHome(video=video, project_dir=project_path.parent, identity=source)
     wired = serving_edit(recorded, home, dag=dag)
     (recorded if wired is None else wired).save(project_path)
     written = record.resolve(project_path.parent)
@@ -163,6 +170,34 @@ def materialize_replicate(
             "every replicate is now backed by a written crop, so the crop node has been "
             "replaced by a read of each file — this project no longer decodes the parent"
         )
+
+
+def _unwired(project: Project, home: SourceHome) -> Project:
+    """`project` with any serving edit taken back out, or `project` unchanged.
+
+    Implicit rather than a flag or a second command, and this is the invocation
+    that decides it: asking to cut a served project is asking for the state in
+    which there is something to cut. A `--unserve` the user had to know to pass
+    would spell the refusal `_region` used to raise as an argument instead of a
+    sentence, and the answer to "how do I add a thirteenth arena" would still be
+    a hand edit of YAML.
+
+    It is not a mode the command leaves the document in. The wiring below runs on
+    the same invocation and re-takes the edit as soon as every replicate has a
+    file again, so the visible cost of a re-cut is a re-cut. Where it does not —
+    a parent that has been re-exported, so the other replicates' records no
+    longer back anything — the document is left unserved deliberately: those
+    files are stale, and a project that decodes the parent is the honest state to
+    leave someone in.
+    """
+    unwired = unserving_edit(project, home)
+    if unwired is None:
+        return project
+    typer.echo(
+        "this project was reading written crops, so the crop node has been wired back in "
+        "from the records it kept — it decodes the parent again until every replicate is cut"
+    )
+    return unwired
 
 
 def _picked(dag: Dag, target: Replicate) -> dict[str, str]:

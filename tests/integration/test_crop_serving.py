@@ -61,7 +61,7 @@ from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoReader
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import picked_key, source_identity, source_key
-from sieve.pipeline.crop_serving import serving_edit
+from sieve.pipeline.crop_serving import serving_edit, unserving_edit
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
 from sieve.pipeline.plan import ExecutionPlan, validated_params
@@ -292,6 +292,92 @@ class TestTheEditTheProjectHolds:
 
         assert project.pipeline.node(CUT).tool_id == "crop"
         assert project.crops, "the file was still written and recorded"
+
+
+class TestTheWayBackFromAServedProject:
+    """The reverse of the edit above, and the two states it is the way out of.
+
+    Taking the serving edit used to be one-way in the tree
+    (`findings/2026.08.09-a-served-project-cannot-grow-a-replicate-or-be-cut-again.md`):
+    a served project has no root crop node, so `sieve materialize` had nothing to
+    cut, and a thirteenth arena drawn on one carried a `region` override of a
+    node whose tool has no such parameter — a document that saved and then failed
+    every plan.
+
+    Both are the same missing edit rather than two bugs, which is why they share
+    a class: the records survive the substitution, so the crop node and every
+    replicate's box can be read back out of them.
+    """
+
+    def test_a_served_project_can_be_cut_again(self, synthetic_video: Path, tmp_path: Path) -> None:
+        """The reverse edit, and then a whole cut through the command that takes it.
+
+        The direct assertion first, because the round trip alone would pass for a
+        `materialize` that had merely learnt to skip the refusal: what
+        `unserving_edit` hands back is a *crop* node, and the box on it is the
+        one the record was cut at rather than the graph's `WHOLE_FRAME` default.
+
+        Then the round trip, which is what a user does. Cutting a served project
+        un-wires it, cuts, and wires it back, so the document is where it started
+        — the same node, the same file, the same one record — and the only thing
+        that moved is the artifact on disk.
+        """
+        path = _project(synthetic_video, tmp_path, replicates=(_replicate(),))
+        _cut(path)
+        served = Project.load(path)
+
+        reverted = unserving_edit(served, _home(served, path))
+
+        assert served.pipeline.node(CUT).tool_id == "footage"
+        assert reverted is not None
+        assert reverted.pipeline.node(CUT).tool_id == "crop"
+        assert reverted.params_for(CUT, "a") == {
+            "region": {"x": ARENA.x, "y": ARENA.y, "width": ARENA.width, "height": ARENA.height}
+        }
+        assert reverted.crops == served.crops, "the records are what it was read out of"
+
+        _cut(path)
+
+        again = Project.load(path)
+        assert again.pipeline.node(CUT).tool_id == "footage"
+        assert again.params_for(CUT, "a") == served.params_for(CUT, "a")
+        assert again.crops == served.crops
+
+    def test_a_replicate_added_to_a_served_project_runs(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """A thirteenth arena on twelve, at the scale the fixture affords.
+
+        The override the new replicate carries is a `region` on `CUT`, because
+        that is what a front end writes for an arena and it is written against a
+        document whose crop node is already gone. Cutting it is what makes it
+        runnable: the invocation un-wires the project, so `region` names a
+        parameter that exists again, and re-wires it once both arenas have files.
+
+        The run at the end is the assertion the item's criterion asks for rather
+        than a smoke test — before this, the document saved and every plan built
+        from it raised `extra_forbidden` on a field the user never typed.
+        """
+        path = _project(synthetic_video, tmp_path, replicates=(_replicate(),))
+        _cut(path)
+        served = Project.load(path)
+        grown = _replicate(OTHER, "Arena 2", "b")
+        served.with_replicates((*served.replicates, grown)).save(path)
+
+        _cut(path, "b")
+        result = runner.invoke(app, ["run", str(path), "--frames", f"{SPAN.start}:{SPAN.end}"])
+
+        assert result.exit_code == 0, result.output
+        after = Project.load(path)
+        assert after.pipeline.node(CUT).tool_id == "footage"
+        assert len(after.crops) == 2
+        assert after.params_for(CUT, "a") != after.params_for(CUT, "b"), "one file each"
+        answered = SPAN.frame_count
+        assert result.output.splitlines() == [
+            f"Arena {index + 1}: {answered} frames, {answered * 2} node outputs computed, "
+            "0 from cache"
+            for index in range(2)
+        ]
 
 
 class TestTheServedFramesAreTheFramesTheParentWouldHaveGiven:

@@ -10,11 +10,10 @@ SIEVE turns video into behavioral measurements using interpretable signal-proces
 
 ## Goals every decision is weighed against (Written by Kendrick 2026.08.09)
 
-- How the workflow feels and behaves to the user: Weighed against the mock up and the best of v2 (for what didn't make it to the mock up)
-- Tool speed-of-development, as stated in other sections of the vision
-- Ease of GUI adjustment, again in other sections of the vision
-- Transparency to user (a standing goal, it should be obvious to the user what they're doing)
-- Speed goals (the app needs to be snappy)
+- How the workflow feels and behaves to the user: weighed against the mock up ([MOCKUP-MAP.md](MOCKUP-MAP.md) reads it, and its second half is what the mock up deliberately leaves open; [adr/the-mockup-is-the-gui-end-state.md](adr/the-mockup-is-the-gui-end-state.md) is why it binds), and the best of v2 for whatever it does not reach ([V2-MAP.md](V2-MAP.md) — the decision, never the file)
+- Tool speed-of-development: the numbered features below, and [adr/a-tool-is-one-file.md](adr/a-tool-is-one-file.md) for the form that can be checked
+- Ease of GUI adjustment: the same features, the reshuffle paragraph under “Vision”, and [adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md) over the intent kinds [PLAN.md](PLAN.md)'s Phase 7 enumerates
+- Transparency to user (a standing goal, it should be obvious to the user what they're doing): the reviewer paragraph under “Vision” states it for what a run reads and writes, and the scope paragraph under “Two speed regimes” for what a slow answer still owes
 
 
 ## Two speed regimes

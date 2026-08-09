@@ -34,12 +34,13 @@ stacked (`step_pane.py`), and what space a drawn region is denominated in
 (`kind_editors.RegionEditor`) are four questions about the assembly, answered in
 the module each is a fact about and referred to from here.
 
-**Two edges have to be redrawn on every move of the walk**, and neither is
-incremental. The step pane is rebuilt because `param_form.py` reads the document
-once and never reads it back, and the composite-kind editors are rebuilt because
-they hang on the canvas and the band rather than on the pane — a walk that left
-the previous node's overlay on the viewport would be editing a parameter the user
-has moved off.
+**Three edges have to be redrawn on every move of the walk**, and none of them
+is incremental. The step pane and the card stack are rebuilt because
+`param_form.py` reads the document once and never reads it back — and both hold
+a generated form, so both go stale the same way. The composite-kind editors are
+rebuilt for a different reason: they hang on the canvas and the band rather than
+on a pane, and a walk that left the previous node's overlay on the viewport would
+be editing a parameter the user has moved off.
 
 Nothing here computes: opening a project reads a document, the order the graph
 walks in is `walk.py`'s, and every array in the window came out of
@@ -57,16 +58,19 @@ from typing import Any
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
-from sieve.core.pipeline_model import Node, Pipeline
+from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline
 from sieve.core.tool_base import ElementKind, ParamStereotype, ToolSpec
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
+from sieve.gui.chain_stack import PipelinePane
+from sieve.gui.chrome import darken_title_bar, window_stylesheet
 from sieve.gui.control import Control
 from sieve.gui.graph_panel import GraphPanel
 from sieve.gui.hotkeys import bind_navigation_hotkeys
 from sieve.gui.kind_editors import bind_editors
 from sieve.gui.layout import CanvasSlot, compose, size_window
+from sieve.gui.param_form import ParamForm
 from sieve.gui.project_select import projects_in
 from sieve.gui.save_screen import SaveScreen
 from sieve.gui.step_pane import StepPane
@@ -140,6 +144,8 @@ class MainWindow(QMainWindow):
     def __init__(self, projects: Sequence[Path], registry: ToolRegistry | None = None) -> None:
         super().__init__()
         self.setWindowTitle("SIEVE")
+        self.setStyleSheet(window_stylesheet())
+        darken_title_bar(self)
 
         self._projects = tuple(projects)
         self._registry = loaded_shelf() if registry is None else registry
@@ -402,7 +408,9 @@ class MainWindow(QMainWindow):
 
     def _redraw(self) -> None:
         """Both walk positions, the overlays, and which node the graph is about."""
-        self._control.show_graph(self._order, self._at, self._build_step())
+        self._control.show_graph(
+            self._order, self._at, self._build_pipeline_pane(), self._build_step()
+        )
         self._rebind_editors()
         node = self.current_node
         self._tuning.watch(None if node is None else node.node_id)
@@ -413,6 +421,46 @@ class MainWindow(QMainWindow):
         # showing the previous node's output: it says the picture is the source,
         # and that picture is a render — of a node the walk has left.
         self._paint_viewport()
+
+    def _build_pipeline_pane(self) -> QWidget:
+        """The pipeline position's content: a card per node of the walk.
+
+        The knobs on each card are the same generated form the step position
+        gets, from the same spec, and `None` for a node whose tool this install
+        does not have — `_build_step`'s reason, one card at a time: a form is
+        generated from a spec and there is nothing honest to draw without one.
+        The card itself still stands, because a document naming a missing tool is
+        still a chain the user has to be able to walk.
+        """
+        session = self._session
+        if session is None:
+            return QWidget()
+        steps: list[tuple[Node, QWidget | None]] = []
+        for node in self._order:
+            spec = self._specs.get(node.node_id)
+            knobs = None
+            if spec is not None:
+                form = ParamForm(session, node.node_id, spec)
+                form.edited.connect(self.refill_graph)
+                knobs = form
+            steps.append((node, knobs))
+        return PipelinePane(
+            session.path.name.removesuffix(PROJECT_SUFFIX),
+            steps,
+            self._at,
+            on_select=self._walk_to,
+            on_open=self._open_step,
+        )
+
+    def _open_step(self, index: int) -> None:
+        """A card's arrow: select that step, then slide to its form.
+
+        Both halves, in that order, because the step position shows the node the
+        walk is on — arriving there without having moved the walk would open the
+        form of whichever step the user was standing on before.
+        """
+        self._walk_to(index)
+        self._control.show_step()
 
     def _build_step(self) -> QWidget:
         """The step position's content for the node the walk is on.

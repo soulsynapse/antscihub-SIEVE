@@ -1,7 +1,7 @@
 ---
 title: The pipeline pane is a stack of cards wearing the referent's chrome
 step: "09.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k chain_cards"
 opened: 2026-08-09

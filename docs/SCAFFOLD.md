@@ -13,13 +13,15 @@ src/sieve/__init__.py                      # Signal isolation for ethological vi
 src/sieve/gui/__init__.py                  # Rendering values, emitting intents, holding view state; computes nothing.
 src/sieve/gui/app.py                       # The window: what the parts are, and what the four navigation verbs mean.
 src/sieve/gui/canvas.py                    # The viewport: the frame it was last handed, drawn to fit.
+src/sieve/gui/chain_stack.py               # The pipeline position: one card per step, scrolling under a fixed project card.
+src/sieve/gui/chrome.py                    # The colours the window is drawn in, and the two sheets that apply them.
 src/sieve/gui/control.py                   # Which of the four positions is showing, and the track that slides between.
 src/sieve/gui/expander.py                  # The down arrow on a step, and the tool's own guidance under it.
 src/sieve/gui/graph_panel.py               # The graph: one refill's series, drawn where its frames are.
 src/sieve/gui/hotkeys.py                   # Which keys exist and which verb each one calls.
 src/sieve/gui/kind_editors.py              # One editor per composite kind, on the surface the value is about.
 src/sieve/gui/layout.py                    # Where the main window's two halves sit and how big they start.
-src/sieve/gui/node_list.py                 # How one node is drawn, and how the ordered list of them is built.
+src/sieve/gui/node_list.py                 # How one node is captioned: its place in the walk, and the tool it applies.
 src/sieve/gui/param_form.py                # One control per parameter, chosen by how the parameter is populated.
 src/sieve/gui/project_select.py            # Picking one of the project files that already exist.
 src/sieve/gui/rail.py                      # One tick per node, down the left edge, marking where the walk is.

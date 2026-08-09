@@ -18,7 +18,7 @@ this node, and then what the whole run keeps.
 The rail is hidden here for the same reason it is hidden at the project
 position: it says where the walk is, and the save screen is not on the walk.
 
-Not what any of them contains — `project_select.py`, `node_list.py`,
+Not what any of them contains — `project_select.py`, `chain_stack.py`,
 `step_pane.py`, `save_screen.py` own those.
 Not the canvas: `app.py` swaps that separately and this module never mentions
 it. Not which node is current: that is the window's, passed in on every rebuild
@@ -56,7 +56,6 @@ from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QWidget
 
 from sieve.core.pipeline_model import Node
-from sieve.gui.node_list import build_node_list
 from sieve.gui.project_select import ProjectSelect
 from sieve.gui.rail import NodeRail
 from sieve.gui.step_pane import StepPane
@@ -192,6 +191,11 @@ class Control(QWidget):
         return select
 
     @property
+    def pipeline_pane(self) -> QWidget:
+        """The pipeline position's content: a `PipelinePane` once a graph is showing."""
+        return self._panes.pane(_POS_PIPELINE)
+
+    @property
     def step_pane(self) -> StepPane | QWidget:
         """The step position's content: a `StepPane` once a graph is showing.
 
@@ -214,7 +218,9 @@ class Control(QWidget):
         self._rail.setVisible(False)
         self._panes.set_current(_POS_PROJECT)
 
-    def show_graph(self, nodes: Sequence[Node], current: int, step: QWidget) -> None:
+    def show_graph(
+        self, nodes: Sequence[Node], current: int, stack: QWidget, step: QWidget
+    ) -> None:
         """Redraw both walk positions for `nodes` with `current` selected.
 
         Called on every move of the walk as well as on open, because a whole
@@ -224,9 +230,11 @@ class Control(QWidget):
         runs on — `param_form.py` reads the document once and never reads it
         back, so a rebuild is how a new value arrives.
 
-        `step` is built by the caller and handed in, because what goes on the
-        step position needs the session and the node's spec and this module has
-        neither: it owns which position is showing and nothing about the graph.
+        `stack` and `step` are built by the caller and handed in, because what
+        goes on either position needs the session and the nodes' specs and this
+        module has neither: it owns which position is showing and nothing about
+        the graph. `nodes` and `current` stay in the signature for the rail,
+        which is this module's own and needs only how many and which one.
         """
         old_rail = self._rail
         self._rail = self._build_rail(len(nodes), current)
@@ -239,7 +247,7 @@ class Control(QWidget):
         old_rail.setParent(None)
         old_rail.deleteLater()
 
-        self._panes.replace_pane(_POS_PIPELINE, build_node_list(nodes, current))
+        self._panes.replace_pane(_POS_PIPELINE, stack)
         self._panes.replace_pane(_POS_STEP, step)
 
     def set_save_screen(self, screen: QWidget) -> None:

@@ -4,7 +4,7 @@ priority: high
 phase: 9
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/gui -q -k band_surface"
+done_when: "uv run pytest tests/gui tests/bench -q -k 'band_surface or band_drag_repaint'"
 opened: 2026-08-09
 ---
 
@@ -51,7 +51,27 @@ anyway, is what the measurement decides — but a picture assembled first will
 make the second of those look like a change to the drawing code rather than to
 the channel.
 
-`done_when` at minting, red because nothing matches:
+## Widened 2026-08-09 at review: the measurement has to be witnessed too
+
+The section above was folded in by the review that minted this item, which said
+in the same breath that `pytest tests/gui -q -k band_surface` would not witness
+it — a picture that draws can be green while the cost stays unmeasured, which is
+[a-folded-item-outgrows-a-criterion-that-cannot-be-widened-to-match](../findings/loop/2026.08.08-a-folded-item-outgrows-a-criterion-that-cannot-be-widened-to-match.md).
+It is widened here rather than passed on. `band_drag_repaint` is already a real
+row in `bench/budgets.py` and already declared in its `WITHOUT_PRODUCER` set —
+the repo's own statement that nothing under `src/` measures it — so the second
+half of this item is exactly the removal of that declaration, and
+`test_declared_producerless_budgets_have_not_quietly_grown_one` goes red the
+moment a producer appears without it. The criterion names the key, so a run that
+draws the picture and leaves the budget unmeasured cannot report green.
+
+`done_when` as widened, red because nothing matches:
+
+    $ uv run pytest tests/gui tests/bench -q -k 'band_surface or band_drag_repaint'
+    162 deselected in 0.66s
+    exit: 5
+
+`done_when` at minting, red because nothing matched:
 
     $ uv run pytest tests/gui -q -k band_surface
     122 deselected in 0.63s

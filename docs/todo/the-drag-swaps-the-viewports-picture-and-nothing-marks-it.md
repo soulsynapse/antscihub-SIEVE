@@ -2,7 +2,7 @@
 title: The drag swaps the viewport's picture for the source, and the surface has no mark
 priority: high
 phase: "7"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k source_badge"
 opened: 2026-08-09
@@ -88,3 +88,26 @@ neither owns the other's case. The badge does not double as the settle render's
 progress signal: it names the picture, and a mark that also meant "work is in
 flight" would be false in the two causes where no render is coming (a node with
 no picture, a render that failed) — which is the honesty half it was added for.
+
+## 2026-08-09: reviewed and done, with the painting left unheld
+
+The criterion re-runs at `3 passed, 124 deselected`, `done_when` is untouched
+and the worker left `awaiting-review`. The red is this commit's own: with both
+`src/` files restored to `c7b1f8b^` byte for byte, all three fail on the missing
+`showing_source` / `mark_source`. Independently swept, the state machine is
+attributable rather than a lucky aggregate — the clear in `set_values`, the
+`mark_source()` call in `app._paint_viewport`, and a mark forced back down after
+that call all die. `tests/gui` is 127 passed, ruff clean.
+
+Both edges the ruling handed the work are settled the way the section above
+says, and the `_redraw` comment rewrite is right on its facts: a viewport still
+carrying the previous node's render has `showing_source` false, so the badge
+would indeed not cover that interval.
+
+What the criterion cannot see is that the badge is never drawn in a test —
+`paintEvent`'s `if badge:` replaced with `if False:` survives `tests/gui`. The
+mark itself paints, checked by hand here. That is
+`the-source-badge-is-painted-by-nothing.md`, minted rather than folded because
+the item this closes is spent and the file that carried this shape for the rest
+of `gui/` (`the-gui-skeletons-argued-branches-have-no-case.md`) closed with
+every rotation used.

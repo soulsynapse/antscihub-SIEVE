@@ -70,6 +70,7 @@ from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import MetricBus, Recorder
 from sieve.cli.run_cmd import footage_end, frame_source, load_project, refuse, span_for
 from sieve.core.pipeline_model import Pipeline, Project, Replicate, SourceSpan
+from sieve.core.tool_base import SourceFileError
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
@@ -118,7 +119,8 @@ def preview_project(
         typer.Exit: code 1 for anything refused deliberately — an invalid
             document, an unknown replicate or node, an unparseable edit, a value
             the tool will not accept, a graph that does not resolve or cannot be
-            executed, or footage that cannot be read.
+            executed, footage that cannot be read, or a source root whose pattern
+            names no one file.
     """
     discover()
     project = load_project(project_path)
@@ -181,6 +183,11 @@ def _render(session: PreviewSession, pipeline: Pipeline, at: int | None) -> Prev
     hands a user's untyped value to a tool's parameter model, so a value the
     model refuses is an ordinary answer to what the user typed rather than a
     defect a traceback should announce.
+
+    `SourceFileError` is `sieve run`'s refusal reaching a render rather than a
+    run start: a session resolves its source roots to key them, so a pattern
+    naming no file is refused here in the same words instead of arriving as a
+    traceback out of the tool on the first frame.
     """
     try:
         if at is None:
@@ -192,6 +199,7 @@ def _render(session: PreviewSession, pipeline: Pipeline, at: int | None) -> Prev
         FormatMismatchError,
         VideoDecodeError,
         ValidationError,
+        SourceFileError,
     ) as error:
         raise refuse(str(error)) from error
 

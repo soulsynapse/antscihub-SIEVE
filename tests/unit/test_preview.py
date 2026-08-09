@@ -20,6 +20,11 @@ from here, where both are importable.
 be correct and would pay for the whole clip again to show a span the user had
 already tuned.
 
+**A source root is keyed, so the subtree under it is too.** A root whose file
+the session never resolved is left out of the keys and takes everything below it
+with it, so every render of such a graph recomputes the whole chain — correct
+frames, no message, and the tuning loop gone.
+
 v2's file holds these same **3 cases** and every one survives; what changes is
 what a session is handed. The filter shelf and kernel shelf become one
 `ToolRegistry` (`adr/no-kernel-apparatus.md`), `ClipRange` becomes `SourceSpan`,
@@ -35,20 +40,23 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 
 import numpy as np
 
 from sieve.bench.budgets import BUDGETS
 from sieve.core.pipeline_model import Edge, Node, Pipeline, SourceSpan
 from sieve.core.tool_base import (
+    SOURCE_ELEMENT_NAMES,
     ArraySpec,
+    ElementKind,
     ElementRelation,
     Emission,
     ParamsBase,
     ParamStereotype,
 )
 from sieve.core.tool_registry import ToolRegistry, register_tool
-from sieve.core.types import ChannelSpec, Frame, FrameSpan
+from sieve.core.types import ChannelSpec, Frame, FrameIndex, FrameSpan
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.preview import (
     FIRST_FRAME_BUDGET,
@@ -92,6 +100,45 @@ def bias_run(params: BiasParams, window: FrameSpan, state: None) -> Frame:
 )
 class BiasParams(ParamsBase):
     bias: int = 0
+
+
+class ScratchPlate:
+    """A `ToolSource`: the file a root reads, and the frames it hands back.
+
+    Its pixels are the file's own size, so a swap of the file underneath a path
+    that did not move is visible in the frames as well as in the keys — and the
+    read is a `stat` rather than a decode, for the module docstring's reason.
+    """
+
+    def file(self, params: PlateParams, /) -> Path:
+        return Path(params.path)
+
+    def read(self, params: PlateParams, index: FrameIndex, /) -> Frame:
+        return Frame(
+            data=np.full((HEIGHT, WIDTH), Path(params.path).stat().st_size, dtype=np.uint8),
+            index=FrameIndex.of(index),
+            channels=ChannelSpec.GRAY,
+        )
+
+
+PLATE = ScratchPlate()
+
+
+@register_tool(
+    tool_id="plate",
+    version="1.0.0",
+    summary="Reads the file its own path parameter names.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(dtypes=("uint8",), channels=(ChannelSpec.GRAY,)),
+    emissions=(Emission("plate"),),
+    source=PLATE,
+    element=ElementKind.PIXEL,
+    element_names=SOURCE_ELEMENT_NAMES,
+    param_stereotypes={"path": ParamStereotype.PATH},
+    registry=SHELF,
+)
+class PlateParams(ParamsBase):
+    path: str = ""
 
 
 class CountingSource:
@@ -145,6 +192,27 @@ def chain(second_bias: int) -> Pipeline:
             Node(node_id="tail", tool_id="bias", version="1.0.0", params={"bias": second_bias}),
         ),
         edges=(Edge(upstream="head", downstream="tail"),),
+    )
+
+
+def plated(directory: Path) -> Pipeline:
+    """A source root and one node below it.
+
+    Two nodes because that is where an unkeyed root costs more than itself: the
+    node below folds its upstream's key in, so a root with none takes the whole
+    chain under it out of the store.
+    """
+    return Pipeline(
+        nodes=(
+            Node(
+                node_id="plate",
+                tool_id="plate",
+                version="1.0.0",
+                params={"path": str(directory / "plate.raw")},
+            ),
+            Node(node_id="tail", tool_id="bias", version="1.0.0", params={"bias": 1}),
+        ),
+        edges=(Edge(upstream="plate", downstream="tail"),),
     )
 
 
@@ -251,3 +319,28 @@ def test_moving_the_window_keeps_the_frames_the_two_spans_share() -> None:
     # are new, and are the only ones the reader was asked for.
     assert (slid.computed, slid.from_cache) == (4, 4)
     assert reader.reads == [14, 15]
+
+
+def test_a_picked_source_root_is_keyed_and_so_is_the_chain_below_it(tmp_path: Path) -> None:
+    """A session resolves its source roots, or its store answers nothing.
+
+    `Dag.node_keys` skips a source root whose identity it was not given, and a
+    node below an unkeyed one has no key either — so a session that never
+    resolved the file renders this two-node graph from scratch every time, with
+    the right frames and no message. The tallies are the observable: 8 computed
+    twice rather than 8 then 0.
+
+    The read log is the second half. Nothing here is fed by the footage, so a
+    render that touched the reader would be one that had bound the picker to it.
+    """
+    (tmp_path / "plate.raw").write_bytes(b"a plate")
+    reader = CountingSource()
+    preview = session(reader)
+    graph = plated(tmp_path)
+
+    first = preview.render_window(graph)
+    again = preview.render_window(graph)
+
+    assert (first.computed, first.from_cache) == (8, 0)
+    assert (again.computed, again.from_cache) == (0, 8)
+    assert reader.reads == []

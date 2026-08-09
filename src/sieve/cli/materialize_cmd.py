@@ -53,6 +53,7 @@ import typer
 
 from sieve.cli.run_cmd import footage_end, load_project, read_range, refuse, span_for
 from sieve.core.pipeline_model import Project, Replicate
+from sieve.core.tool_base import SourceFileError
 from sieve.core.types import ROI
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
@@ -62,8 +63,8 @@ from sieve.pipeline.materialize import (
     MaterializeCancelledError,
     materialize_crop,
 )
-from sieve.pipeline.plan import ExecutionPlan
-from sieve.pipeline.resolve_source import crop_roots
+from sieve.pipeline.plan import ExecutionPlan, validated_params
+from sieve.pipeline.resolve_source import crop_roots, picked_identities, source_files
 from sieve.storage.crop_writer import CropWriteError
 from sieve.tools import discover
 
@@ -109,7 +110,12 @@ def materialize_replicate(
     # a second, unrecorded way to say it.
     try:
         plan = ExecutionPlan.build(
-            dag, source=source, span=span_for(None, end), replicate=target, source_end=end
+            dag,
+            source=source,
+            span=span_for(None, end),
+            replicate=target,
+            source_end=end,
+            picked=_picked(dag, target),
         )
     except ValueError as error:
         raise refuse(str(error)) from error
@@ -140,6 +146,26 @@ def materialize_replicate(
     project.with_crop(record).save(project_path)
     written = record.resolve(project_path.parent)
     typer.echo(f"{target.name}: wrote {record.path} ({written.stat().st_size / 1e6:.1f} MB)")
+
+
+def _picked(dag: Dag, target: Replicate) -> dict[str, str]:
+    """What identifies each source root's file, for the plan this cuts from.
+
+    The walk `sieve run` does at run start (`pipeline/resolve_source.py`), so the
+    plan derived here is keyed as the plan a run of this graph is keyed — a front
+    end building one without it builds a differently-keyed description of the
+    same run, and `Dag.node_keys` drops the subtree under every root it was given
+    no identity for.
+
+    Where the refusals differ, and deliberately: a cut opens the footage and
+    never a picked file, so an input that does not resolve costs those nodes
+    their keys and stops nothing. `sieve run` refuses the same graph, because a
+    run is what reads the file.
+    """
+    try:
+        return picked_identities(source_files(dag, validated_params(dag, target)))
+    except SourceFileError:
+        return {}
 
 
 def _region(dag: Dag, plan: ExecutionPlan, target: Replicate) -> ROI:

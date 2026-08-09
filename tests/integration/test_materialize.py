@@ -362,6 +362,53 @@ WINDOWED_GRAPH = Pipeline(
     ),
 )
 
+#: The node id and the pattern of the source root `_picked_graph` adds.
+PLATE = "plate"
+PLATE_PATTERN = "*_bg.png"
+
+
+def _picked_graph(directory: Path) -> Pipeline:
+    """`GRAPH` with a root that reads its own file standing beside the crop.
+
+    A second root rather than a second crop: `crop_roots` still finds exactly one
+    box, so the command derives everything it derived before and the only thing
+    that has moved is what the plan is keyed on.
+    """
+    return Pipeline(
+        nodes=(
+            *GRAPH.nodes,
+            Node(
+                node_id=PLATE,
+                tool_id="pick",
+                version="1.0.0",
+                params={"pattern": str(directory / PLATE_PATTERN)},
+            ),
+        ),
+        edges=GRAPH.edges,
+    )
+
+
+def _capture_plans(monkeypatch: pytest.MonkeyPatch) -> list[ExecutionPlan]:
+    """Every plan the command builds, in build order.
+
+    Reaching for the object rather than for the output because the command
+    prints none of what is asserted through this: it derives a region, a span and
+    a format from the plan and writes a file, and the keys are the one thing on
+    it that never reaches a line. Bound before the patch, so the spy calls the
+    real classmethod rather than itself.
+    """
+    built: list[ExecutionPlan] = []
+    original = ExecutionPlan.build
+
+    def spy(dag: Dag, **derivation: Any) -> ExecutionPlan:
+        plan = original(dag, **derivation)
+        built.append(plan)
+        return plan
+
+    monkeypatch.setattr(ExecutionPlan, "build", spy)
+    return built
+
+
 #: A crop of another node's output rather than of the footage, which is a crop of
 #: something no file on disk holds.
 NO_ROOT_CROP = Pipeline(
@@ -518,6 +565,31 @@ class TestTheCommandDerivesWhatV2WasHanded:
 
         assert Project.load(project_path).crops[0].format == "luma"
         assert "--format" not in runner.invoke(app, ["materialize", "--help"]).output
+
+    def test_the_plan_it_derives_from_keys_its_picked_source_root(
+        self, synthetic_video: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The plan this command builds is the plan a run of the graph would be.
+
+        `Dag.node_keys` leaves a source root out when nothing resolved its file,
+        and every node below it with it — so a front end that builds a plan
+        without `picked` builds a differently-keyed description of the same run.
+        Here the keys are unread, which is exactly why the divergence would sit
+        unnoticed until something on this side wanted one.
+
+        The file only has to exist: the command cuts the footage and never opens
+        a picked file, so what is being resolved is its identity and nothing else.
+        """
+        (tmp_path / f"plate{PLATE_PATTERN[1:]}").write_bytes(b"a plate")
+        project_path = _project(synthetic_video, tmp_path, pipeline=_picked_graph(tmp_path))
+        built = _capture_plans(monkeypatch)
+
+        assert _materialize(project_path).exit_code == 0
+
+        assert built, "the command built no plan at all"
+        for plan in built:
+            assert PLATE in plan.keys, "the source root is unkeyed"
+            assert CUT in plan.keys, "the graph the box came from is keyed either way"
 
     def test_the_command_refuses_a_graph_with_no_crop_reading_the_source(
         self, synthetic_video: Path, tmp_path: Path

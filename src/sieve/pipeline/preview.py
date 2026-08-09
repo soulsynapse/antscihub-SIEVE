@@ -43,6 +43,18 @@ misspelling into a first-render failure instead of an unwatched metric.
 `tests/unit/test_preview.py` checks both against `BUDGETS` from a layer that may
 see it.
 
+**A source root is resolved here, per render, and it is the one thing in this
+module that touches the filesystem.** A root that opens its own file is keyed on
+what that file is, so a session that did not resolve it hands the plan no
+identity for it and `Dag.node_keys` leaves it — and everything below it — out of
+the keys entirely. That is a whole chain recomputed on every drag, with correct
+frames and no message, which is the tuning loop rather than an efficiency note.
+Per render rather than per session because the graph arrives per render: an edit
+that moves a picker's pattern moves the file it names, and an identity fixed when
+the session opened would key the new file under the old one's name — the
+wrong-answer-from-cache failure `cache_key.py` is written against. `sieve run`
+resolves the same thing once, because a run has one graph.
+
 **Nothing here coalesces, and the reason is a boundary that does not exist
 yet.** Coalescing exists because a human is dragging something, and `sieve
 preview` renders once and has nothing to discard — so it belongs to the
@@ -91,7 +103,8 @@ from sieve.core.tool_registry import ToolRegistry
 from sieve.pipeline.cache import FrameStore, MemoryFrameStore
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import FrameResult, FrameSource, execute
-from sieve.pipeline.plan import ExecutionPlan
+from sieve.pipeline.plan import ExecutionPlan, validated_params
+from sieve.pipeline.resolve_source import picked_identities, source_files
 
 #: How a span is timed and published. `MetricBus.measure` is one, and is what
 #: every real caller passes; a test passes something that records the keys and
@@ -292,6 +305,8 @@ class PreviewSession:
                 and a `PreviewRender` describing no run would make that decision
                 by omission.
             ValidationError: if any node's resolved parameters are invalid.
+            SourceFileError: if a source root's file does not resolve — see
+                `_plan`.
             UnrunnableNodeError: if a node cannot be called at all, or returns a
                 frame it was not asked for.
             FormatMismatchError: if the reader's format is not the graph's.
@@ -335,12 +350,25 @@ class PreviewSession:
         plan would save microseconds and introduce the question of whether two
         pipelines that compare equal are the same graph, which is a question
         with no upside here.
+
+        The one exception is the source roots, which are a glob and a stat each
+        — see the module docstring on why that is paid per render. A graph with
+        no source tool pays nothing: `source_files` walks a list that is empty.
+
+        Raises:
+            SourceFileError: if a source root's path parameter names no file or
+                several. Here rather than at the first frame, where the tool
+                would raise it resolving the same pattern: a render that cannot
+                say which file it reads has no key for that node and no frame to
+                show for it either.
         """
+        dag = Dag.build(pipeline, self._registry)
         return ExecutionPlan.build(
-            Dag.build(pipeline, self._registry),
+            dag,
             source=self._source,
             span=span,
             replicate=self._replicate,
+            picked=picked_identities(source_files(dag, validated_params(dag, self._replicate))),
         )
 
     def _run(self, plan: ExecutionPlan, on_frame: Consumer | None, *, whole: bool) -> PreviewRender:

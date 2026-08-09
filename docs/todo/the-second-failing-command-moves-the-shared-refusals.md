@@ -129,3 +129,26 @@ collected refusal is the natural member, and solving it in `run_cmd` first would
 be the second spelling to reconcile.
 
 This item has no `done_when`, so nothing was widened.
+
+## 2026-08-09: the same run-start refusal is now spelled in a third command, and one of the three is unexercised
+
+Folded from the run that keyed a source root in every front end
+(`todo/a-source-root-is-unkeyed-in-every-front-end-but-run.md`). Resolving a
+source root is what keys it, so `pipeline/preview.py` now raises
+`SourceFileError` out of a render and `preview_cmd._render` catches it into the
+same one-line refusal `run_cmd._external_inputs` prints — a third command
+holding the run-start vocabulary, and the one that reaches it through a
+`pipeline` module rather than by importing `run_cmd`. `materialize_cmd` is the
+fourth site and deliberately does *not* refuse: a cut never opens a picked file,
+so it keys nothing and continues. Three commands, one condition, three answers —
+which is the property this item exists to settle, and the answers differ for
+stated reasons rather than by drift, so what is owed is one home for the
+spelling and not a change of behaviour.
+
+The entry added to `_render`'s except tuple is untested, and it is on the same
+line as this item's second bullet: `ValidationError` sits there catching nothing
+while `tests/integration/test_cli_preview.py` explains a refusal by it.
+`SourceFileError` is the mirror image — it catches something no case exercises,
+so `adr/declared-means-verified.md` is unsatisfied in both directions in one
+tuple. A `sieve preview` over a project whose picker names no file is the case,
+and it belongs with whatever this item does to the tuple rather than beside it.

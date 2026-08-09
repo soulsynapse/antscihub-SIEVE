@@ -35,6 +35,22 @@ of horizontal cuts, and `detect` supplying all three at once.
 VISION's `Band drag → graphs repaint` row is the budget this is measured
 against, and it is the first thing here that can be measured at all.
 
+## Added 2026-08-09 at review: what the budget is up against
+
+Measure before the picture is built rather than after, because the shape the
+channel landed in is redundant by roughly the window length. `detect.display`
+runs the whole gate chain a second time and then `morlet_power_profile` over
+the *whole* bank — where `run` sums only the band's rows — and returns one
+column of each, discarding the rest of a window that is `warmup + lookahead + 1`
+frames wide. At `golden_params` that is 59 frames of transform per frame of
+output, thrown away but for one column, on top of `run`'s own chain; and a
+watched node is not served from the store, so none of it is amortized across a
+re-drag. Whether the fix is a filler handed the span rather than the window, a
+surface memoized across the frames of one drag, or the budget simply being met
+anyway, is what the measurement decides — but a picture assembled first will
+make the second of those look like a change to the drawing code rather than to
+the channel.
+
 `done_when` at minting, red because nothing matches:
 
     $ uv run pytest tests/gui -q -k band_surface

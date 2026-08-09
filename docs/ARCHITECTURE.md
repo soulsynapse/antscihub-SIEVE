@@ -15,6 +15,7 @@ and its file in `docs/adr/` but leaves this index.
 - [Declared means verified](adr/declared-means-verified.md) — A spec declaration is either consumed by running machinery or refused by name at registration; nothing is stored against a future consumer, and no declaration certifies its own correctness.
 - [ops admission is two tools](adr/ops-admission-is-two-tools.md) — `core/ops/` holds only math two tools already call: single-caller math lives in its tool module, and the package itself appears with its first two-caller entry, gated by a census test.
 - [One field is one populated value](adr/one-field-is-one-populated-value.md) — A composite stereotype sits on the field that holds the whole value, never on one bound of a pair, and registration proves it against `params_model`.
+- [A band declares the surface it is dragged on, and the tool fills it](adr/a-band-declares-the-surface-it-is-dragged-on.md) — A `BAND` param names a `DisplaySurface` — a picture kind, never a unit — and its tool fills it on a preview-only channel: never emitted, never keyed, and refused unless both halves are declared.
 
 ## 02 — The saved artifact
 
@@ -43,4 +44,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The GUI's base is the v2.5 spike, not v2's gui](adr/gui-base-is-the-v25-spike.md) — `gui/` starts from the v2.5 spike's skeleton — `proto_sieve`'s `gui` and `session` — not v2's `gui/`; v2 components port into it where they held, and the layout operates as VISION describes.
 - [The mockup is the GUI's end state](adr/the-mockup-is-the-gui-end-state.md) — `mockup/mockup.py` is the settled v3 surface: layout, hotkeys, and interactions are final; the fake back end transfers nothing; what it does not show lands in a popup, never as a new region.
 
-*21 settled, 1 superseded.*
+*22 settled, 1 superseded.*

@@ -2,7 +2,7 @@
 title: A band's axis has no vocabulary and no plot to be dragged on
 priority: normal
 phase: "07"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests -q -k declared_surface"
 opened: 2026-08-08
@@ -74,8 +74,9 @@ attractive later it is a separate decision against 04.8. And the mechanism is
 minted once: the canvas-ownership problem (what a tool shows on the canvas,
 MOCKUP-MAP.md's first non-settlement) should be answered by this same
 declaration vocabulary or by a revision of it, not by a second parallel one.
-The review that lands the mechanism mints the ADR; this section is the
-holding text until then.
+Minted at the review that landed the mechanism as
+[adr/a-band-declares-the-surface-it-is-dragged-on.md](../adr/a-band-declares-the-surface-it-is-dragged-on.md),
+which is the home for what binds; this section is the argument that reached it.
 
 `done_when` at minting, red because nothing matches:
 

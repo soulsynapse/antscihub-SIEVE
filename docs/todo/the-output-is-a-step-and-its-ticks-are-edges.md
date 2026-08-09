@@ -1,7 +1,7 @@
 ---
 title: The output is a step, and its ticks are edges
 step: "09.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests -q -k ticks_are_edges"
 opened: 2026-08-09
@@ -163,3 +163,35 @@ becoming drawn edges with the product name at the arrowhead
 `gui/save_screen.py` dissolving into it. `done_when` still covers exactly
 that; the sentences it no longer covers are the ones the ADR removed from
 scope rather than left undone.
+
+## 2026-08-09 (work): the card is drawn, the ticks are its edges, and Run is on its form
+
+Built to the ruling's scope and no wider. `gui/save_screen.kept_products` derives
+what the run keeps from the document — `Project.checkpoints` and
+`Project.outputs` together, each named by the product that node's own parameters
+select, so the name on an edge moves when the knob does. `chain_stack.Outputs`
+carries those to the pane as positions, which is `Step.reads`' form; the card
+lands at the foot of the stack as a card of `ChainColumn` and not of the walk,
+because the walk stands only where a node is. `ChainColumn` grows the labels the
+09.7 review handed over: `port_labels` is the derivation, `port_label_origin`
+the placement, and `_paint_edge` writes the name beside the arrowhead — only
+where the destination has more than one input, which in this stack is the output
+card and nothing else.
+
+The tick redraws the picture rather than updating it: `SaveScreen.checked` says
+a box moved and `app._outputs` derives the edges again from the document, so
+there is no second copy of the write list to go stale. No cache key moves and the
+graph is untouched — the pane's `Outputs` never reaches `session/`.
+
+The save pane is that card's form: the card's arrow opens it, `save_screen.py`'s
+header now says so, and Run is where it already was. What was *not* done is
+folding the fourth position of the track away — `control.py` argues at length
+(07.11, from VISION) for save being a position rather than a dialog, the
+referent's three-position row is about a mockup with no save screen at all, and
+neither this item nor ADR 25 rules on the track. So the form is reachable both
+from the card and from the end of the walk, which is the same pane either way.
+
+One thing measured that outlives the item is folded into
+[a-checkpoint-does-not-record-which-product-it-holds.md](a-checkpoint-does-not-record-which-product-it-holds.md):
+the card draws both of the document's write lists and the form ticks only one of
+them, so a sink draws an edge no box is ticked for.

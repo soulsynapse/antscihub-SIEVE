@@ -52,7 +52,8 @@ no derivation in the tree (`todo/a-stage-header-groups-by-nothing-the-tree-decla
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -240,17 +241,24 @@ def fixed_card(title: str) -> ChainCard:
 # stored, because the stack is rebuilt on every move of the walk; an edge layer
 # holding its own coordinates would draw the previous selection's stack.
 #
-# One clause of the referent's is not here: the port named at an arrowhead where
-# a step has more than one input. Schema v1 gives an edge no port and refuses two
-# edges into one node, so there is nothing in the tree a name could be read off —
-# `todo/the-output-is-a-step-and-its-ticks-are-edges.md` is where both the second
-# input and the product that names it arrive together.
+# A port is named at an arrowhead only where the destination has more than one
+# input, which in this stack is the output card and nothing else: schema v1 gives
+# an edge no port and refuses two edges into one node, so a name over a step's
+# arrowhead would be a distinction the document cannot make. The card's inputs
+# are not the document's — they are the ticks, derived
+# (`adr/the-output-card-is-a-picture-of-the-write-list.md`) — and a product is
+# what they are named by.
 
 #: The trunk's inset from a card's left edge, and the step out to the next lane.
 EDGE_STUB = 16.0
 EDGE_LANE = 34.0
 ARROW_WIDTH = 4.0
 ARROW_HEIGHT = 6.0
+#: Clear of the arrowhead's own shoulder, so the name reads as beside the line
+#: rather than as something the head is part of.
+PORT_GAP = 8.0
+#: How far the name's baseline sits above the card it lands on.
+PORT_RISE = 2.0
 
 
 def edge_lanes(edges: Sequence[tuple[int, int]]) -> dict[tuple[int, int], int]:
@@ -297,6 +305,17 @@ def arrowhead(end: QPointF) -> QPolygonF:
             QPointF(end.x(), end.y()),
         ]
     )
+
+
+def port_label_origin(end: QPointF) -> QPointF:
+    """The baseline the product's name is written from, beside the head at `end`.
+
+    Right of the lane and in the gap above the card, which is the only space the
+    name can take without standing on either: a name centred over the arrowhead
+    would sit in the lane the next edge along may be using, and one inside the
+    card would read as something the card says about itself.
+    """
+    return QPointF(end.x() + ARROW_WIDTH + PORT_GAP, end.y() - PORT_RISE)
 
 
 # ---------------------------------------------------------------------------
@@ -445,6 +464,49 @@ class FannedEdge:
     rejoin: tuple[QPointF, ...]
 
 
+# ---------------------------------------------------------------------------
+# What leaves the chain: a card at the foot of it, drawn and never modeled.
+#
+# The write list is that card's param, and a ticked product *is* an edge into it
+# — derived on every redraw rather than held, so the picture cannot come to
+# disagree with what the document says the run keeps. No output node enters the
+# tool contract for this and writing stays the run's own act
+# (`adr/the-output-card-is-a-picture-of-the-write-list.md`): a node whose inputs
+# were the ticks would make every tick a graph mutation, and a tick may not reach
+# a cache key.
+#
+# It is the one card in the stack with more than one input, so it is the one
+# whose arrowheads are named — by product, which is the word the user ticked.
+
+
+@dataclass(frozen=True)
+class Write:
+    """One product the run keeps, as the picture draws it.
+
+    A position rather than a node id, for `Step.reads`' reason: the line is drawn
+    between cards and the caller is the one holding the walk that numbered them.
+    """
+
+    position: int
+    #: What the arrowhead is named. The product the step's own parameters select,
+    #: in the tool's words — derived by the caller from the same document the
+    #: form's ticks are read from (`save_screen.kept_products`).
+    product: str
+
+
+@dataclass(frozen=True)
+class Outputs:
+    """The card at the foot of the chain, and the writes reaching into it.
+
+    `on_open` rides here rather than beside it on the pane for `Fan`'s reason: a
+    pane drawing no output card cannot be handed the way into a form it has no
+    card to open.
+    """
+
+    writes: tuple[Write, ...]
+    on_open: Callable[[], None]
+
+
 class ChainColumn(QWidget):
     """The stack's column, with the chain's edges drawn under its cards.
 
@@ -458,15 +520,33 @@ class ChainColumn(QWidget):
     them there.
     """
 
-    def __init__(self, edges: Sequence[tuple[int, int]], parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        edges: Sequence[tuple[int, int]],
+        labels: Mapping[tuple[int, int], str] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         # Only the edges that descend. A walk that puts a producer below its
         # reader has a cycle in it, which the window still has to draw
         # (`walk.py`) and which no downward line describes.
         self.edges = tuple(edge for edge in edges if edge[0] < edge[1])
         self._lanes = edge_lanes(self.edges)
+        fan_in = Counter(dst for _src, dst in self.edges)
+        # A name only where the destination has a choice to name: one line into a
+        # card came from the one place it could have, and a label on it would be
+        # a word the picture did not need.
+        self._labels = {
+            edge: text
+            for edge, text in (labels or {}).items()
+            if edge in self._lanes and fan_in[edge[1]] > 1
+        }
         self.cards: tuple[ChainCard, ...] = ()
         self.fan: RegionFan | None = None
+
+    def port_labels(self) -> dict[tuple[int, int], str]:
+        """The product written beside each arrowhead that is named at all."""
+        return dict(self._labels)
 
     def edge_line(self, src: int, dst: int) -> tuple[QPointF, QPointF]:
         """Where the edge from `src` to `dst` starts and ends, in this widget."""
@@ -577,6 +657,10 @@ class ChainColumn(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(LINE)
         painter.drawPolygon(arrowhead(end))
+        label = self._labels.get((src, dst))
+        if label is not None:
+            painter.setPen(QPen(DIM))
+            painter.drawText(port_label_origin(end), label)
 
 
 class PipelinePane(QWidget):
@@ -599,6 +683,7 @@ class PipelinePane(QWidget):
         on_pin: Callable[[int], None],
         on_remove: Callable[[int], None],
         fan: Fan | None = None,
+        outputs: Outputs | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -620,8 +705,13 @@ class PipelinePane(QWidget):
             for position, step in enumerate(steps)
         )
 
+        foot = len(steps)
+        self.output_card = None if outputs is None else self._build_output_card(outputs)
+        writes = () if outputs is None else outputs.writes
         self.column = ChainColumn(
             [(source, position) for position, step in enumerate(steps) for source in step.reads]
+            + [(write.position, foot) for write in writes],
+            {(write.position, foot): write.product for write in writes},
         )
         stack = QVBoxLayout(self.column)
         stack.setContentsMargins(6, 6, 6, 6)
@@ -634,8 +724,14 @@ class PipelinePane(QWidget):
             stack.addWidget(card)
             if self.fan is not None and position == self.fan.position:
                 stack.addWidget(self.fan)
+        if self.output_card is not None:
+            stack.addWidget(self.output_card)
         stack.addStretch(1)
-        self.column.cards = self.cards
+        # The output card is a card of the column and not of the pane: the lines
+        # are drawn between cards by position and its position is the foot of the
+        # stack, while `cards` is the walk's own list and the walk never stands
+        # on a card no node is behind.
+        self.column.cards = self.cards + (() if self.output_card is None else (self.output_card,))
         self.column.fan = self.fan
 
         scroll = QScrollArea()
@@ -648,6 +744,23 @@ class PipelinePane(QWidget):
         layout.setSpacing(6)
         layout.addWidget(self.project_card)
         layout.addWidget(scroll)
+
+    @staticmethod
+    def _build_output_card(outputs: Outputs) -> ChainCard:
+        """The foot of the chain: what leaves it, and the way into the write list.
+
+        Never selected, and with no ✕ or ◆: the walk is over the document's nodes
+        and there is no node here to stand on, pin or drop. What it carries is the
+        arrow every other card carries, because the pane behind it is this card's
+        form like any other step's (`save_screen.py`).
+        """
+        card = ChainCard(selected=False)
+        row = QHBoxLayout(card)
+        row.setContentsMargins(8, 6, 8, 6)
+        row.addWidget(title_label("output"))
+        row.addStretch(1)
+        row.addWidget(_settings_button(outputs.on_open))
+        return card
 
     def _build_fan(self, fan: Fan | None, steps: Sequence[Step]) -> RegionFan | None:
         """The branch below `fan.position`, or nothing where there is no gap for it.

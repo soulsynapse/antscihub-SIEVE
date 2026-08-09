@@ -23,6 +23,15 @@ screen can do honestly it does: a reopened document shows the checked node
 against the product its parameters select, so the row that is ticked is the one
 a run would actually write.
 
+**This is the output card's form, not a screen beside the chain.** What leaves
+the chain is a card at the foot of it and the write list is that card's param
+(`adr/the-output-card-is-a-picture-of-the-write-list.md`), so the pane the ticks
+and Run sit on is that card's form and is reached from it. `kept_products` is the
+other half of the same arrangement: the picture's edges are derived from the
+document here rather than held anywhere, so a tick cannot come to disagree with
+the line drawn for it. The card is drawn and never modeled — no output node
+reaches the tool contract, and ticking one more product moves no cache key.
+
 **Run is the saved file handed to `sieve run`.** Not a call into `sieve.cli`,
 which the layers contract puts beside this package rather than under it, and not
 a second execution path: the GUI spawns the same command a cluster node would,
@@ -55,8 +64,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.core.pipeline_model import Pipeline
-from sieve.core.tool_base import Emission, ToolSpec, selects_emission
+from sieve.core.pipeline_model import Pipeline, Project
+from sieve.core.tool_base import Emission, ToolSpec, selected_emission, selects_emission
 from sieve.gui.walk import node_order
 from sieve.session.intents import SetOutputs, issue
 from sieve.session.session import Session
@@ -97,6 +106,55 @@ def output_rows(pipeline: Pipeline, specs: Mapping[str, ToolSpec]) -> tuple[Outp
     )
 
 
+def _emission_label(spec: ToolSpec, emission: Emission) -> str:
+    """A product in the tool's own words, where the tool has any for it."""
+    labels = (
+        {}
+        if emission.selected_by is None
+        else spec.param_value_labels.get(emission.selected_by, {})
+    )
+    return labels.get(emission.name, emission.name)
+
+
+def _kept_emission(spec: ToolSpec, params: Mapping[str, object]) -> Emission:
+    """Which product a node with these parameters computes, as its declaration.
+
+    `selected_emission` is the one derivation of that question and answers it by
+    name; a label is read off the emission rather than off a name, so what is
+    returned is the declaration the name came from.
+
+    Raises:
+        ValueError: if no emission matches, which `selected_emission` refuses.
+    """
+    name = selected_emission(spec, params)
+    return next(emission for emission in spec.emissions if str(emission.name) == name)
+
+
+def kept_products(project: Project, specs: Mapping[str, ToolSpec]) -> tuple[tuple[str, str], ...]:
+    """Which node keeps what, in walk order: the write list the card is drawn over.
+
+    Both of the document's lists, because both are things the run writes and a
+    picture reading one of the two would go quiet about a sink a handoff added.
+    The product is derived rather than recorded: `checkpoints` names a node and
+    not a product (`todo/a-checkpoint-does-not-record-which-product-it-holds.md`),
+    so what the tick stands for is whatever this node's own parameters select —
+    which is also what makes the edge's name move when the knob does.
+
+    A node whose spec is not among `specs` is skipped, for `resolved_specs`'
+    reason: a window has to draw a document naming a tool this install lacks,
+    and nothing can say what such a node would write.
+    """
+    kept = set(project.checkpoints) | {sink.node_id for sink in project.outputs}
+    return tuple(
+        (
+            node.node_id,
+            _emission_label(spec, _kept_emission(spec, project.params_for(node.node_id))),
+        )
+        for node in node_order(project.pipeline)
+        if node.node_id in kept and (spec := specs.get(node.node_id)) is not None
+    )
+
+
 class SaveScreen(QWidget):
     """The checkoff, the run button, and whatever the last run said.
 
@@ -108,6 +166,11 @@ class SaveScreen(QWidget):
     #: The argv handed to the CLI, emitted as the process is started. Carried so
     #: a placement can log or echo the handoff without re-deriving it.
     run_issued = Signal(tuple)
+    #: A box has been ticked and the document written. Carried without the list,
+    #: because the one thing that reads this redraws the card the ticks are the
+    #: edges into and derives them from the document again — a payload here would
+    #: be the second copy that derivation exists to avoid.
+    checked = Signal()
 
     def __init__(
         self,
@@ -151,12 +214,7 @@ class SaveScreen(QWidget):
     @staticmethod
     def _label(row: OutputRow, spec: ToolSpec) -> str:
         """The row's text: the node, and the product in the tool's own words."""
-        labels = (
-            {}
-            if row.emission.selected_by is None
-            else spec.param_value_labels.get(row.emission.selected_by, {})
-        )
-        return f"{row.node_id} — {labels.get(row.emission.name, row.emission.name)}"
+        return f"{row.node_id} — {_emission_label(spec, row.emission)}"
 
     @property
     def rows(self) -> Sequence[OutputRow]:
@@ -202,6 +260,7 @@ class SaveScreen(QWidget):
                 outputs=self._session.project.outputs,
             ),
         )
+        self.checked.emit()
 
     def _finished(self, exit_code: int, _status: object) -> None:
         self._running = False

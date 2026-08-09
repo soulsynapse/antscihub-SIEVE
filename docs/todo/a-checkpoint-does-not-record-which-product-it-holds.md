@@ -88,3 +88,23 @@ handed, and a parameter on the read-back tool that carries it. Not urgent for
 the same reason as the rest — nothing outside `dag.py` reads `Dag.elements`
 yet — and folded here rather than minted because it is the same manifest, the
 same writer, and the same sentence about what a checkpoint fails to record.
+
+## 2026-08-09 (from 09.2): the card draws a list the form cannot tick
+
+The output card at the foot of the chain is a picture of what the run keeps, and
+what the run keeps is `Project.checkpoints` *and* `Project.outputs` — both, since
+a sink is a thing the run writes and a picture reading one of the two would go
+quiet about the other (`gui/save_screen.kept_products`,
+[adr/the-output-card-is-a-picture-of-the-write-list.md](../adr/the-output-card-is-a-picture-of-the-write-list.md)).
+The form behind that card ticks only the first of the two: a checkbox writes
+`checkpoints` and `SetOutputs` carries the sinks through untouched, because
+nothing on the screen names a format or a directory and the map's review leaves
+that combo unsettled. So a document holding a sink — hand-written, or arrived
+from a handoff — draws an edge into the card that no box on its own form is
+ticked for.
+
+Folded here rather than minted because it is this item's sentence from the other
+side. The screen's checkbox is `checkpoints`-shaped, and both gaps are that shape
+failing to hold what the document can say: two products of one node above, and a
+sink at all here. Whatever answers the first has to decide whether a tick is one
+list or two.

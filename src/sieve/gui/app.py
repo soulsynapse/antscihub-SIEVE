@@ -76,7 +76,7 @@ from sieve.core.tool_base import ElementKind, ParamStereotype, ToolSpec
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
-from sieve.gui.chain_stack import Fan, PipelinePane, Step
+from sieve.gui.chain_stack import Fan, Outputs, PipelinePane, Step, Write
 from sieve.gui.chrome import darken_title_bar, window_stylesheet
 from sieve.gui.control import Control
 from sieve.gui.graph_panel import GraphPanel
@@ -94,7 +94,7 @@ from sieve.gui.pinned import (
     surface_note,
 )
 from sieve.gui.project_select import ProjectSelect, listings, projects_in, reveal
-from sieve.gui.save_screen import SaveScreen
+from sieve.gui.save_screen import SaveScreen, kept_products
 from sieve.gui.step_pane import StepPane
 from sieve.gui.timeline.bar import TimelineBar
 from sieve.gui.transport.player import VideoPlayer
@@ -775,6 +775,30 @@ class MainWindow(QMainWindow):
             on_pin=self.pin,
             on_remove=self.remove_step,
             fan=self._region_fan(),
+            outputs=self._outputs(session),
+        )
+
+    def _outputs(self, session: Session) -> Outputs:
+        """The card at the foot of the chain, and the writes reaching into it.
+
+        Derived on every redraw from the document's own two lists rather than
+        held: the card is a picture of what the run keeps, so a copy of the write
+        list here would be the one that went stale against a tick
+        (`adr/the-output-card-is-a-picture-of-the-write-list.md`). Nothing is
+        added to the graph by any of it — the edges are view state, and a tick
+        moves no cache key.
+
+        Drawn whether or not anything is kept, because it is also the way to the
+        form that keeps things: a card that appeared once the first box was
+        ticked would be reachable only from the screen it leads to.
+        """
+        at = {node.node_id: position for position, node in enumerate(self._order)}
+        return Outputs(
+            writes=tuple(
+                Write(at[node_id], product)
+                for node_id, product in kept_products(session.project, self._specs)
+            ),
+            on_open=self._control.show_save,
         )
 
     def _region_fan(self) -> Fan | None:
@@ -861,7 +885,12 @@ class MainWindow(QMainWindow):
                 "no outputs can be offered: this install has no "
                 + ", ".join(dict.fromkeys(missing))
             )
-        return SaveScreen(session, self._specs)
+        screen = SaveScreen(session, self._specs)
+        # A tick is an edge into the output card, so it redraws the stack behind
+        # this screen — the picture is derived from the document and there is
+        # nothing to update in place.
+        screen.checked.connect(self._redraw)
+        return screen
 
     def _rebind_editors(self) -> None:
         """Move the composite-kind overlays onto the node the walk is on."""

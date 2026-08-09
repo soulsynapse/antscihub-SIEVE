@@ -1,9 +1,9 @@
 ---
 title: Remove reads past the step it drops
 step: "09.4"
-status: awaiting-review
+status: done
 gated_on: nothing
-done_when: "uv run pytest tests/gui -q -k reads_past"
+done_when: "uv run pytest tests/gui -q -k 'reads_past or card_and_slot'"
 opened: 2026-08-09
 ---
 
@@ -59,3 +59,12 @@ surface is the graph.
 `done_when` (`-k reads_past`) is not widened here and does not reach this: a
 case asserting the card's note agrees with the slot's would be the part of this
 paragraph a criterion can hold.
+
+## Widened 2026-08-09 at this item's review
+
+The paragraph above named the case it wanted and the criterion did not reach it,
+so `done_when` now selects `reads_past or card_and_slot` — the second disjunct
+is `test_pinned_slot_card_and_slot_never_disagree_about_where_the_surface_is`,
+which would otherwise be certified only by 09.3's already-`done` criterion and
+so by nothing that runs when this item is checked. Both disjuncts select (3 and
+1); neither is a name that matches nothing.

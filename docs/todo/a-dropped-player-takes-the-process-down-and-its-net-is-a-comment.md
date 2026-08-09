@@ -4,7 +4,7 @@ priority: normal
 phase: 9
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/gui -q -k dropped_player"
+done_when: "uv run pytest tests/gui -q -k 'dropped_player or no_orphaned_pane'"
 opened: 2026-08-09
 ---
 
@@ -75,3 +75,12 @@ not two.
 `done_when` (`-k dropped_player`) is not widened here and does not reach this: a
 case asserting that a rebuild leaves no new top-level widget is the part of this
 paragraph a criterion can hold.
+
+## Widened 2026-08-09 at 09.4's review
+
+Taking the sentence above at its word: `done_when` now selects
+`dropped_player or no_orphaned_pane`, so the criterion covers the folded half
+rather than certifying the thread teardown alone. Both disjuncts name nothing in
+the tree today and the criterion stays red at exit 5, which is what it was
+before — the widening adds a second thing the work has to make green, not a
+green one it can hide behind.

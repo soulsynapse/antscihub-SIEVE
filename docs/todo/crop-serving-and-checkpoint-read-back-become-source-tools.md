@@ -1,6 +1,6 @@
 ---
-title: Crop serving and checkpoint read-back become source tools
-status: awaiting-review
+title: Crop serving becomes a source tool
+status: done
 gated_on: nothing
 priority: high
 phase: "05"
@@ -8,7 +8,14 @@ done_when: 'uv run pytest tests/integration/test_crop_serving.py -k "the_served_
 opened: 2026-08-07
 ---
 
-# Crop serving and checkpoint read-back become source tools
+# Crop serving becomes a source tool
+
+**Split on 2026-08-09; the checkpoint half is
+[a-checkpoint-is-read-back-as-a-source-tool.md](a-checkpoint-is-read-back-as-a-source-tool.md)
+and its paragraphs are there and not here.** The title and the slug both name a
+scope this file stopped holding — see the closing section for why the halves
+came apart and why the slug was left where every finding and commit already
+cites it.
 
 [adr/a-users-file-wires-in-like-any-other-input.md](../adr/a-users-file-wires-in-like-any-other-input.md)
 now says the two places a file already stands where a node stood are instances
@@ -20,9 +27,8 @@ Two things move and a third dissolves. `resolve_source.resolve` currently
 answers "which file does this run open, in whose frame numbering" by matching a
 `CropRecord` against a region the caller derived from the graph — that match
 survives, but its product becomes a document edit offered to whoever holds the
-project, not a file handed to a run already planned. The checkpoint side has no
-reader yet, which is the cheap half: it is written as a source tool the first
-time rather than migrated into one. And
+project, not a file handed to a run already planned. (The checkpoint side left
+with the split.) And
 [a-served-run-elides-the-node-its-file-already-holds.md](a-served-run-elides-the-node-its-file-already-holds.md)
 is the third — it is open, it is asked to settle whether a served run
 neutralises the crop node at `WHOLE_FRAME` or drops it from `dag.order`, and
@@ -48,11 +54,8 @@ equality directly, over the two key dicts; Phase 5's second gate does not cover
 it, because it runs one project twice with only its checkpoint list changed and
 never derives a key both ways.
 
-The checkpoint half does move keys, off the checkpointed node's key and onto the
-written file's identity, and that is owed here rather than discovered later: this
-item re-states Phase 5's second gate in `PLAN.md` so it says what a read-back
-that is a document edit can actually satisfy. Re-stating a gate is a change to
-the plan, so it is proposed to Kendrick and not written past him.
+The checkpoint half's key move, and the `PLAN.md` gate re-statement it drags
+with it, left with the split.
 
 **Only one front end serves a crop, and this is what makes that stop mattering.**
 08.2 landed the plan-time route in `cli/run_cmd.py` and nowhere else, so a
@@ -176,21 +179,6 @@ review that closes this item should consider whether `done_when` wants a case
 pinning the split itself — a decoder-read root keying source-flavoured while
 `pick` stays bare — which is a widening and therefore the reviewer's.
 
-## 2026-08-09: the checkpoint half's identity must say which product
-
-A pointer, not a restatement:
-[a-checkpoint-does-not-record-which-product-it-holds.md](a-checkpoint-does-not-record-which-product-it-holds.md)
-holds the schema gap — neither the manifest nor `Project.checkpoints` can say
-which emission of a multi-product node a checkpoint holds, and 07.9's save
-screen could not fix it from its side. That item's own text says the read-back
-path is where it is answered, "whichever arrives first" — and this item is the
-read-back path, arriving first. The checkpoint half mints the written file's
-key-bearing identity here; an identity minted without the product fact
-hardwires the gap into keys and turns a schema field into a migration. So the
-schema question is answered inside this work, not after it. The criterion does
-not name the product fact; folded without touching `done_when`, so the review
-decides whether it must.
-
 ## 2026-08-09: the crop half is wired; the checkpoint half is not started
 
 What landed. `tools/footage.py` is the second source tool and the first
@@ -234,14 +222,8 @@ subtree once. The criterion's first case is written against the root's flavour
 and passes; whether ADR-18's key paragraph wants narrowing is Kendrick's.
 
 **The checkpoint half is not begun, and the criterion does not cover it.** All
-four cases are about the crop half. What the checkpoint half still owes is
-unchanged: a read-back source tool, the key-bearing identity that must say
-which product a checkpoint holds
-([a-checkpoint-does-not-record-which-product-it-holds.md](a-checkpoint-does-not-record-which-product-it-holds.md)),
-and the re-statement of Phase 5's second gate in `PLAN.md` — which this item's
-own text says is proposed to Kendrick and not written past him, so it is not
-written here. `tools/footage.py` is most of the mechanism the read-back needs;
-what it is missing is the schema answer, which is a decision and not code.
+four cases are about the crop half. That observation is what the review acted
+on — see the closing section.
 
 Two things the review should weigh. The criterion may want a fifth case
 pinning the flavour split itself — a decoder-read root keying `source_key`
@@ -259,3 +241,74 @@ whose frame numbering”. That is now `tools/footage.py` and
 sequence is a change to the plan, which this item's own text rules is proposed
 to Kendrick rather than written past him. Named here so it is a decision
 someone takes rather than a line nobody notices.
+
+## 2026-08-09 review: green, and the halves came apart to keep it honest
+
+The criterion was re-run and passes — four cases, four passed, four deselected —
+and the whole suite is green at 1068. `status` had been moved to
+`awaiting-review` and nothing else in the frontmatter was touched, which is the
+worker's whole allowance. Every claim in the run's final message was checked
+against `b63f43f` and each one is in the diff; nothing in the diff is unclaimed
+except the two calls the worker stated for the review to disagree with, which is
+what stating them was for. Both are ruled correct here: the offer is
+whole-document because one pipeline serves every replicate, and coverage is a
+property of the document rather than a clause a resolver re-evaluates.
+
+**Why the item is `done` and yet the checkpoint half is untouched.** The
+criterion is green while a half the item names has not started, which is a
+criterion that certifies work nobody did. The obvious repair — widen `done_when`
+with the checkpoint cases and set `status` back to `open` — does not work, and
+the reason is measured rather than argued:
+[findings/loop/2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing.md](../findings/loop/2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing.md).
+Appending a name to a `-k` disjunction whose other terms already match leaves
+the command green, so the widening would be prose wearing a criterion's
+clothes. The halves are separable — the checkpoint side shares `tools/footage.py`
+and nothing else — so they became two items rather than one item with a
+criterion that cannot reach half of itself.
+[a-checkpoint-is-read-back-as-a-source-tool.md](a-checkpoint-is-read-back-as-a-source-tool.md)
+holds that half, with a criterion of its own that is red because nothing
+matches. Its paragraphs were moved out of this file rather than copied into
+that one, which is the failure
+[findings/loop/2026.08.08-a-split-item-copies-its-paragraphs-and-the-original-closes-still-holding-them.md](../findings/loop/2026.08.08-a-split-item-copies-its-paragraphs-and-the-original-closes-still-holding-them.md)
+records. The slug still says "and checkpoint read-back"; the `title` no longer
+does, because the title is what the index shows and an index row reading `done`
+beside a scope this file no longer holds is the repo lying. The filename is left
+alone because `b63f43f`, ADR-18, ADR-24 and two findings all cite it.
+
+**What the whole-document ruling costs, and where that went.** Taking the edit
+is one-way in the tree: `sieve materialize` refuses a served project, and a
+replicate added to one saves and then fails every plan with a pydantic
+`extra_forbidden` on `region`. Both measured in
+[findings/2026.08.09-a-served-project-cannot-grow-a-replicate-or-be-cut-again.md](../findings/2026.08.09-a-served-project-cannot-grow-a-replicate-or-be-cut-again.md)
+and owned by
+[a-served-project-has-no-way-back-to-its-crop-node.md](a-served-project-has-no-way-back-to-its-crop-node.md).
+This is not a reason to hold the item open: the ruling is right and the reverse
+edit is work the item never asked for. It is a reason `crop_serving.py`'s
+"costs nothing but the edit" should be read as a claim about the document and
+not about the tree.
+
+**Not widened, and why.** The fifth case the worker offered — pinning the
+flavour split itself — is already asserted in two halves that are each other's
+control: `test_the_served_root_folds_the_key_its_file_would_fold_as_footage`
+asserts `upstream != picked_key(identity)` for a decoder-read root, and
+`tests/unit/test_preview.py` holds `pick` at `picked_key`. A fifth case would
+restate them in one place, and under the finding above it could not have been
+added to this criterion anyway.
+
+**One claim in `tools/footage.py` that the tree contradicts, and it is a
+comment rather than code.** `FootageFile`'s docstring says the shared pool means
+"two concurrent renders over one file share a reader and neither can advance the
+other's position — `VideoReader.read` seeks per call". `decode/reader.py` says
+the opposite in its own header and again above the class: "nothing here is
+thread-safe", "one reader belongs to one thread. The GUI keeps its reader on a
+dedicated decode thread for exactly this reason." `_ReaderPool` takes no lock
+either, so two threads missing at once open two readers and leak one, and an
+eviction can `close()` a reader another thread is mid-read on. Not reachable
+today — the GUI refills on a `QTimer` on the GUI thread and the transport's
+`QThread` uses its own `PrefetchFrameSource`, never a `footage` node — so this
+is a sentence that will be believed before it is tested rather than a bug.
+Folded into
+[a-checkpoint-is-read-back-as-a-source-tool.md](a-checkpoint-is-read-back-as-a-source-tool.md),
+which is the next work in `tools/footage.py` and the work that decides whether
+the pool is shared with a second source tool at all. Its criterion does not
+cover the correction; the review that closes it should say whether it must.

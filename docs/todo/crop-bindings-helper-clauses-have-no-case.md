@@ -19,9 +19,11 @@ rows, not a fix.
 
 - A window *exactly* equal to the record's span reads `AT_REST`. Every existing
   row is strictly inside the span or strictly outside it, so `>` and `<` in the
-  window clause survive being widened to `>=` and `<=`. `resolve_source`'s
-  identical clause is already pinned at the boundary by
-  `test_crop_serving._resolved`'s `want=SPAN` default; this is the twin's half.
+  window clause survive being widened to `>=` and `<=`. This used to be "the
+  twin's half", `resolve_source`'s identical clause being pinned at the boundary
+  by `test_crop_serving._resolved`; `b63f43f` retired that clause with the whole
+  plan-time route, so there is no twin and this row is the only pin the boundary
+  will ever have.
 - A near miss is anchored on the box asked about. A record cut at a *different*
   box whose file is gone must not lend its sentence to this box — today
   `_near_miss`'s region guard can be deleted and every row still passes, because

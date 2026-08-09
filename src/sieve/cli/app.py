@@ -12,9 +12,13 @@ empty graph, and a caller that cares about output counts reads them rather than
 a status.
 
 The rest of v2's surface is not missing so much as not yet standing on anything:
-`sweep` lands in Phase 6 with the rest of `bench` (`PLAN.md`), and the options
-`run` still does not take are named in `run_cmd.py`. `detect` never lands —
-detection is a node (`adr/detector-is-a-node.md`).
+the options `run` still does not take are named in `run_cmd.py`. `detect` never
+lands — detection is a node (`adr/detector-is-a-node.md`).
+
+`sweep` is on this list and is not a pipeline command: it runs no graph, opens
+no project, and reports a measurement of the machine. It is here because
+`sieve --help` is the whole surface, and an instrument nobody can find is one
+whose readings nobody takes.
 
 The console-script entry point (`main`) is deliberately not the Typer callback
 (`_group`). The callback runs inside `CliRunner` too, which drives the app
@@ -33,6 +37,7 @@ from sieve.cli.inspect_cmd import inspect_tools
 from sieve.cli.materialize_cmd import materialize_replicate
 from sieve.cli.preview_cmd import preview_project
 from sieve.cli.run_cmd import run_project
+from sieve.cli.sweep_cmd import sweep_decode
 from sieve.decode.quiet import silence_raw_format_warning
 
 app = typer.Typer(
@@ -57,6 +62,9 @@ app.command("preview", help="Render a project's working window and report what i
 )
 app.command("materialize", help="Cut one replicate's crop to a file and record it.")(
     materialize_replicate
+)
+app.command("sweep", help="Measure decode throughput over core sets and worker counts.")(
+    sweep_decode
 )
 
 

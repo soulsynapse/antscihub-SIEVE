@@ -4,7 +4,7 @@ status: open
 gated_on: nothing
 priority: normal
 phase: "03"
-done_when: 'uv run pytest tests/unit/test_external_inputs.py -k "every_named_external_input_is_reported_missing_before_execution or a_project_with_no_source_tool_owes_nothing or the_list_follows_a_rewired_graph_with_nothing_to_migrate" -q'
+done_when: 'uv run pytest tests/unit/test_external_inputs.py -k "every_named_external_input_is_reported_missing_before_execution or a_project_with_no_source_tool_owes_nothing or the_list_follows_a_rewired_graph_with_nothing_to_migrate or a_source_root_reaches_the_plan_as_a_picked_identity or a_recorded_input_that_changed_refuses_before_any_key_is_built" -q'
 opened: 2026-08-07
 ---
 
@@ -100,3 +100,25 @@ the absence check alone and does not reach this.
 `core/pipeline_model.py`'s opening sentence is still narrower than VISION's and
 is still this item's second statement to move; the portable-identity work
 deliberately left it, growing only the identity line where its new field sits.
+
+## 2026-08-09 review: the criterion is widened, and the pointer it inherits is wrong
+
+Three amendments in a row asked for it, so `done_when` above now names five
+cases rather than three: the two added are the `picked` identity reaching the
+plan, and a recorded input that changed refusing before any key is built. The
+names are the shape the cases should take and not a spelling to be obeyed — what
+the criterion has to reach is that all three statements this item now carries are
+run, not that a test is called what a review guessed.
+
+One correction to fold in with them. `Project.check_input_hashes`' `Args:` says
+the run start "already walks its source roots to resolve exactly this
+(`pipeline/resolve_source.picked_identities`)". The walk is a by-product; the
+return value is not. `picked_identities` returns `dict[str, str]` — node id to
+`cache_key.source_identity` — and discards the `Path` that `ToolSource.file`
+handed it, while `check_input_hashes` wants `Mapping[str, Path]`. Whoever writes
+the call site here will follow that pointer to a function whose return type
+cannot be passed to the parameter it is named for, and the choice waiting there
+is one of this item's: either `picked_identities` returns the paths alongside the
+identities, or the walk is written once here and both functions read from it.
+Nothing is wrong in the tree today — `check_input_hashes` has no caller — so this
+is a doc pointer to correct in the same change, not a defect.

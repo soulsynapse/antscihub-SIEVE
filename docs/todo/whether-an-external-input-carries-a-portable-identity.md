@@ -1,6 +1,6 @@
 ---
 title: Whether an external input carries a portable identity, so substitution is not silent
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_pipeline_model.py -q -k a_swapped_external_input_is_refused_by_recorded_hash"
 priority: high

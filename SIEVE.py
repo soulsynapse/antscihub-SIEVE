@@ -33,8 +33,11 @@ def main() -> int:
         _hold()
         return 1
     checkout = Path(__file__).resolve().parent
+    # `check=False` because the exit code is the whole of what this returns:
+    # raising here would print a traceback over a GUI that has already said
+    # whatever it had to say.
     code = subprocess.run(
-        [uv, "run", "--project", str(checkout), "sieve-gui", *sys.argv[1:]]
+        [uv, "run", "--project", str(checkout), "sieve-gui", *sys.argv[1:]], check=False
     ).returncode
     if code != 0:
         _hold()

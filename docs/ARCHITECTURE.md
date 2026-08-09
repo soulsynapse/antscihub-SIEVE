@@ -31,6 +31,7 @@ and its file in `docs/adr/` but leaves this index.
 - [The annotation limit is the source line's budget, applied at edit time](adr/annotation-limit-is-the-source-line-budget.md) — The annotation limit is the docstring line's own budget — ruff's 100 columns less the opening `"""`, 97 — and it binds when a line is written or edited in v3, never at the moment of port.
 - [The gate is one line, stated once](adr/the-gate-is-one-line.md) — The checks a commit must pass are one `&&`-joined command, written once, in `ci.yml`'s gate step. Nothing else enumerates them — not a noxfile, not a README, not a `paths:` entry.
 - [What earns a place on the gate line](adr/a-check-joins-the-gate-line.md) — A check joins the gate line when it is cheap against the line's cost, no other placement catches what it catches, and scoping it to its files would enumerate the gate's membership twice.
+- [A word has one home](adr/a-word-has-one-home.md) — An **output** is what the user persists, an **emission** what a spec declares it can produce, a **result** what a node computes; "product" is dead, "write" is a verb, "checkpoint" its own noun.
 
 ## 04 — The executor
 
@@ -47,4 +48,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The mockup is the GUI's end state](adr/the-mockup-is-the-gui-end-state.md) — `mockup/mockup.py` is the settled v3 surface: layout, hotkeys, and interactions are final; the fake back end transfers nothing; what it does not show lands in a popup, never as a new region.
 - [The output card is a picture of the write list, not a node](adr/the-output-card-is-a-picture-of-the-write-list.md) — The output step at the foot of the chain is drawn, not modeled: the GUI renders a card over `Project.outputs` with edges derived from the ticks — no output node, no sink shape in the tool contract.
 
-*25 settled, 1 superseded.*
+*26 settled, 1 superseded.*

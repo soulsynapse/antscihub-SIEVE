@@ -357,6 +357,32 @@ Phase 5 ships with that open and this sentence is the record.
 Gate: the phase's own steps green, and the pool it inherited answered or
 re-argued against the tree as Phase 7 left it.
 
+## Phase 9 — GUI to the referent
+
+Phase 7 built the capability; this phase reshapes its surfaces to the settled
+layout. The target is not restated here: `mockup/mockup.py` is the referent
+([adr/the-mockup-is-the-gui-end-state.md](adr/the-mockup-is-the-gui-end-state.md))
+and [MOCKUP-MAP.md](MOCKUP-MAP.md) is its reading guide — each step below is
+one of the map's delta rows re-homed into the real `gui`/`session` modules.
+A criterion here is a behaviour under `tests/gui`'s driving harness, never a
+resemblance: "matches the mockup" is not executable and the referent is read
+for shape, not imported or pixel-diffed.
+
+The sequence runs stack-first because the later rows stand on it: the cards
+and their chrome, then the edges drawn under them, then the verbs and slots
+that mutate what the cards show. Three surfaces are deliberately absent,
+parked with their gates rather than sequenced: the source card waits on the
+first source tool, the swap menu's contents wait on the offering predicate's
+`matches`, and the canvas's contents remain the open ownership problem the
+map names — the display-surface, scrub-render and no-op-commit items reopened
+by the 2026-08-09 rulings sit in Phase 7's pool and run ahead of this phase
+under the selector's ordering, which is the intended order: they are the
+mechanisms these surfaces draw on.
+
+Gate: the walk, verbs and panes behave as the referent does under
+`tests/gui`; both budget regimes still measured green through the GUI; the
+`gui-computes-nothing` exception list still empty.
+
 ## Not built, and what revives it
 
 | Not built | Revived by |

@@ -8,6 +8,15 @@ The ideal case: v2's evidence decides what comes over, one decision at a time, w
 
 SIEVE turns video into behavioral measurements using interpretable signal-processing tools. The user builds a pipeline; SIEVE runs it. Its value is the speed of the tuning loop: drag a slider, watch the graphs refill faster than the video plays. Architecture that does not serve that loop does not belong. Two settled rules guard it: preview and production are one execution path, so what you tuned against is what the run produces ([adr/one-execution-path.md](adr/one-execution-path.md)), and the naive path is the product surface — every tool runs correct-but-slow on any machine, and fast paths land only on a measured budget violation ([adr/correctness-is-the-default.md](adr/correctness-is-the-default.md)). The numbers are below, enforced from `bench/budgets.py`, and measured headless before a single widget exists.
 
+## Goals every decision is weighed against (Written by Kendrick 2026.08.09)
+
+- How the workflow feels and behaves to the user: Weighed against the mock up and the best of v2 (for what didn't make it to the mock up)
+- Tool speed-of-development, as stated in other sections of the vision
+- Ease of GUI adjustment, again in other sections of the vision
+- Transparency to user (a standing goal, it should be obvious to the user what they're doing)
+- Speed goals (the app needs to be snappy)
+
+
 ## Two speed regimes
 
 Both are load-bearing and improving one at the cost of the other is a defect. Pre-pipeline runs from opening a video to having replicates cut and a stretch selected; the intended feel is a video editor. In-pipeline runs from dragging a slider to seeing the graph update; the intended feel is direct manipulation, not job submission.

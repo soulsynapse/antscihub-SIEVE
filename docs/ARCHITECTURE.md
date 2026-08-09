@@ -37,6 +37,7 @@ and its file in `docs/adr/` but leaves this index.
 - [Correctness is the default; performance is opt-in](adr/correctness-is-the-default.md) — The naive path is the product surface, not a fallback: every tool runs correct-but-slow on any machine, and a fast path lands only on a measured budget violation, at parity with what it replaces.
 - [Cache admission is a bounded warmup, not a stateless tool](adr/cache-admission-is-bounded-warmup.md) — A tool is keyed when its warmup is **bounded**, stateful or not, and a run entering a cached range re-settles its state over that warmup first. An epsilon warmup is refused.
 - [A user's file wires in like any other input](adr/a-users-file-wires-in-like-any-other-input.md) — A file a user picks enters as a **source tool** — a node with no upstream — so every input is an edge. Only the key differs: a graph-fed node keys from the graph, a source tool from its file.
+- [A root keys by its reader](adr/a-root-keys-by-its-reader.md) — A root's key flavour follows the reader: a file read through the shared decode stack folds `source_key`; only a tool reading with its own code folds `picked_key`.
 
 ## 05 — The GUI
 
@@ -44,4 +45,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The GUI's base is the v2.5 spike, not v2's gui](adr/gui-base-is-the-v25-spike.md) — `gui/` starts from the v2.5 spike's skeleton — `proto_sieve`'s `gui` and `session` — not v2's `gui/`; v2 components port into it where they held, and the layout operates as VISION describes.
 - [The mockup is the GUI's end state](adr/the-mockup-is-the-gui-end-state.md) — `mockup/mockup.py` is the settled v3 surface: layout, hotkeys, and interactions are final; the fake back end transfers nothing; what it does not show lands in a popup, never as a new region.
 
-*22 settled, 1 superseded.*
+*23 settled, 1 superseded.*

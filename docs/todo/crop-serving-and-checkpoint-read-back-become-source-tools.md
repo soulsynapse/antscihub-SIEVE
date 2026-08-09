@@ -1,8 +1,7 @@
 ---
 title: Crop serving and checkpoint read-back become source tools
-status: deferred
-deferred_for: decision
-gated_on: whether an artifact's source tool folds source_key so ADR-18's crop half stays free in keys, or whether both halves are accepted as key-moving and Phase 5's second gate is re-stated for the crop half too
+status: open
+gated_on: nothing
 priority: high
 phase: "05"
 done_when: 'uv run pytest tests/integration/test_crop_serving.py -k "the_served_graph_holds_no_crop_node or a_pre_cropped_folder_needs_no_crop_record or a_preview_is_served_by_the_written_crop or a_served_source_root_reaches_every_front_ends_plan_keyed" -q'
@@ -159,3 +158,20 @@ the opening paragraph says
 already resolved in the direction it anticipated — 05.10 landed first, and this
 item is the one that unwinds it. Nothing about that is re-decided by the
 deferral; it is what this item will do whenever the fork above is settled.
+
+## 2026-08-09: the fork is ruled — the flavour follows the reader
+
+Kendrick took the first fork in the reader-owned form, minted as
+[adr/a-root-keys-by-its-reader.md](../adr/a-root-keys-by-its-reader.md) with
+the finding above holding what decided it: a source tool whose file is read
+through the shared decode stack folds `source_key`, and only an own-code
+reader folds `picked_key`. `status` and `gated_on` moved on that.
+
+For this item that means the artifact's source tool declares the shared-decoder
+reading, `dag.node_keys` folds `source_key(identity, decode_format)` for such
+roots, and the criterion's first case is satisfiable as written. `pick` keeps
+`picked_key` and its keys do not move. The contract change lands here rather
+than in an item of its own because this is the first work that needs it; the
+review that closes this item should consider whether `done_when` wants a case
+pinning the split itself — a decoder-read root keying source-flavoured while
+`pick` stays bare — which is a widening and therefore the reviewer's.

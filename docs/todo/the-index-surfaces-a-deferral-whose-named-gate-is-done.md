@@ -1,6 +1,6 @@
 ---
 title: The index surfaces a deferral whose named gate is done
-status: awaiting-review
+status: done
 priority: normal
 phase: 0
 gated_on: nothing

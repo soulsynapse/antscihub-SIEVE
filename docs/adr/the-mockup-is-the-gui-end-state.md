@@ -29,3 +29,5 @@ cleanup. It is a referent, read and never imported: it computes its own
 mock data inline, which `gui-computes-nothing` forbids the real surface to
 copy, and it stays one file because a referent is read whole — the module
 split it must not receive is exactly the one the real `gui` must.
+[MOCKUP-MAP.md](../MOCKUP-MAP.md) is the reading guide: the deltas against
+the tree, and the boundary of what the referent does not settle.

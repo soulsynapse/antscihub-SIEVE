@@ -219,7 +219,6 @@ UNSPECIFIED_DEBT = frozenset(
         "the-first-gui-cut-names-its-surfaces.md",
         "the-narrowing-case-cannot-see-what-it-did-not-ask-for.md",
         "the-non-finite-guards-get-the-case-their-subject-needs.md",
-        "the-offering-predicate-is-not-the-edge-legality-check.md",
         "the-read-back-shape-check-has-no-case.md",
         "the-review-has-a-path-for-a-partial-deferral.md",
         "the-rss-floor-decides-its-fate.md",

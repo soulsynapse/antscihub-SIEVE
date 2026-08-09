@@ -1,8 +1,8 @@
 ---
 title: The offering predicate is a plausibility question, and admits cannot answer it
-status: deferred
-deferred_for: decision
-gated_on: what a plausibility offer is keyed on — an Emission name, a new ElementKind member, or the path stereotype ADR-18 spends — and whether the answer is an ordering or a yes or no, and whether a tool declares its own plausibility or has it derived
+status: open
+gated_on: nothing
+done_when: "uv run pytest tests -q -k offering"
 priority: normal
 phase: "07"
 opened: 2026-08-07
@@ -50,3 +50,39 @@ run — which is the second reason they are not one function.
 
 Filed in Phase 7 because that is where the surface consuming this lives, not
 because the predicate is GUI code.
+
+## Ruled 2026-08-09: the offer is the dual of admits
+
+Kendrick's ruling, with the first sub-question already taken by his VISION
+edit ("derived from what the source resolved to rather than declared by any
+tool"):
+
+- **Derived, never declared.** No plausibility field, no new ElementKind
+  member, no Emission-name keying. The offer is computed from the facts in
+  hand at offer time — what the position's input resolved to (element kind,
+  count, and the extension class the path stereotype carries once
+  [the first source tool](the-first-source-tool-moves-the-three-single-root-assumptions.md)
+  lands) — against the declarations tools already carry: `accepts` and arity.
+- **The predicate is `matches`, the dual of `admits`.** `admits` is false
+  only on proven disjointness; `matches` is true only on proven
+  compatibility. A wildcard admits but does not match — ignorance is legal
+  and never plausible. Opposite failure modes, one comparison, both derived
+  from the same specs.
+- **Yes/no, displayed by specificity.** The predicate returns a set; the
+  picker orders it by how specific each match is, derivable from the same
+  comparison. No scored ranking — weights nobody can verify are authority
+  the reviewer cannot check, and a wrong offer is only a suggestion the
+  user overrides.
+- New vocabulary is admitted only when a real offer proves inexpressible in
+  the resolved facts, and that day it returns here as its own decision.
+
+The computation sits below `gui` and the picker renders what it is handed
+(`gui-computes-nothing`, [gui-knows-kinds-not-tools](../adr/gui-knows-kinds-not-tools.md)).
+The source-site facts wait on the source tool; the add-tool and swap sites
+have their facts already.
+
+`done_when` at minting, red because nothing matches:
+
+    $ uv run pytest tests -q -k offering
+    1000 deselected in 0.91s
+    exit: 5

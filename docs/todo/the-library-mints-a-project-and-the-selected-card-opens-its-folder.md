@@ -1,7 +1,7 @@
 ---
 title: The library mints a project and the selected card opens its folder
 step: "09.5.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k open_location && uv run pytest tests/gui -q -k new_project && uv run pytest tests/unit/test_pipeline_model.py -q -k no_footage"
 opened: 2026-08-09
@@ -139,3 +139,22 @@ exactly where minting is the only act available. So `MainWindow` takes
 the cards stay the folder's own order; the mutant that appends is killed by a
 project named `zzz` in the fixture, without which it is invisible because
 `untitled_*` happens to sort last.
+
+## Reviewed and closed (2026-08-09)
+
+All three legs re-run green on the committed tree, `done_when` untouched, and
+the worker stopped at `awaiting-review`. Both new GUI cases were re-proved
+rather than taken on the transcript's word: the append-instead-of-rescan mutant
+turns `test_new_project_mints_an_empty_project_the_library_lists` red at the
+order assertion, which is what the `zzz` fixture buys. Entering a minted project
+was probed separately and is not a crash — `open_project` skips the player and
+lands on the chain position with no session footage, which is the state the
+source card is added on.
+
+One clause landed unexercised and is folded, not blocking:
+`run_cmd.footage_of`'s refusal has no case, and the CLI half of ADR 26 is
+carried by
+[the-second-failing-command-moves-the-shared-refusals.md](the-second-failing-command-moves-the-shared-refusals.md)
+because it is a member of that shared vocabulary rather than a fact about this
+pane. Why the criterion could not see it:
+[a criterion widened from the item's prose misses what the ADR added](../findings/loop/2026.08.09-a-criterion-widened-from-the-items-prose-misses-what-the-adr-added.md).

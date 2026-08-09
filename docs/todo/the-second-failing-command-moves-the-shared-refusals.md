@@ -152,3 +152,26 @@ while `tests/integration/test_cli_preview.py` explains a refusal by it.
 so `adr/declared-means-verified.md` is unsatisfied in both directions in one
 tuple. A `sieve preview` over a project whose picker names no file is the case,
 and it belongs with whatever this item does to the tuple rather than beside it.
+
+## 2026-08-09: the vocabulary grew a fourth shared refusal and no case enters it
+
+Folded from the review of `7eec323`, which admitted `Project.source = None`
+(`adr/a-document-may-name-no-footage.md`) and added `run_cmd.footage_of` — the
+one place a document naming no footage becomes an exit code, imported by `run`,
+`preview` and `materialize` so the refusal has one spelling. That is this item's
+own property, held deliberately and by the right shape; what is missing is the
+case. Deleting the `except NoFootage` out of `footage_of`, so the helper is a
+bare `source_path` call and all three commands traceback on a minted project,
+leaves the suite at 1162 passed. `declared-means-verified.md` is unsatisfied at
+a `Raises: typer.Exit` a run cannot reach any other way, which is the same
+condition as the bullet above it in this section and in the same vocabulary —
+a `sieve run` on an `untitled_N.sieve.yaml` is the case, one command, since the
+point of the helper is that the other two cannot differ.
+
+Why here and not on 09.5.1: the refusal is not a fact about the library pane,
+it is a member of the shared CLI vocabulary this item exists to place, and
+whatever `cli/common.py` ends up holding holds `footage_of` too. How the gap
+survived the criterion is
+[a criterion widened from the item's prose misses what the ADR added](../findings/loop/2026.08.09-a-criterion-widened-from-the-items-prose-misses-what-the-adr-added.md).
+
+This item has no `done_when`, so nothing was widened.

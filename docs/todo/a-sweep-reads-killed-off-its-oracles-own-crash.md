@@ -117,6 +117,18 @@ passes it and a sweep that ends mutated after exiting is past it. A check with
 teeth would compare against the subject as git has it, which collides with
 running a sweep over uncommitted work under test.
 
+### The refusals are not the net, because the next command is usually a criterion (folded 2026-08-09)
+
+The section above closes on the two occurrences being caught by the sweep that
+followed them, so no verdict was computed against a dirty tree. A third
+occurrence, on `gui/chain_stack.py` and recorded in the same finding, was not:
+what ran next was the item's own `done_when`, which went red on the work just
+written and reads as a defect in it. A criterion has none of the refusals — it
+has an oracle, and the oracle answers. That is the ordinary shape of a run, not
+an unlucky one: a sweep is what a worker does *before* re-running the criterion
+it is about to report on. So the argument that this class is loud enough to be
+left open should rest on something other than the next command being a sweep.
+
 ## A mutant that will not compile is the deterministic false KILLED (folded 2026-08-08)
 
 This item opened on a false KILLED that fires once in nine runs. There is one

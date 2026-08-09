@@ -55,9 +55,18 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from math import ceil
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF
+from PySide6.QtGui import (
+    QColor,
+    QFontMetricsF,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QPolygonF,
+)
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -307,15 +316,22 @@ def arrowhead(end: QPointF) -> QPolygonF:
     )
 
 
-def port_label_origin(end: QPointF) -> QPointF:
+def port_label_origin(end: QPointF, lift: float = 0.0) -> QPointF:
     """The baseline the product's name is written from, beside the head at `end`.
 
     Right of the lane and in the gap above the card, which is the only space the
     name can take without standing on either: a name centred over the arrowhead
     would sit in the lane the next edge along may be using, and one inside the
     card would read as something the card says about itself.
+
+    `lift` is what makes more than one of them readable. Every arrowhead into a
+    card lands on the same top edge, so names sharing that baseline run into each
+    other the moment two of them are wider than the lane pitch — which every
+    product name is. Each name after the first is raised clear of the one below,
+    up its own lane, so it still reads as belonging to the line it is written
+    beside.
     """
-    return QPointF(end.x() + ARROW_WIDTH + PORT_GAP, end.y() - PORT_RISE)
+    return QPointF(end.x() + ARROW_WIDTH + PORT_GAP, end.y() - PORT_RISE - lift)
 
 
 # ---------------------------------------------------------------------------
@@ -541,12 +557,53 @@ class ChainColumn(QWidget):
             for edge, text in (labels or {}).items()
             if edge in self._lanes and fan_in[edge[1]] > 1
         }
+        # Measured once, here, because the caller reserves room for these lifts in
+        # the layout (`label_headroom`) and a box measured against a second
+        # reading would describe a name the gap was not opened for. The stack is
+        # rebuilt on every move of the walk, so a font that changes is picked up
+        # by the next one.
+        self._metrics = QFontMetricsF(self.font())
+        # A line apart, by the font's own answer to how far apart two lines are:
+        # stacked names are set the way any two lines of text are, and a gap
+        # chosen here would be a second answer to that question. Outer lanes ride
+        # higher — a lane's number is how far back up the stack its edge reached,
+        # so lifting in that order puts the names in the same top-to-bottom order
+        # as the cards they came from.
+        self._lifts = {
+            edge: rank * self._metrics.lineSpacing()
+            for rank, edge in enumerate(sorted(self._labels, key=lambda e: self._lanes[e]))
+        }
         self.cards: tuple[ChainCard, ...] = ()
         self.fan: RegionFan | None = None
 
     def port_labels(self) -> dict[tuple[int, int], str]:
         """The product written beside each arrowhead that is named at all."""
         return dict(self._labels)
+
+    def label_rect(self, src: int, dst: int) -> QRectF:
+        """The box that edge's name occupies, for edges that have one.
+
+        Advance width rather than the glyphs' own bounding box: what has to not
+        be another name's is the run the pen makes, and the ink of a name with no
+        descender stops short of where the next one may start.
+        """
+        origin = port_label_origin(self.edge_line(src, dst)[1], self._lifts[(src, dst)])
+        return QRectF(
+            origin.x(),
+            origin.y() - self._metrics.ascent(),
+            self._metrics.horizontalAdvance(self._labels[(src, dst)]),
+            self._metrics.ascent() + self._metrics.descent(),
+        )
+
+    def label_headroom(self) -> float:
+        """How far above the ordinary gap the highest of a card's names reaches.
+
+        The gap the rest of the stack leaves between cards is one name tall, so a
+        card whose names are stacked needs the layout to open it further — a
+        lifted name is drawn before the cards are and would otherwise be painted
+        under the one above it, which is the same as not being drawn.
+        """
+        return max(self._lifts.values(), default=0.0)
 
     def edge_line(self, src: int, dst: int) -> tuple[QPointF, QPointF]:
         """Where the edge from `src` to `dst` starts and ends, in this widget."""
@@ -660,7 +717,7 @@ class ChainColumn(QWidget):
         label = self._labels.get((src, dst))
         if label is not None:
             painter.setPen(QPen(DIM))
-            painter.drawText(port_label_origin(end), label)
+            painter.drawText(port_label_origin(end, self._lifts[(src, dst)]), label)
 
 
 class PipelinePane(QWidget):
@@ -725,6 +782,7 @@ class PipelinePane(QWidget):
             if self.fan is not None and position == self.fan.position:
                 stack.addWidget(self.fan)
         if self.output_card is not None:
+            stack.addSpacing(ceil(self.column.label_headroom()))
             stack.addWidget(self.output_card)
         stack.addStretch(1)
         # The output card is a card of the column and not of the pane: the lines

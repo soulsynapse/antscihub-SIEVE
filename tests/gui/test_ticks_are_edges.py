@@ -267,6 +267,48 @@ def test_a_single_input_leaves_its_arrowhead_bare(qapp) -> None:
     assert not _ink(column.grab().toImage(), origin.x(), origin.x() + _NAME_WINDOW, origin.y())
 
 
+def test_the_cards_two_names_do_not_collide(qapp) -> None:
+    """The case the whole clause exists for: naming happens only where there are two.
+
+    Both edges land on the card's top edge, so a rule that gave every name the
+    same baseline paints the shorter of the two through the middle of the longer
+    — the arrowheads are one lane apart and no product name in the tree is that
+    narrow. Read as boxes rather than as a pixel: two names overlapping by a
+    stroke are unreadable in the same way as two that coincide, and what the
+    pixels are asked is only whether both were drawn at all.
+    """
+    del qapp
+
+    pane = _pane([(), (0,), (1,)], [(1, "cropped"), (2, "downsampled")])
+    column = pane.column
+    named = sorted(column.port_labels())
+
+    assert len(named) == 2
+
+    boxes = [column.label_rect(*edge) for edge in named]
+
+    # Each box is its name's own run of ink. The clause exists at all because a
+    # product name is wider than the lane pitch the two arrowheads are separated
+    # by, so a box narrower than that would clear its neighbour by arithmetic
+    # that has nothing to do with what is drawn.
+    from sieve.gui.chain_stack import EDGE_LANE
+
+    assert all(box.width() > EDGE_LANE for box in boxes)
+
+    assert not boxes[0].intersects(boxes[1])
+
+    # Both still inside the gap: the edges are painted before the cards are, so a
+    # name lifted past the card above is erased by it — the same collision as the
+    # first, against the one rectangle in the picture that is not a name.
+    assert all(box.top() > column.cards[-2].geometry().bottom() for box in boxes)
+
+    # And painted where the geometry says: a name the picture has a box for and
+    # never draws leaves the arrowhead as bare as no name at all.
+    image = column.grab().toImage()
+    for box in boxes:
+        assert _ink(image, box.left(), box.left() + _NAME_WINDOW, box.bottom())
+
+
 def test_a_tick_on_the_form_redraws_the_picture_and_moves_no_edge_of_the_graph(
     window: Any,
 ) -> None:

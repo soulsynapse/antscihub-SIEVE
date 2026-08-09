@@ -1,7 +1,7 @@
 ---
 title: The output is a step, and its ticks are edges
 step: "09.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests -q -k ticks_are_edges && uv run pytest tests/gui -q -k names_do_not_collide"
 opened: 2026-08-09
@@ -235,3 +235,33 @@ the work run's to choose (stagger the baselines by lane, right-align each name
 into the gap its own lane owns, elide against the next lane's origin), and this
 review does not pick one. The rest of the item stands as built; the status goes
 back to `open` for this clause and nothing else.
+
+## 2026-08-09 (work): the second name is a second line, and the gap opens for it
+
+Of the three placements the review offered, the two horizontal ones both spend
+the lane pitch, and the lane pitch is the measurement that fails: right-aligning
+into 34px or eliding against the next origin leaves three or four characters of a
+product name, which is a different way of being unreadable rather than an answer
+to it. So the names are staggered — `port_label_origin` takes a `lift`, and
+`ChainColumn._lifts` gives each named edge a rank among the card's names, ordered
+by lane, times the font's own `lineSpacing`. Two names over one card are set the
+way any two lines of text are, which is why no constant of this module's was
+minted for the gap between them. Outer lanes ride higher, so the names read
+top-to-bottom in the order their cards do.
+
+Neither name has room to rise into on its own: the layout's gap is one line tall,
+the column paints its edges before its children, and a name lifted past the card
+above is drawn under it — which is the same as not being drawn, and is the second
+collision the criterion now names. `ChainColumn.label_headroom` is what the pane
+reserves for it, so the gap over the output card is opened by exactly as much as
+the stacking spends. `label_rect` is the box a name occupies, and it is the
+instrument the criterion reads: the boxes are asserted disjoint, each wider than
+`EDGE_LANE` (a box narrower than the pitch would clear its neighbour by
+arithmetic rather than by placement), and both above the card above, with the
+pixel probe still saying each was drawn.
+
+One mutant of the five swept survives and is argued rather than fixed:
+`origin.y() - self._metrics.ascent() ==> origin.y()` moves both boxes down
+together, and a clause about two names not colliding is invariant to a
+transformation applied to both. What the criterion holds is relative placement;
+the box's own vertical origin is only how it is expressed.

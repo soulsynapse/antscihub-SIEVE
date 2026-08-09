@@ -118,6 +118,18 @@ TWO_CUTS = Pipeline(
     edges=(Edge(upstream=CUT, downstream=DOWN),),
 )
 
+#: One crop at the root, and a second root the footage also feeds. The crop is
+#: as unambiguous as `GRAPH`'s; what the artifact cannot serve is the node beside
+#: it, which asked for whole frames.
+SECOND_ROOT = Pipeline(
+    nodes=(
+        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
+        Node(node_id=DOWN, tool_id="downsample", version="1.0.0", params={"factor": 2}),
+        Node(node_id="whole", tool_id="downsample", version="1.0.0", params={"factor": 4}),
+    ),
+    edges=(Edge(upstream=CUT, downstream=DOWN),),
+)
+
 #: A crop of another node's output rather than of the footage.
 CUT_BELOW = Pipeline(
     nodes=(
@@ -263,6 +275,21 @@ class TestWhichNodeARecordCouldStandFor:
         and would cost a writing one a file recorded as a cut it is not.
         """
         assert _bound(TWO_CUTS) is None
+
+    def test_a_second_root_beside_the_crop_is_not_one_the_artifact_can_serve(self) -> None:
+        """The clause with no symptom, and the one that arrived after the others.
+
+        Nothing about the crop is ambiguous here — one box, one root crop node,
+        exactly what `GRAPH` answers with. What the record says nothing about is
+        the node beside it, which asked for whole frames; serving replaces the
+        run's whole reader with the artifact, and the executor binds every node
+        the footage feeds to that one reader, so the second root is handed the
+        cut frames. No refusal, no message, and the printed counts are the counts
+        a correct run prints. `linear_order` raises for a two-root graph and
+        `source_key` folds a shape that is visibly wrong; this one announces
+        nothing, which is why it is asserted here rather than left to the run.
+        """
+        assert _bound(SECOND_ROOT, _replicate()) is None
 
     def test_a_crop_of_another_nodes_output_is_not_one_a_file_could_hold(self) -> None:
         """A record is cut from the footage, so only a root can be stood in for.

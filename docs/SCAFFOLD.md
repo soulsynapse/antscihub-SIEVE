@@ -74,6 +74,7 @@ src/sieve/tools/detect.py                  # Morlet band power, an in-band block
 src/sieve/tools/downsample.py              # Reduce spatial resolution by an integer factor.
 src/sieve/tools/motion_history.py          # A causal leaky accumulator of per-block activity, with its neighbours.
 src/sieve/tools/normalize.py               # Per-frame contrast normalization: `off` or `zscore`.
+src/sieve/tools/pick.py                    # A file the user chose, standing in the graph as a node with no upstream.
 src/sieve/tools/rescale.py                 # Reduce spatial resolution by a float linear scale factor.
 src/sieve/tools/span.py                    # Keep a range of frames, with every frame there could be as the identity value.
 src/sieve/tools/temporal_baseline.py       # Each cell's own null distribution over time, and the signal in units of it.

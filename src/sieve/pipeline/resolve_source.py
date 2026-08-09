@@ -25,6 +25,12 @@ node a record could stand for, and the graph without it — but the decision to
 take them is the caller's, because only a caller knows what else it has promised
 that node's output to. `cli/run_cmd.py` is the one that takes it today.
 
+**Two kinds of file, one module.** `resolve` answers which file the *footage*
+resolves to; `picked_identities` answers which file each root that reads its own
+resolves to. They are here together because a run needs both before it is keyed
+and because both are the same question — what is this run actually reading —
+asked of the two ways a node can come by frames.
+
 **A plan-time route with a known expiry.**
 `adr/a-users-file-wires-in-like-any-other-input.md` settles that the substitution
 is a document edit — the written crop is a source tool wired to the crop node's
@@ -242,6 +248,43 @@ def crop_roots(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[tuple[str, R
     )
 
 
+def picked_identities(dag: Dag, params: Mapping[str, ParamsBase]) -> dict[str, str]:
+    """What identifies each source root's file, for the run's keys.
+
+    The other half of `resolve` — that one answers which file the *footage*
+    resolves to, this one which file each root that reads its own resolves to —
+    and it is here rather than in `plan.py` for the reason `source` is a string
+    there: a plan is derivable where nothing is mounted, and both of these stat
+    a file.
+
+    Nothing here knows what a picked file is. The tool resolves its own pattern
+    (`ToolSource.file`), which is what keeps `pipeline` from globbing a second
+    time and disagreeing, and what keeps this walk from branching on a tool id.
+
+    Args:
+        dag: The graph about to run.
+        params: Resolved parameters per node id — `ExecutionPlan.params`, so a
+            replicate that deviated its own pattern resolves its own file.
+
+    Returns:
+        `node_id` to `cache_key.source_identity`, for the source roots only.
+        Hand it to `ExecutionPlan.build` as `picked`.
+
+    Raises:
+        SourceFileError: if any source root's pattern names no file or several.
+            Raised rather than skipped: a run that cannot say which file it is
+            reading cannot be keyed *or* executed, and the executor would reach
+            the same refusal one decode later.
+        OSError: if the file resolves and then cannot be statted.
+    """
+    identities: dict[str, str] = {}
+    for node in dag.source_roots:
+        spec = dag.specs[node.node_id]
+        assert spec.source is not None  # `source_roots` is defined by it
+        identities[node.node_id] = source_identity(spec.source.file(params[node.node_id]))
+    return identities
+
+
 def crop_bound(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[str, ROI] | None:
     """Which node a record could stand for, and the box it would have to hold.
 
@@ -253,6 +296,16 @@ def crop_bound(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[str, ROI] | 
     takes. Serving is an acceleration and declining to guess costs only speed;
     the command that has to produce a file instead refuses (`crop_roots`).
 
+    **A second root the footage feeds also leaves nothing to serve, and that is
+    the clause with no symptom.** Serving replaces the run's whole reader with
+    the artifact, and the executor binds every node fed by the footage to that
+    one reader — so a graph holding the crop and, beside it, any other node
+    reading the source hands the second one frames cut to a box it never asked
+    for. No refusal, no message, and the printed counts are a correct run's
+    counts. A root that reads its *own* file is not one of these and is not
+    counted: it never touches the run's reader, which is the whole of what a
+    source tool changed here (`adr/a-users-file-wires-in-like-any-other-input.md`).
+
     Args:
         dag: The graph about to run.
         params: Resolved parameters per node id — `crop_roots`' rule.
@@ -262,7 +315,10 @@ def crop_bound(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[str, ROI] | 
         `None` is what `resolve` reads as "run the parent".
     """
     roots = crop_roots(dag, params)
-    return roots[0] if len(roots) == 1 else None
+    if len(roots) != 1:
+        return None
+    fed_by_footage = [node for node in dag.roots if dag.specs[node.node_id].source is None]
+    return roots[0] if len(fed_by_footage) == 1 else None
 
 
 def elided(pipeline: Pipeline, node_id: str) -> Pipeline:

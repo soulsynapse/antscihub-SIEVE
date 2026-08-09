@@ -65,6 +65,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from pydantic import ValidationError
 
@@ -81,7 +82,7 @@ from sieve.core.tool_base import (
 )
 from sieve.core.tool_registry import REGISTRY, ToolRegistry, UnknownToolError
 from sieve.core.types import ChannelSpec
-from sieve.pipeline.cache_key import NotCacheableError, node_key, source_key
+from sieve.pipeline.cache_key import NotCacheableError, node_key, picked_key, source_key
 
 
 class GraphError(ValueError):
@@ -549,9 +550,11 @@ class Dag:
 
     @property
     def roots(self) -> tuple[Node, ...]:
-        """Nodes with no upstream: each consumes the replicate's cropped source.
+        """Nodes with no upstream: each is fed the source, or opens its own file.
 
-        In topological order, so a caller feeding them frames does so in the
+        Which of the two is `source_roots` below, and it is a property of the
+        tool rather than of the graph. In topological order, so a caller feeding
+        them frames does so in the
         document's order. A graph with no nodes has no roots; a graph with
         nodes always has at least one, since a graph where every node had an
         upstream would have been rejected as cyclic.
@@ -640,7 +643,28 @@ class Dag:
         """
         return any(_requires_chroma(spec) for spec in self.specs.values())
 
-    def node_keys(self, *, source: str, replicate: Replicate | None = None) -> dict[str, str]:
+    @property
+    def source_roots(self) -> tuple[Node, ...]:
+        """Roots that read a file of their own rather than the run's footage.
+
+        `roots` split by the one declaration that separates them
+        (`adr/a-users-file-wires-in-like-any-other-input.md`): a source tool
+        opens the file its path parameter names, so it is neither fed by the
+        reader nor keyed off the footage. Derived here rather than at each call
+        site because three of them ask — the key walk below, the executor's
+        binding, and the caller deciding whether a written crop can stand for a
+        graph — and a fourth spelling of "no upstream and a source" would be the
+        one that forgot half of it.
+        """
+        return tuple(node for node in self.roots if self.specs[node.node_id].source is not None)
+
+    def node_keys(
+        self,
+        *,
+        source: str,
+        replicate: Replicate | None = None,
+        picked: Mapping[str, str] = MappingProxyType({}),
+    ) -> dict[str, str]:
         """Every cacheable node's key, for one replicate.
 
         The traversal `cache_key.py` names and declines to own. One pass in
@@ -676,6 +700,14 @@ class Dag:
                 (`adr/detector-is-a-node.md`) and so reaches the keys through
                 `resolved_params` like any other deviation. `None` is the
                 baseline a project with no fan-out runs.
+            picked: `cache_key.source_identity` per source root, from a caller
+                that has resolved each one's path parameter. Absent by default
+                and absent per node without penalty: a source root with no
+                identity here is left unkeyed, so the subtree below it computes,
+                which is `NotCacheableError`'s treatment for the same reason —
+                a caller that has not statted the file has no key to give it,
+                and inventing one from the pattern would key two files alike.
+                This module never opens a file, so nothing here can derive it.
 
         Returns:
             `node_id` to key, for the cacheable nodes only.
@@ -702,6 +734,15 @@ class Dag:
                 if parent not in keys:
                     continue
                 upstream = keys[parent]
+            elif self.specs[node.node_id].source is not None:
+                # A source tool keys from its own file, so the footage's key is
+                # not its ancestor — folding `root_key` here would make swapping
+                # the picked file invisible to the store and make every project
+                # over one video agree about a file none of them named.
+                identity = picked.get(node.node_id)
+                if identity is None:
+                    continue
+                upstream = picked_key(identity)
             else:
                 upstream = root_key
             try:

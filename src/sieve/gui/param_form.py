@@ -286,6 +286,12 @@ _BUILDERS: dict[ParamStereotype, _Builder] = {
     ParamStereotype.BAND: _stated_value,
     ParamStereotype.REGION: _stated_value,
     ParamStereotype.POINT: _stated_value,
+    # The pattern as written, until there is a picker to open. A file dialog is
+    # the handoff surface this kind names, and it arrives with the card that
+    # holds a source step (`todo/the-source-is-a-card-in-the-walk.md`); what the
+    # panel owes today is the same thing it owes every kind whose editor lives
+    # elsewhere, which is showing the value the document holds.
+    ParamStereotype.PATH: _stated_value,
 }
 
 

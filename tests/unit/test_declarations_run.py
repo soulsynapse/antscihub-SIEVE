@@ -32,6 +32,7 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
@@ -127,37 +128,91 @@ class Footage:
         return frame
 
 
+class RecordedSource:
+    """A `ToolSource` that counts the frames the executor asked it for.
+
+    The source tool's half of the recorder below. What it records is a width of
+    one per call, which is what a source tool's answer to the mode question is:
+    it is asked for the frame the run is answering for, one at a time, and it
+    accumulates nothing.
+    """
+
+    def __init__(self, inner: object, widths: list[int]) -> None:
+        self._inner = inner
+        self._widths = widths
+
+    def file(self, params: object, /) -> Path:
+        return self._inner.file(params)  # pyright: ignore[reportAttributeAccessIssue]
+
+    def read(self, params: object, index: object, /) -> Frame:
+        self._widths.append(1)
+        return self._inner.read(params, index)  # pyright: ignore[reportAttributeAccessIssue]
+
+
 def observe(
-    spec: ToolSpec, span: SourceSpan, footage: Footage
+    spec: ToolSpec, span: SourceSpan, footage: Footage, params: dict[str, object] | None = None
 ) -> tuple[list[int], list[FrameResult]]:
     """Run `spec` as a single-node graph, recording the window each call got.
 
     The recorder is swapped in with `dataclasses.replace`, which changes no
-    declaration — `run` is a pointer the executor follows, so wrapping it leaves
-    every claim under test exactly as the tool wrote it. A scratch registry
-    rather than the process-wide shelf, because the replacement must not outlive
-    this call.
+    declaration — `run` and `source` are pointers the executor follows, so
+    wrapping one leaves every claim under test exactly as the tool wrote it. A
+    scratch registry rather than the process-wide shelf, because the replacement
+    must not outlive this call.
 
     A root and nothing above it: what a tool is handed here is the reader's
     frame, so the width the executor chose is the tool's own declaration and not
-    an upstream's lookahead accumulated into it.
+    an upstream's lookahead accumulated into it. A source tool is a root that is
+    handed nothing at all — the footage below is built and never read — and the
+    pointer it declares instead is the one wrapped.
     """
     widths: list[int] = []
-    assert spec.run is not None, f"{spec.tool_id} points at no run and cannot be executed"
-    kernel = spec.run
-
-    def recorded(params: object, window: object, state: object, /) -> Frame:
-        widths.append(len(window))  # pyright: ignore[reportArgumentType]
-        return kernel(params, window, state)  # pyright: ignore[reportArgumentType]
-
     shelf = ToolRegistry()
-    shelf.register(dataclasses.replace(spec, run=recorded))
+    if spec.source is not None:
+        shelf.register(dataclasses.replace(spec, source=RecordedSource(spec.source, widths)))
+    else:
+        assert spec.run is not None, f"{spec.tool_id} points at no run and cannot be executed"
+        kernel = spec.run
+
+        def recorded(params: object, window: object, state: object, /) -> Frame:
+            widths.append(len(window))  # pyright: ignore[reportArgumentType]
+            return kernel(params, window, state)  # pyright: ignore[reportArgumentType]
+
+        shelf.register(dataclasses.replace(spec, run=recorded))
     pipeline = Pipeline(
-        nodes=(Node(node_id=NODE, tool_id=spec.tool_id, version=spec.version, params={}),),
+        nodes=(
+            Node(
+                node_id=NODE,
+                tool_id=spec.tool_id,
+                version=spec.version,
+                params=dict(params or {}),
+            ),
+        ),
         edges=(),
     )
     plan = ExecutionPlan.build(Dag.build(pipeline, shelf), source=SOURCE, span=span)
     return widths, list(execute(plan, footage))
+
+
+@pytest.fixture(scope="module")
+def picked(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
+    """Params pointing every path parameter on the shelf at one written picture.
+
+    Derived from `ToolSpec.path_params` — the kind, never a tool id — so this is
+    the same shape as everything else here: a tool that lands tomorrow with a
+    file to read is handed one without this file learning its name. The picture
+    is the size `Footage` hands every other tool, so a case comparing an emitted
+    frame against its input is comparing like with like.
+    """
+    path = tmp_path_factory.mktemp("picked") / "plate.png"
+    rng = np.random.default_rng(7)
+    cv2.imwrite(str(path), rng.integers(0, 256, (HEIGHT, WIDTH), dtype=np.uint8))
+    return {"path": path}
+
+
+def params_for(spec: ToolSpec, picked: dict[str, object]) -> dict[str, object]:
+    """This tool's node params: nothing, or the picture for its path parameters."""
+    return {name: str(picked["path"]) for name in spec.path_params}
 
 
 def node_for(spec: ToolSpec) -> Node:
@@ -170,7 +225,7 @@ def golden_for(spec: ToolSpec) -> Path:
 
 
 @pytest.mark.parametrize("spec", SHELF, ids=lambda spec: spec.tool_id)
-def test_mode_is_what_the_run_does(spec: ToolSpec) -> None:
+def test_mode_is_what_the_run_does(spec: ToolSpec, picked: dict[str, object]) -> None:
     """A windowed tool is handed a span, and a streaming one the frame in front of it.
 
     `Mode` is what the executor branches on, so a tool declaring the wrong one
@@ -191,7 +246,8 @@ def test_mode_is_what_the_run_does(spec: ToolSpec) -> None:
     is the one a spec cannot fake, and it is skipped for a tool with something to
     settle, whose answer depends on its predecessors by declaration.
     """
-    widths, _ = observe(spec, SPAN, Footage(spec))
+    settings = params_for(spec, picked)
+    widths, _ = observe(spec, SPAN, Footage(spec), settings)
     assert widths, f"{spec.tool_id} was never called; there is nothing to read a mode off"
 
     if spec.mode is Mode.WINDOWED:
@@ -208,8 +264,10 @@ def test_mode_is_what_the_run_does(spec: ToolSpec) -> None:
     if spec.stateful or node_warmup_frames((spec, spec.params_model())).frames > 0:
         return
 
-    plain = dict(_by_index(observe(spec, NEIGHBOURHOOD, Footage(spec))[1]))
-    perturbed = dict(_by_index(observe(spec, NEIGHBOURHOOD, Footage(spec, altered=ALTERED))[1]))
+    plain = dict(_by_index(observe(spec, NEIGHBOURHOOD, Footage(spec), settings)[1]))
+    perturbed = dict(
+        _by_index(observe(spec, NEIGHBOURHOOD, Footage(spec, altered=ALTERED), settings)[1])
+    )
     for index, frame in plain.items():
         if index == ALTERED:
             continue
@@ -224,7 +282,7 @@ def _by_index(results: list[FrameResult]) -> list[tuple[int, Frame]]:
 
 
 @pytest.mark.parametrize("spec", SHELF, ids=lambda spec: spec.tool_id)
-def test_element_is_what_the_run_emits(spec: ToolSpec) -> None:
+def test_element_is_what_the_run_emits(spec: ToolSpec, picked: dict[str, object]) -> None:
     """The dtype, the channels and the element kind, against the frame handed back.
 
     `emits` is what `dag.py` chains an edge on and `element` is the noun a count
@@ -242,10 +300,9 @@ def test_element_is_what_the_run_emits(spec: ToolSpec) -> None:
     rather than the count (see this module's docstring).
     """
     footage = Footage(spec)
-    _, results = observe(spec, SPAN, footage)
+    _, results = observe(spec, SPAN, footage, params_for(spec, picked))
     assert results, f"{spec.tool_id} answered for no frame"
     produced = results[0][NODE]
-    consumed = footage.handed[0]
     assert isinstance(spec.emits, ArraySpec)
 
     if spec.emits.dtypes:
@@ -257,12 +314,19 @@ def test_element_is_what_the_run_emits(spec: ToolSpec) -> None:
             f"{spec.tool_id} emitted {produced.channels} and declares {spec.emits.channels}"
         )
 
-    assert consumed.data.size > 1, "a one-element input cannot tell the element kinds apart"
     assert (produced.data.size == 1) is (spec.element is ElementKind.FRAME), (
         f"{spec.tool_id} declares element={spec.element} and emitted {produced.data.size} "
-        f"value(s) for an input of {consumed.data.size} — one value for the whole frame is "
-        f"{ElementKind.FRAME!r} and nothing else"
+        f"value(s) — one value for the whole frame is {ElementKind.FRAME!r} and nothing else"
     )
+    if spec.source is not None:
+        # The three legs below relate what came out to what went in, and a
+        # source tool was handed nothing: it opened its own file, so `footage`
+        # was built and never read. The two legs above are the ones that still
+        # have a subject.
+        assert not footage.handed, f"{spec.tool_id} declares a source and read the footage anyway"
+        return
+    consumed = footage.handed[0]
+    assert consumed.data.size > 1, "a one-element input cannot tell the element kinds apart"
     if spec.element is ElementKind.BLOCK:
         assert produced.data.size < consumed.data.size, (
             f"{spec.tool_id} declares element={spec.element} and emitted as many values as it "

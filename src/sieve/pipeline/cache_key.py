@@ -18,8 +18,10 @@ graph it did not validate is a second answer to the question of what the graph
 is.
 
 **Decoder identity enters once, at the root.** It is folded into `source_key`,
-which every root node names as its upstream, so it reaches every downstream key
-through the ancestry rather than by being re-hashed at each node.
+which a root the footage feeds names as its upstream, so it reaches every
+downstream key through the ancestry rather than by being re-hashed at each node.
+A root that reads its own file names `picked_key` instead, and the two flavours
+are what keeps one graph's two roots from folding one identity.
 
 **What is deliberately absent.** Checkpoints, sink paths, the frames a run asks
 for, and the replicate's display name. Narrowing a request changes which frames
@@ -86,8 +88,14 @@ DIGEST_BYTES = 32
 #: wiring left for a digest to distinguish.
 NODE_KEY_POSITIONS: tuple[str, ...] = ("flavour", "upstream", "tool_id", "version", "params")
 
-#: `NODE_KEY_POSITIONS` for the ancestor of every root.
+#: `NODE_KEY_POSITIONS` for the ancestor of every root the footage feeds.
 SOURCE_KEY_POSITIONS: tuple[str, ...] = ("flavour", "source", "decoder", "format")
+
+#: `NODE_KEY_POSITIONS` for the ancestor of a root that reads its own file.
+#: Neither of `source_key`'s last two positions appears, and their absence is
+#: the difference between the two flavours rather than an omission — see
+#: `picked_key`.
+PICKED_KEY_POSITIONS: tuple[str, ...] = ("flavour", "file")
 
 
 class NotCacheableError(ValueError):
@@ -258,6 +266,38 @@ def source_key(source: str, *, decode_format: CropFormat) -> str:
     return _digest(SOURCE_KEY_POSITIONS, "source", source, decoder_identity(), decode_format)
 
 
+def picked_key(identity: str) -> str:
+    """The key for a file a source tool reads: the ancestor of that one root.
+
+    `source_key`'s sibling, and the whole reason there are two. A graph-fed
+    root's ancestry is the footage the run decodes, so what identifies it is the
+    file *and* the reader that opened it. A source tool has nothing upstream to
+    constrain it: it opens its own file with its own code, so the reading is
+    already covered by the `tool_id` and `version` positions of the node key
+    below — `version` stands proxy for a tool's reading exactly as it does for
+    its computing. Folding `decoder_identity()` and a decode format in anyway
+    would key a picked PNG against the video decoder that never touched it, and
+    would move every such key on the day `decode/` changes a seek strategy.
+
+    What it must do is move when the file moves, and that is the failure ADR-18
+    names: get this wrong and swapping one background for another is invisible
+    to the store, which serves the first model's results under the second's name
+    — well-formed key, plausible frame, no symptom.
+
+    **The rule that found the file is not in here.** What is hashed is the
+    resolved file's identity and never the pattern, so two projects naming one
+    file agree about it and one project agrees with itself after the folder is
+    reorganized underneath it (`adr/a-users-file-wires-in-like-any-other-input.md`).
+    The pattern is still a parameter and still reaches the node's own key
+    through `params`; what it may not do is stand *instead of* the identity.
+
+    Args:
+        identity: What identifies the picked file — `source_identity` builds
+            one, from the path the tool's own resolution came back with.
+    """
+    return _digest(PICKED_KEY_POSITIONS, "picked", identity)
+
+
 def node_key(
     node: Node, *, spec: ToolSpec, upstream: str, replicate: Replicate | None = None
 ) -> str:
@@ -282,7 +322,8 @@ def node_key(
         spec: The registered tool, resolved by the caller — `dag.py` does this
             against a `ToolRegistry` and the executor carries the result.
         upstream: The key of the node feeding this one, which for a root is the
-            `source_key`. Not optional and not a mapping: schema v1 gives every
+            `source_key` of the footage or the `picked_key` of the file the tool
+            reads. Not optional and not a mapping: schema v1 gives every
             node exactly one input, and the day a two-input tool lands is the
             day the edge learns which port it feeds and this position becomes
             port-bound pairs again — `a - b` and `b - a` are fed by the same two

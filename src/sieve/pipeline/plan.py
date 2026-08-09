@@ -98,6 +98,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from pydantic import ValidationError
 
@@ -167,6 +168,7 @@ class ExecutionPlan:
         span: SourceSpan,
         replicate: Replicate | None = None,
         source_end: FrameIndex | None = None,
+        picked: Mapping[str, str] = MappingProxyType({}),
     ) -> ExecutionPlan:
         """Derive the run of `dag` over `span`.
 
@@ -190,6 +192,11 @@ class ExecutionPlan:
                 buildable where none can be opened, and the whole difference it
                 makes is whether the trailing end of the window is clamped or
                 merely asked for.
+            picked: What identifies each source root's file, for a caller that
+                has resolved it — `resolve_source.picked_identities`. Optional
+                for `source` being a string's reason: a plan is derivable where
+                nothing is mounted, and a source root with no identity is left
+                out of `keys` rather than keyed against a pattern.
 
         Raises:
             InvalidParamsError: if any node's resolved parameters are not valid
@@ -217,7 +224,7 @@ class ExecutionPlan:
             dag=dag,
             span=answerable,
             params=params,
-            keys=dag.node_keys(source=source, replicate=replicate),
+            keys=dag.node_keys(source=source, replicate=replicate, picked=picked),
             lead_in=_fold(dag, params, input_warmup_frames),
             lookahead=lookahead,
             replicate=replicate,

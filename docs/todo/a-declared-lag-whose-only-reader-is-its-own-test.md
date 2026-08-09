@@ -23,6 +23,23 @@ and was kept without anyone asking; a future tool exposing a derived quantity
 with a test and no caller has no precedent to read off the tree, only two
 modules that happen to agree.
 
+## A third module in the same set, and it is not a params method
+
+`dag.linear_order` is read by `tests/unit/test_dag.py` and by nothing under
+`src/`
+([finding](../findings/2026.08.09-linear-order-is-not-the-tool-stacks-redraw.md)).
+It landed for a caller that was then written elsewhere: the tool stack walks
+`gui/walk.node_order`, which never refuses, because a window has to render
+whatever document was opened. So the pair above is no longer two modules that
+happen to agree — it is three, and the third widens the question rather than
+repeating it. `settle_frames` and `group_delay_frames` compute a real property
+a test can measure; `linear_order` computes a real property of a graph and also
+carries a *refusal* nothing can reach, which is the shape
+`adr/declared-means-verified.md` is least ambiguous about. Whichever reading the
+rule takes, the answer wants to cover all three at once, and this one is the
+cheapest to act on: it is promoted to a front end that reads it or cut with its
+cases.
+
 The consumer, when it arrives, is an onset time leaving the process: a CSV of
 detections wants its frame numbers corrected by this many frames, and the delay
 matters most against a centred window, which has none of its own — mixing the

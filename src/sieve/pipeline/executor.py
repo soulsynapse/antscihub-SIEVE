@@ -19,6 +19,16 @@ reader is a `FrameSource` rather than a `VideoReader` for the same reason the
 store is a protocol: a run over materialized frames (VISION step 4) is the same
 executor with a different source, not a mode.
 
+**A root is fed by the reader unless it opens its own file.** A source tool has
+no upstream and does not want one: its frames come from the file its path
+parameter names, and this loop asks it for them where it would otherwise have
+decoded (`adr/a-users-file-wires-in-like-any-other-input.md`). That is one
+route and not two — the node is scheduled, keyed, stored and yielded exactly as
+every other node is, and what differs is the one line that says where its input
+came from. A graph whose roots all read their own files therefore never touches
+the reader, which is what makes a picker runnable in a project the footage of
+which is not the subject.
+
 **A stateful node keeps its state in its binding, and a served range is what it
 has to survive.** `cache_policy` keys a node whose warmup is *bounded* whether
 or not it keeps state (`adr/cache-admission-is-bounded-warmup.md`), so a store
@@ -95,6 +105,7 @@ from sieve.core.tool_base import (
     Mode,
     ToolDisplay,
     ToolRun,
+    ToolSource,
     ToolSpec,
     node_lookahead_frames,
     node_warmup_frames,
@@ -237,7 +248,11 @@ class BoundNode:
     signature and no backends the only such thing left is `state`.
     """
 
-    run: ToolRun[Any, Any]
+    run: ToolRun[Any, Any] | None
+    #: What opens this node's own file, or `None` for every node the graph
+    #: feeds. `run`'s alternative and never its companion — `ToolSpec` refuses
+    #: the pair — so exactly one of the two is set on every bound node.
+    source: ToolSource[Any] | None
     #: This run's state, from `ToolSpec.state_factory`, or `None` for a tool
     #: that keeps none. Made in `_bind` and unreachable from anywhere else, so
     #: two concurrent `execute` calls over one node are two states.
@@ -430,32 +445,45 @@ def execute(
                 if cached is not None:
                     _serve(node.node_id, cached, answers_for, emitted, pending)
                     continue
-            fed = plan.dag.upstreams[node.node_id]
-            if fed:
-                (parent,) = fed
-                incoming = emitted[parent]
+            if bound.source is not None:
+                # The binding a source tool replaces rather than shares
+                # (`adr/a-users-file-wires-in-like-any-other-input.md`): a root
+                # the footage feeds is handed `reader.read`, and this one opens
+                # the file its own path parameter names. The reader is not
+                # touched on its account, so a graph whose only root is a picker
+                # decodes nothing.
+                produced = _source_frame(node, bound, plan, answers_for)
+                window = FrameSpan((produced,))
             else:
-                if decoded is None:
-                    # The one place the reader is touched, and only once per
-                    # frame however many roots there are: a graph with two roots
-                    # reads one frame rather than seeking twice.
-                    decoded = reader.read(step)
-                    _check_format(decoded, plan)
-                    pending[step].source = decoded
-                incoming = decoded
-            window = _window(incoming, bound, histories.get(node.node_id))
-            if window is None:
-                # Holding the window open: this node has its target in hand but
-                # not yet the frames past it that it declared it would read.
-                continue
-            if eager:
-                cached = keep.get(key, answers_for)
-                if cached is not None:
-                    _serve(node.node_id, cached, answers_for, emitted, pending)
-                    _remember(feeds, node.node_id, incoming)
+                fed = plan.dag.upstreams[node.node_id]
+                if fed:
+                    (parent,) = fed
+                    incoming = emitted[parent]
+                else:
+                    if decoded is None:
+                        # The one place the reader is touched, and only once per
+                        # frame however many roots there are: a graph with two
+                        # roots reads one frame rather than seeking twice.
+                        decoded = reader.read(step)
+                        _check_format(decoded, plan)
+                        pending[step].source = decoded
+                    incoming = decoded
+                assembled = _window(incoming, bound, histories.get(node.node_id))
+                if assembled is None:
+                    # Holding the window open: this node has its target in hand
+                    # but not yet the frames past it that it declared it would
+                    # read.
                     continue
-            _resettle(node.node_id, bound, plan, feeds.get(node.node_id), fed_through)
-            produced = _run_node(node, window, bound, plan, answers_for)
+                window = assembled
+                if eager:
+                    cached = keep.get(key, answers_for)
+                    if cached is not None:
+                        _serve(node.node_id, cached, answers_for, emitted, pending)
+                        _remember(feeds, node.node_id, incoming)
+                        continue
+                _resettle(node.node_id, bound, plan, feeds.get(node.node_id), fed_through)
+                produced = _run_node(node, window, bound, plan, answers_for)
+                _remember(feeds, node.node_id, incoming)
             fed_through[node.node_id] = answers_for
             emitted[node.node_id] = produced
             held = pending.setdefault(answers_for, _Partial())
@@ -463,7 +491,6 @@ def execute(
             fill = watched.get(node.node_id)
             if fill is not None:
                 held.displays[node.node_id] = _drawn(node, fill, window, plan, answers_for)
-            _remember(feeds, node.node_id, incoming)
             if reusable:
                 keep.put(key, answers_for, produced)
         yield from _completed(pending, total, plan)
@@ -639,11 +666,16 @@ def _unrunnable_reason(spec: ToolSpec) -> str | None:
     node that emits for only some of its input frames, and rows at either end of
     a call that is frames in and a frame out.
 
+    Two of those clauses are about the *input* side of the call, and a source
+    tool has no input side: it points at a `source` instead of a `run` and is
+    handed nothing to accept. Both are skipped for one, which leaves the two
+    clauses that are about what it hands back.
+
     Returns:
         A clause naming the declaration that cannot be run — the caller supplies
         whatever identifies the node — or `None` when the spec is callable.
     """
-    if spec.run is None:
+    if spec.source is None and spec.run is None:
         return (
             "points at no run, so there is nothing to call — a spec may be declared without one "
             "and a graph over it still plans, but it cannot be executed"
@@ -653,7 +685,7 @@ def _unrunnable_reason(spec: ToolSpec) -> str | None:
             "declares rate_changing, and the one signature has no way to emit nothing for an "
             "input frame"
         )
-    if not isinstance(spec.accepts, ArraySpec):
+    if spec.source is None and not isinstance(spec.accepts, ArraySpec):
         return (
             "accepts rows, and a run is handed frames — nothing downstream of a table has "
             "anything to feed it"
@@ -697,12 +729,12 @@ def _bind(plan: ExecutionPlan) -> dict[str, BoundNode]:
             # The node id, not only the tool: a graph may name the same tool
             # twice and the reader has to know which one to go and edit.
             raise UnrunnableNodeError(f"{node.node_id} ({spec.tool_id} {spec.version}) {reason}")
-        assert spec.run is not None  # `_unrunnable_reason` refused a spec without one
         step = (spec, plan.params[node.node_id])
         lookahead = node_lookahead_frames(step).frames
         warmup = node_warmup_frames(step).frames
         bindings[node.node_id] = BoundNode(
             run=spec.run,
+            source=spec.source,
             state=None if spec.state_factory is None else spec.state_factory(),
             mode=spec.mode,
             window=(warmup + lookahead + 1 if spec.mode is Mode.WINDOWED else 1),
@@ -795,6 +827,40 @@ def _drawn(
             "against the frames the run yielded, so one filed elsewhere shifts the picture"
         )
     return drawn
+
+
+def _source_frame(node: Node, bound: BoundNode, plan: ExecutionPlan, answers_for: int) -> Frame:
+    """One source tool's frame for the frame the loop is answering for.
+
+    `_run_node` for the root that produces rather than transforms, and it makes
+    the same check for the same reason: the store is keyed by source frame
+    index, so a source tool answering under its own file's numbering would write
+    an entry that is served back later as a different frame's result. The tool
+    is *told* which frame to answer for rather than asked what it has, which is
+    what makes a static input broadcast across the span with no window shape of
+    its own.
+
+    `_check_format` is deliberately not applied here. That check exists because
+    `source_key` hashes the format the *reader* was opened in, and a picked file
+    is neither read through that reader nor keyed on it (`cache_key.picked_key`);
+    what a source tool hands to the node below it is checked where every other
+    edge is, against the declarations, before a frame is read.
+
+    Raises:
+        UnrunnableNodeError: if the frame does not carry the index it was asked
+            for.
+        SourceFileError: if the tool's path parameter names no file or several.
+    """
+    spec = plan.dag.spec(node.node_id)
+    assert bound.source is not None  # the caller branched on it
+    produced = bound.source.read(plan.params[node.node_id], FrameIndex(answers_for))
+    if produced.index != answers_for:
+        raise UnrunnableNodeError(
+            f"{node.node_id} ({spec.tool_id} {spec.version}) sourced frame {produced.index} for "
+            f"target frame {answers_for}; a source tool is told which frame it is answering for, "
+            "and the cache is keyed on it"
+        )
+    return produced
 
 
 def _run_node(

@@ -82,6 +82,14 @@ parameter's values, both directions refused. `sieve inspect` prints it, which
 is the reader that keeps it from being a Phase-7 declaration nobody has read
 (`adr/declared-means-verified.md`).
 
+`source` is the one declaration here that is an *alternative* to `run` rather
+than an addition to it: a node with no upstream reads the file a user picked,
+so where a graph-fed tool is handed frames, a source tool opens them
+(`adr/a-users-file-wires-in-like-any-other-input.md`). It is paired with
+`ParamStereotype.PATH` in both directions, which is what makes the file
+findable — a run reporting which external inputs it needs walks the kind, never
+a `tool_id`.
+
 v2's fourth params-derived declaration, `frame_bytes_ratio`, is cut here with
 `CostEstimate` and `backend_agnostic`: each fed machinery v3 has not built, and
 a declaration with no consumer is refused rather than stored
@@ -100,12 +108,13 @@ from dataclasses import dataclass, field, is_dataclass
 from dataclasses import fields as dataclass_fields
 from enum import StrEnum
 from fractions import Fraction
+from pathlib import Path
 from types import NoneType, UnionType
 from typing import Any, ClassVar, Protocol, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict
 
-from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, FrameSpan
+from sieve.core.types import NO_FRAMES, ChannelSpec, Frame, FrameCount, FrameIndex, FrameSpan
 
 #: `MAJOR.MINOR.PATCH`, no pre-release or build metadata. A tool version is
 #: an input to a cache key before it is a human-facing label, and `1.0.0-rc1`
@@ -860,6 +869,19 @@ class ParamStereotype(StrEnum):
     REGION = "region"
     #: A single location in the frame — what a stamp tool would declare.
     POINT = "point"
+    #: A file the user chose from outside the project, named by a pattern the
+    #: run resolves. The handoff surface is a file or folder picker, which is
+    #: `adr/gui-knows-kinds-not-tools.md`'s licensed extension: the tool
+    #: declaring one writes no GUI code
+    #: (`adr/a-users-file-wires-in-like-any-other-input.md`).
+    #:
+    #: The one member that says where a node's *frames* come from rather than
+    #: how one of its numbers is populated, and that is why `ToolSpec` refuses
+    #: it in either direction against `source` below. A walk looking for the
+    #: external files a project reads finds them by this kind and by nothing
+    #: else — the alternative is branching on `tool_id`, which the ADR above
+    #: and `adr/a-tool-is-one-file.md` each refuse.
+    PATH = "path"
 
 
 class DisplaySurface(StrEnum):
@@ -980,6 +1002,66 @@ class ToolDisplay(Protocol[ParamsT_contra]):
     ) -> Mapping[DisplaySurface, Frame]: ...
 
 
+class SourceFileError(ValueError):
+    """A source tool's path parameter does not resolve to one readable file.
+
+    Two of the three ways it can fail are refused on one set of terms
+    (`adr/a-users-file-wires-in-like-any-other-input.md`): a pattern resolving
+    to nothing is a run that cannot happen, and one resolving to several is
+    refused rather than ordered, since "the first match" is the filesystem's
+    answer and not the project's. The third is the file that resolved and then
+    could not be read as what the tool declared it emits, which is the same
+    refusal one step later and has nowhere better to land.
+    """
+
+
+class ToolSource(Protocol[ParamsT_contra]):
+    """Where a node with no upstream gets its frames: its own file.
+
+    `ToolRun`'s counterpart for the root of a graph. A graph-fed node is handed
+    what its upstream emitted; a source tool has no upstream, and this is the
+    binding that stands where the reader stood
+    (`adr/a-users-file-wires-in-like-any-other-input.md`). A spec declares one
+    or the other and never both — a tool that produces frames is not also a
+    tool that transforms the ones it was handed, and a spec carrying both would
+    leave the executor choosing.
+
+    **Two methods rather than a callable, because the file is asked about twice
+    and must be resolved once.** The executor wants frames; the key walk wants
+    the file's identity, since a source tool keys from its file rather than
+    from the graph, and getting that wrong makes swapping one background for
+    another invisible to the store. Both questions resolve the same pattern, so
+    the resolution is the tool's and is written once — the alternative is
+    `pipeline` globbing a pattern a second time and the two answers drifting
+    apart on the day a pattern matches something new.
+
+    The tool owns the file format for `adr/a-tool-is-one-file.md`'s reason:
+    reading a new kind of file is a tool, bought for one module. Nothing in
+    `pipeline` learns what a picked file is.
+    """
+
+    def file(self, params: ParamsT_contra, /) -> Path:
+        """The one file `params` names.
+
+        Raises:
+            SourceFileError: if the pattern names no file or several.
+        """
+        ...
+
+    def read(self, params: ParamsT_contra, index: FrameIndex, /) -> Frame:
+        """That file's frame for source frame `index`.
+
+        The index is the loop's, not the file's: what a source tool emits is
+        filed under the frame the run is answering for, exactly as every other
+        node's output is, and a static input broadcasts one picture across the
+        span rather than growing a window shape of its own.
+
+        Raises:
+            SourceFileError: if the pattern names no file or several.
+        """
+        ...
+
+
 def _empty_param_value_labels() -> Mapping[str, Mapping[str, str]]:
     return {}
 
@@ -998,7 +1080,9 @@ def _empty_param_stereotypes() -> Mapping[str, ParamStereotype]:
 #: first scalar field that declares it, where the other spelling would let it
 #: through unchecked and hand the generator half a value
 #: (`adr/one-field-is-one-populated-value.md`).
-_ONE_FIELD_STEREOTYPES = frozenset({ParamStereotype.SCALAR_RANGE, ParamStereotype.ENUM})
+_ONE_FIELD_STEREOTYPES = frozenset(
+    {ParamStereotype.SCALAR_RANGE, ParamStereotype.ENUM, ParamStereotype.PATH}
+)
 
 
 def _value_components(annotation: object) -> int:
@@ -1159,6 +1243,18 @@ class ToolSpec:
     #: its id, which is the file-that-grows-with-the-tool-count ADR-2 exists to
     #: prevent.
     run: ToolRun[Any, Any] | None = None
+    #: Where this tool's frames come from when nothing feeds it, or `None` for
+    #: the tools that are fed by the graph. `run`'s alternative rather than its
+    #: companion, and the pair is refused in every direction below: a source
+    #: tool with a `run` would leave the executor choosing which of the two
+    #: produced the node's output, and a path parameter without one of these is
+    #: a file nothing opens.
+    #:
+    #: Beside `run` in the identity channel and for its reason — which file a
+    #: node reads decides what the result *is*, which is also why the key of a
+    #: source root is derived from that file rather than from the graph
+    #: (`adr/a-users-file-wires-in-like-any-other-input.md`).
+    source: ToolSource[Any] | None = None
     mode: Mode = Mode.STREAMING
     #: Frames the tool must consume before its output is trustworthy, counted
     #: in this tool's *input* frames — "must consume" is the unit. Warmup
@@ -1515,6 +1611,19 @@ class ToolSpec:
                         "the kind that fits the value this field actually holds"
                     )
                 continue
+            if kind is ParamStereotype.PATH:
+                # A pattern, not a resolved path, and the annotation says so:
+                # what a picker holds is `*_bg.png` until a run resolves it, and
+                # a `Path` here would be a value the document could round-trip
+                # into an absolute name for one machine.
+                if annotation is not str:
+                    raise ValueError(
+                        f"{self.tool_id}: param_stereotypes[{name!r}] is {kind.value!r} on "
+                        f"{annotation} — a picked file is named by a pattern the run resolves, "
+                        "so the field holds the text the user chose and str is what a document "
+                        "carries it as"
+                    )
+                continue
             if kind in _ONE_FIELD_STEREOTYPES:
                 continue
             if _value_components(annotation) < 2:
@@ -1525,6 +1634,7 @@ class ToolSpec:
                     "parameter and never two bounds each wearing the kind"
                 )
         self._check_surfaces(known)
+        self._check_source()
         # Comparing the function objects, not calling them: a params model with
         # required fields cannot be instantiated here, and the question is
         # whether an override exists at all rather than what it returns.
@@ -1610,6 +1720,62 @@ class ToolSpec:
                 "channel is filled for the bands that are dragged on it, so a filler nothing "
                 "declared is a computation run every frame that no parameter reads"
             )
+
+    def _check_source(self) -> None:
+        """Refuse a file nothing opens, a producer nothing names a file for, or both.
+
+        `_check_surfaces`' shape for the other declaration whose halves are only
+        a declaration together. A path parameter says a user chooses this node's
+        footage; `source` is what opens it. Either alone is a tool that cannot
+        do what it declares — and the pairing is also what lets a walk find
+        every external file a project reads by looking for the kind rather than
+        for a tool id (`adr/gui-knows-kinds-not-tools.md`).
+
+        Raises:
+            ValueError: for a path parameter with no `source`, a `source` with
+                no path parameter, a spec declaring both `source` and `run`, or
+                a source tool that declares a window.
+        """
+        paths = self.path_params
+        if paths and self.source is None:
+            raise ValueError(
+                f"{self.tool_id}: declares a path parameter {list(paths)} and points at nothing "
+                "that opens it — a picked file reaches the graph through the tool that reads it, "
+                "so declare source=<what resolves and reads the file>"
+            )
+        if self.source is not None and not paths:
+            raise ValueError(
+                f"{self.tool_id}: points at a source and declares no path parameter — a node with "
+                f"no upstream reads a file the user chose, and nothing about this tool says which "
+                f"one or lets a run report it missing before it starts"
+            )
+        if self.source is not None and self.run is not None:
+            raise ValueError(
+                f"{self.tool_id}: declares both a source and a run — a source tool produces the "
+                "frames a graph-fed tool would have been handed, so the two are alternatives and "
+                "a spec carrying both leaves the executor choosing which made the output"
+            )
+        if self.source is not None and self.mode is not Mode.STREAMING:
+            raise ValueError(
+                f"{self.tool_id}: declares a source and mode={self.mode.value} — a source tool is "
+                "asked for one frame at a time and has no input window to accumulate, so a mode "
+                "here is a declaration the loop has no way to honour"
+            )
+
+    @property
+    def path_params(self) -> tuple[str, ...]:
+        """Parameters naming a file this tool reads, in declaration order.
+
+        The whole of how anything outside a tool finds the external files a
+        project depends on. Derived from `param_stereotypes` rather than
+        declared beside it, so there is no second list to disagree with the
+        kinds the widget generator reads.
+        """
+        return tuple(
+            name
+            for name in self.params_model.model_fields
+            if self.param_stereotypes.get(name) is ParamStereotype.PATH
+        )
 
     @property
     def display_surfaces(self) -> frozenset[DisplaySurface]:
@@ -1698,6 +1864,12 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     # what the result is, and `version` is the position that stands proxy for it
     # in the digest — hashing the function would key a run on a build's memory
     # layout and miss the edit that matters.
+    # Beside `run` and for its sentence: which file a node with no upstream
+    # reads is what the result is, and the key of that root is derived from the
+    # file rather than from the graph. `version` stands proxy for the reading
+    # code here exactly as it does for `run`; what distinguishes two runs is the
+    # file's own identity, which reaches the digest through `cache_key.picked_key`.
+    "source": Channel.IDENTITY,
     "run": Channel.IDENTITY,
     "mode": Channel.EXECUTION,
     "rate_changing": Channel.EXECUTION,

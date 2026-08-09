@@ -14,8 +14,10 @@ from collections.abc import Mapping
 from dataclasses import fields
 from enum import StrEnum
 from fractions import Fraction
+from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 from sieve.core.tool_base import (
@@ -49,7 +51,15 @@ from sieve.core.tool_registry import (
     UnknownToolError,
     register_tool,
 )
-from sieve.core.types import NO_FRAMES, ROI, ChannelSpec, Frame, FrameCount, FrameSpan
+from sieve.core.types import (
+    NO_FRAMES,
+    ROI,
+    ChannelSpec,
+    Frame,
+    FrameCount,
+    FrameIndex,
+    FrameSpan,
+)
 
 
 class SampleParams(ParamsBase):
@@ -975,6 +985,10 @@ class TestParamStereotypes:
         # fails here rather than in a review nobody scheduled. `band` was forced
         # by `detect`, whose three interval params are on Hz, a block-power
         # value and a fraction rather than on the timeline `span` reaches.
+        # `path` was forced by `pick`, the first tool whose input is a file the
+        # user chose rather than an edge — and it is the one member a walk
+        # outside the GUI reads, since the list of external files a project
+        # needs is derived from this kind and never from a `tool_id`.
         assert [kind.value for kind in ParamStereotype] == [
             "scalar-range",
             "enum",
@@ -982,6 +996,7 @@ class TestParamStereotypes:
             "band",
             "region",
             "point",
+            "path",
         ]
 
     def test_every_param_field_declares_a_stereotype(self) -> None:
@@ -1452,6 +1467,26 @@ def probe_run(params: ParamsBase, window: FrameSpan, state: None) -> Frame:
     return window.target
 
 
+class ProbeSource:
+    """A `ToolSource` that resolves nothing, for the `source` probe below.
+
+    `probe_run`'s treatment for the other pointer: the spec stores it and asks
+    nothing of it, so neither method is ever reached and what the probe checks
+    is that the keyword arrives at the field.
+    """
+
+    def file(self, params: ParamsBase, /) -> Path:
+        del params
+        return Path("nowhere")
+
+    def read(self, params: ParamsBase, index: FrameIndex, /) -> Frame:
+        del params
+        return Frame(data=np.zeros((1, 1), dtype=np.uint8), index=index, channels=ChannelSpec.GRAY)
+
+
+stub_source = ProbeSource()
+
+
 #: One legal value per keyword, differing from both that parameter's default
 #: and `BASE`'s value — so a keyword the decorator accepts and never forwards
 #: leaves the spec holding the other one. Applied one at a time rather than all
@@ -1467,6 +1502,9 @@ PROBES: dict[str, Any] = {
     # Any callable: the spec stores the pointer and checks nothing about it, and
     # what may call it is `pipeline/executor.py`'s question.
     "run": probe_run,
+    # `run`'s alternative rather than a second pointer beside it, so this probe
+    # is the one row that also drops `BASE`'s — the spec refuses both together.
+    "source": stub_source,
     "mode": Mode.WINDOWED,
     "settling_epsilon": 0.25,
     "rate_changing": True,
@@ -1534,14 +1572,20 @@ class TestDecoratorMatchesSpec:
 
             band: tuple[float, float] = (0.0, 1.0)
 
-        # The two probes that cannot ride on the shared params model: each names
-        # a flag the spec refuses unless the decorated class overrides the
-        # matching method, and refuses the override without.
+        class PathProbeParams(ParamsBase):
+            """A pattern-shaped field, which is what a path may stand over."""
+
+            pattern: str = ""
+
+        # The probes that cannot ride on the shared params model: each names a
+        # flag or a pointer the spec refuses unless the decorated class carries
+        # the matching override or field, and refuses that without.
         models = {
             "rate_changing": RateProbeParams,
             "selecting": SelectProbeParams,
             "param_surfaces": BandProbeParams,
             "display": BandProbeParams,
+            "source": PathProbeParams,
         }
 
         for name, probe in PROBES.items():
@@ -1567,6 +1611,10 @@ class TestDecoratorMatchesSpec:
             elif name == "warmup_kind":
                 values["stateful"] = True
                 values["settling_epsilon"] = 0.25
+            elif name == "source":
+                # The one probe that is an alternative rather than an addition:
+                # a source tool names the file it opens and declares no run.
+                values["param_stereotypes"] = {"pattern": ParamStereotype.PATH}
             elif name in ("param_surfaces", "display"):
                 # The one probe pair that also moves the stereotype map: a
                 # surface may only stand over a band, and the derived map above

@@ -3084,6 +3084,9 @@ def build_project_pane(current: int, on_select, on_open, on_new) -> QWidget:
     # and not in the fan that shows them.
     library = _fixed_card(LIBRARY, f"{len(PROJECTS)} projects on disk")
     new = _mini_button("+", "New project — empty until sources are added")
+    # Larger than the card-row minis: it is the one action on the whole pane
+    # that makes something, not a per-row adjustment.
+    new.setFont(_plot_font(14, bold=True))
     new.clicked.connect(on_new)
     library.layout().addWidget(new)
 

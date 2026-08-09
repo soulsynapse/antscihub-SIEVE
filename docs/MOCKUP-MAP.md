@@ -34,10 +34,11 @@ its `src/sieve/gui` counterpart and was reshaped from there.
 
 ## What the mockup does not settle
 
-- **The canvas.** The composite, the magnifier, the block-grid overlay, the
-  solo gesture, the heat rings — indicative, not final. What a tool shows on
-  the canvas has to be owned by the tool, and how a headless tool owns a
-  drawn surface is an open problem no part of ADR 22 closes. The crop boxes
+- **The canvas contents.** The magnifier, the block-grid overlay, the solo
+  gesture, the heat rings — indicative, not final. Who owns the surface is
+  no longer open: the walk does, and emission display generates per kind
+  ([adr/the-walked-step-owns-the-canvas.md](adr/the-walked-step-owns-the-canvas.md))
+  — but the kind vocabulary waits for its first consumer. The crop boxes
   are the exception: a rect param's generated editor is settled
   ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)).
 - **The tool lists.** `NODES`, `STAGES`' membership, `SWAPPABLE`'s entries,

@@ -2,7 +2,7 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest -q tests/gui/test_app.py -k dropped"
 opened: 2026-08-08
@@ -698,3 +698,46 @@ the shown entry of a generated combo through a real `MainWindow` leaves the
 graph panel carrying no stale notice, while an actual change to the same combo
 does. Both halves, or the case passes on a window whose panel was never marked
 stale by anything.
+
+## The notification is held, and the item is done (2026-08-09)
+
+`e97c2f2` closed the last thing on this item. Re-run independently: the
+criterion is `1 passed, 1 deselected`, `exit=0`; the suite is 1021 passed,
+`ruff format --check` and `ruff check` clean, `lint-imports` 8 kept / 0 broken.
+The case asserts what the criterion could not say — the shown entry re-selected
+through a real `MainWindow` leaves `graph.is_stale` false with `can_undo()`
+false, and a real change to the same combo two gestures later sets it — so both
+halves are there and the prose half of the criterion is met as well as the exit
+code. `done_when` was untouched and the status the worker left was
+`awaiting-review`.
+
+The red is this commit's own and not the run's word for it: with the four
+`src/` files restored to `e97c2f2^` byte for byte, the case fails at
+`assert not window.graph.is_stale`, and restoring them turns it green. That
+also disposes of the one vacuity risk the first half carries on its own — a
+PageDown-and-Return that reached nothing would leave the panel unmarked and
+pass — because under the unfixed tree that same gesture *does* mark the panel,
+which it can only do by reaching the combo.
+
+**The scope call the run flagged stands.** `issue` returning `bool` rather than
+the present `Project` is the mechanism of the shape the criterion was
+fix-agnostic between, not work beside it: the only readers are
+`save_screen._checkoff`, which ignores it, and four cases in
+`test_intents.py`, which ignore it too, and a function returning a value every
+caller can read off `session.project` is what made the drop unobservable. The
+choice of that shape over deriving the notification from the document is the
+worker's and is argued — the writer has already computed the equality — and it
+keeps the ruling's one-writer property: `Session.commit` still decides, and the
+surfaces only ask.
+
+One thing about where the rule is written, not a defect. It is stated three
+times — `Session.commit`, `issue`, `_Editor._commit` — and not at all in
+`ParamForm._edit`, which is the emitter the residue named first. That is the
+right density rather than an omission: the `if` is legible and the reason is a
+click away in the function it calls. The `edited` comments on both surfaces
+still read "the document has just been written to", which was approximately
+true before and is exactly true now.
+
+The item closes with every rotation spent, both prose corrections landed, and
+the combo signal settled by Kendrick's ruling above rather than by a worker on
+the way past.

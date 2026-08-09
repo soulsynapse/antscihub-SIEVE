@@ -44,3 +44,31 @@ Whether the per-node dtype assertion and the served-prefix assertions
 derive is open; that one is about which frames were served and not about
 equality, and a node with no cache policy at all would have to be excluded
 rather than asserted over.
+
+The sequence above happened, on the day this was opened and by an author who
+had not read it. A fourth `BOUNDED` tool — a dense-flow node on a scratch
+branch — went red at the gate, its author read the failure message, added a
+`farneback -> normalize` graph and a third `ServedCase`, and went green in one
+edit. Nothing compared either node: both parity assertions iterate their
+literal tuples, and neither names the two node ids the new graph introduced.
+The prediction needed no help and no adversary to come true, which is the
+argument for the fix above rather than for a better failure message.
+
+That leaves a second question this did not ask: whether the *cases* derive too,
+and not only the comparison. Deriving the comparison closes the correctness
+hole on its own — a hand-built graph whose nodes are all compared is honest —
+and what stays open under it is the shape, a shared file every `BOUNDED` tool
+after this one has to enter with a graph of its own, which is
+`adr/a-tool-is-one-file.md`'s subject read as a cost curve. The obstacle is why
+the graphs are hand-built at all: the three `BOUNDED` tools accept disjoint
+inputs — `block_signal` takes four dtypes, `detect` float32 GRAY alone,
+`farneback` uint8 alone — so no single source feeds them. `Footage` in
+`tests/unit/test_declarations_run.py` already solves exactly that, deriving
+frames from a spec's own `accepts` and running every tool on the shelf as a
+lone root with `detect` among them, so a `ServedCase` carrying a source beside
+its pipeline could be minted per `BOUNDED` spec and the hand-built graphs would
+stay only for the claims a lone root cannot make — the served-to-computed
+transition inside the span, and the node with no warmup beneath one that has
+some. What that costs is a home for `Footage` both files can read, and
+`tests/conftest.py` is not it: that module never imports `sieve`, by an argument
+in its own docstring, and a helper taking a `ToolSpec` cannot honour it.

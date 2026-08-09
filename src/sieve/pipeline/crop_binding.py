@@ -1,11 +1,19 @@
 """Which record backs a box right now, and why one stopped.
 
-The reporting twin of `resolve_source.py`, beside it because the two walk the
-same clauses over the same records and a clause added to `CropRecord.backs` is
-owed to both. `resolve` answers which file to open and declines quietly; this
-answers which of the four states a reader is being shown, and names the clause
-that missed. Neither is a copy of the predicate — both call `backs` — and
-everything here is the part `backs` refuses to answer.
+The reporting twin of `crop_serving.py`, beside it because the two walk the same
+clauses over the same records and a clause added to `CropRecord.backs` is owed to
+both. `serving_edit` answers whether the substitution can be wired into the
+document and declines quietly; this answers which of the four states a reader is
+being shown, and names the clause that missed. Neither is a copy of the
+predicate — both call `backs` — and everything here is the part `backs` refuses
+to answer.
+
+**What the states now mean.** They were about a run: `AT_REST` said the next
+render would be served from the file. Under
+`adr/a-users-file-wires-in-like-any-other-input.md` serving is a document edit,
+so `AT_REST` says the edit is *offerable* for this box and `STALE` says why it
+is not. The facts are the same facts about the same records; who acts on them
+moved from the planner to whoever holds the project.
 
 Not under `gui/`, on two counts. A `sieve run` that falls back to the parent and
 says nothing about the artifact sitting next to it is making the same underclaim
@@ -38,11 +46,11 @@ that — how big it is, when it was written, whether it can be read at all — i
 **Nothing here refuses an edit.** This module reports; it does not hold anything
 still. Freezing the box a record was cut at, or the window it was cut over, would
 be an artifact that refuses the tuning it exists to make faster. Both edits
-already fail safe without a gate: a moved box misses `backs` on the region, a
-window outside the span misses in `resolve_source`, and the render falls back to
-the parent with the same pixels under the same keys. What is left for the user is
-a `STALE` reading naming the clause that missed, which is the report this module
-owes them.
+already fail safe without a gate: a moved box misses `backs` on the region and
+no edit is offered, so an un-wired project goes on cutting from the parent with
+the same pixels under the same keys. What is left for the user is a `STALE`
+reading naming the clause that missed, which is the report this module owes
+them.
 """
 
 from __future__ import annotations
@@ -81,7 +89,7 @@ class CropState(Enum):
 class CropBacking:
     """What one box's source boundary is, in one value.
 
-    Carried whole rather than unpacked, for `ResolvedSource`'s reason: a caller
+    Carried whole rather than unpacked: a caller
     that read `record` without `state` would offer a discard for a record it had
     just been told is serving, and one that read `state` without `reason` would
     render every staleness identically.
@@ -150,7 +158,7 @@ def backing_for(
 
     Args:
         crops: The document's records, in document order. The first match wins,
-            exactly as `resolve_source.resolve` takes it.
+            exactly as `crop_serving.serving_edit` takes it.
         index: Which box is being asked about.
         regions: All of them, in the order their replicates appear — every
             replicate's resolved region at the crop node. Needed whole for orphan

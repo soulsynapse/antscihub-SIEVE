@@ -1475,12 +1475,14 @@ class ProbeSource:
     is that the keyword arrives at the field.
     """
 
+    decoded = False
+
     def file(self, params: ParamsBase, /) -> Path:
         del params
         return Path("nowhere")
 
-    def read(self, params: ParamsBase, index: FrameIndex, /) -> Frame:
-        del params
+    def read(self, params: ParamsBase, index: FrameIndex, /, *, luma: bool) -> Frame:
+        del params, luma
         return Frame(data=np.zeros((1, 1), dtype=np.uint8), index=index, channels=ChannelSpec.GRAY)
 
 

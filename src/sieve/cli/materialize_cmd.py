@@ -18,10 +18,11 @@ document does not determine it.
 **It cuts the window, not the span.** `plan.decode_range` rather than
 `plan.span`: a graph with any lead-in reads frames either side of the ones it
 answers for, out of whichever file serves it, so a file cut to the answer alone
-is declined by `resolve` at the next run and the decode is paid twice
-(`pipeline/resolve_source.py` on `want`). The span here is the whole video
-narrowed by the graph, which is the widest window any narrower invocation of
-`sieve run` can ask for, so one cut serves them all.
+is a file every wider run then reads past the end of. The span here is the whole
+video narrowed by the graph, which is the widest window any narrower invocation
+of `sieve run` can ask for, so one cut serves them all — and once the cut is
+wired in there is no parent to fall back to, so what used to cost a second
+decode now costs the refusal `tools/footage.py` names.
 
 **The format is derived, never chosen.** `--format` does not exist and must not:
 the artifact holds what the current graph decodes (`ExecutionPlan.luma`), and a
@@ -35,9 +36,15 @@ minutes of decode, and a command that quietly started twelve of them is a comman
 whose cost nobody estimated. A loop in a shell script is the honest form of "all
 of them", and it prints per-artifact progress for free.
 
-**Write and registration are one command.** An artifact nothing points at is an
-artifact the next session re-cuts — minutes of decode paid again in silence — so
-cutting and recording happen in the same call rather than two.
+**Write, registration and wiring are one command.** An artifact nothing points
+at is an artifact the next session re-cuts — minutes of decode paid again in
+silence — so cutting and recording happen in the same call rather than two. The
+wiring is the third of those for the same reason and lands the moment it can:
+`crop_serving.serving_edit` is offerable only when every replicate has a file,
+so the invocation that cuts the last one is the one that replaces the crop node
+with a `footage` node over each. Before that it answers `None` and the document is
+saved with the record alone. Cutting one replicate per invocation is what makes
+that a real state rather than a formality.
 
 The refusals `load_project`, `refuse`, `span_for` and `footage_end` speak with are
 `run_cmd`'s own rather than respelled, as in `preview_cmd`: two commands refusing
@@ -57,6 +64,7 @@ from sieve.core.tool_base import SourceFileError
 from sieve.core.types import ROI
 from sieve.decode.reader import VideoDecodeError
 from sieve.pipeline.cache_key import source_identity
+from sieve.pipeline.crop_serving import crop_roots, serving_edit
 from sieve.pipeline.dag import Dag, GraphError
 from sieve.pipeline.materialize import (
     CropVerificationError,
@@ -64,7 +72,8 @@ from sieve.pipeline.materialize import (
     materialize_crop,
 )
 from sieve.pipeline.plan import ExecutionPlan, validated_params
-from sieve.pipeline.resolve_source import crop_roots, picked_identities, source_files
+from sieve.pipeline.resolve_source import picked_identities, source_files
+from sieve.pipeline.source_home import SourceHome
 from sieve.storage.crop_writer import CropWriteError
 from sieve.tools import discover
 
@@ -143,15 +152,23 @@ def materialize_replicate(
     except OSError as error:
         raise refuse(f"could not write the crop: {error}") from error
 
-    project.with_crop(record).save(project_path)
+    recorded = project.with_crop(record)
+    home = SourceHome(video=video, project_dir=project_path.parent, identity=source)
+    wired = serving_edit(recorded, home, dag=dag)
+    (recorded if wired is None else wired).save(project_path)
     written = record.resolve(project_path.parent)
     typer.echo(f"{target.name}: wrote {record.path} ({written.stat().st_size / 1e6:.1f} MB)")
+    if wired is not None:
+        typer.echo(
+            "every replicate is now backed by a written crop, so the crop node has been "
+            "replaced by a read of each file — this project no longer decodes the parent"
+        )
 
 
 def _picked(dag: Dag, target: Replicate) -> dict[str, str]:
     """What identifies each source root's file, for the plan this cuts from.
 
-    The walk `sieve run` does at run start (`pipeline/resolve_source.py`), so the
+    The walk `sieve run` does at run start (`resolve_source.source_files`), so the
     plan derived here is keyed as the plan a run of this graph is keyed — a front
     end building one without it builds a differently-keyed description of the
     same run, and `Dag.node_keys` drops the subtree under every root it was given
@@ -171,10 +188,10 @@ def _picked(dag: Dag, target: Replicate) -> dict[str, str]:
 def _region(dag: Dag, plan: ExecutionPlan, target: Replicate) -> ROI:
     """The box this replicate's file would hold, or a refusal naming why not.
 
-    Where `crop_bound` falls back to the parent on an ambiguous graph, this
-    refuses: serving is an acceleration and guessing wrong there costs only
-    speed, while guessing wrong here writes minutes of decode into a file
-    recorded as a cut it is not.
+    Where `crop_serving.serving_edit` declines to offer an edit for a graph it
+    cannot read one box out of, this refuses with the nodes named: declining
+    costs a user an offer they can still make by hand, and guessing wrong here
+    writes minutes of decode into a file recorded as a cut it is not.
 
     Raises:
         typer.Exit: code 1 if the graph offers no root crop node or more than

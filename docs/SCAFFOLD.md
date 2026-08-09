@@ -57,12 +57,13 @@ src/sieve/pipeline/__init__.py             # The DAG, the plan, cache keys, and 
 src/sieve/pipeline/cache.py                # Where a computed frame is kept so it is not computed twice.
 src/sieve/pipeline/cache_key.py            # What makes two computations the same computation.
 src/sieve/pipeline/crop_binding.py         # Which record backs a box right now, and why one stopped.
+src/sieve/pipeline/crop_serving.py         # Wiring a written crop into the graph, as an edit the project holds.
 src/sieve/pipeline/dag.py                  # The graph, resolved: what runs, in what order, and whether it can run at all.
 src/sieve/pipeline/executor.py             # The single shared execution path: a plan, a reader, and a store go in.
 src/sieve/pipeline/materialize.py          # Cut one replicate's crop to a file, and refuse to register one that lies.
 src/sieve/pipeline/plan.py                 # Everything about a run that is knowable before a frame is decoded.
 src/sieve/pipeline/preview.py              # The preview session: one working window, one replicate, many revisions.
-src/sieve/pipeline/resolve_source.py       # Which file a run opens, and in whose frame numbering.
+src/sieve/pipeline/resolve_source.py       # Which external file each source root reads, and what identifies it.
 src/sieve/pipeline/series_collector.py     # Assemble one node's per-frame outputs into the series a graph is drawn from.
 src/sieve/pipeline/shelf.py                # Who fills the shelf, for a front end that may not reach a tool.
 src/sieve/pipeline/source_home.py          # The frame of reference a crop record is read against: three facts, one value.
@@ -72,6 +73,7 @@ src/sieve/tools/block_signal.py            # Per-block motion signals from the s
 src/sieve/tools/crop.py                    # Take a region of every frame, with the whole frame as the identity value.
 src/sieve/tools/detect.py                  # Morlet band power, an in-band block count, and a centred detection gate.
 src/sieve/tools/downsample.py              # Reduce spatial resolution by an integer factor.
+src/sieve/tools/footage.py                 # A video file standing in the graph as a node with no upstream.
 src/sieve/tools/motion_history.py          # A causal leaky accumulator of per-block activity, with its neighbours.
 src/sieve/tools/normalize.py               # Per-frame contrast normalization: `off` or `zscore`.
 src/sieve/tools/pick.py                    # A file the user chose, standing in the graph as a node with no upstream.

@@ -9,7 +9,7 @@ stale with nothing to re-cut from. They travel together or the caller has a bug
 that looks like a working call.
 
 **Its own module because it is the argument both twins take and neither owns.**
-`resolve_source.resolve` and `crop_binding.backing_for` walk the same clauses
+`crop_serving.serving_edit` and `crop_binding.backing_for` walk the same clauses
 over the same records and are deliberately siblings; putting the value they
 share inside either one would make the other import through it and give the pair
 a direction they do not have. Not `core/` either, though the fields alone would

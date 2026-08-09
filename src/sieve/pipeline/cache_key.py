@@ -20,8 +20,11 @@ is.
 **Decoder identity enters once, at the root.** It is folded into `source_key`,
 which a root the footage feeds names as its upstream, so it reaches every
 downstream key through the ancestry rather than by being re-hashed at each node.
-A root that reads its own file names `picked_key` instead, and the two flavours
-are what keeps one graph's two roots from folding one identity.
+Which of the two flavours a root that opens its own file names follows the
+*reader* and nothing else (`adr/a-root-keys-by-its-reader.md`): a file read
+through `decode/` folds `source_key` like any footage, and only a tool reading
+with its own code folds `picked_key`. The two are what keeps one graph's two
+roots from folding one identity.
 
 **What is deliberately absent.** Checkpoints, sink paths, the frames a run asks
 for, and the replicate's display name. Narrowing a request changes which frames
@@ -249,14 +252,15 @@ def source_key(source: str, *, decode_format: CropFormat) -> str:
     This position distinguishes two runs on one build; that constant
     distinguishes two builds.
 
-    **Whether a written crop exists does not appear here, and must not.** Not
-    because it cannot change a key — under schema v1's child-source model it
-    does, and knowingly — but because the way it does is by being passed a
-    *different `source`*, computed from the artifact file itself. This function
-    is never asked "is there a crop"; it is handed footage, and an artifact is
-    footage (`CropRecord`). A presence test in here would be a storage decision
-    wearing a semantic decision's clothes, and it would additionally be a second
-    answer to a question Phase 5's source resolution owns.
+    **Whether a written crop exists does not appear here, and must not.** The
+    way an artifact changes a key is by being passed a *different `source`*,
+    computed from the artifact file itself — and since the substitution became a
+    document edit it is not even this function's caller who does it: a written
+    crop is a source root over its own file, so what reaches here is that file's
+    identity through the ordinary walk. This function is never asked "is there a
+    crop"; it is handed footage, and an artifact is footage (`CropRecord`). A
+    presence test in here would be a storage decision wearing a semantic
+    decision's clothes.
 
     Args:
         source: What identifies the footage — `source_identity` builds one.
@@ -271,13 +275,21 @@ def picked_key(identity: str) -> str:
 
     `source_key`'s sibling, and the whole reason there are two. A graph-fed
     root's ancestry is the footage the run decodes, so what identifies it is the
-    file *and* the reader that opened it. A source tool has nothing upstream to
-    constrain it: it opens its own file with its own code, so the reading is
-    already covered by the `tool_id` and `version` positions of the node key
-    below — `version` stands proxy for a tool's reading exactly as it does for
-    its computing. Folding `decoder_identity()` and a decode format in anyway
-    would key a picked PNG against the video decoder that never touched it, and
-    would move every such key on the day `decode/` changes a seek strategy.
+    file *and* the reader that opened it. A tool reading with *its own code* has
+    nothing upstream to constrain it, so the reading is already covered by the
+    `tool_id` and `version` positions of the node key below — `version` stands
+    proxy for a tool's reading exactly as it does for its computing. Folding
+    `decoder_identity()` and a decode format in anyway would key a picked PNG
+    against the video decoder that never touched it, and would move every such
+    key on the day `decode/` changes a seek strategy.
+
+    Which is why this is not every source tool's key.
+    `adr/a-root-keys-by-its-reader.md` rules the flavour off the reader: a
+    source tool that opens its file through `decode/` is decoded by the same
+    stack, in the same format, as the footage it stands in for, and folds
+    `source_key` — so a written crop wired in at a crop node's place keys as
+    that file's own footage would and moves nothing below it. `ToolSource.
+    decoded` is the declaration; `Dag.node_keys` is the one reader of it.
 
     What it must do is move when the file moves, and that is the failure ADR-18
     names: get this wrong and swapping one background for another is invisible

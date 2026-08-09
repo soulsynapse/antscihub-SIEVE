@@ -22,7 +22,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from sieve.cli import run_cmd
 from sieve.cli.app import app
 from sieve.core.pipeline_model import (
     Edge,
@@ -31,13 +30,7 @@ from sieve.core.pipeline_model import (
     Project,
     Replicate,
     Sink,
-    SourceSpan,
 )
-from sieve.core.types import ROI
-from sieve.decode.prefetch import PrefetchFrameSource
-from sieve.pipeline.dag import Dag
-from sieve.pipeline.materialize import materialize_crop
-from sieve.tools import discover
 from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES
 
 runner = CliRunner()
@@ -322,210 +315,10 @@ def test_a_tool_this_build_does_not_have_is_named_before_anything_decodes(
     assert "2.1.0" in result.stderr
 
 
-#: The box a served run's file already holds, and what it was cut over. The
-#: same cut `test_crop_serving.py` and `test_materialize.py` use, so the three
-#: files describe one artifact rather than three.
-SERVED_REGION = ROI(x=17, y=9, width=64, height=48)
-SERVED_SPAN = SourceSpan(start=10, end=16)
-CUT = "cut"
-
-#: `crop -> downsample` streams, so its decode range *is* its span and a record
-#: cut over `SERVED_SPAN` covers a run of it exactly.
-STREAMING = Pipeline(
-    nodes=(
-        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
-        Node(node_id="down", tool_id="downsample", version="1.0.0", params={"factor": 2}),
-    ),
-    edges=(Edge(upstream=CUT, downstream="down"),),
-)
-
-#: The graph `STREAMING` is not. `detect` reads ahead of every frame it answers
-#: for and the signal under it reads behind, so the span and the frames read
-#: are different quantities and a record can cover one without the other. The
-#: band is narrow for `DETECT_FREQ_LO`'s reason.
-WINDOWED = Pipeline(
-    nodes=(
-        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
-        Node(
-            node_id="blocks", tool_id="block_signal", version="1.0.0", params={"fps": FIXTURE_FPS}
-        ),
-        Node(
-            node_id="detector",
-            tool_id="detect",
-            version="1.0.0",
-            params={"freq_band": (10.0, 14.0), "window_frames": 3, "fps": FIXTURE_FPS},
-        ),
-    ),
-    edges=(Edge(upstream=CUT, downstream="blocks"), Edge(upstream="blocks", downstream="detector")),
-)
-#: Far enough inside the 40-frame fixture that the whole window is legal
-#: footage, so a record short of an end is short on its own span and not on the
-#: clamp.
-WINDOWED_SPAN = SourceSpan(start=16, end=20)
-#: `ExecutionPlan.decode_range` for `WINDOWED` over `WINDOWED_SPAN`: eleven
-#: frames of lead-in and ten of read-ahead around four answered frames.
-WINDOW = SourceSpan(start=5, end=30)
-
-
-def _cropping(video: Path, directory: Path, pipeline: Pipeline) -> Path:
-    """`pipeline` beside `video`, one replicate pinning the box at `CUT`.
-
-    Geometry lives on the replicate rather than on the node because that is
-    where schema v1 puts it (`adr/detector-is-a-node.md`), and it is what makes
-    the region a thing the command has to *derive* rather than read.
-    """
-    box = SERVED_REGION
-    replicate = Replicate(name="arena 1", replicate_id="a").with_override(
-        CUT, {"region": {"x": box.x, "y": box.y, "width": box.width, "height": box.height}}
-    )
-    path = directory / "cropping.sieve.yaml"
-    Project.for_video(video, directory).with_pipeline(pipeline).with_replicates((replicate,)).save(
-        path
-    )
-    return path
-
-
-def _cut(project_path: Path, span: SourceSpan) -> Path:
-    """Write `SERVED_REGION` over `span`, record it, save. Returns the file."""
-    discover()
-    project = Project.load(project_path)
-    record = materialize_crop(
-        project.source_path(project_path),
-        SERVED_REGION,
-        span,
-        name="arena 1",
-        project_dir=project_path.parent,
-        luma=not Dag.build(project.pipeline).needs_chroma,
-    )
-    project.with_crop(record).save(project_path)
-    return record.resolve(project_path.parent)
-
-
-def _watch_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
-    """Every video the run loop opens, in order, still opening each of them.
-
-    The one thing the printed counts cannot say. A run that drops the crop node
-    and then reads the parent reports exactly the numbers a correctly served run
-    reports, and every frame it produces is a whole frame where a box was asked
-    for.
-    """
-    opened: list[Path] = []
-    real = run_cmd.frame_source
-
-    def watching(video: Path, *, luma: bool) -> PrefetchFrameSource:
-        opened.append(video)
-        return real(video, luma=luma)
-
-    monkeypatch.setattr(run_cmd, "frame_source", watching)
-    return opened
-
-
-def test_a_served_run_elides_the_crop_node_its_file_already_holds(
-    synthetic_video: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The artifact *is* the crop node's output, so the run must not cut again.
-
-    Two invocations of one project either side of the box being written, and the
-    difference between them is the whole claim: the same frames answered, one
-    node's worth of work gone, and the parent not opened. Fails both ways a
-    route can fail — a run that opens the artifact and still runs `crop` cuts a
-    box out of a box, and one that drops the node but reads the parent
-    downsamples whole frames under the artifact's keys, which is a wrong answer
-    with no symptom.
-
-    Dropped rather than neutralised at `crop.WHOLE_FRAME`, which is
-    `adr/a-users-file-wires-in-like-any-other-input.md`'s call and is what the
-    node count here is the observable of.
-    """
-    path = _cropping(synthetic_video, tmp_path, STREAMING)
-    frames = f"{SERVED_SPAN.start}:{SERVED_SPAN.end}"
-    unserved = runner.invoke(app, ["run", str(path), "--frames", frames])
-    artifact = _cut(path, SERVED_SPAN)
-    opened = _watch_opens(monkeypatch)
-
-    served = runner.invoke(app, ["run", str(path), "--frames", frames])
-
-    assert unserved.exit_code == 0, unserved.output
-    assert served.exit_code == 0, served.output
-    answered = SERVED_SPAN.frame_count
-    assert unserved.output.splitlines() == [
-        f"arena 1: {answered} frames, {answered * 2} node outputs computed, 0 from cache"
-    ]
-    assert served.output.splitlines() == [
-        f"arena 1: {answered} frames, {answered} node outputs computed, 0 from cache"
-    ]
-    assert opened == [artifact]
-
-
-@pytest.mark.parametrize(
-    ("cut", "serves"),
-    [
-        (WINDOW, True),
-        (SourceSpan(start=WINDOW.start + 1, end=WINDOW.end), False),
-        (SourceSpan(start=WINDOW.start, end=WINDOW.end - 1), False),
-    ],
-    ids=["covers-the-window", "a-frame-short-at-the-lead-in", "a-frame-short-at-the-lookahead"],
-)
-def test_a_served_run_is_matched_against_the_window_it_reads_not_its_span(
-    synthetic_video: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    cut: SourceSpan,
-    serves: bool,
-) -> None:
-    """`resolve` is handed `decode_range`, and this is the caller that hands it.
-
-    Every one of these three records covers `WINDOWED_SPAN` outright, so a
-    command resolving against the span serves all three — and then reads
-    twenty-five frames from a file holding at most twenty-five, off by one at
-    whichever end is short. The covering row is exact at both ends, so widening
-    the clause to `>=` on either side fails here too, and without it the two
-    short rows would pass against a command that had stopped serving anything.
-
-    The pair of assertions is what makes a row mean something: which file was
-    opened, and whether the crop node ran. Serving is both or neither.
-    """
-    path = _cropping(synthetic_video, tmp_path, WINDOWED)
-    artifact = _cut(path, cut)
-    parent = Project.load(path).source_path(path)
-    opened = _watch_opens(monkeypatch)
-
-    result = runner.invoke(
-        app, ["run", str(path), "--frames", f"{WINDOWED_SPAN.start}:{WINDOWED_SPAN.end}"]
-    )
-
-    assert result.exit_code == 0, result.output
-    answered = WINDOWED_SPAN.frame_count
-    ran = len(WINDOWED.nodes) - (1 if serves else 0)
-    assert result.output.splitlines() == [
-        f"arena 1: {answered} frames, {answered * ran} node outputs computed, 0 from cache"
-    ]
-    assert opened == [artifact if serves else parent]
-
-
-def test_a_checkpointed_crop_node_is_not_elided(
-    synthetic_video: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A node someone asked to keep is a node that runs, artifact or not.
-
-    Dropping it would leave the manifest naming a key this run never looked
-    anything up under — a plan does not answer for a node its graph no longer
-    holds — so the record buys nothing here and the run reads the parent. Fails
-    as a traceback out of the writer's key map for a route that elides on the
-    record alone.
-    """
-    path = _cropping(synthetic_video, tmp_path, STREAMING)
-    Project.load(path).with_outputs((CUT,), ()).save(path)
-    _cut(path, SERVED_SPAN)
-    parent = Project.load(path).source_path(path)
-    opened = _watch_opens(monkeypatch)
-
-    result = runner.invoke(
-        app, ["run", str(path), "--frames", f"{SERVED_SPAN.start}:{SERVED_SPAN.end}"]
-    )
-
-    assert result.exit_code == 0, result.output
-    answered = SERVED_SPAN.frame_count
-    assert f"arena 1: {answered} frames, {answered * 2} node outputs computed" in result.output
-    assert f"checkpointed {CUT}" in result.output
-    assert opened == [parent]
+#: Serving a written crop is not this command's subject any more. The plan-time
+#: route three cases here used to drive was replaced by an edit the project
+#: holds (`adr/a-users-file-wires-in-like-any-other-input.md`), so a served run
+#: is an ordinary run of an ordinary graph and every claim those cases made —
+#: which file is opened, which nodes are in the graph, and that a checkpointed
+#: crop node is left alone — is now `tests/integration/test_crop_serving.py`'s,
+#: stated against the edit rather than against a route.

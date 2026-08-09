@@ -117,6 +117,10 @@ class PickedFile:
     picture.
     """
 
+    #: Own code, not `decode/`: `cv2.imread` below. So this root keys
+    #: `picked_key` (`adr/a-root-keys-by-its-reader.md`).
+    decoded = False
+
     def file(self, params: PickParams, /) -> Path:
         """The one file `params.pattern` names.
 
@@ -141,8 +145,15 @@ class PickedFile:
             )
         return found[0]
 
-    def read(self, params: PickParams, index: FrameIndex, /) -> Frame:
+    def read(self, params: PickParams, index: FrameIndex, /, *, luma: bool) -> Frame:
         """The picked picture, filed under the frame the run is answering for.
+
+        `luma` is ignored, and that is the contract rather than an oversight: a
+        root read with its own code keys `picked_key`, which folds no decode
+        format, so a picture converted for a luma session would be filed under
+        the entry a colour session reads back (`ToolSource.read`). What the file
+        holds is what this hands over, and an edge that cannot take it is
+        refused by `dag.py` before a frame is read.
 
         Raises:
             SourceFileError: if the pattern does not resolve, or the file it

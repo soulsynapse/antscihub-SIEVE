@@ -110,10 +110,15 @@ class ScratchPlate:
     read is a `stat` rather than a decode, for the module docstring's reason.
     """
 
+    #: Own code — a `stat`, not `decode/` — so this root keys `picked_key`
+    #: (`adr/a-root-keys-by-its-reader.md`).
+    decoded = False
+
     def file(self, params: PlateParams, /) -> Path:
         return Path(params.path)
 
-    def read(self, params: PlateParams, index: FrameIndex, /) -> Frame:
+    def read(self, params: PlateParams, index: FrameIndex, /, *, luma: bool) -> Frame:
+        del luma  # no format to vary on; see `pick.PickedFile.read`
         return Frame(
             data=np.full((HEIGHT, WIDTH), Path(params.path).stat().st_size, dtype=np.uint8),
             index=FrameIndex.of(index),

@@ -29,11 +29,19 @@ and what `stat` says about it.
 
 from __future__ import annotations
 
+from glob import glob
 from pathlib import Path
 
 import pytest
 
-from sieve.core.pipeline_model import CropRecord, SourceSpan
+from sieve.core.pipeline_model import (
+    CropRecord,
+    Edge,
+    Node,
+    Pipeline,
+    Project,
+    SourceSpan,
+)
 from sieve.core.types import ROI
 from sieve.pipeline.crop_binding import (
     CropBacking,
@@ -41,10 +49,12 @@ from sieve.pipeline.crop_binding import (
     backing_for,
     evidence_for,
 )
-from sieve.pipeline.resolve_source import resolve
+from sieve.pipeline.crop_serving import serving_edit
 from sieve.pipeline.source_home import SourceHome
+from sieve.tools import discover
 
 ARENA = ROI(x=100, y=100, width=64, height=48)
+CUT = "cut"
 SPAN = SourceSpan(start=10, end=20)
 #: Strictly inside the record's span, so widening it is a one-number edit.
 WANT = SourceSpan(start=12, end=18)
@@ -64,6 +74,18 @@ def record(tmp_path: Path) -> CropRecord:
         cut_from=SOURCE,
         decoder="decoder|1",
     )
+
+
+def _pinned(region: ROI) -> dict[str, dict[str, int]]:
+    """A crop node's own box, as the document spells one."""
+    return {
+        "region": {
+            "x": region.x,
+            "y": region.y,
+            "width": region.width,
+            "height": region.height,
+        }
+    }
 
 
 def _home(tmp_path: Path, source: str = SOURCE) -> SourceHome:
@@ -270,20 +292,38 @@ class TestTheTwinsCannotDisagree:
             CropState.STALE,
         }
 
-    def test_the_record_reported_at_rest_is_the_record_the_run_opens(
+    def test_the_record_reported_at_rest_is_the_file_the_edit_wires_in(
         self, tmp_path: Path, record: CropRecord
     ) -> None:
         """The join between the twins, on the one input they both take.
 
-        Drift between them is silent in both directions: a run served by a file
-        nothing reports, and a report about a file no run opens. Asserted on
-        `AT_REST` rather than on a near miss because that is the direction where
-        both answers are non-trivial — a stale record makes both say "parent",
-        which two independently broken implementations would also manage.
+        Drift between them is silent in both directions: a project wired to a
+        file nothing reports, and a report about a file no graph reads. Asserted
+        on `AT_REST` rather than on a near miss because that is the direction
+        where both answers are non-trivial — a stale record makes both say
+        "nothing to offer", which two independently broken implementations would
+        also manage.
         """
+        discover()
+        project = (
+            Project.for_video(tmp_path / "arena.MP4", tmp_path)
+            .with_pipeline(
+                Pipeline(
+                    nodes=(
+                        Node(node_id=CUT, tool_id="crop", version="1.0.0", params=_pinned(ARENA)),
+                        Node(node_id="down", tool_id="downsample", version="1.0.0"),
+                    ),
+                    edges=(Edge(upstream=CUT, downstream="down"),),
+                )
+            )
+            .with_crop(record)
+        )
+
         backing = _backing((record,), tmp_path)
-        resolved = resolve((record,), ARENA, home=_home(tmp_path), luma=True, want=WANT)
+        wired = serving_edit(project, _home(tmp_path))
 
         assert backing.state is CropState.AT_REST
-        assert backing.record is resolved.record
-        assert resolved.path == record.resolve(tmp_path)
+        assert backing.record is record
+        assert wired is not None
+        assert wired.pipeline.node(CUT).tool_id == "footage"
+        assert glob(wired.pipeline.node(CUT).params["path"]) == [str(record.resolve(tmp_path))]

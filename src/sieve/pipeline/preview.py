@@ -86,10 +86,13 @@ where a served range hands its state back (`executor._resettle`) — which is wh
 **What v2 carried here and v3 does not.** A `backend` and a kernel shelf go with
 `adr/no-kernel-apparatus.md`; a lowered decode prefix goes with the lowering
 `PLAN.md` refuses to build until a budget is missed. The `pre_cropped` flag and
-the artifact's own frame floor go together: under schema v1 a written crop is a
-child source with an identity of its own, so a session over one is handed a
-different `source` and a reader already renumbered by
-`resolve_source.ResolvedSource.wrap`, and there is no flag left to carry.
+the artifact's own frame floor go together: a written crop is wired into the
+document as a `footage` node over its own file
+(`adr/a-users-file-wires-in-like-any-other-input.md`), so a session over one is
+handed a graph in which the artifact is an ordinary source root and there is no
+flag, no second source, and no renumbering left for this module to carry. That
+is also why this session needs no source resolution of its own to be served —
+the gap that used to make a preview decode the parent while `sieve run` did not.
 """
 
 from __future__ import annotations

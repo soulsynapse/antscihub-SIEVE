@@ -840,11 +840,13 @@ def _source_frame(node: Node, bound: BoundNode, plan: ExecutionPlan, answers_for
     what makes a static input broadcast across the span with no window shape of
     its own.
 
-    `_check_format` is deliberately not applied here. That check exists because
-    `source_key` hashes the format the *reader* was opened in, and a picked file
-    is neither read through that reader nor keyed on it (`cache_key.picked_key`);
-    what a source tool hands to the node below it is checked where every other
-    edge is, against the declarations, before a frame is read.
+    `_check_format` is deliberately not applied here, and the reason is now the
+    declaration rather than the tool: a source that reads with its own code is
+    keyed on no format at all (`cache_key.picked_key`), and one that reads
+    through `decode/` is handed `plan.luma` below, so it opens its file in the
+    format its own key folded. Either way what a source tool hands to the node
+    below it is checked where every other edge is, against the declarations,
+    before a frame is read.
 
     Raises:
         UnrunnableNodeError: if the frame does not carry the index it was asked
@@ -853,7 +855,7 @@ def _source_frame(node: Node, bound: BoundNode, plan: ExecutionPlan, answers_for
     """
     spec = plan.dag.spec(node.node_id)
     assert bound.source is not None  # the caller branched on it
-    produced = bound.source.read(plan.params[node.node_id], FrameIndex(answers_for))
+    produced = bound.source.read(plan.params[node.node_id], FrameIndex(answers_for), luma=plan.luma)
     if produced.index != answers_for:
         raise UnrunnableNodeError(
             f"{node.node_id} ({spec.tool_id} {spec.version}) sourced frame {produced.index} for "

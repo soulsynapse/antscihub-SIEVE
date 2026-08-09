@@ -293,10 +293,11 @@ NO_FRAMES = FrameCount(0)
 class FrameIndex:
     """A source-frame position, not a count of frames.
 
-    The position's origin is not carried. `pipeline/resolve_source.py` is the
-    one artifact boundary that translates local file numbering into source
-    numbering; above that boundary, a frame index is a position in the stream a
-    run is answering about. The type exists for the arithmetic: two positions
+    The position's origin is not carried. A source tool reading a file that is a
+    window out of a longer source is the one boundary that translates local file
+    numbering into source numbering (`tools/footage.py` on `first_index`); above
+    that boundary, a frame index is a position in the stream a run is answering
+    about. The type exists for the arithmetic: two positions
     may be subtracted to produce a `FrameCount`, and a count may move a
     position. Adding two positions is not an operation.
     """

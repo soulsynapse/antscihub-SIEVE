@@ -1040,6 +1040,15 @@ class ToolSource(Protocol[ParamsT_contra]):
     `pipeline` learns what a picked file is.
     """
 
+    #: Whether this source reads its file through `decode/`'s stack rather than
+    #: with code of its own. The one declaration `adr/a-root-keys-by-its-reader.md`
+    #: turns on: a decoder-read root folds `cache_key.source_key`, so an artifact
+    #: standing where footage stood keys exactly as that footage would, and an
+    #: own-code reader folds `cache_key.picked_key`, whose docstring argues why
+    #: a decoder that never touched the file may not enter its key. Two readers —
+    #: the key walk and the format handed to `read` — and neither may guess it.
+    decoded: bool
+
     def file(self, params: ParamsT_contra, /) -> Path:
         """The one file `params` names.
 
@@ -1048,13 +1057,20 @@ class ToolSource(Protocol[ParamsT_contra]):
         """
         ...
 
-    def read(self, params: ParamsT_contra, index: FrameIndex, /) -> Frame:
+    def read(self, params: ParamsT_contra, index: FrameIndex, /, *, luma: bool) -> Frame:
         """That file's frame for source frame `index`.
 
         The index is the loop's, not the file's: what a source tool emits is
         filed under the frame the run is answering for, exactly as every other
         node's output is, and a static input broadcasts one picture across the
         span rather than growing a window shape of its own.
+
+        `luma` is `not Dag.needs_chroma` for the graph being run, handed over
+        rather than chosen so that a decoder-read source opens its file in the
+        format its key says it was opened in. A source with `decoded` false is
+        handed it too and must ignore it — `picked_key` folds no format, so an
+        output that varied with one would be filed under an entry that cannot
+        tell the two apart.
 
         Raises:
             SourceFileError: if the pattern names no file or several.

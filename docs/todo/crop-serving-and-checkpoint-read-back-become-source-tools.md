@@ -1,6 +1,6 @@
 ---
 title: Crop serving and checkpoint read-back become source tools
-status: open
+status: awaiting-review
 gated_on: nothing
 priority: high
 phase: "05"
@@ -190,3 +190,72 @@ hardwires the gap into keys and turns a schema field into a migration. So the
 schema question is answered inside this work, not after it. The criterion does
 not name the product fact; folded without touching `done_when`, so the review
 decides whether it must.
+
+## 2026-08-09: the crop half is wired; the checkpoint half is not started
+
+What landed. `tools/footage.py` is the second source tool and the first
+decoder-read one: it opens a video through `decode/reader.py` in the format
+the graph derives, carries `first_index` so a file that is a window out of a
+longer source answers in source numbering, and declares `ToolSource.decoded`,
+which is the contract change ADR-24 needed and which `Dag.node_keys` is the
+one reader of. `pipeline/crop_serving.serving_edit` is the match `resolve`
+used to make per run, made once and returned as a `Project`:  each root crop
+node becomes a `footage` node over the written file, every replicate's region
+override becomes a path and an offset, and `sieve materialize` applies it on
+the invocation that makes it offerable. `resolve`, `ResolvedSource`,
+`OffsetFrameSource`, `crop_bound` and `elided` are gone, `_route` with them,
+and `run_cmd` opens no container at all for a graph whose every root reads its
+own file. `crop_binding`'s four states are untouched and now report whether an
+edit is offerable.
+
+Two rulings this item's prose left to it, taken here and stated so the review
+can disagree with them rather than discover them. **The offer is whole-
+document**: one pipeline serves every replicate, so a crop node cannot be a
+`footage` node for the arena whose file exists and a crop for the arena whose
+file does not, and `serving_edit` therefore answers `None` until every target
+has a record. `sieve materialize` cuts one replicate per invocation, so that
+is a real state and not a formality. **Coverage stops being a clause**: there
+is no parent to decline back to once the file is the source, which is the
+position a folder of already-cut files was always in, so a window past what
+the file holds is a decode error naming it rather than a fallback. What
+replaces the clause is that `materialize_cmd` cuts the whole video's read
+range and the edit is reversible — the records survive it.
+
+The key equality the paragraph beginning “Cache keys are not one guard over
+both halves” asks for is **satisfied one hop up from where it is written**, and
+no choice available under ADR-18 satisfies it as written. Measured and argued
+in a dated amendment to
+[findings/2026.08.09-a-source-tool-root-keys-in-a-different-flavour-than-the-footage-it-replaces.md](../findings/2026.08.09-a-source-tool-root-keys-in-a-different-flavour-than-the-footage-it-replaces.md):
+the served root's upstream *is* `source_key(<file>, decode_format)`, the string
+that file folds as footage; but a source tool is a node, so the nodes below it
+fold its node key and not that string, and its key must carry `first_index` or
+two windows out of one file collide. Taking the edit therefore re-keys the
+subtree once. The criterion's first case is written against the root's flavour
+and passes; whether ADR-18's key paragraph wants narrowing is Kendrick's.
+
+**The checkpoint half is not begun, and the criterion does not cover it.** All
+four cases are about the crop half. What the checkpoint half still owes is
+unchanged: a read-back source tool, the key-bearing identity that must say
+which product a checkpoint holds
+([a-checkpoint-does-not-record-which-product-it-holds.md](a-checkpoint-does-not-record-which-product-it-holds.md)),
+and the re-statement of Phase 5's second gate in `PLAN.md` — which this item's
+own text says is proposed to Kendrick and not written past him, so it is not
+written here. `tools/footage.py` is most of the mechanism the read-back needs;
+what it is missing is the schema answer, which is a decision and not code.
+
+Two things the review should weigh. The criterion may want a fifth case
+pinning the flavour split itself — a decoder-read root keying `source_key`
+while `pick` stays bare — which
+`test_crop_serving.py::test_the_served_root_folds_the_key_its_file_would_fold_as_footage`
+asserts one half of and `tests/unit/test_preview.py` the other; widening is the
+reviewer's. And `_ReaderPool` in `tools/footage.py` holds its readers open past
+the end of a run, because the executor has no lifecycle hook for a source tool
+— bounded at two, closed on eviction, and named there rather than left as a
+surprise.
+Left untouched on purpose: `PLAN.md`'s two Phase 5 sentences describing
+`resolve_source.py` as the module that answers “which file a run opens, in
+whose frame numbering”. That is now `tools/footage.py` and
+`pipeline/crop_serving.py`, so the sentences are stale — but editing the build
+sequence is a change to the plan, which this item's own text rules is proposed
+to Kendrick rather than written past him. Named here so it is a decision
+someone takes rather than a line nobody notices.

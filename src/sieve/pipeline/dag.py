@@ -69,7 +69,7 @@ from types import MappingProxyType
 
 from pydantic import ValidationError
 
-from sieve.core.pipeline_model import Node, Pipeline, Replicate
+from sieve.core.pipeline_model import CropFormat, Node, Pipeline, Replicate
 from sieve.core.tool_base import (
     SOURCE_ELEMENT_NAMES,
     ArraySpec,
@@ -721,7 +721,8 @@ class Dag:
         # Derived here rather than passed in, so the key and the reader cannot
         # disagree about what was decoded: whoever opens the reader asks this
         # same graph the same question.
-        root_key = source_key(source, decode_format="bgr" if self.needs_chroma else "luma")
+        decode_format: CropFormat = "bgr" if self.needs_chroma else "luma"
+        root_key = source_key(source, decode_format=decode_format)
         keys: dict[str, str] = {}
         for node in self.order:
             fed = self.upstreams[node.node_id]
@@ -734,15 +735,24 @@ class Dag:
                 if parent not in keys:
                     continue
                 upstream = keys[parent]
-            elif self.specs[node.node_id].source is not None:
+            elif (opens := self.specs[node.node_id].source) is not None:
                 # A source tool keys from its own file, so the footage's key is
                 # not its ancestor — folding `root_key` here would make swapping
                 # the picked file invisible to the store and make every project
-                # over one video agree about a file none of them named.
+                # over one video agree about a file none of them named. Which
+                # flavour follows the reader and nothing else
+                # (`adr/a-root-keys-by-its-reader.md`): a file opened through
+                # `decode/` is keyed as the footage it stands in for, which is
+                # what makes a written crop wired in at a crop node's place fold
+                # the string a run over that file as *its* footage folds.
                 identity = picked.get(node.node_id)
                 if identity is None:
                     continue
-                upstream = picked_key(identity)
+                upstream = (
+                    source_key(identity, decode_format=decode_format)
+                    if opens.decoded
+                    else picked_key(identity)
+                )
             else:
                 upstream = root_key
             try:

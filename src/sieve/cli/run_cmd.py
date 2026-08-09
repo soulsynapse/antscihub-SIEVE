@@ -48,24 +48,16 @@ alone: a recorded `Project.input_hashes` entry is compared here too, so a file
 swapped for another at the matching name is refused rather than run over. A node
 the document records nothing about is still only named, not recognised.
 
-**A replicate is routed before it is planned, in two passes.** The source
-resolution v2 did per replicate — which written crop can serve this run, in
-whose frame numbering — is `pipeline/resolve_source.py`, and `_route` is the
-join it was written for. The first pass builds a plan on the parent's identity
-purely to learn two things a document cannot state: which box this replicate
-resolves to at the crop node, and `decode_range`, the frames the run *reads*
-rather than the ones it answers for. A record is matched against those, and only
-then is the run keyed — on whichever identity came back. Handing the span over
-instead certifies a record for the frames in the answer and then reads the
-frames around them, off either end.
-
-**Serving elides, it does not neutralise.** The artifact already holds the crop
-node's output, so the served plan is built on a graph that no longer has the
-node — `resolve_source.elided`, on
-`adr/a-users-file-wires-in-like-any-other-input.md`'s terms. That ADR also
-settles that this whole route is temporary: the substitution becomes an edit the
-project holds, at which point there is no node to drop and `_route` goes with
-it.
+**A written crop is not this command's business, and that is the point.** v2
+resolved a source per replicate here — which artifact can serve this run, in
+whose frame numbering — and so did this command, in two passes, until
+`adr/a-users-file-wires-in-like-any-other-input.md` settled that the
+substitution is an edit the project holds (`pipeline/crop_serving.py`). A served
+project's graph roots on a `footage` node over the written file and holds no crop
+node, so this command plans it exactly as it plans anything else and the file it
+reads is found by the same source-root walk above. What that bought is not
+brevity here: a preview session and a render worker never had the route, and
+under the edit they no longer need one.
 
 **Cut from v2's command, each with where it comes back.** `--backend` has no
 referent (`adr/no-kernel-apparatus.md`). `--replicate` and `--workers` are
@@ -88,7 +80,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from pathlib import Path
-from types import MappingProxyType
 from typing import Annotated
 
 import typer
@@ -110,15 +101,7 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag, GraphError, InvalidParamsError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan, validated_params
-from sieve.pipeline.resolve_source import (
-    ResolvedSource,
-    crop_bound,
-    elided,
-    picked_identities,
-    resolve,
-    source_files,
-)
-from sieve.pipeline.source_home import SourceHome
+from sieve.pipeline.resolve_source import picked_identities, source_files
 from sieve.storage.checkpoint_writer import CheckpointWriteError, CheckpointWriter
 from sieve.tools import discover
 
@@ -170,17 +153,15 @@ def run_project(
 
     end = None if dry_run else footage_end(video)
     span = span_for(frames, end)
-    home = SourceHome(video=video, project_dir=project_path.parent, identity=source)
     # `ValueError` rather than the `GraphError` above: what a plan refuses is a
     # span it cannot answer for, which is neither a graph nor a document and has
     # no error of its own — the message names the ranges that disagree, and a
     # traceback would be this command's only refusal a user cannot read.
     try:
-        runs = [
-            _route(
-                project,
+        plans = [
+            ExecutionPlan.build(
                 dag,
-                home,
+                source=source,
                 span=span,
                 replicate=target,
                 source_end=end,
@@ -192,7 +173,7 @@ def run_project(
         raise refuse(str(error)) from error
 
     if dry_run:
-        for plan, _ in runs:
+        for plan in plans:
             typer.echo(_describe(plan))
         return
 
@@ -202,23 +183,50 @@ def run_project(
     # of decoding that a node id cannot be a file name is a message that was
     # available immediately.
     try:
-        writers = [_checkpoints(project, video, project_path, plan) for plan, _ in runs]
+        writers = [_checkpoints(project, video, project_path, plan) for plan in plans]
     except CheckpointWriteError as error:
         raise refuse(str(error)) from error
 
-    # One reader per file rather than per replicate, which is v2's reopening and
-    # this command's previous single open at once: a reader is a pool of decode
-    # threads, so every arena reading the parent must share one, and an arena
-    # served by its own crop cannot. `wrap` is per replicate either way — it is
-    # the artifact's numbering offset, and the identity function for the parent.
+    # One reader for the footage, shared by every replicate: a reader is a pool
+    # of decode threads, so an open per arena is v2's reopening. Every plan here
+    # runs one graph, so one format and one reader answer for all of them.
     with ExitStack() as open_files:
-        readers: dict[Path, FrameSource] = {}
-        for (plan, resolved), writer in zip(runs, writers, strict=True):
-            if resolved.path not in readers:
-                readers[resolved.path] = open_files.enter_context(
-                    frame_source(resolved.path, luma=plan.luma)
-                )
-            _execute_one(plan, resolved.wrap(readers[resolved.path]), store, writer)
+        reader: FrameSource = _UNFED
+        if _reads_the_footage(dag):
+            reader = open_files.enter_context(frame_source(video, luma=plans[0].luma))
+        for plan, writer in zip(plans, writers, strict=True):
+            _execute_one(plan, reader, store, writer)
+
+
+def _reads_the_footage(dag: Dag) -> bool:
+    """Whether any root of this graph is fed by the run's reader.
+
+    A graph every root of which opens its own file — a project served entirely
+    by written crops, or a folder of already-cut files — reads the parent
+    nowhere, and opening it would be a decode pool built for a container nothing
+    asks a frame of. `footage_end` still opens it once, because the span and the
+    trailing clamp are facts about the source whatever the graph roots on.
+    """
+    return len(dag.source_roots) < len(dag.roots)
+
+
+class _UnfedReader:
+    """The reader a graph with no footage-fed root is handed.
+
+    A refusal rather than `None`, so the absence cannot be threaded through
+    `execute` as an optional and read back as "no frames yet". Reaching it means
+    a root the walk above counted as self-opening asked for a source frame,
+    which is a disagreement between two derivations rather than a missing file.
+    """
+
+    def read(self, index: int | FrameIndex) -> FrameSource:  # pragma: no cover - unreachable
+        raise VideoDecodeError(
+            f"frame {int(index)} was asked of the source video, but every root of this graph "
+            "opens its own file, so no container was opened for it"
+        )
+
+
+_UNFED = _UnfedReader()
 
 
 def frame_source(video: Path, *, luma: bool) -> PrefetchFrameSource:
@@ -304,75 +312,6 @@ def _label(replicate: Replicate | None) -> str:
     line reporting its frames would be two names for one run.
     """
     return "baseline" if replicate is None else replicate.name
-
-
-def _route(
-    project: Project,
-    dag: Dag,
-    home: SourceHome,
-    *,
-    span: SourceSpan,
-    replicate: Replicate | None,
-    source_end: FrameIndex | None,
-    picked: Mapping[str, str] = MappingProxyType({}),
-) -> tuple[ExecutionPlan, ResolvedSource]:
-    """The plan one replicate runs, and the file it runs against.
-
-    The two passes the module docstring describes. The first plan is built on
-    the parent whatever happens, because its params are how this replicate's box
-    is derived and its `decode_range` is what a record has to cover; it is also
-    the answer whenever nothing serves, so the parent path costs no extra work.
-
-    A served run is keyed on the artifact and clamped against the artifact: what
-    the file holds is `record.span`, in source numbering, and passing the
-    parent's length here would let the trailing window overhang the end of a
-    file that stops earlier. `resolve` has already refused any record that does
-    not cover the read range, so nothing is clamped in practice and the argument
-    is the honest one rather than the reachable one.
-
-    `picked` is this replicate's, and reaches both plans unchanged: eliding the
-    crop node moves no source root, and a root left out of it is a subtree that
-    recomputes on every run.
-
-    Raises:
-        ValueError: from either plan, for `run_project`'s reasons.
-    """
-    parent = ExecutionPlan.build(
-        dag,
-        source=home.identity,
-        span=span,
-        replicate=replicate,
-        source_end=source_end,
-        picked=picked,
-    )
-    bound = crop_bound(dag, parent.params)
-    if bound is not None and bound[0] in project.checkpoints:
-        # A node whose output someone asked to keep has to run: dropping it
-        # would leave the manifest naming a key this run never looked anything
-        # up under, and a plan does not answer for a node its graph no longer
-        # holds. The record still exists and the next run without the checkpoint
-        # uses it.
-        bound = None
-    resolved = resolve(
-        project.crops,
-        None if bound is None else bound[1],
-        home=home,
-        luma=not dag.needs_chroma,
-        want=read_range(parent),
-    )
-    if bound is None or resolved.record is None:
-        return parent, resolved
-    return (
-        ExecutionPlan.build(
-            Dag.build(elided(project.pipeline, bound[0])),
-            source=resolved.identity,
-            span=span,
-            replicate=replicate,
-            source_end=FrameIndex(resolved.record.span.end),
-            picked=picked,
-        ),
-        resolved,
-    )
 
 
 def read_range(plan: ExecutionPlan) -> SourceSpan:

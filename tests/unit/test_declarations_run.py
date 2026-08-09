@@ -140,13 +140,17 @@ class RecordedSource:
     def __init__(self, inner: object, widths: list[int]) -> None:
         self._inner = inner
         self._widths = widths
+        # The wrapped tool's, not a value of this class's own: which key flavour
+        # a root folds is the declaration under test, and a recorder that
+        # answered for itself would move every source tool's keys to one side.
+        self.decoded = inner.decoded  # pyright: ignore[reportAttributeAccessIssue]
 
     def file(self, params: object, /) -> Path:
         return self._inner.file(params)  # pyright: ignore[reportAttributeAccessIssue]
 
-    def read(self, params: object, index: object, /) -> Frame:
+    def read(self, params: object, index: object, /, *, luma: bool) -> Frame:
         self._widths.append(1)
-        return self._inner.read(params, index)  # pyright: ignore[reportAttributeAccessIssue]
+        return self._inner.read(params, index, luma=luma)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def observe(
@@ -196,23 +200,42 @@ def observe(
 
 @pytest.fixture(scope="module")
 def picked(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
-    """Params pointing every path parameter on the shelf at one written picture.
+    """One file per kind of source reader, for every path parameter on the shelf.
 
-    Derived from `ToolSpec.path_params` — the kind, never a tool id — so this is
-    the same shape as everything else here: a tool that lands tomorrow with a
-    file to read is handed one without this file learning its name. The picture
-    is the size `Footage` hands every other tool, so a case comparing an emitted
-    frame against its input is comparing like with like.
+    Derived from `ToolSpec.path_params` and `ToolSource.decoded` — kinds, never a
+    tool id — so this is the same shape as everything else here: a tool that
+    lands tomorrow with a file to read is handed one without this file learning
+    its name. Two files rather than one because the declaration that splits the
+    key flavours also splits what a file has to *be*
+    (`adr/a-root-keys-by-its-reader.md`): a tool reading with its own code is
+    handed the picture, and one reading through `decode/` is handed a container,
+    and a picture offered to the second decodes as a single frame and fails on
+    the next one the run asks for.
+
+    Both are the size `Footage` hands every other tool, so a case comparing an
+    emitted frame against its input is comparing like with like, and the video
+    is long enough for `NEIGHBOURHOOD`.
     """
-    path = tmp_path_factory.mktemp("picked") / "plate.png"
+    directory = tmp_path_factory.mktemp("picked")
     rng = np.random.default_rng(7)
-    cv2.imwrite(str(path), rng.integers(0, 256, (HEIGHT, WIDTH), dtype=np.uint8))
-    return {"path": path}
+    still = directory / "plate.png"
+    cv2.imwrite(str(still), rng.integers(0, 256, (HEIGHT, WIDTH), dtype=np.uint8))
+    clip = directory / "plate.mp4"
+    writer = cv2.VideoWriter(str(clip), cv2.VideoWriter.fourcc(*"mp4v"), 20.0, (WIDTH, HEIGHT))
+    if not writer.isOpened():  # pragma: no cover - environment without an encoder
+        pytest.skip("No usable mp4v encoder in this OpenCV build")
+    for index in range(NEIGHBOURHOOD.end):
+        writer.write(np.full((HEIGHT, WIDTH, 3), index * 5, dtype=np.uint8))
+    writer.release()
+    return {"path": still, "decoded_path": clip}
 
 
 def params_for(spec: ToolSpec, picked: dict[str, object]) -> dict[str, object]:
-    """This tool's node params: nothing, or the picture for its path parameters."""
-    return {name: str(picked["path"]) for name in spec.path_params}
+    """This tool's node params: nothing, or the file its source can read."""
+    if spec.source is None:
+        return {}
+    key = "decoded_path" if spec.source.decoded else "path"
+    return {name: str(picked[key]) for name in spec.path_params}
 
 
 def node_for(spec: ToolSpec) -> Node:

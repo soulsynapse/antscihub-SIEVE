@@ -1,6 +1,6 @@
 ---
 title: The offering predicate is a plausibility question, and admits cannot answer it
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests -q -k offering"
 priority: normal

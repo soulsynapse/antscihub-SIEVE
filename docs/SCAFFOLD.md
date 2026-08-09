@@ -42,6 +42,7 @@ src/sieve/gui/walk.py                      # The order Up and Down move through 
 src/sieve/cli/__init__.py                  # The headless front end; with the saved file, the cluster handoff.
 src/sieve/cli/app.py                       # The `sieve` command: argument parsing and nothing else.
 src/sieve/cli/inspect_cmd.py               # `sieve inspect` — what is on the shelf, read off the declarations.
+src/sieve/cli/materialize_cmd.py           # `sieve materialize` — cut one replicate's crop to a file and record it.
 src/sieve/cli/preview_cmd.py               # `sieve preview` — the tuning loop's inner step, with the timings printed.
 src/sieve/cli/run_cmd.py                   # `sieve run` — execute a saved project through the one executor.
 src/sieve/session/__init__.py              # The open project and its history: two stacks of whole immutable pipeline values.

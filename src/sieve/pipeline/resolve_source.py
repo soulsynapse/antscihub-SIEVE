@@ -209,21 +209,21 @@ def resolve(
     return _parent(home)
 
 
-def crop_bound(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[str, ROI] | None:
-    """Which node a record could stand for, and the box it would have to hold.
+def crop_roots(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[tuple[str, ROI], ...]:
+    """Every node a record could stand for, with the box it would have to hold.
 
-    The argument `resolve` does not derive for itself, because the graph is the
-    caller's. Recognised by the resolved params type rather than by a tool id:
-    the box is `CropParams.region`, `materialize_crop` cut it with that same
-    tool, so the type *is* the claim that a file can stand where this node
-    stands, and `pipeline` stays out of the business of knowing tools by name.
+    Recognised by the resolved params type rather than by a tool id: the box is
+    `CropParams.region`, `materialize_crop` cut it with that same tool, so the
+    type *is* the claim that a file can stand where this node stands, and
+    `pipeline` stays out of the business of knowing tools by name.
 
-    A root, because a record is cut from the parent footage and a crop of some
-    other node's output is a crop of something no file on disk holds. One or
-    nothing: two of them are two boxes, and choosing between them is what
-    `todo/the-materialize-command-derives-what-v2-was-handed.md` is open on, so
-    until that is settled the answer is the fallback every clause in this module
-    takes.
+    Roots only, because a record is cut from the parent footage and a crop of
+    some other node's output is a crop of something no file on disk holds.
+
+    All of them rather than the one, because the two callers differ on what an
+    ambiguous graph means and neither can recover a count from `None`:
+    `crop_bound` below falls back to the parent, and `cli/materialize_cmd.py`
+    refuses with the nodes named rather than cutting a box it picked.
 
     Args:
         dag: The graph about to run.
@@ -232,18 +232,37 @@ def crop_bound(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[str, ROI] | 
             and nothing re-derives an override.
 
     Returns:
+        `(node_id, region)` per root crop node, in graph order.
+    """
+    return tuple(
+        (node.node_id, resolved.region)
+        for node in dag.order
+        if isinstance(resolved := params[node.node_id], CropParams)
+        and not dag.upstreams[node.node_id]
+    )
+
+
+def crop_bound(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[str, ROI] | None:
+    """Which node a record could stand for, and the box it would have to hold.
+
+    The argument `resolve` does not derive for itself, because the graph is the
+    caller's.
+
+    One or nothing: two of them are two boxes, and nothing here can choose
+    between them, so the answer is the fallback every clause in this module
+    takes. Serving is an acceleration and declining to guess costs only speed;
+    the command that has to produce a file instead refuses (`crop_roots`).
+
+    Args:
+        dag: The graph about to run.
+        params: Resolved parameters per node id — `crop_roots`' rule.
+
+    Returns:
         `(node_id, region)`, or `None` when the graph offers no single box.
         `None` is what `resolve` reads as "run the parent".
     """
-    bound: tuple[str, ROI] | None = None
-    for node in dag.order:
-        resolved = params[node.node_id]
-        if not isinstance(resolved, CropParams) or dag.upstreams[node.node_id]:
-            continue
-        if bound is not None:
-            return None
-        bound = (node.node_id, resolved.region)
-    return bound
+    roots = crop_roots(dag, params)
+    return roots[0] if len(roots) == 1 else None
 
 
 def elided(pipeline: Pipeline, node_id: str) -> Pipeline:

@@ -28,9 +28,8 @@ scrubbing it are a player's gestures, and a session over an empty graph would be
 a fiction invented to route the number through this module. The reader is the
 session's own collaborator, so the boundary being measured is the one the loop
 actually stands on. `cut_to_ready` is the fourth pre-pipeline budget and is not
-measured here: confirming a cut writes a crop artifact, the command that does it
-headless is not built
-(`todo/the-materialize-command-derives-what-v2-was-handed.md`), and
+measured here: `sieve materialize` now drives the write headlessly, but what the
+interval *ends* at when nothing has a window is undecided, and
 `todo/cut-to-ready-gets-a-headless-referent.md` holds the gap.
 
 **Every gate is a median over its own series, and no sample anywhere in the run

@@ -34,3 +34,13 @@ call site in `tests/bench/`, the key joins `budgets.TIMED`, and this item's
 sentence in that set's comment is deleted rather than left true.
 `docs/findings/2026.08.07-the-loop-budget-is-met-headless.md` holds the reading
 the other three took.
+
+## 2026-08-09: the command landed and the gap did not close
+
+08.4 built `sieve materialize`, so "the command that drives that from a terminal
+is still open" above is no longer why this is unmeasurable — the headless write
+exists and takes a project and a replicate. What is still undecided is the whole
+of the paragraph after it: where the interval ends when nothing has a window.
+The command is a *write*, and it returns when the file is verified and the
+project saved, which is the "handoff or write" fork stated above and not an
+answer to it.

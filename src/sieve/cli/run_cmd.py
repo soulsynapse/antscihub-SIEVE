@@ -64,10 +64,11 @@ they are absent rather than present and untested — the full CLI is Phase 5 and
 
 v2 kept `load_project`, `refuse` and `parse_span` in a `cli/common.py`, because
 two commands refusing in two spellings would be two spellings of every error
-message a user sees. `inspect` has since landed and refuses nothing — it reads
-declarations and prints them — so there is still one speller and no module to
-hold an agreement between two. The second command that can fail is what moves
-these.
+message a user sees. Here they stay in this module and the other commands import
+them (`preview_cmd`, `materialize_cmd`), which buys the same one spelling without
+a module whose only content is what this one already had to define. What would
+move them is this command ceasing to be the natural home — a fourth caller, or a
+refusal that has nothing to do with running a graph.
 """
 
 from __future__ import annotations
@@ -230,7 +231,7 @@ def _route(
         None if bound is None else bound[1],
         home=home,
         luma=not dag.needs_chroma,
-        want=_read_range(parent),
+        want=read_range(parent),
     )
     if bound is None or resolved.record is None:
         return parent, resolved
@@ -246,11 +247,13 @@ def _route(
     )
 
 
-def _read_range(plan: ExecutionPlan) -> SourceSpan:
+def read_range(plan: ExecutionPlan) -> SourceSpan:
     """`plan.decode_range` as the span `resolve` matches records against.
 
     A conversion rather than a second derivation: the frames a run reads are the
-    plan's to state, and this is only the shape `resolve` takes them in.
+    plan's to state, and this is only the shape `resolve` takes them in. Shared
+    with `materialize_cmd`, which cuts exactly what this certifies — a second
+    spelling of it would drift into a file that serves no run.
     """
     reading = plan.decode_range
     return SourceSpan(start=int(reading.start), end=int(reading.stop))

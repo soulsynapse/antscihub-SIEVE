@@ -17,6 +17,13 @@ The record's own model is not the subject here — `TestCropRecords` in
 `write_ffv1` alone is `tests/unit/test_crop_artifact.py`'s. What is asserted
 below is the join: the file holds what the graph would have seen, the record
 points at it, and neither exists when the write went wrong.
+
+`TestTheCommandDerivesWhatV2WasHanded` is the other end of the same file: the
+writer takes a region, a span and a format as arguments, and every one of the
+three is something `sieve materialize` has to *derive* from a document that
+records none of them directly. Here rather than in a module of its own because
+the failure it guards against is a file — a cut of the wrong box, over the wrong
+frames, that nothing points at — and what proves it is opening that file.
 """
 
 from __future__ import annotations
@@ -29,20 +36,26 @@ from typing import Any
 import numpy as np
 import pytest
 from numpy.typing import NDArray
+from typer.testing import CliRunner, Result
 
-from sieve.core.pipeline_model import SourceSpan
-from sieve.core.types import ROI, FrameSpan
+from sieve.cli.app import app
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Replicate, SourceSpan
+from sieve.core.types import ROI, FrameIndex, FrameSpan
 from sieve.decode.reader import VideoReader
 from sieve.pipeline import materialize as materialize_module
 from sieve.pipeline.cache_key import source_identity
+from sieve.pipeline.dag import Dag
 from sieve.pipeline.materialize import (
     CropVerificationError,
     MaterializeCancelledError,
     materialize_crop,
 )
+from sieve.pipeline.plan import ExecutionPlan
 from sieve.storage.crop_writer import write_ffv1
+from sieve.tools import discover
 from sieve.tools.crop import CropParams
 from sieve.tools.crop import run as crop_frame
+from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES
 
 #: Wholly inside the 160x120 fixture and at an odd origin in both axes, so a
 #: codec that quietly re-aligned the crop to a macroblock grid would show up.
@@ -281,3 +294,297 @@ class TestTheTwoCallbacksALongWriteOffers:
 
         assert reported == [(1, SPAN.frame_count), (2, SPAN.frame_count)]
         assert not list(tmp_path.glob("**/*.mkv"))
+
+
+runner = CliRunner()
+
+PROJECT_NAME = "arena.sieve.yaml"
+CUT = "cut"
+DOWN = "down"
+KEEP = "keep"
+SIGNAL = "signal"
+GATE = "gate"
+
+#: The crop node carries no region of its own — `crop.WHOLE_FRAME` is its
+#: default, which is the identity crop as a value — and the replicate pins the
+#: box. That is where geometry lives under schema v1
+#: (`adr/detector-is-a-node.md`), and it is what makes the derivation a
+#: derivation: a command reading the document would cut the whole frame. The
+#: `span` node is the other half — schema v1 records no frame range of its own,
+#: so the frames are a node's parameters like everything else.
+GRAPH = Pipeline(
+    nodes=(
+        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
+        Node(node_id=DOWN, tool_id="downsample", version="1.0.0", params={"factor": 2}),
+        Node(
+            node_id=KEEP,
+            tool_id="span",
+            version="1.0.0",
+            params={"frames": [SPAN.start, SPAN.end]},
+        ),
+    ),
+    edges=(Edge(upstream=CUT, downstream=DOWN), Edge(upstream=DOWN, downstream=KEEP)),
+)
+
+#: `detect`'s band, chosen for `test_cli_run.py`'s reason: the transform's reach
+#: is charged at the band's low edge, so the wide-open default would want more
+#: frames either side of every target than the 40-frame fixture holds.
+DETECT_BAND = (10.0, 14.0)
+
+#: The frames `WINDOWED_GRAPH` answers for. Far enough inside the fixture that
+#: the window either side of it is legal footage.
+WINDOWED_SPAN = SourceSpan(start=16, end=20)
+
+#: The graph `GRAPH` is not: `crop -> downsample` streams, so its decode range
+#: *is* its span and a command cutting either would pass every case above. Here
+#: the detector reads well past and well behind every frame it answers for.
+WINDOWED_GRAPH = Pipeline(
+    nodes=(
+        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
+        Node(node_id=SIGNAL, tool_id="block_signal", version="1.0.0", params={"fps": FIXTURE_FPS}),
+        Node(
+            node_id=GATE,
+            tool_id="detect",
+            version="1.0.0",
+            params={"freq_band": DETECT_BAND, "window_frames": 3, "fps": FIXTURE_FPS},
+        ),
+        Node(
+            node_id=KEEP,
+            tool_id="span",
+            version="1.0.0",
+            params={"frames": [WINDOWED_SPAN.start, WINDOWED_SPAN.end]},
+        ),
+    ),
+    edges=(
+        Edge(upstream=CUT, downstream=SIGNAL),
+        Edge(upstream=SIGNAL, downstream=GATE),
+        Edge(upstream=GATE, downstream=KEEP),
+    ),
+)
+
+#: A crop of another node's output rather than of the footage, which is a crop of
+#: something no file on disk holds.
+NO_ROOT_CROP = Pipeline(
+    nodes=(
+        Node(node_id=DOWN, tool_id="downsample", version="1.0.0", params={"factor": 2}),
+        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
+    ),
+    edges=(Edge(upstream=DOWN, downstream=CUT),),
+)
+
+#: Two boxes at the root and nothing in the document to choose between them.
+TWO_ROOT_CROPS = Pipeline(
+    nodes=(
+        Node(node_id=CUT, tool_id="crop", version="1.0.0"),
+        Node(node_id="other", tool_id="crop", version="1.0.0"),
+        Node(node_id=DOWN, tool_id="downsample", version="1.0.0", params={"factor": 2}),
+    ),
+    edges=(Edge(upstream=CUT, downstream=DOWN),),
+)
+
+
+def _replicate(region: ROI = ARENA) -> Replicate:
+    pinned = {"x": region.x, "y": region.y, "width": region.width, "height": region.height}
+    return Replicate(name=NAME, replicate_id="a").with_override(CUT, {"region": pinned})
+
+
+def _project(
+    video: Path,
+    directory: Path,
+    *,
+    pipeline: Pipeline = GRAPH,
+    replicate: Replicate | None = None,
+) -> Path:
+    """Write a one-arena project over `video` into `directory`, and return its path."""
+    target = _replicate() if replicate is None else replicate
+    project = Project.for_video(video, directory).with_pipeline(pipeline).with_replicates((target,))
+    path = directory / PROJECT_NAME
+    project.save(path)
+    return path
+
+
+def _materialize(project_path: Path, replicate: str = NAME) -> Result:
+    return runner.invoke(app, ["materialize", str(project_path), "--replicate", replicate])
+
+
+def _reads(pipeline: Pipeline, replicate: Replicate) -> SourceSpan:
+    """The source frames a whole-video run of `pipeline` decodes, window included.
+
+    Derived here the way the command derives it rather than written down, because
+    the numbers are the detector's own declarations and a literal would be a
+    second copy of them going stale on its own schedule.
+    """
+    discover()
+    reading = ExecutionPlan.build(
+        Dag.build(pipeline),
+        source="",
+        span=SourceSpan(start=0, end=FIXTURE_FRAMES),
+        replicate=replicate,
+        source_end=FrameIndex(FIXTURE_FRAMES),
+    ).decode_range
+    return SourceSpan(start=int(reading.start), end=int(reading.stop))
+
+
+class TestTheCommandDerivesWhatV2WasHanded:
+    """Region, span and format: three arguments, none of them in the document.
+
+    v2's command read a frame range off the project and an `roi` off the
+    replicate, and schema v1 records neither. What is asserted here is that each
+    one comes out of the graph as resolved for this replicate — and, where the
+    graph does not determine it, that the command says so rather than cutting
+    something plausible.
+    """
+
+    def test_the_command_cuts_the_box_the_replicate_pins_over_the_graphs_span(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """Both derivations at once, read back off the file rather than the record.
+
+        The two failures a command trusting the document would make are visible
+        here as sizes: `crop.WHOLE_FRAME` is the node's own region, so a
+        derivation skipping the override writes a 160x120 file, and a span read
+        off a project that records none writes all forty frames.
+        """
+        project_path = _project(synthetic_video, tmp_path)
+
+        result = _materialize(project_path)
+
+        assert result.exit_code == 0, result.output
+        record = Project.load(project_path).crops[0]
+        with VideoReader(record.resolve(tmp_path), luma=True) as reader:
+            assert (reader.metadata.width, reader.metadata.height) == (ARENA.width, ARENA.height)
+            assert reader.metadata.frame_count == SPAN.frame_count
+        assert record.region == ARENA
+        assert record.span == SPAN
+
+    def test_the_command_registers_what_it_cut_in_the_project_it_saves(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """The half that is easy to leave out and expensive to notice.
+
+        A written file nothing points at is minutes of decode the next session
+        pays again in silence, and the only thing that can say the pointer works
+        is the matching rule itself, asked of a document that has been through
+        YAML and back.
+        """
+        project_path = _project(synthetic_video, tmp_path)
+
+        assert _materialize(project_path).exit_code == 0
+
+        reloaded = Project.load(project_path)
+        assert len(reloaded.crops) == 1
+        assert reloaded.crops[0].backs(
+            ARENA, source=source_identity(synthetic_video), luma=True, project_dir=tmp_path
+        )
+
+    def test_the_command_cuts_the_window_the_graph_reads_not_only_its_span(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """A file cut to the answer alone is a file the next run declines.
+
+        `resolve` matches a record against the frames a run *reads* — its span
+        widened by every window in the graph — and declines one that misses them
+        at either end, so a command cutting `plan.span` would write an artifact
+        that serves nothing and be re-run every time. The first assertion is what
+        makes the second mean anything: under `GRAPH` the two spans are equal and
+        this case would pass against either derivation.
+        """
+        replicate = _replicate()
+        reads = _reads(WINDOWED_GRAPH, replicate)
+        project_path = _project(
+            synthetic_video, tmp_path, pipeline=WINDOWED_GRAPH, replicate=replicate
+        )
+
+        assert _materialize(project_path).exit_code == 0
+
+        assert reads.frame_count > WINDOWED_SPAN.frame_count
+        assert Project.load(project_path).crops[0].span == reads
+
+    def test_the_command_derives_the_format_and_offers_no_flag_for_it(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """`--format` is the one option that must never exist.
+
+        No tool on the shelf declares a chroma-only input (`Dag.needs_chroma`),
+        so every graph today is a luma graph and the derived value cannot be
+        contrasted against a colour one. What can be asserted is the thing that
+        would make the derivation defeatable — an option letting a user write a
+        colour file for a luma session, which is the combination v2's codec
+        finding proved reads back as plausible wrong pixels.
+        """
+        project_path = _project(synthetic_video, tmp_path)
+
+        assert _materialize(project_path).exit_code == 0
+
+        assert Project.load(project_path).crops[0].format == "luma"
+        assert "--format" not in runner.invoke(app, ["materialize", "--help"]).output
+
+    def test_the_command_refuses_a_graph_with_no_crop_reading_the_source(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """A crop of another node's output is a crop of something no file holds.
+
+        The graph here *has* a crop node, so a refusal keyed on the tool being
+        absent would pass this case while cutting a box that stands for nothing.
+        """
+        project_path = _project(
+            synthetic_video,
+            tmp_path,
+            pipeline=NO_ROOT_CROP,
+            replicate=Replicate(name=NAME, replicate_id="a"),
+        )
+
+        result = _materialize(project_path)
+
+        assert result.exit_code == 1
+        assert "no crop node reading the source" in result.stderr
+        assert not list(tmp_path.glob("**/*.mkv"))
+
+    def test_the_command_refuses_a_graph_with_two_crops_reading_the_source(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """Two boxes are two answers, and picking one writes a file that lies.
+
+        Both node ids are named because the fix is an edit to the graph, and a
+        message saying only that the graph is ambiguous leaves the reader to find
+        which two nodes made it so.
+        """
+        project_path = _project(synthetic_video, tmp_path, pipeline=TWO_ROOT_CROPS)
+
+        result = _materialize(project_path)
+
+        assert result.exit_code == 1
+        assert CUT in result.stderr
+        assert "other" in result.stderr
+        assert not list(tmp_path.glob("**/*.mkv"))
+
+    def test_the_command_refuses_a_replicate_that_pins_no_region(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """Cutting the graph's own box and filing it under one arena's name.
+
+        The graph resolves perfectly well here — `crop.WHOLE_FRAME` is a legal
+        region — so nothing downstream would refuse it: the command would write
+        the whole frame, record it as this replicate's cut, and go on serving it
+        to every other replicate that had pinned the same nothing.
+        """
+        project_path = _project(
+            synthetic_video, tmp_path, replicate=Replicate(name=NAME, replicate_id="a")
+        )
+
+        result = _materialize(project_path)
+
+        assert result.exit_code == 1
+        assert "overrides no region" in result.stderr
+        assert not list(tmp_path.glob("**/*.mkv"))
+
+    def test_the_command_refuses_a_name_no_replicate_answers_to(
+        self, synthetic_video: Path, tmp_path: Path
+    ) -> None:
+        """Named before a container is opened, and saying what the project holds."""
+        project_path = _project(synthetic_video, tmp_path)
+
+        result = _materialize(project_path, replicate="Arena 9")
+
+        assert result.exit_code == 1
+        assert NAME in result.stderr

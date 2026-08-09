@@ -20,11 +20,11 @@ Four claims, each failing for its own reason:
   the status quo rather than an error, and a key that moved on the way back would
   make un-backing a box cost a full recompute of work that is still valid.
 
-Nothing here drives the CLI. `sieve materialize` does not exist
-(`todo/the-materialize-command-derives-what-v2-was-handed.md`) and `sieve run`
-does not yet call `resolve` — the resolve-plan-execute path is the subject
-either way, and a command that printed counts is exactly what cannot distinguish
-a correct run from one reading the wrong frames.
+Nothing here drives the CLI, though both ends of it now exist: `sieve
+materialize` writes the record and `sieve run` resolves against it. The
+resolve-plan-execute path is the subject either way, and a command that printed
+counts is exactly what cannot distinguish a correct run from one reading the
+wrong frames.
 """
 
 from __future__ import annotations
@@ -256,11 +256,11 @@ class TestWhichNodeARecordCouldStandFor:
     def test_a_second_crop_at_the_root_leaves_no_box_to_serve(self) -> None:
         """Two boxes are two answers, and a caller eliding either is guessing.
 
-        Which one a record is a record *of* is
-        `todo/the-materialize-command-derives-what-v2-was-handed.md`'s to
-        settle. Until it is, the fallback is the parent — and the failure this
-        refuses is silent: the wrong node dropped is a run whose frames were
-        never cut to the box its keys claim.
+        The fallback is the parent, and the failure it refuses is silent: the
+        wrong node dropped is a run whose frames were never cut to the box its
+        keys claim. `cli/materialize_cmd.py` reads the same walk and refuses
+        instead, because declining to guess costs a serving caller only speed
+        and would cost a writing one a file recorded as a cut it is not.
         """
         assert _bound(TWO_CUTS) is None
 

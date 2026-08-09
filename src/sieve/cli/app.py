@@ -12,9 +12,9 @@ empty graph, and a caller that cares about output counts reads them rather than
 a status.
 
 The rest of v2's surface is not missing so much as not yet standing on anything:
-`materialize` and the full `run` land in Phase 5 with results at rest, and
-`sweep` in Phase 6 with the rest of `bench` (`PLAN.md`). `detect` never
-lands — detection is a node (`adr/detector-is-a-node.md`).
+`sweep` lands in Phase 6 with the rest of `bench` (`PLAN.md`), and the options
+`run` still does not take are named in `run_cmd.py`. `detect` never lands —
+detection is a node (`adr/detector-is-a-node.md`).
 
 The console-script entry point (`main`) is deliberately not the Typer callback
 (`_group`). The callback runs inside `CliRunner` too, which drives the app
@@ -30,6 +30,7 @@ from __future__ import annotations
 import typer
 
 from sieve.cli.inspect_cmd import inspect_tools
+from sieve.cli.materialize_cmd import materialize_replicate
 from sieve.cli.preview_cmd import preview_project
 from sieve.cli.run_cmd import run_project
 from sieve.decode.quiet import silence_raw_format_warning
@@ -53,6 +54,9 @@ app.command("run", help="Run a project's pipeline over a span of its source vide
 app.command("inspect", help="Describe the registered tools, or one of them.")(inspect_tools)
 app.command("preview", help="Render a project's working window and report what it cost.")(
     preview_project
+)
+app.command("materialize", help="Cut one replicate's crop to a file and record it.")(
+    materialize_replicate
 )
 
 

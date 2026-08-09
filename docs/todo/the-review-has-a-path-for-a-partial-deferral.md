@@ -47,3 +47,20 @@ because the tree is broken elsewhere would be misread as finished. The cheaper
 variant is to run it only when the answer would be `work` and to report the
 green rather than suppress the item, which leaves the judgement with whoever
 reads it.
+
+## The same green means something at `awaiting-review` too (2026-08-09)
+
+09.5.1 reached a review at `awaiting-review` with its criterion passing and
+half the item unbuilt: the worker had deferred NEW PROJECT to a schema ruling,
+and the criterion's `-k` disjunction named it but matched nothing, so it went
+green on the half that landed. Nothing in the repo distinguished that from a
+finished item — the deferral was legible only in the prose the worker wrote
+into the item.
+
+So the check this item proposes has a second reading site. Run at the `work`
+answer it catches an item with nothing to do; run at the `review` answer it
+catches the opposite — a criterion that will certify whatever the review does
+not read. Neither reading suppresses the item; both report the green to the
+session that has to act on it. That the two failures are the same observable
+from opposite sides is an argument for putting the check in `next_action`
+rather than in either role's prompt.

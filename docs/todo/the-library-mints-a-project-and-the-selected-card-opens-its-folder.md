@@ -1,9 +1,9 @@
 ---
 title: The library mints a project and the selected card opens its folder
 step: "09.5.1"
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/gui -q -k \"new_project or open_location\""
+done_when: "uv run pytest tests/gui -q -k open_location && uv run pytest tests/gui -q -k new_project && uv run pytest tests/unit/test_pipeline_model.py -q -k no_footage"
 opened: 2026-08-09
 ---
 
@@ -94,3 +94,26 @@ the other two exits are rejected for the reasons the section above gives —
 the pending row lies after a relaunch, the dialog is the modal the referent
 argues away. The review can widen `done_when` over NEW PROJECT rather than
 striking it; the schema decision it was waiting on is made.
+
+## Reviewed and widened, back to open (2026-08-09)
+
+OPEN LOCATION holds. Its three cases were re-run and re-proved: reverting
+`project_select.py`, `app.py` and `chrome.py` to the parent of `bfcecb7`
+turns all three red, and because two of those reds are a missing name rather
+than a wrong answer
+([reverting the implementation is no proof when the item created the module](../findings/loop/2026.08.07-reverting-the-implementation-is-no-proof-when-the-item-created-the-module.md)),
+the landed code was mutated as well: opening the file instead of the folder
+and drawing the button on every card are both killed. The third mutant —
+`on_reveal(index)` to `on_reveal(current)` — survives and is equivalent, since
+the only site that connects it is inside the `index == current` branch.
+
+`done_when` is now one command per claim rather than one `-k` disjunction over
+all of them, because a widened disjunction is green for whatever it names and
+does not have
+([a -k disjunction is green for the disjunct that names nothing](../findings/loop/2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing.md)).
+The third leg is the schema half ADR 26 ruled: `Project.source` is still a
+required `SourceRef` on this tree, so the document a mint would write cannot
+be built yet, and the case for it lives beside the model rather than in the
+GUI suite. The GUI and the schema stay one item because one commit satisfies
+both and neither has a reason to land alone — the admission exists to make the
+mint writable, and the mint is the only caller that wants it.

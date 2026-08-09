@@ -1,8 +1,9 @@
 ---
 title: The output is a step, and its ticks are edges
 step: "09.2"
-status: open
-gated_on: nothing
+status: deferred
+deferred_for: decision
+gated_on: whether the tool contract admits a node that consumes and emits nothing, which is an ADR nobody has written
 done_when: "uv run pytest tests -q -k ticks_are_edges"
 opened: 2026-08-09
 ---
@@ -97,3 +98,27 @@ ports, the five sites, the tool, the tick-to-edge derivation — with the GUI ha
 (the card at the foot of the stack, Run on its form, `gui/save_screen.py`
 dissolving into it) a second job behind it. `done_when` is untouched and still
 covers the whole; nothing here narrows it.
+
+## 2026-08-09 (review): the gate is in the frontmatter now, and the fork is wider than the sink
+
+The work run's reading holds — I re-ran `done_when` on its commit and got the
+same red, and every citation above checks out against the tree. What it left in
+prose is the field the loop actually reads: it concluded the item cannot be
+taken until a ruling exists and then left `status: open`, `gated_on: nothing`,
+so `--next` handed 09.2 straight back and the next work run would have stalled
+at the same sentence. That is
+[findings/loop/2026.08.07-an-item-states-its-gate-in-prose-and-ungated-in-frontmatter-so-the-selector-runs-it-first.md](../findings/loop/2026.08.07-an-item-states-its-gate-in-prose-and-ungated-in-frontmatter-so-the-selector-runs-it-first.md)
+a second time, from the other end — there the gate was derived at minting, here
+at the first attempt to build. This review sets `deferred_for: decision`.
+
+The ruling is also wider than "does `ToolSpec` admit a sink". Writing already
+happens in this tree, and it happens *outside the graph*:
+`storage/checkpoint_writer.py` writes `<node>.<emission>.npy` and a manifest,
+called by the run rather than declared on the shelf, and `tools/checkpoint.py`
+is only the read side of it — a source tool, wired in by
+[adr/a-users-file-wires-in-like-any-other-input.md](../adr/a-users-file-wires-in-like-any-other-input.md).
+So the fork Kendrick is owed is not only what a sink may declare but whether
+writing is a node at all: MOCKUP-MAP's "Output is a step" row presumes it is,
+and the only writer the tree has says it is not. Answering the narrow question
+without that one would admit a shape into the contract that the existing writer
+did not need.

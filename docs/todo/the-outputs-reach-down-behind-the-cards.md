@@ -45,3 +45,15 @@ one of the two becomes a link to the other, and PLAN is the one that should
 shrink, since the reason a step sits where it does belongs to the step. While
 both stand, PLAN's version also overstates its own sequence: it says the edges
 are "drawn under all of it last", and 09.8's crop fan lands after this step.
+
+## 2026-08-09 (review): 09.2 is deferred, so the multi-input half of this has no subject
+
+Read before starting. The step this one says it "runs after" is now
+`deferred_for: decision` — the output node needs a ruling on whether the tool
+contract admits a node that consumes and emits nothing, which is Kendrick's and
+not a work run's. The consequence here is partial, not a block: lanes,
+arrowheads and the down-edges of a linear chain are buildable now, and only the
+occlusion clause and the port name at a multi-input arrowhead wait on 09.2. If
+this step is reached with 09.2 still deferred, say so rather than inventing a
+second-input fixture to paint against — the whole reason this step sits late is
+that no such graph exists yet.

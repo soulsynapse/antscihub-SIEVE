@@ -128,6 +128,18 @@ INPUT_HASH_ALGORITHM = "blake2b-256"
 _HASH_BLOCK = 1 << 20
 
 
+class NoFootage(ValueError):
+    """A reader that needs frames was handed a document that names none.
+
+    The cost of `adr/a-document-may-name-no-footage.md`, borne where the ADR
+    says it is borne: the schema admits the under-construction state, so each
+    reader over `source_path` refuses it. Named rather than an `AttributeError`
+    off `None`, and carrying the project file rather than the field, because the
+    user is looking at a library and the actionable half of the news is which of
+    those projects has no footage yet.
+    """
+
+
 class ExternalInputChanged(ValueError):
     """A recorded external input is not the file that was recorded.
 
@@ -875,10 +887,21 @@ class Project(_Artifact):
     machine configuration (where the cache lives, how many workers) or
     presentation (zoom, panel layout, which overlay is showing), and neither
     belongs in a document two machines are supposed to agree about.
+
+    Narrowed by `adr/a-document-may-name-no-footage.md`, which is why `source`
+    may be `None`: reproducibility is a property of a document that *can* run,
+    and a project under construction is one `source_path` refuses rather than
+    one the schema does. Everything else here holds of it unchanged — a
+    no-footage document that is handed frames later runs what it always said it
+    would.
     """
 
     schema_version: int = SCHEMA_VERSION
-    source: SourceRef
+    #: `None` while the project names no footage — a real state, and the one a
+    #: newly minted project is in (`adr/a-document-may-name-no-footage.md`).
+    #: What it costs is `source_path`'s refusal, which every reader needing
+    #: frames goes through.
+    source: SourceRef | None = None
     #: Ordered, and the order is meaningful: it is the order the user drew them
     #: in and the order per-replicate outputs are written in.
     replicates: tuple[Replicate, ...] = ()
@@ -1040,17 +1063,37 @@ class Project(_Artifact):
                 update={"path": _posix_relative(record.resolve(from_dir), to_dir)}
             )
 
+        source = self.source
         return self.model_copy(
             update={
-                "source": SourceRef.relative_to(self.source.resolve(from_dir), to_dir),
+                "source": (
+                    None
+                    if source is None
+                    else SourceRef.relative_to(source.resolve(from_dir), to_dir)
+                ),
                 "outputs": tuple(rebase_sink(sink) for sink in self.outputs),
                 "crops": tuple(rebase_crop(record) for record in self.crops),
             }
         )
 
     def source_path(self, project_path: Path) -> Path:
-        """The video, resolved against the project file it was read from."""
-        return self.source.resolve(project_path.parent)
+        """The video, resolved against the project file it was read from.
+
+        **The one gate between the admitted no-footage state and everything that
+        needs frames.** Every front end reaches the footage through this, so the
+        refusal is stated once here rather than as a `None` check per caller —
+        and a caller that skipped it would be reading `source` directly, which is
+        a visibly different line.
+
+        Raises:
+            NoFootage: if the document names no footage yet.
+        """
+        source = self.source
+        if source is None:
+            raise NoFootage(
+                f"{project_path} names no footage: add a source to it before running it"
+            )
+        return source.resolve(project_path.parent)
 
     def with_replicates(self, replicates: Sequence[Replicate]) -> Self:
         """Copy carrying a different set of replicates, in order."""

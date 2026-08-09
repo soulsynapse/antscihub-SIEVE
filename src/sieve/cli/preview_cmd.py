@@ -68,7 +68,7 @@ from pydantic import ValidationError
 
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import MetricBus, Recorder
-from sieve.cli.run_cmd import footage_end, frame_source, load_project, refuse, span_for
+from sieve.cli.run_cmd import footage_end, footage_of, frame_source, load_project, refuse, span_for
 from sieve.core.pipeline_model import Pipeline, Project, Replicate, SourceSpan
 from sieve.core.tool_base import SourceFileError
 from sieve.decode.reader import VideoDecodeError
@@ -119,12 +119,12 @@ def preview_project(
         typer.Exit: code 1 for anything refused deliberately — an invalid
             document, an unknown replicate or node, an unparseable edit, a value
             the tool will not accept, a graph that does not resolve or cannot be
-            executed, footage that cannot be read, or a source root whose pattern
+            executed, a document naming no footage, footage that cannot be read, or a source root whose pattern
             names no one file.
     """
     discover()
     project = load_project(project_path)
-    video = project.source_path(project_path)
+    video = footage_of(project, project_path)
     target = _target(project, replicate_id)
     parsed = _parse_edits(project, edits or ())
     if parsed and repeat < 2:

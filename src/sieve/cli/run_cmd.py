@@ -87,6 +87,7 @@ from pydantic import ValidationError
 
 from sieve.core.pipeline_model import (
     ExternalInputChanged,
+    NoFootage,
     Project,
     Replicate,
     Sink,
@@ -126,15 +127,15 @@ def run_project(
     Raises:
         typer.Exit: code 1 for anything refused deliberately — an invalid
             document, a graph that does not resolve or does not chain, a node
-            this executor cannot call, footage that is not where the project
-            says, a span the footage cannot supply — including one lying wholly
+            this executor cannot call, a document naming no footage, footage that
+            is not where the project says, a span the footage cannot supply — including one lying wholly
             inside the graph's read-ahead of the last frame — or a project
             declaring outputs nothing can yet write.
     """
     discover()
     project = load_project(project_path)
     _refuse_sinks(project)
-    video = project.source_path(project_path)
+    video = footage_of(project, project_path)
 
     try:
         dag = Dag.build(project.pipeline)
@@ -504,6 +505,23 @@ def load_project(path: Path) -> Project:
         return Project.load(path)
     except ValidationError as error:
         raise refuse(f"{path} is not a valid project:\n{error}") from error
+
+
+def footage_of(project: Project, path: Path) -> Path:
+    """The video `project` names, or refuse because it names none.
+
+    Every command that decodes goes through this rather than `source_path`
+    directly, so the one state the schema now admits and no run can proceed
+    from (`adr/a-document-may-name-no-footage.md`) is a refusal with an exit
+    code rather than a traceback out of the model.
+
+    Raises:
+        typer.Exit: code 1 if the document names no footage yet.
+    """
+    try:
+        return project.source_path(path)
+    except NoFootage as error:
+        raise refuse(str(error)) from error
 
 
 def parse_span(frames: str) -> SourceSpan:

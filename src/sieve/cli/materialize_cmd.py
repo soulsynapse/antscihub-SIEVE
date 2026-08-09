@@ -64,7 +64,7 @@ from typing import Annotated
 
 import typer
 
-from sieve.cli.run_cmd import footage_end, load_project, read_range, refuse, span_for
+from sieve.cli.run_cmd import footage_end, footage_of, load_project, read_range, refuse, span_for
 from sieve.core.pipeline_model import Project, Replicate
 from sieve.core.tool_base import SourceFileError
 from sieve.core.types import ROI
@@ -100,14 +100,14 @@ def materialize_replicate(
 
     Raises:
         typer.Exit: code 1 for anything refused deliberately — an invalid
-            document, a graph that does not resolve, no such replicate, footage
-            that is not where the project says, a graph that does not determine
+            document, a graph that does not resolve, no such replicate, a document
+            naming no footage, footage that is not where the project says, a graph that does not determine
             one box to cut, a replicate pinning no box on it, or a write that
             failed or did not read back as what was fed to it.
     """
     discover()
     project = load_project(project_path)
-    video = project.source_path(project_path)
+    video = footage_of(project, project_path)
 
     try:
         source = source_identity(video)

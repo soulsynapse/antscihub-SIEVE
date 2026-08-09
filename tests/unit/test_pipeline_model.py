@@ -20,6 +20,7 @@ from sieve.core.pipeline_model import (
     Edge,
     ExternalInputChanged,
     Node,
+    NoFootage,
     Pipeline,
     Project,
     Replicate,
@@ -703,6 +704,49 @@ class TestBlankStringsAreRefused:
                         field: "",
                     }
                 )
+
+
+class TestADocumentMayNameNoFootage:
+    """The under-construction state is a valid document, and its cost is borne here.
+
+    `adr/a-document-may-name-no-footage.md`. The state comes from the mint —
+    NEW PROJECT writes a project with no sources and no chain, and the next act
+    is adding one — so the schema admits it rather than refusing a project the
+    user is halfway through making. What that buys is paid for by every reader
+    that needs frames: it refuses naming the file, which is the second case
+    here.
+    """
+
+    def test_a_document_naming_no_footage_round_trips(self, tmp_path: Path) -> None:
+        path = tmp_path / "untitled_1.sieve.yaml"
+        Project().save(path)
+
+        reopened = Project.load(path)
+
+        assert reopened.source is None
+        assert reopened == Project()
+
+    def test_no_footage_refuses_the_reader_that_needs_frames_by_name(self, tmp_path: Path) -> None:
+        # Naming the file rather than the field: what the reader was handed is a
+        # path, and "this project has no footage" is only actionable if the user
+        # is told which of the projects in the library it was.
+        path = tmp_path / "untitled_1.sieve.yaml"
+
+        with pytest.raises(NoFootage, match=re.escape(str(path))):
+            Project().source_path(path)
+
+    def test_relocating_with_no_footage_rebases_what_it_does_name(self, tmp_path: Path) -> None:
+        # A project under construction still holds sinks and crops if it was
+        # emptied of its source rather than minted, and a rebase that tripped
+        # over the absent one would take the rest of the move with it.
+        project = make_project().model_copy(update={"source": None})
+        old_dir = tmp_path / "old"
+        new_dir = tmp_path / "new"
+
+        moved = project.relocated(old_dir, new_dir)
+
+        assert moved.source is None
+        assert moved.outputs[0].resolve(new_dir) == project.outputs[0].resolve(old_dir)
 
 
 class TestConventions:

@@ -1,7 +1,7 @@
 ---
 title: The library mints a project and the selected card opens its folder
 step: "09.5.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k open_location && uv run pytest tests/gui -q -k new_project && uv run pytest tests/unit/test_pipeline_model.py -q -k no_footage"
 opened: 2026-08-09
@@ -117,3 +117,25 @@ be built yet, and the case for it lives beside the model rather than in the
 GUI suite. The GUI and the schema stay one item because one commit satisfies
 both and neither has a reason to land alone — the admission exists to make the
 mint writable, and the mint is the only caller that wants it.
+
+## NEW PROJECT landed on ADR 26 (2026-08-09)
+
+`Project.source` admits `None` and `source_path` raises `NoFootage` naming the
+project file, which is the whole of what the ADR asked for; the three CLI
+commands reach footage through one `run_cmd.footage_of` so the refusal is an
+exit code in one spelling rather than three. `project_select.mint` writes
+`untitled_N.sieve.yaml` for the first `N` the folder does not hold — numbered
+against the folder rather than a count of cards, because a library minted into
+before already holds the low numbers and reusing one would open the earlier
+project instead of making a new one.
+
+Two things the item could not settle in advance. **The window needed to be told
+its library**, not merely derive it: the folder is read off the projects' shared
+parent when it is not given, but `main` launches on `projects_in(Path.cwd())`
+and a first run in an empty folder has no project to read one off — which is
+exactly where minting is the only act available. So `MainWindow` takes
+`library=`, and the button is drawn only where there is a folder to write into.
+**The shelf is re-scanned after a mint** rather than the new path appended, so
+the cards stay the folder's own order; the mutant that appends is killed by a
+project named `zzz` in the fixture, without which it is invisible because
+`untitled_*` happens to sort last.

@@ -7,8 +7,10 @@ first thing a user sees the one surface that does not look like SIEVE — the
 argument `chain_stack.py` makes about the pipeline pane, read at the position
 that comes before it.
 
-The first cut opens a project; it does not build one from a folder of videos
-(`PLAN.md`, Phase 7), so there is no "new project" path here and no file dialog.
+The first cut opens a project and mints an empty one; it does not build one from
+a folder of videos (`PLAN.md`, Phase 7), so there is no file dialog here and
+nothing asks for a name — `mint` writes a document naming no footage, and both
+the name and the footage are knobs on the card the selection lands on.
 
 **What the widget is handed is text, and `listings` is what reads the document
 to produce it.** A card says what its project holds, and that is a fact about a
@@ -63,6 +65,49 @@ def projects_in(directory: Path) -> tuple[Path, ...]:
     return tuple(sorted(directory.glob(f"*{PROJECT_SUFFIX}")))
 
 
+def library_folder(paths: Sequence[Path]) -> Path | None:
+    """The folder the projects came out of, where they came out of one.
+
+    `projects_in` scans a single directory, so they do — but a caller may hand
+    the pane any sequence, and one assembled from two folders has no single
+    answer to name or to mint into. Read twice for that reason: it is what the
+    library card is titled with and what a new project is written to.
+    """
+    folders = {path.parent for path in paths}
+    if len(folders) != 1:
+        return None
+    return folders.pop()
+
+
+def mint(directory: Path) -> Path:
+    """Write an empty project into `directory` and say where it landed.
+
+    Empty is the whole of it: no sources, no chain (`adr/a-document-may-name-no-
+    footage.md`, which exists because this document could not otherwise be
+    built). No name is asked for — the name is a knob like any other and a modal
+    at mint time would be the one form in the surface that blocks the walk — so
+    the file is named after the first `untitled_N` the folder does not already
+    hold. Numbered against the folder rather than against a count of cards,
+    because a library the user has minted into before already holds the low
+    numbers and reusing one would open the earlier project rather than make a
+    new one.
+
+    Written immediately rather than held pending in the window: a row that
+    existed only in memory would vanish on the next launch, having been counted
+    as a project in the meantime.
+
+    Raises:
+        OSError: if the file cannot be written.
+    """
+    taken = {path.name for path in directory.iterdir()} if directory.is_dir() else set()
+    number = 1
+    while f"untitled_{number}{PROJECT_SUFFIX}" in taken:
+        number += 1
+    path = directory / f"untitled_{number}{PROJECT_SUFFIX}"
+    Project().save(path)
+    return path
+
+
 def reveal(project: Path) -> None:
     """Show the project's folder in whatever the system uses to browse files.
 
@@ -114,7 +159,8 @@ def _holds(path: Path) -> str:
     # The file and not the path it is spelt with: a card is a card wide, and the
     # folder is the same for every project in a library often enough that
     # showing it would spend that width on the part that never differs.
-    return f"{chain} · {Path(project.source.path).name}"
+    footage = "no footage yet" if project.source is None else Path(project.source.path).name
+    return f"{chain} · {footage}"
 
 
 def _when(path: Path, now: datetime) -> str:
@@ -165,17 +211,9 @@ def listings(paths: Sequence[Path], now: datetime | None = None) -> tuple[Listin
     )
 
 
-def _library_title(paths: Sequence[Path]) -> str:
-    """The folder the projects came out of, where they came out of one.
-
-    `projects_in` scans a single directory, so they do — but the widget takes
-    whatever sequence it is handed, and a caller that assembled one from two
-    folders has no single answer to name.
-    """
-    folders = {path.parent for path in paths}
-    if len(folders) != 1:
-        return "library"
-    return f"library — {folders.pop()}"
+def _library_title(folder: Path | None) -> str:
+    """What the card above the shelf is called."""
+    return "library" if folder is None else f"library — {folder}"
 
 
 def _project_card(
@@ -249,17 +287,31 @@ class ProjectSelect(QWidget):
     #: other two are signals: which project an index means is the window's
     #: answer, and a pane that answered it would be holding the selection twice.
     revealed = Signal(int)
+    #: The library card's NEW PROJECT was pressed. Carries nothing: minting is
+    #: an act on the library, which is the card the button sits on, and the
+    #: selection it lands on afterwards is the window's to move.
+    minted = Signal()
 
     def __init__(
         self,
         rows: Sequence[Listing],
         current: int,
+        library: Path | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setStyleSheet(stack_stylesheet())
 
-        self.library_card = fixed_card(_library_title([row.path for row in rows]))
+        self.library_card = fixed_card(_library_title(library))
+        if library is not None:
+            # On the library card and not at the foot of the list: a new project
+            # is added to the library, the way another region is added on the
+            # crop card and not in the fan that shows them. Absent where there is
+            # no one folder to write into, which is the only honest alternative
+            # to a button that would refuse whenever it was pressed.
+            new = chrome_button("NEW PROJECT", "New project — empty until sources are added")
+            new.clicked.connect(self.minted.emit)
+            self.library_card.layout().addWidget(new)
         self.cards = tuple(
             _project_card(
                 index,

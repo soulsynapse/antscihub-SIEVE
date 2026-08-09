@@ -93,7 +93,14 @@ from sieve.gui.pinned import (
     element_kinds,
     surface_note,
 )
-from sieve.gui.project_select import ProjectSelect, listings, projects_in, reveal
+from sieve.gui.project_select import (
+    ProjectSelect,
+    library_folder,
+    listings,
+    mint,
+    projects_in,
+    reveal,
+)
 from sieve.gui.save_screen import SaveScreen, kept_products
 from sieve.gui.step_pane import StepPane
 from sieve.gui.timeline.bar import TimelineBar
@@ -207,13 +214,24 @@ def frame_bearing(pipeline: Pipeline, specs: Mapping[str, ToolSpec], node_id: st
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, projects: Sequence[Path], registry: ToolRegistry | None = None) -> None:
+    def __init__(
+        self,
+        projects: Sequence[Path],
+        registry: ToolRegistry | None = None,
+        library: Path | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("SIEVE")
         self.setStyleSheet(window_stylesheet())
         darken_title_bar(self)
 
         self._projects = tuple(projects)
+        # Where a mint lands, and what the library card is titled with. Derived
+        # from the projects when it is not given, which is every caller holding a
+        # scan; passed explicitly by `main`, because the folder a user launched
+        # in may hold no projects at all and that is precisely when minting is
+        # the only thing there is to do.
+        self._library = library_folder(self._projects) if library is None else library
         self._registry = loaded_shelf() if registry is None else registry
         self._session: Session | None = None
         self._specs: Mapping[str, ToolSpec] = {}
@@ -387,8 +405,12 @@ class MainWindow(QMainWindow):
         # The path is resolved against the project's own directory and handed
         # over as a string: whether the file is there is the decode thread's
         # answer to give, and a check here would be a second one that could
-        # disagree with it.
-        self._player.open(str(self._session.project.source.resolve(path.parent)))
+        # disagree with it. A project that names no footage has nothing to hand
+        # it — the window opens on the chain it does not have yet, which is where
+        # a source is added (`adr/a-document-may-name-no-footage.md`).
+        source = self._session.project.source
+        if source is not None:
+            self._player.open(str(source.resolve(path.parent)))
         self._redraw()
         self._control.show_pipeline()
 
@@ -542,6 +564,26 @@ class MainWindow(QMainWindow):
         self.select_project(index)
         self.open_project(self._projects[self._project_at])
 
+    def new_project(self) -> None:
+        """The library card's NEW PROJECT: mint an empty project and stand on it.
+
+        Standing on it rather than opening it, which is the referent's ruling
+        and the reason the shelf is the position that mints: the chain pane
+        would show a chain the project does not have, and the next act — adding
+        sources — is a knob on the card the selection just landed on.
+
+        The library is re-scanned rather than the new path being appended, so
+        the shelf stays the folder's own answer in the folder's own order: a
+        mint appended at the foot would be the one card out of sorted order
+        until the next relaunch moved it.
+        """
+        if self._library is None:
+            return
+        minted = mint(self._library)
+        self._projects = projects_in(self._library)
+        self._project_at = self._projects.index(minted)
+        self._control.set_project_select(self._build_project_select())
+
     def reveal_project(self, index: int) -> None:
         """Show project `index` on disk, and move nothing.
 
@@ -602,10 +644,11 @@ class MainWindow(QMainWindow):
         is on one — and rebuilt whole on every move of the selection, because
         that is what the rest of the window does with a redraw.
         """
-        select = ProjectSelect(listings(self._projects), self._project_at)
+        select = ProjectSelect(listings(self._projects), self._project_at, self._library)
         select.selected.connect(self.select_project)
         select.opened.connect(self.enter_project)
         select.revealed.connect(self.reveal_project)
+        select.minted.connect(self.new_project)
         return select
 
     def _reread_graph(self) -> None:
@@ -943,6 +986,6 @@ class MainWindow(QMainWindow):
 
 def main() -> None:
     application = QApplication(sys.argv)
-    window = MainWindow(projects_in(Path.cwd()))
+    window = MainWindow(projects_in(Path.cwd()), library=Path.cwd())
     size_window(window)
     sys.exit(application.exec())

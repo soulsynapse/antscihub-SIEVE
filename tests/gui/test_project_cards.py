@@ -242,6 +242,66 @@ def test_open_location_asks_for_the_folder_the_document_sits_in(
     assert [url.toLocalFile() for url in asked] == [(tmp_path / "lib").as_posix()]
 
 
+def _new_button(pane: Any) -> Any:
+    from PySide6.QtWidgets import QPushButton
+
+    return pane.library_card.findChild(QPushButton)
+
+
+def test_new_project_mints_an_empty_project_the_library_lists(window: Any, library: Path) -> None:
+    from sieve.gui.project_select import listings, projects_in
+
+    # A project sorting *after* the minted names, so that "the shelf is the
+    # folder's own answer in the folder's own order" is a claim with a witness:
+    # a mint appended to the list in hand would stand below this one.
+    _write(library / "zzz.sieve.yaml", 1)
+
+    assert _new_button(window.control.project_select).text() == "NEW PROJECT"
+
+    _new_button(window.control.project_select).click()
+    # Twice, because a mint that reused the name would not be a second project —
+    # it would silently be the first one again, and the card would say so only
+    # once its chain diverged.
+    _new_button(window.control.project_select).click()
+
+    minted = [path for path in projects_in(library) if path.name.startswith("untitled")]
+    assert len(minted) == 2
+    # Empty on disk: no sources and no chain. Adding sources is the next act, on
+    # the card the selection lands on.
+    assert [Project.load(path) == Project() for path in minted] == [True, True]
+    assert listings((minted[0],))[0].holds == "no chain yet · no footage yet"
+
+    pane = window.control.project_select
+    assert len(pane.cards) == len(_LIBRARY) + 3
+    assert _titles(pane.cards)[3:] == ["untitled_1", "untitled_2", "zzz"]
+    # The selection lands on the mint without entering it: the chain pane would
+    # show a chain the project does not have.
+    assert [card.selected for card in pane.cards] == [False] * 4 + [True, False]
+    assert window.session is None
+    assert window.control.current_position() == "project"
+
+
+def test_new_project_mints_into_an_empty_library(qapp: Any, tmp_path: Path) -> None:
+    del qapp
+    from sieve.gui.app import MainWindow
+
+    folder = tmp_path / "empty"
+    folder.mkdir()
+    # The first-run case, and the reason the folder is a parameter rather than
+    # only being derived from the projects: an empty library has no project to
+    # read one off, and it is exactly where minting is the only thing to do.
+    opened = MainWindow((), library=folder)
+    try:
+        _new_button(opened.control.project_select).click()
+
+        pane = opened.control.project_select
+        assert _titles([pane.library_card]) == [f"library — {folder}"]
+        assert _titles(pane.cards) == ["untitled_1"]
+        assert [card.selected for card in pane.cards] == [True]
+    finally:
+        opened.close()
+
+
 def test_project_cards_up_and_down_move_the_selection_not_the_walk(window: Any) -> None:
     driving.double_click(window.control.project_select.cards[0], 4.0, 4.0)
     window.go_down()

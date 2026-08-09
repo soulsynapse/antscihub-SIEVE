@@ -152,3 +152,38 @@ refusal-not-report shape the rest of this item argues for. Whether that gate is
 what lands, or whether the whole KILLED signal is re-founded on the mutant's own
 test failing (which subsumes it, and which the finding names as the real fix),
 is this item's decision and not a second item's.
+
+## The sweep leaves a sidecar, so the next red command names the mutant (folded 2026-08-09)
+
+The subsection above closes on this class being quiet whenever the next command
+is a criterion rather than a sweep, and on the third occurrence costing four
+invocations and a wrong hypothesis before the tree was the thing being looked
+at. What that argues for is not a fix — the mechanism is still unaccounted for,
+and the structural answer, never writing a mutant into the working tree at all,
+is a larger decision this must not pre-empt — but a detector, so that the wrong
+reading costs one line of output instead of a diagnosis.
+
+The shape: `scripts/mutation_sweep.py` leaves a sidecar recording the subject it
+swept and the exact replacement text of every mutant it applied, and a failing
+pytest session reads that sidecar, checks the subject for those texts, and
+prints one line naming the subject, the replacement found in it, and the path to
+`findings/loop/2026.08.08-a-restored-sweep-subject-came-back-mutated-after-the-sweep-had-exited.md`.
+
+The signature must be the replacement text present in the subject, not that the
+subject changed. A worker editing the file after a sweep is the ordinary case —
+a sweep is what precedes re-running the criterion — so a hash captured at the
+sweep's exit false-positives on every ordinary run, while no legitimate edit
+reintroduces a mutant's bytes. It is also the check the folded section above
+says the read-back cannot be: it compares against neither `original` nor git, so
+it holds over uncommitted work under test.
+
+Two things the work will get backwards unless they are said here. The sidecar
+must survive a clean exit rather than being removed in the `finally`: all three
+recorded occurrences followed a sweep that exited 0 and printed its results, so
+a sidecar deleted on success is a detector that can never fire. And it carries a
+`completed` flag separate from its list of applied replacements, because a sweep
+killed mid-mutant never reaches its `finally` at all — the second mode in this
+item, recorded in the folded 2026-08-08 section above — and an incomplete
+sidecar is what catches that one. One artifact, both modes: the flag says a
+sweep that did not finish left the tree mutated, the replacement bytes say one
+that did.

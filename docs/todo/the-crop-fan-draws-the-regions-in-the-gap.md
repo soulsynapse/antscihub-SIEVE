@@ -1,7 +1,7 @@
 ---
 title: The crop fan draws the regions in the gap below the card
 step: "09.8"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k crop_fan"
 opened: 2026-08-09

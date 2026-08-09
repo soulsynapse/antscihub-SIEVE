@@ -55,8 +55,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -299,6 +299,152 @@ def arrowhead(end: QPointF) -> QPolygonF:
     )
 
 
+# ---------------------------------------------------------------------------
+# The branch one card makes: a numbered square per region, in the gap.
+#
+# A step with one output needs nothing here — the arrow out of its card is the
+# whole of it. A step that cuts a region per dish branches at the card and not
+# further down, so the row of squares stands in the gap between that card and
+# its reader: anywhere else and it would be a legend rather than the branch.
+# Every arrow into a square leaves the same run out of the card, because that
+# card made all of them, and the one arrow that continues down leaves the square
+# the user selected — what the stack below is drawn for is that region, and the
+# others are the same chain, unwalked.
+#
+# What a region *is* is not this module's to say, and the fan holds none of it:
+# `Fan` carries names the caller read off the document and an index into them.
+# The tree's regions are the project's replicates, each one a per-replicate
+# override of this step's box (`core/pipeline_model.Replicate`), and a widget
+# holding its own list would be a second home for that value.
+
+#: The square, the pitch between two of them, and the run's clearance from the
+#: card above and the card below.
+TILE = 24.0
+TILE_GAP = 12.0
+FAN_STUB = 12.0
+#: Tall enough for a tile with the stub above and below it.
+FAN_HEIGHT = 56
+#: What a line describing an unwalked region is held back to. Alpha rather than a
+#: second colour so the two weights are visibly the same line.
+UNLIT_ALPHA = 150
+
+
+@dataclass(frozen=True)
+class Fan:
+    """The regions one card's step cuts, and which of them the walk is on.
+
+    `on_select` rides here rather than beside it on the pane, so a pane with no
+    fan cannot be handed a callback for regions it has none of.
+    """
+
+    #: The position whose card the branch leaves.
+    position: int
+    #: One name per region, in the document's order. Drawn as its ordinal — the
+    #: name is what the caller identified it by, and the square is too small to
+    #: carry one.
+    regions: tuple[str, ...]
+    selected: int
+    on_select: Callable[[int], None]
+
+
+class RegionFan(QWidget):
+    """One numbered square per region, left-aligned on the trunk.
+
+    It paints its squares and nothing else. The lines are `ChainColumn`'s, drawn
+    before its children, so they arrive behind these tiles the way an edge
+    arrives behind a card.
+    """
+
+    def __init__(
+        self, fan: Fan, reader: int, trunk_x: float, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self.fan = fan
+        #: The position the continuing arrow lands on: the fan hangs in that gap.
+        self.reader = reader
+        self._trunk_x = trunk_x
+        self.setFixedHeight(FAN_HEIGHT)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        # The squares carry ordinals because a 24px tile holds nothing longer,
+        # and the regions are named — so the names arrive here, numbered, rather
+        # than being dropped on the way and leaving the count as the whole of
+        # what the surface knows about them.
+        self.setToolTip(" · ".join(f"{index + 1} {name}" for index, name in enumerate(fan.regions)))
+
+    @property
+    def position(self) -> int:
+        """The position whose card this branch leaves."""
+        return self.fan.position
+
+    @property
+    def selected(self) -> int:
+        """Which region the stack below is drawn for."""
+        return self.fan.selected
+
+    def tile_rects(self) -> list[QRectF]:
+        """One square per region, the first on the trunk and the rest to its right.
+
+        Left-aligned off the trunk rather than centred in the row: a centred row
+        sits wherever the count and the pane's width put it, and only a diagonal
+        could reach it from the lane the chain descends in.
+        """
+        top = (self.height() - TILE) / 2.0
+        left = self._trunk_x - TILE / 2.0
+        return [
+            QRectF(left + index * (TILE + TILE_GAP), top, TILE, TILE)
+            for index in range(len(self.fan.regions))
+        ]
+
+    def tile_at(self, pos: QPointF) -> int | None:
+        """Which square is under `pos`, with the slack a 24px target wants."""
+        for index, tile in enumerate(self.tile_rects()):
+            if tile.adjusted(-4, -4, 4, 4).contains(pos):
+                return index
+        return None
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        index = self.tile_at(event.position())
+        if index is None:
+            super().mousePressEvent(event)
+            return
+        event.accept()
+        self.fan.on_select(index)
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        del event
+        painter = QPainter(self)
+        for index, tile in enumerate(self.tile_rects()):
+            chosen = index == self.fan.selected
+            painter.fillRect(tile, PANEL)
+            painter.setPen(QPen(ACCENT if chosen else LINE, 1.6 if chosen else 1.0))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(tile)
+            painter.setPen(QPen(TEXT if chosen else DIM))
+            painter.drawText(tile, Qt.AlignmentFlag.AlignCenter, str(index + 1))
+        painter.end()
+
+
+@dataclass(frozen=True)
+class FannedEdge:
+    """Where the branch out of a fanned card runs, in the column's coordinates.
+
+    Segments rather than a painted result, for `edge_line`'s reason: what the
+    picture claims is geometry, and geometry is the thing a test can read.
+    """
+
+    #: Card bottom down to the run.
+    stem: tuple[QPointF, QPointF]
+    #: The run itself, out to the last square.
+    bus: tuple[QPointF, QPointF]
+    #: The run down into each square's top, in the regions' own order.
+    drops: tuple[tuple[QPointF, QPointF], ...]
+    #: Selected square's bottom, back onto the trunk, and down onto the reader.
+    rejoin: tuple[QPointF, ...]
+
+
 class ChainColumn(QWidget):
     """The stack's column, with the chain's edges drawn under its cards.
 
@@ -307,8 +453,9 @@ class ChainColumn(QWidget):
     (`chrome.py`) — and a column that inherited nothing would leave the edges on
     the platform's grey.
 
-    `cards` is set by the caller after the cards are in the layout, because what
-    this paints is where they landed and it has no part in putting them there.
+    `cards` and `fan` are set by the caller after both are in the layout,
+    because what this paints is where they landed and it has no part in putting
+    them there.
     """
 
     def __init__(self, edges: Sequence[tuple[int, int]], parent: QWidget | None = None) -> None:
@@ -319,6 +466,7 @@ class ChainColumn(QWidget):
         self.edges = tuple(edge for edge in edges if edge[0] < edge[1])
         self._lanes = edge_lanes(self.edges)
         self.cards: tuple[ChainCard, ...] = ()
+        self.fan: RegionFan | None = None
 
     def edge_line(self, src: int, dst: int) -> tuple[QPointF, QPointF]:
         """Where the edge from `src` to `dst` starts and ends, in this widget."""
@@ -326,14 +474,100 @@ class ChainColumn(QWidget):
         x = lane_x(above.left(), self._lanes[(src, dst)])
         return QPointF(x, above.bottom() + 1), QPointF(x, below.top())
 
+    def lane_of(self, src: int, dst: int) -> int:
+        """Which lane that edge runs in — the fan reads it to stand on the trunk."""
+        return self._lanes[(src, dst)]
+
+    def fan_tiles(self) -> list[QRectF]:
+        """The fan's squares in this widget's coordinates, where the lines are."""
+        assert self.fan is not None
+        origin = self.fan.geometry().topLeft()
+        return [tile.translated(origin) for tile in self.fan.tile_rects()]
+
+    def fanned_edge(self) -> FannedEdge:
+        """Out of the fanned card into every region, and on out of the one selected.
+
+        One run across the gap and a vertical drop off it into each square: what
+        the picture has to say is that these all came from that card, and a
+        shared segment says it while every arrowhead stays a descent, which is
+        what an arrowhead means everywhere else in the stack. The way out
+        mirrors it back onto the trunk, so the lane the rest of the stack is
+        drawn in survives the branch.
+        """
+        assert self.fan is not None
+        src, dst = self.fan.position, self.fan.reader
+        above, below = self.cards[src].geometry(), self.cards[dst].geometry()
+        tiles = self.fan_tiles()
+        x = lane_x(above.left(), self._lanes[(src, dst)])
+        bus_y = above.bottom() + 1 + FAN_STUB
+        chosen = tiles[self.fan.selected]
+        rejoin_y = below.top() - FAN_STUB
+        return FannedEdge(
+            stem=(QPointF(x, above.bottom() + 1), QPointF(x, bus_y)),
+            bus=(QPointF(x, bus_y), QPointF(tiles[-1].center().x(), bus_y)),
+            drops=tuple(
+                (QPointF(tile.center().x(), bus_y), QPointF(tile.center().x(), tile.top()))
+                for tile in tiles
+            ),
+            rejoin=(
+                QPointF(chosen.center().x(), chosen.bottom()),
+                QPointF(chosen.center().x(), rejoin_y),
+                QPointF(x, rejoin_y),
+                QPointF(x, below.top()),
+            ),
+        )
+
     def paintEvent(self, event: QPaintEvent) -> None:
         del event
         painter = QPainter(self)
         painter.fillRect(self.rect(), STACK_BG)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        fanned = None if self.fan is None else (self.fan.position, self.fan.reader)
         for src, dst in self.edges:
-            self._paint_edge(painter, src, dst)
+            if (src, dst) == fanned:
+                self._paint_fanned_edge(painter)
+            else:
+                self._paint_edge(painter, src, dst)
         painter.end()
+
+    def _paint_fanned_edge(self, painter: QPainter) -> None:
+        """The branch, with everything but the selected region's reach held back.
+
+        The run is drawn twice so the reach to the selected square is at the
+        chain's own weight and the rest of it is not, the way the drops off it
+        are: what is dimmed is the part of the picture describing a chain the
+        walk is not on.
+        """
+        assert self.fan is not None
+        edge = self.fanned_edge()
+        unlit = QColor(LINE)
+        unlit.setAlpha(UNLIT_ALPHA)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+        painter.setPen(QPen(LINE, 1.0))
+        painter.drawLine(*edge.stem)
+        painter.setPen(QPen(unlit, 1.0))
+        painter.drawLine(*edge.bus)
+        painter.setPen(QPen(LINE, 1.0))
+        painter.drawLine(edge.bus[0], QPointF(edge.rejoin[0].x(), edge.bus[0].y()))
+
+        for index, drop in enumerate(edge.drops):
+            chosen = index == self.fan.selected
+            colour = LINE if chosen else unlit
+            painter.setPen(QPen(colour, 1.0))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawLine(*drop)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(colour)
+            painter.drawPolygon(arrowhead(drop[1]))
+
+        painter.setPen(QPen(LINE, 1.0))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for start, end in zip(edge.rejoin, edge.rejoin[1:], strict=False):
+            painter.drawLine(start, end)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(LINE)
+        painter.drawPolygon(arrowhead(edge.rejoin[-1]))
 
     def _paint_edge(self, painter: QPainter, src: int, dst: int) -> None:
         start, end = self.edge_line(src, dst)
@@ -364,6 +598,7 @@ class PipelinePane(QWidget):
         on_open: Callable[[int], None],
         on_pin: Callable[[int], None],
         on_remove: Callable[[int], None],
+        fan: Fan | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -394,10 +629,14 @@ class PipelinePane(QWidget):
         # shows, so it is sized for the arrowhead rather than for the rhythm of
         # the cards.
         stack.setSpacing(18)
-        for card in self.cards:
+        self.fan = self._build_fan(fan, steps)
+        for position, card in enumerate(self.cards):
             stack.addWidget(card)
+            if self.fan is not None and position == self.fan.position:
+                stack.addWidget(self.fan)
         stack.addStretch(1)
         self.column.cards = self.cards
+        self.column.fan = self.fan
 
         scroll = QScrollArea()
         scroll.setWidget(self.column)
@@ -409,6 +648,31 @@ class PipelinePane(QWidget):
         layout.setSpacing(6)
         layout.addWidget(self.project_card)
         layout.addWidget(scroll)
+
+    def _build_fan(self, fan: Fan | None, steps: Sequence[Step]) -> RegionFan | None:
+        """The branch below `fan.position`, or nothing where there is no gap for it.
+
+        The gap is the one between that card and the nearest card reading it. A
+        fan below the foot of the chain would be a row of squares with nothing
+        to continue into — a legend, and what the picture claims is that it is
+        the branch itself. Nothing is drawn for a step whose regions the caller
+        found none of, either: a branch of nothing is the plain arrow the rest
+        of the stack already draws.
+        """
+        if fan is None or not fan.regions:
+            return None
+        readers = [
+            position
+            for position, step in enumerate(steps)
+            if fan.position in step.reads and position > fan.position
+        ]
+        if not readers:
+            return None
+        reader = min(readers)
+        # The trunk in the fan's own coordinates: the cards and the fan are rows
+        # of one column layout, so they share a left edge and a lane offset
+        # carries across unchanged.
+        return RegionFan(fan, reader, lane_x(0.0, self.column.lane_of(fan.position, reader)))
 
     @staticmethod
     def _build_card(

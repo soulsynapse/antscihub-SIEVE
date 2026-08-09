@@ -76,7 +76,7 @@ from sieve.core.tool_base import ElementKind, ParamStereotype, ToolSpec
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
-from sieve.gui.chain_stack import PipelinePane, Step
+from sieve.gui.chain_stack import Fan, PipelinePane, Step
 from sieve.gui.chrome import darken_title_bar, window_stylesheet
 from sieve.gui.control import Control
 from sieve.gui.graph_panel import GraphPanel
@@ -132,6 +132,22 @@ def source_fed_nodes(pipeline: Pipeline) -> frozenset[str]:
     """
     fed = {edge.downstream for edge in pipeline.edges}
     return frozenset(node.node_id for node in pipeline.nodes if node.node_id not in fed)
+
+
+def cuts_regions(spec: ToolSpec | None, node_id: str, pipeline: Pipeline) -> bool:
+    """Whether this node's box is the one the project's regions are deviations of.
+
+    Read off the stereotype rather than off a tool id, which is the only reading
+    available here (`adr/gui-knows-kinds-not-tools.md`) and the same one
+    `pipeline/crop_serving.crop_roots` makes from the resolved params type. Roots
+    only, for `source_fed_nodes`' reason: a region is denominated in the frame
+    its own node is handed, and a replicate's box is a box on the footage.
+    """
+    return (
+        spec is not None
+        and ParamStereotype.REGION in spec.param_stereotypes.values()
+        and node_id in source_fed_nodes(pipeline)
+    )
 
 
 def removable(spec: ToolSpec | None) -> bool:
@@ -213,6 +229,11 @@ class MainWindow(QMainWindow):
         # Up are two ways to move one number, and a widget that kept its own
         # would be the second answer to which project is being looked at.
         self._project_at = 0
+        # Which of the project's regions the stack below the fan is drawn for.
+        # View state for the walk's reason: which region is being looked at is
+        # not something the document records, and a widget holding its own would
+        # be the second answer to it.
+        self._region = 0
         # Which step holds the slot under the canvas. `None` until a project is
         # open, and an index into `_order` after — one slot, so pinning is a
         # move of this number and eviction is what that means.
@@ -281,12 +302,7 @@ class MainWindow(QMainWindow):
         if node is None or session is None:
             return None
         pipeline = session.project.pipeline
-        spec = self._specs.get(node.node_id)
-        if (
-            spec is not None
-            and ParamStereotype.REGION in spec.param_stereotypes.values()
-            and node.node_id in source_fed_nodes(pipeline)
-        ):
+        if cuts_regions(self._specs.get(node.node_id), node.node_id, pipeline):
             return None
         return frame_bearing(pipeline, self._specs, node.node_id)
 
@@ -362,6 +378,9 @@ class MainWindow(QMainWindow):
         self._session = Session.open(path)
         self._reread_graph()
         self._at = 0
+        # The walk's reason one line up: where the previous project's regions had
+        # reached is an index into a different set of them.
+        self._region = 0
         self._pinned = default_pinned(self._order, self._elements)
         self._show_pinned()
         self._control.set_save_screen(self._build_save_screen(self._session))
@@ -522,6 +541,28 @@ class MainWindow(QMainWindow):
             return
         self.select_project(index)
         self.open_project(self._projects[self._project_at])
+
+    @property
+    def region(self) -> int:
+        """Which of the project's regions the stack is drawn for."""
+        return self._region
+
+    def select_region(self, index: int) -> None:
+        """A square in the fan: walk onto one of the regions the crop step cuts.
+
+        The same kind of move as a card's click, so it is the same redraw: the
+        fan, the walk and the stack below all show one region, and which one is
+        as much the crop's value as where its box is. Clamped rather than
+        wrapped, for `_walk_to`'s reason.
+        """
+        session = self._session
+        if session is None or not session.project.replicates:
+            return
+        index = max(0, min(index, len(session.project.replicates) - 1))
+        if index == self._region:
+            return
+        self._region = index
+        self._redraw()
 
     def refill_graph(self) -> None:
         """Redraw the trace for the document as it now stands.
@@ -720,7 +761,38 @@ class MainWindow(QMainWindow):
             on_open=self._open_step,
             on_pin=self.pin,
             on_remove=self.remove_step,
+            fan=self._region_fan(),
         )
+
+    def _region_fan(self) -> Fan | None:
+        """The branch the region step makes, or nothing where there is none.
+
+        The regions are the project's replicates, in the document's order: a
+        replicate's box is a per-replicate override of this step's own region
+        parameter (`core/pipeline_model.Replicate`), so the fan is that value's
+        editor and holds no list of its own. A project with no replicates runs
+        the step's baseline once and has no branch to draw.
+
+        The first such step rather than every one: a second region at a second
+        root is a second box on the same footage, and which of them the
+        replicates deviate at is a question the document does not answer. Two
+        fans drawn off one selection would be two pictures claiming to be the
+        same walk, so the branch hangs where the chain first cuts and the second
+        root keeps the plain arrow it already had.
+        """
+        session = self._session
+        if session is None or not session.project.replicates:
+            return None
+        pipeline = session.project.pipeline
+        for position, node in enumerate(self._order):
+            if cuts_regions(self._specs.get(node.node_id), node.node_id, pipeline):
+                return Fan(
+                    position=position,
+                    regions=tuple(replicate.name for replicate in session.project.replicates),
+                    selected=self._region,
+                    on_select=self.select_region,
+                )
+        return None
 
     def _pinned_note(self) -> str:
         """The sentence the pinned step's card carries, or nothing to carry it.

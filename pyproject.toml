@@ -137,7 +137,17 @@ target-version = "py313"
 # tagged fence would turn a docs-only commit red. Excluded here rather than by
 # narrowing the gate's target, because the target only binds CI — this binds
 # anyone who runs the formatter on the tree they are editing.
-extend-exclude = ["*.md"]
+#
+# `mockup/` is the second: the referent is frozen surface, not shipped code
+# (adr/the-mockup-is-the-gui-end-state.md — reshaping it is a revision of that
+# ADR, not a cleanup), it is read and never imported, and nothing under `src/`
+# or `tests/` reaches it. It arrived authored under a narrower line length and
+# has never been lint-clean, so putting it under the gate is not a whitespace
+# pass: it is a rewrap of the file the build reads as its picture of done,
+# plus autofixes the rules ask for that the file has reasons to refuse — the
+# `list()` around the crop-watcher iteration is there because a callback may
+# register or drop a watcher mid-notify, and `PERF101` would take it away.
+extend-exclude = ["*.md", "mockup/"]
 
 [tool.ruff.lint.per-file-ignores]
 # `from ...machine import available_cpus as available_cpus` is a re-export, not

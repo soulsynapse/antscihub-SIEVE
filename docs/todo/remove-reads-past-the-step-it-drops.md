@@ -28,3 +28,34 @@ unchanged graph.
     $ uv run pytest tests/gui -q -k reads_past
     119 deselected in 0.68s
     exit: 5
+
+## Folded 2026-08-09 at 09.3's review: the pinned card's note lies for a step whose surface is elsewhere
+
+09.3 landed the second verb this item's head row is about, and put a note under
+it: the pinned step's card carries `PINNED_ELSEWHERE_NOTE`, "surface pinned
+below the canvas", so the stack says where the surface went rather than drawing
+it twice. It is added on `position == pinned` alone, with no reference to
+whether that step *has* a surface in the slot. Probed on the chain
+`crop -> downsample -> detect` with `pin(0)`, card 1 reads
+
+    ['1. crop', 'region', "{'x': 0, ...}", 'surface pinned below the canvas']
+
+while the slot under the canvas reads `pinned.CANVAS_NOTE` — "the boxes on the
+canvas are this step's surface — drag them there", which
+`test_pinned_slot_evicts_and_a_step_with_no_plot_states_its_surface_in_words`
+asserts. Two sentences on one screen disagreeing about where `crop`'s surface
+is, and the card's is the wrong one: 09.3's own sentence is that the card says
+where its surface *went*, and for a `REGION` step it went to the canvas, not
+below it. `downsample` is the third case — no surface anywhere, and the card
+still says one is pinned below the canvas.
+
+It lands here because this item is the next thing to rewrite `_build_card`'s
+head row and body (the ✕ beside the ◆) and the next thing to move `app._pinned`
+— one commit covers the note and the verb. The shape is three notes keyed off
+the same predicate `pinned.draws_a_trace` already answers for the slot, not two
+independent strings; `PINNED_ELSEWHERE_NOTE` is only true where the slot's
+surface is the graph.
+
+`done_when` (`-k reads_past`) is not widened here and does not reach this: a
+case asserting the card's note agrees with the slot's would be the part of this
+paragraph a criterion can hold.

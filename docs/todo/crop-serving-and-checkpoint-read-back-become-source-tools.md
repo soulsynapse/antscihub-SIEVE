@@ -5,7 +5,7 @@ deferred_for: subject
 gated_on: the-first-source-tool-moves-the-three-single-root-assumptions.md landing, because there is no source tool to migrate onto until it does
 priority: high
 phase: "05"
-done_when: 'uv run pytest tests/integration/test_crop_serving.py -k "the_served_graph_holds_no_crop_node or a_pre_cropped_folder_needs_no_crop_record" -q'
+done_when: 'uv run pytest tests/integration/test_crop_serving.py -k "the_served_graph_holds_no_crop_node or a_pre_cropped_folder_needs_no_crop_record or a_preview_is_served_by_the_written_crop" -q'
 opened: 2026-08-07
 ---
 
@@ -65,6 +65,14 @@ end that reads the document is served without knowing artifacts exist. Unwinding
 `_route` and its two-pass shape is this item's work either way; what the gap
 says is that the alternative — teaching two more front ends the same plan-time
 route — is work with the same known expiry and should not be done.
+
+`done_when` gained `a_preview_is_served_by_the_written_crop` at the review that
+read that fold, because the two cases it named are both about the graph and
+neither would go red for a migration that served `sieve run` and left
+`cli/preview_cmd.py` decoding the parent. The preview is named rather than the
+GUI worker because it is the front end that exists as a command today; if the
+worker is a distinct executable path when this lands, it wants a case of its own
+and the criterion widens again.
 
 Where the clause work goes is open and is this item's call.
 `crop_binding.py`'s four states are facts about records and stay facts, but a

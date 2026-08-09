@@ -4,7 +4,7 @@ status: open
 gated_on: nothing
 priority: normal
 phase: 8
-done_when: 'uv run pytest tests/unit/test_source_tool.py -k "two_roots_order_and_execute or swapping_the_picked_file_moves_only_its_own_key or a_pattern_matching_several_files_is_refused or the_picker_emits_a_concrete_stream_type" -q'
+done_when: 'uv run pytest tests/unit/test_source_tool.py -k "two_roots_order_and_execute or swapping_the_picked_file_moves_only_its_own_key or a_pattern_matching_several_files_is_refused or the_picker_emits_a_concrete_stream_type" -q && uv run pytest tests/integration/test_crop_serving.py -k a_second_root_beside_the_crop_is_not_one_the_artifact_can_serve -q'
 opened: 2026-08-07
 ---
 
@@ -113,3 +113,30 @@ checked. That was a defect independent of everything above and it survived
 whichever way the axis question goes; it was fixed on its own reason in
 [its own item](elementkind-counts-two-members-over-three.md), not here. The axis
 question is untouched by that fix.
+
+## 2026-08-08: a fourth site, and it is the one that fails silently
+
+08.2 landed `resolve_source.crop_bound`, which answers which root a written crop
+could stand for, and `cli/run_cmd._route`, which drops that node and points the
+whole run at the artifact. `crop_bound` declines when there are two crop roots,
+because two boxes are two answers — but it says nothing about a *non-crop* root
+standing beside the crop. Checked at this review on a graph of `crop -> down`
+plus a second unattached `downsample`: two roots, and `crop_bound` still returns
+the crop's box. The run is then served, the artifact is the invocation's only
+reader, and `executor` binds every node with no upstream to that reader — so the
+second root, which asked for whole frames, is handed the cut ones. No refusal,
+no message, and the printed counts are the counts a correct run prints.
+
+The other three sites announce themselves: `linear_order` raises, `source_key`
+folds a shape that is visibly wrong, the executor's binding is the one the tool
+replaces. This one is the same assumption with no symptom, and it is worth
+noting that it arrived *after* the three were written down — a plan-time route
+that reads "the root" is the shape this assumption keeps taking. Whether the
+tool moves it or `crop_bound` simply declines a graph with more than one root is
+this item's call; either way the case named in `done_when` is what pins it, and
+it is writable today rather than waiting on the picker.
+
+[crop-serving-and-checkpoint-read-back-become-source-tools.md](crop-serving-and-checkpoint-read-back-become-source-tools.md)
+is where `_route` is unwound, and unwinding it retires this site with the rest
+of the plan-time route — but that migration is gated on this item, so the site
+is live until this one lands.

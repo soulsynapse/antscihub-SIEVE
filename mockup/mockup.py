@@ -52,9 +52,11 @@ from PySide6.QtCore import (
     QRectF,
     Qt,
     QTimer,
+    QUrl,
 )
 from PySide6.QtGui import (
     QColor,
+    QDesktopServices,
     QFont,
     QFontMetricsF,
     QImage,
@@ -91,7 +93,8 @@ from PySide6.QtWidgets import (
 # ---------------------------------------------------------------------------
 # The sample document.
 
-LIBRARY = "library — D:/ethology/2026"
+LIBRARY_ROOT = "D:/ethology/2026"
+LIBRARY = f"library — {LIBRARY_ROOT}"
 
 # Name, what the project holds, and when it was last opened. The second line is
 # what the pipeline's knob rows are here: the thing about the card a click acts on.
@@ -100,6 +103,18 @@ PROJECTS = [
     ("colony_04_stirred", "18 sources · chain saved", "3 days ago"),
     ("petri_replicates", "4 sources · no chain yet", "last month"),
 ]
+
+def add_project() -> None:
+    """Another project in the library, holding what a new one holds: nothing.
+
+    Named here rather than through a dialog because the name is a knob like any
+    other — the project card is where it would be edited, and a modal asking for
+    it up front would be the one form in the surface that blocks the walk.
+    """
+    PROJECTS.append(
+        (f"untitled_{len(PROJECTS) + 1}", "no sources · no chain yet", "just created")
+    )
+
 
 # The project's videos, and which one the chain reads. Module state for the
 # reason BANDS is: the pipeline pane is rebuilt on every walk move, and a
@@ -3029,6 +3044,11 @@ def build_pipeline_pane(
 # the first thing the user sees the one thing that doesn't look like SIEVE.
 
 
+def _reveal_project(name: str) -> None:
+    """The project's folder in the system's file manager — the sample path here."""
+    QDesktopServices.openUrl(QUrl.fromLocalFile(f"{LIBRARY_ROOT}/{name}"))
+
+
 def _project_card(index: int, current: int, on_select, on_open) -> ChainCard:
     name, holds, opened = PROJECTS[index]
     card = ChainCard(
@@ -3044,16 +3064,28 @@ def _project_card(index: int, current: int, on_select, on_open) -> ChainCard:
     head.addWidget(_title_label(name))
     head.addStretch(1)
     head.addWidget(_dim_label(opened))
+    # On the selected card alone: it acts on the selection, and the pane is
+    # rebuilt when that moves, so the button travels with the highlight.
+    if index == current:
+        reveal = _mini_button("…", "Open this project's folder on disk")
+        reveal.clicked.connect(lambda: _reveal_project(name))
+        head.addWidget(reveal)
     layout.addLayout(head)
     layout.addWidget(_dim_label(holds))
     return card
 
 
-def build_project_pane(current: int, on_select, on_open) -> QWidget:
+def build_project_pane(current: int, on_select, on_open, on_new) -> QWidget:
     pane = QWidget()
     pane.setStyleSheet(_stack_stylesheet())
 
+    # The + is on the library card, not at the foot of the list: a new project
+    # is added to the library, the way another region is added on the crop card
+    # and not in the fan that shows them.
     library = _fixed_card(LIBRARY, f"{len(PROJECTS)} projects on disk")
+    new = _mini_button("+", "New project — empty until sources are added")
+    new.clicked.connect(on_new)
+    library.layout().addWidget(new)
 
     column = QWidget()
     stack = QVBoxLayout(column)
@@ -3366,7 +3398,10 @@ class Control(QWidget):
         self._panes = _SlidingPanes(
             [
                 build_project_pane(
-                    self._current_project, self.select_project, self.open_project
+                    self._current_project,
+                    self.select_project,
+                    self.open_project,
+                    self.new_project,
                 ),
                 self._build_pipeline_pane(),
                 build_step_pane(
@@ -3469,6 +3504,16 @@ class Control(QWidget):
         self.select_project(index)
         self.go(_POS_PIPELINE)
 
+    def new_project(self) -> None:
+        """The library card's +: mint an empty project and stand on it.
+
+        Standing on it rather than opening it: the chain pane would show a
+        chain the project does not have, and the next act — adding sources —
+        is a knob on the card the selection just landed on.
+        """
+        add_project()
+        self.select_project(len(PROJECTS) - 1)
+
     def select_project(self, index: int) -> None:
         index = max(0, min(len(PROJECTS) - 1, index))
         if index == self._current_project:
@@ -3477,7 +3522,10 @@ class Control(QWidget):
         self._replace_pane(
             _POS_PROJECT,
             build_project_pane(
-                self._current_project, self.select_project, self.open_project
+                self._current_project,
+                self.select_project,
+                self.open_project,
+                self.new_project,
             ),
         )
         # The pipeline stack is headed by the project it belongs to, so moving

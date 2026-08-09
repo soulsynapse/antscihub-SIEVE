@@ -3079,14 +3079,27 @@ def build_project_pane(current: int, on_select, on_open, on_new) -> QWidget:
     pane = QWidget()
     pane.setStyleSheet(_stack_stylesheet())
 
-    # The + is on the library card, not at the foot of the list: a new project
-    # is added to the library, the way another region is added on the crop card
-    # and not in the fan that shows them.
+    # The button is on the library card, not at the foot of the list: a new
+    # project is added to the library, the way another region is added on the
+    # crop card and not in the fan that shows them. It wears the timeline
+    # button's dress (HANDLES, ▶) inline, because this pane's stylesheet has no
+    # QPushButton rule and the affordance should not differ by pane.
     library = _fixed_card(LIBRARY, f"{len(PROJECTS)} projects on disk")
-    new = _mini_button("+", "New project — empty until sources are added")
-    # Larger than the card-row minis: it is the one action on the whole pane
-    # that makes something, not a per-row adjustment.
-    new.setFont(_plot_font(14, bold=True))
+    new = QPushButton("NEW PROJECT")
+    new.setToolTip("New project — empty until sources are added")
+    new.setStyleSheet(
+        f"""
+        QPushButton {{
+            background: rgb({PANEL_HOT.red()},{PANEL_HOT.green()},{PANEL_HOT.blue()});
+            color: rgb({TEXT.red()},{TEXT.green()},{TEXT.blue()});
+            border: 1px solid rgb({LINE.red()},{LINE.green()},{LINE.blue()});
+            padding: 2px 4px;
+        }}
+        QPushButton:hover {{
+            border-color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});
+        }}
+        """
+    )
     new.clicked.connect(on_new)
     library.layout().addWidget(new)
 

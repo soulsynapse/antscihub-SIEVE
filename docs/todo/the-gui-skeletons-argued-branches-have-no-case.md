@@ -2,9 +2,8 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: deferred
-deferred_for: decision
-gated_on: whether the combo's re-selection is fixed by the narrow signal swap or by a no-op guard in the commit path
+status: open
+gated_on: nothing
 done_when: "uv run pytest -q tests/gui/test_param_generator.py -k reselect"
 opened: 2026-08-08
 ---
@@ -634,3 +633,17 @@ branch can go sees the one input on which it moves them. Prose only: no branch
 moved, and `tests/gui` is 113 passed either side. The item's status,
 `deferred_for` and `done_when` are untouched; what it is deferred on is still
 `param_form`'s combo signal and still Kendrick's.
+
+## Ruled 2026-08-09: the no-op guard lives in Session.commit
+
+Kendrick's ruling, from the three shapes the rotations laid out: the document's
+only writer drops a commit whose value equals the one it already holds —
+nothing appended, no undo entry, no re-plan. `activated` stays, so
+commit-on-intent stands; the same rule covers the spin box arrowed back to its
+start and every future editor by construction, because 07.3 left exactly one
+writer for it to live in. The equality test is part of what being the writer
+means — a write is a change, a non-change is not a write — and is stated so
+where it lands, rather than as an exception to session's computing-nothing
+line. A live drag is untouched: its stream is distinct values, all real; only
+exact no-ops die. The criterion below is already fix-agnostic and red, and is
+unchanged by this ruling.

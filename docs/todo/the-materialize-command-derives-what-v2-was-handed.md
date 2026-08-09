@@ -1,7 +1,7 @@
 ---
 title: The materialize command derives what v2 was handed
 step: "08.4"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_materialize.py -q -k command && uv run pytest tests/integration/test_materialize.py tests/integration/test_cli_help.py -q"
 opened: 2026-08-07

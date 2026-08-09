@@ -61,3 +61,31 @@ because both are about who spells a refusal and where:
   tree says it is not. Deleting the entry and re-pointing both sentences at
   `GraphError` is the edit; the test's assertion — exit 1, the field named —
   holds either way, which is why it stayed green through the wrap.
+
+## The docstring this item quotes is gone, and the third caller spells one option two ways
+
+Folded 2026-08-09, from the review of 08.4 (`753c241`), which added
+`cli/materialize_cmd.py` as the third importer of `run_cmd`'s vocabulary. Two
+things move on this item and neither is a defect in that commit:
+
+- The paragraph this item quotes no longer exists. `run_cmd.py` said "the second
+  command that can fail is what moves these", which had already fired and not
+  moved them; 08.4 rewrote it to say they stay in `run_cmd` and the other
+  commands import them, and named a different trigger — a fourth caller, or a
+  refusal that has nothing to do with running a graph. So the item's premise
+  ("the trigger that docstring names has fired") now cites a sentence the tree
+  does not hold, and the tree states a counter-argument to the move rather than
+  an argument for it. This item is where that is settled either way; the note is
+  so a later session does not read the new paragraph as the decision.
+- The same commit is the counter-example to the new paragraph's own claim.
+  `materialize_cmd` imports `refuse`, `load_project`, `span_for` and
+  `footage_end`, and then writes its own `_target` for the replicate lookup:
+  `--replicate` on `sieve materialize` takes an id *or* a name, while
+  `--replicate` on `sieve preview` takes an id only (`preview_cmd._target`,
+  around `Project.replicate`). One option, two commands, two meanings and two
+  refusal messages — the property "one spelling per refusal" that this item
+  exists to preserve is already not held, and it is the argument's own subject
+  rather than a style point. Whichever way the `cli/common.py` question is
+  settled, the replicate lookup is one of the things that has to end up in one
+  place. `Project.replicate` is the model's own lookup and neither command's
+  name branch goes through it.

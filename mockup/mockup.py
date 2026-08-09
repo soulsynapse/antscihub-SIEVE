@@ -29,9 +29,10 @@ not a screen beside it, so the write list is that step's param and the edges
 into its card are what is ticked. The save position went with it — a pane whose
 whole content was one step's form is that step's form.
 
-`_AddBox` is the fifth, and it is the gap ADR 22 carved out of its own popup
-default: a step that is not one yet, opened into the chain by the project
-card's ADD STEP and moved through it with the same ↑/↓ that move the walk.
+`_AddBox` is the fifth, and it is why a popup is not the default for every
+question (`docs/adr/a-position-is-asked-for-in-the-chain.md`): a step that is
+not one yet, opened into the chain by the project card's ADD STEP and moved
+through it with the same ↑/↓ that move the walk.
 VISION's add-tool box is "below the last step" because that is where its
 scenario stands; what a position *is* does not change further up, so the box
 goes wherever the chain has a gap, and the offer it holds is the position's.

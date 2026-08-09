@@ -1,7 +1,7 @@
 # What the mockup settles
 
 `mockup/mockup.py` is the settled v3 surface
-([adr/the-mockup-is-the-gui-end-state.md](adr/the-mockup-is-the-gui-end-state.md)).
+([adr/a-position-is-asked-for-in-the-chain.md](adr/a-position-is-asked-for-in-the-chain.md)).
 This map is its reading guide: what the mockup decides that the tree's
 `src/sieve/gui` does not yet have, where each decision lives in the file, and
 — as load-bearing as the list itself — what the mockup does *not* decide.

@@ -361,7 +361,7 @@ re-argued against the tree as Phase 7 left it.
 
 Phase 7 built the capability; this phase reshapes its surfaces to the settled
 layout. The target is not restated here: `mockup/mockup.py` is the referent
-([adr/the-mockup-is-the-gui-end-state.md](adr/the-mockup-is-the-gui-end-state.md))
+([adr/a-position-is-asked-for-in-the-chain.md](adr/a-position-is-asked-for-in-the-chain.md))
 and [MOCKUP-MAP.md](MOCKUP-MAP.md) is its reading guide — each step below is
 one of the map's delta rows re-homed into the real `gui`/`session` modules.
 A criterion here is a behaviour under `tests/gui`'s driving harness, never a

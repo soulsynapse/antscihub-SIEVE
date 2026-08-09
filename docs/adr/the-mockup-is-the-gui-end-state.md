@@ -1,8 +1,8 @@
 ---
 title: The mockup is the GUI's end state
 adr: 22
-position: "05.03"
-status: settled
+status: superseded
+superseded_by: a-position-is-asked-for-in-the-chain
 decided: 2026-08-08
 ---
 

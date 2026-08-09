@@ -29,5 +29,9 @@ cleanup. It is a referent, read and never imported: it computes its own
 mock data inline, which `gui-computes-nothing` forbids the real surface to
 copy, and it stays one file because a referent is read whole — the module
 split it must not receive is exactly the one the real `gui` must.
+One gap is owed rather than ruled on: the referent has no add-tool
+affordance yet, and the popup default does not cover it — VISION's
+add-tool box (the new-project scenario) is the binding wording until the
+box lands here as a licensed revision.
 [MOCKUP-MAP.md](../MOCKUP-MAP.md) is the reading guide: the deltas against
 the tree, and the boundary of what the referent does not settle.

@@ -46,6 +46,17 @@ its `src/sieve/gui` counterpart and was reshaped from there.
   from the position's signature, the write list from what the chain can
   emit — and the open questions about those derivations stay open
   (`docs/todo/the-offering-predicate-is-not-the-edge-legality-check.md`).
+- **Adding a tool.** The mockup has no affordance for it — a deliberate
+  gap, not a settlement, and the one place ADR 22's popup default does not
+  apply. VISION's add-tool box (the new-project scenario) is the binding
+  wording: a box below the last step holding what could go there, the offer
+  derived from what the source resolved to. What an offer is keyed on stays
+  open (`docs/todo/the-offering-predicate-is-not-the-edge-legality-check.md`).
+- **The output step's file rows.** The `into` folder and the format combo
+  on the output form arrived with no instruction behind them; the format
+  choice in particular collides with `storage`'s one-format rule and will
+  be worked over later. The settled part of the output card is the shape —
+  write list as ticks, ticks as edges, Run on the form.
 - **The mechanism.** Nothing here weakens VISION's flexibility claims: the
   command layer stays keyed by intent kind, editors stay generated per param
   kind, and a complete GUI is still any layout that emits every intent kind.

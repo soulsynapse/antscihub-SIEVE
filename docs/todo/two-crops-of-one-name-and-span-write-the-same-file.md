@@ -1,7 +1,7 @@
 ---
 title: Two crops of one name and span write the same file
 step: "08.3"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/integration/test_materialize.py -q -k collide && uv run pytest tests/integration/test_materialize.py -q"
 opened: 2026-08-07

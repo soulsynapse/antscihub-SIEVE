@@ -12,6 +12,15 @@ the decode side already hands back a proxy sized for display
 (`transport/decode_worker.PROXY_WIDTH`), so upscaling here would invent detail
 the user would then judge footage by.
 
+**The badge says what is shown, not that it is stale.** The source frame stands
+in for the watched node's output in four cases — before the first render, while
+a drag is in flight, for a node with no picture, and after a render that failed
+— and the frame it puts up is at the *correct* index, so "stale" is the wrong
+word for it and `graph_panel`'s mark is the wrong mark. What the user cannot
+otherwise tell is whose picture it is, which on a node whose output is a mask or
+a difference is a change of kind. The state is raised by the one caller that
+knows (`app._paint_viewport`) and lowered only by a render landing.
+
 **A node's output has no display range, so the greyscale is stretched between
 that frame's own extremes.** `graph_panel.value_range`'s question one surface
 over, and answered differently on purpose: a trace is read against an axis and
@@ -32,6 +41,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 _BACKGROUND = QColor(18, 18, 22)
 _HINT = QColor(120, 120, 130)
 _EMPTY_HINT = "No frame"
+_SOURCE_BADGE = "source"
 
 
 def image_of(values: NDArray[np.float32]) -> QImage | None:
@@ -78,12 +88,27 @@ class VideoCanvas(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._frame: QImage | None = None
+        self._showing_source = False
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     @property
     def frame(self) -> QImage | None:
         """The image on screen, or None before the first frame arrives."""
         return self._frame
+
+    @property
+    def showing_source(self) -> bool:
+        """Whether what is drawn is the footage standing in for a node's output."""
+        return self._showing_source
+
+    def mark_source(self) -> None:
+        """The frame just handed over is the source, not the watched node's output."""
+        self._showing_source = True
+        self.update()
+
+    def badge_text(self) -> str:
+        """The word drawn over the picture, empty when the picture speaks for itself."""
+        return _SOURCE_BADGE if self._showing_source and self._frame is not None else ""
 
     def set_frame(self, index: int, image: QImage) -> None:
         """Show `image`. `index` is accepted and ignored — the readout is the bar's."""
@@ -103,11 +128,18 @@ class VideoCanvas(QWidget):
         if image is None:
             return False
         self.set_frame(index, image)
+        # A render is the watched node's output by definition, which is the one
+        # thing that displaces the badge. The refusal above leaves it alone: the
+        # caller's next move is to hand back the source and raise it again, and
+        # clearing in between would drop the mark on every repaint of a node
+        # that has no picture at all.
+        self._showing_source = False
         return True
 
     def clear(self) -> None:
         """Return to the empty state. The source has gone."""
         self._frame = None
+        self._showing_source = False
         self.update()
 
     def frame_rect(self) -> QRectF:
@@ -137,4 +169,14 @@ class VideoCanvas(QWidget):
             return
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.drawImage(box, self._frame)
+        badge = self.badge_text()
+        if badge:
+            # Over the frame rather than over the letterbox, which is empty on a
+            # viewport the picture happens to fill.
+            painter.setPen(_HINT)
+            painter.drawText(
+                box.adjusted(6, 4, -6, -4),
+                int(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft),
+                badge,
+            )
         painter.end()

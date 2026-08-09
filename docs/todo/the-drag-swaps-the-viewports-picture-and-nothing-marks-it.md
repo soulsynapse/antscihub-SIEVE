@@ -2,7 +2,7 @@
 title: The drag swaps the viewport's picture for the source, and the surface has no mark
 priority: high
 phase: "7"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k source_badge"
 opened: 2026-08-09
@@ -72,3 +72,19 @@ ruling), and whether the badge doubles as the settle render's
 progress-visible signal, which
 `findings/2026.08.09-the-settles-render-is-charged-to-a-ceiling-the-gui-does-not-publish.md`
 is adjacent to but does not rule.
+
+## 2026-08-09: built — one state on the canvas, raised at the fallback
+
+`VideoCanvas` holds `showing_source`, raised by `mark_source()` and lowered only
+by a `set_values` that lands, and `_paint_viewport` raises it on the one branch
+all four causes share. A refused `set_values` deliberately leaves it alone: the
+caller's next statement hands the source back and marks it, and clearing in
+between would drop the badge on every repaint of a node with no picture.
+
+Both edges settled as work, not as re-decisions. `NO_SURFACE_NOTE` is the
+pinned step's line for a step with *no plot* (`mockup.py`, `_plots_for` empty),
+which is a different surface from the viewport's picture — no collision, and
+neither owns the other's case. The badge does not double as the settle render's
+progress signal: it names the picture, and a mark that also meant "work is in
+flight" would be false in the two causes where no render is coming (a node with
+no picture, a render that failed) — which is the honesty half it was added for.

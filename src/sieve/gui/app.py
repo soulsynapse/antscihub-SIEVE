@@ -364,7 +364,10 @@ class MainWindow(QMainWindow):
         The source frame is the fallback and not the subject: it is what the
         window shows before a pipeline can answer for that index, for a node
         with no picture, and for a render that failed — which the tuning loop
-        reports through `last_error` rather than by handing over a blank.
+        reports through `last_error` rather than by handing over a blank. All
+        four causes are marked here, and only here, because this is the only
+        place that knows which of the two frames went to the canvas
+        (`canvas.mark_source`).
 
         It is also what a drag in flight gets, which is the one caller that
         passes `render=False`: the render would otherwise sit inside the round
@@ -385,6 +388,7 @@ class MainWindow(QMainWindow):
         )
         if values is None or not self._viewport.set_values(index, values):
             self._viewport.set_frame(index, image)
+            self._viewport.mark_source()
 
     def _walk_to(self, index: int) -> None:
         # Clamped rather than wrapped, and silent at either end: a held key
@@ -405,9 +409,9 @@ class MainWindow(QMainWindow):
         self.refill_graph()
         # Ahead of the refill this move just asked for, because that one is
         # deferred by a turn of the event loop and the picture is about the node
-        # the walk is on *now* — a viewport still showing the previous node's
-        # output until the graph comes back is the stale-mark interval leaking
-        # onto a surface that has no mark.
+        # the walk is on *now*. The badge would not cover a viewport still
+        # showing the previous node's output: it says the picture is the source,
+        # and that picture is a render — of a node the walk has left.
         self._paint_viewport()
 
     def _build_step(self) -> QWidget:

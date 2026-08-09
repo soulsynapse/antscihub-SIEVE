@@ -61,6 +61,12 @@ _ONE_BLOCK = 1024
 _SHOWN = "change_energy"
 _CHOSEN = "flow_agreement"
 
+#: Two frames of the fixture, well apart so the pictures at them differ, and
+#: both inside it. Which is which matters only in that the drag lands somewhere
+#: the settle then has to repaint.
+_SETTLED_ON = 13
+_DRAGGED_TO = 27
+
 #: How long the decode thread is given to open the clip and the preview to
 #: render it. `test_gui_cli_parity.py`'s number and its reason: every wait here
 #: ends when the thing it waits on does, so a generous ceiling costs nothing but
@@ -214,5 +220,54 @@ def test_a_dropped_write_leaves_the_graph_where_it_was(qapp, tunable_project: Pa
         # Left settled: a window closed mid-render tears down the reader the
         # render is holding.
         _settled(window)
+    finally:
+        window.close()
+
+
+def test_the_source_badge_rises_on_a_drag_and_falls_on_the_settle(
+    qapp, tunable_project: Path
+) -> None:
+    """The interval the render-on-settle ruling opened, with the mark on it.
+
+    The walk stands on `block_signal`, whose output is not footage, so the drag
+    does not merely delay the picture — it swaps which node's picture is up.
+    Both halves are needed: a badge that never falls would mark a window that is
+    showing exactly what it claims to, and a badge that never rises is the
+    unmarked interval this case exists about.
+
+    Driven through the player rather than through a slider, because what decides
+    the render is the permission the frame arrives with
+    (`transport/request_intent.py`) and `scrub` is where a drag produces one.
+    """
+    del qapp
+    from sieve.gui.app import MainWindow
+
+    discover()
+    window = MainWindow([tunable_project])
+    window.show()
+    try:
+        window.open_project(tunable_project)
+        driving.wait_until(lambda: window.player.metadata is not None, _TIMEOUT_MS)
+        window.timeline.set_window(SourceSpan(start=0, end=window.player.metadata.frame_count))
+        window.go_down()
+        assert window.current_node is not None and window.current_node.node_id == _BLOCKS
+        _settled(window)
+
+        window.player.seek(_SETTLED_ON)
+        driving.wait_until(lambda: window.player.current_index == _SETTLED_ON, _TIMEOUT_MS)
+        driving.wait_until(lambda: window.viewport.frame is not None, _TIMEOUT_MS)
+        assert not window.viewport.showing_source
+
+        window.player.scrub(_DRAGGED_TO)
+        driving.wait_until(lambda: window.player.current_index == _DRAGGED_TO, _TIMEOUT_MS)
+        assert window.viewport.showing_source
+        assert window.viewport.badge_text() == "source"
+        dragged = window.viewport.frame
+
+        window.player.seek(_DRAGGED_TO)
+        driving.wait_until(lambda: not window.viewport.showing_source, _TIMEOUT_MS)
+        # One index, painted twice and differently: what the badge was about is
+        # which node's picture was up, not which frame.
+        assert window.viewport.frame != dragged
     finally:
         window.close()

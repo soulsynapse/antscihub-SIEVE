@@ -22,6 +22,7 @@ and its file in `docs/adr/` but leaves this index.
 - [Crop, span, and the detector are graph nodes](adr/detector-is-a-node.md) — Schema v1 has crop, span, and the detector as graph nodes natively — no `Project.detector`, no `Replicate.roi`, no `Project.clip`.
 - [v2 projects do not import](adr/v2-does-not-import.md) — v3 reads no v2 file: there is no `compat` package and no importer, and no module anywhere spells a v2 field name — schema v1 is written as if v2 never existed.
 - [What can change an output is a param](adr/param-not-preference.md) — A value that can change an output is a param — in the artifact, in the cache key; one that can only change presentation or performance is a preference, and anything ambiguous is a param.
+- [A document may name no footage](adr/a-document-may-name-no-footage.md) — `Project.source` admits `None`: a document with no footage is a valid saved project, and every reader that needs frames refuses it naming the file, rather than the schema refusing the state.
 
 ## 03 — The repo itself
 
@@ -44,5 +45,6 @@ and its file in `docs/adr/` but leaves this index.
 - [The GUI knows kinds, never tools](adr/gui-knows-kinds-not-tools.md) — `gui` reads spec data — param kinds, presentation stereotypes, window shape — and never branches on `tool_id`; widgets and overlays are generated per kind.
 - [The GUI's base is the v2.5 spike, not v2's gui](adr/gui-base-is-the-v25-spike.md) — `gui/` starts from the v2.5 spike's skeleton — `proto_sieve`'s `gui` and `session` — not v2's `gui/`; v2 components port into it where they held, and the layout operates as VISION describes.
 - [The mockup is the GUI's end state](adr/the-mockup-is-the-gui-end-state.md) — `mockup/mockup.py` is the settled v3 surface: layout, hotkeys, and interactions are final; the fake back end transfers nothing; what it does not show lands in a popup, never as a new region.
+- [The output card is a picture of the write list, not a node](adr/the-output-card-is-a-picture-of-the-write-list.md) — The output step at the foot of the chain is drawn, not modeled: the GUI renders a card over `Project.outputs` with edges derived from the ticks — no output node, no sink shape in the tool contract.
 
-*23 settled, 1 superseded.*
+*25 settled, 1 superseded.*

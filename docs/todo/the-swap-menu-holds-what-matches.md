@@ -1,8 +1,7 @@
 ---
 title: The swap menu holds what matches, not what admits
-status: deferred
-deferred_for: subject
-gated_on: the offering predicate landing (the-offering-predicate-is-not-the-edge-legality-check.md, ruled 2026-08-09) — the ⇄ menu renders the `matches` shortlist, and building the button before the predicate would ship a menu with either everything or a hardcoded list in it
+status: open
+gated_on: nothing
 priority: normal
 phase: "9"
 done_when: "uv run pytest tests/gui -q -k swap_menu"
@@ -41,3 +40,14 @@ question the mock does not answer.
     $ uv run pytest tests/gui -q -k swap_menu
     119 deselected in 0.66s
     exit: 5
+
+## Ruled 2026-08-09 (Kendrick): the gate lifted, the item opens
+
+The deferral was on the offering predicate landing, and it has:
+`the-offering-predicate-is-not-the-edge-legality-check.md` is done and
+`matches` is on the contract (`core/tool_base.py`). The original gate text
+lived in the frontmatter and is preserved here: *"the offering predicate
+landing … the ⇄ menu renders the `matches` shortlist, and building the
+button before the predicate would ship a menu with either everything or a
+hardcoded list in it."* The empty-menu fold above stands: eight of ten
+positions offer nothing today, so the empty case is still the first case.

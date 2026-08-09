@@ -85,3 +85,12 @@ GUI step. The three ways out, and why none is a run's judgement call:
 So: the criterion no longer covers the whole of the item, and the review owes
 it either a widening plus a ruling on the first bullet, or a strike that sends
 NEW PROJECT out as its own item behind that decision.
+
+## Ruled 2026-08-09 (Kendrick): the first bullet
+
+[adr/a-document-may-name-no-footage.md](../adr/a-document-may-name-no-footage.md):
+`Project.source` admits `None`, readers that need frames refuse by name, and
+the other two exits are rejected for the reasons the section above gives —
+the pending row lies after a relaunch, the dialog is the modal the referent
+argues away. The review can widen `done_when` over NEW PROJECT rather than
+striking it; the schema decision it was waiting on is made.

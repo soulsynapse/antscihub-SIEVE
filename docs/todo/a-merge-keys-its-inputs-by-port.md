@@ -30,3 +30,17 @@ smallest crossing that can show it.
 
 The gate does not move. A scenario naming a tool is not the tool, and what this
 item needs is a node that actually has two inputs to cross over.
+
+## Ruled 2026-08-09 (Kendrick): a blocker, not a revival row
+
+Considered for PLAN's "Not built, and what revives it" table and ruled
+against: multi-input is settled in the referent — ports named at fan-in,
+VISION's branch feeding a subtraction — so the trigger is unscheduled, not
+hypothetical, and the deferral stands as written. Two notes for whoever the
+gate eventually lifts for. First,
+[adr/the-output-card-is-a-picture-of-the-write-list.md](../adr/the-output-card-is-a-picture-of-the-write-list.md)
+closed the route 09.2 once promised — the output card gains no schema
+inputs, so ticks will never be this item's subject; only a real multi-input
+tool will. Second, this gate is prose and invisible to the index's
+named-gate scan, so the item that mints the first multi-input tool must cite
+this one in its body — that citation is the whole net.

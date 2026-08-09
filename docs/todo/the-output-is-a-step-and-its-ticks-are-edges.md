@@ -1,9 +1,8 @@
 ---
 title: The output is a step, and its ticks are edges
 step: "09.2"
-status: deferred
-deferred_for: decision
-gated_on: whether the tool contract admits a node that consumes and emits nothing, which is an ADR nobody has written
+status: open
+gated_on: nothing
 done_when: "uv run pytest tests -q -k ticks_are_edges"
 opened: 2026-08-09
 ---
@@ -142,3 +141,25 @@ both module-level or public for that reason.
 `-k ticks_are_edges` reaches the drawn label and not only the derivation — a
 case that asserts the tick-to-edge mapping and never renders the stack would
 leave the picture's half of this clause exactly as unheld as it is today.
+
+## Ruled 2026-08-09 (Kendrick): the output card is drawn, not modeled
+
+[adr/the-output-card-is-a-picture-of-the-write-list.md](../adr/the-output-card-is-a-picture-of-the-write-list.md)
+answers both widths of the fork the reviews above opened: no sink node
+enters the contract, and writing is not a node at all — the card is the
+GUI's picture of `Project.outputs`, its edges derived from the ticks as view
+state, consistent with the one writer the tree already has. The deferral
+lifts on that ruling, which is why the frontmatter reads open again.
+
+What this closes inside the item: the port-keyed `window` extension, the
+five one-input sites, and the fan-in do **not** ride this step — no schema
+node gains a second input from a tick, so the paragraph above expecting
+[a-merge-keys-its-inputs-by-port.md](a-merge-keys-its-inputs-by-port.md) to
+come off its gate behind this work no longer holds; that item stays deferred
+on a genuinely multi-input tool. What remains is the GUI half plus the
+derivation: the card at the foot of the stack over `Project.outputs`, ticks
+becoming drawn edges with the product name at the arrowhead
+(`chain_stack.py`'s painter, per the review above), Run on its form,
+`gui/save_screen.py` dissolving into it. `done_when` still covers exactly
+that; the sentences it no longer covers are the ones the ADR removed from
+scope rather than left undone.

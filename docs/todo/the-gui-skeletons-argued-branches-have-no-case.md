@@ -2,9 +2,9 @@
 title: The GUI skeleton's argued branches have no case
 priority: normal
 phase: 7
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest -q tests/gui/test_param_generator.py -k reselect"
+done_when: "uv run pytest -q tests/gui/test_app.py -k dropped"
 opened: 2026-08-08
 ---
 
@@ -661,3 +661,40 @@ the stale mark flashing for an edit that was dropped. The same is true of
 the write took — which is a second question about what `issue` returns, not a
 per-editor guard — and it is deliberately not done here: the criterion does not
 reach it and the ruling put the refusal in one place on purpose.
+
+## The writer holds, and the criterion rotates onto the notification (2026-08-09)
+
+`a5054b8` answered the ruling in `Session.commit` and nowhere else. Re-run
+independently: the criterion is `1 passed, 7 deselected`, the suite is 1020
+passed, `ruff format --check` and `ruff check` are clean, and the case is red
+for the right reason — with the two guard lines removed byte for byte from the
+committed file it fails at `assert session.project is chosen`, printing two
+equal documents. The identity assertion is what makes that red possible;
+equality would have passed on the unguarded tree. `done_when` was untouched and
+the status the worker left was `awaiting-review`.
+
+The early return also skips `self._future.clear()`, which the diff does not
+mention and is right: a value equal to the present one is not a divergence, so
+a redo branch survives a no-op the way it survives no write at all.
+
+**The residue folded above is the criterion now, and the item stays open for
+it.** Read against the tree: `ParamForm._edit` emits `edited` after `issue`
+returns, `app.py:425` and `:476` connect that to `refill_graph`,
+`refill_graph` calls `TuningLoop.request_refill`, and that calls
+`GraphPanel.mark_stale` before arming its timer. So the gesture the commit just
+made document-invisible still puts `_STALE_NOTICE` over the plot and schedules
+a render, for an edit that was dropped. The ruling's own third clause — "no
+re-plan" — and `commit`'s docstring line about "no new value for anything
+downstream to re-plan from" are both true of the *value* and false of what the
+user sees, because the refill is driven by a signal rather than by the
+document.
+
+The new criterion is fix-agnostic between the two shapes the residue names —
+the widgets learning from `issue`'s return whether the write took, or the
+notification being derived from the document rather than emitted beside it —
+because it asserts the panel and not the signal. It is red today at `exit=5`,
+no case matching. What the case must assert, which the selector cannot: driving
+the shown entry of a generated combo through a real `MainWindow` leaves the
+graph panel carrying no stale notice, while an actual change to the same combo
+does. Both halves, or the case passes on a window whose panel was never marked
+stale by anything.

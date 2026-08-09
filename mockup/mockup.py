@@ -37,6 +37,14 @@ VISION's add-tool box is "below the last step" because that is where its
 scenario stands; what a position *is* does not change further up, so the box
 goes wherever the chain has a gap, and the offer it holds is the position's.
 
+It is also what ⇄ opens, standing over the card instead of between two: adding
+and swapping are one question asked of a gap and of a card, so there is no swap
+menu. The modes differ underneath, where a swap keeps the node it is — its id,
+its edges, the ticks naming it — and an add mints one. That difference is the
+reason a swap is not a remove and an add, and it is invisible on screen, which
+is why it is written here and in `MOCKUP-MAP.md` rather than left to be read
+off the picture.
+
 Run: `uv run python mockup/mockup.py`
 """
 
@@ -87,7 +95,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QMenu,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -209,6 +216,12 @@ refresh_output_inputs()
 # means. What it means is that the chain reads past it, which is `_sources_of`.
 REMOVED: set[int] = set()
 
+# Positions whose tool was swapped for another. Their `node_id` does not move —
+# that is the whole of what a swap preserves and a remove-then-add would not —
+# but the knobs, plots and guidance written against them here were written for
+# the tool that has gone, so they are dropped the way an added step's are.
+RETOOLED: set[int] = set()
+
 
 def live_nodes() -> list[int]:
     """The chain in the order the stack draws it, which is the stages' order.
@@ -278,13 +291,33 @@ def stage_after(site: int) -> int:
 def offer_after(site: int) -> list[str]:
     """What could stand in the gap under `site`: the position's signature.
 
-    The same derivation the ⇄ menu runs, asked of a position that has no tool
-    in it yet — which is why adding and swapping are one question here and not
-    two. `SWAPPABLE` stands in for it (the tool lists are sample data), but
-    what it stands in for is keyed on the stage's `in -> out` chip and never on
-    the tool above the gap.
+    `SWAPPABLE` stands in for the derivation (the tool lists are sample data),
+    but what it stands in for is keyed on the stage's `in -> out` chip and
+    never on the tool above the gap.
     """
     return SWAPPABLE[STAGES[stage_after(site)][0]]
+
+
+def offer_at(index: int) -> list[str]:
+    """What could stand where `index` stands — the same question, of a card.
+
+    Adding and swapping are one question asked of two kinds of position, which
+    is why one box serves both: a gap has no tool in it and a card has one, and
+    neither fact is an input to the offering. What differs is underneath, where
+    a swap keeps the node's identity and an add mints one.
+    """
+    return SWAPPABLE[_stage_of(index)[0]]
+
+
+def retool(index: int, tool: str) -> None:
+    """Put another tool at `index`, keeping the node it is.
+
+    The id does not move, so the ticks on the output card that name this step,
+    and every edge into and out of it, survive the swap — which is the whole
+    difference between this and removing the step and adding one back.
+    """
+    NODES[index] = (NODES[index][0], tool)
+    RETOOLED.add(index)
 
 
 def add_node(site: int, tool: str) -> int:
@@ -2489,6 +2522,8 @@ def _knobs_for(index: int, on_source_change=lambda: None) -> list[tuple[str, QWi
     — parentless, undeletable, and for the crop pair still registered against
     the value it edits, pulling into spin boxes nobody can see.
     """
+    if index in RETOOLED:
+        return []
     return {
         0: lambda: [("video", _source_chooser(on_source_change))],
         1: lambda: [
@@ -2517,6 +2552,8 @@ def _knobs_for(index: int, on_source_change=lambda: None) -> list[tuple[str, QWi
 
 def _plots_for(index: int) -> list[QWidget]:
     """Fresh instances every call: the stack and the pin cannot share a widget."""
+    if index in RETOOLED:
+        return []
     if index == _BLOCKS_INDEX:
         return [MockGraph()]
     if index == 8:
@@ -2541,29 +2578,23 @@ def _stage_of(index: int) -> tuple[str, str]:
     return next((stage, chip) for stage, chip, members in STAGES if index in members)
 
 
-def _swap_button(index: int, tool: str) -> QToolButton:
-    """The offering for this position: every tool with the stage's signature.
+def _swap_button(index: int, on_swap) -> QToolButton:
+    """Open the box over this card: what could stand where this step stands.
 
-    The menu is the whole of it here — a chosen alternative does not rebuild the
-    step, because the mockup's knobs are keyed by position rather than by tool.
-    What it is showing is that the position takes a type and not a fixed tool.
+    Not a menu of its own. Adding and swapping are the same question asked of
+    two kinds of position — a gap has no tool in it, a card has one — so the
+    box that answers it for a gap answers it here, standing where the card is
+    instead of between two. A second widget rendering the same shortlist would
+    be the same derivation displayed twice.
     """
-    stage, chip = _stage_of(index)
+    _stage, chip = _stage_of(index)
     button = QToolButton()
     button.setText("⇄")
     button.setAutoRaise(True)
-    button.setToolTip(f"Swap for another {chip} tool")
-    button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-    menu = QMenu(button)
-    for name in SWAPPABLE[stage]:
-        action = menu.addAction(name)
-        action.setCheckable(True)
-        action.setChecked(name == tool)
-    button.setMenu(menu)
+    button.setToolTip(f"Swap for another {chip} tool — the chain is unchanged until you pick")
+    button.clicked.connect(lambda: on_swap(index))
     button.setStyleSheet(
         f"QToolButton {{ color: rgb({DIM.red()},{DIM.green()},{DIM.blue()}); border: 0; }}"
-        # The arrow would be a second glyph beside the one the button is.
-        "QToolButton::menu-indicator { image: none; }"
     )
     return button
 
@@ -2870,25 +2901,40 @@ def _offer_button(name: str, lit: bool, on_take) -> QPushButton:
     return button
 
 
-def _add_box(site: int, number: int, offer: int, on_take) -> _AddBox:
+def _add_box(site: int, number: int, offer: int, on_take, replaces: bool) -> _AddBox:
+    """The box in either of its two positions: a gap, or the card at `site`.
+
+    One widget because one question — what could stand here — and the only
+    thing the two modes disagree about is what the caption says and whether
+    ↑/↓ have anywhere to go. A box over a card is anchored: walking it into
+    the gaps would flip it between replacing and inserting with nothing on
+    screen saying which.
+    """
     box = _AddBox()
     layout = QVBoxLayout(box)
     layout.setContentsMargins(8, 6, 8, 8)
     layout.setSpacing(4)
 
     head = QHBoxLayout()
-    title = _title_label(f"{number}. new step")
+    title = _title_label(f"{number}. {NODES[site][1] if replaces else 'new step'}")
     title.setStyleSheet(f"color: rgb({ACCENT.red()},{ACCENT.green()},{ACCENT.blue()});")
     head.addWidget(title)
     head.addStretch(1)
-    # What the splice does, in the two names the picture cannot show until it
-    # happens: the box reads one step and is read by whatever read past it.
-    readers = [NODES[dst][0] for dst in live_nodes() if site in _sources_of(dst)]
-    reads = f" · {', '.join(readers)} would read it" if readers else ""
-    head.addWidget(_dim_label(f"after {NODES[site][0]}{reads}"))
+    if replaces:
+        # The id is what the ticks and the edges hang on, so naming it is the
+        # picture of what a swap keeps that removing and adding would not.
+        note = f"{NODES[site][0]} keeps its edges · esc keeps its tool"
+    else:
+        # What the splice does, in the two names the picture cannot show until
+        # it happens: the box reads one step and is read by whatever read past.
+        readers = [NODES[dst][0] for dst in live_nodes() if site in _sources_of(dst)]
+        note = f"after {NODES[site][0]}" + (
+            f" · {', '.join(readers)} would read it" if readers else ""
+        )
+    head.addWidget(_dim_label(note))
     layout.addLayout(head)
 
-    names = offer_after(site)
+    names = offer_at(site) if replaces else offer_after(site)
     grid = QGridLayout()
     grid.setContentsMargins(0, 2, 0, 0)
     grid.setSpacing(4)
@@ -2900,7 +2946,8 @@ def _add_box(site: int, number: int, offer: int, on_take) -> _AddBox:
         )
     grid.setColumnStretch(_OFFER_COLUMNS, 1)
     layout.addLayout(grid)
-    layout.addWidget(_dim_label("↑↓ move the box · ←→ the offer · enter takes it · esc cancels"))
+    keys = "←→ the offer · enter takes it · esc cancels"
+    layout.addWidget(_dim_label(keys if replaces else f"↑↓ move the box · {keys}"))
     return box
 
 
@@ -2920,8 +2967,10 @@ class _ChainColumn(QWidget):
         self._lanes = _lanes()
         self.cards: dict[int, ChainCard] = {}
         self.fan: _CropFan | None = None
-        #: The open add box and the gap it stands in, or `-1` for no box.
+        #: The open box's position, or `-1` for no box, and whether it stands
+        #: where that step's card is rather than in the gap under it.
         self.box_site = -1
+        self.box_replaces = False
         # Which region is selected moves an arrowhead here, so this repaints on
         # the same notification the canvas and the spin boxes do.
         watch_crop(self, self.update)
@@ -2933,11 +2982,13 @@ class _ChainColumn(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         for src, dst in _edges():
             if src in self.cards and dst in self.cards:
-                # The edges out of the gap's step are not drawn while a box
-                # stands in it: what is on screen has to be one chain, and a
-                # solid line running past the box beside the dashed pair that
-                # replaces it would be the picture saying both.
-                if src == self.box_site:
+                # The edges the box interrupts are not drawn while it stands
+                # there: what is on screen has to be one chain, and a solid
+                # line running past the box beside the dashed pair replacing
+                # it would be the picture saying both. A box in a gap
+                # interrupts what leaves that step; a box over a card
+                # interrupts what enters it too.
+                if src == self.box_site or (self.box_replaces and dst == self.box_site):
                     continue
                 if src == _CROP_INDEX and self.fan is not None:
                     self._paint_fanned_edge(painter, src, dst)
@@ -2948,34 +2999,48 @@ class _ChainColumn(QWidget):
         painter.end()
 
     def _paint_provisional(self, painter: QPainter) -> None:
-        """The two edges the box would be spliced on, dashed because it is not.
+        """The edges the box would be spliced on, dashed because it is not.
 
-        Out of the gap's step into the box, and out of the box into whatever
-        read past the gap — which is `_sources_of` inverted, and the picture of
-        what taking an offer would write.
+        In a gap: out of that step into the box, and out of the box into
+        whatever read past the gap — `_sources_of` inverted, and the picture of
+        what taking an offer would write. Over a card: what fed the card feeds
+        the box, which is the picture of a swap keeping the edges it stands on.
         """
-        if self.box_site == _CROP_INDEX and self.fan is not None:
-            self._paint_fanned_edge(painter, self.box_site, _ADD_SLOT, dashed=True)
-        else:
-            self._paint_edge(painter, self.box_site, _ADD_SLOT, dashed=True)
-        for dst in live_nodes():
-            if dst in self.cards and self.box_site in _sources_of(dst):
-                self._paint_edge(painter, _ADD_SLOT, dst, dashed=True)
+        for src in self._box_upstream():
+            if src == _CROP_INDEX and self.fan is not None:
+                self._paint_fanned_edge(painter, src, _ADD_SLOT, dashed=True)
+            else:
+                self._paint_edge(painter, src, _ADD_SLOT, dashed=True)
+        for dst in self._box_downstream():
+            self._paint_edge(painter, _ADD_SLOT, dst, dashed=True)
 
-    def hold_box(self, site: int, box: _AddBox) -> None:
+    def _box_upstream(self) -> list[int]:
+        return _sources_of(self.box_site) if self.box_replaces else [self.box_site]
+
+    def _box_downstream(self) -> list[int]:
+        return [
+            dst
+            for dst in live_nodes()
+            if dst in self.cards and self.box_site in _sources_of(dst)
+        ]
+
+    def hold_box(self, site: int, box: _AddBox, replaces: bool) -> None:
         """Give the box a position, so the edge painters reach it as a card.
 
-        Its lanes are the site's own: the box stands where that step's output
-        already ran, and an edge that moved sideways to enter it would be
-        saying the chain had been rerouted rather than interrupted.
+        Its lanes are the ones the edges it interrupts already had, so the
+        picture does not shift sideways when it opens: an edge that moved to
+        enter the box would be saying the chain had been rerouted rather than
+        interrupted, and the swap case would be saying it about edges the swap
+        is specifically keeping.
         """
         self.box_site = site
+        self.box_replaces = replaces
         self.cards[_ADD_SLOT] = box
-        lane = min((lane for (src, _), lane in self._lanes.items() if src == site), default=0)
-        self._lanes[(site, _ADD_SLOT)] = lane
-        for dst in live_nodes():
-            if site in _sources_of(dst):
-                self._lanes[(_ADD_SLOT, dst)] = lane
+        trunk = min((lane for (src, _), lane in self._lanes.items() if src == site), default=0)
+        for src in self._box_upstream():
+            self._lanes[(src, _ADD_SLOT)] = self._lanes.get((src, site), trunk)
+        for dst in self._box_downstream():
+            self._lanes[(_ADD_SLOT, dst)] = self._lanes.get((site, dst), trunk)
 
     def trunk_x(self, src: int) -> float:
         """Where `src`'s outgoing edge runs, in the x of any row beside its card.
@@ -3100,6 +3165,7 @@ def _card(
     on_remove,
     on_select,
     on_open,
+    on_swap,
 ) -> ChainCard:
     card = ChainCard(selected=index == current, on_select=lambda: on_select(index))
     layout = QVBoxLayout(card)
@@ -3113,7 +3179,7 @@ def _card(
     head.addWidget(_title_label(f"{number}. {title}"))
     head.addStretch(1)
     head.addWidget(_settings_button(index, on_open))
-    head.addWidget(_swap_button(index, title))
+    head.addWidget(_swap_button(index, on_swap))
     head.addWidget(_pin_button(index, pinned, on_pin))
     head.addWidget(_remove_button(index, on_remove))
     layout.addLayout(head)
@@ -3200,6 +3266,8 @@ def build_pipeline_pane(
     offer: int = 0,
     on_add: object = None,
     on_take: object = None,
+    on_swap: object = None,
+    replaces: bool = False,
 ) -> QWidget:
     pane = QWidget()
     pane.setStyleSheet(_stack_stylesheet())
@@ -3230,12 +3298,15 @@ def build_pipeline_pane(
     order = live_nodes()
     # The box counts as a step for numbering: it is standing in the chain, and
     # the cards below it would move down by one if it were taken, so a number
-    # that skipped it would be telling the user the position is free.
+    # that skipped it would be telling the user the position is free. A box
+    # over a card takes that card's own number — nothing below it moves,
+    # because a swap adds no step.
     below_box = order.index(adding) + 1 if adding >= 0 else len(order)
+    shift = 0 if replaces else 1
     cards: dict[int, ChainCard] = {
         index: _card(
             index,
-            number + (1 if number > below_box else 0),
+            number + (shift if number > below_box else 0),
             current,
             NODES[index][1],
             _knobs_for(index, on_source_change),
@@ -3247,8 +3318,13 @@ def build_pipeline_pane(
             on_remove,
             on_select,
             on_open,
+            on_swap,
         )
         for number, index in enumerate(order, start=1)
+        # The card the box stands in place of is not built: a widget nothing
+        # lays out is parentless for as long as the pane lives, and the edges
+        # that would have asked for its geometry are the ones the box took.
+        if not (replaces and index == adding)
     }
     column.cards = cards
     # A stage emptied by removals takes its header with it: the chip names a
@@ -3259,21 +3335,28 @@ def build_pipeline_pane(
             continue
         stack.addLayout(_stage_header(stage, chip))
         for index in shown:
-            stack.addWidget(cards[index])
-            # The fan needs a gap to stand in, and it is the gap between the
-            # crop card and whatever reads it — a row that stood anywhere else
-            # would be a legend rather than the branch itself.
-            if index == _CROP_INDEX and any(
-                _CROP_INDEX in _sources_of(dst) for dst in live_nodes()
-            ):
-                column.fan = _CropFan(column.trunk_x(_CROP_INDEX))
-                stack.addWidget(column.fan)
-            # Below the fan when there is one: the box stands in the gap this
-            # step's output crosses, and the fan is the first thing in it.
+            # A card the box is standing in place of gives up its slot, and its
+            # fan with it: those regions are a param of the tool under offer,
+            # so drawing them beside the offer would be drawing outputs of a
+            # step the user is in the middle of replacing.
+            swapping = replaces and index == adding
+            if not swapping:
+                stack.addWidget(cards[index])
+                # The fan needs a gap to stand in, and it is the gap between
+                # the crop card and whatever reads it — a row that stood
+                # anywhere else would be a legend rather than the branch.
+                if index == _CROP_INDEX and any(
+                    _CROP_INDEX in _sources_of(dst) for dst in live_nodes()
+                ):
+                    column.fan = _CropFan(column.trunk_x(_CROP_INDEX))
+                    stack.addWidget(column.fan)
+            # In a gap: below the fan when there is one, since the box stands
+            # in the gap this step's output crosses and the fan is the first
+            # thing in it. Over a card: exactly where the card was.
             if index == adding:
-                box = _add_box(index, below_box + 1, offer, on_take)
+                box = _add_box(index, below_box + shift, offer, on_take, replaces)
                 stack.addWidget(box)
-                column.hold_box(index, box)
+                column.hold_box(index, box, replaces)
     stack.addStretch(1)
 
     layout = QVBoxLayout(pane)
@@ -3544,12 +3627,14 @@ def build_step_form(node_id: str, on_source_change=lambda: None, on_writes_chang
     return form
 
 
-#: A step the user added has no written guidance here, and inventing one per
-#: tool would be inventing the shelf. The real pane reads the tool's own.
+#: A step the user added or swapped in has no written guidance here, and
+#: inventing one per tool would be inventing the shelf. The real pane reads the
+#: tool's own.
 _ADDED_GUIDANCE = (
-    "Added to this position from what it offered. Its params generate this form "
-    "the way every other step's do — the mockup writes its knobs per position, "
-    "so this is the one card here whose form is empty rather than mocked."
+    "Chosen from what this position offered. Its params generate this form the "
+    "way every other step's do — the mockup writes its knobs per position, so a "
+    "position the user filled is the one place here whose form is empty rather "
+    "than mocked."
 )
 
 _EXPANDER_BODY_HEIGHT = 200
@@ -3633,6 +3718,10 @@ def build_step_pane(
 ) -> QWidget:
     """step_pane.py: caption, form, guidance, in one scrolling column."""
     node_id, tool = NODES[current]
+    # A retooled step keeps its id, which is what its ticks and edges hang on —
+    # and what would otherwise pull this pane the old tool's sampled rows. The
+    # real form is generated from the params of whatever stands here now.
+    sampled = "" if current in RETOOLED else node_id
 
     # What the form belongs to, standing where the library card and the project
     # card stand: the step is to its knobs what the project is to its chain.
@@ -3642,8 +3731,8 @@ def build_step_pane(
     column = QWidget()
     inside = QVBoxLayout(column)
     inside.setContentsMargins(6, 6, 6, 6)
-    inside.addWidget(build_step_form(node_id, on_source_change, on_writes_change))
-    inside.addWidget(GuidanceExpander(GUIDANCE.get(node_id, _ADDED_GUIDANCE)))
+    inside.addWidget(build_step_form(sampled, on_source_change, on_writes_change))
+    inside.addWidget(GuidanceExpander(GUIDANCE.get(sampled, _ADDED_GUIDANCE)))
     inside.addStretch(1)
 
     scroll = QScrollArea()
@@ -3672,10 +3761,12 @@ class Control(QWidget):
         self._current_node = len(NODES) - 1
         self._current_project = 0
         self._pinned = PINNED_DEFAULT
-        #: The gap the add box stands in, or `-1`, and which offer is lit. Held
+        #: Where the box stands, or `-1`; whether it stands over that step's
+        #: card rather than in the gap under it; and which offer is lit. Held
         #: here and not on the box: the box is rebuilt as the site moves, and a
         #: widget that owned the state would be rebuilding what it was told.
         self._adding = -1
+        self._replaces = False
         self._offer = 0
         self.on_pinned_changed = lambda index: None
         self.on_current_changed = lambda index: None
@@ -3789,17 +3880,49 @@ class Control(QWidget):
             return
         slots = self._slots()
         self._adding = self._current_node if self._current_node in slots else slots[-1]
+        self._replaces = False
         self._offer = 0
         self._rebuild_walk()
 
+    def swap_here(self, index: int) -> None:
+        """A card's ⇄: the same box, standing where that card is.
+
+        The offer opens on the tool already there, so what the box says first
+        is what the position currently holds — which is the checked entry the
+        menu this replaces used to carry, and the reason esc is a real answer
+        rather than the only one.
+        """
+        if self.adding() and self._adding == index and self._replaces:
+            self.cancel_add()
+            return
+        names = offer_at(index)
+        self._adding = index
+        self._replaces = True
+        self._offer = names.index(NODES[index][1]) if NODES[index][1] in names else 0
+        self._rebuild_walk()
+
     def cancel_add(self) -> None:
+        """Esc: the box goes and the document is where it was.
+
+        Nothing was written when it opened — a box is a picker, and the step it
+        is standing over or the gap it is standing in is unchanged until an
+        offer is taken. That is what makes this free.
+        """
         if not self.adding():
             return
         self._adding = -1
+        self._replaces = False
         self._rebuild_walk()
 
     def move_add(self, delta: int) -> None:
-        """↑/↓ while a box is open move the box, not the walk."""
+        """↑/↓ while a box is open move the box, not the walk.
+
+        A box over a card does not move: it is standing at a position that
+        exists, and walking it into the gaps would flip it between replacing
+        and inserting with nothing on screen saying which.
+        """
+        if self._replaces:
+            return
         slots = self._slots()
         position = slots.index(self._adding) + delta
         moved = slots[max(0, min(len(slots) - 1, position))]
@@ -3811,28 +3934,46 @@ class Control(QWidget):
         self._adding, self._offer = moved, 0
         self._rebuild_walk()
 
+    def _offering(self) -> list[str]:
+        """What the open box holds — of the card it covers, or of its gap."""
+        return offer_at(self._adding) if self._replaces else offer_after(self._adding)
+
     def move_offer(self, delta: int) -> None:
-        """←/→ while a box is open walk its offers, not the panes."""
-        names = offer_after(self._adding)
+        """←/→ while a box is open walk its offers, not the panes.
+
+        The same keys in both modes: an anchored box has one fewer axis, not a
+        second key map.
+        """
+        names = self._offering()
         if not names:
             return
         self._offer = (self._offer + delta) % len(names)
         self._rebuild_walk()
 
     def take_offer(self) -> None:
-        names = offer_after(self._adding)
+        names = self._offering()
         if names:
-            self.add_step(self._adding, names[self._offer % len(names)])
+            self.fill_box(self._adding, names[self._offer % len(names)])
 
-    def add_step(self, tool_site: int, tool: str) -> None:
-        """Fill the box: the chain grows a step and the walk lands on it.
+    def fill_box(self, site: int, tool: str) -> None:
+        """Take an offer: the one mutation the whole gesture writes.
 
-        On the new step rather than back where it was, for the reason removal
-        lands on the step above: what the user did was put something there, and
-        the next thing they will do is set it up.
+        Which mutation is the only thing the two modes disagree about below the
+        surface, and it is the difference the surface cannot show: a swap keeps
+        the node it is, so its ticks and its edges survive; an add mints one,
+        and the chain reads through it. Doing a swap as a remove and an add
+        would look identical here and lose everything the id is holding.
         """
-        index = add_node(tool_site, tool)
+        if self._replaces:
+            retool(site, tool)
+            index = site
+        else:
+            index = add_node(site, tool)
         self._adding = -1
+        self._replaces = False
+        # The walk lands on what was just filled, for the reason removal lands
+        # on the step above: what the user did was put something there, and the
+        # next thing they will do is set it up.
         self._current_node = index
         self._rebuild_walk()
         self.on_current_changed(index)
@@ -3932,7 +4073,9 @@ class Control(QWidget):
             self._adding,
             self._offer,
             self.add_here,
-            lambda tool: self.add_step(self._adding, tool),
+            lambda tool: self.fill_box(self._adding, tool),
+            self.swap_here,
+            self._replaces,
         )
 
     def _build_rail(self) -> NodeRail:

@@ -175,3 +175,18 @@ than in an item of its own because this is the first work that needs it; the
 review that closes this item should consider whether `done_when` wants a case
 pinning the split itself — a decoder-read root keying source-flavoured while
 `pick` stays bare — which is a widening and therefore the reviewer's.
+
+## 2026-08-09: the checkpoint half's identity must say which product
+
+A pointer, not a restatement:
+[a-checkpoint-does-not-record-which-product-it-holds.md](a-checkpoint-does-not-record-which-product-it-holds.md)
+holds the schema gap — neither the manifest nor `Project.checkpoints` can say
+which emission of a multi-product node a checkpoint holds, and 07.9's save
+screen could not fix it from its side. That item's own text says the read-back
+path is where it is answered, "whichever arrives first" — and this item is the
+read-back path, arriving first. The checkpoint half mints the written file's
+key-bearing identity here; an identity minted without the product fact
+hardwires the gap into keys and turns a schema field into a migration. So the
+schema question is answered inside this work, not after it. The criterion does
+not name the product fact; folded without touching `done_when`, so the review
+decides whether it must.

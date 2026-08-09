@@ -1,9 +1,10 @@
 ---
 title: cut_to_ready is the one pre-pipeline ceiling nothing can measure
-status: open
+status: deferred
+deferred_for: decision
 phase: 8
 priority: normal
-gated_on: nothing
+gated_on: whether cut_to_ready's 200 ms ends at the handoff — the session can render over the new source — or at the verified write, which an FFV1 encode of a real clip cannot meet; and whether the interval belongs to the crop path at all when the pre-pipeline regime ends at "replicates cut and a stretch selected"
 opened: 2026-08-07
 ---
 
@@ -44,3 +45,12 @@ of the paragraph after it: where the interval ends when nothing has a window.
 The command is a *write*, and it returns when the file is verified and the
 project saved, which is the "handoff or write" fork stated above and not an
 answer to it.
+
+## 2026-08-09: re-tagged a decision, which is what it always was
+
+Everything left in this item is the fork — what the 200 ms is a promise
+*about* — and that is a product promise no session can take. Moved to
+`deferred` so it stands in the waiting table beside the input-hash question
+rather than in the pool as work, where every pass over it would re-discover
+that it is not. Once ruled, what remains is a `within_budget` call site and a
+`budgets.TIMED` entry, and the item comes back as ordinary bench work.

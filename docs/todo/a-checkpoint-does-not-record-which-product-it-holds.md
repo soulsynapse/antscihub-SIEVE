@@ -43,3 +43,13 @@ has moved: it is no longer only a manifest field, because the *document* cannot
 say which product was asked for either. `checkpoints: tuple[str, ...]` is the
 field that would have to grow, which makes this a schema question ahead of a
 writer one, and neither 07.9's criterion nor its cut could reach it.
+
+## 2026-08-09: the read-back path arrived first, and it is next in the queue
+
+"Whichever arrives first is where this is answered" resolved toward the
+read-back path:
+[crop-serving-and-checkpoint-read-back-become-source-tools.md](crop-serving-and-checkpoint-read-back-become-source-tools.md)
+is at the head of the queue and mints the checkpoint file's key-bearing
+identity under `adr/a-root-keys-by-its-reader.md`, so the schema question is
+answered there — a paragraph in that item now points back here. This one
+stays open as the record of the gap until the answer exists to point at.

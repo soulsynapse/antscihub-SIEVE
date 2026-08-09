@@ -132,6 +132,12 @@ def add_project() -> None:
     )
 
 
+def close_project(index: int) -> None:
+    """Out of the library. Deleted from the list and not marked, unlike REMOVED:
+    nothing here is keyed by a project's position, so the ones below can move."""
+    del PROJECTS[index]
+
+
 # The project's videos, and which one the chain reads. Module state for the
 # reason BANDS is: the pipeline pane is rebuilt on every walk move, and a
 # selection living in the combo box would revert each time the user moved.
@@ -3404,7 +3410,46 @@ def _reveal_project(name: str) -> None:
     QDesktopServices.openUrl(QUrl.fromLocalFile(f"{LIBRARY_ROOT}/{name}"))
 
 
-def _project_card(index: int, current: int, on_select, on_open) -> ChainCard:
+def _open_project_button(index: int, on_open) -> QToolButton:
+    """The double click, offered to the pointer: select this project and slide.
+
+    The same arrow as a step card's, for the same reason — opening a project is
+    ↑/↓ then → on the keyboard and nothing at all on the mouse but a gesture the
+    surface never says is there.
+    """
+    button = QToolButton()
+    button.setText("→")
+    button.setAutoRaise(True)
+    button.setToolTip("Open this project's chain")
+    button.setStyleSheet(f"color: rgb({DIM.red()},{DIM.green()},{DIM.blue()}); border: 0;")
+    button.clicked.connect(lambda: on_open(index))
+    return button
+
+
+def _close_project_button(index: int, on_close) -> QToolButton:
+    """Drop this project from the library. The folder on disk is not touched.
+
+    The last one is offered disabled rather than left off, the way the source
+    step is: every card carries the same two buttons in the same place. What
+    stops it is that every pane past this one is drawn about a project, so a
+    library the walk stands in front of has one.
+    """
+    closable = len(PROJECTS) > 1
+    button = QToolButton()
+    button.setText("✕")
+    button.setAutoRaise(True)
+    button.setEnabled(closable)
+    button.setToolTip(
+        "Remove from the library — the folder on disk stays"
+        if closable
+        else "The walk has to stand on a project"
+    )
+    button.setStyleSheet(f"color: rgb({DIM.red()},{DIM.green()},{DIM.blue()}); border: 0;")
+    button.clicked.connect(lambda: on_close(index))
+    return button
+
+
+def _project_card(index: int, current: int, on_select, on_open, on_close) -> ChainCard:
     name, holds, opened = PROJECTS[index]
     card = ChainCard(
         selected=index == current,
@@ -3418,11 +3463,17 @@ def _project_card(index: int, current: int, on_select, on_open) -> ChainCard:
     head = QHBoxLayout()
     head.addWidget(_title_label(name))
     head.addStretch(1)
-    head.addWidget(_dim_label(opened))
+    head.addWidget(_open_project_button(index, on_open))
+    head.addWidget(_close_project_button(index, on_close))
     layout.addLayout(head)
 
+    layout.addWidget(_dim_label(holds))
+
     foot = QHBoxLayout()
-    foot.addWidget(_dim_label(holds))
+    # Last opened sits under what the project holds rather than beside the name:
+    # it is the one line on the card the user reads and never acts on, and the
+    # head is now where the acting is.
+    foot.addWidget(_dim_label(opened))
     foot.addStretch(1)
     # On the selected card alone: it acts on the selection, and the pane is
     # rebuilt when that moves, so the button travels with the highlight.
@@ -3434,7 +3485,7 @@ def _project_card(index: int, current: int, on_select, on_open) -> ChainCard:
     return card
 
 
-def build_project_pane(current: int, on_select, on_open, on_new) -> QWidget:
+def build_project_pane(current: int, on_select, on_open, on_new, on_close) -> QWidget:
     pane = QWidget()
     pane.setStyleSheet(_stack_stylesheet())
 
@@ -3452,7 +3503,7 @@ def build_project_pane(current: int, on_select, on_open, on_new) -> QWidget:
     stack.setSpacing(6)
     stack.addLayout(_stage_header("projects", "project -> source"))
     for index in range(len(PROJECTS)):
-        stack.addWidget(_project_card(index, current, on_select, on_open))
+        stack.addWidget(_project_card(index, current, on_select, on_open, on_close))
     stack.addStretch(1)
 
     layout = QVBoxLayout(pane)
@@ -3777,12 +3828,7 @@ class Control(QWidget):
 
         self._panes = _SlidingPanes(
             [
-                build_project_pane(
-                    self._current_project,
-                    self.select_project,
-                    self.open_project,
-                    self.new_project,
-                ),
+                self._build_project_pane(),
                 self._build_pipeline_pane(),
                 build_step_pane(
                     self._current_node, self.source_changed, self.writes_changed
@@ -4013,20 +4059,40 @@ class Control(QWidget):
         add_project()
         self.select_project(len(PROJECTS) - 1)
 
+    def close_project(self, index: int) -> None:
+        """A project's ✕: out of the library, and the selection lands somewhere.
+
+        Rebuilt rather than routed through `select_project`, which returns early
+        when the index does not move — closing the card above the selected one
+        leaves it selected and every card's text still has to be redrawn.
+        """
+        if len(PROJECTS) <= 1:
+            return
+        close_project(index)
+        # Closing above the selection moves it up with the cards; closing the
+        # selected one leaves the highlight where it stood, on whatever rose
+        # into that slot, and only the last card has nothing below to rise.
+        if index < self._current_project:
+            self._current_project -= 1
+        self._current_project = min(self._current_project, len(PROJECTS) - 1)
+        self._replace_pane(_POS_PROJECT, self._build_project_pane())
+        self._replace_pane(_POS_PIPELINE, self._build_pipeline_pane())
+
+    def _build_project_pane(self) -> QWidget:
+        return build_project_pane(
+            self._current_project,
+            self.select_project,
+            self.open_project,
+            self.new_project,
+            self.close_project,
+        )
+
     def select_project(self, index: int) -> None:
         index = max(0, min(len(PROJECTS) - 1, index))
         if index == self._current_project:
             return
         self._current_project = index
-        self._replace_pane(
-            _POS_PROJECT,
-            build_project_pane(
-                self._current_project,
-                self.select_project,
-                self.open_project,
-                self.new_project,
-            ),
-        )
+        self._replace_pane(_POS_PROJECT, self._build_project_pane())
         # The pipeline stack is headed by the project it belongs to, so moving
         # the selection moves what that header names.
         self._replace_pane(_POS_PIPELINE, self._build_pipeline_pane())

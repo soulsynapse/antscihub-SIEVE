@@ -88,18 +88,43 @@ def test_a_step_outranks_a_pool_item_in_its_own_phase(tmp_path):
     assert item is not None and item.path.name == "step.md"
 
 
-def test_an_earlier_phase_outranks_everything_in_a_later_one(tmp_path):
-    # Including its steps and including its urgency: the number already claims
-    # that one must hold before the other is worth doing, so a priority able to
-    # jump it would be a second ordering laid over the first.
+def test_an_earlier_phase_outranks_everything_later_on_the_mainline(tmp_path):
+    # The number already claims that one must hold before the other is worth
+    # doing, so a later phase's step and its `high` both wait for an earlier
+    # step — priority able to jump a phase would be a second ordering laid
+    # over the first.
     write_item(tmp_path, "later-step", SEQUENCED_6)
     urgent = OWED.replace("phase: 5", "phase: 6").replace("priority: normal", "priority: high")
     write_item(tmp_path, "later-urgent", urgent)
-    write_item(tmp_path, "earlier", OWED.replace("priority: normal", "priority: low"))
+    write_item(tmp_path, "earlier-step", SEQUENCED)
 
     item = next_takeable(collect(tmp_path))
 
-    assert item is not None and item.path.name == "earlier.md"
+    assert item is not None and item.path.name == "earlier-step.md"
+
+
+def test_a_high_aside_keeps_its_phases_slot(tmp_path):
+    # `high` is minted as "take this before the next numbered step", and the
+    # bands do not demote it: it still precedes every later phase's mainline.
+    urgent = OWED.replace("priority: normal", "priority: high")
+    write_item(tmp_path, "urgent", urgent)
+    write_item(tmp_path, "later-step", SEQUENCED_6)
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "urgent.md"
+
+
+def test_a_normal_aside_waits_behind_every_phases_steps(tmp_path):
+    # The 2026-08-09 ruling: an earlier phase's steps are groundwork, its
+    # normal/low asides are not, so the pool's tail yields to the mainline of
+    # every phase — thirty phase-8 asides may not dam phase 9's first step.
+    write_item(tmp_path, "earlier-aside", OWED.replace("phase: 5", "phase: 2"))
+    write_item(tmp_path, "later-step", SEQUENCED_6)
+
+    item = next_takeable(collect(tmp_path))
+
+    assert item is not None and item.path.name == "later-step.md"
 
 
 def test_a_claim_awaiting_review_is_not_in_the_queue(tmp_path):
@@ -357,7 +382,8 @@ def test_the_unspecified_ledger_only_shrinks():
 
 
 def test_the_pool_takes_the_earliest_phase_first(tmp_path):
-    write_item(tmp_path, "step", SEQUENCED_6)
+    # Behind the mainline, not gated by it: once no step or `high` is open,
+    # the tail is simply the queue, earliest phase first.
     write_item(tmp_path, "later", OWED)
     write_item(tmp_path, "earlier", OWED.replace("phase: 5", "phase: 3"))
 

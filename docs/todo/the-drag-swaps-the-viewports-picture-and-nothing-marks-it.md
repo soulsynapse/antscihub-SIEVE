@@ -1,6 +1,6 @@
 ---
 title: The drag swaps the viewport's picture for the source, and the surface has no mark
-priority: normal
+priority: high
 phase: "7"
 status: open
 gated_on: nothing

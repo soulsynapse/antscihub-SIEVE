@@ -7,17 +7,18 @@ anything. A *pool* item carries `priority:` instead — work noticed while doing
 the phase rather than committed to by it.
 
 The order over both is one sort key (`queue_key`) and there is no state in it:
-phase, then a step before a pool item, then the number or the priority, then
-the name. So `--next` is the first `open` row of `docs/todo/.index.md` read top
-to bottom, and a reader who scrolls to it lands on the item the loop is about
-to take — asserted, not promised. The queue that runs the work never has to
-encode an order; the repo holds it.
+the mainline — steps and `high` pool items, phase-first — then the rest of the
+pool, phase-first again. So `--next` is the first `open` row of
+`docs/todo/.index.md` read top to bottom, and a reader who scrolls to it lands
+on the item the loop is about to take — asserted, not promised. The queue that
+runs the work never has to encode an order; the repo holds it.
 
-Phase outranks urgency, which is the whole of what makes it simple: an earlier
-phase is groundwork the later ones stand on, so a `low` in phase 0 precedes a
-`high` in phase 5. Work that cannot wait for its phase is not a pool item at
-all — it is minted as a decimal step in the phase's own list, and a phase whose
-steps all read `done` is still a place to file one.
+Phase outranks urgency on the mainline: an earlier phase's steps are groundwork
+the later ones stand on, so a `low` step in phase 0 precedes a `high` in
+phase 5. A `normal` or `low` aside is not groundwork — it waits behind every
+phase's mainline (`queue_key` holds the ruling). Work that cannot wait for its
+phase is not a pool item at all — it is minted as a decimal step in the phase's
+own list, and a phase whose steps all read `done` is still a place to file one.
 
 Either shape may declare its own arithmetic, and both declarations are refused
 where they disagree with what they stand over: `table_rows:` against the body
@@ -689,11 +690,11 @@ def render(items: list[Item], titles: dict[int, str]) -> str:
             )
             lines.append("")
         pooled = sorted(
-            (i for i in items if i.phase == phase and i.step_key is None),
+            (i for i in items if i.phase == phase and i.step_key is None and i.priority_rank == 0),
             key=lambda i: (i.priority_rank, i.path.name),
         )
         if pooled:
-            lines += ["Asides that can wait:", ""]
+            lines += ["High asides, before the next phase:", ""]
             lines += _table(
                 ("Priority", "Status", "Item", "Gated on"),
                 [
@@ -709,7 +710,8 @@ def render(items: list[Item], titles: dict[int, str]) -> str:
             lines.append("")
 
     unattached = sorted(
-        (i for i in items if i.phase is None), key=lambda i: (i.priority_rank, i.path.name)
+        (i for i in items if i.phase is None and (i.step_key is not None or i.priority_rank == 0)),
+        key=lambda i: (i.priority_rank, i.path.name),
     )
     if unattached:
         lines += ["## Unattached", ""]
@@ -723,6 +725,33 @@ def render(items: list[Item], titles: dict[int, str]) -> str:
                     _cell(item.fields.get("gated_on")),
                 )
                 for item in unattached
+            ],
+        )
+        lines.append("")
+
+    tail = sorted(
+        (i for i in items if i.step_key is None and i.priority_rank > 0),
+        key=queue_key,
+    )
+    if tail:
+        lines += [
+            "## The pool",
+            "",
+            "Asides that can wait, and what they wait behind is every phase's",
+            "mainline — earliest phase first (`queue_key` holds the ruling).",
+            "",
+        ]
+        lines += _table(
+            ("Phase", "Priority", "Status", "Item", "Gated on"),
+            [
+                (
+                    _cell(item.phase),
+                    _cell(item.fields.get("priority")),
+                    item.status,
+                    f"[{_cell(item.fields.get('title'))}]({item.path.name})",
+                    _cell(item.fields.get("gated_on")),
+                )
+                for item in tail
             ],
         )
         lines.append("")
@@ -1219,34 +1248,48 @@ def render_scaffold(modules: list[tuple[str, str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def queue_key(item: Item) -> tuple[int, int, tuple[int, ...], str]:
+def queue_key(item: Item) -> tuple[int, int, int, tuple[int, ...], str]:
     """The whole priority order, as one sort key.
 
-    Phase, then a step before a pool item, then the number or the priority,
-    then the name. Three comparisons and no state: what runs next is a fact
-    about the folder, so a queue reading it never has to know what ran before.
+    The mainline — steps and `high` pool items, phase-first — then the rest of
+    the pool, phase-first again. Within either band: phase, then a step before
+    a pool item, then the number or the priority, then the name. One key and no
+    state: what runs next is a fact about the folder, so a queue reading it
+    never has to know what ran before.
 
-    **Phase outranks everything, including urgency.** An earlier phase is
-    groundwork the later ones stand on, so a `low` in phase 0 precedes a `high`
-    in phase 5 — the number already carries the claim that one must hold before
-    the other is worth doing, and a priority that could jump it would be a
-    second ordering laid over the first.
+    **The mainline outruns the pool's tail** (ruled 2026-08-09). The phase
+    argument is about steps: an earlier phase's steps are groundwork the later
+    ones stand on. Its pool of asides is not — a `normal` or `low` aside is
+    work the phase noticed, not work the next phase requires, so "can wait" now
+    includes waiting behind every phase's mainline. `high` is minted as the
+    opposite claim — take this before the next numbered step — so it keeps its
+    phase's slot.
+
+    **Phase outranks everything inside each band.** On the mainline a phase-0
+    step precedes a `high` in phase 5 — the number already carries the claim
+    that one must hold before the other is worth doing. The tail drains the
+    same way, earliest phase first, priority ranking only within its phase.
 
     **A step outranks a pool item in its own phase.** A step is what the phase
     committed to; a pool item is what got noticed while doing it.
 
-    A step and a pool item never reach the third position together, so the two
+    A step and a pool item never reach the fourth position together, so the two
     shapes it can hold — a dotted step and a bare priority rank — are never
     compared with each other.
 
-    What this replaced: a boundary rule where a phase's pool was paid only when
-    the next phase opened, plus an exemption for a phase already under way. Two
-    pieces of state, and between them a pool nothing could reach — forty-nine
-    owed items against a plan in its sixth phase, and a `priority` that ordered
-    a drain that had never once run.
+    What this replaced, twice: a boundary rule where a phase's pool was paid
+    only when the next phase opened, plus an exemption for a phase already
+    under way — two pieces of state, and between them a pool nothing could
+    reach, forty-nine owed items against a plan in its sixth phase. Then a flat
+    phase-first order with no bands, under which thirty phase-8 asides stood
+    between the loop and phase 9's first step. The bands keep the second
+    problem fixed without reintroducing the first: nothing here reads what ran
+    before, and the tail is always reachable — it is ordered, not gated.
     """
     pooled = item.step_key is None
+    waits = int(pooled and item.priority_rank > 0)
     return (
+        waits,
         UNPHASED if item.phase is None else item.phase,
         int(pooled),
         item.step_key or (item.priority_rank,),

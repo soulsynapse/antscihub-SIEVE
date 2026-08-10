@@ -1,7 +1,7 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_talkative_only_on_the_mutant_is_not_scored_killed"
 opened: 2026-08-08
@@ -266,3 +266,26 @@ it, so it is wrong in the tree for the same reason `_run_bounded`'s is, and the
 correcting run owns both paragraphs. The clauses listed as next are unchanged
 and unstarted: the docstring's own correction, the compile-the-mutant gate,
 `_tail`'s uncased halves, and `ORACLE_BUDGET_SECONDS`'s comment.
+
+## What landed (2026-08-10)
+
+`test_an_oracle_talkative_only_on_the_mutant_is_not_scored_killed`, and nothing
+else. Its oracle exits 0 while `limit = 100` is in the subject and writes 1 MiB
+to each stream once the mutant has removed it, so the baseline is green, no
+refusal fires, and the mutant is the first invocation that can block — the
+asymmetry the section above says is the only shape that reaches a verdict. The
+true verdict is SURVIVED and the case asserts it.
+
+The mechanism was read outside the sweep's alphabet, which is what the finding
+this rotation came from asks for: `run_sweep` called in-process against a `PIPE`
+twin of `_run_bounded`, `SweepError` caught and printed apart from the verdict,
+returning `[True]` — a scored KILLED, not a refusal. Red through the sweep is
+also recorded — the combined redirection mutant and each of `stdout=out,` and
+`stderr=err,` alone all KILLED — but on the finding's own reading a sweep cannot
+tell which red it got, so that is capacity evidence and not mechanism evidence.
+The finding carries the amendment.
+
+Untouched, in the order the section above lists them: `_run_bounded`'s docstring
+and this rotation's own predecessor docstring — the correcting run owns both
+paragraphs and the capacity case's name with them — then the compile-the-mutant
+gate, `_tail`'s uncased halves, and `ORACLE_BUDGET_SECONDS`'s comment.

@@ -337,6 +337,37 @@ def test_an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit(r
     assert [killed for _, killed in results] == [False]
 
 
+def test_an_oracle_talkative_only_on_the_mutant_is_not_scored_killed(repo: Path) -> None:
+    """The false KILLED itself: a mutant the tests do not kill, scored KILLED by a full pipe.
+
+    The case above fills the buffer unconditionally, so under `PIPE` it is the baseline
+    that blocks and the sweep refuses before any mutant is applied
+    (`docs/findings/loop/2026.08.10-a-case-whose-oracle-is-talkative-at-the-baseline-is-refused-before-any-mutant-is-scored.md`).
+    The oracle here is quiet on the original bytes — green baseline, nothing refused —
+    and only turns talkative once the mutant has landed, which is the one shape that
+    reaches a verdict: under `PIPE` the mutant's run blocks in its own `write`, is timed
+    out, and a timeout is a kill. It exits 0 either way, so the true verdict is SURVIVED
+    and the redirection is what the sweep's honesty rests on rather than a tidier
+    `capture_output`.
+    """
+    subject = subject_with(repo, b"limit = 100\n")
+    fat = 1 << 20
+    talkative = (
+        f"import pathlib, sys; "
+        f"sys.exit(0) if 'limit = 100' in pathlib.Path({str(subject)!r}).read_text() else None; "
+        f"sys.stdout.write('o' * {fat}); sys.stderr.write('e' * {fat}); sys.exit(0)"
+    )
+    results = run_sweep(
+        subject,
+        [Mutant(anchor="limit = 100", replacement="limit = 1")],
+        [sys.executable, "-c", talkative],
+        repo,
+        oracle_budget=20.0,
+        mutant_timeout=20.0,
+    )
+    assert [killed for _, killed in results] == [False]
+
+
 def test_the_mutant_timeout_is_derived_from_the_baseline(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

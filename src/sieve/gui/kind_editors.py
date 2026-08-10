@@ -168,9 +168,20 @@ class RegionEditor(_Editor):
     read-only restatement of the value. Better a parameter the user must type
     than a box that draws in the wrong units.
 
+    **Every mapping goes through `canvas.view_rect()`, never the fit.** They are
+    the same rectangle until the user magnifies, and then they are not: a box
+    aimed at the picture and mapped through the fit resolves to source pixels
+    the user cannot see, and it draws itself back through the same wrong
+    conversion, so the box on screen sits exactly where it was drawn. Nothing
+    downstream catches it — the crop runs, the file is written, the numbers are
+    simply not the ones the user drew. `zoom.py` holds the two rectangles and
+    the argument for the difference.
+
     Clamped to the extent and not to the widget. The canvas centres the frame and
     never enlarges it, so there is always a margin, and clamping to the widget
-    would scale that overshoot into coordinates the frame does not have.
+    would scale that overshoot into coordinates the frame does not have. Under
+    magnification the widget is the smaller of the two, and clamping to it would
+    make the reachable region a function of the zoom.
 
     Outline only, no fill: the region is drawn over the footage it is being
     judged against, and a wash over it would hide the thing the user is aiming.
@@ -200,7 +211,7 @@ class RegionEditor(_Editor):
 
     def region_rect(self) -> QRectF:
         """Where the committed region sits on screen, empty when there is none."""
-        box = self._canvas.frame_rect()
+        box = self._canvas.view_rect()
         scale = self._scale()
         region = self._region
         if region is None or scale <= 0.0:
@@ -228,7 +239,7 @@ class RegionEditor(_Editor):
         two agree only when the canvas is showing the space at its own
         resolution, and the whole point of the extent is that it need not be.
         """
-        box = self._canvas.frame_rect()
+        box = self._canvas.view_rect()
         width = self._extent[0]
         if box.isEmpty() or width <= 0:
             return 0.0
@@ -239,7 +250,7 @@ class RegionEditor(_Editor):
         scale = self._scale()
         if scale <= 0.0:
             return None
-        box = self._canvas.frame_rect()
+        box = self._canvas.view_rect()
         return QPointF(
             min(max((point.x() - box.left()) / scale, 0.0), float(self._extent[0])),
             min(max((point.y() - box.top()) / scale, 0.0), float(self._extent[1])),

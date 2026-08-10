@@ -99,18 +99,21 @@ def double_click(widget: Any, x: float, y: float) -> None:
     widget.mouseDoubleClickEvent(_event(QEvent.Type.MouseButtonDblClick, x, y, held=True))
 
 
-def wheel(widget: Any, notches: int = -1) -> None:
-    """`notches` wheel detents over `widget`, delivered as Qt delivers them.
+def wheel(widget: Any, notches: int = -1, at: tuple[float, float] = (0.0, 0.0)) -> None:
+    """`notches` wheel detents over `widget` at `at`, delivered as Qt delivers them.
 
     Sent rather than handed to `wheelEvent` directly, unlike the mouse above: a
     control that declines the wheel does so by ignoring the event, and only a
     dispatched event carries the accepted flag that says so.
+
+    Where the cursor is defaults to the origin because a scroll does not care;
+    a magnifier anchored on the pointer does, and is the caller that passes it.
     """
     from PySide6.QtCore import QPoint, QPointF, Qt
     from PySide6.QtGui import QWheelEvent
     from PySide6.QtWidgets import QApplication
 
-    origin = QPointF(0.0, 0.0)
+    origin = QPointF(*at)
     QApplication.sendEvent(
         widget,
         QWheelEvent(

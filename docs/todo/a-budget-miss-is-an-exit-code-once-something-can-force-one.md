@@ -43,3 +43,14 @@ that `misses()` is the thing reading it. What would kill the mutant is a
 is the same fake-clock capability this item is waiting on and wants the same
 answer about who owns the bus. Doing it here is cheaper than twice
 ([findings/loop/2026.08.07-a-live-gate-asserting-a-collector-is-empty-passes-for-a-collector-that-collects-nothing.md](../findings/loop/2026.08.07-a-live-gate-asserting-a-collector-is-empty-passes-for-a-collector-that-collects-nothing.md)).
+
+The same seam runs the other way on the band surface, and there it is not
+hypothetical: `test_every_band_drag_the_session_published_is_gated` was red in
+one whole-suite run and green in the next with nothing under it changed
+([findings/2026.08.10-the-band-drags-per-sample-gate-is-red-under-a-full-suite-and-green-alone.md](../findings/2026.08.10-the-band-drags-per-sample-gate-is-red-under-a-full-suite-and-green-alone.md)).
+So a live clock is not only a gate that cannot be made to miss — it is a gate
+that misses for reasons the code under it does not own, which costs a session a
+diagnosis every time it fires. Whoever answers who owns the bus should treat the
+bench fixtures as a caller too, not just the `--check` flag: an injected clock
+that can force a miss is the same capability as one that can refuse a miss the
+scheduler caused.

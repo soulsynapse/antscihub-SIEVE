@@ -1,7 +1,7 @@
 ---
 title: One magnifier, and everything drawn on it maps to source pixels
 step: "10.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'magnified or source_pixels_round_trip'"
 opened: 2026-08-09

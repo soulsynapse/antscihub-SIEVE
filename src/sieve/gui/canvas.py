@@ -43,8 +43,10 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPaintEvent
+from PySide6.QtGui import QColor, QImage, QPainter, QPaintEvent, QWheelEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QVBoxLayout, QWidget
+
+from sieve.gui.zoom import Magnifier
 
 _BACKGROUND = QColor(18, 18, 22)
 _HINT = QColor(120, 120, 130)
@@ -108,6 +110,7 @@ class VideoCanvas(QWidget):
         self._under: QImage | None = None
         self._opacity = DEFAULT_OPACITY / 100.0
         self._showing_source = False
+        self._magnifier = Magnifier()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     @property
@@ -201,6 +204,44 @@ class VideoCanvas(QWidget):
         height = image.height() * scale
         return QRectF((self.width() - width) / 2.0, (self.height() - height) / 2.0, width, height)
 
+    def view_rect(self) -> QRectF:
+        """Where the frame is *painted*: `frame_rect` magnified and panned.
+
+        The mapping every overlay goes through, and the difference from the fit
+        is the whole of `zoom.py`. Nothing to magnify with no frame, so the
+        empty fit is returned as it is rather than scaled up into a rectangle
+        about nothing.
+        """
+        fit = self.frame_rect()
+        if fit.isEmpty():
+            return fit
+        return self._magnifier.view_rect(fit)
+
+    @property
+    def zoom(self) -> float:
+        """Magnification as a multiple of the fit scale. 1.0 is fitted."""
+        return self._magnifier.zoom
+
+    def reset_zoom(self) -> None:
+        """Return to the fitted view."""
+        self._magnifier.reset()
+        self.update()
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        """Magnify about the cursor, never below the fit.
+
+        Declined outright when there is nothing on screen, so the wheel keeps
+        whatever meaning the enclosing widget gives it rather than being
+        swallowed by a viewport that would do nothing with it.
+        """
+        detents = event.angleDelta().y() / 120.0
+        if detents == 0.0 or self.frame_rect().isEmpty():
+            super().wheelEvent(event)
+            return
+        if self._magnifier.wheel(detents, event.position(), self.frame_rect()):
+            self.update()
+        event.accept()
+
     def paintEvent(self, event: QPaintEvent) -> None:
         del event
         painter = QPainter(self)
@@ -212,14 +253,20 @@ class VideoCanvas(QWidget):
             painter.end()
             return
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        # Into `box`, which is fitted to the result: the input is what the
-        # result was made from, so the result is the frame whose aspect the
-        # letterbox is about, and a step that reshaped its input is still one
-        # picture of one thing.
+        # Into the view rect, which is fitted to the result and then magnified:
+        # the input is what the result was made from, so the result is the frame
+        # whose aspect the letterbox is about, and a step that reshaped its
+        # input is still one picture of one thing. Both layers take the same
+        # magnification for the same reason they take the same rectangle.
+        painted = self.view_rect()
+        # The fit is the letterbox, and a magnified frame overruns it on both
+        # axes: without this, the inset a portrait frame leaves fills with
+        # picture and the widget stops showing where the frame ends.
+        painter.setClipRect(box)
         if self._under is not None:
-            painter.drawImage(box, self._under)
+            painter.drawImage(painted, self._under)
             painter.setOpacity(self._opacity)
-        painter.drawImage(box, self._frame)
+        painter.drawImage(painted, self._frame)
         painter.setOpacity(1.0)
         badge = self.badge_text()
         if badge:

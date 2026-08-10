@@ -45,6 +45,7 @@ src/sieve/gui/transport/request_intent.py  # Why a frame was asked for, and what
 src/sieve/gui/transport/scrub_policy.py    # When to stop decoding every scrub target, and what to decode instead.
 src/sieve/gui/tuning.py                    # The loop itself: an edit lands, the graph goes stale, a refill answers it.
 src/sieve/gui/walk.py                      # The order Up and Down move through a graph.
+src/sieve/gui/zoom.py                      # The magnifier: zoom, a pan centre, and the two rectangles between them.
 src/sieve/cli/__init__.py                  # The headless front end; with the saved file, the cluster handoff.
 src/sieve/cli/app.py                       # The `sieve` command: argument parsing and nothing else.
 src/sieve/cli/inspect_cmd.py               # `sieve inspect` — what is on the shelf, read off the declarations.

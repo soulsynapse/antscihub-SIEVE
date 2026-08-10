@@ -82,7 +82,11 @@ DEAD_IDENTIFIERS: tuple[tuple[str, tuple[str, ...], str], ...] = (
         ),
         "adr/tools-not-filters.md",
     ),
-    ("clip", (), "adr/v2-does-not-import.md"),
+    # `setClipRect` is Qt's, one toolkit over from `eventFilter` above and there
+    # for the same reason: a painter bounded to a rectangle is spelt that way or
+    # not at all, and the clipping region it names has nothing to do with v2's
+    # noun for a video.
+    ("clip", ("setClipRect",), "adr/v2-does-not-import.md"),
     # `ROI` is the live type a region is written in; `roi` was the field name,
     # and `region` is how v3 spells the thing (`CropRecord.region`).
     ("roi", ("ROI",), "adr/v2-does-not-import.md"),

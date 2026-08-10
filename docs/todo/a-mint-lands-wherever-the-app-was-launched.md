@@ -42,3 +42,13 @@ the one place the app decides it, and it is not a ruling that a library is a
 folder relative to the launch directory forever. What supersedes it is a project
 pane that can be pointed at a folder — at which point this function is where the
 remembered choice is read, and the `projects/` default is what it falls back to.
+
+## Folded 2026-08-09 (review of 09.10): it has already happened once
+
+An `untitled_1.sieve.yaml` holding an empty `Project()` was sitting untracked in
+the repository root during that review, minted at 18:10 by something launched
+there — not by the tests: neither `tests/gui` nor the full suite reproduces it
+from a clean tree. The review deleted it. So the `.gitignore` clause above wants
+both spellings, `projects/` and a project file directly in the launch directory:
+until the relocation lands, the form that actually appears is the second one, and
+`git status` showing it is the only thing that catches a mint nobody meant.

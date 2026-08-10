@@ -1,7 +1,7 @@
 ---
 title: Swap opens the same box, and keeps the node it is
 step: "09.10"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'swap_box or keeps_the_node'"
 opened: 2026-08-09
@@ -166,3 +166,15 @@ Building this deletes `_swap_button`'s menu from the referent and rewrites
 [a-position-is-asked-for-in-the-chain](../adr/a-position-is-asked-for-in-the-chain.md),
 not a succession of it: the ADR rules that a question about a place is asked in
 the chain, and this is that rule reaching a second gesture.
+
+## Closed 2026-08-09 (review)
+
+`done_when` re-run green (8 passed), the full suite 1196 passed, and five
+mutants over the anchoring, the fan suppression, the empty-offer refusal, the
+landing position and the override drop all KILLED. Two corrections to the prose
+above rather than to the work: the referent paragraph one line up was already
+discharged before this item was worked — `a5b1adc` made `mockup/_swap_button`
+open the box and rewrote the map's row to "Swap is the same box" — so nothing in
+the referent was owed by the build, and the offer's lit entry got a consequence
+the ruling did not follow through on, which is
+[taking-the-tool-already-there-wipes-the-step-it-kept](taking-the-tool-already-there-wipes-the-step-it-kept.md).

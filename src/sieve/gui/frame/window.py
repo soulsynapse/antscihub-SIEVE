@@ -18,6 +18,13 @@ right panes, the left and right sides in the bottom one, each side stacking two
 strips on that one axis. Which sides those are and how deep they stack is the
 pane's own and stated there; the window opens none of them, and the resting
 frame is the three panes and the two boundaries between them.
+
+The right pane is the one pane that stands something at rest: a swipe, which is
+the three screens that pane houses laid side by side on a track it slides along.
+That is a view in a pane like any other and not a fourth pane — what the swipe
+changes is the right pane's occupant, never how many panes there are. Which keys
+walk it is `hotkeys.py`'s; the verbs they call are here, because the swipe is the
+window's to hold and the keyboard is not the frame's to interpret twice.
 """
 
 from __future__ import annotations
@@ -26,6 +33,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 
 from sieve.gui.frame.chrome import stylesheet
+from sieve.gui.frame.hotkeys import bind_hotkeys
 from sieve.gui.frame.menu import build_menu_bar, show_about
 from sieve.gui.frame.panes import (
     build_bottom,
@@ -33,6 +41,7 @@ from sieve.gui.frame.panes import (
     build_right,
     build_seam,
 )
+from sieve.gui.frame.swipe import build_swipe
 
 #: What the window restores down *to*. Kept even though it opens maximized:
 #: without it the restored size — and with it whether the title bar can be
@@ -50,6 +59,13 @@ class MainWindow(QMainWindow):
         self.left = build_left()
         self.right = build_right()
         self.bottom = build_bottom()
+
+        # The swipe goes in the core's layout, which is what `body` is, so the
+        # right pane can still take a subpane on either side without the track
+        # being what gets cut — a strip is anchored to the pane and the swipe
+        # is standing in it, and the two never trade room.
+        self.swipe = build_swipe("right")
+        self.right.body.addWidget(self.swipe)
 
         # No subpane is opened on the way up. Which sides each pane offers and
         # how many each stacks is still the pane's claim and still checkable by
@@ -79,6 +95,9 @@ class MainWindow(QMainWindow):
         column.addWidget(self.bottom)
         self.setCentralWidget(stacked)
         self.setMenuBar(build_menu_bar(self))
+        #: Held rather than dropped so the bindings are reachable by name, not
+        #: only by walking the window's children.
+        self.hotkeys = bind_hotkeys(self)
 
         self.resize(_WINDOW_WIDTH, _WINDOW_HEIGHT)
         self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
@@ -92,6 +111,14 @@ class MainWindow(QMainWindow):
         """
         half = max(self.split.width(), _WINDOW_WIDTH) // 2
         self.split.setSizes([half, half])
+
+    def swipe_back(self) -> None:
+        """←: one position out along the right pane's track."""
+        self.swipe.step(-1)
+
+    def swipe_forward(self) -> None:
+        """→: one position in."""
+        self.swipe.step(+1)
 
     def toggle_full_screen(self) -> None:
         """Full screen and back, without deciding what 'back' is.

@@ -8,10 +8,12 @@
   - 📁 `adr/`
     - 📄 `ADR-0001-panes-house-any-view.md`
     - 📄 `ADR-0002-a-subpane-divides-the-spare-axis.md`
+    - 📄 `ADR-0003-the-right-pane-swipes-between-positions.md`
   - 📁 `vocab/`
     - 📄 `menu.md`
     - 📄 `pane.md`
     - 📄 `subpane.md`
+    - 📄 `swipe.md`
     - 📄 `view.md`
     - 📄 `window.md`
   - 📄 `ADR.md`
@@ -26,8 +28,10 @@
     - 📁 `gui/` — The interactive view: the frame, and what stands in its panes.
       - 📁 `frame/` — The frame: the window, its three panes, and the chrome between them.
         - 📄 `chrome.py` — What the window wears where no pane covers it.
+        - 📄 `hotkeys.py` — The keys the window answers, and never what answering them does.
         - 📄 `menu.py` — The bar across the top, and what the window itself can be asked to do.
         - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
+        - 📄 `swipe.py` — The run of views a pane shows one at a time, and the slide between them.
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
       - 📄 `palette.py` — The colours every view draws with.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.

@@ -54,3 +54,45 @@ gate holds, since the two claims are about a graph no `Pipeline` accepts:
     $ uv run pytest tests/gui/test_chain_edges.py tests/gui/test_walk.py -q -k 'a_second_parent_arrives_at_its_own_arrowhead or a_child_hangs_under_its_first_parent'
     7 deselected in 0.14s
     exit: 5
+
+## Folded 2026-08-10: the label is built, and three sites besides `walk.py` tie-break
+
+Two corrections to the body above, both in this item's favour.
+
+**The named arrowhead exists in `src/`, not only in the referent.** 09.2 built it
+for the output card, which is the tree's one node with more than one input:
+`ChainColumn.port_labels` derives the names, `port_label_origin` places one
+beside its head, `_lifts` ranks a card's names so two of them are set as two
+lines rather than through each other, `label_rect` is the geometric referent the
+disjointness case reads, and `_paint_edge` writes them. So this item does not
+invent the picture — it becomes the second caller of one that works, and what it
+adds is the port name rather than the product name (the output card's edges are
+named by what the *upstream* card emits, which is the one case where the reader
+has nothing of its own to say).
+
+That inheritance carries a defect 09.2's closing review recorded as unreachable
+and named this caller for: `_lifts` ranks across every label on the column and
+`label_headroom` is the max over all of them, while `PipelinePane` reserves that
+spacing above the output card alone (`chain_stack.py`, the `addSpacing` before
+`output_card`). A named edge into a *mid-stack* card therefore stacks by a global
+rank and opens the gap in the wrong place — the names rise into the card above
+and are painted under it, which the same review establishes is the same as not
+being drawn. It is arithmetic today only because every label is an edge into the
+foot.
+
+**`walk.py`'s "with no edit anywhere below it" is false.** Three other sites read
+the same refusal and each tie-breaks on its own:
+`app.frame_bearing` and `pinned.element_kinds` both build
+`{edge.downstream: edge.upstream for edge in pipeline.edges}`, which keeps the
+**last** edge of a fan-in, and `MainWindow._feeding` — what the offer under a position
+is computed from — takes the **first** through `next(...)`. Each carries a
+comment citing the refusal by name, so none is an oversight; but the two
+directions disagree, which means a fan-in landing without this item is not one
+arbitrary choice made in one place, it is the canvas blending over one parent
+while the offer is computed from the other. `the-canvas-shows-the-result-over-the-input.md`
+(10.1) rests a paragraph on the same sentence and will ship before 11.2, so its
+climb is the fourth site rather than a fifth question.
+
+The rule the four then share is one ruling, not four: which parent a child hangs
+under in the walk is what the canvas blends over and what the offer is computed
+from, or the stack draws a chain the rest of the window is not talking about.

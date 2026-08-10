@@ -57,8 +57,9 @@ Two things it does not decide. Not the gesture: the referent draws its fan-in as
 fixed geometry (`INPUTS`, `PORT_NAMES` in `mockup/mockup.py`) and its source
 chooser is a combo writing a param, so the mockup holds no picture of a user
 moving an edge and there is nothing to copy — the surface arrives with
-[a-fan-in-has-no-picture-and-no-rule-for-which-parent-holds-it.md](a-fan-in-has-no-picture-and-no-rule-for-which-parent-holds-it.md)
-or with whatever else first needs one. And not a third refusal: a re-point can
+[a-second-input-has-no-writer-and-the-box-splices-one-edge.md](a-second-input-has-no-writer-and-the-box-splices-one-edge.md),
+which is the whatever-else: the fan-in item draws a picture and touches no input
+handling, so the gesture is owed there rather than by it. And not a third refusal: a re-point can
 draw a cycle, and `Pipeline` refuses self-loops while `Dag` refuses cycles at
 execution — the intent raises through one of those two rather than growing a
 legality check beside them.

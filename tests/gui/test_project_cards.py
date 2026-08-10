@@ -248,8 +248,16 @@ def _new_button(pane: Any) -> Any:
     return pane.library_card.findChild(QPushButton)
 
 
-def test_new_project_mints_an_empty_project_the_library_lists(window: Any, library: Path) -> None:
+def test_new_project_mints_an_empty_project_the_library_lists(
+    window: Any, library: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sieve.gui.app as app_module
     from sieve.gui.project_select import listings, projects_in
+
+    # Answering the ask with the folder already on the shelf, which is the case
+    # the rest of this asserts: the mint's own answer is where it lands, and
+    # what a `QFileDialog` looks like is Qt's.
+    monkeypatch.setattr(app_module, "ask_where", lambda parent: library)
 
     # A project sorting *after* the minted names, so that "the shelf is the
     # folder's own answer in the folder's own order" is a claim with a witness:
@@ -281,12 +289,16 @@ def test_new_project_mints_an_empty_project_the_library_lists(window: Any, libra
     assert window.control.current_position() == "project"
 
 
-def test_new_project_mints_into_an_empty_library(qapp: Any, tmp_path: Path) -> None:
+def test_new_project_mints_into_an_empty_library(
+    qapp: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     del qapp
+    import sieve.gui.app as app_module
     from sieve.gui.app import MainWindow
 
     folder = tmp_path / "empty"
     folder.mkdir()
+    monkeypatch.setattr(app_module, "ask_where", lambda parent: folder)
     # The first-run case, and the reason the folder is a parameter rather than
     # only being derived from the projects: an empty library has no project to
     # read one off, and it is exactly where minting is the only thing to do.
@@ -329,32 +341,73 @@ def test_project_cards_up_and_down_move_the_selection_not_the_walk(window: Any) 
     ]
 
 
-def test_the_library_root_is_a_folder_under_where_the_app_was_launched(
-    tmp_path: Path,
+def test_new_project_asks_where_the_project_goes(
+    qapp: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from sieve.gui.project_select import LIBRARY_FOLDER, library_root, mint, projects_in
+    del qapp
+    import sieve.gui.app as app_module
+    from sieve.gui.app import MainWindow
+    from sieve.gui.project_select import projects_in
 
-    library = library_root(tmp_path)
-    assert library == tmp_path / LIBRARY_FOLDER
-    assert library.is_dir()
+    chosen = tmp_path / "somewhere"
+    chosen.mkdir()
+    asked: list[Any] = []
 
-    # The gesture the pane exists for lands in the folder and not beside it,
-    # which is the whole claim: a mint is a user's document, and the launch
-    # directory during development is the repository.
-    minted = mint(library)
-    assert minted.parent == library
-    assert projects_in(tmp_path) == ()
-    assert projects_in(library) == (minted,)
+    def ask(parent: Any) -> Path:
+        asked.append(parent)
+        return chosen
+
+    # The real one opens a modal that waits for a person. That the mint asks is
+    # the claim; what a `QFileDialog` looks like is Qt's.
+    monkeypatch.setattr(app_module, "ask_where", ask)
+
+    # The window `main` builds: no folder and nothing scanned, which is what
+    # "nothing defaults anywhere" leaves. The button is the shelf's one gesture
+    # and is drawn with no library, or an empty shelf would have no way out.
+    opened = MainWindow(())
+    try:
+        assert opened.control.project_select.cards == ()
+
+        _new_button(opened.control.project_select).click()
+
+        assert asked == [opened]
+        minted = projects_in(chosen)
+        assert len(minted) == 1
+        assert Project.load(minted[0]) == Project()
+
+        pane = opened.control.project_select
+        assert _titles(pane.cards) == ["untitled_1"]
+        # The answer is the folder now being listed, so the card above the shelf
+        # says so: a title naming a folder the cards did not come out of would be
+        # the second answer to which library is being looked at.
+        assert _titles([pane.library_card]) == [f"library — {chosen}"]
+        assert [card.selected for card in pane.cards] == [True]
+        assert opened.session is None
+        assert opened.control.current_position() == "project"
+    finally:
+        opened.close()
 
 
-def test_the_library_root_is_answered_the_same_way_twice(tmp_path: Path) -> None:
-    from sieve.gui.project_select import library_root
+def test_a_cancelled_ask_mints_nothing(
+    qapp: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del qapp
+    import sieve.gui.app as app_module
+    from sieve.gui.app import MainWindow
 
-    first = library_root(tmp_path)
-    (first / "keep").write_text("", encoding="utf-8")
-    # Asked again on a folder that already exists and holds something: the
-    # answer is the same folder and nothing in it moved. `mkdir` is create-if-
-    # absent, not reset, and a library the user has minted into is exactly the
-    # case where the difference is destructive.
-    assert library_root(tmp_path) == first
-    assert (first / "keep").exists()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(app_module, "ask_where", lambda parent: None)
+
+    opened = MainWindow(())
+    try:
+        _new_button(opened.control.project_select).click()
+
+        assert opened.control.project_select.cards == ()
+        # The whole of "nothing defaults anywhere": there is no location the ask
+        # falls back to when it is given none, and in particular not the
+        # directory the process was launched in — which is the only thing that
+        # could put a document the user did not ask for beside `pyproject.toml`.
+        assert list(tmp_path.iterdir()) == []
+        assert opened.session is None
+    finally:
+        opened.close()

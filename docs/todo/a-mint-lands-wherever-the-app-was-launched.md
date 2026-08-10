@@ -2,7 +2,7 @@
 title: A mint asks where the project goes, and nothing defaults anywhere
 phase: 9
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_project_cards.py -q -k 'new_project_asks_where_the_project_goes or a_cancelled_ask_mints_nothing'"
 opened: 2026-08-09
@@ -186,3 +186,33 @@ moved to `docs/adr/superseded/`. That commit's citation sweep missed it because
 the path is hyphen-wrapped across two lines. The argument still holds — ADR 34
 dissolves that subject rather than reversing it — so it is the citation that is
 stale and not the reason it gives.
+
+## 2026-08-10: the ask is for a folder, and two readings of this item disagreed
+
+`ask_where` asks for a directory (`QFileDialog.getExistingDirectory`) and `mint`
+is untouched, so the name is still the first `untitled_N` the folder does not
+hold. The head of this item says "the path the empty document is written to",
+which reads as a save dialog and would have taken the name off the user; the
+section above says the mint docstring's no-name argument "is still true about
+the *name* — the ask is for a location, and the name comes from it", which is a
+folder. The second was written by the session that repointed this item under ADR
+35 and is the more specific of the two, and it is also what the ADR's own
+arithmetic needs — a source path is relative to the document's *directory* — so
+that is the fork taken. A save dialog remains reachable without touching
+anything but `ask_where`.
+
+What the answer does to the shelf is the part no criterion here reaches. The
+mint's folder becomes the folder `MainWindow` lists and titles the library card
+with, re-scanned as before, because the alternatives were to append one path to
+a shelf that is otherwise one folder's sorted scan — the invariant
+`new_project`'s own docstring argues for — or to invent the list ADR 35 leaves
+undecided. It is the smallest thing that keeps the one folder true, and it is
+what
+[pinning-a-project-is-state-the-library-has-nowhere-to-put.md](pinning-a-project-is-state-the-library-has-nowhere-to-put.md)
+replaces when the store lands.
+
+Gone with the default: `library_root`, `LIBRARY_FOLDER`, their two tests, the
+tracked `projects/.gitkeep` and the `.gitignore` stanza that ignored what a mint
+wrote into it. `main` builds `MainWindow(())` — no scan, no folder — and the NEW
+PROJECT button is drawn whether or not a folder is being listed, or the empty
+shelf that launch now opens on would have no way out.

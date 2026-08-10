@@ -7,11 +7,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# A mint is a user's document, not a fixture: the project pane writes here.
-# The folder is tracked and its contents are not: what a user mints is theirs.
-projects/*
-!projects/.gitkeep
-
 # Real footage to try the app against by hand. Not a fixture — the suite's
 # clips are generated (`tests/conftest.py`) so a checkout needs no media, and
 # a tracked video would be the one file in the repo nobody can review.

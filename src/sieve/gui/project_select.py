@@ -8,9 +8,10 @@ argument `chain_stack.py` makes about the pipeline pane, read at the position
 that comes before it.
 
 The first cut opens a project and mints an empty one; it does not build one from
-a folder of videos (`PLAN.md`, Phase 7), so there is no file dialog here and
-nothing asks for a name — `mint` writes a document naming no footage, and both
-the name and the footage are knobs on the card the selection lands on.
+a folder of videos (`PLAN.md`, Phase 7). The one thing a mint asks is where the
+document goes (`ask_where`), because that is what a document cannot be written
+without — `mint` writes one naming no footage, and both the name and the footage
+are knobs on the card the selection lands on.
 
 **What the widget is handed is text, and `listings` is what reads the document
 to produce it.** A card says what its project holds, and that is a fact about a
@@ -38,6 +39,7 @@ import yaml
 from PySide6.QtCore import QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QScrollArea,
     QVBoxLayout,
@@ -53,30 +55,21 @@ from sieve.gui.chrome import chrome_button, stack_stylesheet
 _RELATIVE_DAYS = 30
 
 
-#: The library is a folder, not the directory the process happened to start in.
-#: Named here because two callers need the same answer and a second spelling of
-#: it would be a second library the day one of them was edited.
-LIBRARY_FOLDER = "projects"
+def ask_where(parent: QWidget | None = None) -> Path | None:
+    """Where the project about to be minted should live, or nothing.
 
+    A directory and not a file: what a document owes is a location, because a
+    source's path is stored relative to it (`adr/a-project-lives-where-the-user-
+    put-it.md`), and the name still comes off the folder rather than off a form
+    (`mint`).
 
-def library_root(launched_in: Path) -> Path:
-    """The folder a mint lands in, given where the app was launched.
-
-    A function rather than a line inside `main`, so a caller that is not opening
-    a `QApplication` can ask the same question — which is the only reason the
-    default is reachable from a test at all.
-
-    Created if it is not there. The alternative is a library that cannot be
-    minted into until someone makes a folder by hand, and the pane's one gesture
-    would fail on a fresh checkout for a reason no message could usefully give.
-
-    Where the launch directory is the repository, this is what keeps a user's
-    document out of the source tree: a mint is not a fixture, and a scan of the
-    launch directory would otherwise draw the repository as the library.
+    `None` is a cancelled ask, and the caller mints nothing on it. There is no
+    directory to fall back to — a default location is the only thing that can
+    write a document the user did not ask for, so the absence of one here is
+    what that ADR buys.
     """
-    folder = launched_in / LIBRARY_FOLDER
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder
+    chosen = QFileDialog.getExistingDirectory(parent, "New project — where should it live?")
+    return Path(chosen) if chosen else None
 
 
 def projects_in(directory: Path) -> tuple[Path, ...]:
@@ -108,11 +101,12 @@ def library_folder(paths: Sequence[Path]) -> Path | None:
 def mint(directory: Path) -> Path:
     """Write an empty project into `directory` and say where it landed.
 
-    Empty is the whole of it: no sources, no chain (`adr/a-document-may-name-no-
-    footage.md`, which exists because this document could not otherwise be
-    built). No name is asked for — the name is a knob like any other and a modal
-    at mint time would be the one form in the surface that blocks the walk — so
-    the file is named after the first `untitled_N` the folder does not already
+    Empty is the whole of it: no sources, no chain (`adr/superseded/a-document-
+    may-name-no-footage.md`, dissolved rather than reversed by the schema's own
+    ADR and still the reason this document can be built at all). No name is
+    asked for — the name is a knob like any other, and what `ask_where` asks for
+    is the location the document cannot be written without — so the file is
+    named after the first `untitled_N` the folder does not already
     hold. Numbered against the folder rather than against a count of cards,
     because a library the user has minted into before already holds the low
     numbers and reusing one would open the earlier project rather than make a
@@ -329,15 +323,14 @@ class ProjectSelect(QWidget):
         self.setStyleSheet(stack_stylesheet())
 
         self.library_card = fixed_card(_library_title(library))
-        if library is not None:
-            # On the library card and not at the foot of the list: a new project
-            # is added to the library, the way another region is added on the
-            # crop card and not in the fan that shows them. Absent where there is
-            # no one folder to write into, which is the only honest alternative
-            # to a button that would refuse whenever it was pressed.
-            new = chrome_button("NEW PROJECT", "New project — empty until sources are added")
-            new.clicked.connect(self.minted.emit)
-            self.library_card.layout().addWidget(new)
+        # On the library card and not at the foot of the list: a new project is
+        # added to the library, the way another region is added on the crop card
+        # and not in the fan that shows them. Drawn whether or not a folder is
+        # being listed, because the mint carries its own answer to where a
+        # document goes and an empty shelf is otherwise a state with no way out.
+        new = chrome_button("NEW PROJECT", "New project — empty until sources are added")
+        new.clicked.connect(self.minted.emit)
+        self.library_card.layout().addWidget(new)
         self.cards = tuple(
             _project_card(
                 index,

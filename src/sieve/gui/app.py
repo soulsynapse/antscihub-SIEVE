@@ -102,8 +102,8 @@ from sieve.gui.pinned import (
 )
 from sieve.gui.project_select import (
     ProjectSelect,
+    ask_where,
     library_folder,
-    library_root,
     listings,
     mint,
     projects_in,
@@ -950,22 +950,31 @@ class MainWindow(QMainWindow):
         self.open_project(self._projects[self._project_at])
 
     def new_project(self) -> None:
-        """The library card's NEW PROJECT: mint an empty project and stand on it.
+        """The library card's NEW PROJECT: ask where it goes, mint, stand on it.
+
+        The ask comes first and nothing follows a cancelled one
+        (`adr/a-project-lives-where-the-user-put-it.md`): a project lives where
+        the user put it, so there is no directory this falls back to when it is
+        given none.
 
         Standing on it rather than opening it, which is the referent's ruling
         and the reason the shelf is the position that mints: the chain pane
         would show a chain the project does not have, and the next act — adding
         sources — is a knob on the card the selection just landed on.
 
-        The library is re-scanned rather than the new path being appended, so
-        the shelf stays the folder's own answer in the folder's own order: a
-        mint appended at the foot would be the one card out of sorted order
-        until the next relaunch moved it.
+        The answer becomes the folder being listed, re-scanned rather than the
+        new path being appended, so the shelf stays one folder's own answer in
+        the folder's own order: a mint appended at the foot would be the one
+        card out of sorted order until the next relaunch moved it. That the
+        shelf is one folder at all is what the remembered list replaces
+        (`todo/pinning-a-project-is-state-the-library-has-nowhere-to-put.md`).
         """
-        if self._library is None:
+        directory = ask_where(self)
+        if directory is None:
             return
-        minted = mint(self._library)
-        self._projects = projects_in(self._library)
+        minted = mint(directory)
+        self._library = directory
+        self._projects = projects_in(directory)
         self._project_at = self._projects.index(minted)
         self._control.set_project_select(self._build_project_select())
 
@@ -1576,7 +1585,12 @@ class MainWindow(QMainWindow):
 
 def main() -> None:
     application = QApplication(sys.argv)
-    library = library_root(Path.cwd())
-    window = MainWindow(projects_in(library), library=library)
+    # No projects and no folder. The directory the process started in is not a
+    # library and nothing else is either (`adr/a-project-lives-where-the-user-
+    # put-it.md`), so the first launch opens on an empty shelf whose one gesture
+    # asks. What will fill it is the remembered list of locations the app has
+    # been shown, which is not this window's to invent
+    # (`todo/pinning-a-project-is-state-the-library-has-nowhere-to-put.md`).
+    window = MainWindow(())
     size_window(window)
     sys.exit(application.exec())

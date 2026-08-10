@@ -1,9 +1,9 @@
 ---
 title: The first multi-input tool lands, and VISION's lead scenario stops being refused
 step: "11.3"
-status: awaiting-review
+status: done
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_subtract.py -q -k 'two_inputs_arrive_on_named_ports or a_crossed_pair_is_not_the_same_graph'"
+done_when: "uv run pytest tests/unit/test_subtract.py -q"
 opened: 2026-08-09
 ---
 
@@ -46,3 +46,29 @@ the same graph, and until now no graph in this repo has had a twin.
     $ uv run pytest tests/unit/test_subtract.py -q -k 'two_inputs_arrive_on_named_ports or a_crossed_pair_is_not_the_same_graph'
     ERROR: file or directory not found: tests/unit/test_subtract.py
     exit: 4
+
+## Reviewed 2026-08-10 — closed, and `done_when` widened to the whole file
+
+The `-k` above selected two of the four cases the work landed, leaving the
+magnitude default and the geometry refusal — both claims this item's body makes
+and neither reachable by the criterion that closed it. Widened to the file, which
+is still one file the tool brought with it and not a module a later case can
+weaken by being added to it lightly: all four are the tool's own, and a mutation
+sweep over `tools/subtract.py` kills the positional read, the shape refusal, the
+`MAGNITUDE` branch, and an unconditional `abs` (4 killed, 0 survived). Under the
+narrow `-k`, the second and third of those survive.
+
+The "zero edits elsewhere" clause held where the ADR aims it: no `src` file but
+`tools/subtract.py`, no helper module, so 11.2's extension was finished. The one
+edit outside is `tests/unit/test_declarations_run.py`, whose shelf-wide cases ran
+every tool as a root — which a tool with named ports cannot be. Generalising an
+oracle so a new shipped tool is reachable by it is the work, not a spill from it.
+What that generalisation left behind has a home of its own:
+[the-declaration-harness-picks-its-feeder-by-name-not-by-quietness.md](the-declaration-harness-picks-its-feeder-by-name-not-by-quietness.md).
+
+[a-merge-keys-its-inputs-by-port.md](a-merge-keys-its-inputs-by-port.md) reads
+`done` and needed no move — 11.2's review closed it on the case that finally ran
+it, so the citation-as-net had already discharged.
+[the-discover-ordering-claim-needs-a-second-tool.md](the-discover-ordering-claim-needs-a-second-tool.md)
+stays `open`: re-run here, its mutant still SURVIVED, so `subtract` breaks no tie
+and the item did not go green under work nobody did.

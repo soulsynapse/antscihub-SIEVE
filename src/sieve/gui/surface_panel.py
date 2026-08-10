@@ -4,7 +4,7 @@
 The graph draws a node's *output* — one value per frame, assembled by
 `SeriesCollector`. This draws a node's *display surface* — many values per frame,
 assembled by `SurfaceCollector` off the preview-only channel
-(`adr/a-band-declares-the-surface-it-is-dragged-on.md`). Two panels rather than
+(`adr/a-parameters-space-is-resolved-by-the-graph.md`). Two panels rather than
 one with a mode, for the reason the two collectors are two classes: the thing
 that must never happen is a surface being drawn as if it were something the
 graph declared.

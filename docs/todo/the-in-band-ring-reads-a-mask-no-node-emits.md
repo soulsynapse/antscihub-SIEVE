@@ -25,7 +25,7 @@ reaching for it would import the tool's module, the violation
 [adr/gui-knows-kinds-not-tools.md](../adr/gui-knows-kinds-not-tools.md) names
 outright. Its home is a `DisplaySurface` member on the preview-only channel,
 the licensed revision of
-[adr/a-band-declares-the-surface-it-is-dragged-on.md](../adr/a-band-declares-the-surface-it-is-dragged-on.md)
+[adr/a-parameters-space-is-resolved-by-the-graph.md](../adr/a-parameters-space-is-resolved-by-the-graph.md)
 rather than a second vocabulary beside it. What is different when this is done
 is that the walked step's canvas draws the ring from a surface `detect` declares
 and fills, and no module under `gui/` names the tool.

@@ -38,7 +38,7 @@ trace shifted at the hole rather than as an error.
 
 **A display surface is the same stack one dimension wider, and it is a second
 class rather than a wider row.** `execute(..., show=)` fills a band's declared
-surface one column per frame (`adr/a-band-declares-the-surface-it-is-dragged-on`),
+surface one column per frame (`adr/a-parameters-space-is-resolved-by-the-graph`),
 so what a picture is assembled from is exactly what a trace is assembled from
 with `(N, 1)` where the trace has `(1, 1)` — `CollectedSeries` already says
 `(T, *the node's frame shape)` and holds both. What differs is not the shape but

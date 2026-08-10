@@ -1,8 +1,8 @@
 ---
 title: A band declares the surface it is dragged on, and the tool fills it
 adr: 23
-position: "01.07"
-status: settled
+status: superseded
+superseded_by: a-parameters-space-is-resolved-by-the-graph
 decided: 2026-08-09
 ---
 

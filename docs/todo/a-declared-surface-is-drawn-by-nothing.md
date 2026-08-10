@@ -93,7 +93,7 @@ painter reaching for it would import the tool's module, which is the violation
 [adr/gui-knows-kinds-not-tools.md](../adr/gui-knows-kinds-not-tools.md) names
 outright. Its home is a `DisplaySurface` member on the preview-only channel —
 the licensed revision of
-[a-band-declares-the-surface-it-is-dragged-on.md](../adr/a-band-declares-the-surface-it-is-dragged-on.md)
+[a-band-declares-the-surface-it-is-dragged-on.md](../adr/superseded/a-band-declares-the-surface-it-is-dragged-on.md)
 rather than a second vocabulary beside it — which is to say it is another
 consumer of exactly the read path this item builds, and the reason it waits is
 the measurement in the section above: a watched node is never served from the

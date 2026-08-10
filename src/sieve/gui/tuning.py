@@ -34,7 +34,7 @@ second answer to what supersedes what
 A step whose spec declares display surfaces has them filled by asking the render
 to show that node (`preview.render_window(..., show=)`), which means the node is
 computed rather than served for every frame — the trade
-`adr/a-band-declares-the-surface-it-is-dragged-on.md` takes deliberately. One
+`adr/a-parameters-space-is-resolved-by-the-graph.md` takes deliberately. One
 render feeds every collector: the trace's and one per surface, off the same
 consumer, because two renders would double the cost to show two views of one
 edit.

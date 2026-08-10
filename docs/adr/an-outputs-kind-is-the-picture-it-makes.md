@@ -24,7 +24,7 @@ declarations to grow in.
 `DisplaySurface` is the neighbouring vocabulary and this is not a second
 declaration beside it. That enum answers what a tool *shows* — filled per
 request on the preview-only channel, never emitted, never keyed, never in the
-store ([a-band-declares-the-surface-it-is-dragged-on.md](a-band-declares-the-surface-it-is-dragged-on.md)).
+store ([a-parameters-space-is-resolved-by-the-graph.md](a-parameters-space-is-resolved-by-the-graph.md)).
 `ElementKind` answers what a node's output *is*, which the store keys and the
 save screen offers. Two questions over two bodies of data, and each keeps its
 own: a picture a tool wants shown over the footage is a `DisplaySurface`

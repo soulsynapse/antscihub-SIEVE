@@ -436,7 +436,7 @@ ring reads `detect`'s gate mask, which is no node's product — `emissions` is
 import the tool's module, which is ADR 28's named violation spelled out. Its
 home is a `DisplaySurface` member on the preview-only channel, the licensed
 revision of
-[adr/a-band-declares-the-surface-it-is-dragged-on.md](adr/a-band-declares-the-surface-it-is-dragged-on.md)
+[adr/a-parameters-space-is-resolved-by-the-graph.md](adr/a-parameters-space-is-resolved-by-the-graph.md)
 rather than a second vocabulary beside it, and it is
 [todo/the-in-band-ring-reads-a-mask-no-node-emits.md](todo/the-in-band-ring-reads-a-mask-no-node-emits.md).
 It waited behind the read path for a measured reason — a watched node is never

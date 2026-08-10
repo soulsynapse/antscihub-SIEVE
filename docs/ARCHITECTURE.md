@@ -17,7 +17,7 @@ but leaves this index for `docs/adr/superseded/`.
   - [An unconsumed member is named in a list, not left to a check that cannot see it](adr/an-unconsumed-member-is-named-in-a-list.md) — A vocabulary admits a member nothing consumes only by naming it in an unconsumed set beside it. A test refuses both: an unnamed member with no consumer, and a named member that gained one.
 - [ops admission is two tools](adr/ops-admission-is-two-tools.md) — `core/ops/` holds only math two tools already call: single-caller math lives in its tool module, and the package itself appears with its first two-caller entry, gated by a census test.
 - [One field is one populated value](adr/one-field-is-one-populated-value.md) — A composite stereotype sits on the field that holds the whole value, never on one bound of a pair, and registration proves it against `params_model`.
-- [A band declares the surface it is dragged on, and the tool fills it](adr/a-band-declares-the-surface-it-is-dragged-on.md) — A `BAND` param names a `DisplaySurface` — a picture kind, never a unit — and its tool fills it on a preview-only channel: never emitted, never keyed, and refused unless both halves are declared.
+- [A parameter's coordinate space is resolved by the graph](adr/a-parameters-space-is-resolved-by-the-graph.md) — A tool declares the space a parameter's value is denominated in — an extent, an axis, its label — absolutely or relative to its input. The graph folds it forward, and `None` refuses the editor.
 
 ## 02 — The saved artifact
 
@@ -54,4 +54,4 @@ but leaves this index for `docs/adr/superseded/`.
 - [The walked step owns the canvas](adr/the-walked-step-owns-the-canvas.md) — The walked step owns the canvas — its result over its input, its emissions drawn by kind; an ancestor's emissions are a view toggle; the pin owns only the slot below.
 - [An output's kind is the picture it makes](adr/an-outputs-kind-is-the-picture-it-makes.md) — The canvas paints an output by its `ElementKind` — `PIXEL` an image, `BLOCK` a field of cells over its frame, `FRAME` no picture — and no member is ever added for a tool.
 
-*32 settled, 4 superseded.*
+*32 settled, 5 superseded.*

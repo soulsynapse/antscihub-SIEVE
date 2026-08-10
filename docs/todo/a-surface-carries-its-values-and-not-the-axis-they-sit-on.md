@@ -10,10 +10,10 @@ opened: 2026-08-10
 
 # A surface carries its values and not the axis they sit on
 
-`adr/a-band-declares-the-surface-it-is-dragged-on.md` rests on one sentence:
-naming the picture rather than the unit is honest because "units ride with the
-data at run time, where the upstream node has already run". Building the panel
-and the handles
+`adr/superseded/a-band-declares-the-surface-it-is-dragged-on.md` rests on one
+sentence: naming the picture rather than the unit is honest because "units ride
+with the data at run time, where the upstream node has already run". Building
+the panel and the handles
 ([a-declared-surface-is-drawn-by-nothing.md](a-declared-surface-is-drawn-by-nothing.md))
 cashed that sentence in and it paid for two of `detect`'s three bands.
 

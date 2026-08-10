@@ -2,7 +2,7 @@
 title: A second source root is drawn over the first root's footage
 priority: high
 phase: "10"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k a_second_source_root_is_not_drawn_over"
 opened: 2026-08-10

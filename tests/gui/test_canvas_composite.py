@@ -39,6 +39,11 @@ from tests.gui import driving
 _COARSE = "coarse"
 _MOTION = "motion"
 
+#: A `footage` node reading a *different* file, which is the second source root:
+#: it decoded none of the project's own clip, so any picture of that clip
+#: underneath it is a blend of two unrelated recordings.
+_ELSEWHERE = "elsewhere"
+
 #: `test_app.py`'s ceiling and its reason: every wait ends when the thing it
 #: waits on does, so a generous one costs only the flake it prevents.
 _TIMEOUT_MS = 60_000
@@ -65,6 +70,39 @@ def two_picture_project(stirred_clip: Path, tmp_path: Path) -> Path:
                     Node(node_id=_MOTION, tool_id="motion_history", version="1.0.0"),
                 ),
                 edges=(Edge(upstream=_COARSE, downstream=_MOTION),),
+            )
+        }
+    ).save(path)
+    return path
+
+
+@pytest.fixture
+def two_root_project(stirred_clip: Path, synthetic_video: Path, tmp_path: Path) -> Path:
+    """The project's own footage, and a `footage` root over another file entirely.
+
+    `synthetic_video` rather than a second copy of the clip: what the case below
+    compares is the picture under the second root against the first root's
+    footage, and two roots over the same recording make that comparison pass
+    however the composite is built.
+    """
+    video = tmp_path / stirred_clip.name
+    video.write_bytes(stirred_clip.read_bytes())
+    elsewhere = tmp_path / synthetic_video.name
+    elsewhere.write_bytes(synthetic_video.read_bytes())
+    path = tmp_path / "two-roots.sieve.yaml"
+    Project.for_video(video, tmp_path).model_copy(
+        update={
+            "pipeline": Pipeline(
+                nodes=(
+                    Node(node_id=_COARSE, tool_id="downsample", version="1.0.0"),
+                    Node(
+                        node_id=_ELSEWHERE,
+                        tool_id="footage",
+                        version="1.0.0",
+                        params={"path": str(elsewhere)},
+                    ),
+                ),
+                edges=(),
             )
         }
     ).save(path)
@@ -212,5 +250,54 @@ def test_the_pair_comes_off_one_render_and_not_two(qapp, two_picture_project: Pa
 
         assert len(calls) == 1
         assert window.viewport.under is not None
+    finally:
+        window.close()
+
+
+def test_a_second_source_root_is_not_drawn_over_the_first_roots_footage(
+    qapp, two_root_project: Path
+) -> None:
+    """Standing on a root that decoded none of this clip, the clip is not underneath.
+
+    `FrameResult.source` is one frame for the whole render, so a composite that
+    reads a root's input from it hands every root the same picture — and a
+    `footage` root reading another file is then blended with footage it has
+    nothing to do with, with nothing on the surface saying so.
+
+    Stated as what the under layer may *be* rather than as one implementation:
+    a refusal at a source root leaves it absent, and an input carried per root
+    makes it that root's own frames. Both are this claim; the picture of the
+    project's clip is neither.
+    """
+    del qapp
+    from sieve.gui.app import MainWindow
+    from sieve.gui.emission_paint import image_of
+
+    discover()
+    window = MainWindow([two_root_project])
+    window.resize(_WINDOW[0], _WINDOW[1])
+    window.show()
+    try:
+        window.open_project(two_root_project)
+        driving.wait_until(lambda: window.player.metadata is not None, _TIMEOUT_MS)
+        window.timeline.set_window(SourceSpan(start=0, end=window.player.metadata.frame_count))
+        window.go_down()
+        assert window.current_node is not None and window.current_node.node_id == _ELSEWHERE
+
+        window.player.seek(_AT)
+        driving.wait_until(lambda: window.player.current_index == _AT, _TIMEOUT_MS)
+        # A render reached the canvas: the badge is raised for every frame the
+        # window shows without one, so waiting on it lowering is waiting for the
+        # composite this case is about rather than for the source standing in.
+        driving.wait_until(lambda: not window.viewport.showing_source, _TIMEOUT_MS)
+        assert window.tuning.last_error is None, window.tuning.last_error
+
+        own = image_of(
+            window.tuning.render_at(window.session.project.pipeline, _ELSEWHERE, _AT).result
+        )
+        assert own is not None
+
+        under = window.viewport.under
+        assert under is None or under == own
     finally:
         window.close()

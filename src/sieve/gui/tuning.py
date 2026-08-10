@@ -331,10 +331,14 @@ class TuningLoop(QObject):
         and attributable to neither half of it.
 
         `under` is the upstream node's id, or `None` for a node with nothing
-        upstream — where the input is the decoded frame the run began from, and
-        so `result.source`. That is itself `None` on a warm re-render where
-        nothing decoded, and the caller holding the transport's proxy at that
-        index is the one that can answer for it (`app._paint_viewport`).
+        upstream — a source root, which has no input layer at all and comes back
+        with none. `result.source` is not that layer, however much it looks like
+        it at a footage root: it is *one* frame for the whole render, so a graph
+        with a second root — a checkpoint read back, a written crop wired in —
+        would draw that root over a recording it never decoded. A root shows its
+        result alone, which is `adr/the-walked-step-owns-the-canvas.md`'s own
+        sentence about a source step and what the canvas already does with no
+        under layer (`canvas.set_values`).
 
         Both halves are `None` when there is no footage open, and for a render
         that raised, which is held in `last_error` on the module docstring's
@@ -346,7 +350,7 @@ class TuningLoop(QObject):
         held: list[Composite] = []
 
         def grab(result: FrameResult) -> None:
-            base = result.source if under is None else result.outputs.get(under)
+            base = None if under is None else result.outputs.get(under)
             held.append(
                 Composite(
                     np.asarray(result[node_id].data, np.float32),

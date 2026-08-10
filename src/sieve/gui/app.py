@@ -1319,10 +1319,11 @@ class MainWindow(QMainWindow):
 
         The composite is `adr/the-walked-step-owns-the-canvas.md`'s, and both of
         its layers come off the one render `render_at` makes. The input is the
-        upstream node's entry in that same result; at a root it is the decoded
-        frame, and where nothing decoded — a warm re-render of a graph whose
-        roots are all servable — the transport's proxy at this index is the
-        answer, which is the frame already in hand below.
+        upstream node's entry in that same result; a source root has no input
+        layer and is drawn alone, which is that ADR's own sentence about a
+        source step and is the only reading that survives a second root
+        (`tuning.render_at`). The transport's proxy is not that layer: it is
+        this project's footage, and a root reading another file is not about it.
 
         The source frame is the fallback and not the subject: it is what the
         window shows before a pipeline can answer for that index, for a node
@@ -1357,7 +1358,7 @@ class MainWindow(QMainWindow):
             values, beneath = self._tuning.render_at(
                 pipeline, node, index, under=input_of(pipeline, node)
             )
-        under = image if beneath is None else image_of(beneath)
+        under = None if beneath is None else image_of(beneath)
         if values is None or not self._viewport.set_values(
             index,
             values,

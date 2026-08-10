@@ -176,11 +176,13 @@ class VideoPlayer(QObject):
         _RUNNING.add(self._thread)
 
         # A running `QThread` whose wrapper is finalised aborts the process, so
-        # stopping it cannot be left to a caller remembering to. `destroyed`
-        # fires while the thread object is still valid and the closure holds
-        # *it* rather than `self`, which is being torn down as the slot runs.
-        # `shutdown` stays, and is what an orderly exit calls: this is the floor
-        # under a player that is simply dropped.
+        # stopping it cannot be left to a caller remembering to. The closure
+        # holds the thread rather than `self`, which is being torn down as the
+        # slot runs — but `destroyed` can fire after shiboken has deleted the
+        # C++ object as well, so this catches the dropped player only when it
+        # runs early enough, and `_stop` tolerates the case where it does not.
+        # `_RUNNING` and the reaper above are what hold when it does not.
+        # `shutdown` stays, and is what an orderly exit calls.
         thread = self._thread
         self.destroyed.connect(lambda: _stop(thread))
 

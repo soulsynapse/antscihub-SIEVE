@@ -8,6 +8,6 @@ order along that shelf is `position`, both placement only — an ADR that drops
 its group leaves this index while keeping its number and its file.
 
 - 📁 `Layer 1`
-  - 📄 [A pane houses any surface](adr/ADR-0001-panes-house-any-surface.md) — A surface can go anywhere, which is how we buy coarse-grained customization. They might not be happy, they might not look good, they might be clipped, but they can be shoved into any pane.
+  - 📄 [A pane houses any view](adr/ADR-0001-panes-house-any-view.md) — A view can go anywhere, which is how we buy coarse-grained customization. They might not be happy, they might not look good, they might be clipped, but they can be shoved into any pane.
 
 *1 settled.*

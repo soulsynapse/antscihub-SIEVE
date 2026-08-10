@@ -1,4 +1,4 @@
-"""The colours every surface draws with.
+"""The colours every view draws with.
 
 Held above `frame` because the frame is not the only thing that reads them: the
 panes' contents paint cards, plots and footage against the same values,

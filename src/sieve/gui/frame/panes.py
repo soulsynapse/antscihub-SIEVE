@@ -29,7 +29,7 @@ _MIN_PANE = 160
 class Blank(QWidget):
     """A pane with its name in it, and a layout for what will fill it.
 
-    It paints rather than styles: the panes come to hold surfaces that
+    It paints rather than styles: the panes come to hold views that
     draw themselves, and a stylesheet rule broad enough to fill this one would
     still be reaching into them after they arrive.
     """
@@ -77,7 +77,7 @@ def build_timeline() -> Blank:
 
     Full width under the other two panes and not inside either, because the
     window it carries is where the canvas and every plot on the right are read
-    — one position in one file, held by neither of the two surfaces showing it.
+    — one position in one file, held by neither of the two views showing it.
     """
     timeline = Blank("timeline")
     timeline.setObjectName("timeline")

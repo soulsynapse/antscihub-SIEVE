@@ -1,1 +1,1 @@
-"""The interactive surface: the frame, and what stands in its panes."""
+"""The interactive view: the frame, and what stands in its panes."""

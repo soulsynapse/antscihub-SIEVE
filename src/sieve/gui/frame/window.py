@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         self.controls = build_controls()
         self.timeline = build_timeline()
 
-        # Even stretch, and an even split to start: neither surface is the
+        # Even stretch, and an even split to start: neither view is the
         # window's main one. The chain is tuned by reading a plot against the
         # footage, so a frame that gave either the remainder of a resize would
         # be answering a question the user answers by dragging.

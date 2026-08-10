@@ -3,7 +3,7 @@
 The menu is the frame's, not a pane's: everything on it acts on the
 window or on the project the window is showing, and nothing on it belongs to
 the canvas, the chain or the timeline — those are acted on where they are
-drawn. That line is what keeps the bar from becoming the place every surface
+drawn. That line is what keeps the bar from becoming the place every view
 hangs its overflow.
 
 Entries whose target does not exist yet are built and disabled rather than

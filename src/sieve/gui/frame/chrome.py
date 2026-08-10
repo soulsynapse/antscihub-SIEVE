@@ -2,7 +2,7 @@
 
 Every rule is anchored to the splitter or to a named object, never to a bare
 widget class: a plain `QLabel` or `QWidget` selector set on the window reaches
-down into whatever the panes come to hold — surfaces that paint
+down into whatever the panes come to hold — views that paint
 themselves — and the two stylesheets would then fight over every card.
 """
 

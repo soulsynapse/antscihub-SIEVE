@@ -4,7 +4,7 @@ priority: high
 phase: 11
 status: open
 gated_on: nothing
-done_when: 'uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k "a_document_carrying_a_source_key_is_refused or relocating_rewrites_the_source_nodes_path_param or a_relative_source_param_anchors_on_the_project_directory" && uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name && uv run pytest "tests/gui/test_project_cards.py::test_the_library_line_reads_footage_through_the_graph" -q'
+done_when: 'uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k "a_document_carrying_a_source_key_is_refused or relocating_rewrites_the_source_nodes_path_param or a_relative_source_param_anchors_on_the_project_directory" && uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name && uv run pytest "tests/gui/test_project_cards.py::test_the_library_line_reads_footage_through_the_graph" -q && uv run pytest tests/unit/test_pipeline_model.py -q -k the_version_a_document_declares_after_the_removal'
 opened: 2026-08-10
 ---
 
@@ -101,6 +101,26 @@ not already say. The argument for moving it anyway is that a removal is exactly
 the change a stamp exists to record; the argument against is that a number
 nothing reads differently is a number that lies about being load-bearing. This
 item's session picks one and says which in the commit.
+
+## Review 2026-08-10: the branch is measured, and the criterion pins whichever one is taken
+
+The section above is right that the number is this item's to move or not, and
+wrong that ADR 38 leaves it open: "the stamp rises only when a build writes into
+it something the declared version does not have" decides it, and a removal
+writes nothing new. What that decision costs is
+[a-removals-price-is-charged-only-to-the-old-document](../findings/2026.08.10-a-removals-price-is-charged-only-to-the-old-document.md)
+— the document this migration produces loads clean on the pre-removal build,
+which then tells the user to add footage to a project that already names it in a
+node param. The ADR prices the old document under the new build and is silent on
+the new document under the old one, which is the direction the stamp exists for.
+
+So the pick is between a misreading with a measured message and a successor ADR
+saying a removal moves the number too. That is a ruling rather than an
+implementation detail, and a worker taking either branch without one records the
+decision nowhere. `done_when` now ends in a case that pins the version a
+post-removal document declares — red until it exists, and satisfiable under
+either branch, since what is missing today is not a number but any assertion at
+all about which number a document written after the removal carries.
 
 ## What stays where it is
 

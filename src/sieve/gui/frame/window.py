@@ -25,6 +25,11 @@ That is a view in a pane like any other and not a fourth pane — what the swipe
 changes is the right pane's occupant, never how many panes there are. Which keys
 walk it is `hotkeys.py`'s; the verbs they call are here, because the swipe is the
 window's to hold and the keyboard is not the frame's to interpret twice.
+
+The first of those positions houses the project list, which is the first view to
+land. The window is what puts it there and hands it what to show — the view
+names no pane and no position, so where it stands is the frame's answer and
+changing it is an edit here.
 """
 
 from __future__ import annotations
@@ -41,7 +46,8 @@ from sieve.gui.frame.panes import (
     build_right,
     build_seam,
 )
-from sieve.gui.frame.swipe import build_swipe
+from sieve.gui.frame.swipe import POSITIONS, build_swipe
+from sieve.gui.view.project_list import ProjectList
 
 #: What the window restores down *to*. Kept even though it opens maximized:
 #: without it the restored size — and with it whether the title bar can be
@@ -66,6 +72,18 @@ class MainWindow(QMainWindow):
         # is standing in it, and the two never trade room.
         self.swipe = build_swipe("right")
         self.right.body.addWidget(self.swipe)
+
+        # The library stands in the first position, which is where the swipe's
+        # order already put it. Housed by adding it to that position's own
+        # layout rather than by the swipe building it: a position is a space
+        # like a pane is, and a track that knew which view belonged at index 0
+        # would be the file where "the project list is the right pane's" had
+        # been decided — which ADR-0001 says is nowhere.
+        self.projects = ProjectList()
+        self.swipe.position(POSITIONS.index("project")).body.addWidget(self.projects)
+        # Opening a project is a move inward along the same line ← and → walk,
+        # so it is the swipe's step and not a second kind of navigation.
+        self.projects.opened.connect(lambda _project: self.swipe_forward())
 
         # No subpane is opened on the way up. Which sides each pane offers and
         # how many each stacks is still the pane's claim and still checkable by

@@ -33,8 +33,9 @@ if TYPE_CHECKING:  # importing it for real would close the loop back to `window`
 #: ← and → are the swipe's, and are spent on it: it is the one thing in the
 #: frame that runs on a line, so the two keys that mean *along a line* say
 #: exactly one thing wherever the user is standing. ↑ and ↓ are deliberately
-#: not bound — they belong to whatever selection the position in view owns, and
-#: no position owns one yet.
+#: not bound — they mean the next row of whatever holds focus, and a view that
+#: has rows answers them itself; bound here they would fire for the position in
+#: front as easily as for the one the user is looking at.
 _KEYS: tuple[tuple[str, str], ...] = (
     ("Left", "swipe_back"),
     ("Right", "swipe_forward"),

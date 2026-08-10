@@ -1,61 +1,74 @@
 ---
-title: Both axes for "generated background" are closed, so the question is whether VISION's sentence survives
+title: A picked file's meaning is the wiring, and the user is the one who states it
 phase: 2
 priority: normal
 status: deferred
-deferred_for: decision
-gated_on: Kendrick ruling on VISION's "select what type of output it should broadcast as" — a residual capability, or a sentence describing the swap
+deferred_for: subject
+gated_on: the-window-grows-a-port-keyed-form-and-the-executor-delays-each-port.md — a node with one input has one place a file can wire to, so there is nothing for the user to say yet
+done_when: "uv run pytest tests/unit/test_intents.py -q -k a_picked_file_is_wired_to_a_named_port"
 opened: 2026-08-09
 ---
 
-# Both axes are closed, so the question is whether VISION's sentence survives
+# A picked file's meaning is the wiring, and the user is the one who states it
 
-Minted the same day claiming two live readings, and corrected within the hour:
-both were already ruled, by two rulings this item had not read together.
+Minted the same day claiming two live readings, corrected within the hour when
+both turned out to be ruled, and ruled outright an hour after that. The sequence
+is worth keeping because the answer is not either of the things the question
+offered.
 
-**A fourth `ElementKind` member is closed.**
+**Neither axis carries it.** A fourth `ElementKind` member is closed by
 [adr/an-outputs-kind-is-the-picture-it-makes.md](../adr/an-outputs-kind-is-the-picture-it-makes.md)
-(settled 2026-08-09) says "no member is ever added for a tool", and that a
-picture a tool wants shown over the footage is a `DisplaySurface` member and a
-revision of that ADR, "never a fourth `ElementKind`". Its reason is the one the
-source-tool item had already argued and could not settle alone: `ElementKind`
+— "no member is ever added for a tool" — on the reasoning that `ElementKind`
 answers what a node's output *is*, and a scene description is not an answer to
-that question.
+that. Emission-name keying is refused by the 2026-08-09 ruling on
+[the-offering-predicate-is-not-the-edge-legality-check.md](the-offering-predicate-is-not-the-edge-legality-check.md),
+which answers by derivation: the offer is computed from what the position's
+input resolved to.
 
-**Emission-name keying is refused where it was going to be spent.** The
-2026-08-09 ruling on
-[the-offering-predicate-is-not-the-edge-legality-check.md](the-offering-predicate-is-not-the-edge-legality-check.md)
-reads "no plausibility field, no new `ElementKind` member, no Emission-name
-keying", and answers positively instead: the offer is derived from what the
-position's input resolved to. That is scoped to the offer rather than to every
-consumer, but the offer was one of the three scenarios the axis was said to
-block, and the ruling's closing clause governs the rest — new vocabulary is
-admitted only when a real offer proves inexpressible in the resolved facts.
+**Ruled 2026-08-09 (Kendrick): the meaning is the wiring, and the user states
+it.** VISION's "select what type of output it should broadcast as" survives, and
+what it describes is neither a declaration on the spec nor a derivation — it is
+the user saying what their file wires to. A file the user brought is precisely
+the case where nothing can be derived: a background and a mask resolve
+identically, one `PIXEL` file of the same extension class, so there is no fact in
+hand to compute an answer from. Derivation is how candidates are *offered*, and
+an offer is a suggestion; a file from outside the project is the case where the
+system has no basis to suggest and the user has to be able to say. So the answer
+is asked for rather than inferred, and where it lands is the edge.
 
-So what is left is not a choice between two mechanisms. It is whether VISION's
-sentence still describes a capability at all: "they do that and select what type
-of output it should broadcast as. As soon as they select generated background,
-the background subtraction step picks it up and displays it." Read against
+That is consistent with everything already settled rather than a new axis beside
+them:
 [adr/a-users-file-wires-in-like-any-other-input.md](../adr/a-users-file-wires-in-like-any-other-input.md)
-— a picked file is a node, so choosing among sources is moving an edge — and
-against the substitution-not-comparison ruling in
-[whether-vision-states-the-background-ab.md](whether-vision-states-the-background-ab.md),
-the sentence may already be satisfied by the swap: the file means "background"
-because of which position it was wired into, and there is nothing left to select.
-The reading against that is that derivation genuinely cannot tell a background
-PNG from a mask PNG — both resolve to one `PIXEL` file of the same extension
-class — so if the user is ever to say which it is, an edge is the only place the
-answer currently lives, and a graph where two source nodes feed one step has two
-edges and no labels on them until Phase 11's ports exist.
+already says choosing among sources is moving an edge, and the
+substitution-not-comparison ruling in
+[whether-vision-states-the-background-ab.md](whether-vision-states-the-background-ab.md)
+already says one background is live at a time. What this adds is that the move is
+the user's to make explicitly, by name, rather than something a swap performs
+silently on their behalf.
 
-That is the residual, and it is Kendrick's for the same reason the A/B was: it is
-a VISION edit either way — the sentence stays and gains a mechanism, or it comes
-out because the swap already does its work. What it is **not** is a blocker for
-Phase 11. 11.3's subtraction knows which input is the background from the port it
-arrives on, and ports are settled.
+**Deferred on a subject, not a decision.** The gesture has nothing to operate on
+yet: every node in the tree takes one input, so a picked file has exactly one
+place it can wire to and asking the user which is asking a question with one
+answer. It becomes real with the port-keyed form
+([the-window-grows-a-port-keyed-form-and-the-executor-delays-each-port.md](the-window-grows-a-port-keyed-form-and-the-executor-delays-each-port.md)),
+where a subtraction has a plate port and a background port and "what does this
+wire to" is a question with two answers. `PORT_NAMES` in the referent is already
+the surface for it — the mockup names ports only where a step has more than one
+input, which is the same condition as this gesture's.
 
-`pick.py` is stale on this and the fix rides with whichever way it goes: its
-docstring and its spec comment both tell the reader the axis is open, written at
-07:39 on 2026-08-09, eight hours before ADR 29 closed half of it.
+Two constraints on whoever lifts this. The port a user names is a fact about the
+graph, so it is on the edge and in the saved file, and it reaches the cache key
+the way 11.2's ordered `(port, key)` pairs do — not a second identity beside it.
+And the naming is a `SetParam`-shaped intent through the one command layer, not a
+special path: an edge the user re-pointed is the same mutation kind as a value
+they typed
+([one-field-is-one-populated-value.md](../adr/one-field-is-one-populated-value.md)).
 
-No `done_when`, because what a command would assert is the thing being decided.
+`done_when` at minting, red because nothing matches and red for as long as the
+gate holds — a deferral on a subject still owes a criterion, and this one names
+the gesture rather than the port machinery so it cannot be satisfied by 11.2
+alone:
+
+    $ uv run pytest tests/unit/test_intents.py -q -k a_picked_file_is_wired_to_a_named_port
+    7 deselected in 0.13s
+    exit: 5

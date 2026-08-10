@@ -485,11 +485,15 @@ Then the tool (11.3), which is what lifts
 that the index's named-gate scan cannot see, so the citation from the item that
 mints the tool is the entire net.
 
-Which of two inputs is "the background" is not a question this phase has to ask:
-the port it arrives on is the answer, which is what makes ports worth having
-beyond keying. The neighbouring question — whether a user ever *declares* that a
-picked file means "background", VISION's "select what type of output it should
-broadcast as" — is under "Open questions" below and gates nothing here.
+Ports are what makes this phase the home of a second thing, and it is the reason
+VISION's "select what type of output it should broadcast as" has a mechanism at
+all. Which of two inputs is "the background" is not a declaration on a spec and
+not something derived — a file the user brought resolves identically to a mask,
+so there is no fact in hand to compute from — it is the port it arrives on, and a
+user bringing their own file has to be able to say which one that is
+([todo/which-axis-carries-a-meaning-like-generated-background.md](todo/which-axis-carries-a-meaning-like-generated-background.md),
+ruled 2026-08-09). Until a node has two inputs the question has one answer, which
+is why the gesture is deferred on 11.2 rather than sequenced beside it.
 
 Gate: two parents of different lag align at their child; a graph and its
 port-swapped twin are not the same graph and exactly one key moved; the merge
@@ -559,25 +563,18 @@ drawn from, which is the plotting path and not the run path.
 Each carries a decision item in `docs/todo/`, so a question blocking a step
 is visible in the index rather than only here.
 
-**Whether VISION's "select what type of output it should broadcast as" survives
-the swap.** Both mechanisms once proposed for it are closed — a fourth
-`ElementKind` member by `adr/an-outputs-kind-is-the-picture-it-makes.md`, and
-Emission-name keying by the offering ruling, which answers by derivation instead
-— so what is left is whether the sentence describes a capability or describes
-the swap already ruled in
-`todo/whether-vision-states-the-background-ab.md`
-([todo/which-axis-carries-a-meaning-like-generated-background.md](todo/which-axis-carries-a-meaning-like-generated-background.md)).
-It is a VISION edit either way and it blocks nothing: Phase 11's subtraction
-reads its background off a port.
-
-That item was first written claiming two live readings and corrected the same
-day, which is the part worth keeping here. The question had stood since
-2026-08-07 inside a section of an item that then went `done`, and this list reads
-item status rather than item bodies — so "None open" was true of the index and
-false of the tree, while two of the rulings that answered it landed elsewhere and
-nothing brought them together. A decision reserved for a person needs a file of
-its own the moment the item carrying it can be closed around it, and that file is
-also what a later ruling has to be read against.
+None open. What a picked file *means* was listed here for part of 2026-08-09 and
+ruled the same day — the meaning is the wiring, and the user states it, which is
+Phase 11's paragraph above and
+[todo/which-axis-carries-a-meaning-like-generated-background.md](todo/which-axis-carries-a-meaning-like-generated-background.md)'s
+body. It is worth one sentence of process here rather than none: the question had
+stood since 2026-08-07 inside a section of an item that then went `done`, this
+list reads item status and not item bodies, and two of the three rulings that
+bore on it landed in an ADR and in a third item's review without either citing
+the other. So "None open" was true of the index and false of the tree for two
+days, and the remedy is the strike-out — a decision reserved for a person needs a
+file of its own the moment the item carrying it can be closed around it, because
+that file is what a later ruling gets read against.
 
 The three that stood here on 2026-08-08 — the external-input
 identity, the background A/B, and the type gate — were ruled in one pass, and

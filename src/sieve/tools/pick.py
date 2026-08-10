@@ -30,12 +30,12 @@ not a question a stream type asks, and this tool does not answer it on any other
 axis either. It cannot: `adr/an-outputs-kind-is-the-picture-it-makes.md` rules
 that no `ElementKind` member is added for a tool, and the offering ruling on
 `todo/the-offering-predicate-is-not-the-edge-legality-check.md` refuses
-Emission-name keying in favour of derivation. So the meaning is carried by the
-position the node is wired into, and what remains open is only whether a user
-ever declares one outright
-(`todo/which-axis-carries-a-meaning-like-generated-background.md`). This tool
-declares the one product it has and nothing selects between products it does not
-have.
+Emission-name keying in favour of derivation. The meaning is the position the
+node is wired into, and the user is the one who says which — a file they brought
+resolves the same as any other picture, so there is nothing to derive it from
+(`todo/which-axis-carries-a-meaning-like-generated-background.md`). That gesture
+waits on a node with more than one input to point at. This tool declares the one
+product it has and nothing selects between products it does not have.
 
 **Where the pattern is anchored.** As written: an absolute pattern is used as it
 stands, a relative one against the process's directory. That is what a file

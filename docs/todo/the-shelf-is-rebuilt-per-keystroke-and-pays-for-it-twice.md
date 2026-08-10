@@ -1,6 +1,6 @@
 ---
 title: The shelf is rebuilt per keystroke and pays for it twice
-status: awaiting-review
+status: done
 gated_on: nothing
 priority: high
 phase: "9"

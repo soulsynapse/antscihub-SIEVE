@@ -138,3 +138,26 @@ the store decides what a pin *is*, this card decides what a user presses.
 `done_when` is untouched and covers neither — it names the foot's rearrangement
 and the arrow. The review that takes this item decides whether the pin gesture
 is a third leg here or its own item behind the store.
+
+## Folded 2026-08-10: building forty of these is now the whole of a keystroke
+
+`the-shelf-is-rebuilt-per-keystroke-and-pays-for-it-twice` landed and the
+parsing half of the arrow key is gone; what is left is measured in
+[findings/2026.08.09-the-shelf-reparses-every-project-per-arrow-key.md](../findings/2026.08.09-the-shelf-reparses-every-project-per-arrow-key.md)'s
+2026-08-10 amendment and it is these cards being constructed — still above a
+frame at a forty-project library, with nothing read from disk to blame. The
+remedy is that a moved accent stops rebuilding the pane at all and repaints the
+two cards whose accent changed, and that is this item's to take rather than the
+shelf item's for one reason: OPEN LOCATION is drawn on the selected card alone,
+so a card built for the unselected state cannot become the selected one without
+the head-and-foot rearrangement above. Whichever arrangement wins, it decides
+whether a card can be repainted in place.
+
+The `when` line the rearrangement moves is also the one line on the card with a
+lifetime. `project_select.HeldListings` keys its memo on the file's mtime and
+size *and* the reader's calendar day, precisely so "saved yesterday" is re-read
+at midnight with the file untouched; nothing asserts that third component, and
+its loss would be invisible until a window left open overnight said the wrong
+day. A case that hands `rows()` two different `now` values over one unchanged
+file is the whole of it, and it belongs beside whatever this item does to the
+line.

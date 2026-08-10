@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -44,9 +45,12 @@ from PySide6.QtGui import QKeyEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QSpinBox,
+    QToolButton,
     QWidget,
 )
 
@@ -275,6 +279,113 @@ def _stated_value(
     return QLabel(str(value))
 
 
+#: What a path field reads as while the document holds none. A sentence rather
+#: than a blank row: a source nobody has chosen a file for is the state VISION's
+#: minted project starts in, so it is a state the surface names.
+UNCHOSEN = "nothing chosen"
+
+
+def ask_for_file(parent: QWidget | None = None) -> Path | None:
+    """Which file this parameter should name, or nothing if the ask was cancelled.
+
+    The dialog narrows by nothing. What a tool can read is not something this
+    module can know — the map below is keyed on a population kind and never on a
+    tool (`adr/gui-knows-kinds-not-tools.md`) — and a pattern written here would
+    be a second, guessed answer to a question the reader one step down already
+    refuses concretely.
+    """
+    chosen, _pattern = QFileDialog.getOpenFileName(parent, "Choose a file")
+    return Path(chosen) if chosen else None
+
+
+def ask_for_folder(parent: QWidget | None = None) -> Path | None:
+    """Which folder this parameter should name, or nothing if the ask was cancelled.
+
+    A second ask rather than one dialog admitting both: Qt's file dialog selects
+    files or directories and not either, and the two are different questions
+    anyway — VISION's user picks a video and then changes their mind and names
+    the folder it came out of, which is a decision about what the source *is*.
+    """
+    chosen = QFileDialog.getExistingDirectory(parent, "Choose a folder")
+    return Path(chosen) if chosen else None
+
+
+class PathChooser(QWidget):
+    """What a path parameter holds, and the two verbs that rewrite it.
+
+    The value and not what it resolved to. A path naming a folder stands for
+    every file in it, and the ordering that produces is a filesystem read with a
+    lifetime (`pipeline/resolve_source.resolved_sources`) — so it is drawn where
+    the window can invalidate it, on the card (`chain_stack.Step.sources`), and
+    a chooser showing it here would be offering a stale reading as the document's
+    own value.
+
+    A label rather than a line edit. A path typed a character at a time would
+    reach `SetParam` naming files nobody meant on the way to the one they did,
+    which is the pass-through the generated controls exist to refuse; the ask is
+    the commit, exactly as a combo's `activated` is.
+    """
+
+    def __init__(self, value: str, on_edit: _Edit, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.shown = QLabel(value or UNCHOSEN)
+        self.shown.setToolTip(value or UNCHOSEN)
+        # The two asks are named inside a lambda rather than handed over, so the
+        # module attribute is read when the button is pressed: a caller standing
+        # in front of the dialog does so after the form was built, and a button
+        # holding the function it was constructed with would open the real one.
+        self.browse_file = _browse_button(
+            "file…", "Choose a file", lambda: ask_for_file(self), on_edit, self
+        )
+        self.browse_folder = _browse_button(
+            "folder…",
+            "Choose a folder, read as everything in it",
+            lambda: ask_for_folder(self),
+            on_edit,
+            self,
+        )
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(self.shown)
+        layout.addStretch(1)
+        layout.addWidget(self.browse_file)
+        layout.addWidget(self.browse_folder)
+
+
+def _browse_button(
+    text: str, tip: str, ask: Callable[[], Path | None], on_edit: _Edit, parent: QWidget
+) -> QToolButton:
+    """One verb of the chooser: ask, and edit only where the ask was answered.
+
+    A cancelled ask is the one answer that must not reach the document, which is
+    the same rule a new project's location runs on (`project_select.ask_where`)
+    and for the same reason: the alternative to declining is a value nobody
+    chose.
+
+    What is written is the path as the dialog gave it, which is absolute — the
+    resolution takes an absolute pattern as it stands and resolves a relative
+    one against the process's directory (`core.tool_base.named_files`), so a
+    chooser that stored a relative one would name a different file from the next
+    launch.
+    """
+    button = QToolButton(parent)
+    button.setText(text)
+    button.setAutoRaise(True)
+    button.setToolTip(tip)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.clicked.connect(lambda: None if (got := ask()) is None else on_edit(str(got)))
+    return button
+
+
+def _path(
+    described: Mapping[str, Any], value: Any, labels: Mapping[str, str], on_edit: _Edit
+) -> QWidget:
+    """The chooser, over whatever the document holds for this field."""
+    del described, labels
+    return PathChooser(str(value or ""), on_edit)
+
+
 #: Kind to control, and the whole of this module's tool knowledge. Total over
 #: `ParamStereotype`, which `tests/gui/test_param_generator.py` holds: a kind
 #: minted without an entry here is a parameter no panel can show, and the
@@ -286,12 +397,7 @@ _BUILDERS: dict[ParamStereotype, _Builder] = {
     ParamStereotype.BAND: _stated_value,
     ParamStereotype.REGION: _stated_value,
     ParamStereotype.POINT: _stated_value,
-    # The pattern as written, until there is a picker to open. A file dialog is
-    # the handoff surface this kind names, and it arrives with the card that
-    # holds a source step (`todo/the-source-is-a-card-in-the-walk.md`); what the
-    # panel owes today is the same thing it owes every kind whose editor lives
-    # elsewhere, which is showing the value the document holds.
-    ParamStereotype.PATH: _stated_value,
+    ParamStereotype.PATH: _path,
 }
 
 

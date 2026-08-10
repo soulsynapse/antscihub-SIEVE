@@ -918,7 +918,7 @@ class ParamStereotype(StrEnum):
     #: units, its count threshold as a fraction. Which plot the handles are
     #: grabbed on is the tool's second declaration and not this one's silence —
     #: `param_surfaces`, refused in either direction against this kind
-    #: (`adr/a-band-declares-the-surface-it-is-dragged-on.md`).
+    #: (`adr/a-parameters-space-is-resolved-by-the-graph.md`).
     BAND = "band"
     #: A rectangle in the frame the node is handed, e.g. `crop`'s `ROI`.
     REGION = "region"
@@ -946,9 +946,7 @@ class ParamStereotype(StrEnum):
 #: (`adr/an-unconsumed-member-is-named-in-a-list.md`), which is what stops a
 #: kind from being minted, deferred, and deferred again with nothing red.
 #: `tests/gui/test_unconsumed_members.py` holds it in both directions.
-STEREOTYPES_WITHOUT_EDITOR: frozenset[ParamStereotype] = frozenset(
-    {ParamStereotype.POINT, ParamStereotype.PATH}
-)
+STEREOTYPES_WITHOUT_EDITOR: frozenset[ParamStereotype] = frozenset({ParamStereotype.POINT})
 
 
 class DisplaySurface(StrEnum):

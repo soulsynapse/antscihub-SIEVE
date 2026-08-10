@@ -169,6 +169,13 @@ class Step:
     #: regions is the ordinary case rather than a caller's omission, and a card
     #: without the row is exactly what such a step should draw.
     regions: Regions | None = None
+    #: What this step's path parameter names on disk, in the resolution's order,
+    #: on a source root and `None` on everything else. The two are distinct and
+    #: the emptiness cannot carry the distinction: a source naming nothing owes
+    #: the sentence below, and a step that is not a source owes no line at all.
+    #: Names rather than paths — the card says which files, and where they are is
+    #: the chooser's line one row up.
+    sources: tuple[str, ...] | None = None
 
 
 class ChainCard(QWidget):
@@ -201,6 +208,11 @@ class ChainCard(QWidget):
         #: the region verbs are pressed on, and a caller reaching it through the
         #: card's children would be finding it by shape.
         self.regions: RegionsRow | None = None
+        #: The line saying what this step's source resolved to, on the cards that
+        #: have one. Held for `regions`' reason: it is the surface the window's
+        #: `resolved_sources` is read off, and a caller finding it among the
+        #: card's labels would be finding it by shape.
+        self.sources: QLabel | None = None
         if on_select is not None:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -372,6 +384,35 @@ class RegionsRow(QWidget):
         layout.addStretch(1)
         layout.addWidget(self.add)
         layout.addWidget(self.drop)
+
+
+#: What a source card says where its path names nothing that is there. One
+#: sentence for the three states the resolution collapses — nothing chosen, a
+#: pattern that will not validate, a folder that is not mounted — because the
+#: window draws all three the same and a card claiming to tell them apart would
+#: be inventing a distinction it was not handed
+#: (`pipeline/resolve_source.resolved_sources`).
+NO_RESOLUTION_NOTE = "the path names nothing on disk"
+
+
+def source_note(files: Sequence[str]) -> str:
+    """What a source card says it resolved to: how many, and which.
+
+    Both, because they answer different questions. VISION's scenario turns on
+    the count — "concatenate appears the moment there is a second file" — and
+    the names are what tell the user *which* second file arrived, which is the
+    half a count alone leaves them to guess at.
+
+    Narrowed by nothing, and in the order the resolution gave, which is neither
+    module's ruling to make here: a folder resolves to everything in it, so a folder
+    holding a README lists the README, and the ordering is lexicographic rather
+    than numeric (`core.tool_base.named_files`). Both are visible for the first
+    time on this line (`todo/the-source-is-a-card-in-the-walk.md`).
+    """
+    if not files:
+        return NO_RESOLUTION_NOTE
+    plural = "" if len(files) == 1 else "s"
+    return f"{len(files)} file{plural} · " + " · ".join(files)
 
 
 def fixed_card(title: str) -> ChainCard:
@@ -1360,6 +1401,13 @@ class PipelinePane(StackPane):
         layout.addLayout(head)
         if step.knobs is not None:
             layout.addWidget(step.knobs)
+        if step.sources is not None:
+            # Under the chooser the knobs carry, because it is what that value
+            # came out to: the parameter is the document and this line is the
+            # disk, and reading them the other way round would put the reading
+            # above the thing it is a reading of.
+            card.sources = note_label(source_note(step.sources))
+            layout.addWidget(card.sources)
         if step.regions is not None:
             # Under the knobs: the count is about the branch the card makes and
             # the knobs are the step's own parameters, so it reads as the last

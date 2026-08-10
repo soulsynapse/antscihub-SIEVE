@@ -1427,6 +1427,15 @@ class MainWindow(QMainWindow):
                     swappable=bool(self._offer_over(position)),
                     reads=reads[node.node_id],
                     regions=self._regions(position),
+                    # Present exactly on the source roots, which is what the
+                    # map's own keys mean (`_reread_sources`) — so the card is
+                    # handed the absence rather than an empty ordering it could
+                    # not tell from a source naming nothing.
+                    sources=(
+                        tuple(file.name for file in self._resolved_sources[node.node_id])
+                        if node.node_id in self._resolved_sources
+                        else None
+                    ),
                 )
             )
         return PipelinePane(

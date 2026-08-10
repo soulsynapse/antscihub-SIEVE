@@ -106,3 +106,44 @@ def test_saving_after_an_undo_writes_the_restored_value(tmp_path: Path) -> None:
     session.save()
 
     assert Session.open(session.path).project == _project(0.25)
+
+
+def test_an_undo_back_to_the_saved_value_is_not_an_edit(tmp_path: Path) -> None:
+    """`edited` is the comparison, not a flag a commit sets.
+
+    A parameter moved and moved back leaves a session with two stacks and a
+    document identical to the file's — and a close that wrote it anyway would
+    be spending the stable serialization on a project nobody changed
+    (`Session.save_if_edited`).
+    """
+    session = _opened(tmp_path)
+    assert not session.edited
+
+    session.commit(_project(0.5))
+    assert session.edited
+
+    session.undo()
+    assert not session.edited
+
+
+def test_a_session_over_a_file_it_has_not_read_is_edited(tmp_path: Path) -> None:
+    """A project composed in memory is owed a write, and its path may hold nothing.
+
+    The one case where the comparison has no left-hand side. Treating an unread
+    file as agreeing would decline the only write that could make it true.
+    """
+    path = tmp_path / "arena.sieve.yaml"
+    session = Session(path, _project(0.25))
+
+    assert session.edited
+    assert session.save_if_edited()
+    assert Session.open(path).project == _project(0.25)
+
+
+def test_a_save_is_not_repeated_for_a_document_that_has_not_moved(tmp_path: Path) -> None:
+    session = _opened(tmp_path)
+    session.commit(_project(0.5))
+
+    assert session.save_if_edited()
+    assert not session.save_if_edited()
+    assert Session.open(session.path).project == _project(0.5)

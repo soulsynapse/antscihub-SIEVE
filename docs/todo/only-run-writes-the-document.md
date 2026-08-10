@@ -2,7 +2,7 @@
 title: Only Run writes the document, so closing the window discards every edit
 phase: 9
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_save_and_run.py -q -k 'an_edit_survives_a_close or a_clean_document_writes_nothing'"
 opened: 2026-08-09
@@ -44,3 +44,32 @@ the file stops being lost outright.
     $ uv run pytest tests/gui/test_save_and_run.py -q -k 'an_edit_survives_a_close or a_clean_document_writes_nothing'
     4 deselected in 0.13s
     exit: 5
+
+## Built 2026-08-09 (worker)
+
+The session holds a third whole value beside the two stacks — the one the file
+is known to hold, set by `open` and by `save` — and `edited` is the comparison
+against it rather than a flag a commit sets, so an undo back onto the opened
+value is clean again. `save_if_edited` is that guard around the existing write,
+and `MainWindow.closeEvent` is the wire. `open_project` calls it too, on the
+project being left: opening a second project is the other way a session ends,
+and it is the same one-line call.
+
+A `Session` built over a file it has never read is `edited` from the start,
+which is the constructor's `on_disk=False` default. The alternative — taking the
+caller's word that the file agrees — would decline the only write that could
+make it true, and the one thing in the tree that composes a project in memory
+and hands it a path is `project_select.mint`.
+
+Both criterion cases proved red independently: dropping the `closeEvent` wire
+fails `an_edit_survives_a_close`, and dropping `save_if_edited`'s guard fails
+`a_clean_document_writes_nothing` — which asserts the file's bytes rather than
+its value, against a hand-written comment line appended to the fixture, so a
+rewrite that round-trips to the same document is still caught. The undo leg of
+`edited` and the unread-file default are `tests/unit/test_session.py`'s, where
+the comparison lives.
+
+    $ uv run pytest tests/gui/test_save_and_run.py -q -k 'an_edit_survives_a_close or a_clean_document_writes_nothing'
+    2 passed, 4 deselected in 1.76s
+
+Full suite 1215 passed, `ruff format --check` and `ruff check` clean.

@@ -19,6 +19,13 @@ the document the GUI just wrote and stops at the one thing that is missing — t
 footage — which is both a fixed sentence to assert on and the strongest available
 statement that the artifact travelled.
 
+**The last two cases are about the other write, and they need a window.** Run is
+not the only thing that puts the document on disk any more — closing the window
+is too — and that one cannot be driven against a bare screen, because the whole
+of it is the wire between `MainWindow.closeEvent` and `Session.save_if_edited`.
+They are here rather than in `test_app.py` because what they assert is what the
+file holds afterwards, which is this module's subject.
+
 Qt and `sieve.gui` are imported inside the test bodies, for the reason
 `conftest.py` gives.
 """
@@ -29,6 +36,8 @@ import shutil
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Sink, SourceRef
 from sieve.core.tool_base import (
@@ -254,3 +263,98 @@ def test_a_command_that_will_not_start_says_so(qapp, tmp_path: Path, monkeypatch
     driving.wait_until(lambda: not screen.running(), _RUN_TIMEOUT_MS)
 
     assert "sieve-that-is-not-installed" in screen.message()
+
+
+#: A hand-written line no `Project.to_yaml` would produce, appended to the file
+#: the window is opened on. A rewrite of the document drops it, so it says that
+#: the file was not rewritten rather than that it round-tripped to the same
+#: bytes — which a comparison against a re-serialized project could not tell
+#: apart.
+_MARKER = b"# hand-written; a save would drop this line\n"
+
+
+@pytest.fixture
+def chain_file(tmp_path: Path) -> Path:
+    """A two-step project on disk, over footage that is not there.
+
+    Registered tools, because the window resolves specs off the shelf and a card
+    for a tool this install lacks carries no ✕ (`app.removable`). The missing
+    footage costs nothing: the transport fails on it asynchronously and neither
+    case waits for a frame.
+    """
+    discover()
+    spec = REGISTRY.latest("downsample")
+    project = Project(
+        source=SourceRef(path="clip.mp4"),
+        pipeline=Pipeline(
+            nodes=(
+                Node(node_id="n0", tool_id=spec.tool_id, version=spec.version),
+                Node(node_id="n1", tool_id=spec.tool_id, version=spec.version),
+            ),
+            edges=(Edge(upstream="n0", downstream="n1"),),
+        ),
+    )
+    path = tmp_path / "clip.sieve.yaml"
+    project.save(path)
+    path.write_bytes(path.read_bytes() + _MARKER)
+    return path
+
+
+def test_an_edit_survives_a_close(qapp, chain_file: Path) -> None:
+    """Drop a step, close the window, and the file is the chain that is left.
+
+    A removal rather than a parameter, because it is the edit whose loss is
+    least deniable: the document on disk would still name a step the user
+    watched leave the stack, and the next `sieve run` would compute it.
+    """
+    del qapp
+    from sieve.gui.app import MainWindow
+
+    window = MainWindow([chain_file])
+    try:
+        window.open_project(chain_file)
+        assert window.session is not None
+        assert not window.session.edited
+
+        window.remove_step(1)
+
+        assert window.session.edited
+        # Nothing has been written yet: the edit is the session's until the
+        # gesture that saves, and this case exists because there was none.
+        assert len(Project.load(chain_file).pipeline.nodes) == 2
+    finally:
+        window.close()
+
+    saved = Project.load(chain_file)
+    assert tuple(node.node_id for node in saved.pipeline.nodes) == ("n0",)
+    assert saved.pipeline.edges == ()
+
+
+def test_a_clean_document_writes_nothing(qapp, chain_file: Path) -> None:
+    """Open a project, walk it, close it — and the file is untouched, byte for byte.
+
+    The walk and the pin move on the way through, which is the point: they are
+    view state and none of them is a change to the document (`app.py`), so the
+    close has every opportunity to write and no reason to. That an edit made and
+    undone is clean again is the same claim from the session's side, where the
+    comparison lives (`tests/unit/test_session.py`).
+    """
+    del qapp
+    from sieve.gui.app import MainWindow
+
+    before = chain_file.read_bytes()
+    window = MainWindow([chain_file])
+    try:
+        window.open_project(chain_file)
+        assert window.session is not None
+        # Really open, so that "nothing was written" is not "nothing happened".
+        assert window.current_node is not None
+
+        window.go_down()
+        window.pin_current()
+
+        assert not window.session.edited
+    finally:
+        window.close()
+
+    assert chain_file.read_bytes() == before

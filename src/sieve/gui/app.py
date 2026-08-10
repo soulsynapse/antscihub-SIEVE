@@ -427,10 +427,17 @@ class MainWindow(QMainWindow):
         container — a second check here of whether the footage is there could
         disagree with it.
 
+        The project being left is written back first, for `closeEvent`'s reason
+        read the other way: opening a second project is how a session ends
+        without the window going, and an edit lost here would be lost to a
+        gesture that never mentioned the document it discarded.
+
         Raises:
             OSError: if `path` cannot be read.
             ValidationError: if the document is structurally invalid.
         """
+        if self._session is not None:
+            self._session.save_if_edited()
         self._tuning.close()
         self._source_extent = None
         self._source_frame = None
@@ -487,13 +494,28 @@ class MainWindow(QMainWindow):
             self._redraw()
 
     def closeEvent(self, event: object) -> None:
-        """Stop the decode thread before the window goes.
+        """Write the document back, then stop the decode thread.
+
+        The save is first because it is the only thing here that can still fail
+        in a way the user would care about, and everything after it is teardown.
+
+        **Closing the window is a save, and there is no other gesture that is
+        one.** Every mutation the command layer issues lives in the session
+        until something calls `save`, and the only other caller is the run
+        button — so without this, tuning six parameters and closing leaves the
+        file as it was opened. Silently rather than through a prompt: the
+        document is the value the user has been editing all along, the stacks
+        that made those edits are this session's and are not saved with it, and
+        a dialog asking whether to keep work already done would be the one
+        surface in the window that treats an edit as provisional.
 
         A `QThread` still running when its `QObject` is finalised takes the
         process down, which turns closing the app into a crash report. The
         preview's own readers are closed first, for the ordinary reason: they
         hold one open container per worker.
         """
+        if self._session is not None:
+            self._session.save_if_edited()
         self._tuning.close()
         self._player.shutdown()
         super().closeEvent(event)  # type: ignore[arg-type]

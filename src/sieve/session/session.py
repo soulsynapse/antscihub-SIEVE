@@ -44,11 +44,17 @@ class Session:
     (`PLAN.md`, Phase 7).
     """
 
-    def __init__(self, path: Path, project: Project) -> None:
+    def __init__(self, path: Path, project: Project, *, on_disk: bool = False) -> None:
         self._path = path
         self._past: list[Project] = []
         self._present = project
         self._future: list[Project] = []
+        # The value the file is known to hold, or `None` for a session that has
+        # never read or written one. `False` by default because a caller that
+        # composed a project in memory cannot say what is at `path` — it may not
+        # even exist — and a session that claimed the file agreed would decline
+        # the one write that would make it true.
+        self._on_disk: Project | None = project if on_disk else None
 
     @classmethod
     def open(cls, path: Path) -> Self:
@@ -63,7 +69,7 @@ class Session:
             OSError: if `path` cannot be read.
             ValidationError: if the document is structurally invalid.
         """
-        return cls(path, Project.load(path))
+        return cls(path, Project.load(path), on_disk=True)
 
     @property
     def path(self) -> Path:
@@ -144,5 +150,42 @@ class Session:
         Only the present: history is this session's, not the document's, so a
         reopened project has no stacks and nothing about it records that it once
         did.
+
+        Unconditional, unlike `save_if_edited`: a caller reaching this is saying
+        the file must hold the present value when it returns, which is what the
+        run button means by it — the argv it is about to issue names the path.
         """
         self._present.save(self._path)
+        self._on_disk = self._present
+
+    @property
+    def edited(self) -> bool:
+        """Whether the present value differs from the one the file holds.
+
+        The comparison an undo already makes (`commit`), asked against the value
+        last read or written rather than against the top of the past stack — so
+        stepping back onto the value that was opened is not an edit, and a
+        parameter moved and moved back is not one either. That is the whole of
+        what dirty state costs here: two stacks of whole values means the saved
+        value is another whole value, and nothing has to record what an edit
+        *was* to know one has happened.
+        """
+        return self._present != self._on_disk
+
+    def save_if_edited(self) -> bool:
+        """Write the present value back, unless the file already holds it.
+
+        The guard is not an optimisation. `Project.to_yaml` is stable byte for
+        byte so that version control is usable on the one file a user most wants
+        a history of (`core/pipeline_model.py`), and a session that rewrote its
+        file on every close would spend that stability on documents nobody
+        touched — a mtime moved, a sync woken, a diff that says the project was
+        worked on when it was only opened.
+
+        Returns:
+            Whether anything was written.
+        """
+        if not self.edited:
+            return False
+        self.save()
+        return True

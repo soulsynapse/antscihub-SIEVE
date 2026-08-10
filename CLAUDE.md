@@ -7,6 +7,12 @@ plays.
 ## Conventions
 
 - Commits are with conventional commits.
+- `docs/SCAFFOLD.md` is generated, never hand-edited: a pre-commit hook rebuilds
+  it from the staged tree and stages it, so every commit carries a map matching
+  what it moved. The glosses are each module's first docstring line, which is
+  where a wrong one gets fixed. Hooks are tracked in `.githooks/`, so a fresh
+  clone turns them on with `git config core.hooksPath .githooks`;
+  `SIEVE_SKIP_SCAFFOLD=1` commits without one.
 
 ## Environment
 

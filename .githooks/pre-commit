@@ -1,0 +1,14 @@
+#!/bin/sh
+# Rebuild docs/SCAFFOLD.md from the staged tree and stage it, so the map of
+# where things live arrives in the same commit as the move it describes.
+#
+# Set SIEVE_SKIP_SCAFFOLD=1 to commit without it.
+set -e
+
+if [ "$SIEVE_SKIP_SCAFFOLD" = "1" ]; then
+	exit 0
+fi
+
+root=$(git rev-parse --show-toplevel)
+uv run --quiet python "$root/scripts/doc_index.py" --quiet
+git add -- "$root/docs/SCAFFOLD.md"

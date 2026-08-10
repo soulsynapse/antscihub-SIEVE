@@ -65,7 +65,7 @@ wheels = [
 [[package]]
 name = "sieve"
 version = "0.4.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "pyside6" },
 ]

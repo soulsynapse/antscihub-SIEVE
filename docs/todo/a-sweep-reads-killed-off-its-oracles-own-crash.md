@@ -1,9 +1,9 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k 'a_hung_grandchild_does_not_outlive_the_mutant_timeout or the_mutant_timeout_is_derived_from_the_baseline'"
+done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit"
 opened: 2026-08-08
 ---
 
@@ -187,3 +187,38 @@ item, recorded in the folded 2026-08-08 section above — and an incomplete
 sidecar is what catches that one. One artifact, both modes: the flag says a
 sweep that did not finish left the tree mutated, the replacement bytes say one
 that did.
+
+## The bound landed and the criterion rotates onto the half nothing covers (2026-08-10)
+
+The bound the section above asked for is delivered and re-verified: the criterion
+that rotated onto it is green independently, `done_when` was not edited by the
+worker, and `_terminate_tree(process) ==> process.kill()` and the derivation's
+own recorded survivor `max(MUTANT_TIMEOUT_FLOOR_SECONDS, 2.0 * elapsed + 1.0)
+==> 300.0` both reproduce as KILLED. `run_sweep` no longer calls
+`subprocess.run` at all.
+
+The third mutant the commit reports as killed does not reproduce.
+`stdout=out, stderr=err ==> stdout=subprocess.PIPE, stderr=subprocess.PIPE`
+SURVIVED an independent sweep over the same two cases
+(`findings/loop/2026.08.10-a-two-part-fix-is-reported-as-two-kills-and-the-half-that-carries-it-is-the-other-one.md`),
+and the reason is that `_run_bounded` never calls `communicate()` — it waits on
+the process handle, which returns on time whatever the streams are. So
+`_run_bounded`'s docstring, the finding it cites, and the commit message all
+credit the redirection with a promptness `Popen.wait` supplies, and the
+docstring is the one in the tree.
+
+The redirection is still load-bearing, and for a reason that belongs to this
+item rather than a neighbour: nothing drains the pipes — no `communicate()`, no
+reader thread — so a PIPE oracle that writes past the buffer blocks in its own
+`write`, never exits, and is timed out and scored KILLED. That is a false KILLED
+on a mutant the tests do not kill, which is this item's title, and `uv run pytest
+-q` on a red baseline clears 64 KB without effort. `done_when` rotates onto a
+case over it, because a departure whose stated reason is wrong and whose real
+reason has no case is indistinguishable from one that could be deleted.
+
+Two clauses this criterion does not reach, in the order they should rotate next:
+the docstring's own correction, which no `-k` can assert; and the
+compile-the-mutant gate two sections above, which is the deterministic member of
+the false-KILLED class and fires on every subject under every oracle. `_tail`'s
+uncased halves and `ORACLE_BUDGET_SECONDS`'s "structurally impossible" comment
+are still here and still smallest.

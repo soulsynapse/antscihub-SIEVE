@@ -37,3 +37,16 @@ with what `_paint_field` draws. That claim lands only in `paintEvent` and is
 outside every oracle the tree has
 ([findings/loop/2026.08.09-an-items-clause-that-lands-only-in-paintevent-is-outside-every-oracle.md](../findings/loop/2026.08.09-an-items-clause-that-lands-only-in-paintevent-is-outside-every-oracle.md)),
 which is a different problem from a refusal nobody entered.
+
+Fold, 2026-08-10, from the review of `458c717`: `SurfacePanel.y_of`'s docstring
+says the axis floor sits "on the widget's bottom edge", which the `RowAxis`
+branch two lines below has made false — `_fraction_of` returns `0.5 / len(rows)`
+for the lowest coordinate, so the floor is half a row up, by the design the
+docstring beside it argues for. It is one sentence to correct, and it belongs
+here because it is the same convention in the same file, not because it is
+another refusal. The review that found it declined to home it on the ground that
+nothing outside the panel reads `value_range`, which is a reachability answer to
+a question about whether a sentence is true
+([findings/loop/2026.08.08-the-proof-of-red-corrects-the-item-and-leaves-the-comment-it-was-written-from.md](../findings/loop/2026.08.08-the-proof-of-red-corrects-the-item-and-leaves-the-comment-it-was-written-from.md)).
+`done_when` is untouched and does not reach this, since no test asserts a
+docstring.

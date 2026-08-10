@@ -62,6 +62,7 @@ from PySide6.QtCore import (
     QAbstractAnimation,
     QEasingCurve,
     QEvent,
+    QPoint,
     QPointF,
     QPropertyAnimation,
     QRect,
@@ -3259,6 +3260,62 @@ def _stack_scroll(column: QWidget) -> QScrollArea:
     return scroll
 
 
+#: Left above and below a card brought into view, so what comes into view with
+#: it is the gap the edges are drawn in rather than the neighbour's border
+#: exactly. A revealed card that ended flush with the viewport would read as
+#: the end of the stack.
+_REVEAL_MARGIN = 20
+
+
+class _StackPane(QWidget):
+    """A position whose body is a scrolling stack of cards, one of them current.
+
+    Both stacks are rebuilt whole on every move — the selection is drawn into
+    the cards rather than pushed onto them — so the scroll offset is state the
+    pane does not survive, and a pane that says nothing about where it was
+    leaves the walk at the top of the chain after every keystroke. These two
+    handles are what the window carries across a rebuild and what it aims at
+    when a position is entered; a pane without a current card (the step form)
+    is not one of these and is replaced without either.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.scroll: QScrollArea | None = None
+        self.current_card: QWidget | None = None
+
+    def offset(self) -> int:
+        return 0 if self.scroll is None else self.scroll.verticalScrollBar().value()
+
+    def scroll_to(self, value: int) -> None:
+        """Where the pane this one replaces was. Clamped by the bar itself,
+        which is what makes a rebuild that shortened the stack land legally."""
+        if self.scroll is not None:
+            self.scroll.verticalScrollBar().setValue(value)
+
+    def reveal_current(self) -> None:
+        """Bring the selected card into view, moving as little as possible.
+
+        Not `ensureWidgetVisible`: a card taller than the viewport is centred by
+        that, and a card is read from its head — the number, the title and the
+        buttons are all in the first line, and the accent edge only says which
+        card is current if the card is recognisable. So a card that cannot fit
+        is aligned to its top, and one that fits is scrolled to whichever edge
+        it is past. A card already in view moves nothing, which is what keeps a
+        click on a visible card from scrolling the stack under the pointer.
+        """
+        if self.scroll is None or self.current_card is None:
+            return
+        bar = self.scroll.verticalScrollBar()
+        top = self.current_card.mapTo(self.scroll.widget(), QPoint(0, 0)).y()
+        height = self.current_card.height()
+        view = self.scroll.viewport().height()
+        if height + 2 * _REVEAL_MARGIN >= view or top - _REVEAL_MARGIN < bar.value():
+            bar.setValue(top - _REVEAL_MARGIN)
+        elif top + height + _REVEAL_MARGIN > bar.value() + view:
+            bar.setValue(top + height + _REVEAL_MARGIN - view)
+
+
 def build_pipeline_pane(
     current: int,
     pinned: int,
@@ -3275,7 +3332,7 @@ def build_pipeline_pane(
     on_swap: object = None,
     replaces: bool = False,
 ) -> QWidget:
-    pane = QWidget()
+    pane = _StackPane()
     pane.setStyleSheet(_stack_stylesheet())
 
     # What stands above the stack is what the stack belongs to, not a step in
@@ -3369,7 +3426,12 @@ def build_pipeline_pane(
     layout.setContentsMargins(6, 6, 6, 0)
     layout.setSpacing(6)
     layout.addWidget(project_card)
-    layout.addWidget(_stack_scroll(column))
+    pane.scroll = _stack_scroll(column)
+    # The box when there is one, and the current card otherwise: what the walk
+    # is standing on is the thing that has to be on screen, and while the box
+    # is open that is the box — the card it stands over is not even built.
+    pane.current_card = cards.get(_ADD_SLOT) if adding >= 0 else cards.get(current)
+    layout.addWidget(pane.scroll)
     return pane
 
 
@@ -3486,7 +3548,7 @@ def _project_card(index: int, current: int, on_select, on_open, on_close) -> Cha
 
 
 def build_project_pane(current: int, on_select, on_open, on_new, on_close) -> QWidget:
-    pane = QWidget()
+    pane = _StackPane()
     pane.setStyleSheet(_stack_stylesheet())
 
     # The button is on the library card, not at the foot of the list: a new
@@ -3502,15 +3564,21 @@ def build_project_pane(current: int, on_select, on_open, on_new, on_close) -> QW
     stack.setContentsMargins(6, 6, 6, 6)
     stack.setSpacing(6)
     stack.addLayout(_stage_header("projects", "project -> source"))
-    for index in range(len(PROJECTS)):
-        stack.addWidget(_project_card(index, current, on_select, on_open, on_close))
+    cards = [
+        _project_card(index, current, on_select, on_open, on_close)
+        for index in range(len(PROJECTS))
+    ]
+    for card in cards:
+        stack.addWidget(card)
     stack.addStretch(1)
 
     layout = QVBoxLayout(pane)
     layout.setContentsMargins(6, 6, 6, 0)
     layout.setSpacing(6)
     layout.addWidget(library)
-    layout.addWidget(_stack_scroll(column))
+    pane.scroll = _stack_scroll(column)
+    pane.current_card = cards[current] if 0 <= current < len(cards) else None
+    layout.addWidget(pane.scroll)
     return pane
 
 
@@ -3881,6 +3949,10 @@ class Control(QWidget):
     def go(self, position: int) -> None:
         self._rail.setVisible(position in (_POS_PIPELINE, _POS_STEP))
         self._panes.set_current(position)
+        # Before the slide rather than after it: the pane travels with what it
+        # will be showing when it arrives, so the correction is never something
+        # the user watches happen to a pane already in front of them.
+        self.reveal_current()
 
     def remove(self, index: int) -> None:
         """Drop a step; the walk and the pin land on the step above it.
@@ -4103,9 +4175,31 @@ class Control(QWidget):
         self._panes._panes[index] = pane
         pane.show()
         self._panes._relayout()
+        # Where the user had scrolled to, then the least move off it that puts
+        # the selection back on screen. Both, and in this order: restoring alone
+        # would leave an arrow key moving an accent the user cannot see, and
+        # revealing alone would put every rebuild back at the top of the chain
+        # — the stack is rebuilt when a knob is turned, not only when the walk
+        # moves. Done here rather than deferred because the pane is laid out by
+        # the show above, and a correction on the next turn of the loop is one
+        # the user would watch happen.
+        if isinstance(pane, _StackPane) and isinstance(old, _StackPane):
+            pane.scroll_to(old.offset())
+            pane.reveal_current()
         old.hide()
         old.setParent(None)
         old.deleteLater()
+
+    def reveal_current(self) -> None:
+        """Put the position's selection on screen, wherever the walk left it.
+
+        The stacks keep their own offsets while the walk is away, so a position
+        entered fresh can be showing anywhere in a chain — including, at launch,
+        the top of one whose selection is the output card at its foot.
+        """
+        pane = self._panes._panes[self.current_position()]
+        if isinstance(pane, _StackPane):
+            pane.reveal_current()
 
     def _rebuild_walk(self) -> None:
         old_rail = self._rail

@@ -41,3 +41,27 @@ rows, not a fix.
 these rows in place the four mutants above should die. The sweep is a throwaway
 `ast.NodeTransformer` over the module — the finding describes it — and belongs
 in the item, not in the repo.
+
+## Folded 2026-08-10: the un-serving inverse is a fifth survivor, and it is in `crop_serving.py`
+
+Measured at the review of `33aefe3`:
+[the un-serving inverse survives the whole suite](../findings/2026.08.10-the-un-serving-inverse-survives-the-whole-suite.md).
+The footage field's removal forced `crop_serving._wired` to cut the edge feeding
+a served crop node and `_uncut` to put it back, and the whole suite is `1296
+passed` with the restoration deleted — while the forward half, narrowed back to
+its pre-removal spelling, fails eleven cases. The docstring calls the
+restoration "what makes the pair an edit and its undo", so this is the fifth row
+of exactly the shape the four above have: shipped code that is right and that
+nothing would notice the loss of.
+
+- A served project un-served has its crop node fed by the graph's footage root.
+  `test_a_served_project_can_be_cut_again` and
+  `test_a_replicate_added_to_a_served_project_runs` reach `_uncut`'s parent
+  lookup — reversing the walk it uses fails both — and assert nothing about
+  whether the answer is wired in. The case is the restored graph's edges, or a
+  run over the un-served document that would have to read the parent.
+
+This widens the item past `crop_binding.py`, which its title still names. It
+lands here rather than beside the serving item because "a clause in this
+mechanism with no case" is what this item is, and a second item for a fifth row
+of it would be the same item twice.

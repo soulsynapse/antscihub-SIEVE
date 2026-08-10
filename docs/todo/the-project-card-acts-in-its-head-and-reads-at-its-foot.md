@@ -161,3 +161,23 @@ its loss would be invisible until a window left open overnight said the wrong
 day. A case that hands `rows()` two different `now` values over one unchanged
 file is the whole of it, and it belongs beside whatever this item does to the
 line.
+
+## Folded 2026-08-10: the footage line is empty for a project that has footage per arena
+
+`33aefe3` moved the card's footage line off the departed schema field and onto
+`resolve_source.named_footage`, which reads the footage root's own parameters
+and never a replicate's. `footage_file`, the CLI's reader of the same question
+in the same module, falls through to the replicates in document order and argues
+why: a path is an ordinary parameter, and a folder of already-cut files is
+exactly the project that leaves the root's `path` empty and deviates it per
+arena. Measured at that commit's review —
+[the two graph-side footage readers disagree on a deviated path](../findings/2026.08.10-the-two-graph-side-footage-readers-disagree-on-a-deviated-path.md).
+
+So the line this item is rearranging says "no footage yet" for a project that
+runs, and `gui/app.open_project` opens no player for it. It lands here rather
+than as its own item because the line's *content* and the line's *position* are
+one edit to one row, and this item already owns the row — but the fix is not a
+layout question, and the `when`/`card_arrow` criterion in the frontmatter does
+not reach it. Whatever the card should say for a per-arena footage is also
+undecided: the first replicate's spelling is a half-truth, and neither an empty
+line nor one path carries "one file per arena".

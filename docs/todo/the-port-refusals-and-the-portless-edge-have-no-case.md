@@ -51,3 +51,30 @@ stream", citing `core/tool_base.py` as having cut the port protocol. The commit
 repaired eight docstrings in `src/` that said the same thing and did not reach
 this one, which is a test asserting a rule under a name that now states the
 opposite of what the rule is.
+
+## Folded 2026-08-10: the stamp question this item pointed at came back unanswered
+
+The `_without_an_absent_port` bullet above defers the schema half to
+[the-field-that-names-footage-leaves-the-schema](the-field-that-names-footage-leaves-the-schema.md),
+"holds that question". That item closed on 2026-08-10 answering only its own
+half: a *removal* stamps 1, because ADR 38's stamp "rises only when a build
+writes into it something the declared version does not have" and a removal
+writes nothing new. `test_the_version_a_document_declares_after_the_removal`
+pins it.
+
+What it did not answer, and what nothing holds now, is the *addition* half it
+had folded in. Under ADR 38 the rise is conditional on content, and nothing in
+the tree implements a conditional rise: a project loaded at 1, given a merge,
+and saved is stamped 1 and carries a `port` that 1 does not have. The bullet's
+own claim — that a document over a graph with no fan-in is byte-for-byte what it
+was — is what makes the stamp *true for the portless case* and is exactly the
+claim no case reads. So the missing case and the unanswered stamp question are
+one subject, which is why this lands here rather than as its own item: pin the
+portless edge and what is left is a single question about the one document that
+does carry a port.
+
+That question is a ruling and not a case — either `SCHEMA_VERSION` moves to 2
+for the addition that already landed, or ADR 38 gains a successor saying a
+conditional stamp is not implemented and why that is safe — so a session taking
+this item should land the six cases and say in its final message that the ruling
+is still Kendrick's rather than answer it in passing.

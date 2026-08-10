@@ -2,7 +2,7 @@
 title: The field that names footage leaves the schema, and every reader reaches it through the graph
 priority: high
 phase: 11
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: 'uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k a_document_carrying_a_source_key_is_refused && uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k relocating_rewrites_the_source_nodes_path_param && uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k a_relative_source_param_anchors_on_the_project_directory && uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name && uv run pytest "tests/gui/test_project_cards.py::test_the_library_line_reads_footage_through_the_graph" -q && uv run pytest tests/unit/test_pipeline_model.py -q -k the_version_a_document_declares_after_the_removal'
 opened: 2026-08-10
@@ -344,3 +344,53 @@ Two things this leaves behind, neither of them this item's:
   `frame_source`, `PrefetchFrameSource`'s use here and `_UNFED` are reached only
   by a graph rooted on a plain tool — which is the state the CLI refuses by name
   one line earlier.
+
+## Review 2026-08-10: all six legs re-run green, and the three residues have homes
+
+Every leg of `done_when` was run against `33aefe3` and each exits 0 on its own
+name; the suite is `1296 passed`, which is the number the run reported.
+`done_when` is untouched and the worker moved `status` only to
+`awaiting-review`. The five cases the commit adds are the six legs' own — no
+test was added for the crop-serving repair the removal forced, which is the one
+place this commit's coverage and its code came apart, and is the third residue
+below.
+
+Three subjects the body raised and this commit did not close, each folded rather
+than left with the item:
+
+- **The key.** The "Review 2026-08-10: the anchoring lands in the cache key"
+  section above names a fork this item was to take and did not; the run's
+  messages do not mention it. It is now
+  [a-projects-directory-is-inside-every-key-below-its-source](a-projects-directory-is-inside-every-key-below-its-source.md),
+  minted because no open item owned the subject and reopening a landed
+  fifty-one-file migration to carry a `node_key` digest question would be two
+  jobs in one item.
+- **The stamp's other half.** "An addition landed and nothing decided whether
+  the stamp rose" is answered for a removal and not for `Edge.port`. Folded
+  into
+  [the-port-refusals-and-the-portless-edge-have-no-case](the-port-refusals-and-the-portless-edge-have-no-case.md),
+  which already pointed *here* for it and already owns the portless-edge case
+  the answer rests on; its `done_when` covers the cases and not the ruling, so
+  the next review may want to widen it.
+- **The reverse of the serving edit.** Deleting `_uncut`'s parent-edge
+  restoration leaves the whole suite green
+  ([the un-serving inverse survives the whole suite](../findings/2026.08.10-the-un-serving-inverse-survives-the-whole-suite.md)).
+  Folded into
+  [crop-bindings-helper-clauses-have-no-case](crop-bindings-helper-clauses-have-no-case.md),
+  which has no `done_when` to widen.
+
+One more the body did not raise: `named_footage` reads the baseline alone where
+`footage_file` falls through to the replicates, so a per-arena footage draws an
+empty card line and opens no player
+([the two graph-side footage readers disagree on a deviated path](../findings/2026.08.10-the-two-graph-side-footage-readers-disagree-on-a-deviated-path.md)),
+folded into
+[the-project-card-acts-in-its-head-and-reads-at-its-foot](the-project-card-acts-in-its-head-and-reads-at-its-foot.md).
+
+Correcting the run's own last bullet on one point, since it is the sentence a
+later reader will act on: `frame_source` and `_UNFED` are *not* "reached only by
+a graph rooted on a plain tool — which is the state the CLI refuses by name one
+line earlier". The CLI refuses a graph with no decoded source root at all; a
+graph with a footage root *and* a plain root passes `footage_of` and takes
+`_reads_the_footage` true. What makes that path cold is that no front end writes
+such a graph, which is the claim the bullet meant and a weaker one than the
+refusal it cites.

@@ -2,7 +2,7 @@
 title: A region is added, dropped, and edited through the one the fan selected
 priority: high
 phase: 9
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'adding_a_region_selects_it or a_knob_edits_the_selected_regions_own_value'"
 opened: 2026-08-09
@@ -69,3 +69,27 @@ is killed by nothing — replacing it with `True` survives
 `uv run pytest -q tests/gui`. The + verb writes an override keyed on a node id
 and that has to be the node the fan hangs under, so whatever pins the keying
 pins the clause.
+
+## 2026-08-09 (work): the gate, and what − was decided to be
+
+`done_when` now green:
+
+    $ uv run pytest tests/gui -q -k 'adding_a_region_selects_it or a_knob_edits_the_selected_regions_own_value'
+    2 passed, 214 deselected in 0.99s
+    exit: 0
+
+The sub-question the item posed is settled the way the item's own argument
+points: − has no floor. The referent's refusal below one was written for a
+mockup where a crop with no region was incoherent; here a project with no
+replicates is the baseline run once, which is the state every document is
+minted in, and a floor would have made the first + a gesture with no way back.
+The count row therefore stays on the card at zero, where the fan is gone, since
+that is where the + that gets a branch back is pressed.
+
+The other arm the item left open is decided the same way it framed it: an edit
+with no region selected is the baseline, and the branch is `selected_replicate`
+returning `None` rather than anything a widget tests.
+
+The roots-only clause is now killed by
+`test_a_step_reading_a_reshaped_frame_is_offered_no_regions` — replacing it with
+`True` fails that case, verified through `scripts/mutation_sweep.py`.

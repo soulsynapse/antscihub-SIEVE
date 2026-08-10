@@ -72,12 +72,12 @@ from PySide6.QtCore import QEvent
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
-from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline
+from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline, Replicate
 from sieve.core.tool_base import ElementKind, ParamStereotype, StreamSpec, ToolSpec
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError, offered_tools
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
-from sieve.gui.chain_stack import Adding, Fan, Outputs, PipelinePane, Step, Write
+from sieve.gui.chain_stack import Adding, Fan, Outputs, PipelinePane, Regions, Step, Write
 from sieve.gui.chrome import darken_title_bar, window_stylesheet
 from sieve.gui.control import Control
 from sieve.gui.graph_panel import GraphPanel
@@ -113,7 +113,14 @@ from sieve.gui.tuning import TuningLoop
 from sieve.gui.walk import node_order
 from sieve.pipeline.resolve_source import resolved_sources
 from sieve.pipeline.shelf import loaded_shelf
-from sieve.session.intents import AddNode, RemoveNode, RetoolNode, issue
+from sieve.session.intents import (
+    AddNode,
+    AddReplicate,
+    RemoveNode,
+    RemoveReplicate,
+    RetoolNode,
+    issue,
+)
 from sieve.session.session import Session
 
 
@@ -145,20 +152,35 @@ def source_fed_nodes(pipeline: Pipeline) -> frozenset[str]:
     return frozenset(node.node_id for node in pipeline.nodes if node.node_id not in fed)
 
 
-def cuts_regions(spec: ToolSpec | None, node_id: str, pipeline: Pipeline) -> bool:
-    """Whether this node's box is the one the project's regions are deviations of.
+def region_param(spec: ToolSpec | None) -> str | None:
+    """The name of the parameter a step's box is, or `None` where it has none.
 
     Read off the stereotype rather than off a tool id, which is the only reading
     available here (`adr/gui-knows-kinds-not-tools.md`) and the same one
-    `pipeline/crop_serving.crop_roots` makes from the resolved params type. Roots
-    only, for `source_fed_nodes`' reason: a region is denominated in the frame
-    its own node is handed, and a replicate's box is a box on the footage.
+    `pipeline/crop_serving.crop_roots` makes from the resolved params type. The
+    first, for `_region_fan`'s reason one level down: a tool declaring two boxes
+    would leave which of them the regions deviate at unanswerable, and nothing
+    on the shelf does.
     """
-    return (
-        spec is not None
-        and ParamStereotype.REGION in spec.param_stereotypes.values()
-        and node_id in source_fed_nodes(pipeline)
+    if spec is None:
+        return None
+    return next(
+        (name for name, kind in spec.param_stereotypes.items() if kind is ParamStereotype.REGION),
+        None,
     )
+
+
+def cuts_regions(spec: ToolSpec | None, node_id: str, pipeline: Pipeline) -> bool:
+    """Whether this node's box is the one the project's regions are deviations of.
+
+    Roots only, for `source_fed_nodes`' reason: a region is denominated in the
+    frame its own node is handed, and a replicate's box is a box on the footage.
+    Which is also what makes this the predicate the + verb keys an override on
+    (`MainWindow.add_region`) — a fan under a node reading a reshaped frame
+    would offer regions whose value the canvas has no editor for, and the
+    overrides would be pinned in a space nothing here can name.
+    """
+    return region_param(spec) is not None and node_id in source_fed_nodes(pipeline)
 
 
 def removable(spec: ToolSpec | None) -> bool:
@@ -276,7 +298,9 @@ class MainWindow(QMainWindow):
         # Which of the project's regions the stack below the fan is drawn for.
         # View state for the walk's reason: which region is being looked at is
         # not something the document records, and a widget holding its own would
-        # be the second answer to it.
+        # be the second answer to it. It is also the tail of every address the
+        # forms and the overlays write at (`selected_replicate`), so a move of it
+        # is a redraw of both for the same reason a move of the walk is.
         self._region = 0
         # Which step holds the slot under the canvas. `None` until a project is
         # open, and an index into `_order` after — one slot, so pinning is a
@@ -955,6 +979,24 @@ class MainWindow(QMainWindow):
         """Which of the project's regions the stack is drawn for."""
         return self._region
 
+    @property
+    def selected_replicate(self) -> str | None:
+        """Which replicate every parameter edit is addressed to, or the baseline.
+
+        The window's own `_region` resolved against the document, and the one
+        place that resolution is made: a form and an overlay reading it
+        separately could open on one region and commit to another.
+
+        `None` where the project has no replicates, which is the arm of the
+        branch the surface had before there were any — an edit with no region to
+        be about moves the node's baseline, and that is the value such a project
+        runs (`core/pipeline_model.resolved_params`).
+        """
+        session = self._session
+        if session is None or not session.project.replicates:
+            return None
+        return session.project.replicates[self._region].replicate_id
+
     def select_region(self, index: int) -> None:
         """A square in the fan: walk onto one of the regions the crop step cuts.
 
@@ -970,6 +1012,70 @@ class MainWindow(QMainWindow):
         if index == self._region:
             return
         self._region = index
+        self._redraw()
+
+    def add_region(self) -> None:
+        """The card's +: another region, carrying the showing one's box, selected.
+
+        **Selected, which is the fan's selection moving from a gesture that is
+        not a click on a square.** The region a user just made is the one they
+        are about to place, and a + that left the walk where it was would make
+        placing it a second gesture the surface never asked for.
+
+        **It arrives pinned to the box it was copied from.** A replicate with no
+        deviation follows the node's baseline, and the baseline is what the next
+        edit on *any* region moves (`Project.with_param_edit`) — so an unpinned
+        new region would be dragged along by an edit made to place its sibling,
+        and the user would find a region they never touched sitting under the
+        one they did. Copied rather than offset off it: the identity crop is
+        larger than any frame (`tools/crop.WHOLE_FRAME`), and a fraction of that
+        offset is a rectangle that clamps to nothing at all.
+
+        Keyed on the step the fan hangs under, which is the step whose box the
+        regions are deviations of and the only one whose value is denominated in
+        a frame this window can name (`cuts_regions`). A project whose chain has
+        no such step has no + to press.
+        """
+        session = self._session
+        cutting = self._cutting()
+        if session is None or cutting is None:
+            return
+        node = self._order[cutting]
+        # Not None: `cuts_regions` found the node by having one.
+        param = region_param(self._specs.get(node.node_id))
+        box = session.project.params_for(node.node_id, self.selected_replicate).get(param)
+        issue(
+            session,
+            AddReplicate(
+                Replicate(
+                    name=f"region {len(session.project.replicates) + 1}",
+                    overrides={} if box is None else {node.node_id: {param: box}},
+                )
+            ),
+        )
+        self._region = len(session.project.replicates) - 1
+        self._redraw()
+
+    def remove_region(self) -> None:
+        """The card's −: drop the region showing, and stand on what is left.
+
+        **The selection moves down with it, and that is what this method is
+        for.** `_region` is otherwise only ever clamped against a count that
+        cannot shrink, and the fan indexes its tiles by it inside `paintEvent` —
+        where an `IndexError` is thrown through a Qt virtual override and takes
+        the process down rather than raising. So the verb that makes the count
+        able to shrink is the verb that has to move it.
+
+        The last one goes too. A project with no regions is the baseline run
+        once, which is the state every project is minted in, and a floor here
+        would make the first + a gesture with no way back
+        (`session/intents.RemoveReplicate`).
+        """
+        session = self._session
+        if session is None or not session.project.replicates:
+            return
+        issue(session, RemoveReplicate(session.project.replicates[self._region].replicate_id))
+        self._region = max(0, min(self._region, len(session.project.replicates) - 1))
         self._redraw()
 
     def refill_graph(self) -> None:
@@ -1160,7 +1266,7 @@ class MainWindow(QMainWindow):
             spec = self._specs.get(node.node_id)
             knobs = None
             if spec is not None:
-                form = ParamForm(session, node.node_id, spec)
+                form = ParamForm(session, node.node_id, spec, replicate_id=self.selected_replicate)
                 form.edited.connect(self.refill_graph)
                 knobs = form
             steps.append(
@@ -1170,6 +1276,7 @@ class MainWindow(QMainWindow):
                     removable=removable(spec),
                     swappable=bool(self._offer_over(position)),
                     reads=reads[node.node_id],
+                    regions=self._regions(position),
                 )
             )
         return PipelinePane(
@@ -1237,6 +1344,50 @@ class MainWindow(QMainWindow):
             on_open=self._control.show_save,
         )
 
+    def _cutting(self) -> int | None:
+        """Which position's box the project's regions are deviations of.
+
+        The first such step rather than every one: a second region at a second
+        root is a second box on the same footage, and which of them the
+        replicates deviate at is a question the document does not answer. Two
+        fans drawn off one selection would be two pictures claiming to be the
+        same walk, so the branch hangs where the chain first cuts and the second
+        root keeps the plain arrow it already had.
+
+        One answer for the three surfaces that need it — the fan, the count row,
+        and the node the + keys its override on — because a second reading could
+        add a region at one step and draw it under another.
+        """
+        session = self._session
+        if session is None:
+            return None
+        pipeline = session.project.pipeline
+        return next(
+            (
+                position
+                for position, node in enumerate(self._order)
+                if cuts_regions(self._specs.get(node.node_id), node.node_id, pipeline)
+            ),
+            None,
+        )
+
+    def _regions(self, position: int) -> Regions | None:
+        """The count row for `position`, or nothing on a step that cuts none.
+
+        Offered at zero, unlike the fan: the row is where a region is made, so a
+        project reduced to its baseline would otherwise have taken away the one
+        gesture that gets a branch back.
+        """
+        session = self._session
+        if session is None or position != self._cutting():
+            return None
+        return Regions(
+            count=len(session.project.replicates),
+            selected=self._region,
+            on_add=self.add_region,
+            on_drop=self.remove_region,
+        )
+
     def _region_fan(self) -> Fan | None:
         """The branch the region step makes, or nothing where there is none.
 
@@ -1245,27 +1396,17 @@ class MainWindow(QMainWindow):
         parameter (`core/pipeline_model.Replicate`), so the fan is that value's
         editor and holds no list of its own. A project with no replicates runs
         the step's baseline once and has no branch to draw.
-
-        The first such step rather than every one: a second region at a second
-        root is a second box on the same footage, and which of them the
-        replicates deviate at is a question the document does not answer. Two
-        fans drawn off one selection would be two pictures claiming to be the
-        same walk, so the branch hangs where the chain first cuts and the second
-        root keeps the plain arrow it already had.
         """
         session = self._session
-        if session is None or not session.project.replicates:
+        cutting = self._cutting()
+        if session is None or cutting is None or not session.project.replicates:
             return None
-        pipeline = session.project.pipeline
-        for position, node in enumerate(self._order):
-            if cuts_regions(self._specs.get(node.node_id), node.node_id, pipeline):
-                return Fan(
-                    position=position,
-                    regions=tuple(replicate.name for replicate in session.project.replicates),
-                    selected=self._region,
-                    on_select=self.select_region,
-                )
-        return None
+        return Fan(
+            position=cutting,
+            regions=tuple(replicate.name for replicate in session.project.replicates),
+            selected=self._region,
+            on_select=self.select_region,
+        )
 
     def _pinned_note(self) -> str:
         """The sentence the pinned step's card carries, or nothing to carry it.
@@ -1299,7 +1440,13 @@ class MainWindow(QMainWindow):
         session = self._session
         if node is None or session is None or node.node_id not in self._specs:
             return QWidget()
-        pane = StepPane(self._at + 1, node, session, self._specs[node.node_id])
+        pane = StepPane(
+            self._at + 1,
+            node,
+            session,
+            self._specs[node.node_id],
+            replicate_id=self.selected_replicate,
+        )
         pane.form.edited.connect(self.refill_graph)
         return pane
 
@@ -1344,15 +1491,17 @@ class MainWindow(QMainWindow):
             if node.node_id in source_fed_nodes(session.project.pipeline)
             else None
         )
+        replicate_id = self.selected_replicate
         self._editors = dict(
             bind_editors(
                 session,
                 node.node_id,
                 self._specs[node.node_id],
-                session.project.params_for(node.node_id),
+                session.project.params_for(node.node_id, replicate_id),
                 canvas=self._viewport,
                 timeline=self._timeline.strip,
                 region_extent=extent,
+                replicate_id=replicate_id,
             )
         )
         for editor in self._editors.values():

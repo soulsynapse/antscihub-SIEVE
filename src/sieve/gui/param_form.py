@@ -301,6 +301,15 @@ class ParamForm(QWidget):
     The spec is handed in rather than looked up: this module never learns which
     tool it is drawing, and a registry lookup here would be the one import that
     made a `tool_id` branch possible to write.
+
+    `replicate_id` is the tail of every address the form reads and writes, and
+    it is the caller's answer rather than one derived here — which region the
+    window is standing on is view state and nothing in the document records it
+    (`gui/app.py`). `None` is the baseline, which is what a project with no
+    regions has and the only thing a form over one could mean. No control
+    branches on it: a spin box on region 2 and a spin box on a project that has
+    none are the same widget emitting the same kind at a longer or shorter
+    address (`session/intents.SetParam`).
     """
 
     #: The document has just been written to. Carries nothing: what changed is
@@ -314,16 +323,19 @@ class ParamForm(QWidget):
         node_id: str,
         spec: ToolSpec,
         parent: QWidget | None = None,
+        *,
+        replicate_id: str | None = None,
     ) -> None:
         super().__init__(parent)
         self._session = session
         self._node_id = node_id
+        self._replicate_id = replicate_id
         self._widgets: dict[str, QWidget] = {}
 
         properties: Mapping[str, Mapping[str, Any]] = resolved_schema(spec.params_model)[
             "properties"
         ]
-        values = session.project.params_for(node_id)
+        values = session.project.params_for(node_id, replicate_id)
         layout = QFormLayout(self)
         for name, described in properties.items():
             kind = spec.param_stereotypes[name]
@@ -348,5 +360,13 @@ class ParamForm(QWidget):
         return self._widgets[name]
 
     def _edit(self, name: str, value: Any) -> None:
-        if issue(self._session, SetParam(node_id=self._node_id, param=name, value=value)):
+        if issue(
+            self._session,
+            SetParam(
+                node_id=self._node_id,
+                param=name,
+                value=value,
+                replicate_id=self._replicate_id,
+            ),
+        ):
             self.edited.emit()

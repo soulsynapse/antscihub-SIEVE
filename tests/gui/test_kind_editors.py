@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Node, Pipeline, Project, Replicate, SourceRef
 from sieve.core.tool_base import (
     ArraySpec,
     ElementRelation,
@@ -183,6 +183,49 @@ def test_a_drawn_region_enters_as_a_set_param(
         "height": 40,
     }
     assert session.undo().params_for(_NODE)["region"] == REGION
+
+
+def test_a_drawn_region_lands_on_the_replicate_it_was_drawn_for(
+    qapp, tmp_path: Path, canvas: Any, shown: Any
+) -> None:
+    """The box on the canvas is the selected region's own, not the project's.
+
+    The address is longer by a replicate and the gesture is unchanged, which is
+    what `session/intents.SetParam` carries a `replicate_id` for: an overlay
+    that branched on selection state would be the second writer this layer
+    exists to prevent. What discriminates it is the region nobody dragged —
+    `north` follows the baseline the edit also moved, and `south` is pinned, so
+    only a per-replicate address can leave the two able to differ at all.
+    """
+    del qapp
+    from sieve.gui.kind_editors import RegionEditor
+
+    north, south = Replicate(name="north"), Replicate(name="south")
+    session = Session(
+        tmp_path / "clip.sieve.yaml",
+        Project(
+            source=SourceRef(path="clip.mp4"),
+            replicates=(north, south),
+            pipeline=Pipeline(
+                nodes=(
+                    Node(
+                        node_id=_NODE,
+                        tool_id="composite",
+                        version="1.0.0",
+                        params={"region": REGION, "frames": list(SPAN)},
+                    ),
+                )
+            ),
+        ),
+    )
+    editor = RegionEditor(
+        canvas, session, _NODE, "region", REGION, shown[0], replicate_id=south.replicate_id
+    )
+    driving.drag(editor, _widget_point(shown, 20, 20), _widget_point(shown, 100, 60))
+
+    drawn = {"x": 20, "y": 20, "width": 80, "height": 40}
+    assert session.project.replicate(south.replicate_id).override_for(_NODE) == {"region": drawn}
+    assert session.project.replicate(north.replicate_id).override_for(_NODE) == {}
 
 
 def test_a_dragged_span_enters_as_a_set_param(qapp, session: Session, band: Any) -> None:

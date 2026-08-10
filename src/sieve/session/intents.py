@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from sieve.core.pipeline_model import Node, Project, Sink
+from sieve.core.pipeline_model import Node, Project, Replicate, Sink
 from sieve.session.session import Session
 
 
@@ -161,6 +161,62 @@ class AddNode:
             ValidationError: if the node's id is one the graph already holds.
         """
         return project.with_pipeline(project.pipeline.with_node_after(self.site_id, self.node))
+
+
+@dataclass(frozen=True, slots=True)
+class AddReplicate:
+    """One more region the graph is run for, at the foot of the document's order.
+
+    At the foot because the order is the one per-replicate outputs are written
+    in (`core/pipeline_model.Project.replicates`), and a region inserted beside
+    the one it was made from would renumber every square after it — the fan
+    draws ordinals, so the user's "region 3" would become somebody else's.
+
+    The replicate is built by the caller for `AddNode`'s reason: minting one
+    needs an id, and it may arrive already carrying the box it was copied from.
+    Which node that box is keyed on is a question about the graph and about
+    which frame the value is denominated in, so it is the front end's
+    (`gui/app.cuts_regions`) and not this layer's.
+    """
+
+    replicate: Replicate
+
+    def applied_to(self, project: Project) -> Project:
+        """The document cutting one more region.
+
+        Raises:
+            ValidationError: if the replicate's id is one the document already
+                holds, or its overrides name a node the graph does not.
+        """
+        return project.with_replicates((*project.replicates, self.replicate))
+
+
+@dataclass(frozen=True, slots=True)
+class RemoveReplicate:
+    """One region out of the document, with its deviations going with it.
+
+    Nothing refuses the last one. A project with no replicates is the baseline
+    run once — the state every document is minted in — so a floor here would
+    make the first region a gesture with no way back, and the shape it would be
+    protecting is one `Project` already holds legitimately.
+    """
+
+    replicate_id: str
+
+    def applied_to(self, project: Project) -> Project:
+        """The document without this region.
+
+        Raises:
+            KeyError: if `replicate_id` names no replicate.
+        """
+        kept = tuple(
+            replicate
+            for replicate in project.replicates
+            if replicate.replicate_id != self.replicate_id
+        )
+        if len(kept) == len(project.replicates):
+            raise KeyError(self.replicate_id)
+        return project.with_replicates(kept)
 
 
 @dataclass(frozen=True, slots=True)

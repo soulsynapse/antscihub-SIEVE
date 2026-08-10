@@ -49,10 +49,12 @@ class StepPane(QWidget):
         session: Session,
         spec: ToolSpec,
         parent: QWidget | None = None,
+        *,
+        replicate_id: str | None = None,
     ) -> None:
         super().__init__(parent)
         self._box = NodeBox(position, node)
-        self.form = ParamForm(session, node.node_id, spec)
+        self.form = ParamForm(session, node.node_id, spec, replicate_id=replicate_id)
         self.expander = GuidanceExpander(spec)
 
         column = QWidget()

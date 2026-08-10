@@ -72,12 +72,26 @@ class _Editor(QWidget):
     #: typed number are one edit, so they say so the same way.
     edited = Signal()
 
-    def __init__(self, host: QWidget, session: Session, node_id: str, param: str) -> None:
+    def __init__(
+        self,
+        host: QWidget,
+        session: Session,
+        node_id: str,
+        param: str,
+        *,
+        replicate_id: str | None = None,
+    ) -> None:
         super().__init__(host)
         self._host = host
         self._session = session
         self._node_id = node_id
         self._param = param
+        # The tail of the address, for `ParamForm`'s reason and to the same
+        # effect: the box drawn on the canvas is the selected region's own, and
+        # a drag with no region selected moves the baseline. Keyword-only
+        # because it is an id threaded past a value and an extent, and a
+        # mis-slotted one would write a real edit at a wrong address.
+        self._replicate_id = replicate_id
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         # Without this the overlay hears a move only while a button is down,
         # which is every move a drag makes but none of the ones the host needs
@@ -107,7 +121,15 @@ class _Editor(QWidget):
         the window re-plans and re-renders from — emitting it regardless would
         put the graph's stale mark up for a document that has not moved.
         """
-        if issue(self._session, SetParam(node_id=self._node_id, param=self._param, value=value)):
+        if issue(
+            self._session,
+            SetParam(
+                node_id=self._node_id,
+                param=self._param,
+                value=value,
+                replicate_id=self._replicate_id,
+            ),
+        ):
             self.edited.emit()
 
 
@@ -146,9 +168,11 @@ class RegionEditor(_Editor):
         param: str,
         value: Mapping[str, int] | None,
         extent: tuple[int, int],
+        *,
+        replicate_id: str | None = None,
     ) -> None:
         """Edit `param` of `node_id`, in the pixels of an `extent`-sized frame."""
-        super().__init__(host, session, node_id, param)
+        super().__init__(host, session, node_id, param, replicate_id=replicate_id)
         self._canvas = host
         self._extent = extent
         self._region = None if value is None else ROI(**dict(value))
@@ -285,8 +309,10 @@ class SpanEditor(_Editor):
         node_id: str,
         param: str,
         value: tuple[int, int] | list[int] | None,
+        *,
+        replicate_id: str | None = None,
     ) -> None:
-        super().__init__(host, session, node_id, param)
+        super().__init__(host, session, node_id, param, replicate_id=replicate_id)
         self._strip = host
         self._span = None if value is None else SourceSpan(start=value[0], end=value[1])
         self._draft: SourceSpan | None = None
@@ -389,14 +415,16 @@ class _Surfaces(NamedTuple):
     region_extent: tuple[int, int] | None
 
 
-def _on_the_canvas(surfaces: _Surfaces, *bound: Any) -> _Editor | None:
+def _on_the_canvas(
+    surfaces: _Surfaces, *bound: Any, replicate_id: str | None = None
+) -> _Editor | None:
     if surfaces.region_extent is None:
         return None
-    return RegionEditor(surfaces.canvas, *bound, surfaces.region_extent)
+    return RegionEditor(surfaces.canvas, *bound, surfaces.region_extent, replicate_id=replicate_id)
 
 
-def _on_the_band(surfaces: _Surfaces, *bound: Any) -> _Editor:
-    return SpanEditor(surfaces.timeline, *bound)
+def _on_the_band(surfaces: _Surfaces, *bound: Any, replicate_id: str | None = None) -> _Editor:
+    return SpanEditor(surfaces.timeline, *bound, replicate_id=replicate_id)
 
 
 #: Kind to editor, and the whole of this module's tool knowledge. Partial over
@@ -418,6 +446,7 @@ def bind_editors(
     canvas: VideoCanvas,
     timeline: TimelineStrip,
     region_extent: tuple[int, int] | None,
+    replicate_id: str | None = None,
 ) -> dict[str, _Editor]:
     """An editor over every parameter of `node_id` whose kind is edited by gesture.
 
@@ -434,6 +463,11 @@ def bind_editors(
     says the caller does not know it — which is a region parameter with no
     editor rather than one editing in whatever units the canvas happens to be
     showing. See `RegionEditor`.
+
+    `replicate_id` is which region the gesture is about, and `None` is the
+    baseline. It has to agree with what `values` was read for or the overlay
+    would open on one region's box and commit to another's — which is why both
+    are the caller's single answer rather than two lookups made here.
     """
     editors: dict[str, _Editor] = {}
     surfaces = _Surfaces(canvas, timeline, region_extent)
@@ -441,7 +475,9 @@ def bind_editors(
         build = _EDITORS.get(kind)
         if build is None:
             continue
-        editor = build(surfaces, session, node_id, name, values.get(name))
+        editor = build(
+            surfaces, session, node_id, name, values.get(name), replicate_id=replicate_id
+        )
         if editor is not None:
             editors[name] = editor
     return editors

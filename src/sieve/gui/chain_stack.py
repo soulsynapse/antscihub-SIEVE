@@ -115,6 +115,27 @@ from sieve.gui.chrome import (
 
 
 @dataclass(frozen=True)
+class Regions:
+    """How many regions a step cuts, which one is showing, and the two verbs.
+
+    On the card and not in the fan below it, which is the referent's split
+    (MOCKUP-MAP row "Crop cuts regions, plural"): a step's card holds what its
+    knobs are, and where its outputs go is the stack's to draw. The count is
+    here even at zero, where there is no fan at all — a project reduced to its
+    baseline still has to offer the + that is the only way back to a branch.
+
+    `count` rather than the names the fan carries: the row says how many and
+    which, and a second copy of the list would be a second thing to keep in step
+    with the squares.
+    """
+
+    count: int
+    selected: int
+    on_add: Callable[[], None]
+    on_drop: Callable[[], None]
+
+
+@dataclass(frozen=True)
 class Step:
     """One card's worth of what the window derived about a step.
 
@@ -142,6 +163,11 @@ class Step:
     #: numbered them. Required rather than defaulted to nothing: a stack whose
     #: caller forgot would draw a chain of unconnected cards and look finished.
     reads: tuple[int, ...]
+    #: The count and the two verbs, on the one step whose box the regions are
+    #: deviations of. Defaulted to nothing, unlike `reads`: a step that cuts no
+    #: regions is the ordinary case rather than a caller's omission, and a card
+    #: without the row is exactly what such a step should draw.
+    regions: Regions | None = None
 
 
 class ChainCard(QWidget):
@@ -169,6 +195,11 @@ class ChainCard(QWidget):
         self._selected = selected
         self._on_select = on_select
         self._on_open = on_open
+        #: The count row, on the one card that has one. Set by the builder after
+        #: the card is laid out, for `ChainColumn.fan`'s reason: it is the row
+        #: the region verbs are pressed on, and a caller reaching it through the
+        #: card's children would be finding it by shape.
+        self.regions: RegionsRow | None = None
         if on_select is not None:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -285,6 +316,61 @@ def note_label(text: str) -> QLabel:
     label = QLabel(text)
     label.setStyleSheet(f"color: {rgb(DIM)};")
     return label
+
+
+def _mini_button(text: str, tip: str, live: bool, on_press: Callable[[], None]) -> QToolButton:
+    """A verb small enough to sit inside a card's knobs rather than beside its name.
+
+    The head's four buttons are about the card; these two are about one of its
+    parameters, so they are the size of a knob and stand with the row that says
+    what they change.
+    """
+    button = QToolButton()
+    button.setText(text)
+    button.setAutoRaise(True)
+    button.setEnabled(live)
+    button.setToolTip(tip)
+    button.setStyleSheet(f"color: {rgb(DIM)}; border: 0;")
+    button.clicked.connect(on_press)
+    return button
+
+
+class RegionsRow(QWidget):
+    """The count of a step's regions, and the two buttons that change it.
+
+    The − is offered dead at zero rather than left out, for the head buttons'
+    reason — but what it is dead *for* is different: there is nothing to drop,
+    not something that may not be dropped. A project with no regions runs the
+    step's own box once, which is a state the document is minted in and not one
+    this row is protecting the user from.
+    """
+
+    def __init__(self, regions: Regions, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        plural = "" if regions.count == 1 else "s"
+        self.count = note_label(
+            f"{regions.count} region{plural} · showing {regions.selected + 1}"
+            if regions.count
+            else "no regions · the step's own box, once"
+        )
+        self.add = _mini_button(
+            "+", "Cut another region — it becomes the one showing", True, regions.on_add
+        )
+        self.drop = _mini_button(
+            "−",
+            "Drop the region showing"
+            if regions.count
+            else "No regions to drop — the step runs its own box once",
+            regions.count > 0,
+            regions.on_drop,
+        )
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(self.count)
+        layout.addStretch(1)
+        layout.addWidget(self.add)
+        layout.addWidget(self.drop)
 
 
 def fixed_card(title: str) -> ChainCard:
@@ -1259,6 +1345,12 @@ class PipelinePane(QWidget):
         layout.addLayout(head)
         if step.knobs is not None:
             layout.addWidget(step.knobs)
+        if step.regions is not None:
+            # Under the knobs: the count is about the branch the card makes and
+            # the knobs are the step's own parameters, so it reads as the last
+            # thing the step says about itself rather than as one of them.
+            card.regions = RegionsRow(step.regions)
+            layout.addWidget(card.regions)
         if position == pinned:
             # Handed over rather than chosen here: which of the three sentences
             # the pinned step gets is `pinned.card_note`'s, and the slot under

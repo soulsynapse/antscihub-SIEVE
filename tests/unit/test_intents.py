@@ -33,7 +33,9 @@ from sieve.core.tool_base import (
 from sieve.pipeline.cache_key import node_key
 from sieve.session.intents import (
     AddNode,
+    AddReplicate,
     RemoveNode,
+    RemoveReplicate,
     RetoolNode,
     SetOutputs,
     SetParam,
@@ -221,6 +223,43 @@ def test_retooling_a_node_keeps_the_node_and_undoes_as_one_value(tmp_path: Path)
     assert session.undo() == before
 
 
+def test_a_region_arrives_at_the_foot_carrying_its_own_deviation(tmp_path: Path) -> None:
+    first = Replicate(name="north", overrides={"n1": {"level": 0.4}})
+    session = _opened(tmp_path, first)
+    before = session.project
+
+    issue(
+        session,
+        AddReplicate(Replicate(name="south", overrides={"n1": {"level": 0.4}})),
+    )
+
+    # At the foot, because the order is the one per-replicate outputs are
+    # written in and the fan draws ordinals off it — an insertion beside its
+    # sibling would renumber every region after it.
+    project = session.project
+    assert [replicate.name for replicate in project.replicates] == ["north", "south"]
+    # And carrying a deviation of its own rather than following: the baseline is
+    # what the next edit to *either* region moves, so an unpinned arrival would
+    # be dragged along by the edit that placed the one beside it.
+    assert project.params_for("n1", project.replicates[1].replicate_id) == {"level": 0.4}
+    assert session.undo() == before
+    assert session.project.replicates == (first,)
+
+
+def test_dropping_the_last_region_is_the_baseline_again(tmp_path: Path) -> None:
+    session = _opened(tmp_path, Replicate(name="north", overrides={"n1": {"level": 0.4}}))
+    before = session.project
+
+    issue(session, RemoveReplicate(session.project.replicates[0].replicate_id))
+
+    # Nothing refuses it. A project with no replicates runs the node's baseline
+    # once, which is the state every document is minted in — a floor here would
+    # make the first region a gesture with no way back.
+    assert session.project.replicates == ()
+    assert session.project.params_for("n1") == {"level": 0.25}
+    assert session.undo() == before
+
+
 def test_an_intent_naming_no_node_leaves_the_session_where_it_was(tmp_path: Path) -> None:
     session = _opened(tmp_path)
 
@@ -228,4 +267,18 @@ def test_an_intent_naming_no_node_leaves_the_session_where_it_was(tmp_path: Path
         issue(session, SetParam(node_id="nowhere", param="level", value=0.5))
 
     assert session.project == _project()
+    assert not session.can_undo()
+
+
+def test_dropping_a_region_the_document_has_not_got_pushes_nothing(tmp_path: Path) -> None:
+    session = _opened(tmp_path, Replicate(name="north"))
+
+    with pytest.raises(KeyError):
+        issue(session, RemoveReplicate("nowhere"))
+
+    # A refused intent and a no-op are different outcomes, which is what the
+    # raise buys: filtering a list by an id nothing matches would drop the
+    # gesture silently and leave the caller's selection pointing at a region it
+    # believes it removed.
+    assert len(session.project.replicates) == 1
     assert not session.can_undo()

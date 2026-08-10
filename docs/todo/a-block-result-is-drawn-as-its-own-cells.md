@@ -1,7 +1,7 @@
 ---
 title: A block result is drawn as its own cells over its input
 step: "10.3"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k block_field"
 opened: 2026-08-09

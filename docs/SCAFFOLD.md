@@ -16,6 +16,7 @@ src/sieve/gui/canvas.py                    # The viewport: the composite it was 
 src/sieve/gui/chain_stack.py               # The pipeline position: one card per step, scrolling under a fixed project card.
 src/sieve/gui/chrome.py                    # The colours the window is drawn in, and the two sheets that apply them.
 src/sieve/gui/control.py                   # Which of the four positions is showing, and the track that slides between.
+src/sieve/gui/emission_paint.py            # What a node's output looks like, dispatched on what one of its values *is*.
 src/sieve/gui/expander.py                  # The down arrow on a step, and the tool's own guidance under it.
 src/sieve/gui/graph_panel.py               # The graph: one refill's series, drawn where its frames are.
 src/sieve/gui/hotkeys.py                   # Which keys exist and which verb each one calls.

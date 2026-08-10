@@ -98,7 +98,8 @@ def canvas(qapp) -> Any:
     otherwise a claim about grey values nobody can name.
     """
     del qapp
-    from sieve.gui.canvas import VideoCanvas, image_of
+    from sieve.gui.canvas import VideoCanvas
+    from sieve.gui.emission_paint import image_of
 
     values = np.zeros((FRAME[1], FRAME[0]), np.float32)
     values[:, FRAME[0] // 2 :] = 1.0

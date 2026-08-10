@@ -255,7 +255,10 @@ def test_the_source_badge_rises_on_a_drag_and_falls_on_the_settle(
 
         window.player.seek(_SETTLED_ON)
         driving.wait_until(lambda: window.player.current_index == _SETTLED_ON, _TIMEOUT_MS)
-        driving.wait_until(lambda: window.viewport.frame is not None, _TIMEOUT_MS)
+        # The field rather than the frame: `block_signal` declares `BLOCK`, so
+        # its output is drawn as cells and the viewport holds no image of its own
+        # while it is up (`gui/emission_paint.py`).
+        driving.wait_until(lambda: window.viewport.field is not None, _TIMEOUT_MS)
         assert not window.viewport.showing_source
 
         window.player.scrub(_DRAGGED_TO)
@@ -263,11 +266,14 @@ def test_the_source_badge_rises_on_a_drag_and_falls_on_the_settle(
         assert window.viewport.showing_source
         assert window.viewport.badge_text() == "source"
         dragged = window.viewport.frame
+        assert dragged is not None
 
         window.player.seek(_DRAGGED_TO)
         driving.wait_until(lambda: not window.viewport.showing_source, _TIMEOUT_MS)
         # One index, painted twice and differently: what the badge was about is
-        # which node's picture was up, not which frame.
-        assert window.viewport.frame != dragged
+        # which node's picture was up, not which frame — and here the two are not
+        # even the same kind of picture.
+        assert window.viewport.frame is None
+        assert window.viewport.field is not None
     finally:
         window.close()

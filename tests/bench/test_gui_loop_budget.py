@@ -391,6 +391,12 @@ def test_the_frame_under_the_playhead_is_the_pipelines_and_not_the_sources(
     block signal the band is drawn over (`gui/app.frame_bearing`) — the
     pipeline's frame at two removes from the footage, which is the strongest
     form the claim takes on this graph.
+
+    That signal declares `ElementKind.BLOCK`, so it reaches the viewport as a
+    field of cells rather than as an image (`gui/emission_paint.py`) and what is
+    compared here is the values the field holds. Against the picture they make it
+    is the stronger comparison, not a weaker one: two renders agreeing on a float
+    per block cannot be two renders agreeing on a colour ramp.
     """
     discover()
     directory = tmp_path_factory.mktemp("gui_viewport")
@@ -402,10 +408,10 @@ def test_the_frame_under_the_playhead_is_the_pipelines_and_not_the_sources(
         _settle_graph(window)
         window.player.seek(_VIEWED)
         driving.wait_until(lambda: window.player.current_index == _VIEWED, _TIMEOUT_MS)
-        driving.wait_until(lambda: window.viewport.frame is not None, _TIMEOUT_MS)
+        driving.wait_until(lambda: window.viewport.field is not None, _TIMEOUT_MS)
 
         shown = window.viewport_node
-        painted = window.viewport.frame
+        painted = window.viewport.field
         metadata = window.player.metadata
     finally:
         window.close()
@@ -417,14 +423,9 @@ def test_the_frame_under_the_playhead_is_the_pipelines_and_not_the_sources(
     # Not a constant, so the equality below is two renders agreeing about a
     # signal rather than about a flat frame.
     assert float(expected.max()) > float(expected.min())
-    assert (painted.width(), painted.height()) == (expected.shape[1], expected.shape[0])
-    assert (painted.width(), painted.height()) != (metadata.width, metadata.height)
-
-    # Imported here rather than at module scope, for `tests/gui/conftest.py`'s
-    # rule about what collection may load.
-    from sieve.gui.canvas import image_of
-
-    assert painted == image_of(expected)
+    assert painted.values.shape == expected.shape
+    assert painted.values.shape != (metadata.height, metadata.width)
+    assert np.array_equal(painted.values, expected)
 
 
 def test_a_drag_shows_the_decoded_frame_and_the_release_shows_the_render(
@@ -441,7 +442,10 @@ def test_a_drag_shows_the_decoded_frame_and_the_release_shows_the_render(
     The release lands on the frame the drag ended on, so it is served out of the
     proxy cache without a decode: the two pictures below are the same source
     index, and the only thing that differs is what the window was willing to pay
-    for it.
+    for it. On this graph they are not even the same kind of picture — the drag
+    shows the decoded frame as an image and the release shows the block signal as
+    a field — which is why the drag half is read off `frame` and the settled half
+    off `field`.
     """
     discover()
     directory = tmp_path_factory.mktemp("gui_drag")
@@ -456,21 +460,20 @@ def test_a_drag_shows_the_decoded_frame_and_the_release_shows_the_render(
         window.player.scrub(_VIEWED)
         driving.wait_until(lambda: window.player.current_index == _VIEWED, _TIMEOUT_MS)
         dragged = window.viewport.frame
+        drag_field = window.viewport.field
 
         # Synchronous: the frame the drag decoded is in the proxy cache, so the
         # settle repaints inside this call rather than through the thread.
         window.player.seek(_VIEWED)
-        settled = window.viewport.frame
+        settled = window.viewport.field
     finally:
         window.close()
 
-    from sieve.gui.canvas import image_of
-
-    expected = image_of(_rendered(directory / stirred_clip.name, _VIEWED, BLOCKS))
-    assert dragged is not None and settled is not None and expected is not None
+    expected = _rendered(directory / stirred_clip.name, _VIEWED, BLOCKS)
+    assert dragged is not None and settled is not None
     assert dragged == delivered[0], "the drag painted something other than the decoded frame"
-    assert dragged != expected
-    assert settled == expected
+    assert drag_field is None, "the drag painted the render it is there to skip"
+    assert np.array_equal(settled.values, expected)
 
 
 def _counted(samples: Sequence[Sample]) -> dict[str, int]:

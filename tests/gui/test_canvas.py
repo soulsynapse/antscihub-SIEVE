@@ -48,7 +48,7 @@ def test_a_frame_smaller_than_the_viewport_is_drawn_at_its_own_size(canvas: Any)
     footage by. Asserted on `frame_rect` because a painted pixel is not
     something a test can ask about.
     """
-    from sieve.gui.canvas import image_of
+    from sieve.gui.emission_paint import image_of
 
     ramp = np.linspace(0.0, 1.0, FRAME_WIDTH * FRAME_HEIGHT, dtype=np.float32)
     image = image_of(ramp.reshape(FRAME_HEIGHT, FRAME_WIDTH))
@@ -62,7 +62,7 @@ def test_a_frame_smaller_than_the_viewport_is_drawn_at_its_own_size(canvas: Any)
 
 
 def _picture() -> Any:
-    from sieve.gui.canvas import image_of
+    from sieve.gui.emission_paint import image_of
 
     ramp = np.linspace(0.0, 1.0, FRAME_WIDTH * FRAME_HEIGHT, dtype=np.float32)
     image = image_of(ramp.reshape(FRAME_HEIGHT, FRAME_WIDTH))
@@ -117,7 +117,7 @@ def test_a_constant_frame_is_flat_and_is_not_divided_by_its_own_spread() -> None
     ordinary constant frame and only the floating-point operation separates
     them.
     """
-    from sieve.gui.canvas import image_of
+    from sieve.gui.emission_paint import image_of
 
     with np.errstate(invalid="raise", divide="raise"):
         image = image_of(np.full((4, 5), 7.0, np.float32))

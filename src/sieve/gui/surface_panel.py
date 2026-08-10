@@ -44,7 +44,7 @@ from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from sieve.core.tool_base import DisplaySurface, ParamAxis, RowAxis, ValueAxis
-from sieve.gui.canvas import image_of
+from sieve.gui.emission_paint import image_of
 from sieve.pipeline.series_collector import CollectedSeries
 
 #: How much taller than the peak a data-derived value axis runs. The graph's
@@ -263,7 +263,7 @@ class SurfacePanel(QWidget):
     def _paint_field(self, painter: QPainter, columns: NDArray[np.float32]) -> None:
         """The scalogram, stretched to the panel. Rows up, frames across.
 
-        `canvas.image_of` does the greyscale mapping, which is the same one the
+        `emission_paint.image_of` does the greyscale mapping, the same one the
         viewport uses — two pictures of pipeline arrays mapped two ways would
         read as two different quantities. Flipped, because row zero is the bottom
         of an axis and the top of an image.

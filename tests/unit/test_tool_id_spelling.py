@@ -85,8 +85,10 @@ DEAD_IDENTIFIERS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     # `setClipRect` is Qt's, one toolkit over from `eventFilter` above and there
     # for the same reason: a painter bounded to a rectangle is spelt that way or
     # not at all, and the clipping region it names has nothing to do with v2's
-    # noun for a video.
-    ("clip", ("setClipRect",), "adr/v2-does-not-import.md"),
+    # noun for a video. `np.clip` is the collision 03.2.1 predicted and the shape
+    # it left this column in: bounding an array is spelt that way, and the cheap
+    # way out under a red gate would be to make the array math worse to read.
+    ("clip", ("setClipRect", "np.clip"), "adr/v2-does-not-import.md"),
     # `ROI` is the live type a region is written in; `roi` was the field name,
     # and `region` is how v3 spells the thing (`CropRecord.region`).
     ("roi", ("ROI",), "adr/v2-does-not-import.md"),

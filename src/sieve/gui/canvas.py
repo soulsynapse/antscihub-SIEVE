@@ -29,13 +29,11 @@ otherwise tell is whose picture it is, which on a node whose output is a mask or
 a difference is a change of kind. The state is raised by the one caller that
 knows (`app._paint_viewport`) and lowered only by a render landing.
 
-**A node's output has no display range, so the greyscale is stretched between
-that frame's own extremes.** `graph_panel.value_range`'s question one surface
-over, and answered differently on purpose: a trace is read against an axis and
-so wants a floor that does not move, while a picture has no axis and a frame
-mapped through a fixed range is black on every tool whose units are not
-already 0..1. What it costs is that brightness is not comparable across frames,
-which is why nothing here is offered as a measurement.
+**What a result looks like is not decided here.** A frame and a block grid are
+different pictures of the same kind of array, and which one a node's output makes
+is `emission_paint.py`'s — including the range each is coloured against, which
+the two entries answer differently on purpose. This widget is handed the kind
+along with the values and dispatches; it does not know which tools exist.
 """
 
 from __future__ import annotations
@@ -46,6 +44,8 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPaintEvent, QWheelEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QVBoxLayout, QWidget
 
+from sieve.core.tool_base import ElementKind
+from sieve.gui.emission_paint import BlockField, picture_of
 from sieve.gui.zoom import Magnifier
 
 _BACKGROUND = QColor(18, 18, 22)
@@ -63,50 +63,13 @@ DEFAULT_OPACITY = 65
 _OPACITY_LABEL = "result"
 
 
-def image_of(values: NDArray[np.float32]) -> QImage | None:
-    """`values` as a greyscale image, or `None` if there is no picture in them.
-
-    `None` for anything that is not a two-dimensional array with a finite value
-    in it: a caller showing a node's output cannot know in advance that the node
-    has one, and an image invented for a frame that has none would be a viewport
-    asserting something about the graph.
-
-    The buffer is copied because `QImage` does not own the one it is
-    constructed over, and the array it would otherwise point into is local.
-    """
-    array = np.asarray(values, np.float32)
-    if array.ndim != 2 or array.size == 0:
-        return None
-    finite = array[np.isfinite(array)]
-    if finite.size == 0:
-        return None
-    low, high = float(finite.min()), float(finite.max())
-    spread = high - low
-    # A constant frame has no spread, so dividing by it is a division by zero.
-    # On a constant frame carrying no positive infinity the guard is not visible
-    # in the pixels — `nan_to_num` below maps the 0/0 it refuses onto the same
-    # zero it writes — so what it buys is the absence of the invalid operation,
-    # which is what the case over it asserts. One `inf` among the constants is
-    # the exception the finding leaves open: there the guard blacks the frame
-    # and the division whites that cell
-    # (`findings/2026.08.08-the-constant-frame-guard-is-output-equivalent-to-the-division-it-refuses.md`).
-    scaled = np.zeros_like(array) if spread <= 0.0 else (array - low) / spread
-    # Every finite value is already inside 0..1 by construction — `low` and
-    # `high` are this frame's own — so the only thing left to place is the
-    # non-finite one, which `image_of`'s caller has no better answer for either.
-    grey = np.ascontiguousarray(
-        np.nan_to_num(scaled, nan=0.0, posinf=1.0, neginf=0.0) * 255.0
-    ).astype(np.uint8)
-    height, width = grey.shape
-    return QImage(grey.data, width, height, width, QImage.Format.Format_Grayscale8).copy()
-
-
 class VideoCanvas(QWidget):
     """Draws the most recent composite, centred, letterboxed."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._frame: QImage | None = None
+        self._field: BlockField | None = None
         self._under: QImage | None = None
         self._opacity = DEFAULT_OPACITY / 100.0
         self._showing_source = False
@@ -115,12 +78,21 @@ class VideoCanvas(QWidget):
 
     @property
     def frame(self) -> QImage | None:
-        """The image on screen, or None before the first frame arrives."""
+        """The image on screen, or None before the first frame arrives.
+
+        None also for a result that is not an image — a block field is drawn as
+        cells and has no frame of its own, which is `field` below.
+        """
         return self._frame
 
     @property
+    def field(self) -> BlockField | None:
+        """The cells on screen, or None when what is shown is an image."""
+        return self._field
+
+    @property
     def under(self) -> QImage | None:
-        """What `frame` is drawn over, or None when it is drawn alone."""
+        """What the result is drawn over, or None when it is drawn alone."""
         return self._under
 
     @property
@@ -153,12 +125,20 @@ class VideoCanvas(QWidget):
         self._frame = image
         # The one frame the window can produce without asking the graph is the
         # source, and it is nothing's result: leaving the previous step's input
-        # under it would compose two pictures the user never asked to compare.
+        # under it, or the cells of a step it is not the output of, would compose
+        # two pictures the user never asked to compare.
+        self._field = None
         self._under = None
         self.update()
 
     def set_values(
-        self, index: int, values: NDArray[np.float32], under: QImage | None = None
+        self,
+        index: int,
+        values: NDArray[np.float32],
+        under: QImage | None = None,
+        *,
+        kind: ElementKind | None = ElementKind.PIXEL,
+        span: tuple[float, float] = (0.0, 1.0),
     ) -> bool:
         """Show `values` over `under`. False, and nothing shown, if they are no picture.
 
@@ -168,11 +148,24 @@ class VideoCanvas(QWidget):
         not an error. It is the *result* that decides: an input with no picture
         in it leaves the result drawn alone, which is a step composed over
         nothing rather than a step that cannot be shown.
+
+        `kind` and `span` are handed over rather than looked up (`emission_paint`
+        says why): the first decides which picture the values make, the second is
+        the range a field is coloured against and is `graph_panel.value_range`'s
+        answer. A field is refused where there is nothing under it, and that is
+        not the input-less case above: cells have no pixels of their own, so
+        without an input they have neither a letterbox to fill nor anything to be
+        a measurement *of*.
         """
-        image = image_of(values)
-        if image is None:
+        del index
+        picture = picture_of(kind, values, span)
+        if picture is None:
             return False
-        self.set_frame(index, image)
+        field = picture if isinstance(picture, BlockField) else None
+        if field is not None and under is None:
+            return False
+        self._frame = None if field is not None else picture
+        self._field = field
         self._under = under
         # A render is the watched node's output by definition, which is the one
         # thing that displaces the badge. The refusal above leaves it alone: the
@@ -185,18 +178,24 @@ class VideoCanvas(QWidget):
     def clear(self) -> None:
         """Return to the empty state. The source has gone."""
         self._frame = None
+        self._field = None
         self._under = None
         self._showing_source = False
         self.update()
 
     def frame_rect(self) -> QRectF:
-        """Where the frame is painted, empty when there is none.
+        """Where the picture is painted, empty when there is none.
 
         Exposed for the same reason the strip exposes its rects: a painted pixel
         is not something a test can ask about, and "the footage is not stretched"
         is a claim about this rectangle.
+
+        A field's letterbox is its *input's*, because cells have no pixels of
+        their own: fitting the widget to an `(ny, nx)` grid would letterbox the
+        footage to the block aspect and put the picture somewhere the frame is
+        not.
         """
-        image = self._frame
+        image = self._frame if self._frame is not None else self._under
         if image is None or image.isNull():
             return QRectF()
         scale = min(self.width() / image.width(), self.height() / image.height(), 1.0)
@@ -247,17 +246,16 @@ class VideoCanvas(QWidget):
         painter = QPainter(self)
         painter.fillRect(self.rect(), _BACKGROUND)
         box = self.frame_rect()
-        if box.isEmpty() or self._frame is None:
+        if box.isEmpty() or (self._frame is None and self._field is None):
             painter.setPen(_HINT)
             painter.drawText(self.rect(), int(Qt.AlignmentFlag.AlignCenter), _EMPTY_HINT)
             painter.end()
             return
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        # Into the view rect, which is fitted to the result and then magnified:
-        # the input is what the result was made from, so the result is the frame
-        # whose aspect the letterbox is about, and a step that reshaped its
-        # input is still one picture of one thing. Both layers take the same
-        # magnification for the same reason they take the same rectangle.
+        # Into the view rect, which is `frame_rect` magnified: a step that
+        # reshaped its input is still one picture of one thing, so both layers
+        # take the same rectangle, and they take the same magnification for the
+        # same reason.
         painted = self.view_rect()
         # The fit is the letterbox, and a magnified frame overruns it on both
         # axes: without this, the inset a portrait frame leaves fills with
@@ -266,7 +264,10 @@ class VideoCanvas(QWidget):
         if self._under is not None:
             painter.drawImage(painted, self._under)
             painter.setOpacity(self._opacity)
-        painter.drawImage(painted, self._frame)
+        if self._frame is not None:
+            painter.drawImage(painted, self._frame)
+        elif self._field is not None:
+            self._field.draw(painter, painted, box)
         painter.setOpacity(1.0)
         badge = self.badge_text()
         if badge:

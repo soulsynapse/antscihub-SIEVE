@@ -89,10 +89,11 @@ from sieve.core.tool_registry import (
     source_tools,
 )
 from sieve.core.types import VideoMetadata
-from sieve.gui.canvas import CanvasPane, VideoCanvas, image_of
+from sieve.gui.canvas import CanvasPane, VideoCanvas
 from sieve.gui.chain_stack import Adding, Fan, Outputs, PipelinePane, Regions, Step, Write
 from sieve.gui.chrome import darken_title_bar, window_stylesheet
 from sieve.gui.control import Control
+from sieve.gui.emission_paint import image_of
 from sieve.gui.graph_panel import GraphPanel
 from sieve.gui.hotkeys import bind_navigation_hotkeys
 from sieve.gui.kind_editors import bind_editors
@@ -1298,6 +1299,12 @@ class MainWindow(QMainWindow):
         place that knows which of the two frames went to the canvas
         (`canvas.mark_source`).
 
+        What the values *look like* is the canvas's dispatch and this is where it
+        is handed what to dispatch on: the walked node's element kind, off the
+        fold `_reread_graph` already did, and the range a block field is coloured
+        against, which is the graph panel's axis rather than a second answer to
+        the same question (`gui/emission_paint.py`).
+
         It is also what a drag in flight gets, which is the one caller that
         passes `render=False`: the render would otherwise sit inside the round
         trip `ScrubPolicy` degrades on (`transport/request_intent.py`). A refill
@@ -1318,7 +1325,13 @@ class MainWindow(QMainWindow):
                 pipeline, node, index, under=input_of(pipeline, node)
             )
         under = image if beneath is None else image_of(beneath)
-        if values is None or not self._viewport.set_values(index, values, under=under):
+        if values is None or not self._viewport.set_values(
+            index,
+            values,
+            under=under,
+            kind=None if node is None else self._elements.get(node),
+            span=self._graph.value_range(),
+        ):
             self._viewport.set_frame(index, image)
             self._viewport.mark_source()
 

@@ -126,6 +126,24 @@ Neither was covered by the criterion, which was about the shortfall being named
 — a thing that now happens, in one of the three files it listed, under the other
 item's spelling.
 
+### Folded 2026-08-10: in the window the same failure is silent
+
+10.3 met the first bullet from inside the GUI. `app._paint_viewport` renders one
+frame through `PreviewSession`, so the last frames of every clip under a centred
+detector raise `Frame N out of range` there too — and the viewport's answer to a
+render that raised is the source frame with the `source` badge on it, which is
+the same answer it gives for a node that has no picture at all. So where `sieve
+preview` dies with a message, the tuning loop shows a plausible frame of footage
+and says nothing about why the pipeline is not on it; `tuning.last_error` holds
+the exception and no surface reads it. A test standing anywhere near the end of a
+clip meets this as a wait that never ends
+(`tests/gui/test_block_field.py` documents the ceiling it works within).
+
+It changes nothing about the three candidates — the ceiling is still the missing
+number — but it moves what "proven where a user meets it" reaches: whichever
+answer lands, the window is a second invocation that fails today, and its failure
+is quieter than the command's.
+
 ### The criterion is widened to what is left (review of f6508d7, 2026-08-08)
 
 `-k trailing_shortfall` over `test_plan.py`, `test_executor.py` and

@@ -1,7 +1,7 @@
 """The colours every surface draws with.
 
 Held above `frame` because the frame is not the only thing that reads them: the
-compartments' contents paint cards, plots and footage against the same values,
+panes' contents paint cards, plots and footage against the same values,
 and a palette owned by the frame would be imported back up out of it by
 everything the frame contains.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from PySide6.QtGui import QColor
 
-#: The ground the panes leave uncovered — splitter seams, the timeline's strip.
+#: The ground the panes leave uncovered — the menu bar's strip, splitter seams.
 STACK_BG = QColor(24, 26, 30)
 
 #: A pane's own fill, and the lighter one a control wears against it.

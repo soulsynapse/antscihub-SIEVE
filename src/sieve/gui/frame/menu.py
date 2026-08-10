@@ -1,6 +1,6 @@
 """The bar across the top, and what the window itself can be asked to do.
 
-The menu is the frame's, not a compartment's: everything on it acts on the
+The menu is the frame's, not a pane's: everything on it acts on the
 window or on the project the window is showing, and nothing on it belongs to
 the canvas, the chain or the timeline — those are acted on where they are
 drawn. That line is what keeps the bar from becoming the place every surface
@@ -9,7 +9,7 @@ hangs its overflow.
 Entries whose target does not exist yet are built and disabled rather than
 left out. A bar that grows an item per commit tells the reader nothing about
 what the application is; one that shows its shape from the start, greyed where
-the wiring has not landed, is the same checkable claim the empty compartments
+the wiring has not landed, is the same checkable claim the empty panes
 make.
 """
 

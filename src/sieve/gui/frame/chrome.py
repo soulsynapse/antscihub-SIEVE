@@ -1,8 +1,8 @@
-"""What the window wears where no compartment covers it.
+"""What the window wears where no pane covers it.
 
 Every rule is anchored to the splitter or to a named object, never to a bare
 widget class: a plain `QLabel` or `QWidget` selector set on the window reaches
-down into whatever the compartments come to hold — surfaces that paint
+down into whatever the panes come to hold — surfaces that paint
 themselves — and the two stylesheets would then fight over every card.
 """
 
@@ -39,7 +39,7 @@ def stylesheet() -> str:
         #menubar::item:pressed {{ background: {rgb(PANEL)}; }}
 
         /* Dropped menus are panes, not ground: a panel fill inside a hairline,
-           the same pairing every card in the compartments will use. */
+           the same pairing every card in the panes will use. */
         QMenu {{
             background: {rgb(PANEL)};
             color: {rgb(TEXT)};
@@ -56,7 +56,7 @@ def stylesheet() -> str:
         }}
 
         /* Anchored to the class and reaching only into its own label: a dialog
-           the frame raises is not a compartment, and nothing inside one is. */
+           the frame raises is not a pane, and nothing inside one is. */
         QMessageBox {{ background: {rgb(PANEL)}; }}
         QMessageBox QLabel {{ color: {rgb(TEXT)}; }}
     """

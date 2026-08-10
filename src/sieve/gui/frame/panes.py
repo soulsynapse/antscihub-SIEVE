@@ -1,9 +1,9 @@
-"""The three rooms the window divides into, and nothing standing in them yet.
+"""The three panes the window divides into, and nothing standing in them yet.
 
 Each is a `Blank`: a pane that fills, names itself, and holds a layout for
 whatever replaces it. Keeping them empty at this stage is what makes the
 frame's own claims checkable — which boundary the user may drag, which is
-fixed, what happens to each compartment when the window is resized — without
+fixed, what happens to each pane when the window is resized — without
 those answers coming from the size hint of some widget inside.
 """
 
@@ -21,15 +21,15 @@ from sieve.gui.palette import DIM, LINE, PANEL
 #: does not get a say in.
 TIMELINE_HEIGHT = 128
 
-#: Neither pane may be dragged shut. A compartment the user cannot see is one
+#: Neither pane may be dragged shut. A pane the user cannot see is one
 #: they cannot get back except by finding a seam with no width.
 _MIN_PANE = 160
 
 
 class Blank(QWidget):
-    """A compartment with its name in it, and a layout for what will fill it.
+    """A pane with its name in it, and a layout for what will fill it.
 
-    It paints rather than styles: the compartments come to hold surfaces that
+    It paints rather than styles: the panes come to hold surfaces that
     draw themselves, and a stylesheet rule broad enough to fill this one would
     still be reaching into them after they arrive.
     """
@@ -75,9 +75,9 @@ def build_controls() -> Blank:
 def build_timeline() -> Blank:
     """Bottom: the whole asset, the working window on it, the playhead.
 
-    Full width under both panes and not inside either, because the window it
-    carries is where the canvas and every plot on the right are read — one
-    position in one file, held by neither of the two surfaces showing it.
+    Full width under the other two panes and not inside either, because the
+    window it carries is where the canvas and every plot on the right are read
+    — one position in one file, held by neither of the two surfaces showing it.
     """
     timeline = Blank("timeline")
     timeline.setObjectName("timeline")

@@ -1,4 +1,4 @@
-"""The window: a menu bar, three compartments, and the boundaries between them.
+"""The window: a menu bar, three panes, and the boundaries between them.
 
 Two of the three boundaries are different in kind and the frame is where that
 difference is stated. Canvas against controls is a splitter — how much room the
@@ -6,7 +6,7 @@ footage gets against the chain is the user's, and it is the trade they make
 most often. Timeline against both is a seam: the strip is a fixed height,
 because what it draws is the whole asset at a size the layout does not get a
 say in. The menu bar sits above all three and is a boundary of neither kind —
-it acts on the window, not on what any compartment holds.
+it acts on the window, not on what any pane holds.
 """
 
 from __future__ import annotations
@@ -15,13 +15,13 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 
 from sieve.gui.frame.chrome import stylesheet
-from sieve.gui.frame.compartments import (
+from sieve.gui.frame.menu import build_menu_bar, show_about
+from sieve.gui.frame.panes import (
     build_canvas,
     build_controls,
     build_seam,
     build_timeline,
 )
-from sieve.gui.frame.menu import build_menu_bar, show_about
 
 #: What the window restores down *to*. Kept even though it opens maximized:
 #: without it the restored size — and with it whether the title bar can be

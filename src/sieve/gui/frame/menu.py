@@ -37,6 +37,8 @@ _MENUS: tuple[tuple[str, tuple[tuple[str, str | None, str] | None, ...]], ...] =
             None,
             ("Open &video…", None, "Ctrl+Shift+O"),
             None,
+            ("&Preferences…", None, "Ctrl+,"),
+            None,
             ("E&xit", "close", "Ctrl+Q"),
         ),
     ),

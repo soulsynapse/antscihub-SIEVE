@@ -126,6 +126,59 @@ def test_the_canvas_paints_the_result_over_input_and_both_layers_show(
         window.close()
 
 
+def test_the_result_over_input_at_zero_opacity_is_the_input_painted(
+    qapp, two_picture_project: Path
+) -> None:
+    """The under layer reaches the surface, pinned to a picture and not to a grab.
+
+    The case above compares three grabs that sweep the *result*'s alpha, so an
+    under layer that is held and never painted still passes it: at opacity 0.0
+    the grab is the empty letterbox, which differs from the other two exactly as
+    a real input layer would
+    (`findings/loop/2026.08.10-three-grabs-that-all-differ-are-green-with-the-under-layer-never-painted.md`).
+    Equality against a canvas handed the input as its only frame is false for a
+    background and false for a layer nobody drew.
+
+    The two boxes coincide because `frame_rect` fits the result and
+    `motion_history` keeps its input's shape; a step that reshaped its input
+    would letterbox the pair differently and this equality would be about the
+    fit rather than about the layer.
+    """
+    del qapp
+    from PySide6.QtGui import QImage
+
+    from sieve.gui.app import MainWindow
+    from sieve.gui.canvas import VideoCanvas
+
+    # A shown widget grabs premultiplied and an unshown one does not, and QImage
+    # compares unequal across formats whatever the pixels say. Both are opaque
+    # over the canvas background, so the conversion is lossless here.
+    opaque = QImage.Format.Format_RGB32
+
+    discover()
+    window = MainWindow([two_picture_project])
+    window.resize(_WINDOW[0], _WINDOW[1])
+    window.show()
+    try:
+        _opened(window, two_picture_project)
+        assert not window.viewport.frame_rect().isEmpty()
+
+        under = window.viewport.under
+        assert under is not None
+
+        window.viewport.overlay_opacity = 0.0
+        input_alone = window.viewport.grab().toImage().convertToFormat(opaque)
+
+        reference = VideoCanvas()
+        reference.resize(window.viewport.size())
+        reference.set_frame(_AT, under)
+        assert reference.frame_rect() == window.viewport.frame_rect()
+
+        assert input_alone == reference.grab().toImage().convertToFormat(opaque)
+    finally:
+        window.close()
+
+
 def test_the_pair_comes_off_one_render_and_not_two(qapp, two_picture_project: Path) -> None:
     """The input is the parent entry of the render the result came out of.
 

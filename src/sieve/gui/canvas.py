@@ -34,14 +34,26 @@ different pictures of the same kind of array, and which one a node's output make
 is `emission_paint.py`'s — including the range each is coloured against, which
 the two entries answer differently on purpose. This widget is handed the kind
 along with the values and dispatches; it does not know which tools exist.
+
+**The solo gesture emits and never applies itself.** Hovering a cell asks for it,
+a click latches one so it survives the pointer leaving, and the marker moves only
+when `set_solo` says so — the selection is the window's view state, the same way
+the pin and the walk are (`adr/the-walked-step-owns-the-canvas.md` calls it that
+outright), and a widget that painted its own gesture would disagree with the
+trace under the canvas for a frame on every crossing. The latch is the one piece
+of gesture state held here, and it is not the solo: it says what the pointer
+leaving reverts *to*, and it is compared against what the model last applied, so
+a request the model dropped is asked again on the next crossing rather than
+deduplicated into silence. v2's discipline and v2's argument
+(`gui/composite_view.py`).
 """
 
 from __future__ import annotations
 
 import numpy as np
 from numpy.typing import NDArray
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPaintEvent, QWheelEvent
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPaintEvent, QPen, QWheelEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QVBoxLayout, QWidget
 
 from sieve.core.tool_base import ElementKind
@@ -52,6 +64,10 @@ _BACKGROUND = QColor(18, 18, 22)
 _HINT = QColor(120, 120, 130)
 _EMPTY_HINT = "No frame"
 _SOURCE_BADGE = "source"
+
+#: The soloed cell's outline. White rather than a hue: it is drawn over the heat
+#: ramp, which spends every hue it has on the values underneath.
+_SOLO_MARK = QColor(255, 255, 255)
 
 #: Where the overlay starts, as a percentage. v2's number and its reason: high
 #: enough that a binary mask is unmissable, low enough that the input stays
@@ -66,6 +82,10 @@ _OPACITY_LABEL = "result"
 class VideoCanvas(QWidget):
     """Draws the most recent composite, centred, letterboxed."""
 
+    #: A cell of the field to solo as `(row, col)`, or `None` to un-solo. Asked
+    #: for, never self-applied — see the module docstring.
+    soloed = Signal(object)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._frame: QImage | None = None
@@ -74,6 +94,15 @@ class VideoCanvas(QWidget):
         self._opacity = DEFAULT_OPACITY / 100.0
         self._showing_source = False
         self._magnifier = Magnifier()
+        #: What the model applied, which is the only thing drawn.
+        self._solo: tuple[int, int] | None = None
+        #: The cell under the pointer, and the one a click pinned. Gesture state,
+        #: and neither of them is the solo.
+        self._hover: tuple[int, int] | None = None
+        self._latched: tuple[int, int] | None = None
+        # Without this the widget hears a move only while a button is down, and
+        # the gesture this one carries is a hover.
+        self.setMouseTracking(True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     @property
@@ -89,6 +118,30 @@ class VideoCanvas(QWidget):
     def field(self) -> BlockField | None:
         """The cells on screen, or None when what is shown is an image."""
         return self._field
+
+    @property
+    def solo(self) -> tuple[int, int] | None:
+        """The cell picked out on the field, or None. What the model applied."""
+        return self._solo
+
+    def set_solo(self, cell: tuple[int, int] | None) -> None:
+        """Draw the marker on `cell`, or on nothing. The model's answer to `soloed`."""
+        if cell == self._solo:
+            return
+        self._solo = cell
+        self.update()
+
+    def cell_at(self, point: QPointF) -> tuple[int, int] | None:
+        """Which cell of the field `point` is over, or None where it is over none.
+
+        Through `view_rect`, which is what the field is painted into: the two are
+        the same rectangle until the user magnifies, and a hit test left on the
+        fit then names cells the colours are not on — a picture that looks
+        perfectly correct while every answer about it is wrong.
+        """
+        if self._field is None:
+            return None
+        return self._field.cell_at(self.view_rect(), self.frame_rect(), point)
 
     @property
     def under(self) -> QImage | None:
@@ -129,6 +182,7 @@ class VideoCanvas(QWidget):
         # two pictures the user never asked to compare.
         self._field = None
         self._under = None
+        self._forget_gesture()
         self.update()
 
     def set_values(
@@ -164,6 +218,10 @@ class VideoCanvas(QWidget):
         field = picture if isinstance(picture, BlockField) else None
         if field is not None and under is None:
             return False
+        # A grid of another shape is another step's field, and a cell index is
+        # only ever about the one it was read off.
+        if field is None or self._field is None or field.values.shape != self._field.values.shape:
+            self._forget_gesture()
         self._frame = None if field is not None else picture
         self._field = field
         self._under = under
@@ -181,7 +239,70 @@ class VideoCanvas(QWidget):
         self._field = None
         self._under = None
         self._showing_source = False
+        self._forget_gesture()
         self.update()
+
+    # ---- the solo gesture ------------------------------------------------
+
+    def _asked_for(self) -> tuple[int, int] | None:
+        """What the gesture currently means: the hovered cell, else the latched one."""
+        return self._hover if self._hover is not None else self._latched
+
+    def _ask(self) -> None:
+        """Ask for the gesture's solo, unless the model already holds it.
+
+        Compared against `self._solo` — what was last applied, and what is drawn
+        — rather than against a record of what was last emitted: a request the
+        model dropped is worth asking again, and one it satisfied is worth not
+        asking twice, since a redundant one costs a re-render at pointer speed.
+        """
+        asked = self._asked_for()
+        if asked != self._solo:
+            self.soloed.emit(asked)
+
+    def _set_hover(self, cell: tuple[int, int] | None) -> None:
+        """One funnel for every change of the cell under the pointer.
+
+        Per cell crossing rather than per mouse sample, which is what makes
+        driving something as involuntary as pointer position affordable at all.
+        """
+        if cell == self._hover:
+            return
+        self._hover = cell
+        self._ask()
+
+    def _forget_gesture(self) -> None:
+        """The field has gone, or is another step's: hover and latch go with it.
+
+        Asked rather than dropped silently — a latch left standing over a grid
+        that is no longer drawn would keep a cell soloed under the canvas with
+        nothing on screen saying which.
+        """
+        self._latched = None
+        self._hover = None
+        self._ask()
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        self._set_hover(self.cell_at(event.position()))
+
+    def leaveEvent(self, event: object) -> None:
+        del event
+        self._set_hover(None)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Latch the cell under the pointer, or unlatch it; the model still decides.
+
+        Unlatching while the pointer is still on the cell asks for nothing new —
+        the hover is soloing it either way — and that is the whole difference the
+        click makes: what leaving the field reverts to.
+        """
+        if event.button() is not Qt.MouseButton.LeftButton:
+            return
+        cell = self.cell_at(event.position())
+        if cell is None:
+            return
+        self._latched = None if cell == self._latched else cell
+        self._ask()
 
     def frame_rect(self) -> QRectF:
         """Where the picture is painted, empty when there is none.
@@ -269,6 +390,14 @@ class VideoCanvas(QWidget):
         elif self._field is not None:
             self._field.draw(painter, painted, box)
         painter.setOpacity(1.0)
+        if self._field is not None and self._solo is not None:
+            # Inside the cell's own pixels rather than on them: a line centred on
+            # the boundary is half over the neighbour, and which cell is picked
+            # out is the whole of what this says.
+            marked = self._field.cell_rect(painted, self._solo)
+            if not marked.isEmpty():
+                painter.setPen(QPen(_SOLO_MARK, 2.0))
+                painter.drawRect(marked.adjusted(1, 1, -1, -1))
         badge = self.badge_text()
         if badge:
             # Over the frame rather than over the letterbox, which is empty on a

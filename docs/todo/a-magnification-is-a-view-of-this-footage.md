@@ -49,3 +49,22 @@ while the seam is open.
     $ uv run pytest tests/gui -q -k a_new_picture_is_a_new_fit
     256 deselected in 0.70s
     exit: 5
+
+## Folded 2026-08-10: the soloed cell is the second view state that carries
+
+10.4 gave the canvas a solo — a cell of the block field picked out by hovering,
+held as the window's view state and drawn as a marker — and it is dropped by
+exactly one rule: `VideoCanvas` forgets the gesture when what it is showing stops
+being a field or becomes a grid of another shape. That covers a walk onto a step
+with a different block size and covers the picture going away, and it does not
+cover the seam this item is about. Two projects whose block grids happen to have
+the same shape leave the marker standing on a cell of footage the user has just
+left, and — where the pin is on a block step — leave the trace under the canvas
+drawn from it.
+
+It is the same seam and the same argument: a magnification is a view of *this*
+footage and so is a cell index, both survive a walk on purpose, and what must end
+them is a new source. So whatever this item wires `reset_zoom` into is what the
+solo has to be dropped at, in the same call — a second seam for the second piece
+of state would be the place the two answers drift apart. `done_when` names only
+the fit and does not reach the solo.

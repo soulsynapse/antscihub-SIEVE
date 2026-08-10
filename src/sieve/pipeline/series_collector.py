@@ -88,7 +88,9 @@ class CollectedSeries:
     #: working window is a stretch of footage, and a graph drawn as if it began
     #: at the file's first frame is a graph about the wrong frames.
     start_index: int
-    #: `(T, *the node's frame shape)` float32, contiguous from `start_index`.
+    #: `(T, *the node's frame shape)` float32, contiguous from `start_index` —
+    #: `(T, 1, 1)` where the collector was narrowed to one cell of that frame
+    #: (`SeriesCollector`).
     data: NDArray[np.float32]
 
 
@@ -136,13 +138,17 @@ class _Stack:
 class SeriesCollector:
     """Rows in as a render produces them, one array out when it finishes.
 
-    One collector watches one node. Not thread-safe, for `PreviewSession`'s
+    One collector watches one node, and at most one cell of it — a node whose
+    frame is a grid has as many series as cells, and which of them is drawn is
+    the caller's selection rather than this class' policy. Not thread-safe, for `PreviewSession`'s
     reason and not a weaker one: a caller rendering on a worker thread already
     holds one render at a time, and a lock here would make that discipline look
     optional.
     """
 
-    def __init__(self, node_id: str, *, measure: Measure) -> None:
+    def __init__(
+        self, node_id: str, *, measure: Measure, cell: tuple[int, int] | None = None
+    ) -> None:
         """Watch `node_id`, publishing each refill's interval through `measure`.
 
         Args:
@@ -150,9 +156,18 @@ class SeriesCollector:
             measure: How a timed span is published — `MetricBus.measure` is the
                 real one. Required for `PreviewSession`'s reason: the refill
                 interval *is* the claim this module exists to make.
+            cell: Which element of the node's frame the series is of, `(row,
+                col)`, or `None` for a node whose frame is one value already. A
+                `BLOCK` node emits a grid per frame and a trace is one value per
+                frame, so something has to name which — and the selection the
+                user made on the field already does (`gui/canvas.py`). An index
+                and never an aggregate: a mean or a max over the grid would be a
+                quantity no tool computed and none of them is the one the user
+                pointed at.
         """
         self._node_id = node_id
         self._measure = measure
+        self._cell = cell
         self._stack = _Stack(f"series for {node_id!r}", "plots as a shifted trace")
         self._series: CollectedSeries | None = None
 
@@ -160,6 +175,11 @@ class SeriesCollector:
     def node_id(self) -> str:
         """The node whose outputs this assembles."""
         return self._node_id
+
+    @property
+    def cell(self) -> tuple[int, int] | None:
+        """Which element of the node's frame the rows are taken from, or None for all."""
+        return self._cell
 
     @property
     def series(self) -> CollectedSeries | None:
@@ -193,14 +213,25 @@ class SeriesCollector:
     def add(self, result: FrameResult) -> None:
         """One frame's outputs, in the order the render produced them.
 
+        A `cell` narrows the row to that element and keeps it a row rather than
+        flattening it to a scalar, so the assembled series is `(T, 1, 1)` — the
+        shape a node emitting one value per frame already produces, which is what
+        lets one panel draw both without asking which it is looking at.
+
         Raises:
             KeyError: if `result` carries no output for the watched node.
                 `execute` computes every node for every frame it yields, so an
                 absence is a node id that names nothing rather than a graph
                 legitimately rendering a prefix.
             ValueError: if `result` is not the frame after the last one added.
+            IndexError: if `cell` is not a cell of the node's frame — the caller
+                read it off that node's own field, so a miss is an index carried
+                across a graph rather than a grid that moved.
         """
-        self._stack.add(int(result.index), np.asarray(result[self._node_id].data, np.float32))
+        row = np.asarray(result[self._node_id].data, np.float32)
+        if self._cell is not None:
+            row = np.asarray(row[self._cell], np.float32).reshape(1, 1)
+        self._stack.add(int(result.index), row)
 
 
 class SurfaceCollector:

@@ -37,7 +37,7 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from PySide6.QtCore import QPoint, QRectF
+from PySide6.QtCore import QPoint, QPointF, QRectF
 from PySide6.QtGui import QImage, QPainter
 
 from sieve.core.tool_base import ElementKind
@@ -215,6 +215,42 @@ class BlockField:
             QPoint(xs[col0], ys[row0]),
             QImage(pixels.tobytes(), width, height, width * 4, QImage.Format.Format_ARGB32).copy(),
         )
+
+    def cell_at(self, view: QRectF, box: QRectF, point: QPointF) -> tuple[int, int] | None:
+        """Which cell `point` is over, `(row, col)`, or `None` over no cell.
+
+        Two containment tests and not one, which is v2's rule and its reason
+        (`gui/composite_view._CompositePane.block_at`): magnified, the grid runs
+        off under the letterbox, and the cells out there are never painted —
+        `draw` bounds its array by the box. So a point the *fit* does not hold
+        is over bare panel
+        whatever the view rect says, and answering with the cell that would have
+        been there picks out a cell the user cannot see.
+
+        The edges are `draw`'s own, read from the same `view`, because a hit test
+        that rounded its own would name a different cell than the colours landed
+        on wherever the two disagreed by a pixel.
+        """
+        if not view.contains(point) or not box.contains(point) or view.isEmpty():
+            return None
+        ny, nx = self.values.shape
+        xs, ys = grid_edges(view, ny, nx)
+        col = min(max(bisect_right(xs, int(point.x())) - 1, 0), nx - 1)
+        row = min(max(bisect_right(ys, int(point.y())) - 1, 0), ny - 1)
+        return row, col
+
+    def cell_rect(self, view: QRectF, cell: tuple[int, int]) -> QRectF:
+        """The pixels cell `(row, col)` covers, off `cell_at`'s edges.
+
+        Empty for a cell this field has not got, which is what a marker for a
+        solo taken on a grid of another shape would be asking for.
+        """
+        ny, nx = self.values.shape
+        row, col = cell
+        if not (0 <= row < ny and 0 <= col < nx):
+            return QRectF()
+        xs, ys = grid_edges(view, ny, nx)
+        return QRectF(xs[col], ys[row], xs[col + 1] - xs[col], ys[row + 1] - ys[row])
 
 
 def _pixel_picture(values: NDArray[np.float32], span: tuple[float, float]) -> QImage | None:

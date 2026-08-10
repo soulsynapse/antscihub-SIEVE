@@ -341,6 +341,12 @@ class MainWindow(QMainWindow):
         # open, and an index into `_order` after — one slot, so pinning is a
         # move of this number and eviction is what that means.
         self._pinned: int | None = None
+        # Which cell of the field on the canvas is picked out. View state for the
+        # pin's reason and named as such by `adr/the-walked-step-owns-the-canvas.md`,
+        # and held here rather than in the widget that carries the gesture because
+        # it is the reduction the *trace* is drawn through: the canvas asks and
+        # this is what answers (`canvas.VideoCanvas.soloed`).
+        self._solo: tuple[int, int] | None = None
         # Which position the box is standing at, which of that position's offers
         # is lit, and whether it stands *in place of* that position's step rather
         # than in the gap under it. `None` while no box is open, which is not the
@@ -365,6 +371,7 @@ class MainWindow(QMainWindow):
 
         self._player = VideoPlayer(self)
         self._viewport = VideoCanvas()
+        self._viewport.soloed.connect(self.solo_cell)
         self._player.frame_changed.connect(self._on_frame_changed)
         self._timeline = TimelineBar(self._player)
         # Connected after the bar, because Qt delivers to subscribers in
@@ -640,6 +647,32 @@ class MainWindow(QMainWindow):
         self._pinned = max(0, min(index, len(self._order) - 1))
         self._show_pinned()
         self._redraw()
+
+    @property
+    def solo(self) -> tuple[int, int] | None:
+        """The cell of the canvas' field the trace is drawn for, or `None`."""
+        return self._solo
+
+    def solo_cell(self, cell: tuple[int, int] | None) -> None:
+        """The canvas has asked for a cell: apply it, and redraw what it changes.
+
+        The gesture is the viewport's and the answer is this window's
+        (`canvas.py`), which is the same division the pin already runs on: what
+        is drawn on the picture and what is drawn under it have to be one
+        selection, and a canvas that applied its own would be the second answer
+        to which cell the trace is of.
+
+        Two consumers, and only the second is obvious. The marker goes back to
+        the widget that asked. The collector under the pinned step is re-aimed,
+        because on a `BLOCK` step the cell *is* the series — so a solo is a
+        refill, not a repaint.
+        """
+        if cell == self._solo:
+            return
+        self._solo = cell
+        self._viewport.set_solo(cell)
+        self._watch_the_pin()
+        self.refill_graph()
 
     def pin_current(self) -> None:
         """P: pin the step the walk is standing on.
@@ -1455,15 +1488,25 @@ class MainWindow(QMainWindow):
         name. And only on a change, because `watch` starts a fresh collector —
         a walk that re-pointed it at the node it was already on would blank the
         graph on every Up and Down.
+
+        **A `BLOCK` step's trace is the soloed cell's.** Its output is a grid per
+        frame and a trace is one value per frame, so the selection the user made
+        on the field is the reduction — and a grid with no cell soloed reaches
+        the panel's refusal, which is a fact about a running graph and refused
+        where the series arrives rather than guessed at here (`pinned.py`). A
+        grid of one block needs no solo and is the case that says so.
+
+        The cell is only ever handed over for the step whose field is on the
+        canvas. A solo is an index into *that* grid, and a pin standing on some
+        other block step would be a trace addressed by a cell of a different
+        graph position.
         """
         node = self.pinned_node
-        watched = (
-            node.node_id
-            if node is not None and draws_a_trace(self._elements.get(node.node_id))
-            else None
-        )
-        if self._tuning.watching != watched:
-            self._tuning.watch(watched)
+        kind = None if node is None else self._elements.get(node.node_id)
+        watched = node.node_id if node is not None and draws_a_trace(kind) else None
+        cell = self._solo if kind is ElementKind.BLOCK and watched == self.viewport_node else None
+        if (self._tuning.watching, self._tuning.soloed) != (watched, cell):
+            self._tuning.watch(watched, cell)
 
     def _show_pinned(self) -> None:
         """Rebuild the slot for the step now pinned, and re-fit it to that step.

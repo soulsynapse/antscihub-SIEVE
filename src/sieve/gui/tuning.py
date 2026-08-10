@@ -164,6 +164,11 @@ class TuningLoop(QObject):
         return None if self._collector is None else self._collector.node_id
 
     @property
+    def soloed(self) -> tuple[int, int] | None:
+        """Which cell of that node's frame the trace is of, or None for the whole frame."""
+        return None if self._collector is None else self._collector.cell
+
+    @property
     def showing(self) -> str | None:
         """The node whose display surfaces are being filled, or None."""
         return self._shown
@@ -238,15 +243,22 @@ class TuningLoop(QObject):
         if self._session is not None:
             self._session.set_replicate(replicate)
 
-    def watch(self, node_id: str | None) -> None:
+    def watch(self, node_id: str | None, cell: tuple[int, int] | None = None) -> None:
         """Draw `node_id`'s series from now on, or nothing for None.
 
         A fresh collector rather than a retargeted one: the rows already
         assembled are the previous node's, and a collector that changed its mind
-        mid-series would stack two nodes' frames into one array.
+        mid-series would stack two nodes' frames into one array. A move of `cell`
+        is the same move for the same reason — the rows assembled are the
+        previous cell's numbers.
+
+        `cell` narrows the series to one element of the node's frame, which is
+        what a node emitting a grid needs before there is a trace to draw at all
+        (`pipeline/series_collector.SeriesCollector`). Which cell is the window's
+        to say, and it says it from the user's own selection on the field.
         """
         self._collector = (
-            None if node_id is None else SeriesCollector(node_id, measure=self._measure)
+            None if node_id is None else SeriesCollector(node_id, measure=self._measure, cell=cell)
         )
         self._panel.set_series(None)
 
@@ -358,14 +370,28 @@ class TuningLoop(QObject):
         self._error = None
         try:
             self._refill(pipeline)
+            self._publish()
         except Exception as error:  # noqa: BLE001 — held, not swallowed; see the docstring
             self._error = error
             return
+        self.refilled.emit()
+
+    def _publish(self) -> None:
+        """Hand the assembled rows to the widgets, inside the refill's own guard.
+
+        Inside it because handing over can refuse: a series carrying more than
+        one value per frame is not something the panel can draw, and a pinned
+        `BLOCK` step with no cell soloed produces exactly that
+        (`graph_panel.set_series`). Thrown out of a timer slot that is a
+        traceback on a console the product has not got, so it is held where every
+        other unrenderable document is held — the mark stays up and `last_error`
+        says why, which is the panel keeping its previous answer rather than
+        drawing a wrong one.
+        """
         if self._collector is not None:
             self._panel.set_series(self._collector.series)
         for collector in self._surfaces:
             self._panels[collector.surface].set_picture(collector.picture)
-        self.refilled.emit()
 
     def _refill(self, pipeline: Pipeline) -> None:
         """One render, feeding the trace's collector and every surface's.

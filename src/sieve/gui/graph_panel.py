@@ -22,7 +22,9 @@ plot rather than as the maximum.
 no trace until something reduces it, and a reduction here would be a computation
 in `gui` and an invisible one: whatever this module picked would draw as a
 plausible line for a quantity the document never named. The refusal is at
-`set_series`, where the series arrives, rather than at paint.
+`set_series`, where the series arrives, rather than at paint. What answers it for
+a grid is the user picking a cell — the series then carries that cell's own
+numbers and this panel is none the wiser (`pipeline/series_collector.py`).
 
 **A non-finite value breaks the trace rather than joining across it.** `detect`
 emits NaN for a frame its gate cannot answer for, and a segment drawn through
@@ -90,11 +92,17 @@ class GraphPanel(QWidget):
     def set_series(self, series: CollectedSeries | None) -> None:
         """Show `series`, which is current by definition — a refill just produced it.
 
+        The refusal below leaves this panel exactly as it was, which is why the
+        values are derived before anything is assigned: a half-applied series
+        would leave `series` and what is drawn describing two different refills,
+        and the mark saying the drawn one is current.
+
         Raises:
             ValueError: if a frame of `series` holds more than one value.
         """
+        values = None if series is None else _one_value_per_frame(series)
         self._series = series
-        self._values = None if series is None else _one_value_per_frame(series)
+        self._values = values
         self._stale = False
         self.update()
 
@@ -201,7 +209,8 @@ def _one_value_per_frame(series: CollectedSeries) -> NDArray[np.float32]:
     if rows.shape[1] != 1:
         raise ValueError(
             f"a graph is drawn from 1 value per frame, and this series carries "
-            f"{rows.shape[1]} — reducing {series.data.shape[1:]} to a number is a tool's "
-            "job, not a panel's"
+            f"{rows.shape[1]} — picking one of {series.data.shape[1:]} is the selection's "
+            "job (a solo on the field), and reducing them to a number is a tool's; "
+            "neither is a panel's"
         )
     return np.asarray(rows.reshape(-1), np.float32)

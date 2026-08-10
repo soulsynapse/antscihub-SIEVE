@@ -1,6 +1,6 @@
 ---
 title: A surface carries its values and not the axis they sit on, so one band of three cannot be dragged
-status: awaiting-review
+status: done
 phase: 9
 priority: high
 gated_on: nothing
@@ -104,3 +104,17 @@ is the open item most likely to be its home rather than a new mint.
     $ uv run pytest tests -q -k scalogram_handle_reads_the_declared_axis
     1264 deselected in 0.97s
     exit: 5
+
+## Done 2026-08-10 at 1217086, and where the residue went
+
+Criterion re-run at review, green; whole suite 1265 green. Every clause of the
+ruling landed: `EDITABLE_AXIS` is gone from the tree, `takes_handles` is the
+resolved axis alone, `SurfacePanel` maps y through it, and
+`kind_editors._on_the_surface` refuses on the fold rather than on the kind.
+
+Two things left this item, both homed rather than left in prose. The region and
+point half of ADR 37 — which the paragraph above says "has no item yet" — is
+[the-extent-half-of-adr-37-lands-and-its-stated-placement-cannot-hold.md](the-extent-half-of-adr-37-lands-and-its-stated-placement-cannot-hold.md),
+which also carries the ADR's placement sentence, contradicted by the tree that
+implements it. The registration refusals `param_axes` and `RowAxis` arrived with
+are [the-axis-declarations-five-refusals-have-no-case.md](the-axis-declarations-five-refusals-have-no-case.md).

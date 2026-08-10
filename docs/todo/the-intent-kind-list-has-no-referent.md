@@ -2,7 +2,7 @@
 title: Five files say a complete GUI emits every intent kind, and nothing says which they are
 phase: 7
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_intents.py -q -k 'the_kinds_are_the_modules_own or a_new_kind_fails_the_list'"
 opened: 2026-08-09

@@ -9,6 +9,7 @@ that pushes a value anyway.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -31,14 +32,18 @@ from sieve.core.tool_base import (
     ToolSpec,
 )
 from sieve.pipeline.cache_key import node_key
+from sieve.session import intents
 from sieve.session.intents import (
+    INTENT_KINDS,
     AddNode,
     AddReplicate,
+    Intent,
     RemoveNode,
     RemoveReplicate,
     RetoolNode,
     SetOutputs,
     SetParam,
+    intent_kinds,
     issue,
 )
 from sieve.session.session import Session
@@ -91,6 +96,62 @@ def _opened(tmp_path: Path, *replicates: Replicate) -> Session:
 
 def _key(project: Project, replicate: Replicate | None = None) -> str:
     return node_key(project.pipeline.node("n1"), spec=SPEC, upstream=ROOT, replicate=replicate)
+
+
+#: Typed out by hand, which is the whole of its job: `INTENT_KINDS` derives
+#: itself from the module, so the only thing that can notice a kind arriving or
+#: leaving is a list written somewhere the module cannot reach. VISION's
+#: reshuffle scenario reads this set as the bindings a complete GUI must emit,
+#: so an eighth name below is a claim about what a layout now owes.
+KIND_NAMES = {
+    "SetParam",
+    "SetOutputs",
+    "RemoveNode",
+    "AddNode",
+    "AddReplicate",
+    "RemoveReplicate",
+    "RetoolNode",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class Reframe:
+    """An eighth kind, of the shape a later phase would add one in."""
+
+    node_id: str
+
+    def applied_to(self, project: Project) -> Project:
+        return project
+
+
+def test_the_kinds_are_the_modules_own() -> None:
+    # The classes the rest of this file issues, not names beside them: a tuple
+    # of strings would let the enumeration and the module drift while both still
+    # read correctly, which is the defect this list was minted against.
+    assert set(INTENT_KINDS) == {
+        SetParam,
+        SetOutputs,
+        RemoveNode,
+        AddNode,
+        AddReplicate,
+        RemoveReplicate,
+        RetoolNode,
+    }
+    assert {kind.__name__ for kind in INTENT_KINDS} == KIND_NAMES
+    assert all(issubclass(kind, Intent) for kind in INTENT_KINDS)
+
+
+def test_a_new_kind_fails_the_list() -> None:
+    # A kind arriving is not something the module can hide: the derivation picks
+    # up anything intent-shaped, so the eighth joins without an edit...
+    grown = intent_kinds({"Reframe": Reframe, **vars(intents)})
+    assert Reframe in grown
+
+    # ...and the hand-typed set above is what then goes red, which is the half
+    # that makes the enumeration worth having. Without this, a phase could add a
+    # surface, emit a kind nothing binds, and leave VISION's completeness claim
+    # true of a shorter list than the one the app has.
+    assert {kind.__name__ for kind in grown} != KIND_NAMES
 
 
 def test_a_set_param_intent_lands_as_a_new_whole_value(tmp_path: Path) -> None:

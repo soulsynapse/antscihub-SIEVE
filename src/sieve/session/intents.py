@@ -23,13 +23,15 @@ answer and a paraphrase of it here would be a second one.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Protocol
+from collections.abc import Mapping
+from dataclasses import dataclass, is_dataclass
+from typing import Any, Protocol, runtime_checkable
 
 from sieve.core.pipeline_model import Node, Project, Replicate, Sink
 from sieve.session.session import Session
 
 
+@runtime_checkable
 class Intent(Protocol):
     """One mutation of the open project, able to state its own result."""
 
@@ -41,6 +43,26 @@ class Intent(Protocol):
         refused one are never the same outcome to the caller.
         """
         ...
+
+
+def intent_kinds(namespace: Mapping[str, object]) -> tuple[type[Intent], ...]:
+    """The intent kinds `namespace` defines, in the order it defines them.
+
+    Takes a namespace rather than reading this module directly so the rule can
+    be run over one this module does not have — which is how a test asks what
+    the list would do with a kind that does not exist yet, instead of restating
+    the rule and certifying itself
+    (`findings/loop/2026.08.07-a-test-that-rebuilds-the-derivation-cannot-see-the-command-that-made-it.md`).
+
+    Frozen-dataclass-and-`applied_to` is the whole membership test, because it
+    is what a kind already is: nothing marks itself as one, so a kind cannot
+    arrive and be left out by forgetting to.
+    """
+    return tuple(
+        member
+        for member in namespace.values()
+        if isinstance(member, type) and is_dataclass(member) and issubclass(member, Intent)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +268,13 @@ class RetoolNode:
             KeyError: if `node_id` names no node.
         """
         return project.with_node_retooled(self.node_id, self.tool_id, self.version)
+
+
+#: The list VISION's reshuffle scenario is stated over: any layout emitting all
+#: of these is a complete GUI, and four ADRs decline to narrow their surface on
+#: the strength of it. Derived rather than typed so it cannot be the thing it
+#: was minted against — a claim five files lean on and nothing keeps current.
+INTENT_KINDS: tuple[type[Intent], ...] = intent_kinds(globals())
 
 
 def issue(session: Session, intent: Intent) -> bool:

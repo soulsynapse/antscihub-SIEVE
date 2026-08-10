@@ -1,7 +1,7 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit"
 opened: 2026-08-08
@@ -222,3 +222,20 @@ compile-the-mutant gate two sections above, which is the deterministic member of
 the false-KILLED class and fires on every subject under every oracle. `_tail`'s
 uncased halves and `ORACLE_BUDGET_SECONDS`'s "structurally impossible" comment
 are still here and still smallest.
+
+## What landed (2026-08-10)
+
+`test_an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit`,
+and nothing else. An oracle writing 1 MiB to each stream and exiting 0, swept
+for a mutant that survives: under `PIPE` the child blocks at the buffer, is
+timed out, and prints KILLED, which is this item's title over a mutant the
+tests do not kill. There was no implementation to revert, so red was shown the
+way the neighbour item `every-bounded-declaration-is-run-not-read.md` shows it,
+by sweeping the line the case exists for: `stdout=out, stderr=err ==>
+stdout=subprocess.PIPE, stderr=subprocess.PIPE` KILLED, and each of
+`stdout=out, ==> stdout=subprocess.PIPE,` and `stderr=err, ==>
+stderr=subprocess.PIPE,` KILLED alone, against the combined mutant's recorded
+SURVIVED. The finding carries the amendment.
+
+The two clauses the section above lists as next are untouched: the docstring's
+own correction, and the compile-the-mutant gate.

@@ -311,6 +311,32 @@ def test_a_hung_grandchild_does_not_outlive_the_mutant_timeout(repo: Path) -> No
     assert subject.read_bytes() == data
 
 
+def test_an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit(repo: Path) -> None:
+    """Redirecting to files is what keeps a talkative oracle running, not what returns on time.
+
+    Nothing in `_run_bounded` drains the streams — it waits on the process handle, so
+    promptness is `Popen.wait`'s and holds whatever the streams are
+    (`docs/findings/loop/2026.08.10-a-two-part-fix-is-reported-as-two-kills-and-the-half-that-carries-it-is-the-other-one.md`).
+    Under `PIPE` the child blocks in its own `write` once the buffer fills, never exits,
+    and is timed out — and a timeout is a kill, so the verdict is KILLED for a mutant
+    the tests do not kill. Both streams are filled because either redirection alone
+    would otherwise be the uncased half, and the mutant here survives, which is the
+    verdict a full buffer would silently flip.
+    """
+    subject = subject_with(repo, b"limit = 100\n")
+    fat = 1 << 20
+    noisy = f"import sys; sys.stdout.write('o' * {fat}); sys.stderr.write('e' * {fat}); sys.exit(0)"
+    results = run_sweep(
+        subject,
+        [Mutant(anchor="limit = 100", replacement="limit = 1")],
+        [sys.executable, "-c", noisy],
+        repo,
+        oracle_budget=20.0,
+        mutant_timeout=20.0,
+    )
+    assert [killed for _, killed in results] == [False]
+
+
 def test_the_mutant_timeout_is_derived_from_the_baseline(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

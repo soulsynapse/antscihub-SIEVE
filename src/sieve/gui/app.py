@@ -116,14 +116,6 @@ from sieve.pipeline.shelf import loaded_shelf
 from sieve.session.intents import AddNode, RemoveNode, RetoolNode, issue
 from sieve.session.session import Session
 
-#: The source a new project starts from. A tool id, which is the one place in
-#: this module that names one — `adr/gui-knows-kinds-not-tools.md` forbids
-#: branching on one and this does not branch: it is which of the shelf's source
-#: tools a mint stands on, and there is no property of a spec that answers it.
-#: Video, because that is what VISION's new project opens onto; a project whose
-#: first input is a folder of stills reaches it by swapping this card.
-MINTED_SOURCE = "footage"
-
 
 def resolved_specs(pipeline: Pipeline, registry: ToolRegistry) -> dict[str, ToolSpec]:
     """The spec behind each node, skipping the ones the shelf does not hold.
@@ -307,9 +299,6 @@ class MainWindow(QMainWindow):
         # repaint the viewport without asking the decode thread for a frame it
         # has already sent.
         self._source_frame: tuple[int, QImage] | None = None
-        #: What the transport was last opened on, so a parameter edit that did
-        #: not move the footage does not reopen the container.
-        self._footage: str | None = None
 
         self._player = VideoPlayer(self)
         self._viewport = VideoCanvas()
@@ -460,14 +449,15 @@ class MainWindow(QMainWindow):
         self._pinned = default_pinned(self._order, self._elements)
         self._show_pinned()
         self._control.set_save_screen(self._build_save_screen(self._session))
-        # Handed over as a string: whether the file is there is the decode
-        # thread's answer to give, and a check here would be a second one that
-        # could disagree with it. A project that names no footage has nothing to
-        # hand it — the window opens on the chain whose source card is where one
-        # is chosen (`adr/a-document-may-name-no-footage.md`).
-        self._footage = self._footage_path()
-        if self._footage is not None:
-            self._player.open(self._footage)
+        # The path is resolved against the project's own directory and handed
+        # over as a string: whether the file is there is the decode thread's
+        # answer to give, and a check here would be a second one that could
+        # disagree with it. A project that names no footage has nothing to hand
+        # it — the window opens on the chain it does not have yet, which is where
+        # a source is added (`adr/a-document-may-name-no-footage.md`).
+        source = self._session.project.source
+        if source is not None:
+            self._player.open(str(source.resolve(path.parent)))
         self._redraw()
         self._control.show_pipeline()
 
@@ -921,10 +911,7 @@ class MainWindow(QMainWindow):
         """
         if self._library is None:
             return
-        source = next((spec for spec in self._shelf() if spec.tool_id == MINTED_SOURCE), None)
-        if source is None:
-            return
-        minted = mint(self._library, source)
+        minted = mint(self._library)
         self._projects = projects_in(self._library)
         self._project_at = self._projects.index(minted)
         self._control.set_project_select(self._build_project_select())
@@ -962,52 +949,6 @@ class MainWindow(QMainWindow):
             return
         self._region = index
         self._redraw()
-
-    def _footage_path(self) -> str | None:
-        """The file the transport opens on: the chain's root source, or the document's.
-
-        The root first, because VISION's project "names no video of its own and
-        every input including this one is a tool" — `Project.source` is what a
-        document written before that carries, and it stays readable rather than
-        being the answer.
-
-        The first file of the first source that resolved to any. Which of
-        several a folder resolves to should be shown is the source card's
-        question and it has not been asked yet, so this takes the ordering's
-        head rather than inventing a rule for it here.
-        """
-        session = self._session
-        if session is None:
-            return None
-        for node in self._order:
-            files = self._resolved_sources.get(node.node_id)
-            if files:
-                return str(files[0])
-        source = session.project.source
-        if source is None:
-            return None
-        return str(source.resolve(session.path.parent))
-
-    def _on_param_edited(self) -> None:
-        """A parameter committed: reopen the transport if it moved the footage, then refill.
-
-        Conditional on the path actually changing, because every other edit
-        arrives here too and reopening the container on a threshold nudge would
-        throw away the decode thread's position and everything the proxy cache
-        holds for a frame that has not moved.
-
-        The re-derivation first: what a source parameter names on disk is a
-        filesystem read, so the value this edit just wrote is not resolved until
-        `_reread_graph` runs — which is also what makes a path naming a folder
-        of several files answer with the same ordering the run would use.
-        """
-        self._reread_graph()
-        footage = self._footage_path()
-        if footage != self._footage:
-            self._footage = footage
-            if footage is not None:
-                self._player.open(footage)
-        self.refill_graph()
 
     def refill_graph(self) -> None:
         """Redraw the trace for the document as it now stands.
@@ -1198,7 +1139,7 @@ class MainWindow(QMainWindow):
             knobs = None
             if spec is not None:
                 form = ParamForm(session, node.node_id, spec)
-                form.edited.connect(self._on_param_edited)
+                form.edited.connect(self.refill_graph)
                 knobs = form
             steps.append(
                 Step(
@@ -1337,7 +1278,7 @@ class MainWindow(QMainWindow):
         if node is None or session is None or node.node_id not in self._specs:
             return QWidget()
         pane = StepPane(self._at + 1, node, session, self._specs[node.node_id])
-        pane.form.edited.connect(self._on_param_edited)
+        pane.form.edited.connect(self.refill_graph)
         return pane
 
     def _build_save_screen(self, session: Session) -> QWidget:

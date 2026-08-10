@@ -93,9 +93,15 @@ a `tool_id`.
 v2's fourth params-derived declaration, `frame_bytes_ratio`, is cut here with
 `CostEstimate` and `backend_agnostic`: each fed machinery v3 has not built, and
 a declaration with no consumer is refused rather than stored
-(`adr/declared-means-verified.md`). So is the merging protocol — `accepts` is
-one stream, not a mapping of ports — which returns with the first two-input
-tool.
+(`adr/declared-means-verified.md`).
+
+The merging protocol is the one cut that has returned. `accepts` is a stream
+*or* a mapping of port names to streams, and `ToolRun`'s window follows it in
+the same shape — one `FrameSpan` where a tool named one stream, one per port
+where it named several. The single form is not the mapping written short: a tool
+with one input has no port to name, so `SOLE_PORT` is `None` and an edge into it
+names nothing (`core/pipeline_model.Edge`). That is what keeps a label from
+appearing wherever the answer would only ever be "the step above".
 """
 
 from __future__ import annotations
@@ -786,10 +792,21 @@ class TableSpec:
 #: cannot feed a table input"); the narrowing itself goes through `isinstance`,
 #: which is what a type checker can follow.
 #:
-#: One input stream and one output stream per node. v2 grew input *ports* for a
-#: merging step; that protocol is cut here and returns with the first two-input
-#: tool, which is also when the artifact has to learn which port an edge feeds.
+#: One output stream per node, and one *or several* input streams — a tool
+#: declaring several names them (`ToolSpec.accepts`), which is also what the
+#: artifact carries on the edge that feeds one (`core/pipeline_model.Edge`).
 type StreamSpec = ArraySpec | TableSpec
+
+#: The port a node's single input arrives on: none, because there is nothing to
+#: distinguish it from. A one-input tool declares a bare `StreamSpec`, an edge
+#: into it names no port, and every port-keyed mapping in the system carries
+#: this as its one key rather than a name invented to fill the slot — which is
+#: what stops a label reading "the step above" from appearing on every edge in
+#: a chain that has no choice to make.
+SOLE_PORT: None = None
+
+#: Which input of a node something is about. `SOLE_PORT` where the node has one.
+type Port = str | None
 
 
 def node_stream(declared: StreamSpec, arriving: StreamSpec | None) -> StreamSpec:
@@ -1130,6 +1147,14 @@ class ToolRun(Protocol[ParamsT_contra, StateT_contra]):
     reads `window.target` and is handed exactly that; a windowed tool is handed
     the frames its declared window reaches, oldest first.
 
+    **`window` takes the shape `accepts` took.** A tool that declared one stream
+    is handed one span, exactly as before; a tool that named ports is handed a
+    mapping from those names to a span each, every one of them positioned at the
+    same source frame — the executor delays the faster ports to the slowest, so
+    a merge never sees two frames of different index. The mapping is total over
+    the declared ports: an unfed port is a graph question and is answered before
+    a frame is read, never by handing a tool a key that is not there.
+
     **`window.target` is the frame to emit for, and it is not always the last
     one.** With a declared `lookahead_frames` of `k` the executor hands over a
     window whose last `k` frames are *past* the target, and it tells the span so
@@ -1149,7 +1174,11 @@ class ToolRun(Protocol[ParamsT_contra, StateT_contra]):
     """
 
     def __call__(
-        self, params: ParamsT_contra, window: FrameSpan, state: StateT_contra, /
+        self,
+        params: ParamsT_contra,
+        window: FrameSpan | Mapping[str, FrameSpan],
+        state: StateT_contra,
+        /,
     ) -> Frame: ...
 
 
@@ -1177,10 +1206,14 @@ class ToolDisplay(Protocol[ParamsT_contra]):
     a surplus one alike, which is where "declared means filled" is checked at
     the one moment registration cannot see it
     (`adr/declared-means-verified.md`).
+
+    `window` takes `ToolRun`'s shape and for its reason: a filler is handed the
+    same frames the run was, so a merging tool's surfaces are drawn from the
+    same ports its output was.
     """
 
     def __call__(
-        self, params: ParamsT_contra, window: FrameSpan, /
+        self, params: ParamsT_contra, window: FrameSpan | Mapping[str, FrameSpan], /
     ) -> Mapping[DisplaySurface, Frame]: ...
 
 
@@ -1531,7 +1564,13 @@ class ToolSpec:
     version: str
     summary: str
     params_model: type[ParamsBase]
-    accepts: StreamSpec
+    #: What this tool consumes: one stream, or a stream per named port for a
+    #: tool that merges. The two forms are different declarations rather than
+    #: one written two ways — a single-input tool has no port, so `input_ports`
+    #: keys it under `SOLE_PORT` and the edge feeding it names nothing. A
+    #: mapping of one is refused below for that reason: it would put a label on
+    #: the one edge whose port a reader could never have chosen.
+    accepts: StreamSpec | Mapping[str, StreamSpec]
     emits: StreamSpec
     #: Every product a node of this tool can be asked to keep, in the order a
     #: reader should meet them. Required, with no default, for `element`'s
@@ -1797,6 +1836,7 @@ class ToolSpec:
             )
         if not SEMVER_PATTERN.match(self.version):
             raise ValueError(f"version must be MAJOR.MINOR.PATCH, got {self.version!r}")
+        self._check_ports()
         if self.settling_epsilon is not None and (
             not math.isfinite(self.settling_epsilon) or self.settling_epsilon < 0.0
         ):
@@ -2132,6 +2172,66 @@ class ToolSpec:
                 "asked for one frame at a time and has no input window to accumulate, so a mode "
                 "here is a declaration the loop has no way to honour"
             )
+
+    def _check_ports(self) -> None:
+        """Refuse a port declaration nothing downstream could act on.
+
+        Three refusals, and each closes a way the two forms of `accepts` could
+        stop being different declarations. A mapping of one is the single form
+        with a label on it, and the label would have to appear on an edge whose
+        port the user never chose. A source tool consumes nothing, so a port on
+        one names an input the loop never fills. And a port name reaches a saved
+        document and a cache key exactly as a `tool_id` does, so it is spelt by
+        the same rule for the same reason.
+
+        Raises:
+            ValueError: for any of the three.
+        """
+        if not isinstance(self.accepts, Mapping):
+            return
+        if self.source is not None:
+            raise ValueError(
+                f"{self.tool_id}: declares a source and input ports {sorted(self.accepts)} — a "
+                "source tool opens the file its path parameter names and is fed nothing, so a "
+                "port on one is an input no edge can reach"
+            )
+        if len(self.accepts) < 2:
+            raise ValueError(
+                f"{self.tool_id}: names {len(self.accepts)} input port — a tool with one input "
+                "declares the stream itself, because the edge feeding it has no other port to "
+                "have been chosen over and the label would read 'the step above'"
+            )
+        misspelt = sorted(name for name in self.accepts if not TOOL_ID_PATTERN.match(name))
+        if misspelt:
+            raise ValueError(
+                f"{self.tool_id}: input port must match {TOOL_ID_PATTERN.pattern!r}, got "
+                f"{misspelt} — a port name is written into the document and folded into a cache "
+                "key, so it may not depend on case folding or shell quoting to stay itself"
+            )
+
+    @property
+    def input_ports(self) -> Mapping[Port, StreamSpec]:
+        """What this tool accepts, keyed by the port it arrives on.
+
+        The one form every consumer reads, so that a check over edges is written
+        once rather than twice with a branch on which shape the tool declared.
+        A single-input tool keys under `SOLE_PORT`, which is `None` and not a
+        name: the mapping says the tool has one input rather than that its input
+        is called something.
+        """
+        if isinstance(self.accepts, Mapping):
+            return dict(self.accepts)
+        return {SOLE_PORT: self.accepts}
+
+    def accepts_on(self, port: Port) -> StreamSpec | None:
+        """What may feed `port`, or `None` if this tool has no such input.
+
+        `None` is what a graph layer reports as a miswired edge rather than
+        something a caller may read past: an edge naming a port the tool does
+        not have is refused where the graph is checked, before a frame is read
+        (`pipeline/dag.py`).
+        """
+        return self.input_ports.get(port)
 
     @property
     def path_params(self) -> tuple[str, ...]:

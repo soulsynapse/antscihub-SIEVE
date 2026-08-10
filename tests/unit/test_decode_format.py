@@ -27,7 +27,13 @@ import numpy as np
 import pytest
 
 from sieve.core.pipeline_model import CropFormat, Edge, Node, Pipeline, SourceSpan
-from sieve.core.tool_base import ArraySpec, ElementRelation, Emission, ParamsBase
+from sieve.core.tool_base import (
+    SOLE_PORT,
+    ArraySpec,
+    ElementRelation,
+    Emission,
+    ParamsBase,
+)
 from sieve.core.tool_registry import ToolRegistry, register_tool
 from sieve.core.types import ChannelSpec, Frame, FrameSpan
 from sieve.pipeline.cache_key import node_key, source_key
@@ -142,7 +148,7 @@ class TestTheGraphsAnswerIsTheKeysAnswer:
         return node_key(
             plan.dag.pipeline.node("n0"),
             spec=plan.dag.spec("n0"),
-            upstream=source_key(SOURCE, decode_format=decode_format),
+            upstream=((SOLE_PORT, source_key(SOURCE, decode_format=decode_format)),),
         )
 
     def test_a_chain_that_never_reads_colour_is_keyed_for_the_plane_it_opens(self) -> None:

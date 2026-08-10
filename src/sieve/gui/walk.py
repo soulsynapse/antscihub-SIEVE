@@ -13,12 +13,15 @@ branching one, a disconnected one, and one whose graph will not run — and a
 walk that raised would take the whole skeleton down with it rather than the
 part that cannot be drawn.
 
-**Every graph schema v1 admits is already a forest.** `Pipeline` refuses two
-edges into one node, so a node has at most one producer and the spanning tree
-is the graph. The word survives because the ADR's claim is about who chooses,
-and the day a merging tool gives a node two inputs
-(`core/pipeline_model.py`'s `Edge`) this is the module that has to pick which
-parent a child hangs under — with no edit anywhere below it.
+**A fan-in is expressible now, and this module has not chosen a rule for one.**
+`Pipeline` refuses two edges into one *port* and no longer two into one node, so
+a node may have two producers and the spanning tree is no longer the graph.
+`node_order` visits a child from whichever parent reaches it first and marks it
+seen, which is a choice made by the tie-break below rather than by anything
+anybody decided — and three other sites tie-break the same question in their own
+directions. Picking one rule for all four is
+`todo/a-fan-in-has-no-picture-and-no-rule-for-which-parent-holds-it.md`, and it
+is a choice made here with no edit anywhere below.
 """
 
 from __future__ import annotations

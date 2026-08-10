@@ -21,6 +21,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any, TypeVar
 
 from sieve.core.tool_base import (
+    SOLE_PORT,
     AxisDeclaration,
     CaptionPart,
     DisplaySurface,
@@ -206,7 +207,16 @@ def offered_tools(
     for spec in shelf:
         if spec.source is not None:
             continue
-        slack = spec.accepts.match_slack(produced)
+        sole = spec.accepts_on(SOLE_PORT)
+        if sole is None:
+            # A merging tool, and a gap names one producer: what the offer
+            # should mean for one is
+            # `todo/a-second-input-has-no-writer-and-the-box-splices-one-edge.md`'s
+            # to rule, since taking it would have to say where the other port
+            # comes from. Excluded rather than matched on one of its ports,
+            # which is the reading that would settle that question here.
+            continue
+        slack = sole.match_slack(produced)
         if slack is None:
             continue
         if (
@@ -253,7 +263,7 @@ def register_tool(
     tool_id: str,
     version: str,
     summary: str,
-    accepts: StreamSpec,
+    accepts: StreamSpec | Mapping[str, StreamSpec],
     emits: StreamSpec,
     emissions: tuple[Emission, ...],
     run: ToolRun[Any, Any] | None = None,

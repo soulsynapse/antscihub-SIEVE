@@ -8,7 +8,7 @@ cannot be read off either — it is a fact about paint order — so it is assert
 on rendered pixels: the line is there in the gap above the card it passes and
 the card's own fill is there where it crosses.
 
-A fan-out is what gives the fourth case a subject. Schema v1 refuses two edges
+A fan-out is what gives the fourth case a subject. Nothing here draws two edges
 into one node and permits one node feeding two, so the graph where an edge has
 a card to pass is the branching one, and it is a graph the tree already admits
 (`gui/walk.py`).

@@ -77,3 +77,28 @@ gate holds, since a merge is a tool no shelf can carry until 11.3:
     $ uv run pytest tests/gui/test_add_box.py -q -k 'a_merge_is_offered_only_where_both_its_ports_can_be_fed or taking_a_merge_wires_both_of_its_ports'
     12 deselected in 0.13s
     exit: 5
+
+## Folded 2026-08-10: the gate opened, and removing a merge can now write a document nothing accepts
+
+11.2 landed, so `Pipeline` accepts two edges into one node on two ports and this
+item's `gated_on` is spent. Two things it inherits.
+
+`Pipeline.without_node` fans a removed node's inputs out to every reader and
+keeps the *reader's* port on each new edge, which is right for the one-input
+case it was written for and produces two edges into one port when the node
+removed had two. `model_validate` at the end of that method refuses it, so a
+user removing a merge whose parents both fed one downstream port gets a
+`ValueError` out of a document edit rather than a chain closed over the gap —
+which is the same "is a half-wired merge legal" ruling read from the removal
+side, and belongs with it rather than beside it. The docstring predicted "both
+of them on the day a merging tool gives a node two" and did not predict that
+both of them collide.
+
+`offered_tools` now skips a tool that declares ports rather than matching one of
+them, and the comment there cites this item by name as the ruling it is standing
+in for. That is the `offered_only_where_both_its_ports_can_be_fed` reading taken
+as the conservative default, not as a decision — a session that argues the other
+reading is changing behaviour that exists rather than adding it.
+
+This item's `done_when` names the offer and the wiring and covers neither of the
+two paragraphs above.

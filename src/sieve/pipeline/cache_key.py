@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
@@ -72,7 +73,12 @@ from sieve.decode.identity import decoder_identity
 #: canonical form that stops being canonical — as opposed to when an input
 #: changes. Without it the only way to correct a key that was missing an input
 #: would be to touch every input by hand.
-HASH_VERSION = 1
+#:
+#: Moved to 2 when `upstream` below became port-bound pairs. Every node with an
+#: ancestor keys differently under the new layout, so the whole store turns over
+#: once — which is what this constant is for, and is cheaper than the alternative
+#: of a layout that could be read two ways.
+HASH_VERSION = 2
 
 #: 32 bytes of BLAKE2b. Not a security boundary — nothing here defends against a
 #: crafted collision — so the size is chosen against accidental collision, where
@@ -86,9 +92,11 @@ DIGEST_BYTES = 32
 #: one that shows up as a cache that silently stops hitting.
 #:
 #: `flavour` is the literal tag that keeps the two key kinds from colliding.
-#: `upstream` is one key rather than v2's port-to-key mapping: schema v1 gives a
-#: node one input and an edge no port (`core/tool_base.py`), so there is no
-#: wiring left for a digest to distinguish.
+#: `upstream` is v2's port-to-key mapping, back with the merging protocol: an
+#: ordered list of `(port, key)` pairs, one per input, `port` being `SOLE_PORT`
+#: on the single-input nodes that are most of every graph. It is the wiring the
+#: digest has to distinguish — the same two upstreams crossed over feed the same
+#: two keys and are not the same computation.
 NODE_KEY_POSITIONS: tuple[str, ...] = ("flavour", "upstream", "tool_id", "version", "params")
 
 #: `NODE_KEY_POSITIONS` for the ancestor of every root the footage feeds.
@@ -311,7 +319,11 @@ def picked_key(identity: str) -> str:
 
 
 def node_key(
-    node: Node, *, spec: ToolSpec, upstream: str, replicate: Replicate | None = None
+    node: Node,
+    *,
+    spec: ToolSpec,
+    upstream: Sequence[tuple[str | None, str]],
+    replicate: Replicate | None = None,
 ) -> str:
     """The key for `node`'s output, for one replicate.
 
@@ -333,13 +345,14 @@ def node_key(
         node: The graph node. Its `tool_id` and `version` must match `spec`.
         spec: The registered tool, resolved by the caller — `dag.py` does this
             against a `ToolRegistry` and the executor carries the result.
-        upstream: The key of the node feeding this one, which for a root is the
-            `source_key` of the footage or the `picked_key` of the file the tool
-            reads. Not optional and not a mapping: schema v1 gives every
-            node exactly one input, and the day a two-input tool lands is the
-            day the edge learns which port it feeds and this position becomes
-            port-bound pairs again — `a - b` and `b - a` are fed by the same two
-            keys and are not the same computation.
+        upstream: `(port, key)` for every node feeding this one, which for a
+            root is one pair on `SOLE_PORT` carrying the `source_key` of the
+            footage or the `picked_key` of the file the tool reads. Ordered, and
+            the caller owns the order: `Dag.inputs` sorts by port, so writing
+            two edges the other way round is one graph and one key, while
+            crossing which parent feeds which port is two of each — `a - b` and
+            `b - a` are fed by the same two keys and are not the same
+            computation.
         replicate: The replicate being processed; `None` for the node's
             baseline, which is what a project with no fan-out runs.
 
@@ -362,7 +375,10 @@ def node_key(
     return _digest(
         NODE_KEY_POSITIONS,
         "node",
-        upstream,
+        # A list of two-element lists once JSON has been through it, which is
+        # what keeps a port from being able to impersonate a key: the pairing is
+        # structural rather than a separator inside one string.
+        [[port, key] for port, key in upstream],
         node.tool_id,
         node.version,
         params.canonical_json(),

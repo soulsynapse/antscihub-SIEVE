@@ -24,7 +24,8 @@ one.
 
 **Deliberately not registry-aware.** Nothing here asks whether a tool named by
 a node exists, what parameters it takes, or whether an edge's types chain.
-Those are `pipeline/dag.py`'s job, against the registry. The split is what lets
+Those are `pipeline/dag.py`'s job, against the registry — including whether the
+port an edge names is one the downstream tool has. The split is what lets
 a project open on a machine where a tool is missing: the user gets "no tool
 `wavelet_bands` at version 2.1.0", which names the thing to install, rather
 than a parse error that names nothing. It is also what lets a front end draw a
@@ -76,7 +77,14 @@ from typing import Any, Literal, Self
 from uuid import uuid4
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from sieve.core.tool_base import SEMVER_PATTERN, TOOL_ID_PATTERN
 from sieve.core.types import ROI
@@ -617,23 +625,48 @@ def edited_params(
 
 
 class Edge(_Artifact):
-    """`upstream`'s output feeds `downstream`'s input.
+    """`upstream`'s output feeds one of `downstream`'s inputs.
 
-    One input stream per node, so an edge names no port. v2 grew ports for a
-    merging step it never built; the protocol is cut from the tool contract
-    (`core/tool_base.py`) and the day a two-input tool lands is the day this
-    document has to learn which input an edge feeds. Adding the field before
-    then would be a schema carrying a distinction nothing can make.
+    Which one is `port`, and it is absent wherever the node has only one: a
+    label on the single edge into a single-input step would say "the step above"
+    and could never have been chosen otherwise, which is the distinction-nothing-
+    can-make this field was kept out of the schema for until a merging tool
+    existed. `core/tool_base.SOLE_PORT` is that absence named, and the tool
+    contract is where the port set is declared — this document says which of
+    them an edge feeds and never what they are, because the answer is a registry
+    question and nothing here asks one.
+
+    Absent from the serialized form when it is absent from the edge, so a
+    document over a graph with no fan-in is byte-for-byte the document it was
+    before ports existed. That is the additive half of
+    `adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md` taken literally:
+    what is written into a file is what the graph in it actually says.
     """
 
     upstream: str
     downstream: str
+    #: The downstream's input this feeds, or `None` for its sole one.
+    port: str | None = None
+
+    @field_validator("port")
+    @classmethod
+    def _known_shape_port(cls, value: str | None) -> str | None:
+        # `TOOL_ID_PATTERN` because a port is spelt where the tool declares it
+        # and read back here; `ToolSpec` refuses the other end of the same rule.
+        if value is not None and not TOOL_ID_PATTERN.match(value):
+            raise ValueError(f"port must match {TOOL_ID_PATTERN.pattern!r}, got {value!r}")
+        return value
 
     @model_validator(mode="after")
     def _not_a_self_loop(self) -> Self:
         if self.upstream == self.downstream:
             raise ValueError(f"edge from {self.upstream} to itself")
         return self
+
+    @model_serializer(mode="plain")
+    def _without_an_absent_port(self) -> dict[str, Any]:
+        written = {"upstream": self.upstream, "downstream": self.downstream}
+        return written if self.port is None else {**written, "port": self.port}
 
 
 class Sink(_Artifact):
@@ -818,16 +851,18 @@ class Pipeline(_Artifact):
             for endpoint in (edge.upstream, edge.downstream):
                 if endpoint not in seen:
                     raise ValueError(f"edge names no such node: {endpoint!r}")
-        # One producer per node, which subsumes a duplicate-edge check: two
-        # identical edges collide here too. Whatever the tool turns out to be,
-        # its one input carries one stream — that is true of every tool that
-        # will ever be installed, so it is structural rather than dag.py's
-        # question.
-        fed: set[str] = set()
+        # One producer per *port*, which still subsumes a duplicate-edge check:
+        # two identical edges collide here too. A port carries one stream — that
+        # is true of every tool that will ever be installed, so it is structural
+        # rather than dag.py's question. How many ports the node has is not:
+        # that is what the tool declares, so a node fed twice on two ports is
+        # admitted here and refused by `dag.py` if the tool has no such port.
+        fed: set[tuple[str, str | None]] = set()
         for edge in self.edges:
-            if edge.downstream in fed:
-                raise ValueError(f"two edges feed {edge.downstream!r}")
-            fed.add(edge.downstream)
+            if (edge.downstream, edge.port) in fed:
+                named = "" if edge.port is None else f" on port {edge.port!r}"
+                raise ValueError(f"two edges feed {edge.downstream!r}{named}")
+            fed.add((edge.downstream, edge.port))
         return self
 
     def __contains__(self, node_id: str) -> bool:
@@ -867,9 +902,7 @@ class Pipeline(_Artifact):
             if edge.upstream == node_id:
                 # In place of the edge it replaces, so a fan-out keeps the
                 # sibling order the walk breaks its ties on (`gui/walk.py`).
-                rewired.extend(
-                    Edge(upstream=source, downstream=edge.downstream) for source in feeding
-                )
+                rewired.extend(edge.model_copy(update={"upstream": source}) for source in feeding)
                 continue
             rewired.append(edge)
         return self.model_validate(
@@ -901,9 +934,10 @@ class Pipeline(_Artifact):
         """
         self.node(site_id)
         rewired = tuple(
-            Edge(upstream=node.node_id, downstream=edge.downstream)
-            if edge.upstream == site_id
-            else edge
+            # A copy rather than a fresh edge, so the reader keeps the port it
+            # was reading on: what moved is where the stream comes from, not
+            # which of the reader's inputs receives it.
+            edge.model_copy(update={"upstream": node.node_id}) if edge.upstream == site_id else edge
             for edge in self.edges
         )
         return self.model_validate(

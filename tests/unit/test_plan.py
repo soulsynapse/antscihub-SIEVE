@@ -241,7 +241,7 @@ def node(node_id: str, tool_id: str, **params: object) -> Node:
 
 
 def edges(*pairs: str) -> tuple[Edge, ...]:
-    """`"a>b"` for each edge. Schema v1 gives an edge no port to name."""
+    """`"a>b"` for each edge, on the sole port. A merge builds its own."""
     built: list[Edge] = []
     for pair in pairs:
         upstream, downstream = pair.split(">")

@@ -20,6 +20,7 @@ never reaches this module.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
 from fractions import Fraction
 
@@ -202,6 +203,44 @@ _windowed("trail3", 2, 0)
 _windowed("centre2", 2, 2)
 #: The smallest window with a trailing side, for chaining two of them.
 _windowed("ahead1", 0, 1)
+
+#: The frame index each port carried, per `merge_run` call. A pair rather than
+#: one number because the claim is that the two agree, and a list of one of them
+#: would be satisfied by a loop that read whatever each branch last produced.
+MERGED: list[tuple[int, int]] = []
+
+
+def merge_run(params: MergeParams, window: object, state: None) -> Frame:
+    del params, state
+    assert isinstance(window, Mapping)
+    fast, slow = window["fast"].target, window["slow"].target
+    MERGED.append((int(fast.index), int(slow.index)))
+    return Frame(
+        data=fast.data + slow.data,
+        index=fast.index,
+        channels=fast.channels,
+    )
+
+
+@register_tool(
+    tool_id="merge",
+    version="1.0.0",
+    summary="Adds two streams together, reading each on its own port.",
+    accepts={"fast": ArraySpec(), "slow": ArraySpec()},
+    emits=ArraySpec(),
+    emissions=(Emission("out"),),
+    run=merge_run,
+    element=ElementRelation.PRESERVED,
+    registry=SHELF,
+)
+class MergeParams(ParamsBase):
+    """The first tool here with two inputs, and it does nothing else.
+
+    Its output is the sum so that a wrong pairing would be visible in the pixels
+    as well as in `MERGED`, but what the alignment claim rests on is the indices:
+    two branches of different lag hand this node frames of different index at
+    one step, and a sum of the wrong two is still a plausible frame.
+    """
 
 
 class Flaw(StrEnum):
@@ -457,7 +496,7 @@ def node(node_id: str, tool_id: str = "tag", **params: object) -> Node:
 
 
 def edges(*pairs: str) -> tuple[Edge, ...]:
-    """`"a>b"` for each edge. Schema v1 gives an edge no port to name."""
+    """`"a>b"` for each edge, on the sole port. A merge builds its own."""
     built: list[Edge] = []
     for pair in pairs:
         upstream, downstream = pair.split(">")
@@ -481,6 +520,7 @@ def forget_calls() -> None:
     CALLS.clear()
     WINDOWS.clear()
     TARGETS.clear()
+    MERGED.clear()
     DRAWN.clear()
 
 
@@ -657,6 +697,42 @@ def test_every_node_in_a_result_answers_for_the_same_source_frame() -> None:
         # value. Both branches therefore name the source frame they came from.
         assert int(result["c"].data[0, 0]) == int(result.index) + 6
         assert int(result["w"].data[0, 0]) == int(result.index) + 1
+
+
+def test_two_parents_of_different_lag_align_at_the_child() -> None:
+    """A merge is handed one source frame, not whatever each branch last emitted.
+
+    The fork case above is this one's other half: two branches of a fork answer
+    for a frame at different steps, and `_completed` is what keeps the *result*
+    honest about it. Nothing kept the *node below them* honest, because until a
+    document could hold two edges into one node there was no such node. `fast`
+    reads `a` directly and `slow` reads it through a one-frame lookahead, so at
+    every step the two arrive a frame apart and the delay buffer on `fast` is
+    what puts them back together.
+
+    Without it the merge would be handed `(i, i-1)` on every call — adjacent,
+    plausible, and a difference between two frames of one branch rather than
+    between two branches at one frame.
+    """
+    merged = Pipeline(
+        nodes=(node("a"), node("w", "ahead1"), node("m", "merge")),
+        edges=(
+            Edge(upstream="a", downstream="w"),
+            Edge(upstream="a", downstream="m", port="fast"),
+            Edge(upstream="w", downstream="m", port="slow"),
+        ),
+    )
+    plan = plan_for(merged)
+
+    results = run(plan, ListSource())
+
+    assert plan.lookahead == FrameCount(1)
+    assert [result.index for result in results] == [20, 21, 22]
+    assert all(fast == slow for fast, slow in MERGED)
+    # And the frame they agree on is the one the node answered for, which is
+    # what a store keyed by source frame index rests on.
+    assert [result["m"].index for result in results] == [20, 21, 22]
+    assert [fast for fast, _slow in MERGED][-3:] == [20, 21, 22]
 
 
 def test_a_node_the_one_signature_cannot_call_is_refused_before_anything_is_read() -> None:

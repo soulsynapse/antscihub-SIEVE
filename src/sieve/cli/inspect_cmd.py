@@ -33,6 +33,7 @@ without an edit here — the same property `sieve.tools` exists to have.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated
 
 import typer
@@ -77,7 +78,7 @@ def _describe(spec: ToolSpec) -> str:
     lines = [
         *_headline(spec),
         "",
-        f"accepts           {_stream(spec.accepts)}",
+        f"accepts           {_accepts(spec)}",
         f"emits             {_stream(spec.emits)}",
         f"element           {_element(spec)}",
         f"mode              {spec.mode}",
@@ -110,6 +111,18 @@ def _headline(spec: ToolSpec) -> list[str]:
         f"  {spec.summary}",
         f"  can emit{chooses}: {', '.join(spec.emission_names)}",
     ]
+
+
+def _accepts(spec: ToolSpec) -> str:
+    """The input side, which is one stream or one per named port.
+
+    The ports are named on the line rather than printed as a block, because what
+    a reader is here for is whether two tools wire together and a merge's answer
+    is "on this port, that stream" — the name is half the fact.
+    """
+    if not isinstance(spec.accepts, Mapping):
+        return _stream(spec.accepts)
+    return "; ".join(f"{port}: {_stream(stream)}" for port, stream in sorted(spec.accepts.items()))
 
 
 def _stream(stream: StreamSpec) -> str:

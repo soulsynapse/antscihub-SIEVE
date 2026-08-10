@@ -36,6 +36,7 @@ from sieve.core.pipeline_model import (
     resolved_params,
 )
 from sieve.core.tool_base import (
+    SOLE_PORT,
     SPEC_CHANNELS,
     ArraySpec,
     AxisRelation,
@@ -139,6 +140,15 @@ BANDED_SPEC = make_spec(
     display=_fills_nothing,
 )
 
+#: The first spec here with more than one input. Two array ports rather than one
+#: of each kind, so that what separates them is the wiring and nothing else —
+#: the crossing has to move the key on the labels alone.
+MERGE_SPEC = make_spec(
+    tool_id="merge",
+    summary="Reads two streams.",
+    accepts={"left": ArraySpec(), "right": ArraySpec()},
+)
+
 CROP_SPEC = make_spec(
     tool_id="crop",
     summary="Cuts a region out of the frame.",
@@ -146,10 +156,21 @@ CROP_SPEC = make_spec(
     param_stereotypes={"region": ParamStereotype.REGION},
 )
 
+
+def sole(key: str) -> tuple[tuple[str | None, str], ...]:
+    """`key` as the one input of a single-input node.
+
+    `node_key` takes `(port, key)` pairs, and most of this file is about a node
+    with one input, whose port is `SOLE_PORT`. Written once here so the cases
+    that are not about ports do not each spell the pairing out.
+    """
+    return ((SOLE_PORT, key),)
+
+
 #: A stand-in for whatever the walk hands a root. Every key in this file is
-#: derived from something, because in schema v1 a root's upstream is the source
-#: key and there is no node with no input at all.
-ROOT = "root-key"
+#: derived from something, because a root's upstream is the source key and
+#: there is no node with no input at all.
+ROOT = sole("root-key")
 
 
 def make_node(node_id: str, **params: object) -> Node:
@@ -181,14 +202,14 @@ def keys_for(project: Project, replicate: Replicate | None) -> dict[str, str]:
     hand-walk shorter than the fixture that would replace it.
     """
 
-    def key(node_id: str, upstream: str) -> str:
+    def key(node_id: str, upstream: tuple[tuple[str | None, str], ...]) -> str:
         return node_key(
             project.pipeline.node(node_id), spec=SPEC, upstream=upstream, replicate=replicate
         )
 
     keys = {"a": key("a", ROOT)}
-    keys["b"] = key("b", keys["a"])
-    keys["c"] = key("c", keys["a"])
+    keys["b"] = key("b", sole(keys["a"]))
+    keys["c"] = key("c", sole(keys["a"]))
     return keys
 
 
@@ -360,6 +381,43 @@ class TestIsolation:
             assert getattr(edited, name) != getattr(base, name)
             expected = keyed if base is SPEC else banded_key
             assert node_key(node, spec=edited, upstream=ROOT) == expected
+
+
+class TestWiring:
+    """What the `upstream` position has to separate now that it is pairs.
+
+    v2 asserted this and 03.3 dropped it for want of a subject — an edge carried
+    no port, so `a - b` and `b - a` were not two graphs to tell apart
+    (`todo/a-merge-keys-its-inputs-by-port.md`). The subject arrived with the
+    port-keyed form of `accepts`, and the claim is unchanged: crossing two
+    inputs over is a different computation at that node and the same one
+    everywhere else.
+    """
+
+    def test_swapping_two_ports_moves_one_key(self) -> None:
+        # Walked by hand for `keys_for`'s reason, over the smallest graph the
+        # claim needs: one root, two branches off it, and a merge reading both.
+        # The branches must key differently — crossing two edges carrying one
+        # key would prove nothing, since the pairs would be equal either way.
+        def walk(left: str, right: str) -> dict[str, str]:
+            keys = {
+                "p": node_key(make_node("p", radius=5), spec=SPEC, upstream=ROOT),
+                "q": node_key(make_node("q", radius=7), spec=SPEC, upstream=ROOT),
+            }
+            keys["m"] = node_key(
+                Node(node_id="m", tool_id="merge", version="1.0.0"),
+                spec=MERGE_SPEC,
+                upstream=(("left", keys[left]), ("right", keys[right])),
+            )
+            return keys
+
+        straight = walk("p", "q")
+        crossed = walk("q", "p")
+
+        assert straight["m"] != crossed["m"]
+        assert {name: key for name, key in straight.items() if name != "m"} == {
+            name: key for name, key in crossed.items() if name != "m"
+        }
 
 
 class TestInputs:

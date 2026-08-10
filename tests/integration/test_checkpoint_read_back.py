@@ -27,6 +27,7 @@ from typer.testing import CliRunner
 
 from sieve.cli.app import app
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceSpan
+from sieve.core.tool_base import SOLE_PORT
 from sieve.decode.reader import VideoReader
 from sieve.pipeline.cache_key import node_key, picked_key, source_identity, source_key
 from sieve.pipeline.dag import Dag
@@ -264,9 +265,13 @@ class TestTheRootIsKeyedOffTheFile:
 
         node = dag.order[0]
         spec = dag.specs[READ]
-        assert keys[READ] == node_key(node, spec=spec, upstream=picked_key(identity))
+        assert keys[READ] == node_key(
+            node, spec=spec, upstream=((SOLE_PORT, picked_key(identity)),)
+        )
         assert keys[READ] != node_key(
-            node, spec=spec, upstream=source_key(identity, decode_format="luma")
+            node,
+            spec=spec,
+            upstream=((SOLE_PORT, source_key(identity, decode_format="luma")),),
         )
 
         written = Project.load(written_path)

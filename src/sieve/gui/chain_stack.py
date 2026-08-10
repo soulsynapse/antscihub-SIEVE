@@ -442,9 +442,11 @@ def fixed_card(title: str) -> ChainCard:
 # holding its own coordinates would draw the previous selection's stack.
 #
 # A port is named at an arrowhead only where the destination has more than one
-# input, which in this stack is the output card and nothing else: schema v1 gives
-# an edge no port and refuses two edges into one node, so a name over a step's
-# arrowhead would be a distinction the document cannot make. The card's inputs
+# input, which in this stack is the output card and nothing else — not because a
+# step cannot have two now (an `Edge` names a port and `Pipeline` refuses only
+# two into one of them), but because nothing here draws the second edge yet:
+# `todo/a-fan-in-has-no-picture-and-no-rule-for-which-parent-holds-it.md` is
+# where this becomes the second caller of the naming below. The card's inputs
 # are not the document's — they are the ticks, derived
 # (`adr/the-output-card-is-a-picture-of-the-write-list.md`) — and a product is
 # what they are named by.

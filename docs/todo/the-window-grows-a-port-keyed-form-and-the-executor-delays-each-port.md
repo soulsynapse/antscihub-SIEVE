@@ -1,7 +1,7 @@
 ---
 title: The window grows a port-keyed form, and the executor delays each port to the slowest
 step: "11.2"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_executor.py tests/unit/test_cache_key.py -q -k 'two_parents_of_different_lag_align_at_the_child or swapping_two_ports_moves_one_key'"
 opened: 2026-08-09

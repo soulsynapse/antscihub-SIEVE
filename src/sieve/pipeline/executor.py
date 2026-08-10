@@ -72,6 +72,19 @@ loop reads in step and the graph answers behind it, so one `FrameResult` is
 assembled from outputs computed at different steps and is complete only when the
 slowest node in the graph has reached that frame.
 
+**A node with two parents delays each port to the slowest.** Two parents of
+different lag hand a node frames of different index at one step, so the lag that
+governs it is the maximum and each port is held back by the difference — a
+`max_lag - lag[port]` buffer per edge, filled from the step that parent starts
+emitting and read from its oldest end. That is what makes the alignment
+arithmetic rather than a search: every buffer is exactly full at the step this
+node's guard first lets it through, and stays so, because every node's answers
+advance one frame per step. What the tool is then handed is one span per port,
+all at one source frame, which is the port-keyed form of `window` `ToolRun`
+declares. A merge served the two frames it happened to have would compute a
+difference between adjacent frames of two branches — plausible, and wrong by the
+lookahead the branches differ by.
+
 **The display channel is the one thing here that is not a product.** A node
 named in `show` fills the surfaces its band parameters declare
 (`core/tool_base.py`, `ToolDisplay`), and those go out beside `outputs` rather
@@ -100,6 +113,7 @@ from typing import Any, Protocol
 
 from sieve.core.pipeline_model import Node
 from sieve.core.tool_base import (
+    SOLE_PORT,
     ArraySpec,
     DisplaySurface,
     Mode,
@@ -271,6 +285,15 @@ class BoundNode:
     stateful: bool
     #: Frames past its target this node must have read before it may emit.
     lookahead: int
+    #: `(port, parent node id)` for every input, in `Dag.inputs`' order. Empty at
+    #: a root. The port is what the assembled window is keyed by for a merging
+    #: tool and is `SOLE_PORT` everywhere else, where the window is the bare span
+    #: the tool has always been handed.
+    inputs: tuple[tuple[str | None, str], ...]
+    #: How many steps each port's arriving frame is held before this node reads
+    #: it, keyed as `inputs` is. Zero on the port whose parent is the slowest,
+    #: positive on every port that answers ahead of it — see `_delays`.
+    port_delay: Mapping[str | None, int]
     #: Source frames this node's *upstream* output trails the loop by. Zero at
     #: a root, where the upstream is the reader.
     upstream_lag: int
@@ -283,6 +306,16 @@ class BoundNode:
     def lag(self) -> int:
         """Source frames this node's own output trails the loop by."""
         return self.upstream_lag + self.lookahead
+
+    @property
+    def ports(self) -> tuple[str | None, ...]:
+        """Which inputs this node reads on, in `inputs`' order.
+
+        `(SOLE_PORT,)` at a root, where what arrives is the decoded frame or the
+        tool's own file rather than an edge: a root has no `inputs` and still has
+        one input, and the loop keys everything it holds per node by port.
+        """
+        return tuple(port for port, _parent in self.inputs) or (SOLE_PORT,)
 
     @property
     def lead_in(self) -> int:
@@ -371,16 +404,25 @@ def execute(
     keep = NullFrameStore() if store is None else store
     bindings = _bind(plan)
     watched = _watched(plan, show)
-    histories: dict[str, deque[Frame]] = {
-        node_id: deque(maxlen=bound.window)
+    histories: dict[str, dict[str | None, deque[Frame]]] = {
+        node_id: {port: deque(maxlen=bound.window) for port in bound.ports}
         for node_id, bound in bindings.items()
         if bound.mode is Mode.WINDOWED
+    }
+    # One buffer per edge, holding that port's arrivals until the slowest port
+    # has caught up to them — `_delays` is the whole of the alignment. A node
+    # with one input buys a deque of length one, which is the frame it would
+    # have read straight out of `emitted`.
+    delays: dict[str, dict[str | None, deque[Frame]]] = {
+        node_id: {port: deque(maxlen=bound.port_delay[port] + 1) for port, _parent in bound.inputs}
+        for node_id, bound in bindings.items()
+        if bound.inputs
     }
     # Only where a served range could leave a state behind: a node with no key
     # is never skipped, so its state is fed by the loop and there is nothing to
     # replay. That exclusion is what keeps `temporal_baseline`'s 7199-frame
     # warmup from becoming 7199 frames held in a deque.
-    feeds: dict[str, deque[Frame]] = {
+    feeds: dict[str, deque[Mapping[str | None, Frame]]] = {
         node_id: deque(maxlen=bound.warmup)
         for node_id, bound in bindings.items()
         if bound.stateful and bound.warmup > 0 and node_id in plan.keys
@@ -405,13 +447,23 @@ def execute(
         # yields one empty result per frame of the span rather than nothing.
         pending.setdefault(step, _Partial())
         decoded: Frame | None = None
-        # This step's emissions, by node. A node's downstream reads its parent
-        # here and nowhere else: the parent answered for `step - lag[parent]`
-        # this very step, which is exactly the frame the child's own window
-        # needs next, so no alignment machinery and no per-node input queue.
+        # This step's emissions, by node. A node's downstream takes its parents
+        # from here and nowhere else, and puts each straight into that port's
+        # delay buffer: a parent answered for `step - lag[parent]` this very
+        # step, and where two parents answer for different frames the buffers
+        # are what re-align them.
         emitted: dict[str, Frame] = {}
         for node in plan.dag.order:
             bound = bindings[node.node_id]
+            # Before the guard, because the fast port starts arriving while the
+            # slow one is still reading up to the frame this node answers for
+            # first — those are exactly the frames the buffer exists to hold.
+            queued = delays.get(node.node_id)
+            if queued is not None:
+                for port, parent in bound.inputs:
+                    arrived = emitted.get(parent)
+                    if arrived is not None:
+                        queued[port].append(arrived)
             if step - bound.upstream_lag < first:
                 # Nothing has arrived at this node yet: everything above it is
                 # still reading past the frames it will answer for first.
@@ -453,12 +505,13 @@ def execute(
                 # touched on its account, so a graph whose only root is a picker
                 # decodes nothing.
                 produced = _source_frame(node, bound, plan, answers_for)
-                window = FrameSpan((produced,))
+                window: FrameSpan | Mapping[str, FrameSpan] = FrameSpan((produced,))
             else:
-                fed = plan.dag.upstreams[node.node_id]
-                if fed:
-                    (parent,) = fed
-                    incoming = emitted[parent]
+                if queued is not None:
+                    # The oldest frame each port is holding, which is the one the
+                    # slowest port has now caught up to: every buffer is exactly
+                    # full by the step this guard let through.
+                    incoming = {port: held[0] for port, held in queued.items()}
                 else:
                     if decoded is None:
                         # The one place the reader is touched, and only once per
@@ -467,14 +520,14 @@ def execute(
                         decoded = reader.read(step)
                         _check_format(decoded, plan)
                         pending[step].source = decoded
-                    incoming = decoded
+                    incoming = {SOLE_PORT: decoded}
                 assembled = _window(incoming, bound, histories.get(node.node_id))
                 if assembled is None:
                     # Holding the window open: this node has its target in hand
                     # but not yet the frames past it that it declared it would
                     # read.
                     continue
-                window = assembled
+                window = _called_with(assembled)
                 if eager:
                     cached = keep.get(key, answers_for)
                     if cached is not None:
@@ -516,7 +569,11 @@ def _serve(
     held.from_cache.add(node_id)
 
 
-def _remember(feeds: dict[str, deque[Frame]], node_id: str, incoming: Frame) -> None:
+def _remember(
+    feeds: dict[str, deque[Mapping[str | None, Frame]]],
+    node_id: str,
+    incoming: Mapping[str | None, Frame],
+) -> None:
     """Keep this node's input against a state that may have to be replayed.
 
     Only the last `warmup` of them, and only for a node that can be skipped at
@@ -533,7 +590,7 @@ def _resettle(
     node_id: str,
     bound: BoundNode,
     plan: ExecutionPlan,
-    feed: deque[Frame] | None,
+    feed: deque[Mapping[str | None, Frame]] | None,
     fed_through: dict[str, int],
 ) -> None:
     """Run a stale state over its warmup, discarding what comes out.
@@ -556,45 +613,90 @@ def _resettle(
     if feed is None:
         return
     seen = fed_through.get(node_id)
-    if seen is not None and feed and int(feed[-1].index) <= seen:
+    if seen is not None and feed and _arrival_index(feed[-1]) <= seen:
         # The contiguous case, which is every frame of every run that was served
         # nothing: the newest frame kept is one the state has already had, so
         # there is no gap and the loop below would skip every element of a deque
         # that may be thousands long.
         return
     params = plan.params[node_id]
-    for frame in feed:
-        index = int(frame.index)
+    for arrival in feed:
+        index = _arrival_index(arrival)
         if seen is not None and index <= seen:
             continue
-        bound.run(params, FrameSpan((frame,)), bound.state)
+        bound.run(
+            params,
+            _called_with({port: FrameSpan((frame,)) for port, frame in arrival.items()}),
+            bound.state,
+        )
         seen = index
     if seen is not None:
         fed_through[node_id] = seen
 
 
-def _window(incoming: Frame, bound: BoundNode, history: deque[Frame] | None) -> FrameSpan | None:
+def _arrival_index(arrival: Mapping[str | None, Frame]) -> int:
+    """The source frame one step's arrivals are all positioned at.
+
+    Any port answers, which is the alignment stated as a precondition: the delay
+    buffers hand a node one frame index across every port, so a mapping whose
+    ports disagreed would be a defect upstream of here rather than something to
+    pick a winner from.
+    """
+    return int(next(iter(arrival.values())).index)
+
+
+def _window(
+    incoming: Mapping[str | None, Frame],
+    bound: BoundNode,
+    history: Mapping[str | None, deque[Frame]] | None,
+) -> dict[str | None, FrameSpan] | None:
     """The frames this node is called with, or `None` while it is still filling.
 
     A span even for a streaming node, because there is one signature and a
     window of one is what "one frame in" is in it (`adr/no-kernel-apparatus.md`).
+    Keyed by port even for the single-input node that is most of every graph;
+    `_called_with` is where that collapses back to the bare span such a tool has
+    always been handed.
 
     A windowed node's history is appended to on every step its input arrives,
     including the steps before it may emit anything — those frames are the
     lookahead side of its first window, and skipping the append would hand it a
-    window missing its own future.
+    window missing its own future. Every port is appended to before any of them
+    is measured, so a node still filling does not fill some of its ports twice.
 
     The span is told how many of its trailing frames are past the target, which
     is what makes `FrameSpan.target` the frame the tool was called about. The
     number is this node's own, from `node_lookahead_frames` at bind time, so it
-    is the same one `_run_node` then checks the returned index against.
+    is the same one `_run_node` then checks the returned index against. It is one
+    number for every port because the delay buffers have already put them at one
+    frame: a window whose sides differed per port would be a tool called about
+    two frames at once.
     """
     if history is None:
-        return FrameSpan((incoming,))
-    history.append(incoming)
-    if len(history) <= bound.lookahead:
+        return {port: FrameSpan((frame,)) for port, frame in incoming.items()}
+    for port, frame in incoming.items():
+        history[port].append(frame)
+    if any(len(history[port]) <= bound.lookahead for port in incoming):
         return None
-    return FrameSpan(tuple(history), lookahead=FrameCount(bound.lookahead))
+    return {
+        port: FrameSpan(tuple(history[port]), lookahead=FrameCount(bound.lookahead))
+        for port in incoming
+    }
+
+
+def _called_with(assembled: Mapping[str | None, FrameSpan]) -> FrameSpan | Mapping[str, FrameSpan]:
+    """The window as `ToolRun` takes it: a bare span, or one per named port.
+
+    `SOLE_PORT` is present exactly when the tool declared one input
+    (`core/tool_base.ToolSpec.input_ports`), so this is the declaration read
+    back rather than a count of what happened to arrive — which is what keeps a
+    merging tool with one port still unwired from being handed a bare span as
+    though it were the single-input tool it is not.
+    """
+    sole = assembled.get(SOLE_PORT)
+    if sole is not None:
+        return sole
+    return {port: span for port, span in assembled.items() if port is not None}
 
 
 def _completed(
@@ -685,7 +787,9 @@ def _unrunnable_reason(spec: ToolSpec) -> str | None:
             "declares rate_changing, and the one signature has no way to emit nothing for an "
             "input frame"
         )
-    if spec.source is None and not isinstance(spec.accepts, ArraySpec):
+    if spec.source is None and not all(
+        isinstance(accepts, ArraySpec) for accepts in spec.input_ports.values()
+    ):
         return (
             "accepts rows, and a run is handed frames — nothing downstream of a table has "
             "anything to feed it"
@@ -732,6 +836,8 @@ def _bind(plan: ExecutionPlan) -> dict[str, BoundNode]:
         step = (spec, plan.params[node.node_id])
         lookahead = node_lookahead_frames(step).frames
         warmup = node_warmup_frames(step).frames
+        fed = plan.dag.inputs[node.node_id]
+        upstream_lag = max((bindings[parent].lag for _port, parent in fed), default=0)
         bindings[node.node_id] = BoundNode(
             run=spec.run,
             source=spec.source,
@@ -741,12 +847,11 @@ def _bind(plan: ExecutionPlan) -> dict[str, BoundNode]:
             warmup=warmup,
             stateful=spec.stateful,
             lookahead=lookahead,
-            upstream_lag=max(
-                (bindings[parent].lag for parent in plan.dag.upstreams[node.node_id]),
-                default=0,
-            ),
+            inputs=fed,
+            port_delay={port: upstream_lag - bindings[parent].lag for port, parent in fed},
+            upstream_lag=upstream_lag,
             upstream_warmup=max(
-                (bindings[parent].lead_in for parent in plan.dag.upstreams[node.node_id]),
+                (bindings[parent].lead_in for _port, parent in fed),
                 default=0,
             ),
         )
@@ -786,7 +891,7 @@ def _watched(plan: ExecutionPlan, show: Collection[str]) -> dict[str, ToolDispla
 def _drawn(
     node: Node,
     fill: ToolDisplay[Any],
-    window: FrameSpan,
+    window: FrameSpan | Mapping[str, FrameSpan],
     plan: ExecutionPlan,
     answers_for: int,
 ) -> Mapping[DisplaySurface, Frame]:
@@ -867,7 +972,7 @@ def _source_frame(node: Node, bound: BoundNode, plan: ExecutionPlan, answers_for
 
 def _run_node(
     node: Node,
-    window: FrameSpan,
+    window: FrameSpan | Mapping[str, FrameSpan],
     bound: BoundNode,
     plan: ExecutionPlan,
     answers_for: int,

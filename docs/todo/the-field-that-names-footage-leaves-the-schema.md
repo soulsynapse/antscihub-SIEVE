@@ -141,3 +141,22 @@ one command.
     $ uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name
     8 deselected in 0.33s
     exit: 5
+
+## Folded 2026-08-10: an addition landed and nothing decided whether the stamp rose
+
+11.2 put `Edge.port` into the document — the first field added since ADR 38
+settled that a bump adds and a load keeps the version it read — and it landed
+without touching `SCHEMA_VERSION`. What made that defensible is a serializer:
+`Edge` writes `port` only when it has one, so a document over a graph with no
+fan-in is byte-for-byte what it was, and a v1 stamp on it is true. What it does
+not answer is the document that *does* carry a port. Under ADR 38 the stamp
+"rises only when a build writes into it something the declared version does not
+have", and nothing in the tree implements a conditional rise: a project loaded at
+1, given a merge, and saved is stamped 1 and carries a field 1 does not have.
+
+It lands here rather than as its own item because this is the item that pays a
+removal at a version, so it is the one that has to decide what a version *is* on
+the way in as well as on the way out — and its `done_when` already names
+`the_version_a_document_declares_after_the_removal`, which is the case the
+addition's answer would sit beside. That criterion covers the removal only; the
+addition half may want widening.

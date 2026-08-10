@@ -41,9 +41,11 @@ def stream_specs(
     without an upstream to name. A step below a missing tool therefore resolves
     exactly as far as its own declaration reaches, and no further.
 
-    Schema v1 refuses two edges into one node (`walk.py`), so there is never a
-    parent to choose between; `order` is the walk's, which is topological, so a
-    step's input is resolved by the time it is reached.
+    A fan-in keeps its *last* parent here, which is a tie-break and not a rule —
+    one of the four that
+    `todo/a-fan-in-has-no-picture-and-no-rule-for-which-parent-holds-it.md`
+    settles together. `order` is the walk's, which is topological, so a step's
+    input is resolved by the time it is reached.
     """
     upstream_of = {edge.downstream: edge.upstream for edge in pipeline.edges}
     resolved: dict[str, StreamSpec | None] = {}

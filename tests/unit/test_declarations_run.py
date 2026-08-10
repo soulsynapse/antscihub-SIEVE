@@ -38,6 +38,7 @@ import pytest
 
 from sieve.core.pipeline_model import Node, Pipeline, SourceSpan
 from sieve.core.tool_base import (
+    SOLE_PORT,
     ArraySpec,
     ElementKind,
     ElementRelation,
@@ -87,7 +88,7 @@ GOLDENS = Path(__file__).resolve().parents[1] / "goldens"
 
 #: A stand-in for whatever the walk hands a root, as `test_cache_key.py` spells
 #: it: in schema v1 a root's upstream is the source key and no node has no input.
-UPSTREAM = "upstream-key"
+UPSTREAM = ((SOLE_PORT, "upstream-key"),)
 
 #: A version no tool has, for the bump. Nothing about it is special except that
 #: it is not the registered one.

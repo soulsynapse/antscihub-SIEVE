@@ -28,29 +28,32 @@ would be the `is_valid()` that makes the checked and unchecked cases one type.
 A `Diagnostic` carries the `GraphError` itself rather than a re-rendered
 sentence, so the two modes cannot word one rejection differently.
 
-**Three rejections, in a fixed order**, because the first useful message is the
+**Four rejections, in a fixed order**, because the first useful message is the
 one to give: an unresolved tool is reported before a cycle, since a graph half
 of whose nodes name nothing has no meaningful cycle to describe; and a cycle is
-reported before an edge's types, since reporting the earliest mismatch needs the
-sort that the cycle check produces. The order is also what makes collecting
-sound rather than merely longer: the first two rejections stop the walk, because
-there is no later check whose inputs survive them.
+reported before anything about an edge, since reporting the earliest mismatch
+needs the sort that the cycle check produces. The order is also what makes
+collecting sound rather than merely longer: the first two rejections stop the
+walk, because there is no later check whose inputs survive them.
 
 1. Every `(tool_id, version)` resolves against the registry.
 2. The graph is acyclic.
-3. Every edge chains: what the downstream `accepts` admits the upstream's
-   `emits`.
-4. Nothing else. Parameters are *not* validated here — that happens where a
+3. Every edge names a port its downstream tool has.
+4. Every edge chains: what that port `accepts` admits the upstream's `emits`.
+5. Nothing else. Parameters are *not* validated here — that happens where a
    wrong parameter would enter a hash, against `spec.params_model`, in the walk
    that keys nodes. A second validation pass would be a second answer to whether
    a graph is runnable.
 
-v2 checked a fourth thing here, that a node's incoming edges filled its declared
-input ports exactly. Schema v1 has no ports — `core/tool_base.py` cut the
-merging protocol until the first two-input tool — so a node has one input, and
-"two edges feed one node" is refused by `Pipeline` before this module sees the
-graph. The rejection did not move layers because it was weakened; it moved
-because the distinction it policed is one nothing can express.
+The third of those is v2's port check arriving late rather than a new idea. v2
+asked that a node's incoming edges filled its declared ports *exactly*; this
+asks only that each edge names a port that exists, because whether an unfilled
+port is a legal document is a question about what a half-wired merge is
+(`todo/a-second-input-has-no-writer-and-the-box-splices-one-edge.md`) and
+answering it here would settle it by construction. What `Pipeline` still refuses
+before this module sees the graph is two edges into one *port*, which is
+structural in the way a port set is not: a port carries one stream whatever the
+tool turns out to be.
 
 **The walk lives here.** `cache_key.py` computes one node's key given its
 upstream's and declines to say which nodes those are; `node_keys` below is the
@@ -71,6 +74,7 @@ from pydantic import ValidationError
 
 from sieve.core.pipeline_model import CropFormat, Node, Pipeline, Replicate
 from sieve.core.tool_base import (
+    SOLE_PORT,
     SOURCE_ELEMENT_NAMES,
     ArraySpec,
     ElementKind,
@@ -83,6 +87,28 @@ from sieve.core.tool_base import (
 from sieve.core.tool_registry import REGISTRY, ToolRegistry, UnknownToolError
 from sieve.core.types import ChannelSpec
 from sieve.pipeline.cache_key import NotCacheableError, node_key, picked_key, source_key
+
+
+def _arriving_element(
+    resolved: Mapping[str, ElementKind | None], fed: Sequence[str]
+) -> ElementKind | None:
+    """The element meaning arriving at a node, given its parents' answers.
+
+    A root is handed `PIXEL`: the source is frames of pixels, and this is the
+    one place that enters. Parents that agree hand their agreement down; parents
+    that disagree hand down nothing, because a merge of blocks and pixels emits
+    values that are neither and no count over them has an honest denominator.
+
+    v2 had exactly this branch and it went out with the merge in 03.3
+    (`todo/dag-is-rederived-against-schema-v1.md`). What stood in its place
+    until a fan-in was expressible was a refusal — folding the first of two
+    would have carried a meaning nothing chose to everything downstream — and
+    the refusal was the posture, not the answer.
+    """
+    if not fed:
+        return ElementKind.PIXEL
+    arriving = {resolved[parent] for parent in fed}
+    return arriving.pop() if len(arriving) == 1 else None
 
 
 class GraphError(ValueError):
@@ -125,6 +151,29 @@ class CycleError(GraphError):
     def __init__(self, nodes: Iterable[str]) -> None:
         self.nodes = tuple(sorted(nodes))
         super().__init__(f"pipeline contains a cycle among nodes: {', '.join(self.nodes)}")
+
+
+class PortError(GraphError):
+    """An edge feeds an input its downstream tool does not have.
+
+    Separate from `EdgeTypeError` because there is no `accepts` to compare
+    against: the edge does not carry the wrong thing, it arrives nowhere. Both
+    ways of getting here are one mistake seen from either side — an edge naming
+    a port on a tool that declares one input, and an edge naming nothing into a
+    tool that declares several — so both are this rejection rather than two, and
+    the message names the ports the tool does have because that is the list the
+    reader has to pick from.
+    """
+
+    def __init__(
+        self, upstream: str, downstream: str, port: str | None, ports: Sequence[str]
+    ) -> None:
+        self.upstream = upstream
+        self.downstream = downstream
+        self.port = port
+        named = f"port {port!r}" if port is not None else "no port"
+        has = f"has ports {sorted(ports)}" if ports else "has one input and names no port"
+        super().__init__(f"edge {upstream} to {downstream} names {named}, but {downstream} {has}")
 
 
 class EdgeTypeError(GraphError):
@@ -213,12 +262,18 @@ class Dag:
     order: tuple[Node, ...]
     #: The resolved spec per `node_id`. Total over `order`.
     specs: Mapping[str, ToolSpec]
-    #: Upstream node ids per `node_id`. Total over `order` — a root maps to `()`
-    #: rather than being absent. At most one entry while a node has one input;
-    #: a tuple anyway, because Kahn's algorithm below counts them and because
-    #: the day a two-input tool lands is a day this field's shape is already
-    #: right.
+    #: Upstream node ids per `node_id`, in the document's edge order. Total over
+    #: `order` — a root maps to `()` rather than being absent. Kahn's algorithm
+    #: below counts them, and a consumer that only needs to know *what* feeds a
+    #: node reads this rather than `inputs`.
     upstreams: Mapping[str, tuple[str, ...]]
+    #: `(port, upstream node id)` per `node_id`, ordered by port rather than by
+    #: the document's edges. Total over `order`. The order is canonical because
+    #: it is what the cache key folds: writing the same two edges in the other
+    #: order is the same graph, and crossing which parent feeds which port is
+    #: not (`cache_key.node_key`). `upstreams` beside it is the same set with
+    #: the labels dropped, kept because most readers want exactly that.
+    inputs: Mapping[str, tuple[tuple[str | None, str], ...]]
     #: Downstream node ids per `node_id`, in the document's edge order. Total
     #: over `order`.
     downstreams: Mapping[str, tuple[str, ...]]
@@ -316,11 +371,11 @@ class Dag:
                 if named not in missing:
                     missing.append(named)
             return ((Diagnostic(unresolved, UnresolvedToolError(missing)),), None)
-        upstreams, downstreams = cls._adjacency(pipeline)
+        upstreams, downstreams, inputs = cls._adjacency(pipeline)
         order, unordered = cls._topological(pipeline, upstreams, downstreams)
         if unordered:
             return ((Diagnostic(unordered, CycleError(unordered)),), None)
-        edges = cls._edge_faults(order, specs, upstreams)
+        edges = cls._edge_faults(order, specs, inputs)
         if edges:
             return (edges, None)
         return (
@@ -330,6 +385,7 @@ class Dag:
                 order=order,
                 specs=specs,
                 upstreams=upstreams,
+                inputs=inputs,
                 downstreams=downstreams,
                 elements=cls._elements(order, specs, upstreams),
                 element_names=cls._element_names(order, specs, upstreams),
@@ -360,21 +416,39 @@ class Dag:
     @staticmethod
     def _adjacency(
         pipeline: Pipeline,
-    ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
-        """Both directions, total over the node set.
+    ) -> tuple[
+        dict[str, tuple[str, ...]],
+        dict[str, tuple[str, ...]],
+        dict[str, tuple[tuple[str | None, str], ...]],
+    ]:
+        """Both directions and the labelled one, total over the node set.
 
         Built as lists and frozen on the way out so that edge order is the
         document's. Nothing downstream depends on that order, but a traversal
         whose output order is the document's is one whose diffs are readable.
+
+        `inputs` is the one exception and deliberately so: it is ordered by port
+        because the cache key folds it, and a key that moved when two edges were
+        written the other way round would say two spellings of one graph are two
+        computations. `SOLE_PORT` is `None` and sorts first on its own, since a
+        node has either that one input or named ones and never both.
         """
         up: dict[str, list[str]] = {node.node_id: [] for node in pipeline.nodes}
         down: dict[str, list[str]] = {node.node_id: [] for node in pipeline.nodes}
+        ports: dict[str, list[tuple[str | None, str]]] = {
+            node.node_id: [] for node in pipeline.nodes
+        }
         for edge in pipeline.edges:
             up[edge.downstream].append(edge.upstream)
             down[edge.upstream].append(edge.downstream)
+            ports[edge.downstream].append((edge.port, edge.upstream))
         return (
             {node_id: tuple(ids) for node_id, ids in up.items()},
             {node_id: tuple(ids) for node_id, ids in down.items()},
+            {
+                node_id: tuple(sorted(fed, key=lambda pair: (pair[0] is not None, pair[0] or "")))
+                for node_id, fed in ports.items()
+            },
         )
 
     @staticmethod
@@ -430,7 +504,7 @@ class Dag:
     def _edge_faults(
         order: Sequence[Node],
         specs: Mapping[str, ToolSpec],
-        upstreams: Mapping[str, tuple[str, ...]],
+        inputs: Mapping[str, tuple[tuple[str | None, str], ...]],
     ) -> tuple[Diagnostic, ...]:
         """Every edge, in topological order, against the input it feeds.
 
@@ -438,6 +512,10 @@ class Dag:
         it decides *which* mismatch is reported first in a graph with several,
         and reporting the earliest is what lets a user fix a chain from the top
         rather than from wherever a dict happened to start.
+
+        The port is resolved before the types are compared, because a miswired
+        edge has no `accepts` to be compared against and reporting it as a type
+        mismatch would name a stream the tool never declared.
 
         A root's input is unchecked, and deliberately: what feeds it is the
         replicate's cropped source, which is an array of whatever the decoder
@@ -447,8 +525,18 @@ class Dag:
         """
         faults: list[Diagnostic] = []
         for node in order:
-            accepts = specs[node.node_id].accepts
-            for upstream_id in upstreams[node.node_id]:
+            spec = specs[node.node_id]
+            for port, upstream_id in inputs[node.node_id]:
+                accepts = spec.accepts_on(port)
+                if accepts is None:
+                    named = [name for name in spec.input_ports if name is not None]
+                    faults.append(
+                        Diagnostic(
+                            (upstream_id, node.node_id),
+                            PortError(upstream_id, node.node_id, port, named),
+                        )
+                    )
+                    continue
                 emits = specs[upstream_id].emits
                 if not accepts.admits(emits):
                     faults.append(
@@ -471,22 +559,15 @@ class Dag:
         is reached. `tool_base.node_element` is the conversion and this is only
         the traversal that supplies its second argument — the same split
         `input_warmup_frames` has, so that there is one answer to what a
-        preserving tool preserves.
+        preserving tool preserves. What arrives at a node with several parents
+        is `_arriving_element`.
 
         A root's input is the replicate's cropped source, which is frames of
         pixels; `ElementKind.PIXEL` enters here and nowhere else.
         """
         resolved: dict[str, ElementKind | None] = {}
         for node in order:
-            fed = upstreams[node.node_id]
-            # Unpacked rather than indexed, for `node_keys`' reason: folding
-            # the first of two upstreams would carry a meaning nothing chose
-            # to every node downstream of the merge.
-            if fed:
-                (parent,) = fed
-                upstream: ElementKind | None = resolved[parent]
-            else:
-                upstream = ElementKind.PIXEL
+            upstream = _arriving_element(resolved, upstreams[node.node_id])
             resolved[node.node_id] = node_element(specs[node.node_id].element, upstream)
         return resolved
 
@@ -506,13 +587,18 @@ class Dag:
         names: dict[str, ElementNames | None] = {}
         for node in order:
             fed = upstreams[node.node_id]
+            upstream = _arriving_element(elements, fed)
             if not fed:
-                upstream: ElementKind | None = ElementKind.PIXEL
                 upstream_names: ElementNames | None = SOURCE_ELEMENT_NAMES
+            elif upstream is None:
+                # The noun follows the meaning: where the parents disagreed
+                # there is no kind left to name, and a name carried up from one
+                # of them would be the wrong column heading on a count over
+                # something neither parent emitted.
+                upstream_names = None
             else:
-                (parent,) = fed
-                upstream = elements[parent]
-                upstream_names = names[parent]
+                arriving = {names[parent] for parent in fed}
+                upstream_names = arriving.pop() if len(arriving) == 1 else None
             spec = specs[node.node_id]
             elements[node.node_id] = node_element(spec.element, upstream)
             names[node.node_id] = node_element_names(
@@ -725,16 +811,16 @@ class Dag:
         root_key = source_key(source, decode_format=decode_format)
         keys: dict[str, str] = {}
         for node in self.order:
-            fed = self.upstreams[node.node_id]
+            fed = self.inputs[node.node_id]
             if fed:
-                # Unpacked rather than indexed: schema v1 gives a node one
-                # input, and the day a second one lands is the day `node_key`
-                # takes port-bound pairs — silently keying on the first of two
-                # is the failure that would otherwise be waiting there.
-                (parent,) = fed
-                if parent not in keys:
+                # Port-bound pairs, in `inputs`' canonical order: a node fed on
+                # two ports is two keys the digest has to tell apart by which
+                # port each arrived on, since `a - b` and `b - a` are fed by the
+                # same two keys and are not the same computation. One unkeyed
+                # parent takes the node with it, for the reason below.
+                if any(parent not in keys for _port, parent in fed):
                     continue
-                upstream = keys[parent]
+                upstream = tuple((port, keys[parent]) for port, parent in fed)
             elif (opens := self.specs[node.node_id].source) is not None:
                 # A source tool keys from its own file, so the footage's key is
                 # not its ancestor — folding `root_key` here would make swapping
@@ -748,13 +834,19 @@ class Dag:
                 identity = picked.get(node.node_id)
                 if identity is None:
                     continue
+                # A root's ancestor arrives on `SOLE_PORT` like any single
+                # input: what feeds it is not an edge, but the digest's layout
+                # is about arity and not about where the stream came from.
                 upstream = (
-                    source_key(identity, decode_format=decode_format)
-                    if opens.decoded
-                    else picked_key(identity)
+                    (
+                        SOLE_PORT,
+                        source_key(identity, decode_format=decode_format)
+                        if opens.decoded
+                        else picked_key(identity),
+                    ),
                 )
             else:
-                upstream = root_key
+                upstream = ((SOLE_PORT, root_key),)
             try:
                 keys[node.node_id] = node_key(
                     node,

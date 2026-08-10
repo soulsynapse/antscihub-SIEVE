@@ -24,6 +24,7 @@ from sieve.core.pipeline_model import (
     SourceRef,
 )
 from sieve.core.tool_base import (
+    SOLE_PORT,
     ArraySpec,
     ElementRelation,
     Emission,
@@ -95,7 +96,9 @@ def _opened(tmp_path: Path, *replicates: Replicate) -> Session:
 
 
 def _key(project: Project, replicate: Replicate | None = None) -> str:
-    return node_key(project.pipeline.node("n1"), spec=SPEC, upstream=ROOT, replicate=replicate)
+    return node_key(
+        project.pipeline.node("n1"), spec=SPEC, upstream=((SOLE_PORT, ROOT),), replicate=replicate
+    )
 
 
 #: Typed out by hand, which is the whole of its job: `INTENT_KINDS` derives

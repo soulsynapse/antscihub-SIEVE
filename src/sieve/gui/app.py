@@ -252,8 +252,11 @@ def frame_bearing(pipeline: Pipeline, specs: Mapping[str, ToolSpec], node_id: st
     stands on a tool this install does not have — the source is what is shown
     for both, being the one frame the window can produce without a spec.
 
-    Schema v1 refuses two edges into one node (`walk.py`), so the path upward is
-    a chain and there is no parent to choose between.
+    A fan-in is expressible, so the path upward is a chain only until a merge
+    is drawn: this keeps the *last* edge into a node, which is a tie-break and
+    not a rule anybody wrote. Which parent a child hangs under is one ruling for
+    the four sites that each answer it their own way
+    (`todo/a-fan-in-has-no-picture-and-no-rule-for-which-parent-holds-it.md`).
     """
     upstream = {edge.downstream: edge.upstream for edge in pipeline.edges}
     current: str | None = node_id
@@ -273,9 +276,11 @@ def input_of(pipeline: Pipeline, node_id: str) -> str | None:
     `None` is a root, whose input is the frame the run decoded rather than
     another node's output — which is what `tuning.render_at` reads it as.
 
-    Schema v1 refuses two edges into one node (`walk.py`), the same fact
-    `frame_bearing` above stands on, so there is never a parent to choose
-    between and the answer is a lookup rather than a policy.
+    This returns the *first* edge into the node, where `frame_bearing` above
+    keeps the last — the two tie-break a fan-in in opposite directions, which is
+    the disagreement
+    (`todo/a-fan-in-has-no-picture-and-no-rule-for-which-parent-holds-it.md`)
+    exists to settle rather than something either site decided.
     """
     for edge in pipeline.edges:
         if edge.downstream == node_id:
@@ -940,9 +945,10 @@ class MainWindow(QMainWindow):
     def _feeding(self, position: int) -> int | None:
         """Which position's output `position` reads, or `None` at the root.
 
-        At most one: schema v1 refuses two edges into one node
-        (`core/pipeline_model.Pipeline`), so there is no choice to make here
-        that a merging tool has not yet given the document.
+        The first, where a node has two — a tie-break rather than a rule, and
+        one of the four that
+        `todo/a-fan-in-has-no-picture-and-no-rule-for-which-parent-holds-it.md`
+        settles together.
         """
         session = self._session
         if session is None or not 0 <= position < len(self._order):

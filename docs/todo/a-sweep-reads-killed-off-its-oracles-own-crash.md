@@ -1,9 +1,9 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit"
+done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_talkative_only_on_the_mutant_is_not_scored_killed"
 opened: 2026-08-08
 ---
 
@@ -239,3 +239,30 @@ SURVIVED. The finding carries the amendment.
 
 The two clauses the section above lists as next are untouched: the docstring's
 own correction, and the compile-the-mutant gate.
+
+## The case covers the line and not the verdict, so it rotates again (2026-08-10)
+
+The criterion is green from here, `done_when` was not edited by the worker, and
+the case discriminates the line it was written for: the combined redirection
+mutant and each of `stdout=out,` and `stderr=err,` alone all turn it red,
+re-verified against the working tree rather than through the sweep.
+
+It does not reach this item's title. `run_sweep` hands the same oracle to the
+baseline and to every mutant, so an oracle that writes 1 MiB unconditionally
+fills the buffer on the baseline first: under `PIPE` the failure is
+`SweepError("the test command did not finish inside the 20s oracle budget")`
+raised before any mutant is applied, not a KILLED scored against one
+(`findings/loop/2026.08.10-a-case-whose-oracle-is-talkative-at-the-baseline-is-refused-before-any-mutant-is-scored.md`).
+The rotation above asked for "a false KILLED on a mutant the tests do not kill",
+and the only oracle shape that produces one is quiet on the original bytes and
+talkative on the mutated ones — quick green baseline, mutant blocked at the
+buffer, timed out, scored KILLED under `PIPE` and SURVIVED with the redirection.
+`done_when` rotates onto that case. The existing case stays; it is the only red
+the refusal has for a reason other than a red baseline, and it needs a name that
+claims the capacity rather than the verdict.
+
+The new case's docstring states the KILLED mechanism as though the case reached
+it, so it is wrong in the tree for the same reason `_run_bounded`'s is, and the
+correcting run owns both paragraphs. The clauses listed as next are unchanged
+and unstarted: the docstring's own correction, the compile-the-mutant gate,
+`_tail`'s uncased halves, and `ORACLE_BUDGET_SECONDS`'s comment.

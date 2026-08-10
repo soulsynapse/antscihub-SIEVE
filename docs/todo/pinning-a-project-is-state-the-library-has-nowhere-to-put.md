@@ -125,3 +125,25 @@ names the pin, and the store, the list and the ordering are what a run must buil
 under it. The review that takes this widens it to the list — a criterion that
 green-lights a pin sitting on top of a surviving scan would certify the half that
 did not land.
+
+## 2026-08-10: two of the three functions are gone, and half the scan with them
+
+`dc4ae8c` deleted `library_root` under
+[a-mint-lands-wherever-the-app-was-launched.md](a-mint-lands-wherever-the-app-was-launched.md),
+so the paragraph above naming three functions and a `main` that calls the first
+two together is stale in both halves. `main` now builds `MainWindow(())` and
+scans nothing at all: the launch-time scan this item was going to remove has
+already gone, and what is left of the scan is one call inside `new_project`,
+which sets `_library` to the folder the mint's own ask returned and re-scans it.
+
+That narrows this item rather than satisfying it. The re-scan is still the
+argument that dies first — under a remembered list there is no one folder to
+answer — and it now has a second reason to go, because the folder being listed
+is whatever the last mint chose, which is a list of one kept by accident.
+`projects_in` and `library_folder` are the two functions the store's landing has
+to account for, not three.
+
+`done_when` here is untouched and still names only the pin. It reached less than
+the item before this section and reaches less again: the list, the ordering and
+now the mint-sets-the-shelf behaviour above are what a run must replace under
+it. The review that takes this widens it.

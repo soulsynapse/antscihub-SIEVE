@@ -2,7 +2,7 @@
 title: A mint asks where the project goes, and nothing defaults anywhere
 phase: 9
 priority: high
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_project_cards.py -q -k 'new_project_asks_where_the_project_goes or a_cancelled_ask_mints_nothing'"
 opened: 2026-08-09

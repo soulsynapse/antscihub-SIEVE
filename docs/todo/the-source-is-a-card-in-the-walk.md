@@ -1,10 +1,10 @@
 ---
 title: The source is a card in the walk
-status: awaiting-review
+status: open
 gated_on: nothing
 priority: high
 phase: "9"
-done_when: "uv run pytest tests/gui -q -k source_card"
+done_when: 'uv run pytest "tests/gui/test_source_card.py::test_a_minted_project_opens_on_a_source_card_with_nothing_chosen" "tests/gui/test_source_card.py::test_the_root_position_offers_the_source_tools" -q'
 opened: 2026-08-09
 ---
 
@@ -108,3 +108,44 @@ because a root cannot be what goes *after* something; the root's offer is that
 refusal read the other way. And the swap button's dead tooltip on the source card
 is asserted in `tests/gui/test_swap_box.py`, so whatever this card does to the
 root position has a test standing on the current answer.
+
+## 2026-08-10, review of `adc0756`: the two lines landed and the root did not
+
+`adc0756` built the card's two lines — `param_form.PathChooser` for the value the
+document holds, `chain_stack.Step.sources` for what the window resolved it to —
+and dropped `PATH` from `STEREOTYPES_WITHOUT_EDITOR`. That is the chooser clause
+and the "two files now show in the source tool" clause, and `done_when` reached
+exactly those, which is why it went green over a body that still holds two
+subjects nobody has built:
+
+- **The mint writes the source node.** `project_select.mint` still writes
+  `Project()`, and its docstring still says "Empty is the whole of it: no
+  sources, no chain" — so VISION's minted project opens on an empty stack, not
+  on "the source picker with nothing chosen". The card that draws it now exists,
+  which is what the section above was waiting for.
+- **The root's own offer.** `app.MainWindow._offer_over` still returns `()` at
+  the root, and its docstring still gives the accepts-side reason ("needs their
+  count and extension class") that the fold above replaced — the question is
+  source-ness, not what accepts the stream, and the docstring goes with the
+  build.
+
+`done_when` is now those two by nodeid rather than a `-k` over the file, so it
+cannot go green on the half that already shipped
+([[2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing]]).
+
+**Append-on-browse is struck.** The item reserved MOCKUP-MAP's "browsing
+*appends*" row for confirmation in review rather than treating it as licence;
+this is that review, and it does not translate. The row describes the mockup's
+module-level `SOURCES` list, and a v3 source node holds one `path` parameter
+with no set behind it — appending would need a second document shape nothing
+else asks for. VISION line 96 is the clause that does translate ("pick a video
+out of a folder, change their mind, and swap the source to the folder itself"),
+and the two asks `adc0756` built are it.
+
+**The two rulings leave.** Whether the resolution is narrowed by extension and
+whether `sorted` is the order a concatenating chain should read are both now
+visible on screen and neither is this card's to settle; they move to
+[a-folders-resolution-is-unnarrowed-and-lexicographic.md](a-folders-resolution-is-unnarrowed-and-lexicographic.md),
+which also carries the fixture note that
+`test_the_source_card_lists_what_its_path_resolved_to` pins the list against
+reversal and against nothing finer.

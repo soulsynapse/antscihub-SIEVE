@@ -1,7 +1,7 @@
 ---
 title: One magnifier, and everything drawn on it maps to source pixels
 step: "10.2"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'magnified or source_pixels_round_trip'"
 opened: 2026-08-09
@@ -31,6 +31,15 @@ The rule that has to survive the port is v2's, and it is worth restating in the
 module because it does not follow from the code: mapping goes to source pixels
 and never through the proxy image, because the proxy's resolution changes with
 a preference and between frames while what the document holds cannot.
+
+## 2026-08-10 (review): what the port left behind
+
+The mapping half is closed and independently re-verified — see the verdict on
+the review commit. What the port did not bring over is the magnifier's
+*lifecycle*: `reset_zoom()` landed with neither of v2's two callers, so a
+magnification carries from one project's footage to the next. That is outside
+this item's subject, which is where a drawn box resolves, and is
+[a-magnification-is-a-view-of-this-footage.md](a-magnification-is-a-view-of-this-footage.md).
 
 `done_when` at minting, red because nothing matched:
 

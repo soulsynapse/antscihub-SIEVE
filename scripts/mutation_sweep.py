@@ -52,8 +52,10 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -159,6 +161,54 @@ def _tail(finished: subprocess.CompletedProcess[bytes], lines: int = 20) -> str:
     return "\n".join(streams) if streams else "(the command printed nothing)"
 
 
+def _terminate_tree(process: subprocess.Popen[bytes]) -> None:
+    """Kill the command and everything it started, not just the command.
+
+    `Popen.kill()` reaches the direct child alone, and the oracle passed after `--`
+    is `uv run pytest`: uv spawns the interpreter, so killing uv leaves pytest
+    running with the mutant still patched into the tree.
+    """
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, check=False
+        )
+    else:
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+    process.kill()
+
+
+def _run_bounded(
+    command: list[str], cwd: Path, env: dict[str, str], timeout: float
+) -> subprocess.CompletedProcess[bytes]:
+    """`subprocess.run` whose timeout bounds the call rather than only the child.
+
+    Two departures from `run(capture_output=True, timeout=...)`, both forced by the
+    same measurement — 40.1s of wall clock under a 3s timeout
+    (`docs/findings/loop/2026.08.08-a-subprocess-timeout-does-not-bound-a-command-whose-grandchild-holds-the-pipe.md`).
+    The streams go to files, because `run` kills the child and then blocks in
+    `communicate()` until every inherited copy of the pipe closes, and a grandchild
+    holds one. And the timeout kills the process tree, because redirection alone
+    returns on time while leaving the work running.
+    """
+    detach = {} if os.name == "nt" else {"start_new_session": True}
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
+        out_path, err_path = Path(scratch) / "out", Path(scratch) / "err"
+        with out_path.open("wb") as out, err_path.open("wb") as err:
+            process = subprocess.Popen(command, cwd=cwd, env=env, stdout=out, stderr=err, **detach)
+            try:
+                returncode = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                _terminate_tree(process)
+                process.wait()
+                raise
+        return subprocess.CompletedProcess(
+            command, returncode, out_path.read_bytes(), err_path.read_bytes()
+        )
+
+
 def run_sweep(
     subject: Path,
     mutants: list[Mutant],
@@ -185,9 +235,7 @@ def run_sweep(
     purge_bytecode(repo)
     started = time.monotonic()
     try:
-        baseline = subprocess.run(
-            command, cwd=repo, env=env, capture_output=True, check=False, timeout=oracle_budget
-        )
+        baseline = _run_bounded(command, repo, env, oracle_budget)
     except subprocess.TimeoutExpired:
         raise SweepError(
             f"the test command did not finish inside the {oracle_budget:g}s oracle budget — "
@@ -212,9 +260,7 @@ def run_sweep(
             subject.write_bytes(mutated)
             purge_bytecode(repo)
             try:
-                finished = subprocess.run(
-                    command, cwd=repo, env=env, capture_output=True, check=False, timeout=timeout
-                )
+                finished = _run_bounded(command, repo, env, timeout)
                 results.append((mutant, finished.returncode != 0))
             except subprocess.TimeoutExpired:
                 results.append((mutant, True))

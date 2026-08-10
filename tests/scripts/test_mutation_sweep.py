@@ -6,8 +6,10 @@ bytes on disk rather than by an import graph the tmp tree does not have.
 """
 
 import sys
+import time
 from pathlib import Path
 
+import mutation_sweep
 import pytest
 from mutation_sweep import Mutant, SweepError, apply_mutant, main, parse_mutant, run_sweep
 
@@ -264,3 +266,77 @@ def test_a_hung_mutant_is_killed_and_the_subject_restores(repo: Path) -> None:
     )
     assert [killed for _, killed in results] == [True]
     assert subject.read_bytes() == data
+
+
+def test_a_hung_grandchild_does_not_outlive_the_mutant_timeout(repo: Path) -> None:
+    """The live oracle shape: `uv run pytest` is a grandchild, and the case above is not.
+
+    `subprocess.run(capture_output=True, timeout=T)` kills the process it started and
+    then blocks in `communicate()` until every inherited copy of the pipe closes, so a
+    command whose grandchild outlives it runs to the grandchild's own completion — 40.1s
+    measured under a 3s timeout
+    (`docs/findings/loop/2026.08.08-a-subprocess-timeout-does-not-bound-a-command-whose-grandchild-holds-the-pipe.md`).
+    The mutant here spawns a grandchild that outlives its parent's kill and marks the
+    disk partway through, so both halves are asserted: the call returns inside the
+    timeout, and the work it was bounding is over rather than merely disowned.
+    """
+    data = b"limit = 100\n"
+    subject = subject_with(repo, data)
+    marker = repo / "grandchild-ran.txt"
+    grandchild = (
+        f"import time, pathlib; time.sleep(2); "
+        f"pathlib.Path({str(marker)!r}).write_text('ran'); time.sleep(18)"
+    )
+    code = (
+        f"import pathlib, subprocess, sys, time; "
+        f"sys.exit(0) if 'limit = 100' in pathlib.Path({str(subject)!r}).read_text() else None; "
+        f"subprocess.Popen([{sys.executable!r}, '-c', {grandchild!r}]); "
+        f"time.sleep(18)"
+    )
+    started = time.monotonic()
+    results = run_sweep(
+        subject,
+        [Mutant(anchor="limit = 100", replacement="limit = 1")],
+        [sys.executable, "-c", code],
+        repo,
+        mutant_timeout=1.0,
+    )
+    elapsed = time.monotonic() - started
+    assert [killed for _, killed in results] == [True]
+    assert elapsed < 10.0
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and not marker.exists():
+        time.sleep(0.1)
+    assert not marker.exists()
+    assert subject.read_bytes() == data
+
+
+def test_the_mutant_timeout_is_derived_from_the_baseline(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Both halves of the derivation are run, because every other case passes the timeout in.
+
+    The floor and the factor were written and checked by nothing — `max(FLOOR, 2.0 *
+    elapsed + 1.0) ==> 300.0` SURVIVED a sweep of this module. A fast baseline takes the
+    floor; the floor is then lowered so a slower one takes the doubling.
+    """
+    subject = subject_with(repo, b"limit = 100\n")
+    seen: list[float] = []
+    bounded = mutation_sweep._run_bounded
+
+    def record(command: list[str], cwd: Path, env: dict[str, str], timeout: float):
+        seen.append(timeout)
+        return bounded(command, cwd, env, timeout)
+
+    monkeypatch.setattr(mutation_sweep, "_run_bounded", record)
+    run_sweep(subject, [Mutant("100", "1")], [sys.executable, "-c", ""], repo)
+    assert seen == [
+        mutation_sweep.ORACLE_BUDGET_SECONDS,
+        mutation_sweep.MUTANT_TIMEOUT_FLOOR_SECONDS,
+    ]
+
+    seen.clear()
+    monkeypatch.setattr(mutation_sweep, "MUTANT_TIMEOUT_FLOOR_SECONDS", 0.0)
+    slow = [sys.executable, "-c", "import time; time.sleep(0.5)"]
+    run_sweep(subject, [Mutant("100", "1")], slow, repo)
+    assert 2.0 * 0.5 + 1.0 <= seen[1] <= 2.0 * 3.0 + 1.0

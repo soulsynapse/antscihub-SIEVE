@@ -1,7 +1,7 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k 'a_hung_grandchild_does_not_outlive_the_mutant_timeout or the_mutant_timeout_is_derived_from_the_baseline'"
 opened: 2026-08-08

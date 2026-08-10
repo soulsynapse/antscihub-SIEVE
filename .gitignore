@@ -1,0 +1,13 @@
+.venv/
+dist/
+build/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Real footage to try the app against by hand. Not a fixture — the suite's
+# clips are generated (`tests/conftest.py`) so a checkout needs no media, and
+# a tracked video would be the one file in the repo nobody can review.
+video-tests/

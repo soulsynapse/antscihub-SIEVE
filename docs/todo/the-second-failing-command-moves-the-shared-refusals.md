@@ -175,3 +175,21 @@ survived the criterion is
 [a criterion widened from the item's prose misses what the ADR added](../findings/loop/2026.08.09-a-criterion-widened-from-the-items-prose-misses-what-the-adr-added.md).
 
 This item has no `done_when`, so nothing was widened.
+
+## 2026-08-10: the fourth shared refusal is deleted rather than tested
+
+`adr/a-document-names-footage-only-through-a-tool.md` (34) takes
+`Project.source` out of the schema, so `footage_of` has nothing to read and the
+refusal moves to where the graph can be seen. The case the section above owes it
+is therefore a case for a helper that is going away: whoever picks this item up
+writes it against `run_cmd` as it stands and loses it, and whoever picks up
+[the-field-that-names-footage-leaves-the-schema](the-field-that-names-footage-leaves-the-schema.md)
+— the migration item, which is where that refusal's new spelling and its case
+land — deletes the subject out from under it. Nothing above is retracted:
+`footage_of` is still the right shape for as long as the field exists, and the
+argument that the shared vocabulary is where a run-start refusal is spelled is
+what carries over to the moved one. What changes is only that this item should
+not spend a session pinning it first.
+
+The `cli/common.py` question itself is untouched by the ADR and stays here; the
+migration takes only the one member whose subject it removes.

@@ -14,9 +14,10 @@ it acts on the window, not on what any pane holds.
 
 A subpane adds a boundary of the seam's kind one level in, and on the axis its
 pane's outer boundary left alone — the top and bottom sides in the left and
-right panes, the left and right sides in the bottom one. Which sides those are
-is the pane's own and stated there; the window opens none of them, and the
-resting frame is the three panes and the two boundaries between them.
+right panes, the left and right sides in the bottom one, each side stacking two
+strips on that one axis. Which sides those are and how deep they stack is the
+pane's own and stated there; the window opens none of them, and the resting
+frame is the three panes and the two boundaries between them.
 """
 
 from __future__ import annotations
@@ -50,11 +51,12 @@ class MainWindow(QMainWindow):
         self.right = build_right()
         self.bottom = build_bottom()
 
-        # No subpane is opened on the way up. Which sides each pane offers is
-        # still the pane's claim and still checkable by asking it, but a strip
-        # standing blank in every pane costs room in all three and shows a
-        # boundary where the resting frame has none. They are attached where a
-        # view asks for one — the resting frame is three panes, not nine.
+        # No subpane is opened on the way up. Which sides each pane offers and
+        # how many each stacks is still the pane's claim and still checkable by
+        # asking it, but a strip standing blank in every slot costs room in all
+        # three panes and shows boundaries where the resting frame has none.
+        # They are attached where a view asks for one — the resting frame is
+        # three panes, not fifteen.
 
         # Even stretch, and an even split to start: neither view is the
         # window's main one. The chain is tuned by reading a plot against the

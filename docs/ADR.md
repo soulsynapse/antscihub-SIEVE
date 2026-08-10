@@ -9,6 +9,6 @@ its group leaves this index while keeping its number and its file.
 
 - 📁 `Layer 1`
   - 📄 [A pane houses any view](adr/ADR-0001-panes-house-any-view.md) — A view can go anywhere, which is how we buy coarse-grained customization. They might not be happy, they might not look good, they might be clipped, but they can be shoved into any pane.
-  - 📄 [A subpane divides its pane's spare axis](adr/ADR-0002-a-subpane-divides-the-spare-axis.md) — A pane offers a subpane only the axis its own outer boundary left alone: the top and bottom sides in the left and right panes, which sit either side of a vertical splitter, and the left and right sides in the bottom pane, which runs full width under both. Both axes in one pane is refused, not nested.
+  - 📄 [A subpane divides its pane's spare axis](adr/ADR-0002-a-subpane-divides-the-spare-axis.md) — A pane offers a subpane only the axis its own outer boundary left alone: the top and bottom sides in the left and right panes, which sit either side of a vertical splitter, and the left and right sides in the bottom pane, which runs full width under both. Both axes in one pane is refused, not nested; further cuts on the one axis are not.
 
 *2 settled.*

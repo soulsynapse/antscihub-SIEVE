@@ -43,3 +43,17 @@ bar chose for itself, and the comment describes a shape the code has left
 behind. Whatever settles the gesture is written against a bar that is never
 windowless once a container is open, so the correction belongs beside it rather
 than as a second answer to when the bar has a window.
+
+## 2026-08-10 at review: what the criterion above does not reach
+
+The fold is in the right home — the paragraph is a constraint on how this item's
+own case must be written — but `done_when` is a pytest node on the gesture and
+cannot see two dead lines in another file. The review that closes this item
+checks the correction landed as well as the class going green:
+
+    grep -c "holds no window" tests/gui/test_app.py    # 0
+
+Left in prose rather than folded into `done_when` because a criterion is one
+string and this is a second command; the shape is
+[a folded item outgrows a criterion that cannot be widened to match](../findings/loop/2026.08.08-a-folded-item-outgrows-a-criterion-that-cannot-be-widened-to-match.md),
+amended the same day with this instance.

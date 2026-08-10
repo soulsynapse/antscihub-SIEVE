@@ -2,7 +2,7 @@
 title: The tuning loop draws the baseline while the fan is standing on a region
 priority: high
 phase: 9
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'the_loop_renders_the_region_the_fan_is_standing_on'"
 opened: 2026-08-09
@@ -72,3 +72,30 @@ the crop's box over `stirred_clip`, rendered at a node below the crop, before
 and after a click onto the second square. Equal shapes and unequal pixels — the
 shape half is what says the render *before* the click is aimed too, since a
 baseline-aimed first render would be the whole frame.
+
+## 2026-08-10 (review): done, with the cache-hit half folded elsewhere
+
+Criterion re-run independently, green (`1 passed, 232 deselected`, exit 0).
+Red-before-green re-proved here rather than read off the transcript: with
+`gui/app.py` and `gui/tuning.py` restored to `d7ac7d3^` the case fails on
+`np.array_equal`, both renders the baseline's `(60, 80)` — so the assertion is
+about the aim and not about the fixture. Full suite 1250 passed; `ruff check`,
+`ruff format --check`, `lint-imports` (8 contracts) clean. Every claim the run
+made is in the commit, and the commit holds nothing it did not claim.
+
+The ordering the body's symptom needs is real and worth naming, because it is
+not visible from `refill_graph` alone: `_redraw` calls `refill_graph` — which
+sets the replicate synchronously — before `_paint_viewport`, and
+`_paint_viewport` renders off the same session, so the canvas the item describes
+as "still cropping region 2's box" is repainted after the re-aim rather than
+alongside it.
+
+What the diff does not assert is the body's other half — that clicking back onto
+a region is a cache hit rather than a re-render, which is the sentence making
+this an interactive-loop claim. `PreviewSession.set_replicate` keeps every
+entry, so re-aiming is the choice that earns it, but nothing goes red if a later
+hand rebuilds instead. Folded into
+`previews-replicate-store-and-fallbacks-are-declared-and-not-asserted.md`,
+whose first clause already asks for two deviating replicates rendered in turn
+against one store; the window's re-aim is now that path in the tree rather than
+a hypothetical, and that item is open, so nothing is closed over it.

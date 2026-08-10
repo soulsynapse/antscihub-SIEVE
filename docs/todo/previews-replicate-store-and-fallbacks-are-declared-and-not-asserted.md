@@ -43,3 +43,21 @@ on a `JSONDecodeError` so that `mode=fast` works without shell-quoted JSON;
 passes a JSON integer. No tool on the shelf takes a string parameter yet, so the
 case may have to wait for one — which is itself worth knowing, since the
 fallback's justification is written about a tool that does not exist.
+
+## Folded 2026-08-10 at review: the re-aimed session is now the window's path
+
+`the-loop-draws-the-baseline-while-the-fan-stands-on-a-region.md` settled that
+the window re-aims its live session (`TuningLoop.set_replicate` forwarding here)
+rather than rebuilding it, and it settled it *on* the store: the item's reason
+for preferring re-aim is that clicking back onto a region a user has already
+seen is a cache hit, which a rebuild would throw away. Nothing asserts that.
+Its own case asserts only that two aims produce two pictures, and that stays
+true of a rebuild.
+
+So the first clause above — "two replicates deviating on `tail.factor`,
+rendered in turn against one store, where the second is not a total cache hit" —
+is no longer only about `PreviewSession` in the abstract; it is the shape the
+GUI now depends on, and the assertion it is owed has a second half: the *first*
+replicate's entries survive the re-aim, so the click back serves rather than
+recomputes. That is the difference between the two designs, and it is the only
+thing in the tree that would notice a later hand swapping them.

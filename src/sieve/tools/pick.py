@@ -39,14 +39,17 @@ resolves the same as any other picture, so there is nothing to derive it from
 waits on a node with more than one input to point at. This tool declares the one
 product it has and nothing selects between products it does not have.
 
-**Where the pattern is anchored.** As written: an absolute pattern is used as it
-stands, a relative one against the process's directory. That is what a file
-picker hands over and it is deliberately not the project directory — a picked
-file relative to the project is a portable identity question, and the identity an
-external input carries is ruled and lands with the schema field that holds it
-(`todo/whether-an-external-input-carries-a-portable-identity.md`). What is fixed
-here is only the half the ADR settles: the *rule* never enters a key, only the
-file the rule found (`pipeline/cache_key.picked_key`).
+**Where the pattern is anchored, and why it is not answered here.** As written:
+an absolute pattern is used as it stands, a relative one against the process's
+directory. A relative pattern out of a *document* means neither —
+`adr/a-document-names-footage-only-through-a-tool.md` settles that it is read
+against the directory holding the project file — and this tool is handed a
+pattern with no idea which document it came out of, so the anchoring happens on
+the way into a run and this module sees the product
+(`pipeline/resolve_source.anchored`). Resolution therefore happens before the
+key, which leaves the half `a-users-file-wires-in-like-any-other-input` settles
+untouched: the *rule* never enters a key, only the file the rule found
+(`pipeline/cache_key.picked_key`).
 
 Resolution happens per frame rather than once, and the cost is a glob and a stat
 against a decode this module caches. If it ever shows up in the loop budget the

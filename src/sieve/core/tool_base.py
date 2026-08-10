@@ -1258,9 +1258,12 @@ def named_files(param: str, tool_id: str, /) -> tuple[Path, ...]:
     carries yet (`todo/the-source-is-a-card-in-the-walk.md`).
 
     Args:
-        param: The path parameter as the document holds it. An absolute pattern
-            is used as it stands and a relative one resolves against the
-            process's directory, which is what a file picker hands over.
+        param: The path parameter as this tool was handed it. An absolute
+            pattern is used as it stands and a relative one resolves against the
+            process's directory. A parameter out of a document reaches here
+            already absolute, because a path stored relative to the project file
+            is anchored before a run reads it and this layer has no document to
+            anchor against (`pipeline/resolve_source.anchored`).
         tool_id: Named in the refusals, because the user's next action is to fix
             one node's parameter and the message is what says which.
 

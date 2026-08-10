@@ -102,7 +102,7 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag, GraphError, InvalidParamsError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan, validated_params
-from sieve.pipeline.resolve_source import picked_identities, source_files
+from sieve.pipeline.resolve_source import anchored, picked_identities, source_files
 from sieve.storage.checkpoint_writer import CheckpointWriteError, CheckpointWriter, Kept
 from sieve.tools import discover
 
@@ -138,7 +138,7 @@ def run_project(
     video = footage_of(project, project_path)
 
     try:
-        dag = Dag.build(project.pipeline)
+        dag = Dag.build(anchored(project.pipeline, project_path.parent))
     except GraphError as error:
         raise refuse(str(error)) from error
     try:

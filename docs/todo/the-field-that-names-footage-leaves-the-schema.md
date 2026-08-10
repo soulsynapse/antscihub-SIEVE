@@ -142,6 +142,51 @@ one command.
     8 deselected in 0.33s
     exit: 5
 
+## Folded 2026-08-10: the anchoring clause is discharged, and the four that remain are counted
+
+The section above headed "The two source tools anchor against the wrong
+directory" is done. `pipeline/resolve_source.anchored` rewrites every
+`ToolSpec.path_params` entry that is relative against the project file's
+directory, before `Dag.build` and therefore before any key —
+`tests/unit/test_source_tool.py::TestASourceParamIsAnchoredOnTheProject::
+test_a_relative_source_param_anchors_on_the_project_directory` is the third
+`-k` clause and it passes. It lives in `pipeline/` rather than in the two tools
+because a tool is handed a pattern and never a document, which is the same
+reason `pick`'s own header gave for deferring the question; both tool headers
+and `tool_base.named_files`' Args now cite the rewrite instead of stating the
+process's directory as the rule. `sieve run`, `sieve materialize`, `sieve
+preview` and the window's two readers all call it, so the answer does not
+depend on which front end asked.
+
+What this session did **not** do, and the measurement of why. The remaining
+five `-k` clauses are one atomic schema removal, and its cost is not the four
+source files this item inventories — it is the corpus that names the field.
+`Project.for_video` has 23 call sites in `tests/`, `SourceRef` 71 mentions
+across roughly twenty more, and the two shapes are not one edit:
+
+- A test that carries `source=SourceRef(path="clip.mp4")` as ceremony and never
+  decodes — most of `tests/gui/` — loses the line and nothing else. Cheap.
+- A test built as `Project.for_video(video, dir).with_pipeline(graph())` has to
+  grow a `footage` root feeding what was a reader-fed root, which moves the node
+  count in every `"N node outputs computed"` assertion and the walk position in
+  every GUI layout assertion. `tests/integration/test_cli_run.py::_project` is
+  the shape, and there are twenty-odd of it.
+
+Which is to say the `done_when` above is five jobs behind one criterion:
+the anchoring (done), the field's removal, `relocated`'s rewrite, the CLI's
+graph-side refusal, the library card, and the version. A review widening or
+splitting it is the edit this needs, and this session may not make it. The
+version clause in particular is answerable on its own — ADR 38 already decides
+it, per the "Review 2026-08-10" section above — and needs none of the removal
+to land.
+
+`relocated` is worth naming separately because it cannot stay where it is:
+rebasing a source node's path param means knowing which param is a path, which
+is a registry question, and `core/pipeline_model.py` is registry-blind by its
+own header. Either the caller hands it `ToolSpec.path_params` or the method
+leaves `Project`. Nothing calls `relocated` today and nothing tests it, so the
+signature is free.
+
 ## Folded 2026-08-10: an addition landed and nothing decided whether the stamp rose
 
 11.2 put `Edge.port` into the document — the first field added since ADR 38

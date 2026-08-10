@@ -43,7 +43,7 @@ from sieve.core.types import ChannelSpec, Frame
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
 from sieve.pipeline.plan import ExecutionPlan
-from sieve.pipeline.resolve_source import picked_identities, source_files
+from sieve.pipeline.resolve_source import anchored, picked_identities, source_files
 from sieve.tools import discover
 from sieve.tools.footage import SOURCE as FOOTAGE
 from sieve.tools.footage import FootageParams
@@ -342,6 +342,59 @@ class TestAFolderIsAnOrderingRatherThanAnAmbiguity:
             PICKED.files(PickParams())
 
         assert "names no file" in str(unchosen.value)
+
+
+class TestASourceParamIsAnchoredOnTheProject:
+    def test_a_relative_source_param_anchors_on_the_project_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The directory the document is in, not the one the process is in.
+
+        Two files match the same pattern, one beside the project and one in the
+        folder the run was launched from, and they differ in fill so the answer
+        says which was read rather than merely that something was. The old rule
+        — a relative pattern against the process's directory — finds the decoy,
+        which is what the second assertion pins: the graph as the document holds
+        it resolves to the launch folder's file, and the same graph anchored
+        resolves to the project's.
+
+        An absolute parameter is the third assertion, because the anchoring must
+        not touch one: it is what a file picker hands over and what
+        `pipeline/crop_serving.py` writes.
+        """
+        write_picture(tmp_path / "plate_bg.png", 200)
+        launched_in = tmp_path / "elsewhere"
+        launched_in.mkdir()
+        write_picture(launched_in / "plate_bg.png", 40)
+        monkeypatch.chdir(launched_in)
+        discover()
+        relative = Pipeline(
+            nodes=(
+                Node(node_id=PICK, tool_id="pick", version="1.0.0", params={"pattern": PATTERN}),
+            )
+        )
+
+        anchored_dag = Dag.build(anchored(relative, tmp_path))
+        as_held = Dag.build(relative)
+
+        assert source_files(anchored_dag, _params(anchored_dag))[PICK] == tmp_path / "plate_bg.png"
+        # `.resolve()` because a glob over a relative pattern answers relatively:
+        # the file it found is the launch folder's, said as the name alone.
+        assert (
+            source_files(as_held, _params(as_held))[PICK].resolve()
+            == (launched_in / "plate_bg.png").resolve()
+        ), "unanchored, the pattern is the process's — which is the rule being replaced"
+        absolute = Pipeline(
+            nodes=(
+                Node(
+                    node_id=PICK,
+                    tool_id="pick",
+                    version="1.0.0",
+                    params={"pattern": str(launched_in / PATTERN)},
+                ),
+            )
+        )
+        assert anchored(absolute, tmp_path) == absolute
 
 
 class TestThePickerDeclaresWhatItsFramesAre:

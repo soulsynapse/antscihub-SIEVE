@@ -77,6 +77,7 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import GraphError, graph_needs_chroma
 from sieve.pipeline.executor import FormatMismatchError, UnrunnableNodeError
 from sieve.pipeline.preview import PreviewRender, PreviewSession
+from sieve.pipeline.resolve_source import anchored
 from sieve.tools import discover
 
 
@@ -168,7 +169,7 @@ def preview_project(
             session.set_replicate(_aim(edited, target))
             if attempt == 0:
                 typer.echo(_header(edited, target, window, at=at))
-            render = _render(session, edited.pipeline, at)
+            render = _render(session, anchored(edited.pipeline, project_path.parent), at)
             typer.echo(f"render {attempt + 1}: {_describe(render, edits if attempt else None)}")
 
     for key in recorder.keys:

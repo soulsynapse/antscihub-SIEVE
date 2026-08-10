@@ -126,7 +126,7 @@ from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.transport.request_intent import RequestKind
 from sieve.gui.tuning import TuningLoop
 from sieve.gui.walk import node_order
-from sieve.pipeline.resolve_source import resolved_sources
+from sieve.pipeline.resolve_source import anchored, resolved_sources
 from sieve.pipeline.shelf import loaded_shelf
 from sieve.session.intents import (
     AddNode,
@@ -1215,7 +1215,9 @@ class MainWindow(QMainWindow):
             return
         self._tuning.set_replicate(self.selected_region)
         self._tuning.set_window(window)
-        self._tuning.request_refill(self._session.project.pipeline)
+        self._tuning.request_refill(
+            anchored(self._session.project.pipeline, self._session.path.parent)
+        )
 
     # ---- internals -------------------------------------------------------
 
@@ -1297,7 +1299,15 @@ class MainWindow(QMainWindow):
             )
         )
         resolved = dict(self._resolved_sources)
-        resolved.update(resolved_sources(asked, self._specs))
+        # Anchored, because a path a document stores relative to itself means
+        # the project's directory and not this process's
+        # (`pipeline/resolve_source.anchored`) — and a window resolving it the
+        # other way would show a file no run would open.
+        resolved.update(
+            resolved_sources(
+                anchored(Pipeline(nodes=asked), self._session.path.parent).nodes, self._specs
+            )
+        )
         # The roots as the document now stands, so a node that was one and has
         # been retooled into something else leaves with its answer rather than
         # keeping it. A node that is not a source is never in here, so it is

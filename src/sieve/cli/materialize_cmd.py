@@ -78,7 +78,7 @@ from sieve.pipeline.materialize import (
     materialize_crop,
 )
 from sieve.pipeline.plan import ExecutionPlan, validated_params
-from sieve.pipeline.resolve_source import picked_identities, source_files
+from sieve.pipeline.resolve_source import anchored, picked_identities, source_files
 from sieve.pipeline.source_home import SourceHome
 from sieve.storage.crop_writer import CropWriteError
 from sieve.tools import discover
@@ -118,7 +118,7 @@ def materialize_replicate(
     project = _unwired(project, home)
     target = _target(project, replicate)
     try:
-        dag = Dag.build(project.pipeline)
+        dag = Dag.build(anchored(project.pipeline, project_path.parent))
     except GraphError as error:
         raise refuse(str(error)) from error
     # The whole video before the graph has its say, which is what `span_for`

@@ -140,10 +140,11 @@ class FootageFile:
 
         A pattern rather than a literal name, matching `pick`: an absolute
         pattern is used as it stands and a relative one resolves against the
-        process's directory. What a written crop's wiring puts here is an
-        absolute path, because the document's own relative-to-the-project rule
-        (`CropRecord.path`) has no reader inside a tool and a tool that learned
-        it would be `pipeline` resolving a second time.
+        process's directory. A relative path out of a document is not that case
+        — it is read against the project file's directory, and the rewrite that
+        makes it absolute happens before this is called, for the reason a tool
+        that learned the rule would be `pipeline` resolving a second time
+        (`pipeline/resolve_source.anchored`, `pick`'s header).
 
         Raises:
             SourceFileError: if the path resolves to no file or to several, on

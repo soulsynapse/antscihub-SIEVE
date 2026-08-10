@@ -131,7 +131,7 @@ _HASH_BLOCK = 1 << 20
 class NoFootage(ValueError):
     """A reader that needs frames was handed a document that names none.
 
-    The cost of `adr/a-document-may-name-no-footage.md`, borne where the ADR
+    The cost of `adr/superseded/a-document-may-name-no-footage.md`, borne where the ADR
     says it is borne: the schema admits the under-construction state, so each
     reader over `source_path` refuses it. Named rather than an `AttributeError`
     off `None`, and carrying the project file rather than the field, because the
@@ -954,7 +954,7 @@ class Project(_Artifact):
     presentation (zoom, panel layout, which overlay is showing), and neither
     belongs in a document two machines are supposed to agree about.
 
-    Narrowed by `adr/a-document-may-name-no-footage.md`, which is why `source`
+    Narrowed by `adr/superseded/a-document-may-name-no-footage.md`, which is why `source`
     may be `None`: reproducibility is a property of a document that *can* run,
     and a project under construction is one `source_path` refuses rather than
     one the schema does. Everything else here holds of it unchanged — a
@@ -964,7 +964,7 @@ class Project(_Artifact):
 
     schema_version: int = SCHEMA_VERSION
     #: `None` while the project names no footage — a real state, and the one a
-    #: newly minted project is in (`adr/a-document-may-name-no-footage.md`).
+    #: newly minted project is in (`adr/superseded/a-document-may-name-no-footage.md`).
     #: What it costs is `source_path`'s refusal, which every reader needing
     #: frames goes through.
     source: SourceRef | None = None

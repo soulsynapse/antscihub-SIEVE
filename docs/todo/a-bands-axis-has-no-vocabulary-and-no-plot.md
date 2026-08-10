@@ -65,7 +65,7 @@ the phase-1 vocabulary objection cannot reach. `gui` stays kinds-not-tools —
 a surface kind is a kind — and `declared-means-verified` holds by refusing at
 registration a declared surface nothing fills, or a filled channel nothing
 declared. The referent's tuning centerpiece
-([adr/the-mockup-is-the-gui-end-state.md](../adr/the-mockup-is-the-gui-end-state.md))
+([adr/superseded/the-mockup-is-the-gui-end-state.md](../adr/superseded/the-mockup-is-the-gui-end-state.md))
 is what this mechanism feeds.
 
 Boundaries the ruling sets rather than leaves open: splitting detect into

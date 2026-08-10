@@ -21,7 +21,7 @@ output edges descending past steps that do not consume them, the crop fan,
 the walk — each reached by making the interaction actually work, which is
 the one test prose cannot run. The freeze is the surface, not the mechanism:
 tools still arrive freely under kind-keyed generation
-([gui-knows-kinds-not-tools](gui-knows-kinds-not-tools.md)), and a complete
+([gui-knows-kinds-not-tools](../gui-knows-kinds-not-tools.md)), and a complete
 GUI is still one that emits every intent kind (VISION), which is what keeps
 a later reshuffle affordable. Until such a reshuffle is decided, this file
 is what done looks like, and reshaping it is a revision of this ADR, not a
@@ -33,5 +33,5 @@ One gap is owed rather than ruled on: the referent has no add-tool
 affordance yet, and the popup default does not cover it — VISION's
 add-tool box (the new-project scenario) is the binding wording until the
 box lands here as a licensed revision.
-[MOCKUP-MAP.md](../MOCKUP-MAP.md) is the reading guide: the deltas against
+[MOCKUP-MAP.md](../../MOCKUP-MAP.md) is the reading guide: the deltas against
 the tree, and the boundary of what the referent does not settle.

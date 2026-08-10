@@ -15,7 +15,7 @@ bindings for the app to be equally operational — the intent kinds the command
 layer is keyed by are that list — and any layout that emits them all is a
 complete GUI". Four ADRs restate it
 ([a-position-is-asked-for-in-the-chain.md](../adr/a-position-is-asked-for-in-the-chain.md),
-[the-mockup-is-the-gui-end-state.md](../adr/the-mockup-is-the-gui-end-state.md),
+[the-mockup-is-the-gui-end-state.md](../adr/superseded/the-mockup-is-the-gui-end-state.md),
 [one-field-is-one-populated-value.md](../adr/one-field-is-one-populated-value.md),
 [the-walked-step-owns-the-canvas.md](../adr/the-walked-step-owns-the-canvas.md)),
 each as the reason its own ruling does not narrow the surface. Nowhere is the

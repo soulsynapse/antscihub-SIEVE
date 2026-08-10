@@ -19,5 +19,5 @@ identity values keep re-creation mechanical
 ([tools-not-filters](tools-not-filters.md)). Phase 5's oracle survives the
 deletion: build the equivalent pipeline by hand in both versions and diff
 outputs at the product level. Revived only by a real v2 project that must
-come over, at which point [compat-spells-v2](compat-spells-v2.md) is the
+come over, at which point [compat-spells-v2](superseded/compat-spells-v2.md) is the
 shape to revive.

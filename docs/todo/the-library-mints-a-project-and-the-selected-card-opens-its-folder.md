@@ -88,7 +88,7 @@ NEW PROJECT out as its own item behind that decision.
 
 ## Ruled 2026-08-09 (Kendrick): the first bullet
 
-[adr/a-document-may-name-no-footage.md](../adr/a-document-may-name-no-footage.md):
+[adr/superseded/a-document-may-name-no-footage.md](../adr/superseded/a-document-may-name-no-footage.md):
 `Project.source` admits `None`, readers that need frames refuse by name, and
 the other two exits are rejected for the reasons the section above gives —
 the pending row lies after a relaunch, the dialog is the modal the referent

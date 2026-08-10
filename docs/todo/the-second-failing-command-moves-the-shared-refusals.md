@@ -156,7 +156,7 @@ and it belongs with whatever this item does to the tuple rather than beside it.
 ## 2026-08-09: the vocabulary grew a fourth shared refusal and no case enters it
 
 Folded from the review of `7eec323`, which admitted `Project.source = None`
-(`adr/a-document-may-name-no-footage.md`) and added `run_cmd.footage_of` — the
+(`adr/superseded/a-document-may-name-no-footage.md`) and added `run_cmd.footage_of` — the
 one place a document naming no footage becomes an exit code, imported by `run`,
 `preview` and `materialize` so the refusal has one spelling. That is this item's
 own property, held deliberately and by the right shape; what is missing is the

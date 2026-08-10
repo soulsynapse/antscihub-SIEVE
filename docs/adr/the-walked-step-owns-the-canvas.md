@@ -35,7 +35,7 @@ that says when it is shown breaks the claim that any layout emitting every
 intent kind is a complete GUI (VISION's reshuffle scenario). What stays
 indicative is the referent's canvas *contents* — magnifier, block grid,
 solo, heat rings — per
-[the-mockup-is-the-gui-end-state.md](the-mockup-is-the-gui-end-state.md)'s
+[the-mockup-is-the-gui-end-state.md](superseded/the-mockup-is-the-gui-end-state.md)'s
 own carve-out; a param's drawn editor already enters by
 [gui-knows-kinds-not-tools.md](gui-knows-kinds-not-tools.md) and appears
 when its step holds the canvas.

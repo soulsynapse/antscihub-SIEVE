@@ -461,7 +461,7 @@ class MainWindow(QMainWindow):
         # answer to give, and a check here would be a second one that could
         # disagree with it. A project that names no footage has nothing to hand
         # it — the window opens on the chain it does not have yet, which is where
-        # a source is added (`adr/a-document-may-name-no-footage.md`).
+        # a source is added (`adr/superseded/a-document-may-name-no-footage.md`).
         source = self._session.project.source
         if source is not None:
             self._player.open(str(source.resolve(path.parent)))

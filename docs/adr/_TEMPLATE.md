@@ -40,5 +40,7 @@ plan phase, a commit message — and the older home is cut to a link in the
 same commit. A claim a contract or test already checks is cited, not minted.
 
 To supersede: the successor is a new ADR; the old file keeps `adr:` and its
-text, sets `status: superseded` and `superseded_by: <slug>`, and drops
-`position` — surrendering the position is what removes it from the index.
+text, sets `status: superseded` and `superseded_by: <slug>`, drops `position`,
+and moves to `superseded/` — the position is what removes it from the index and
+the folder is what removes it from the shelf you read. Both are checked. Links
+into it are relative, so they gain a `superseded/` segment on the way past.

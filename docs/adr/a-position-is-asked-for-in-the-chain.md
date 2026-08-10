@@ -31,7 +31,7 @@ copy, and it stays one file because a referent is read whole — the module spli
 it must not receive is exactly the one the real `gui` must.
 
 The exception is what this ADR adds, and it is the gap
-[the-mockup-is-the-gui-end-state](the-mockup-is-the-gui-end-state.md) left
+[the-mockup-is-the-gui-end-state](superseded/the-mockup-is-the-gui-end-state.md) left
 owed. A popup is the right default because most of what the referent does not
 draw is a *choice* — one list, one answer, no geometry — and giving each of
 those a region would grow the surface per feature. Adding a step is not that

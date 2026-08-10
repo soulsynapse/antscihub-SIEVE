@@ -5,7 +5,7 @@
 Derived: each line is its ADR's first paragraph, so the file is the
 home and this index cannot drift from it. Order and grouping come from
 `position`, which is placement only; a superseded ADR keeps its number
-and its file in `docs/adr/` but leaves this index.
+but leaves this index for `docs/adr/superseded/`.
 
 ## 01 — The tool contract
 

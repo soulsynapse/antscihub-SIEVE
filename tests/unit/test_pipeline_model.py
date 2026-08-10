@@ -846,7 +846,7 @@ class TestBlankStringsAreRefused:
 class TestADocumentMayNameNoFootage:
     """The under-construction state is a valid document, and its cost is borne here.
 
-    `adr/a-document-may-name-no-footage.md`. The state comes from the mint —
+    `adr/superseded/a-document-may-name-no-footage.md`. The state comes from the mint —
     NEW PROJECT writes a project with no sources and no chain, and the next act
     is adding one — so the schema admits it rather than refusing a project the
     user is halfway through making. What that buys is paid for by every reader

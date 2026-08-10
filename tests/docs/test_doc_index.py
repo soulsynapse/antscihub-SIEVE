@@ -779,8 +779,10 @@ def test_the_index_line_is_the_first_paragraph_joined_across_wraps(tmp_path):
 
 
 def test_a_superseded_adr_keeps_its_number_but_leaves_the_index(tmp_path):
-    write_item(tmp_path, "kernel-registry", ADR + "\nsuperseded_by: no-kernel-apparatus")
-    old = tmp_path / "kernel-registry.md"
+    dead = tmp_path / "superseded"
+    dead.mkdir()
+    write_item(dead, "kernel-registry", ADR + "\nsuperseded_by: no-kernel-apparatus")
+    old = dead / "kernel-registry.md"
     old.write_text(
         old.read_text(encoding="utf-8")
         .replace("status: settled", "status: superseded")
@@ -794,6 +796,29 @@ def test_a_superseded_adr_keeps_its_number_but_leaves_the_index(tmp_path):
     assert "no-kernel-apparatus.md" in text
     assert "kernel-registry" not in text
     assert "*1 settled, 1 superseded.*" in text
+
+
+def test_a_superseded_adr_left_on_the_shelf_is_refused(tmp_path):
+    """The status is what the index reads; the folder is what a person reads."""
+    write_item(tmp_path, "successor", ADR.replace("adr: 2", "adr: 3").replace("01.02", "01.03"))
+    write_item(
+        tmp_path,
+        "old",
+        ADR.replace("status: settled", "status: superseded").replace('position: "01.02"\n', "")
+        + "\nsuperseded_by: successor",
+    )
+
+    with pytest.raises(ItemError, match="belongs in `superseded/`"):
+        collect_adrs(tmp_path, GROUPS)
+
+
+def test_a_settled_adr_filed_as_superseded_is_refused(tmp_path):
+    dead = tmp_path / "superseded"
+    dead.mkdir()
+    write_item(dead, "alive", ADR)
+
+    with pytest.raises(ItemError, match="does not sit in `superseded/`"):
+        collect_adrs(tmp_path, GROUPS)
 
 
 def test_a_superseded_adr_holding_a_position_is_refused(tmp_path):

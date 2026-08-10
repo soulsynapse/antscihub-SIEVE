@@ -34,7 +34,7 @@ its folder moves is the reason the rule was written that way rather than an
 exception to it. `relocated` keeps rebasing outputs and crops and rebases the
 source as a param rewrite on the node that holds it.
 
-This supersedes [a-document-may-name-no-footage](a-document-may-name-no-footage.md),
+This supersedes [a-document-may-name-no-footage](superseded/a-document-may-name-no-footage.md),
 whose subject dissolves rather than reverses. A document under construction was a
 `Project.source` of `None` needing the schema's permission to be absent; it is now
 a graph with no source root, which needs no affordance at all. The refusal it

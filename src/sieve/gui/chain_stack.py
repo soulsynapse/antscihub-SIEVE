@@ -2,7 +2,7 @@
 
 The list widget this replaces wore the platform's palette, which made the surface
 the user spends the session on the one surface that does not look like SIEVE
-(`adr/the-mockup-is-the-gui-end-state.md`, MOCKUP-MAP row "Settings is the right
+(`adr/superseded/the-mockup-is-the-gui-end-state.md`, MOCKUP-MAP row "Settings is the right
 pane"). What arrives with the shape is that a card can hold something: a list row
 is a line of text, and a card is where the step's own knobs go.
 

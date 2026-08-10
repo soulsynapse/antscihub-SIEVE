@@ -40,8 +40,10 @@ ADRs: one short file per settled decision under `docs/adr/`, and
 once, never reused, citable as "ADR-7" — while `position:` is placement only:
 dotted two-digit pairs whose first pair names a `_GROUPS.md` group and each
 further pair indents one level, freely rewritable as the shelf is rearranged.
-A superseded ADR keeps its number and its file but surrenders its position,
-so the index shows only what still binds and never goes stale. The index line
+A superseded ADR keeps its number and its file but surrenders its position and
+moves to `docs/adr/superseded/`, so the index and the folder both show only
+what still binds; the walk stays recursive, which is what keeps the surrendered
+number reserved. The index line
 is the ADR body's first paragraph — same trick as the scaffold, so it cannot
 drift from the file. An ADR records a decision that outlives the text that
 made it; a claim a contract or test already checks is cited, not minted.
@@ -102,6 +104,9 @@ LOOP_DIR = FINDINGS_DIR / "loop"
 PLAN = REPO / "docs" / "PLAN.md"
 SCAFFOLD = REPO / "docs" / "SCAFFOLD.md"
 ADR_DIR = REPO / "docs" / "adr"
+#: Where a decision goes when it stops binding. Off the shelf a reader browses,
+#: still under the walk that keeps its number reserved.
+SUPERSEDED_DIR = "superseded"
 GROUPS = ADR_DIR / "_GROUPS.md"
 ARCHITECTURE = REPO / "docs" / "ARCHITECTURE.md"
 INDEX_NAME = ".index.md"
@@ -982,6 +987,8 @@ def validate_adr(path: Path, fields: dict[str, Any]) -> None:
             )
         if "superseded_by" in fields:
             raise ItemError(f"{path.name}: settled with `superseded_by` — pick one")
+        if path.parent.name == SUPERSEDED_DIR:
+            raise ItemError(f"{path.name}: settled, so it does not sit in `{SUPERSEDED_DIR}/`")
     else:
         if not str(fields.get("superseded_by", "")).strip():
             raise ItemError(f"{path.name}: superseded without `superseded_by` naming the successor")
@@ -989,6 +996,10 @@ def validate_adr(path: Path, fields: dict[str, Any]) -> None:
             # Surrendering the position is what takes a dead decision off the
             # index; a superseded ADR that keeps one would still be shelved.
             raise ItemError(f"{path.name}: a superseded ADR holds no `position`")
+        if path.parent.name != SUPERSEDED_DIR:
+            # The status is what the index reads; the folder is what a person
+            # browsing the shelf reads, and only one of the two was checked.
+            raise ItemError(f"{path.name}: superseded, so it belongs in `{SUPERSEDED_DIR}/`")
 
 
 def _position_key(item: Item) -> tuple[int, ...]:
@@ -1000,7 +1011,9 @@ def collect_adrs(folder: Path = ADR_DIR, groups: dict[int, str] | None = None) -
     adrs: list[Item] = []
     if not folder.is_dir():
         return adrs
-    for path in sorted(folder.glob("*.md")):
+    # Recursive so `superseded/` is still validated: a dead decision keeps its
+    # number, and the number is only unique if the walk still sees it.
+    for path in sorted(folder.rglob("*.md")):
         if path.name.startswith(SKIP_PREFIXES):
             continue
         fields = parse_frontmatter(path)
@@ -1064,7 +1077,7 @@ def render_architecture(adrs: list[Item], groups: dict[int, str]) -> str:
         "Derived: each line is its ADR's first paragraph, so the file is the",
         "home and this index cannot drift from it. Order and grouping come from",
         "`position`, which is placement only; a superseded ADR keeps its number",
-        "and its file in `docs/adr/` but leaves this index.",
+        "but leaves this index for `docs/adr/superseded/`.",
         "",
     ]
     settled = [adr for adr in adrs if adr.status == "settled"]
@@ -1174,7 +1187,7 @@ def dead_language(repo: Path = REPO) -> list[str]:
     docs = repo / "docs"
     targets = [
         *sorted(docs.glob("*.md")),
-        *sorted((docs / "adr").glob("*.md")),
+        *sorted((docs / "adr").rglob("*.md")),
         *sorted((docs / "todo").glob("*.md")),
     ]
     hits = []

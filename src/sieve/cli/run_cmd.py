@@ -512,7 +512,7 @@ def footage_of(project: Project, path: Path) -> Path:
 
     Every command that decodes goes through this rather than `source_path`
     directly, so the one state the schema now admits and no run can proceed
-    from (`adr/a-document-may-name-no-footage.md`) is a refusal with an exit
+    from (`adr/superseded/a-document-may-name-no-footage.md`) is a refusal with an exit
     code rather than a traceback out of the model.
 
     Raises:

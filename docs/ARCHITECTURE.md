@@ -39,6 +39,7 @@ and its file in `docs/adr/` but leaves this index.
 - [One execution path](adr/one-execution-path.md) — Preview and production are one executor over one plan; a preview is the same pipeline with a span or resolution cut prepended, so what the user tuned against cannot diverge from what the run produces.
 - [Correctness is the default; performance is opt-in](adr/correctness-is-the-default.md) — The naive path is the product surface, not a fallback: every tool runs correct-but-slow on any machine, and a fast path lands only on a measured budget violation, at parity with what it replaces.
 - [Cache admission is a bounded warmup, not a stateless tool](adr/cache-admission-is-bounded-warmup.md) — A tool is keyed when its warmup is **bounded**, stateful or not, and a run entering a cached range re-settles its state over that warmup first. An epsilon warmup is refused.
+  - [The epsilon admission is closed, and only a bounded declaration reopens it](adr/the-epsilon-admission-is-closed.md) — The measured-epsilon admission ADR 17 left open is refused: a residual under a tool's declared threshold flips a detection. An epsilon warmup is keyed by becoming bounded, never by measuring small.
 - [A user's file wires in like any other input](adr/a-users-file-wires-in-like-any-other-input.md) — A file a user picks enters as a **source tool** — a node with no upstream — so every input is an edge. Only the key differs: a graph-fed node keys from the graph, a source tool from its file.
   - [A picked file's meaning is the port it wires to](adr/a-picked-files-meaning-is-the-port-it-wires-to.md) — What a user's file *means* — a background rather than a plate — is the port it wires to, and the user states it. No spec field declares it, no `ElementKind` encodes it, nothing derives it.
 - [A root keys by its reader](adr/a-root-keys-by-its-reader.md) — A root's key flavour follows the reader: a file read through the shared decode stack folds `source_key`; only a tool reading with its own code folds `picked_key`.
@@ -52,4 +53,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The walked step owns the canvas](adr/the-walked-step-owns-the-canvas.md) — The walked step owns the canvas — its result over its input, its emissions drawn by kind; an ancestor's emissions are a view toggle; the pin owns only the slot below.
 - [An output's kind is the picture it makes](adr/an-outputs-kind-is-the-picture-it-makes.md) — The canvas paints an output by its `ElementKind` — `PIXEL` an image, `BLOCK` a field of cells over its frame, `FRAME` no picture — and no member is ever added for a tool.
 
-*30 settled, 2 superseded.*
+*31 settled, 2 superseded.*

@@ -24,6 +24,7 @@ and its file in `docs/adr/` but leaves this index.
 - [v2 projects do not import](adr/v2-does-not-import.md) — v3 reads no v2 file: there is no `compat` package and no importer, and no module anywhere spells a v2 field name — schema v1 is written as if v2 never existed.
 - [What can change an output is a param](adr/param-not-preference.md) — A value that can change an output is a param — in the artifact, in the cache key; one that can only change presentation or performance is a preference, and anything ambiguous is a param.
 - [A document names footage only through a tool](adr/a-document-names-footage-only-through-a-tool.md) — `Project.source` and `SourceRef` leave schema v1: a document names footage only in a source tool's path param, stored relative to the project file, and every reader reaches it through the graph.
+- [A project lives where the user put it, and the library remembers](adr/a-project-lives-where-the-user-put-it.md) — A project file's location is the user's, chosen when it is minted, and no directory is the library: the library is the list of locations the app has been shown, held as per-user state.
 
 ## 03 — The repo itself
 
@@ -53,4 +54,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The walked step owns the canvas](adr/the-walked-step-owns-the-canvas.md) — The walked step owns the canvas — its result over its input, its emissions drawn by kind; an ancestor's emissions are a view toggle; the pin owns only the slot below.
 - [An output's kind is the picture it makes](adr/an-outputs-kind-is-the-picture-it-makes.md) — The canvas paints an output by its `ElementKind` — `PIXEL` an image, `BLOCK` a field of cells over its frame, `FRAME` no picture — and no member is ever added for a tool.
 
-*31 settled, 3 superseded.*
+*32 settled, 3 superseded.*

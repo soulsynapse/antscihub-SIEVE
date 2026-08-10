@@ -2,7 +2,7 @@
 title: The stream a position produces is resolved, not declared
 priority: high
 phase: 3
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests -q -k \"offering_from_a_resolved_source or an_unstated_accepts_field\""
 opened: 2026-08-09
@@ -125,3 +125,33 @@ the offer under a source resolved to one video, and both additions here are abou
 a source resolving to more than one. The review that takes this item should widen
 it or split the folder half back out — the second is defensible, and this note is
 the record of why it was not done unilaterally.
+
+## Closed 2026-08-09: split rather than widened, and where both residues went
+
+Reviewed at `119fb2c`. The criterion is green on the tree as committed — seven
+cases, and re-run by the review rather than read off the transcript. The fold,
+the `_unused` ruling and the source leg are all here and all mutation-tested:
+reverting the wildcard leg, the `or arriving` fill, the source refusal or the
+lexicographic pair each turns the suite red.
+
+Two clauses of the body above are not built, and neither is reopened here.
+
+`_offer_over` still returns `()` at the root, which the body says should stop.
+The worker's argument for leaving it is right and is not a deferral of this
+item's subject: `offered_tools` needs a produced stream and a root has none, so
+the accepts-side match is vacuous there and what distinguishes the candidates is
+that they are sources at all. That is
+[the-source-is-a-card-in-the-walk](the-source-is-a-card-in-the-walk.md)'s
+question, and it took the paragraph. The `_offer_over` docstring's "which is what
+makes the source unswappable" therefore still describes the tree correctly and
+stays; the body's objection to it is an objection to the *reason*, which moves
+when the behaviour does.
+
+The folder half folded in above is now
+[a-source-param-names-a-folder-and-several-files-are-an-ordering](a-source-param-names-a-folder-and-several-files-are-an-ordering.md).
+The note asked the review to widen `done_when` or split, and split is right:
+widening would have reopened a finished item to carry a subject of its own, and
+served the next work run a green criterion with an incentive to justify itself
+([findings/loop/2026.08.07-the-review-prompt-has-no-path-for-a-partial-deferral](../findings/loop/2026.08.07-the-review-prompt-has-no-path-for-a-partial-deferral.md),
+whose fourth amendment is this case). `done_when` is untouched, as it was
+throughout.

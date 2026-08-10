@@ -25,7 +25,8 @@ are meant to be answers to facilitate that.
 ## Conventions
 
 - Minting a `docs/todo/` item is the exception, not the reflex. Before writing
-  one, search the open items for the module, the symbol, and the claim: if a
+  one, search the open items for the module, the symbol, and the claim — a
+  duplicate that paraphrases rather than collides goes red nowhere. If a
   not-yet-done item would carry the observation, fold it in there. Two items
   one commit would satisfy are one item. The backlog's cost is its count, and
   a review that mints per observation pays that cost on your behalf.
@@ -33,8 +34,7 @@ are meant to be answers to facilitate that.
   `done_when` — say in your final message that the criterion may no longer
   cover the whole of it, so the review can widen it. A review that folds
   widens in the same commit. Read the pool table in `docs/todo/.index.md`
-  before minting into it — a duplicate that paraphrases rather than collides
-  goes red nowhere.
+  before minting into it.
 - `docs/findings/` folds the same way: one file per truth, not per
   occurrence. A finding that recurs or gains a number takes a dated amendment
   section in the file that holds it. `supersedes` is for a later truth
@@ -66,8 +66,13 @@ are meant to be answers to facilitate that.
   installed; don't spawn one.
 - Write commit messages to a file and `git commit -F <file>` — a here-string
   in either shell corrupts the message and exits 0.
-- The working tree is CRLF. Match and restore file content through bytes,
-  not `write_text`. Mutation testing is
+- `core.autocrlf` is on, so git checks files out converted and normalizes them
+  back on the way in, while anything a tool has written since is still whatever
+  that tool wrote — a file's own bytes are the only authority on its endings,
+  never a rule stated here. Match and restore content through bytes, not
+  `write_text`, and don't normalize a file you only meant to edit.
+  `.gitattributes` is where a file that must not be converted says so, and its
+  comment says why for the only ones that do. Mutation testing is
   `uv run python scripts/mutation_sweep.py`, never a scratch harness.
 - Don't redirect stderr (`2>&1`) on native commands in PowerShell 5.1; it
   wraps output in ErrorRecords and fails commands that succeeded.

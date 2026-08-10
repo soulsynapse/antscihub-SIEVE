@@ -4,7 +4,7 @@ priority: high
 phase: 11
 status: open
 gated_on: nothing
-done_when: 'uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k "a_document_carrying_a_source_key_is_refused or relocating_rewrites_the_source_nodes_path_param or a_relative_source_param_anchors_on_the_project_directory" && uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name'
+done_when: 'uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k "a_document_carrying_a_source_key_is_refused or relocating_rewrites_the_source_nodes_path_param or a_relative_source_param_anchors_on_the_project_directory" && uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name && uv run pytest "tests/gui/test_project_cards.py::test_the_library_line_reads_footage_through_the_graph" -q'
 opened: 2026-08-10
 ---
 
@@ -74,6 +74,15 @@ whose one node is the picker. That is the same reader this item already names â€
 it is now wrong on the common case rather than the empty one, and asserted at
 `tests/gui/test_project_cards.py::test_new_project_mints_an_unchosen_source_the_library_lists`,
 which pins today's answer and will need the migration's.
+
+`done_when` gains a third leg for it, red today because the case does not exist
+(exit 4): the two schema legs and the CLI leg could all go green over a card
+still reading `project.source`, which is what the fold above says is now wrong
+on every project rather than only the empty one.
+
+    $ uv run pytest "tests/gui/test_project_cards.py::test_the_library_line_reads_footage_through_the_graph" -q
+    ERROR: not found: â€¦::test_the_library_line_reads_footage_through_the_graph
+    exit: 4
 
 ## What stays where it is
 

@@ -44,3 +44,15 @@ lit on a stranger.
     $ uv run pytest "tests/gui/test_swap_box.py::test_taking_the_tool_already_standing_there_keeps_its_parameters" -q
     no tests ran in 0.14s
     exit: 4
+
+## Folded 2026-08-10 at `531b878`'s review: the parameter it now wipes is the footage
+
+`531b878` gave the root an offer of its own, so the source card's ⇄ is live and
+the box over it opens lit on the source standing there — the same gesture, at the
+one position whose parameter is the file the user picked. Retooling `footage` to
+`footage` clears `path`, and the card the user is looking at goes back to reading
+`UNCHOSEN` while the chain below it is untouched, which is a worse showing of the
+same defect than a lost `tau_seconds`: the project stops naming its footage at
+all. The measurement and the repair are unchanged — this adds the position where
+the footgun is easiest to reach, not a second mechanism, so the criterion above
+covers it once `with_node_retooled` stops arguing from a tool that did not depart.

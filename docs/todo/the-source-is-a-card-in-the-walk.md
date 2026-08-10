@@ -1,6 +1,6 @@
 ---
 title: The source is a card in the walk
-status: awaiting-review
+status: done
 gated_on: nothing
 priority: high
 phase: "9"

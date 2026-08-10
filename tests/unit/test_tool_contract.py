@@ -24,6 +24,7 @@ from sieve.core.tool_base import (
     ALL_FRAMES,
     SPEC_CHANNELS,
     ArraySpec,
+    AxisRelation,
     CaptionPart,
     Channel,
     DisplaySurface,
@@ -287,10 +288,10 @@ def make_spec(**overrides: object) -> ToolSpec:
     }
     fields.update(overrides)
     # Derived for the stereotypes' reason one step on: a band declares the
-    # picture its handles are grabbed on and a picture declares what fills it,
-    # so a fixture about arity or about a union would otherwise carry two maps
-    # and a function before it could say the thing it is about. Both are
-    # `setdefault`, so a test *about* the pair still states it.
+    # picture its handles are grabbed on and where they read, and a picture
+    # declares what fills it, so a fixture about arity or about a union would
+    # otherwise carry three maps and a function before it could say the thing it
+    # is about. All are `setdefault`, so a test *about* one still states it.
     stereotypes = fields["param_stereotypes"]
     bands = (
         [name for name, kind in stereotypes.items() if kind is ParamStereotype.BAND]
@@ -299,6 +300,7 @@ def make_spec(**overrides: object) -> ToolSpec:
     )
     if bands:
         fields.setdefault("param_surfaces", dict.fromkeys(bands, DisplaySurface.TRACE))
+        fields.setdefault("param_axes", dict.fromkeys(bands, AxisRelation.INPUT_VALUES))
         fields.setdefault("display", stub_display)
     return ToolSpec(**fields)  # pyright: ignore[reportArgumentType]
 
@@ -1525,9 +1527,10 @@ PROBES: dict[str, Any] = {
     },
     "element": ElementKind.BLOCK,
     "element_names": ElementNames("block", "blocks"),
-    # A co-required pair, like the two element rows: neither half may stand
-    # alone, so each probe carries the other in the loop below.
+    # A co-required trio, like the two element rows: no one of them may stand
+    # alone, so each probe carries the others in the loop below.
     "param_surfaces": {"band": DisplaySurface.SCALOGRAM},
+    "param_axes": {"band": AxisRelation.INPUT_VALUES},
     "display": stub_display,
 }
 
@@ -1586,6 +1589,7 @@ class TestDecoratorMatchesSpec:
             "rate_changing": RateProbeParams,
             "selecting": SelectProbeParams,
             "param_surfaces": BandProbeParams,
+            "param_axes": BandProbeParams,
             "display": BandProbeParams,
             "source": PathProbeParams,
         }
@@ -1617,14 +1621,16 @@ class TestDecoratorMatchesSpec:
                 # The one probe that is an alternative rather than an addition:
                 # a source tool names the file it opens and declares no run.
                 values["param_stereotypes"] = {"pattern": ParamStereotype.PATH}
-            elif name in ("param_surfaces", "display"):
-                # The one probe pair that also moves the stereotype map: a
-                # surface may only stand over a band, and the derived map above
-                # declares every field a scalar.
+            elif name in ("param_surfaces", "param_axes", "display"):
+                # The one probe trio that also moves the stereotype map: a
+                # surface and an axis may only stand over a band, and the
+                # derived map above declares every field a scalar.
                 values["param_stereotypes"] = {"band": ParamStereotype.BAND}
-                if name == "display":
+                if name != "param_surfaces":
                     values["param_surfaces"] = {"band": DisplaySurface.TRACE}
-                else:
+                if name != "param_axes":
+                    values["param_axes"] = {"band": AxisRelation.INPUT_VALUES}
+                if name != "display":
                     values["display"] = stub_display
             decorated = register_tool(**values, registry=registry)(model)
 

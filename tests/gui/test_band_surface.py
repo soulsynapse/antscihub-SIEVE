@@ -6,11 +6,11 @@ shows up as a band with no handles: `execute` fills a surface only when asked,
 says what its axis means, and `BandEditor` reads a cut off that axis into one
 `SetParam`.
 
-**The scalogram's refusal is a case here rather than an omission.** Two of
-`detect`'s three bands are denominated in their surface's own axis and the third
-is in Hz over a bank the column does not carry, so the third gets no editor —
-and a file that only asserted the two that work would read as though the third
-had been forgotten (`gui/surface_panel.py`).
+**The refusal is a case here rather than an omission.** Where a band's handles
+read is declared and resolved against what feeds the node, so a band over an
+input nothing can describe gets no editor — and a file that only asserted the
+ones that resolve would read as though that had been forgotten
+(`gui/surface_panel.py`).
 
 The synthetic tool below is `test_kind_editors.py`'s move and for its reason: a
 spec no registry has heard of is what asks "per kind, never per tool" of the
@@ -29,13 +29,17 @@ import pytest
 from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef, SourceSpan
 from sieve.core.tool_base import (
     ArraySpec,
+    AxisRelation,
     DisplaySurface,
     ElementRelation,
     Emission,
     FrameSpan,
+    ParamAxis,
     ParamsBase,
     ParamStereotype,
+    RowAxis,
     ToolSpec,
+    ValueAxis,
 )
 from sieve.core.types import ChannelSpec, Frame
 from sieve.pipeline.series_collector import CollectedSeries
@@ -58,9 +62,22 @@ COUNT_BAND = (0.25, 0.75)
 COUNT_COLUMNS = np.linspace(0.1, 0.9, 20, dtype=np.float32).reshape(-1, 1, 1)
 COUNT_START = 5
 
+#: The synthetic tool's own bank, four rows and log-spaced like a real one — so
+#: a panel that had mapped y linearly in the coordinate rather than in the row
+#: would place a handle somewhere a case can tell apart.
+SYNTHETIC_BANK = (1.0, 2.0, 4.0, 8.0)
+
+#: The three axes `_spec()` declares, resolved against an input whose elements
+#: have a meaning. One of each form the declaration admits.
+_AXES: dict[DisplaySurface, ParamAxis] = {
+    DisplaySurface.SCALOGRAM: RowAxis(SYNTHETIC_BANK),
+    DisplaySurface.TRACE: ValueAxis(),
+    DisplaySurface.COUNT: ValueAxis((0.0, 1.0)),
+}
+
 
 class BandParams(ParamsBase):
-    """One band per surface kind, so a refusal and two placements are all asked."""
+    """One band per surface kind, and one of each form an axis is declared in."""
 
     freqs: tuple[float, float] = (2.0, 8.0)
     values: tuple[float, float] = (0.0, 1.0)
@@ -107,6 +124,11 @@ def _spec() -> ToolSpec:
             "freqs": DisplaySurface.SCALOGRAM,
             "values": DisplaySurface.TRACE,
             "fraction": DisplaySurface.COUNT,
+        },
+        param_axes={
+            "freqs": RowAxis(SYNTHETIC_BANK),
+            "values": AxisRelation.INPUT_VALUES,
+            "fraction": ValueAxis((0.0, 1.0)),
         },
         display=_display,
     )
@@ -157,7 +179,7 @@ def band(qapp) -> Any:
 def _panel(kind: DisplaySurface, columns: np.ndarray, start: int) -> Any:
     from sieve.gui.surface_panel import SurfacePanel
 
-    panel = SurfacePanel(kind)
+    panel = SurfacePanel(kind, _AXES[kind])
     panel.resize(*PANEL_SIZE)
     panel.set_picture(CollectedSeries(start_index=start, data=columns))
     return panel
@@ -252,15 +274,15 @@ def test_a_band_surface_refill_publishes_the_ceiling_a_drag_is_judged_against(qa
 # ---- the picture, drawn ----------------------------------------------------
 
 
-def test_a_band_surface_panel_places_a_value_on_the_axis_its_kind_names(qapp) -> None:
-    """Three kinds, three axes, and the round trip a handle is read through.
+def test_a_band_surface_panel_places_a_value_on_the_axis_it_was_declared(qapp) -> None:
+    """Three declarations, three axes, and the round trip a handle is read through.
 
-    The count's axis is the one that is *fixed*: a fraction is a fraction of a
-    whole whatever the data did, so the top of the plot is one even for columns
-    that never reach it. The other two are read off the picture — the trace from
-    the values themselves, the scalogram from how many rows the bank turned out
-    to have — which is what "units ride with the data" means once there is a
-    panel to cash it in.
+    The count's is *fixed*: a fraction is a fraction of a whole whatever the data
+    did, so the top of the plot is one even for columns that never reach it. The
+    scalogram's ends are the bank's ends and not the picture's — six rows of
+    columns against a four-row declaration, so a panel still reading its own
+    shape would answer six. The trace's is the one the data decides, which is the
+    only honest answer where the unit is the upstream node's.
     """
     del qapp
 
@@ -272,7 +294,8 @@ def test_a_band_surface_panel_places_a_value_on_the_axis_its_kind_names(qapp) ->
     assert count.x_of(COUNT_START) == pytest.approx(PANEL_SIZE[0] * 0.5 / 20)
 
     scalogram = _panel(DisplaySurface.SCALOGRAM, np.zeros((4, 6, 1), np.float32), 0)
-    assert scalogram.value_range() == (0.0, 6.0)
+    assert scalogram.value_range() == (SYNTHETIC_BANK[0], SYNTHETIC_BANK[-1])
+    assert scalogram.value_at(scalogram.y_of(2.0)) == pytest.approx(2.0)
 
     trace = _panel(DisplaySurface.TRACE, np.array([[[2.0], [4.0]]], np.float32), 0)
     low, top = trace.value_range()
@@ -344,24 +367,25 @@ def test_a_band_surface_handle_stops_at_the_other_rather_than_crossing_it(
     assert high == pytest.approx(COUNT_BAND[1])
 
 
-def test_a_band_on_a_scalogram_is_drawn_and_takes_no_handles(
+def test_a_band_whose_axis_did_not_resolve_takes_no_handles(
     qapp, session: Session, canvas: Any, band: Any
 ) -> None:
-    """`RegionEditor`'s refusal, one kind over: no axis, no gesture.
+    """`RegionEditor`'s refusal, one kind over — and now a state of a graph.
 
-    The bank's rows are what the column carries and Hz is what `freq_band`
-    stores, and nothing in the channel converts one to the other — so the
-    scalogram is painted, is asked for no editor, and its parameter keeps the
-    form's read-only restatement. The two panels whose axis *is* the parameter's
-    get their editors in the same call, which is what makes this a placement
-    rather than the kind having been skipped.
+    `values` is declared `INPUT_VALUES`, so a node whose input has no element
+    meaning has no axis for it either and the panel is drawn with none. The
+    scalogram beside it is the case that says the refusal is no longer the
+    *kind*: its axis is declared outright, so it keeps its handles in the same
+    call that takes the trace's away.
     """
     del qapp
     from sieve.gui.kind_editors import BandEditor, bind_editors
     from sieve.gui.surface_panel import SurfacePanel
 
-    panels = {kind: SurfacePanel(kind) for kind in DisplaySurface}
-    assert not panels[DisplaySurface.SCALOGRAM].takes_handles
+    panels = {kind: SurfacePanel(kind, _AXES[kind]) for kind in DisplaySurface}
+    panels[DisplaySurface.TRACE] = SurfacePanel(DisplaySurface.TRACE, None)
+    assert panels[DisplaySurface.SCALOGRAM].takes_handles
+    assert not panels[DisplaySurface.TRACE].takes_handles
 
     editors = bind_editors(
         session,
@@ -374,8 +398,79 @@ def test_a_band_on_a_scalogram_is_drawn_and_takes_no_handles(
         bands=panels,
     )
 
-    assert set(editors) == {"values", "fraction"}
+    assert set(editors) == {"freqs", "fraction"}
     assert all(isinstance(editor, BandEditor) for editor in editors.values())
+
+
+def test_a_scalogram_handle_reads_the_declared_axis(
+    qapp, tmp_path: Path, canvas: Any, band: Any
+) -> None:
+    """The bank is a declaration, so a cut on the picture is a number in Hz.
+
+    On `detect`'s own spec rather than the synthetic one above, because what is
+    being asserted is that the tool that forced the question answers it: the
+    coordinates come from `default_freqs(params.fps)`, which no channel and no
+    panel could have derived. The round trip is taken at a row in the middle of a
+    log-spaced bank, where an axis that had stayed linear in the value would give
+    a different answer from one that is linear in the row.
+    """
+    del qapp
+    from sieve.core.tool_base import ElementKind, RowAxis, node_param_axis
+    from sieve.core.tool_registry import REGISTRY
+    from sieve.gui.kind_editors import BandEditor, bind_editors
+    from sieve.gui.surface_panel import SurfacePanel
+    from sieve.tools import discover
+    from sieve.tools.detect import default_freqs
+
+    discover()
+    spec = REGISTRY.get("detect", "1.0.0")
+    params = spec.params_model()
+    axes = {
+        spec.param_surfaces[name]: node_param_axis(declaration, params, ElementKind.BLOCK)
+        for name, declaration in spec.param_axes.items()
+    }
+    bank = tuple(float(hz) for hz in default_freqs(params.fps))
+    assert axes[DisplaySurface.SCALOGRAM] == RowAxis(bank)
+
+    panel = SurfacePanel(DisplaySurface.SCALOGRAM, axes[DisplaySurface.SCALOGRAM])
+    panel.resize(*PANEL_SIZE)
+    panel.set_picture(CollectedSeries(start_index=0, data=np.zeros((8, len(bank), 1), np.float32)))
+    assert panel.takes_handles
+    assert panel.value_at(panel.y_of(bank[7])) == pytest.approx(bank[7])
+
+    project = Project(
+        source=SourceRef(path="clip.mp4"),
+        pipeline=Pipeline(
+            nodes=(
+                Node(
+                    node_id=_NODE,
+                    tool_id="detect",
+                    version="1.0.0",
+                    params={"freq_band": [bank[4], bank[18]]},
+                ),
+            )
+        ),
+    )
+    session = Session(tmp_path / "clip.sieve.yaml", project)
+    editors = bind_editors(
+        session,
+        _NODE,
+        spec,
+        session.project.params_for(_NODE),
+        canvas=canvas,
+        timeline=band,
+        region_extent=None,
+        bands={DisplaySurface.SCALOGRAM: panel},
+    )
+    editor = editors["freq_band"]
+    assert isinstance(editor, BandEditor)
+    editor.resize(*PANEL_SIZE)
+
+    driving.drag(editor, (10.0, panel.y_of(bank[4])), (10.0, panel.y_of(bank[2])))
+
+    low, high = session.project.params_for(_NODE)["freq_band"]
+    assert low == pytest.approx(bank[2], rel=0.02)
+    assert high == pytest.approx(bank[18])
 
 
 def test_a_band_with_no_panel_drawn_for_it_gets_no_editor(
@@ -401,7 +496,9 @@ def test_a_band_with_no_panel_drawn_for_it_gets_no_editor(
         canvas=canvas,
         timeline=band,
         region_extent=None,
-        bands={DisplaySurface.COUNT: SurfacePanel(DisplaySurface.COUNT)},
+        bands={
+            DisplaySurface.COUNT: SurfacePanel(DisplaySurface.COUNT, _AXES[DisplaySurface.COUNT])
+        },
     )
 
     assert set(bound) == {"fraction"}

@@ -38,14 +38,17 @@ from sieve.core.pipeline_model import (
 from sieve.core.tool_base import (
     SPEC_CHANNELS,
     ArraySpec,
+    AxisRelation,
     CaptionPart,
     Channel,
+    DisplaySurface,
     ElementRelation,
     Emission,
     Mode,
     ParamsBase,
     ParamStereotype,
     ToolSpec,
+    ValueAxis,
     WarmupKind,
 )
 from sieve.core.types import FrameCount
@@ -101,6 +104,40 @@ def make_spec(**overrides: object) -> ToolSpec:
 
 
 SPEC = make_spec()
+
+
+class BandedBlurParams(BlurParams):
+    """`BlurParams` with a band, which is the only thing an axis may stand over.
+
+    A subclass rather than a fourth field on `BlurParams`, because the params
+    model is the *identity* channel: every key in this file is derived from it,
+    and giving the shared model a band would move them all.
+    """
+
+    band: tuple[float, float] = (0.0, 1.0)
+
+
+def _fills_nothing(params: BandedBlurParams, window: object, /) -> dict[object, object]:
+    """A filler, so the surface below is not a declaration nothing draws."""
+    del params, window
+    return {}
+
+
+#: The spec the `param_axes` substitution is made against. It cannot be `SPEC`:
+#: an axis is legal only on a band, a band needs a params model with one, and
+#: that model is the one thing this test holds fixed.
+BANDED_SPEC = make_spec(
+    params_model=BandedBlurParams,
+    param_stereotypes={
+        "radius": ParamStereotype.SCALAR_RANGE,
+        "sigma": ParamStereotype.SCALAR_RANGE,
+        "separable": ParamStereotype.SCALAR_RANGE,
+        "band": ParamStereotype.BAND,
+    },
+    param_surfaces={"band": DisplaySurface.TRACE},
+    param_axes={"band": ValueAxis()},
+    display=_fills_nothing,
+)
 
 CROP_SPEC = make_spec(
     tool_id="crop",
@@ -306,14 +343,23 @@ class TestIsolation:
             "primary_params": ("radius",),
             "summary": "Blurs, described differently.",
             "guidance": "Turn the radius up until the speckle stops moving.",
+            "param_axes": {"band": AxisRelation.INPUT_VALUES},
         }
         presentation = {n for n, c in SPEC_CHANNELS.items() if c is Channel.PRESENTATION}
         assert set(substitutes) == presentation
 
+        # `param_axes` is the one row that cannot be substituted onto `SPEC` —
+        # see `BANDED_SPEC` — so it is asserted against that spec and that
+        # spec's own key.
+        against = dict.fromkeys(substitutes, SPEC) | {"param_axes": BANDED_SPEC}
+        banded_key = node_key(node, spec=BANDED_SPEC, upstream=ROOT)
+
         for name, value in substitutes.items():
-            edited = dataclasses.replace(SPEC, **{name: value})
-            assert getattr(edited, name) != getattr(SPEC, name)
-            assert node_key(node, spec=edited, upstream=ROOT) == keyed
+            base = against[name]
+            edited = dataclasses.replace(base, **{name: value})
+            assert getattr(edited, name) != getattr(base, name)
+            expected = keyed if base is SPEC else banded_key
+            assert node_key(node, spec=edited, upstream=ROOT) == expected
 
 
 class TestInputs:

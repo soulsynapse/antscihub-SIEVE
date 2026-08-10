@@ -76,9 +76,11 @@ from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline, Replicate
 from sieve.core.tool_base import (
     DisplaySurface,
     ElementKind,
+    ParamAxis,
     ParamStereotype,
     StreamSpec,
     ToolSpec,
+    node_param_axis,
 )
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError, offered_tools
 from sieve.core.types import VideoMetadata
@@ -1142,6 +1144,7 @@ class MainWindow(QMainWindow):
         """
         if self._session is None:
             return
+        self._show_axes()
         window = self._timeline.window
         if window is None:
             return
@@ -1347,7 +1350,54 @@ class MainWindow(QMainWindow):
         previous collector whose rows survive the move.
         """
         node = self.current_node
+        self._show_axes()
         self._tuning.show(None if node is None else node.node_id, self.surfaces)
+
+    def _show_axes(self) -> None:
+        """Tell each panel where a cut on it would be read.
+
+        Ahead of `_rebind_editors`, because whether a band gets handles at all is
+        the panel's answer and the panel has not got one until this has run. Also
+        on every refill: the declaration is a function of the node's parameters
+        (`core/tool_base.node_param_axis`), so a scalogram's bank follows the
+        `fps` spin box in the form above it, and a form edit refills without
+        rebuilding the pane.
+        """
+        node = self.current_node
+        if node is None:
+            return
+        axes = self._surface_axes(node.node_id)
+        for surface, panel in self.surfaces.items():
+            panel.set_axis(axes.get(surface))
+
+    def _surface_axes(self, node_id: str) -> dict[DisplaySurface, ParamAxis | None]:
+        """Where each of `node_id`'s bands is read, against what feeds the node.
+
+        The window's own lenient walk supplies the upstream, for the reason
+        `element_kinds` is that walk and not `Dag`'s: this has to answer for a
+        document that would not run. A node whose parameters the model refuses
+        gets nothing rather than an axis derived from a value the document does
+        not hold — the form is where that is reported, and a plot is not.
+        """
+        session = self._session
+        spec = self._specs.get(node_id)
+        if session is None or spec is None or not spec.param_axes:
+            return {}
+        pipeline = session.project.pipeline
+        parent = next(
+            (edge.upstream for edge in pipeline.edges if edge.downstream == node_id), None
+        )
+        upstream = ElementKind.PIXEL if parent is None else self._elements.get(parent)
+        try:
+            params = spec.params_model.model_validate(
+                session.project.params_for(node_id, self.selected_replicate)
+            )
+        except ValueError:
+            return {}
+        return {
+            spec.param_surfaces[name]: node_param_axis(declaration, params, upstream)
+            for name, declaration in spec.param_axes.items()
+        }
 
     def _watch_the_pin(self) -> None:
         """Point the loop at the pinned step, or at nothing if it draws no trace.

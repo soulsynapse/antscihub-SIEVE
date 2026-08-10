@@ -23,14 +23,14 @@ than the gesture — one editor, handed a different panel per parameter. The
 generator's rule holds unchanged: nothing here learns that the tool is `detect`,
 only that a parameter is a band and which kind of picture the spec says it cuts.
 
-The third of the three is refused, and by the panel rather than here
-(`surface_panel.takes_handles`): a scalogram's rows are the Morlet bank's and
-`freq_band` is in Hz, so a cut on it has no value to commit. That is
-`RegionEditor`'s refusal exactly — an editor is offered only where the gesture's
-coordinates are the ones the value is denominated in — and it is why `BAND`
-comes off `tool_base.STEREOTYPES_WITHOUT_EDITOR` with two of three bands
-editable: the list is about a kind having an editor at all, and the per-surface
-refusal is a placement, not a missing one
+A band whose axis the graph could not resolve is refused, and by the panel
+rather than here (`surface_panel.takes_handles`): with nothing saying what a cut
+would be worth there is no value to commit. That is `RegionEditor`'s refusal
+exactly — an editor is offered only where the gesture's coordinates are the ones
+the value is denominated in — and it is why `BAND` comes off
+`tool_base.STEREOTYPES_WITHOUT_EDITOR` even when a graph refuses one of them:
+the list is about a kind having an editor at all, and a refusal that depends on
+what is upstream is a placement rather than a missing one
 (`adr/an-unconsumed-member-is-named-in-a-list.md`).
 
 **A drag paints from a draft and announces itself once, on release.** The
@@ -592,11 +592,14 @@ def _on_the_surface(
 ) -> _Editor | None:
     """The panel this parameter's declared surface is drawn on, or no editor.
 
-    Three ways to be offered nothing, and none of them is a defect: the caller
-    drew no panel for this surface, or drew one whose axis is not the parameter's
-    (`SurfacePanel.takes_handles`). The spec is read for `param_surfaces` and for
-    nothing else — which surface a band names is the one tool fact this module is
-    allowed, and it is a kind.
+    Two ways to be offered nothing, and neither is a defect: the caller drew no
+    panel for this surface, or drew one whose axis the graph could not resolve
+    (`SurfacePanel.takes_handles`). The second is a state of a graph rather than
+    a property of a kind, so a tool whose band is denominated in an input nothing
+    can describe is refused here without this module learning what it is
+    (`adr/a-parameters-space-is-resolved-by-the-graph.md`). The spec is read for
+    `param_surfaces` and for nothing else — which surface a band names is the one
+    tool fact this module is allowed, and it is a kind.
     """
     _session, _node_id, param = bound[0], bound[1], bound[2]
     del _session, _node_id

@@ -21,6 +21,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any, TypeVar
 
 from sieve.core.tool_base import (
+    AxisDeclaration,
     CaptionPart,
     DisplaySurface,
     ElementDeclaration,
@@ -243,6 +244,7 @@ def register_tool(
     param_value_labels: Mapping[str, Mapping[str, str]] | None = None,
     param_stereotypes: Mapping[str, ParamStereotype] | None = None,
     param_surfaces: Mapping[str, DisplaySurface] | None = None,
+    param_axes: Mapping[str, AxisDeclaration] | None = None,
     display: ToolDisplay[Any] | None = None,
     element: ElementDeclaration | None = None,
     element_names: ElementNames | None = None,
@@ -292,6 +294,7 @@ def register_tool(
             param_value_labels={} if param_value_labels is None else param_value_labels,
             param_stereotypes={} if param_stereotypes is None else param_stereotypes,
             param_surfaces={} if param_surfaces is None else param_surfaces,
+            param_axes={} if param_axes is None else param_axes,
             display=display,
             element=element,
             element_names=element_names,

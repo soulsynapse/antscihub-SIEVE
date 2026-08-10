@@ -70,6 +70,10 @@ class StepPane(QWidget):
         #: One panel per surface the tool declares, in the spec's own order so
         #: two steps of the same tool stack their pictures the same way. Empty
         #: for every tool with no band, which is every tool but `detect`.
+        #:
+        #: Born with no axis and given one by the window, which is the half of
+        #: the declaration a step pane cannot resolve: where a band's handles
+        #: read depends on what feeds this node (`app.py`, `_show_surfaces`).
         self.surfaces = {
             surface: SurfacePanel(surface)
             for surface in dict.fromkeys(spec.param_surfaces.values())

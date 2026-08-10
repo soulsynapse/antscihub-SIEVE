@@ -29,6 +29,7 @@ import pytest
 from sieve.core.pipeline_model import Edge, Node, Pipeline, SourceSpan
 from sieve.core.tool_base import (
     ArraySpec,
+    AxisRelation,
     DisplaySurface,
     ElementRelation,
     Emission,
@@ -269,6 +270,7 @@ def _band_display(
         "flaw": ParamStereotype.ENUM,
     },
     param_surfaces={"band": DisplaySurface.TRACE},
+    param_axes={"band": AxisRelation.INPUT_VALUES},
     registry=SHELF,
 )
 class BandParams(ParamsBase):
@@ -297,6 +299,7 @@ def _ahead_band_run(params: AheadBandParams, window: FrameSpan, state: None) -> 
         "flaw": ParamStereotype.ENUM,
     },
     param_surfaces={"band": DisplaySurface.TRACE},
+    param_axes={"band": AxisRelation.INPUT_VALUES},
     registry=SHELF,
 )
 class AheadBandParams(ParamsBase):

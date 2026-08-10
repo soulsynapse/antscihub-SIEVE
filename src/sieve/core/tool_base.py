@@ -965,9 +965,10 @@ class DisplaySurface(StrEnum):
     vocabulary honest where the axis enum refused at phase 1 could not be: Hz is
     a fixed physical unit, a value band is in the upstream node's output units
     and unknowable at spec time, and a fraction is dimensionless
-    (`todo/a-band-has-no-stereotype-of-its-own.md`). Units ride with the data
-    the tool fills the surface with, at run time, where the upstream node has
-    already run and can be asked.
+    (`todo/a-band-has-no-stereotype-of-its-own.md`). What the unit *is* is
+    `ToolSpec.param_axes` beside this, declared per parameter and resolved
+    against the node's input — never a member here and never read off the
+    picture, which carries values and not the axis they sit on.
 
     Closed for `ParamStereotype`'s reason and with its asymmetry: a fourth
     member is a decision about what SIEVE can plot at all, forced by a band that
@@ -994,12 +995,114 @@ class DisplaySurface(StrEnum):
 #: member minted with nothing drawing it has to be written in here to be legal,
 #: which is the sentence a reader arriving at that member is owed.
 #:
-#: Painted is not the same claim as *editable*. A scalogram is drawn and takes
-#: no handles, because the column a tool fills carries the power and not the
-#: frequencies it was taken at — `gui/surface_panel.EDITABLE_AXIS` is where that
-#: narrower claim lives, and it is a fact about the channel rather than about
-#: this vocabulary.
+#: Painted is not the same claim as *editable*. Whether a pair of cuts on a
+#: surface reads back as a value the parameter takes is `ToolSpec.param_axes`
+#: resolved against the node's input, so it is a state of a graph and never a
+#: property of a member here.
 SURFACES_WITHOUT_PAINTER: frozenset[DisplaySurface] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
+class RowAxis:
+    """One coordinate per row of the surface, ascending.
+
+    The field's shape. A scalogram's rows are a bank the tool chose and the
+    parameter is in the unit those rows were taken at, so the row is a position
+    and this is the only thing that says what the position *is*. A panel maps y
+    linearly in the row and reads the value off here, which is also what keeps a
+    log-spaced bank drawn the way the image is stretched.
+    """
+
+    coordinates: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.coordinates) < 2:
+            raise ValueError(f"a row axis needs at least two coordinates, got {self.coordinates}")
+        pairs = zip(self.coordinates, self.coordinates[1:], strict=False)
+        if not all(math.isfinite(value) for value in self.coordinates) or any(
+            second <= first for first, second in pairs
+        ):
+            raise ValueError(f"row axis coordinates must ascend finitely, got {self.coordinates}")
+
+
+@dataclass(frozen=True, slots=True)
+class ValueAxis:
+    """The surface's own values are the coordinate.
+
+    `bounds` fixes the floor and ceiling — a fraction is a fraction of a whole
+    whatever the data did, so an axis that followed the picture would move the
+    handles under a drag that changed nothing about what they cut. `None` leaves
+    them to the data, which is the only honest answer where the unit is the
+    upstream node's and nothing here has met it.
+    """
+
+    bounds: tuple[float, float] | None = None
+
+
+#: Where a band's handles are read, once resolved. Two members rather than one
+#: with a mode, because a row axis is a *lookup* and a value axis is an identity,
+#: and a panel that had to ask which of the two it was holding would be the
+#: branch this union removes.
+type ParamAxis = RowAxis | ValueAxis
+
+
+class AxisRelation(StrEnum):
+    """What a band's axis is when the tool cannot name it at any time.
+
+    `ElementRelation`'s sibling one declaration over, and for its reason: a tool
+    that measures whatever arrives has no constant to declare. `detect`'s
+    `value_band` cuts band power in its input's own units, which are the
+    upstream node's, so any absolute answer it gave would be a lie against some
+    legal graph.
+    """
+
+    #: The axis is the values arriving at this node, whatever they are. Resolves
+    #: to a data-derived `ValueAxis` where the input's elements have a meaning,
+    #: and to `None` where they have not.
+    INPUT_VALUES = "input_values"
+
+
+#: What a tool declares about where one band's handles are read: an axis
+#: outright, a function of the parameters when the axis is one of them, or a
+#: relation to what the node was handed. The middle form is what `element` never
+#: needed — a Morlet bank is derived from `fps`, so the coordinates are not
+#: knowable until a node is configured — and it stays pure for `output_rate`'s
+#: reason: params in, numbers out, no kernel and no codec.
+type AxisDeclaration = ParamAxis | Callable[[ParamsBase], ParamAxis] | AxisRelation
+
+
+def node_param_axis(
+    declaration: AxisDeclaration, params: ParamsBase, upstream: ElementKind | None
+) -> ParamAxis | None:
+    """Where one band's handles are read at this node. `None` is *undeclarable*.
+
+    `node_element`'s shape for the other declaration that relates a node to its
+    input, kept here beside the vocabulary that defines it while the walk
+    supplying `upstream` is the element fold itself (`pipeline/dag.py`,
+    `gui/pinned.py`). `None` therefore propagates exactly as far as the element
+    meaning does: a node fed by a tool this install has not got has no axis for
+    a relation-declared band, and nothing downstream gives one back.
+
+    A refusal is a state of a graph and not a property of a kind
+    (`adr/a-parameters-space-is-resolved-by-the-graph.md`), so the same
+    parameter takes handles in one pipeline and not in another.
+
+    Args:
+        declaration: `ToolSpec.param_axes[name]`.
+        params: The node's resolved parameters — the replicate's, where one is
+            selected, since a deviation may move the axis it is read on.
+        upstream: The element meaning arriving at this node, or `None` if that
+            was itself undeclarable.
+
+    Returns:
+        The axis, or `None` when nothing can honestly say what a cut would be
+        worth.
+    """
+    if isinstance(declaration, AxisRelation):
+        return None if upstream is None else ValueAxis()
+    if callable(declaration):
+        return declaration(params)
+    return declaration
 
 
 #: Contravariant because a `run` is *consumed* with params: a function written
@@ -1281,6 +1384,10 @@ def _empty_param_value_labels() -> Mapping[str, Mapping[str, str]]:
 
 
 def _empty_param_surfaces() -> Mapping[str, DisplaySurface]:
+    return {}
+
+
+def _empty_param_axes() -> Mapping[str, AxisDeclaration]:
     return {}
 
 
@@ -1630,6 +1737,17 @@ class ToolSpec:
     #: timeline, the frame under the canvas, a spin box — and declaring one for
     #: those would be a second answer competing with that ownership.
     param_surfaces: Mapping[str, DisplaySurface] = field(default_factory=_empty_param_surfaces)
+    #: Where each band-shaped parameter's handles are read, one entry per
+    #: `ParamStereotype.BAND` field and refused on every other kind.
+    #:
+    #: Total over the bands for `param_surfaces`' reason and one narrower still.
+    #: The surface says which picture the handles are grabbed on; this says what
+    #: a cut on it is *worth*, and the two are different questions — a scalogram
+    #: is a field of rows whatever bank filled it. Omission would resolve to the
+    #: same `None` a relation resolves to over an undeclarable input, which is
+    #: the one thing that must not be ambiguous: a refusal has to mean the graph
+    #: could not say, never that a tool forgot to.
+    param_axes: Mapping[str, AxisDeclaration] = field(default_factory=_empty_param_axes)
     #: What fills those surfaces for one frame, or `None` for a tool with no
     #: band to place. Required exactly when `param_surfaces` is non-empty, both
     #: directions refused below: a surface nothing fills is a declared plot that
@@ -1889,18 +2007,19 @@ class ToolSpec:
             )
 
     def _check_surfaces(self, known: set[str]) -> None:
-        """Refuse a band with no picture, or a picture with no band.
+        """Refuse a band with no picture or no axis, or either with no band.
 
-        Four refusals, and they are the two halves of one rule seen from each
-        end. A `BAND` is the one stereotype whose control the generator can
-        build and cannot place, so every band names a surface and nothing else
-        may; and a surface is filled by running machinery or it is a declaration
+        Two declarations, each checked from both ends, and a filler. A `BAND` is
+        the one stereotype whose control the generator can build and cannot
+        place, so every band names the picture its handles are grabbed on *and*
+        what a cut on that picture is worth, and nothing else may name either;
+        and a surface is filled by running machinery or it is a declaration
         stored against a consumer that does not exist, which is what
         `adr/declared-means-verified.md` refuses outright.
 
         Raises:
-            ValueError: for a surface on no such field, a surface on a
-                parameter that is not a band, a band with no surface, or either
+            ValueError: for a surface or an axis on no such field or on a
+                parameter that is not a band, a band missing either, or either
                 half of the declaration/filler pair standing alone.
         """
         unknown = [name for name in self.param_surfaces if name not in known]
@@ -1931,6 +2050,34 @@ class ToolSpec:
                 f"param_surfaces={{{placeless[0]!r}: DisplaySurface.{kinds}}}. A band is an "
                 "ordered pair on an axis that is not the timeline, so which plot its handles are "
                 "grabbed on is the one thing the generator has no way to derive"
+            )
+        unknown_axes = [name for name in self.param_axes if name not in known]
+        if unknown_axes:
+            raise ValueError(
+                f"{self.tool_id}: param_axes names no such field: {sorted(unknown_axes)}"
+            )
+        misplaced_axes = sorted(
+            name
+            for name in self.param_axes
+            if self.param_stereotypes.get(name) is not ParamStereotype.BAND
+        )
+        if misplaced_axes:
+            raise ValueError(
+                f"{self.tool_id}: declares an axis for {misplaced_axes}, which is not a band — "
+                "every other kind is populated on a surface the GUI already owns, and what a cut "
+                "on one of them is worth is not a question this declaration answers"
+            )
+        axisless = sorted(
+            name
+            for name, kind in self.param_stereotypes.items()
+            if kind is ParamStereotype.BAND and name not in self.param_axes
+        )
+        if axisless:
+            raise ValueError(
+                f"{self.tool_id}: declares a band on {axisless} and no axis for it — pass "
+                f"param_axes={{{axisless[0]!r}: RowAxis(...), ValueAxis(...), a function of the "
+                "params, or AxisRelation.INPUT_VALUES}. An undeclared axis and one a graph could "
+                "not resolve both come out as no handles, and only the second is a refusal"
             )
         if self.param_surfaces and self.display is None:
             raise ValueError(
@@ -2135,6 +2282,12 @@ SPEC_CHANNELS: Mapping[str, Channel] = {
     "caption": Channel.PRESENTATION,
     "param_value_labels": Channel.PRESENTATION,
     "param_stereotypes": Channel.PRESENTATION,
+    # Presentation where `param_surfaces` beside it is execution, and the pair
+    # is worth reading together. The loop fills the channel and so must be
+    # refused for filling the wrong surface; nothing in the loop asks what a
+    # handle on one would be worth, and two builds disagreeing here run the same
+    # graph to the same products at the same cost.
+    "param_axes": Channel.PRESENTATION,
     "summary": Channel.PRESENTATION,
     "guidance": Channel.PRESENTATION,
 }

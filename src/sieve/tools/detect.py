@@ -70,6 +70,7 @@ from scipy import fft as _fft
 
 from sieve.core.tool_base import (
     ArraySpec,
+    AxisRelation,
     CaptionPart,
     DisplaySurface,
     ElementKind,
@@ -78,6 +79,8 @@ from sieve.core.tool_base import (
     Mode,
     ParamsBase,
     ParamStereotype,
+    RowAxis,
+    ValueAxis,
     WarmupKind,
 )
 from sieve.core.tool_registry import register_tool
@@ -697,6 +700,16 @@ def display(params: DetectParams, window: FrameSpan, /) -> dict[DisplaySurface, 
     }
 
 
+def _bank_axis(params: DetectParams) -> RowAxis:
+    """The scalogram's rows as the frequencies they were taken at.
+
+    `default_freqs` is already the bank the chain transforms on, so this is that
+    call and not a second one: a declaration that derived the axis differently
+    would put the handles on rows the detection was not computed from.
+    """
+    return RowAxis(tuple(float(hz) for hz in default_freqs(params.fps)))
+
+
 @register_tool(
     tool_id="detect",
     version="1.0.0",
@@ -751,6 +764,16 @@ def display(params: DetectParams, window: FrameSpan, /) -> dict[DisplaySurface, 
         "freq_band": DisplaySurface.SCALOGRAM,
         "value_band": DisplaySurface.TRACE,
         "count_frac": DisplaySurface.COUNT,
+    },
+    # What a cut on each of those pictures is worth, which the picture itself
+    # cannot say (`adr/a-parameters-space-is-resolved-by-the-graph.md`). One of
+    # each form, and none of the three could have been written as another: the
+    # bank is derived from a parameter, the fraction is a constant of the
+    # quantity, and the value band is in units this tool never meets.
+    param_axes={
+        "freq_band": _bank_axis,
+        "value_band": AxisRelation.INPUT_VALUES,
+        "count_frac": ValueAxis((0.0, 1.0)),
     },
     display=display,
 )

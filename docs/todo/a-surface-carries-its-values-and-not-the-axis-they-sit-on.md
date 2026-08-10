@@ -1,6 +1,6 @@
 ---
 title: A surface carries its values and not the axis they sit on, so one band of three cannot be dragged
-status: open
+status: awaiting-review
 phase: 9
 priority: high
 gated_on: nothing

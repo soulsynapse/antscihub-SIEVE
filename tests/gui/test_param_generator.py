@@ -22,6 +22,7 @@ from pydantic import Field
 from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef
 from sieve.core.tool_base import (
     ArraySpec,
+    AxisRelation,
     DisplaySurface,
     ElementRelation,
     Emission,
@@ -102,6 +103,7 @@ def _spec() -> ToolSpec:
         },
         param_value_labels={"flavour": {"salt": "salted", "pepper": "peppered"}},
         param_surfaces={"band": DisplaySurface.TRACE},
+        param_axes={"band": AxisRelation.INPUT_VALUES},
         display=_display,
     )
 

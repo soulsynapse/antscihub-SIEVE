@@ -10,26 +10,20 @@ that must never happen is a surface being drawn as if it were something the
 graph declared.
 
 **Per surface kind, never per tool** (`adr/gui-knows-kinds-not-tools.md`). The
-kind decides three things and this module holds all three in one place, because
-they are one decision each way round:
+kind decides what the picture *is* — a scalogram is a field, a trace is many
+values per frame on one axis, a count is one value per frame — and that is all
+it decides.
 
-- what the picture *is* — a scalogram is a field, a trace is many values per
-  frame on one axis, a count is one value per frame;
-- what the vertical axis is denominated in;
-- and therefore whether a pair of cuts placed on it is a value the parameter can
-  take.
-
-**The third is a refusal for one of the three, and it is `RegionEditor`'s
-refusal.** A `COUNT` axis is a fraction of the whole and a `TRACE` axis is the
-upstream node's own units, so on both a y coordinate reads straight back as a
-parameter value. A `SCALOGRAM`'s rows are the Morlet bank's, and `freq_band` is
-in Hz — the column the tool fills carries the power and not the frequencies it
-was taken at, so nothing here can turn a row into a number the document would
-accept. Placing the editor is therefore also the decision not to offer it:
-better a band the user types than handles that commit whatever the bank happened
-to be indexed by. What would lift the refusal is the display channel carrying
-its own axis, which is a revision of the ADR above and not a change to this
-panel (`docs/todo/a-surface-carries-its-values-and-not-the-axis-they-sit-on.md`).
+**What the vertical axis is denominated in arrives beside the picture, and is
+not the kind's to say.** It is `ToolSpec.param_axes` resolved against the node's
+input (`core/tool_base.node_param_axis`), so a `SCALOGRAM` maps y through the
+bank the tool declared rather than through its own row count, and a panel handed
+no axis is `RegionEditor`'s refusal one kind over: a cut on it would commit
+whatever the picture happened to be indexed by. That refusal is a state of a
+graph — a relation-declared band over an input with no element meaning — and
+never a property of a kind (`adr/a-parameters-space-is-resolved-by-the-graph.md`).
+It stays drawable throughout: a picture nobody can place handles on is still the
+picture the parameters produced.
 
 **Time runs across and the value runs up**, on all three, because the surfaces
 sit under a graph and over a scrubber that both already read that way — and
@@ -49,7 +43,7 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from sieve.core.tool_base import DisplaySurface
+from sieve.core.tool_base import DisplaySurface, ParamAxis, RowAxis, ValueAxis
 from sieve.gui.canvas import image_of
 from sieve.pipeline.series_collector import CollectedSeries
 
@@ -76,19 +70,19 @@ _SURFACE_HEIGHT = 160
 _EMPTY_HINT = "No surface yet"
 _STALE_NOTICE = "stale — refilling"
 
-#: Surfaces whose vertical axis is in the units the parameter is stored in, and
-#: so the ones a pair of cuts can be committed from. Written out rather than
-#: derived by excluding `SCALOGRAM`, for `SURFACES_WITHOUT_PAINTER`'s reason: a
-#: fourth member would join the permissive side silently.
-EDITABLE_AXIS: frozenset[DisplaySurface] = frozenset({DisplaySurface.TRACE, DisplaySurface.COUNT})
-
 
 class SurfacePanel(QWidget):
     """One declared surface's picture, and the axis its handles would be read on."""
 
-    def __init__(self, surface: DisplaySurface, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        surface: DisplaySurface,
+        axis: ParamAxis | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._surface = surface
+        self._axis = axis
         self._picture: CollectedSeries | None = None
         self._columns: NDArray[np.float32] | None = None
         self._stale = False
@@ -101,6 +95,22 @@ class SurfacePanel(QWidget):
     def surface(self) -> DisplaySurface:
         """Which kind of picture this is, and therefore what its axis means."""
         return self._surface
+
+    @property
+    def axis(self) -> ParamAxis | None:
+        """Where a cut on this picture is read, or None where nothing can say."""
+        return self._axis
+
+    def set_axis(self, axis: ParamAxis | None) -> None:
+        """Read cuts on `axis` from now on.
+
+        Settable rather than fixed at construction because the declaration is a
+        function of the node's parameters: a scalogram's bank follows `fps`, so
+        an edit to a spin box in the form above the picture moves the axis under
+        it without the pane being rebuilt.
+        """
+        self._axis = axis
+        self.update()
 
     @property
     def picture(self) -> CollectedSeries | None:
@@ -116,11 +126,11 @@ class SurfacePanel(QWidget):
     def takes_handles(self) -> bool:
         """Whether a cut placed here reads back as a value the parameter takes.
 
-        False for a scalogram — see the module docstring. A caller building an
-        editor asks this rather than testing the kind, so the refusal has one
-        home and moves when the channel does.
+        The resolved axis and nothing else — a caller building an editor asks
+        this rather than testing the kind, so a tool whose axis a graph could not
+        resolve is refused without any kind being named.
         """
-        return self._surface in EDITABLE_AXIS
+        return self._axis is not None
 
     def set_picture(self, picture: CollectedSeries | None) -> None:
         """Show `picture`, which is current by definition — a refill produced it."""
@@ -148,19 +158,20 @@ class SurfacePanel(QWidget):
         return QSize(super().sizeHint().width(), _SURFACE_HEIGHT)
 
     def value_range(self) -> tuple[float, float]:
-        """Floor and ceiling of the vertical axis, in that surface's own terms.
+        """Floor and ceiling of the vertical axis, in the parameter's own units.
 
-        A `COUNT` is a fraction of a whole, so its axis is zero to one and is
-        *fixed*: an axis that followed the data would move the handles under a
-        drag that changed nothing about what they cut. The other two are read off
-        the columns, because neither the signal's units nor the bank's depth is
-        knowable here.
+        A declared `RowAxis` runs from its first coordinate to its last — the
+        bank's ends, not the picture's. A `ValueAxis` with bounds is *fixed*,
+        which is what a fraction of a whole needs: an axis that followed the data
+        would move the handles under a drag that changed nothing about what they
+        cut. Everything else is read off the columns with headroom, which is also
+        what an unresolved axis draws itself against — the picture is still the
+        one the parameters produced, and only the handles are refused.
         """
-        if self._surface is DisplaySurface.COUNT:
-            return 0.0, 1.0
-        if self._surface is DisplaySurface.SCALOGRAM:
-            rows = 0 if self._columns is None else self._columns.shape[1]
-            return (0.0, float(rows)) if rows else (0.0, 1.0)
+        if isinstance(self._axis, RowAxis):
+            return self._axis.coordinates[0], self._axis.coordinates[-1]
+        if isinstance(self._axis, ValueAxis) and self._axis.bounds is not None:
+            return self._axis.bounds
         finite = self._finite()
         if finite.size == 0:
             return 0.0, 1.0
@@ -182,8 +193,7 @@ class SurfacePanel(QWidget):
 
     def y_of(self, value: float) -> float:
         """Where `value` sits, with the axis floor on the widget's bottom edge."""
-        low, top = self.value_range()
-        return self.height() * (1.0 - (value - low) / (top - low))
+        return self.height() * (1.0 - self._fraction_of(value))
 
     def value_at(self, y: float) -> float:
         """What a cut at `y` is worth, clamped to the axis.
@@ -192,10 +202,31 @@ class SurfacePanel(QWidget):
         Clamped rather than extrapolated because a handle dragged past the top of
         the plot means the edge of the axis, not a value the picture never showed.
         """
-        low, top = self.value_range()
         if self.height() <= 0:
-            return low
-        return low + (top - low) * min(max(1.0 - y / self.height(), 0.0), 1.0)
+            return self.value_range()[0]
+        return self._value_of(min(max(1.0 - y / self.height(), 0.0), 1.0))
+
+    def _fraction_of(self, value: float) -> float:
+        """How far up the plot `value` is, as `_value_of`'s inverse.
+
+        Uninterpolated for a `RowAxis`, because the axis is linear in the *row*
+        and not in the coordinate: the field is drawn one row per equal band of
+        the widget, so a log-spaced bank placed by its numbers would put the
+        handles off the rows they cut. Cell centres rather than ends, which is
+        where `_paint_field`'s stretch puts them.
+        """
+        if isinstance(self._axis, RowAxis):
+            rows = self._axis.coordinates
+            return (float(np.interp(value, rows, np.arange(len(rows)))) + 0.5) / len(rows)
+        low, top = self.value_range()
+        return (value - low) / (top - low)
+
+    def _value_of(self, fraction: float) -> float:
+        if isinstance(self._axis, RowAxis):
+            rows = self._axis.coordinates
+            return float(np.interp(fraction * len(rows) - 0.5, np.arange(len(rows)), rows))
+        low, top = self.value_range()
+        return low + (top - low) * fraction
 
     def _finite(self) -> NDArray[np.float32]:
         if self._columns is None:
@@ -210,11 +241,14 @@ class SurfacePanel(QWidget):
         painter.fillRect(self.rect(), _BACKGROUND)
         columns = self._columns
         if columns is not None and columns.size:
+            # Every member named rather than one falling to an else, so a fourth
+            # draws nothing and `tool_base.SURFACES_WITHOUT_PAINTER` is what goes
+            # red for it rather than a picture quietly coming out as a polyline.
             if self._surface is DisplaySurface.SCALOGRAM:
                 self._paint_field(painter, columns)
             elif self._surface is DisplaySurface.TRACE:
                 self._paint_cloud(painter, columns)
-            else:
+            elif self._surface is DisplaySurface.COUNT:
                 self._paint_trace(painter, columns)
         notice = self.status_text()
         if notice:

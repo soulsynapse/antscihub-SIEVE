@@ -14,6 +14,7 @@ but leaves this index for `docs/adr/superseded/`.
 - [A new tool is one file](adr/a-tool-is-one-file.md) — A tool's machinery is one module in `sieve.tools`; it adds only files it alone opens and edits none another tool edits, the sole exception being extending a closed vocabulary that cannot express it.
 - [Declared means verified](adr/declared-means-verified.md) — A spec declaration is either consumed by running machinery or refused by name at registration; nothing is stored against a future consumer, and no declaration certifies its own correctness.
   - [An unstated field means any, and the side it sits on says what kind of claim that is](adr/an-unstated-field-is-a-claim.md) — An unstated `dtypes`, `channels` or `columns` means *any*: on an `accepts` a declared universal, on an `emits` a preservation claim that is ignorance only at a root.
+  - [An unconsumed member is named in a list, not left to a check that cannot see it](adr/an-unconsumed-member-is-named-in-a-list.md) — A vocabulary admits a member nothing consumes only by naming it in an unconsumed set beside it. A test refuses both: an unnamed member with no consumer, and a named member that gained one.
 - [ops admission is two tools](adr/ops-admission-is-two-tools.md) — `core/ops/` holds only math two tools already call: single-caller math lives in its tool module, and the package itself appears with its first two-caller entry, gated by a census test.
 - [One field is one populated value](adr/one-field-is-one-populated-value.md) — A composite stereotype sits on the field that holds the whole value, never on one bound of a pair, and registration proves it against `params_model`.
 - [A band declares the surface it is dragged on, and the tool fills it](adr/a-band-declares-the-surface-it-is-dragged-on.md) — A `BAND` param names a `DisplaySurface` — a picture kind, never a unit — and its tool fills it on a preview-only channel: never emitted, never keyed, and refused unless both halves are declared.
@@ -53,4 +54,4 @@ but leaves this index for `docs/adr/superseded/`.
 - [The walked step owns the canvas](adr/the-walked-step-owns-the-canvas.md) — The walked step owns the canvas — its result over its input, its emissions drawn by kind; an ancestor's emissions are a view toggle; the pin owns only the slot below.
 - [An output's kind is the picture it makes](adr/an-outputs-kind-is-the-picture-it-makes.md) — The canvas paints an output by its `ElementKind` — `PIXEL` an image, `BLOCK` a field of cells over its frame, `FRAME` no picture — and no member is ever added for a tool.
 
-*31 settled, 4 superseded.*
+*32 settled, 4 superseded.*

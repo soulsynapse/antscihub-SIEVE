@@ -119,20 +119,189 @@ the thing runs.
 
 ## 3. The blind spots, as structure
 
-*(pending — transcript pass)*
+Evidence for this section includes a pass over the raw orchestrator
+transcripts (`~/.agent-orchestrator/logs/`, 762 runs, 2026.08.04–08.10; grep
+commands inline below). Four blind spots, each structural rather than an
+oversight:
+
+**3.1 One oracle shape, held at both ends.** The worker satisfies a pytest
+selector; the reviewer re-runs the same selector, re-proves red at the parent,
+and sweeps mutants over the changed lines. Both ends of the loop share one
+oracle, so anything the selector does not name is invisible to both — and the
+selector is written *before the work exists*, by specify, under a rule that
+forbids breadth (§4.1). The loop recorded this exact mechanism about itself at
+least six times in `docs/findings/loop/` (the `-k`-disjunction finding and its
+siblings) and each time minted a better selector, never a second kind of
+oracle. A loop whose only remedy for a blind selector is a sharper selector
+can refine forever without gaining altitude.
+
+**3.2 `--next` is the world model, and absence has no item.** Selection is
+stateless: `scripts/doc_index.py` orders every `status: open` item and hands
+over the head. Work not carried by an item does not exist — not deprioritized,
+*unrepresentable*. There was never an item whose subject was "the
+application," so the application was never selected, worked, or reviewed.
+The confession in `67d9c9a` (§1) names the consequence precisely.
+
+**3.3 No instrument above the module — measured, not asserted.** Across all
+762 run transcripts, exactly **3** contain a command that launches the app
+(`grep -lE 'uv run sieve-gui|sieve-gui\.exe|python SIEVE\.py' *.log` over
+non-err logs), and **zero** of those are loop-labeled runs — the same grep
+over `*sieve-v3-*.log` returns nothing. Two are 08-05 ad-hoc sessions
+predating the loop; the third is the 08-09 ad-hoc item that created
+`SIEVE.py`, whose own transcript states the entire runtime verification the
+project ever received: the process "came up and stayed up until I killed
+them." Liveness, once; scenario, never. Everything else the loop could see is
+below the process: GUI tests run offscreen with fabricated events handed to
+handlers (`tests/gui/driving.py`), fixtures are 160×120 synthetic clips
+generated in-process, real footage is `.gitignore`d by written decision
+(`video-tests/` — defensible for review hygiene, and it places the only
+realistic input outside everything the loop can observe), and the reviewer's
+view of the work run itself is a tail — `read_run_log` returns at most the
+last 1000 lines, 150 by default, and its own docstring says so: "readings
+come back as the tail, so a long run is its ending"
+(`agent-orchestrator/src/agent_orchestrator/mcp_server.py`).
+
+**3.4 The rigor turned inward.** §2's ratios (114/207 findings about the loop;
+more doc-machinery tests than integration tests), plus the head of the commit
+log: the final day is largely the loop auditing its mutation harness. This is
+not idleness — it is the apparatus doing exactly what it was built to do,
+optimizing the consistency of its own verdicts. Consistency is the property
+that says nothing about whether the assembled thing runs.
 
 ## 4. Rules that composed into the failure
 
-*(pending)*
+Each of these is defensible alone; the miss is their composition.
+
+**4.1 Specify's narrowness rule.** `sieve-v3-specify.md:42`: a criterion is
+"Not a description of a passing state, not a whole-suite run that would pass
+today." Written to prevent self-certification — and it works — but it makes a
+criterion that spans components structurally impossible. Every criterion is
+narrow *by construction*, so §3.1's shared oracle is always a narrow one.
+
+**4.2 Scope prohibitions at both ends.** The work prompt forbids landing
+anything the criterion does not need and forbids minting when an open item
+could carry the observation; the review prompt forbids fixing anything and
+rules on one item. A worker who noticed the app doesn't start was
+out-of-jurisdiction fixing it; a reviewer who noticed was permitted only to
+mint — into the same pool where phase-9 asides sat unselected. Noticing was
+legal; *acting* was not, and the noticing had nowhere load-bearing to land.
+
+**4.3 Removals paid by the user.** ADR 35 removed the `Path.cwd()` shelf scan
+and ADR 34 removed `Project.source`, each deliberately deferring the
+replacement (`pinning-a-project-is-state-the-library-has-nowhere-to-put.md`,
+open; `SCHEMA_VERSION` held at 1, no migration). Both removals were correct by
+their ADRs' own reasoning and both left the running application worse than
+before — the empty shelf and the refused project files are these two decisions
+— because nothing prices an ADR against the user's next launch. Meanwhile
+`README.md:14` and `SIEVE.py`'s docstring still describe the removed cwd scan:
+the only user-facing instructions tell the user to do something the code no
+longer supports.
+
+**4.4 A named failure mode with no instrument.** `docs/PLAN.md` states
+"Wrong-but-green is the one outcome the loop cannot detect" and demands each
+phase land "something runnable and gated" — then writes every phase gate as a
+pytest/lint line. The constraint that would have caught this was in the
+binding doc from the start, as prose. A constraint without an instrument is a
+hope; the loop itself proved that its documents' other constraints held
+exactly when a gate or a criterion enforced them and drifted when they didn't.
 
 ## 5. Timeline and review-grounds taxonomy
 
-*(pending)*
+Commits per day (`git log --format=%ad --date=short | sort | uniq -c`):
+39 / 251 / 125 / 157 / 70 across 08-06 → 08-10. Loop-labeled runs per day
+(log filenames): 73 / 92 / 80 / 55 across 08-07 → 08-10.
+
+Every does-the-assembled-thing-run defect was minted in the last two days,
+each from a human hand-launching the app, while the numbered plan was already
+`done` through phase 11:
+
+| Commit | Date | Item |
+|---|---|---|
+| `64a774a` | 08-09 | `a-mint-lands-wherever-the-app-was-launched.md` — NEW PROJECT writes into the source tree |
+| `67d9c9a` | 08-09 | `only-run-writes-the-document.md` — closing the window discards every edit |
+| `8836652` | 08-09 | `a-dropped-player-takes-the-process-down-and-its-net-is-a-comment.md` |
+| `b8ad052` | 08-10 | `the-chosen-file-never-reaches-the-player.md` — the central user path, still open |
+
+Review behavior, classified by the `+status:` lines each of the 196
+review-subject commits wrote into `docs/todo/` (script: `git show <h>
+--unified=0 -- docs/todo/ | grep '^+status:'`): 79 closed `done` only;
+58 wrote `done` and at least one `open` (closed the item and minted or
+reopened another); 33 wrote `open` without closing anything; 12 touched no
+item status (findings/gardening); 14 involved `deferred`. So roughly half of
+all reviews produced at least one open item — the reviewer's teeth were real.
+The grounds, in every sampled reopen (§2), are one of four shapes: the
+criterion doesn't discriminate; a clause of the item's body is unbuilt; the
+proof-of-red was too weak; the criterion is a disjunction green on its empty
+side. All four are selector-shaped. No review's grounds were "I ran the
+application and it did not do the thing" — consistent with §3.3's zero
+launches in loop-labeled transcripts.
 
 ## 6. Prescriptions
 
-*(pending)*
+Each cites the blind spot it answers. The theme is one addition — a second
+kind of oracle — plus routing rules so evidence of the app's state can reach
+`--next`.
+
+**6.1 Give PLAN's "runnable" constraint an instrument (3.3, 4.4).** Every
+phase gate gains one clause that executes the real entry point: launch
+`sieve-gui` (the console script, not an imported widget), drive the phase's
+lead scenario, assert its observable outcome. Even the weakest version —
+process starts, opens a project passed on argv, renders a first frame, exits
+0 — would have caught all three current breaks. This is the single highest-
+leverage change; everything the loop already does well (proof-of-red,
+independent re-run, mutation) applies to this oracle unchanged.
+
+**6.2 A standing hand-session item, early and recurring (3.2, §5).** The
+day-4/5 pattern — Kendrick uses the app, defects become items — was the only
+mechanism that ever found this class. Make it deliberate: a recurring item per
+phase whose `done_when` is the existence of a dated hand-session finding, and
+whose body says the session is Kendrick's, not an agent's (an agent cannot
+author this completion without the finding becoming fiction). This is also
+the routing fix for §1's converted evidence: a hand-session finding names the
+*path* that failed, not the local default that happened to be wrong.
+
+**6.3 Phase-boundary criteria may span components (3.1, 4.1).** Keep specify's
+narrowness rule for ordinary items; carve out the phase-gate item class, whose
+criterion is *required* to cross at least the seam the phase claims to close.
+The rule that prevents self-certification and the rule that prevents breadth
+are the same sentence today; they need to be two sentences.
+
+**6.4 An ADR that removes behavior carries its replacement at priority
+(4.3).** Not a pool aside: if the removal degrades a user path, the
+replacement item is minted in the same commit with a priority that outranks
+the pool, or the ADR waits. ADR 34/35 are both cases where the reasoning was
+right and the sequencing produced a regression nothing owned.
+
+**6.5 Entry-point coverage in CI (3.3).** One test that runs the installed
+`sieve-gui` as a subprocess (offscreen platform is fine — the point is
+`main()`, argv handling, and the wiring between them, all currently at zero
+coverage). Cheap, permanent, and it makes `README.md`-style drift (§4.3)
+fail red instead of lying quietly.
+
+**6.6 Minor: let the reviewer read beginnings (3.3).** `read_run_log`'s
+tail-only reading means a long work run is its ending. Either front-load the
+work prompt's claims summary (it already pastes `done_when` output early) or
+add a head/offset parameter. Low weight next to 6.1–6.3.
 
 ## 7. Appendix: shortest path to deployable, 2026-08-10
 
-*(pending)*
+Recorded for actionability; repair is outside this audit. Three breaks
+compose into the current symptom, two already minted:
+
+1. **The shelf is empty on relaunch** — no open-project gesture, no remembered
+   locations, argv ignored. `pinning-a-project-is-state-the-library-has-
+   nowhere-to-put.md` (open). Accepting a project path on `sieve-gui` argv is
+   the smallest cut.
+2. **The chosen file never reaches the player** —
+   `the-chosen-file-never-reaches-the-player.md` (open, high). `_player.open`
+   has one caller (`app.MainWindow.open_project`); the chooser path ends
+   before decode.
+3. **Pre-08-10 project files are refused** — ADR 34's `extra='forbid'` with
+   `SCHEMA_VERSION` still 1 and no migration. Either strip `source:` from the
+   dead files by hand or build the one-key migration the ADR declined.
+
+Plus the documentation lie: `README.md` and `SIEVE.py`'s docstring describe
+the cwd scan ADR 35 removed — the likeliest reason the first launch reads as
+broken rather than unfinished. Residue on disk as of this audit: untracked
+empty mints at `projects/untitled_1.sieve.yaml` and
+`video-tests/untitled_1.sieve.yaml`, left in place as evidence.

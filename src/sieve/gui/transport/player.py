@@ -37,10 +37,12 @@ Playing every frame at the wrong speed would be the wrong tradeoff.
 
 from __future__ import annotations
 
+import atexit
 from time import perf_counter
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtGui import QImage
+from shiboken6 import isValid
 
 from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import METRICS, MetricBus
@@ -66,10 +68,40 @@ FALLBACK_FPS = 30.0
 _SCRUB_BUDGET_MS = BUDGETS["scrub_to_repaint"].limit_ms
 
 
+#: Decode threads whose player has neither shut down nor been destroyed. A held
+#: player never emits `destroyed`, so the closure at the end of `__init__` is a
+#: floor under a player that is *dropped* and this set is the one under a player
+#: that is *kept* — the case every process that exits holding a window is in.
+#: Discarded on both paths, so it does not grow with a session's players.
+_RUNNING: set[QThread] = set()
+
+
 def _stop(thread: QThread) -> None:
-    """Quit and join `thread`. Safe on one that has already finished."""
+    """Quit and join `thread`. Safe on one already finished, or already reaped.
+
+    Reaped is the teardown case: `destroyed` can fire after shiboken has deleted
+    the C++ object, and touching the wrapper then raises `RuntimeError` from a
+    slot nothing is in a position to catch. An invalid wrapper means Qt has
+    already torn the thread down and there is nothing left to join.
+    """
+    _RUNNING.discard(thread)
+    if not isValid(thread):
+        return
     thread.quit()
     thread.wait()
+
+
+@atexit.register
+def _stop_running_threads() -> None:
+    """Stop the decode threads of players still alive at interpreter exit.
+
+    A `QThread` still running when its C++ object is torn down ends the process
+    abnormally: no traceback, no failing test, a nonzero exit on a suite that
+    passed. `atexit` runs while the wrappers are still valid, which is the last
+    point at which stopping them is possible at all.
+    """
+    for thread in list(_RUNNING):
+        _stop(thread)
 
 
 class VideoPlayer(QObject):
@@ -141,6 +173,7 @@ class VideoPlayer(QObject):
         self._worker.frame_ready.connect(self._on_frame_ready)
 
         self._thread.start()
+        _RUNNING.add(self._thread)
 
         # A running `QThread` whose wrapper is finalised aborts the process, so
         # stopping it cannot be left to a caller remembering to. `destroyed`
@@ -272,8 +305,7 @@ class VideoPlayer(QObject):
         """Stop the decode thread. Call before the application exits."""
         self.pause()
         self._close_requested.emit()
-        self._thread.quit()
-        self._thread.wait()
+        _stop(self._thread)
 
     # ---- internals -------------------------------------------------------
 

@@ -1,41 +1,61 @@
 ---
-title: Which axis carries a meaning like "generated background"
+title: Both axes for "generated background" are closed, so the question is whether VISION's sentence survives
 phase: 2
-priority: high
+priority: normal
 status: deferred
 deferred_for: decision
-gated_on: Kendrick naming the axis — an `Emission` name, or a fourth `ElementKind` member
+gated_on: Kendrick ruling on VISION's "select what type of output it should broadcast as" — a residual capability, or a sentence describing the swap
 opened: 2026-08-09
 ---
 
-# Which axis carries a meaning like "generated background"
+# Both axes are closed, so the question is whether VISION's sentence survives
 
-Struck out of
-[the-first-source-tool-moves-the-three-single-root-assumptions.md](the-first-source-tool-moves-the-three-single-root-assumptions.md),
-which reserved the question for Kendrick and then went `done` around it. A
-decision reserved inside a closed item is a decision nothing surfaces: the index
-reads status, not bodies, and `PLAN.md`'s Open questions has read "None open"
-since 2026-08-08 with this one live underneath it. The reasoning is not repeated
-here — that section is still where it lives, and it is the thing to read before
-answering.
+Minted the same day claiming two live readings, and corrected within the hour:
+both were already ruled, by two rulings this item had not read together.
 
-The two readings, as that item left them. An `Emission` name puts the meaning
-where the user's choice already is, per tool, and says nothing to a consumer
-asking what it was handed. A fourth `ElementKind` member puts it on the type,
-where it propagates through `node_element` and reaches every downstream — but
-`ElementKind`'s own docstring says it answers what one value *is a value of*,
-and a scene description is not an answer to that question: a background frame's
-values are pixels, whatever produced them.
+**A fourth `ElementKind` member is closed.**
+[adr/an-outputs-kind-is-the-picture-it-makes.md](../adr/an-outputs-kind-is-the-picture-it-makes.md)
+(settled 2026-08-09) says "no member is ever added for a tool", and that a
+picture a tool wants shown over the footage is a `DisplaySurface` member and a
+revision of that ADR, "never a fourth `ElementKind`". Its reason is the one the
+source-tool item had already argued and could not settle alone: `ElementKind`
+answers what a node's output *is*, and a scene description is not an answer to
+that question.
 
-What waits on it is three of VISION's scenarios and a phase. The broadcast-as
-swap ("as soon as they select generated background, the background subtraction
-step picks it up"), the folder picker's offering, and the plausibility shortlist
-all key on this one axis;
+**Emission-name keying is refused where it was going to be spent.** The
+2026-08-09 ruling on
 [the-offering-predicate-is-not-the-edge-legality-check.md](the-offering-predicate-is-not-the-edge-legality-check.md)
-settled the negative half — `admits` is not the offering predicate — and this is
-the positive keying it left open. The merge phase spends the answer rather than
-asking it: a subtraction node that picks its background up needs to know which
-of its two inputs is one.
+reads "no plausibility field, no new `ElementKind` member, no Emission-name
+keying", and answers positively instead: the offer is derived from what the
+position's input resolved to. That is scoped to the offer rather than to every
+consumer, but the offer was one of the three scenarios the axis was said to
+block, and the ruling's closing clause governs the rest — new vocabulary is
+admitted only when a real offer proves inexpressible in the resolved facts.
 
-No `done_when`, because what a command here would assert is the thing being
-decided. It is owed the moment the deferral lifts.
+So what is left is not a choice between two mechanisms. It is whether VISION's
+sentence still describes a capability at all: "they do that and select what type
+of output it should broadcast as. As soon as they select generated background,
+the background subtraction step picks it up and displays it." Read against
+[adr/a-users-file-wires-in-like-any-other-input.md](../adr/a-users-file-wires-in-like-any-other-input.md)
+— a picked file is a node, so choosing among sources is moving an edge — and
+against the substitution-not-comparison ruling in
+[whether-vision-states-the-background-ab.md](whether-vision-states-the-background-ab.md),
+the sentence may already be satisfied by the swap: the file means "background"
+because of which position it was wired into, and there is nothing left to select.
+The reading against that is that derivation genuinely cannot tell a background
+PNG from a mask PNG — both resolve to one `PIXEL` file of the same extension
+class — so if the user is ever to say which it is, an edge is the only place the
+answer currently lives, and a graph where two source nodes feed one step has two
+edges and no labels on them until Phase 11's ports exist.
+
+That is the residual, and it is Kendrick's for the same reason the A/B was: it is
+a VISION edit either way — the sentence stays and gains a mechanism, or it comes
+out because the swap already does its work. What it is **not** is a blocker for
+Phase 11. 11.3's subtraction knows which input is the background from the port it
+arrives on, and ports are settled.
+
+`pick.py` is stale on this and the fix rides with whichever way it goes: its
+docstring and its spec comment both tell the reader the axis is open, written at
+07:39 on 2026-08-09, eight hours before ADR 29 closed half of it.
+
+No `done_when`, because what a command would assert is the thing being decided.

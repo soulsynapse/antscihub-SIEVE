@@ -26,11 +26,16 @@ unstated pair is a statement of preservation and the check still runs against th
 real upstream. A source tool has no upstream to preserve from.
 
 What its frames *mean* — that this one is a background rather than a plate — is
-not a question a stream type asks, and it is not answered here either: which axis
-carries a meaning like "generated background" is open
-(`todo/the-first-source-tool-moves-the-three-single-root-assumptions.md`), so
-this tool declares the one product it has and nothing selects between products it
-does not have.
+not a question a stream type asks, and this tool does not answer it on any other
+axis either. It cannot: `adr/an-outputs-kind-is-the-picture-it-makes.md` rules
+that no `ElementKind` member is added for a tool, and the offering ruling on
+`todo/the-offering-predicate-is-not-the-edge-legality-check.md` refuses
+Emission-name keying in favour of derivation. So the meaning is carried by the
+position the node is wired into, and what remains open is only whether a user
+ever declares one outright
+(`todo/which-axis-carries-a-meaning-like-generated-background.md`). This tool
+declares the one product it has and nothing selects between products it does not
+have.
 
 **Where the pattern is anchored.** As written: an absolute pattern is used as it
 stands, a relative one against the process's directory. That is what a file
@@ -228,7 +233,8 @@ SOURCE = PickedFile()
     accepts=ArraySpec(),
     emits=ArraySpec(dtypes=PICKED_DTYPES, channels=PICKED_CHANNELS),
     # One product. What the picture *means* — a background, a mask, a plate — is
-    # the open axis question and is not smuggled in here as a second emission.
+    # the position's to say and never a second emission here (ADR 29, and the
+    # offering ruling that answers by derivation).
     emissions=(Emission("picked"),),
     source=SOURCE,
     # The values are the file's own pixels, which is what a decoded frame's

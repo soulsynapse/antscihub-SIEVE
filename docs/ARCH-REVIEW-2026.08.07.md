@@ -17,9 +17,13 @@ on this document's authority; it is cited in the items only as where an
 observation was first written down, never as its evidence.
 
 **Became items.** The undesigned semantic axis →
-[todo/which-axis-carries-a-meaning-like-generated-background.md](todo/which-axis-carries-a-meaning-like-generated-background.md)
-(struck out of the `done` item that had reserved it, and now listed in PLAN's
-Open questions). The merge, with both of the costs this review priced →
+[todo/which-axis-carries-a-meaning-like-generated-background.md](todo/which-axis-carries-a-meaning-like-generated-background.md),
+and it is the clearest case of this document's staleness: the review calls it
+"the largest single undesigned surface in the system", and by the end of
+2026-08-09 both mechanisms it names were ruled out — a fourth `ElementKind`
+member by ADR 29, Emission-name keying by the offering ruling, which answers by
+derivation instead. The item was minted repeating the review's framing and
+corrected the same day. What is left is a VISION edit, not a surface. The merge, with both of the costs this review priced →
 [Phase 11](PLAN.md) as three sequenced steps. `background_ema`'s epsilon warmup
 denying keys downstream →
 [todo/background-ema-is-unkeyed-and-denies-keys-downstream.md](todo/background-ema-is-unkeyed-and-denies-keys-downstream.md),

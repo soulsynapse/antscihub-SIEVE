@@ -44,8 +44,8 @@ unkeyed model in it re-walks its lead-in arithmetic on every render, though not
 its decode wherever something keyed sits above the model
 ([findings/2026.08.09-the-epsilon-chain-repeats-its-lead-in-arithmetic-not-its-decode.md](../findings/2026.08.09-the-epsilon-chain-repeats-its-lead-in-arithmetic-not-its-decode.md)).
 Because the cost is the tools and not the reader, only a materialized product
-upstream of the model removes it — `todo/crop-serving-and-checkpoint-read-back-become-source-tools.md`,
-whose halves are now done and whose remedy is therefore unblocked. Admission was
-the cheap way out of that bill and it is the one that is closed; the ratchet
-turns one way, and a later session meeting this paragraph meets a measurement
-rather than an invitation.
+upstream of the model removes it, which is the remedy
+`todo/crop-serving-and-checkpoint-read-back-become-source-tools.md` carries.
+Admission was the cheap way out of that bill and it is the one that is closed;
+the ratchet turns one way, and a later session meeting this paragraph meets a
+measurement rather than an invitation.

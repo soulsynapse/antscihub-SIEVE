@@ -205,3 +205,44 @@ the way in as well as on the way out — and its `done_when` already names
 `the_version_a_document_declares_after_the_removal`, which is the case the
 addition's answer would sit beside. That criterion covers the removal only; the
 addition half may want widening.
+
+## Review 2026-08-10: the anchoring lands in the cache key, and `relocated` is not free
+
+The anchoring clause the fold above discharges is correct about the file it
+resolves and wrong about what that costs in keys.
+[anchoring-puts-the-project-directory-into-the-node-key](../findings/2026.08.10-anchoring-puts-the-project-directory-into-the-node-key.md)
+measures it: `anchored` rewrites the param before `Dag.build`, `node_key` digests
+the resolved params, and so the project's own directory is inside every key below
+a source node. One `pick` node with the same picked identity keys three different
+ways as held, anchored on one folder, and anchored on another. That is the first
+of the two rules
+[adr/a-users-file-wires-in-like-any-other-input.md](../adr/a-users-file-wires-in-like-any-other-input.md)
+forbids by name — "neither 'this exact path' nor 'the folder of this name beside
+the project'" — and the commit's claim that "the pattern still never enters a
+key" is contradicted by `cache_key.picked_key`'s own docstring, which says the
+pattern reaches the node key through `params`. The ADR's *ordering* clause was
+satisfied and its *exclusion* clause was not; the run checked one and cited both.
+
+This belongs here rather than beside the cache key because it is this migration
+that makes it universal. ADR 34 requires the stored path to be relative to the
+project file, so relative stops being the spelling a few documents happen to use
+and becomes the only one — and relative was the one spelling whose key did not
+move when the folder did. What a user sees after moving a project is a document
+that opens, every file resolving, and every node below the source recomputing.
+
+The fix is a fork this item has to take rather than inherit: either a source-tool
+node's `ToolSpec.path_params` are excluded from `node_key`'s digest — defensible
+without a new ruling, since the file the param resolved to is already in the key
+as the `picked_key` on the node's `upstream` pair — or the cost is accepted and a
+successor ADR says so. Nothing in the tree pins key stability across a project's
+location either way, so whichever branch is taken owes a case that would go red
+if the other were built.
+
+Correcting the fold above on one point: "Nothing calls `relocated` today and
+nothing tests it, so the signature is free" is false.
+`tests/unit/test_pipeline_model.py` calls it twice, at
+`test_relocating_rebases_every_stored_path` and
+`test_relocating_with_no_footage_rebases_what_it_does_name`, and the first
+asserts on `moved.source` — the field this item removes. So the session that
+takes the second `-k` clause rewrites both cases rather than writing one against
+a free signature, and the first of them is what that clause replaces.

@@ -42,3 +42,27 @@ first — a changed decision takes a file beside or over the old one.
     $ uv run pytest tests/unit/test_pipeline_model.py -q -k 'a_load_keeps_the_version_it_read or an_older_document_round_trips_unchanged'
     61 deselected in 0.14s
     exit: 5
+
+## 2026-08-10: the first bump queued behind this one removes a field
+
+`adr/a-document-names-footage-only-through-a-tool.md` (34) takes
+`Project.source` and `SourceRef` out of schema v1 and names this item as where
+the rule for the bump lands — this is the case that forces the rule, not a
+second copy of it, and the migration is
+[the-field-that-names-footage-leaves-the-schema](the-field-that-names-footage-leaves-the-schema.md),
+which sorts into this phase's pool and therefore after this item.
+
+What that costs the paragraph above: "an ADR saying a bump adds fields and never
+repurposes or removes one", written flat, is contradicted by the first thing
+queued behind it. The v2 record it rests on is unmoved — four of five bumps
+purely additive, zero transform code — and so is the argument against a restamp,
+which is about what a *load* does and holds whichever way removal is ruled. What
+is not settled is the removal clause: whether the rule forbids one outright and
+ADR 34 is reopened, or states the terms a removing bump is paid on, of which the
+ADR's own "the cost is charged once, at the version" is the direction rather
+than the wording. Both readings need the round trip this item's criterion pins,
+because a removal is the bump where an older document loaded by a newer build
+cannot go home, so nothing below the rule changes.
+
+This section adds no criterion; the ADR the item writes is what carries the
+clause.

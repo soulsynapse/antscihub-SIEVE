@@ -1,9 +1,9 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k a_mutant_that_leaves_the_subject_unparseable_is_refused"
+done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_unparseable_mutant_is_refused_before_the_oracle_runs"
 opened: 2026-08-08
 ---
 
@@ -357,3 +357,48 @@ Untouched and unstarted, in the order the section above lists them: `_tail`'s
 uncased halves — dropping `stderr` from its pair survives, as does narrowing the
 twenty-line window to one — and `ORACLE_BUDGET_SECONDS`'s comment, which claims
 its figure makes a stall "structurally impossible" where nothing sums the parts.
+
+## The gate holds, and the refusal is paid for after the oracle has been (2026-08-10)
+
+Re-verified rather than read off the transcript: the criterion is green here, the
+whole module is 27 green, `uv run pytest -q --ignore=tests/gui` is 1036 green with
+the load-sensitive bench case not firing this time, `ruff check` and
+`format --check` are clean, `done_when` was untouched and `status` moved only to
+`awaiting-review`. Red-before was reproduced by deleting the `refuse_unparseable`
+call from the loop and running the case: it fails on `assert 0 == 1` with
+`KILLED    a = 100` and `1 killed, 0 survived` on stdout — the false KILLED
+itself, not some neighbouring red. The rename is complete
+(`grep -rn "is_scored_by_its_exit" tests/scripts` is empty) and both corrected
+docstrings say what their subjects do.
+
+Not `done`, and the reason is in the tree rather than ahead of it. Two clauses the
+criterion never reached are still unstarted — `_tail`'s uncased halves and
+`ORACLE_BUDGET_SECONDS`'s comment — and a third arrived with the gate: every
+refusal `run_sweep` can raise about a mutant is a pure function of the original
+bytes and the mutant, and every one of them is raised from inside the per-mutant
+loop, after the oracle budget has already been spent on the baseline and after
+earlier mutants have been scored and discarded. `apply_mutant`'s two anchor
+refusals were always there; `refuse_unparseable` joins them, and it is the one a
+hand-typed mutant list hits routinely, because the padding rule below is a
+one-space trap on every indented line. A sweep of twenty mutants whose
+nineteenth will not compile pays the baseline and eighteen oracle runs and prints
+nothing. `done_when` rotates onto that: the refusals move ahead of the baseline,
+so a mutant list that cannot be applied is refused before any subprocess starts,
+and the case names a sweep whose second mutant is unparseable and asserts the
+oracle was never invoked.
+
+Riding with it in the same commit, and covered by prose rather than by the
+criterion: `_tail`'s two uncased halves, and `ORACLE_BUDGET_SECONDS`'s
+"structurally impossible" comment.
+
+The trap itself is not folded in here as work, because the gate is the ruling the
+previous rotation already took over re-founding the signal: `parse_mutant`'s
+comment says "an anchor's own indentation still counts, only the separator's
+padding does not", and that is true of the anchor and false of the replacement —
+` ==> ` eats the replacement's first indent space, so `A ==> B` for an indented
+`B` always arrives one space short and the sweep now refuses it with a message
+that says to add the space back. That is loud and operable. What it is not is
+recorded correctly: the two mutants this item's section above and the
+2026-08-08 finding's amendment both quote as `2 killed, 0 survived` are refused
+when re-run verbatim, and reproduce only with a compensating space
+(`findings/loop/2026.08.10-a-done-items-mutation-anchor-is-deleted-and-nothing-re-runs-it.md`).

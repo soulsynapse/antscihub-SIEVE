@@ -1,9 +1,9 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_unparseable_mutant_is_refused_before_the_oracle_runs"
+done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_that_breaks_under_a_mutant_is_refused_rather_than_killed"
 opened: 2026-08-08
 ---
 
@@ -441,3 +441,41 @@ recorded correctly: the two mutants this item's section above and the
 2026-08-08 finding's amendment both quote as `2 killed, 0 survived` are refused
 when re-run verbatim, and reproduce only with a compensating space
 (`findings/loop/2026.08.10-a-done-items-mutation-anchor-is-deleted-and-nothing-re-runs-it.md`).
+
+## The hoist holds, and what the item is named for is still scored (2026-08-10)
+
+Re-verified rather than read off the transcript: the criterion under review is
+green here, the whole module is 29 green, `uv run pytest -q --ignore=tests/gui`
+is 1038 green, `ruff check` and `ruff format --check` are clean, `done_when` was
+untouched by the worker and `status` moved only to `awaiting-review`. Red-before
+was reproduced by reverting `scripts/mutation_sweep.py` alone to its parent and
+running the case: it fails on `assert not marker.exists()` with `assert not True`
+— the oracle invocations the old ordering paid for before refusing, which is the
+defect and not a neighbouring red. The `_tail` case, which passes on the
+unchanged tree because the gap was the case, was held under an independent sweep
+here rather than taken from the report: dropping `("stderr", finished.stderr)`
+from the pair and `lines: int = 20 ==> lines: int = 1` are `2 killed, 0
+survived`.
+
+Not `done`, and the residue is what the item is titled for. `run_sweep` still
+reads KILLED off `finished.returncode != 0`, so an oracle that breaks rather than
+fails under a mutant — the Windows access violation measured once in nine runs on
+2026-08-08, a mistyped path after `--` that collects nothing, an interpreter that
+dies in a native frame — is scored as a kill. The baseline closed the
+deterministic red; `refuse_unparseable` closed the deterministic unparseable
+mutant; the hoist moved every refusal ahead of the first subprocess. None of them
+reaches an intermittent break, which is by construction free to land on a mutant
+run rather than the baseline
+(`findings/loop/2026.08.08-a-crashing-test-command-is-indistinguishable-from-a-killed-mutant.md`,
+still `open` on exactly this).
+
+`done_when` rotates onto it, and the shape is the cheap discrimination rather
+than the re-founding the finding sketches: a non-zero exit is a kill only when it
+is the code the oracle uses to say its own tests failed. Every other non-zero
+exit is the command breaking, and gets the treatment a red baseline already gets
+— a refusal that shows the output, not a verdict. The case names an oracle that
+exits like a crash under the mutant and is green at the baseline, and asserts a
+refusal rather than `KILLED`. What the exit-code table should be is the run's to
+settle from the tree: pytest's own codes are the contract that matters, since the
+oracle after `--` is a pytest session in every criterion in `docs/todo/` that
+uses this module.

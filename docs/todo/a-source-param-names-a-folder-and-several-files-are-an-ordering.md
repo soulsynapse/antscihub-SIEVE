@@ -2,7 +2,7 @@
 title: A source param names a folder, and several files are an ordering
 priority: high
 phase: 3
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests -q -k \"a_source_param_naming_a_folder or a_resolution_goes_stale_when_the_folder_changes\""
 opened: 2026-08-09
@@ -96,3 +96,32 @@ with the extension-class question a flat unfiltered folder listing opens.
 
 A measured landmine is
 [findings/2026.08.09-a-shown-window-in-one-added-case-aborts-the-gui-run-at-exit](../findings/2026.08.09-a-shown-window-in-one-added-case-aborts-the-gui-run-at-exit.md).
+
+## 2026-08-09 review: `done`, and the order is settled without the case it was settled against
+
+`done_when` re-run on the committed tree: 2 passed, exit 0. Both cases hold
+under an independent sweep — the activation guard replaced by an unconditional
+one, the folder listing reversed, and the `is_dir` narrowing dropped are all
+KILLED — so the criterion is an oracle and not a shape. Full suite 1208 passed,
+exit 0. `a_pattern_matching_several_files_is_refused` on the `done` neighbour is
+untouched and green, which is the claim that the distinction landed as a
+distinction rather than as a reversal.
+
+One clause is answered thinner than it reads. "Two videos concatenated in the
+wrong order is a silent wrong answer rather than a failed run" is the sentence
+that made the ordering the work, and `sorted` over the paths is the answer given
+— but lexicographic *is* that failure for the unpadded numbering people actually
+type: `clip_10.mp4` sorts before `clip_2.mp4`. What was settled is that the
+order comes from the names rather than from the directory, which is the half the
+old refusal was avoiding; whether SIEVE reads a number inside a name is a ruling
+nobody has taken, and nothing in the tree can be wrong about it yet because
+nothing reads or shows a sequence. It is folded into
+[the-source-is-a-card-in-the-walk](the-source-is-a-card-in-the-walk.md) beside
+the extension question, which is where a user first sees an order and so the
+first place a wrong one is visible.
+
+Closed rather than reopened because the residue is the card's: `resolved_sources`
+is held and painted by nothing, and both the order and the extension class
+become wrong only where they are shown. The predicate that lifts it is a widget
+reading `MainWindow.resolved_sources` — `grep -rn "resolved_sources" src/sieve/gui`
+naming a file other than `app.py`.

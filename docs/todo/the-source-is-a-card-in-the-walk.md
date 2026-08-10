@@ -90,6 +90,19 @@ they did not mean. Whether the chooser narrows the list, the tool declares what
 it can read, or nobody does because a reader refuses it one step later, is a
 question this card is the first to have a reason to ask.
 
+## Folded 2026-08-09 at that item's review: the order the card lists in is a ruling too
+
+Beside the extension question, and reaching the card the same way. `named_files`
+orders a folder lexicographically and argues for it against the alternative it
+was rejecting — the sequence the directory happened to be written in — which is
+the right rejection and not yet an answer. Lexicographic over unpadded numbering
+is the failure the ordering was made deliberate to avoid: `clip_10.mp4` before
+`clip_2.mp4`, which for anything that concatenates is a silent wrong answer
+rather than a failed run. Whether SIEVE reads the number inside a name, or lists
+what `sorted` gives and lets the user see it is wrong, is undecidable until a
+list is drawn — and this card is what draws it, so the choice is visible here
+first and nowhere earlier.
+
 Two facts it can build on. `offered_tools` now refuses a tool declaring `source`,
 because a root cannot be what goes *after* something; the root's offer is that
 refusal read the other way. And the swap button's dead tooltip on the source card

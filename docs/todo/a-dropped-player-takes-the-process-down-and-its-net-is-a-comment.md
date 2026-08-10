@@ -121,3 +121,26 @@ and a single green run is what the current tree already produces three times in
 five, so a criterion that runs the directory once cannot see the thing this item
 is about. `tests/gui` is a few seconds, so three runs is not a cost worth
 trading the claim for.
+
+## Amended 2026-08-09 at the folder-source review: the held half is taken, the dropped half is the item
+
+`c239370` landed `_RUNNING` plus an `atexit` drain and made `_stop` return early
+on a reaped wrapper, measured in
+[findings/2026.08.09-a-player-held-to-interpreter-exit-fail-fasts-the-process-on-a-green-suite.md](../findings/2026.08.09-a-player-held-to-interpreter-exit-fail-fasts-the-process-on-a-green-suite.md)
+— 3 of 10 full runs nonzero before, 0 of 9 after. Two of this item's paragraphs
+move.
+
+The decision it was holding open is answered on one side: for a player *held* to
+interpreter exit the thread is reached through a handle that survives
+finalisation, and that is the alternative picked rather than the connection
+going. The `destroyed` closure and its false sentence are still there and still
+the floor under a *dropped* player, which is the case this item's criterion names
+and which `c239370` deliberately did not close. It also settles the reason the
+finding gave for declining: the traceback count varies 0 to 22 per run
+independently of the exit code, so it was never a count of anything and is not
+evidence about the object graph.
+
+The 09.5 fold's "green sometimes" is now false in the direction that costs
+nothing: the three repeated `tests/gui` links in `done_when` no longer stand
+against a background coin flip, so a run that makes them green has shown
+something. They stay, because that is what the claim is.

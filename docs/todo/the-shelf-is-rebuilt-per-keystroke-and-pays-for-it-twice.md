@@ -55,6 +55,26 @@ what is left here is re-homing it into `gui/` rather than deciding it. The
 first half — `listings` re-parsing every document per arrow key — the referent
 still says nothing about, because its data is inline.
 
+**Folded 2026-08-09 (review of the folder-source item): `_reread_graph` is the
+second unconditional disk read on the interactive path, and it can block rather
+than cost.** `8d5a300` gave `_reread_graph` a fifth fact,
+`resolve_source.resolved_sources`, which stats and lists every folder the
+document's source params name. Its three callers are a project opening, a step
+leaving the chain, and the window regaining activation — so every graph edit and
+every alt-tab now walks the filesystem on the GUI thread, where the other four
+facts are folds over memory. The cost is small for a local folder and it is the
+same shape as `listings` above: work redone unconditionally because the thing
+that invalidates it was not distinguished from the things that do not. A step
+leaving the chain cannot have changed what a folder holds.
+
+It is worse than a cost in one case the other half of this item does not have.
+`resolved_sources` catches `OSError` for "a folder that is not mounted", which
+is the exception; an unresponsive network mount does not raise, it stalls, and
+`Path.is_dir` on one takes as long as the platform's timeout with the window
+frozen behind it. Whichever way the first half goes — an early return, or the
+read moved off the paint path — the same decision covers this, which is why it
+is here rather than in a third file.
+
 `done_when` at minting, red because nothing matches:
 
     $ uv run pytest tests/gui -q -k shelf_redraw

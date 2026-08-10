@@ -72,3 +72,56 @@ alone, and a run that satisfies it will have had to decide the store anyway. The
 review that takes this item decides whether to widen it to the remembered folder
 and the remembered selection, or to leave those to their own items once the store
 exists.
+
+## 2026-08-10: the scan is the other half of the store, and three things collide with it
+
+Asked for as "the todos to get pinning working", and the answer is that they are
+this item — what follows is what a run implementing it walks into, gathered here
+rather than minted beside it, because ADR 35 says the store and its first
+claimant land together and a second file is how they land apart.
+
+**Nothing in v3 reads or writes per-user state at all.** `QSettings`,
+`QStandardPaths`, `platformdirs` and an `AppData`/`XDG` path appear nowhere in
+`src` or `tests`, so the ADR's "v3 holds no per-user state today" is still
+literally true and the store is a module that does not exist rather than a field
+added to one that does. What it has to answer beyond where the file sits: what a
+launch does when the file is absent (a first launch, and an empty library is a
+reachable state the pane already draws), and what it does when the file is there
+and will not parse — `project_select._holds` already rules that one unreadable
+document must not take the whole shelf down, and a store that raises on a bad
+line takes the window down instead.
+
+**The scan is what the list replaces, and no criterion covers its removal.**
+`library_root`, `projects_in` and `library_folder` are the three functions, and
+`app.py`'s `main` is the caller that names the first two together; `MainWindow`
+derives `_library` from the paths it was handed and re-scans inside
+`new_project`. That last one carries the argument that dies first: it re-scans
+rather than appending "so the shelf stays the folder's own answer in the
+folder's own order", and under a list there is no folder to answer, while under
+a pin the order is not sorted at all.
+[a-mint-lands-wherever-the-app-was-launched.md](a-mint-lands-wherever-the-app-was-launched.md)
+disclaims the list in prose and this item's `done_when` names only the pin, so
+today the scan's removal is argued in two places and asserted in neither.
+
+**Pinning reorders a stack whose currency is the index.** `ProjectSelect` emits
+`selected`/`opened`/`revealed` as `int`, `_project_card` binds its own index into
+three closures, and `MainWindow` indexes `self._projects` with what comes back —
+one number, which is the pane's whole answer to which project was pressed.
+"Pinned leads the stack" makes that number a position in an order the store
+decides, so the store keys by path and the index is derived after ordering, or a
+pin quietly opens the neighbour. The remembered selection folded in above is the
+same shape read at the other end: a path between launches, an index within one.
+
+**A pinned project whose file is gone is a row a scan could never produce.** The
+list can hold a path that no longer resolves, and pinning is what makes it
+likely, since a user pins the one they mean to come back to. `_holds` has a word
+for a document that will not parse and absent is a different word — and the ✕
+in [the-project-card-acts-in-its-head-and-reads-at-its-foot.md](the-project-card-acts-in-its-head-and-reads-at-its-foot.md)
+is the gesture that clears such a row, unblocked by ADR 35 and gated on this
+store.
+
+`done_when` is untouched again and now reaches less of the item than before: it
+names the pin, and the store, the list and the ordering are what a run must build
+under it. The review that takes this widens it to the list — a criterion that
+green-lights a pin sitting on top of a surviving scan would certify the half that
+did not land.

@@ -99,3 +99,42 @@ NEW PROJECT, OPEN LOCATION, ▶ and HANDLES are all built and wired, the source
 card's `…` browse is
 [the-source-is-a-card-in-the-walk](the-source-is-a-card-in-the-walk.md), and
 Run is on the output step's form (`save_screen.py`) where the map puts it.
+
+## Folded 2026-08-10: ADR 35 dissolves the ✕ question and opens the pin's
+
+The three exits above are all answers to "a library is a folder", and
+[adr/a-project-lives-where-the-user-put-it.md](../adr/a-project-lives-where-the-user-put-it.md)
+removes the premise: the library is the list of locations the app has been
+shown, so ✕ drops a row and the file on disk is untouched, which is the
+referent's own behaviour and which the ADR cites *this* ✕ as its evidence for.
+None of delete-to-trash, move-to-archive or drop-the-glyph is taken; the
+question is not ruled between them, it stops being a question. What replaces it
+is a gate — the list does not exist yet, and the store it needs is
+[pinning-a-project-is-state-the-library-has-nowhere-to-put.md](pinning-a-project-is-state-the-library-has-nowhere-to-put.md).
+So the ✕'s criterion leg is still owed and is now behind a named item rather
+than behind a decision nobody had made.
+
+The referent's guard on the last remaining card goes with the premise as well.
+Under a scan an empty library was a folder a user could not refill from inside
+the app; under a list, the mint's own picker is how a location comes back, so
+"disabled on the last one" is a guard against a state that is no longer a
+trap. Worth stating either way rather than inherited: an empty shelf is already
+launchable (09.5.1's `library=`).
+
+**Where a project's pin goes is this card's question, and it is open.** VISION
+puts the pinned projects beside the selection on the opening screen; the map's
+project-selector row draws a head of `→` and `✕` and has no pin in it. The
+glyph the eye would reach for is the step card's third one, and it does not
+carry the same meaning: `chain_stack._pin_button` is a move and not a toggle —
+one slot, disabled on the step that holds it, because unpinning would leave the
+canvas with nothing under it — while a pinned project is one of many and
+unpinning it leaves a library that is merely unsorted. Same glyph, two arities,
+on two stacks the map calls the same surface. Either the project card spends a
+third head position on a ◆ that toggles, or the pin is not a head glyph here and
+the surface says so somewhere else. The head-order fold above is the commit that
+would place it, which is why it is recorded here rather than on the store item:
+the store decides what a pin *is*, this card decides what a user presses.
+
+`done_when` is untouched and covers neither — it names the foot's rearrangement
+and the arrow. The review that takes this item decides whether the pin gesture
+is a third leg here or its own item behind the store.

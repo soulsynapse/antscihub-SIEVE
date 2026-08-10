@@ -1,10 +1,10 @@
 ---
 title: A surface carries its values and not the axis they sit on, so one band of three cannot be dragged
-status: deferred
-deferred_for: decision
+status: open
 phase: 9
 priority: high
-gated_on: whether a display surface declares an axis alongside its column — a revision of ADR 23 rather than a second vocabulary beside it — or whether a band whose parameter is in units the picture does not carry is a band the user types, permanently
+gated_on: nothing
+done_when: "uv run pytest tests -q -k scalogram_handle_reads_the_declared_axis"
 opened: 2026-08-10
 ---
 
@@ -60,5 +60,47 @@ about six times a warm re-render and the drag budget holds with room
 so an axis array per surface would not be paid for in latency. This is a
 question about what the declaration means, not about what it costs.
 
-No criterion, for the template's one exemption: what the command would assert —
-that a scalogram takes handles — is the thing being decided.
+No criterion at minting, for the template's one exemption: what the command
+would assert — that a scalogram takes handles — was the thing being decided.
+
+## Ruled 2026-08-10: widen, and the scalogram takes handles
+
+Kendrick's ruling: the channel widens and `freq_band` is dragged like the other
+two. The "or leave it" answer above is closed, and `EDITABLE_AXIS` is a gap
+rather than the vocabulary's shape.
+
+What binds is
+[adr/a-parameters-space-is-resolved-by-the-graph.md](../adr/a-parameters-space-is-resolved-by-the-graph.md),
+minted the same day and wider than this item asked for: the axis is not a
+property of the display channel but of the parameter, declared absolutely or as
+a relation to the node's input and folded forward by the graph beside `elements`
+and `source_indexed`. So the sentence this item was written against — that a
+surface carries values and not the axis they sit on — stays true, and stops
+mattering: the axis stops riding with the picture and starts being resolved
+where every other propagated fact already is.
+
+What should be different when this is done. `detect` declares the scalogram's
+axis from `default_freqs(params.fps)`, which is its own parameter and so an
+absolute rather than a relation. `SurfacePanel` maps y through the resolved axis
+instead of through row indices, `EDITABLE_AXIS` stops existing, and
+`kind_editors._on_the_surface` refuses on the fold resolving to `None` rather
+than on the surface kind — which is what makes the refusal survive a tool whose
+axis genuinely cannot be resolved, without naming a kind. The refusal argued in
+`gui/surface_panel.py`'s docstring and in `kind_editors.BandEditor`'s comes out
+with it; both are written as permanent and are not.
+
+`value_band` is the one that needs the relation half — its units are the
+upstream node's and `detect` cannot name them at any time — so it is the case
+that proves the fold rather than an afterthought to it.
+
+Not carried here: the region and point half of the same ADR, which is a
+coordinate space rather than an axis and has no item yet. `crop` off a graph
+root gets no editor today for exactly the reason this one gets no handles, and
+[one-magnifier-and-everything-on-it-maps-to-source-pixels.md](one-magnifier-and-everything-on-it-maps-to-source-pixels.md)
+is the open item most likely to be its home rather than a new mint.
+
+`done_when` at the ruling, red because nothing matches:
+
+    $ uv run pytest tests -q -k scalogram_handle_reads_the_declared_axis
+    1264 deselected in 0.97s
+    exit: 5

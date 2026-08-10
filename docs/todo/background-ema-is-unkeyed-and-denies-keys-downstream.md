@@ -1,50 +1,56 @@
 ---
-title: An epsilon warmup denies a key to everything downstream, and VISION's lead scenario is all downstream
+title: The epsilon admission question is owed a measurement, and VISION's lead scenario is what pays for it
 phase: 6
 priority: high
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_cache_admission.py tests/bench/test_loop_budget.py -q -k 'a_settled_epsilon_node_is_admitted or the_background_chain_pays_its_lead_in'"
+done_when: "uv run pytest tests/bench/test_loop_budget.py tests/unit/test_background_ema.py -q -k 'the_background_chain_pays_its_lead_in or a_sub_epsilon_difference_reaches_a_detection'"
 opened: 2026-08-09
 ---
 
-# An epsilon warmup denies a key to everything downstream
+# The epsilon admission question is owed a measurement
 
-`background_ema` declares `warmup_kind=WarmupKind.EPSILON`, and its own module
-docstring says what that costs: it "is what denies it a key". `preview.py`'s
-docstring says the rest — an epsilon-warmup node has no key at all, so a graph
-containing one decodes and runs its whole lead-in on every render. VISION's lead
-scenario is a generated background feeding a subtraction, so the scenario the
-product is introduced with is on the uncacheable path by construction, and the
-graph a user draws first is the one the store cannot help.
-
-The remedy written down is a materialized checkpoint upstream of the node, and
-it is behind three gates that nothing schedules — checkpoint read-back, then the
-source-tool migration
-([crop-serving-and-checkpoint-read-back-become-source-tools.md](crop-serving-and-checkpoint-read-back-become-source-tools.md)),
-then the first source tool. That chain is not what this item asks for.
-
-What it asks for is the reading that
+Minted this morning proposing that `settle_frames` makes an epsilon warmup
+bounded and therefore admissible. That is wrong and
 [adr/cache-admission-is-bounded-warmup.md](../adr/cache-admission-is-bounded-warmup.md)
-makes available and nobody has spent. That ADR keys admission on a **bounded
-warmup** rather than on statelessness, and `background_ema` already computes its
-own bound: `settle_frames(alpha, epsilon)` returns the frame at which the
-oldest weight falls below `SETTLED_EPSILON`, and the spec carries the epsilon it
-was computed against. A warmup that a function can name in frames is bounded in
-the sense the ADR means, whatever the enum member is called — so either
-`WarmupKind.EPSILON` is a second name for BOUNDED and the two tools carrying it
-are admissible, or there is a reason it is not that the ADR does not state. This
-item is where that is decided, and the gate is the ADR's own: bit-identity
-against a cold run, so nothing here weakens
-[adr/correctness-is-the-default.md](../adr/correctness-is-the-default.md).
+says why, in the paragraph naming this exact tool: bounded means output at frame
+`N` is *fully determined* by the last `W + 1` inputs, and an EMA's true warmup is
+infinite — its 90 is where the seed drops below 1% of the model's weight, which
+is a claim that the residual is small and not that it is zero. The ADR's gate is
+bit-identity against a cold run, and a small residual is not bit-identity. The
+item was re-arguing a settled decision from a docstring, and the ADR had already
+heard the argument.
 
-The measurement comes first and is half the criterion. 06.3 counted recomputed
-node outputs on a post-edit render; nobody has counted them on a chain with an
-epsilon node in it, and the second `-k` term is that number. Admitting the node
-without it would be a fast path argued from a docstring.
+What survives is the half the ADR itself leaves open and marks as owed: "Also
+rejected, and deliberately left open: admitting `background_ema` and
+`temporal_baseline` on a measured epsilon. Whether a difference below the
+declared threshold survives into a detection flip is unmeasured, and nothing here
+admits them." That is a revival condition with a measurement attached and no one
+holding it. This item holds it — not to admit the tools, but to produce the
+number that decides whether admitting them on a measured epsilon is a live option
+or a closed one.
 
-`done_when` at minting, red because nothing matched:
+The reason it is worth taking now rather than at its number is the other half,
+which is true regardless of how the measurement lands. `background_ema` has no
+key, so nothing downstream of it has one either — `preview.py`'s own docstring
+says a graph containing such a node decodes and runs its whole lead-in on every
+render — and VISION's lead scenario is a generated background feeding a
+subtraction. The chain the product is introduced with is the chain the store
+cannot help, and nobody has counted what that costs. 06.3 counted recomputed node
+outputs on a post-edit render and did it on a graph with no epsilon node in it.
+The first `-k` term is that count on a chain that has one.
 
-    $ uv run pytest tests/unit/test_cache_admission.py tests/bench/test_loop_budget.py -q -k 'a_settled_epsilon_node_is_admitted or the_background_chain_pays_its_lead_in'
-    17 deselected in 0.62s
+The remedy if the number is bad is not this item's to build and is already
+written down: a materialized checkpoint upstream of the node, behind checkpoint
+read-back and the source-tool migration
+([crop-serving-and-checkpoint-read-back-become-source-tools.md](crop-serving-and-checkpoint-read-back-become-source-tools.md)).
+What this item can do is say whether that chain is worth scheduling, which is
+more than anyone can say today.
+
+`done_when` at minting, red because nothing matched — the criterion as first
+written named `a_settled_epsilon_node_is_admitted`, which would have asserted the
+thing ADR 17 refuses:
+
+    $ uv run pytest tests/bench/test_loop_budget.py tests/unit/test_background_ema.py -q -k 'the_background_chain_pays_its_lead_in or a_sub_epsilon_difference_reaches_a_detection'
+    24 deselected in 0.65s
     exit: 5

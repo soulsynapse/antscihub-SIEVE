@@ -69,3 +69,22 @@ legality check beside them.
     $ uv run pytest tests/unit/test_intents.py -q -k a_consumer_is_repointed_to_another_source
     12 deselected in 0.14s
     exit: 5
+
+## Folded in 2026-08-10: the rule that notices the eighth kind refuses nothing
+
+`INTENT_KINDS` notices an arrival by construction, as the paragraph above says,
+and the other half of `intent_kinds`' membership test is asserted by nothing.
+Drop `issubclass(member, Intent)` from the comprehension and `60f99fa`'s two
+cases stay green: every frozen dataclass in `session/intents.py`'s namespace is
+an intent, and the eighth kind the test injects is intent-shaped too, so no
+fixture separates "a dataclass" from "a dataclass conforming to `Intent`" — and
+`@runtime_checkable` on the Protocol is a production change made for that
+conjunct alone. Dropping `is_dataclass(member)` is killed; the measurement is in
+[findings/loop/2026.08.07-a-workers-hand-enumerated-mutation-sweep-held-under-an-independent-one.md](../findings/loop/2026.08.07-a-workers-hand-enumerated-mutation-sweep-held-under-an-independent-one.md).
+
+It lands here rather than as its own item because the case that separates the
+two expressions is a namespace member the rule must refuse, and this is the item
+that touches that namespace next: adding the eighth kind is the moment a reader
+is already looking at what makes something a kind. A frozen dataclass with no
+`applied_to`, handed to `intent_kinds` beside the module's own, is the whole of
+it. This item's `done_when` names only the re-point case and does not cover it.

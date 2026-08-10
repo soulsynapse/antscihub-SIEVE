@@ -2,7 +2,7 @@
 title: Five files say a complete GUI emits every intent kind, and nothing says which they are
 phase: 7
 priority: high
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_intents.py -q -k 'the_kinds_are_the_modules_own or a_new_kind_fails_the_list'"
 opened: 2026-08-09
@@ -48,3 +48,19 @@ written after, it describes what they emitted.
     $ uv run pytest tests/unit/test_intents.py -q -k 'the_kinds_are_the_modules_own or a_new_kind_fails_the_list'
     7 deselected in 0.13s
     exit: 5
+
+## 2026-08-10 review: green, and one conjunct of the rule no fixture reaches
+
+`done_when` re-run against `1768531`: `2 passed, 10 deselected`, exit 0, and the
+item file's own diff in `60f99fa` carries `status` alone. The clauses hold --
+`INTENT_KINDS` is derived from the module's namespace rather than typed beside
+it, and `KIND_NAMES` in `test_intents.py` is the hand-typed list an eighth kind
+reddens.
+
+What the criterion does not reach is the exclusion half of the membership rule:
+drop `issubclass(member, Intent)` from `intent_kinds` and both cases stay green
+([findings/loop/2026.08.07-a-workers-hand-enumerated-mutation-sweep-held-under-an-independent-one.md](../findings/loop/2026.08.07-a-workers-hand-enumerated-mutation-sweep-held-under-an-independent-one.md)
+carries the sweep). The obligation is folded into
+[choosing-among-sources-is-a-move-no-intent-kind-makes.md](choosing-among-sources-is-a-move-no-intent-kind-makes.md),
+which adds the eighth kind and is the cheap moment to put a namespace member in
+front of the rule that it has to refuse.

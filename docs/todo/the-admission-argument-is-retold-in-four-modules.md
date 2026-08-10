@@ -72,3 +72,24 @@ The sentence also carries the number "90 frames for `background_ema`", which is
 a measurement quoted into a durable instruction and wrong for every `alpha` a
 session actually configures — `warmup_frames` refines the bound and the plan
 folds it with what the nodes below ask for. Same edit, same reason.
+
+## 2026-08-10: ADR 33's closing sentence bills a remedy the tree already has
+
+`adr/the-epsilon-admission-is-closed.md`'s last paragraph names
+`todo/crop-serving-and-checkpoint-read-back-become-source-tools.md` in the
+present tense — "the remedy ... carries" — for the re-walk an unkeyed model
+imposes. Both halves are `done`: the crop half at `6076b1f`, and the checkpoint
+half, which split out into
+[a-checkpoint-is-read-back-as-a-source-tool.md](a-checkpoint-is-read-back-as-a-source-tool.md)
+because a `-k` disjunction could not be widened to hold it, at `45bfc41`. So the
+sentence reads as an outstanding bill for a mechanism that exists, and the
+filename it points at no longer holds the half the ADR needs — a materialized
+product upstream of the model is the checkpoint half.
+
+Same class as the two sites above, and the same edit: a state claim quoted into
+a durable instruction where a condition belongs ([CLAUDE.md](../../CLAUDE.md)).
+Stated conditionally — a graph with an unkeyed model re-walks its lead-in, and
+what removes it is available rather than owed — the paragraph is true either
+side of the remedy landing. This is a wording change inside an ADR's argument
+and not a change of decision, so it drains with this item rather than by
+succession.

@@ -6,3 +6,8 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+
+# A mint is a user's document, not a fixture: the project pane writes here.
+# The folder is tracked and its contents are not: what a user mints is theirs.
+projects/*
+!projects/.gitkeep

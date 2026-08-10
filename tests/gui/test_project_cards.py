@@ -327,3 +327,34 @@ def test_project_cards_up_and_down_move_the_selection_not_the_walk(window: Any) 
         False,
         False,
     ]
+
+
+def test_the_library_root_is_a_folder_under_where_the_app_was_launched(
+    tmp_path: Path,
+) -> None:
+    from sieve.gui.project_select import LIBRARY_FOLDER, library_root, mint, projects_in
+
+    library = library_root(tmp_path)
+    assert library == tmp_path / LIBRARY_FOLDER
+    assert library.is_dir()
+
+    # The gesture the pane exists for lands in the folder and not beside it,
+    # which is the whole claim: a mint is a user's document, and the launch
+    # directory during development is the repository.
+    minted = mint(library)
+    assert minted.parent == library
+    assert projects_in(tmp_path) == ()
+    assert projects_in(library) == (minted,)
+
+
+def test_the_library_root_is_answered_the_same_way_twice(tmp_path: Path) -> None:
+    from sieve.gui.project_select import library_root
+
+    first = library_root(tmp_path)
+    (first / "keep").write_text("", encoding="utf-8")
+    # Asked again on a folder that already exists and holds something: the
+    # answer is the same folder and nothing in it moved. `mkdir` is create-if-
+    # absent, not reset, and a library the user has minted into is exactly the
+    # case where the difference is destructive.
+    assert library_root(tmp_path) == first
+    assert (first / "keep").exists()

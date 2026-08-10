@@ -96,6 +96,7 @@ from sieve.gui.pinned import (
 from sieve.gui.project_select import (
     ProjectSelect,
     library_folder,
+    library_root,
     listings,
     mint,
     projects_in,
@@ -1298,6 +1299,7 @@ class MainWindow(QMainWindow):
 
 def main() -> None:
     application = QApplication(sys.argv)
-    window = MainWindow(projects_in(Path.cwd()), library=Path.cwd())
+    library = library_root(Path.cwd())
+    window = MainWindow(projects_in(library), library=library)
     size_window(window)
     sys.exit(application.exec())

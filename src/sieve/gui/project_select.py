@@ -53,6 +53,32 @@ from sieve.gui.chrome import chrome_button, stack_stylesheet
 _RELATIVE_DAYS = 30
 
 
+#: The library is a folder, not the directory the process happened to start in.
+#: Named here because two callers need the same answer and a second spelling of
+#: it would be a second library the day one of them was edited.
+LIBRARY_FOLDER = "projects"
+
+
+def library_root(launched_in: Path) -> Path:
+    """The folder a mint lands in, given where the app was launched.
+
+    A function rather than a line inside `main`, so a caller that is not opening
+    a `QApplication` can ask the same question — which is the only reason the
+    default is reachable from a test at all.
+
+    Created if it is not there. The alternative is a library that cannot be
+    minted into until someone makes a folder by hand, and the pane's one gesture
+    would fail on a fresh checkout for a reason no message could usefully give.
+
+    Where the launch directory is the repository, this is what keeps a user's
+    document out of the source tree: a mint is not a fixture, and a scan of the
+    launch directory would otherwise draw the repository as the library.
+    """
+    folder = launched_in / LIBRARY_FOLDER
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
 def projects_in(directory: Path) -> tuple[Path, ...]:
     """Every project file directly in `directory`, in a stable order.
 

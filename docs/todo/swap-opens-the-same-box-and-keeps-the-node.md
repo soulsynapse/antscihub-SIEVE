@@ -36,6 +36,19 @@ nothing would take the card away and leave esc as the only exit, where an empty
 menu is merely useless. Whether the button is shown at all at such a position is
 this item's to answer, on the same measurement 09.9 faces.
 
+**Folded 2026-08-09 (review of 09.9): the box over a fanned card is painted
+and asserted nowhere.** 09.9 taught `ChainColumn` to dash the edges a box
+would be spliced onto, and gave `fanned_edge` a `dst` argument so the crop
+fan's way out lands on the box when the box stands in the gap the fan hangs
+in. Nothing enters that branch: the 09.9 fixture's project declares no
+regions, so no case in the tree has a fan and a box on screen at once, and
+`_paint_fanned_edge(provisional=True)` is reached only through `paintEvent`
+(`findings/loop/2026.08.09-an-items-clause-that-lands-only-in-paintevent-is-outside-every-oracle.md`).
+The geometry is testable without pixels — `fanned_edge(dst)` returns the runs
+and drops — and the anchored box lands on a card rather than in a gap, so a
+swap over `crop` is exactly where a picture that says two things at once
+would show up. One case with regions declared covers both gestures.
+
 `done_when` at minting, red because nothing matches:
 
     $ uv run pytest tests/gui -q -k 'swap_box or keeps_the_node'

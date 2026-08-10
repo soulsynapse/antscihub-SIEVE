@@ -44,6 +44,17 @@ graph and touches no disk. The two live in one item because one commit that give
 a rebuilt stack a scroll position and a reason not to re-read what did not change
 satisfies both, and splitting them would put the same decision in two files.
 
+**Folded 2026-08-09 (review of 09.9): the referent now answers the second
+half.** `ff1456f` added `_StackPane` to `mockup/mockup.py` — a rebuilt pane
+carries the outgoing one's scroll offset, and `reveal_current` aligns a card
+too tall to fit to its head rather than centring it, moves nothing for a card
+already in view, and leaves a margin so a revealed card never sits flush with
+the viewport. That is the one decision this item says should be taken for both
+stacks, and ADR 30 makes the referent binding on how it looks and responds, so
+what is left here is re-homing it into `gui/` rather than deciding it. The
+first half — `listings` re-parsing every document per arrow key — the referent
+still says nothing about, because its data is inline.
+
 `done_when` at minting, red because nothing matches:
 
     $ uv run pytest tests/gui -q -k shelf_redraw

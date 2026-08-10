@@ -1,9 +1,9 @@
 ---
 title: A gap is a position, and the box fills it
 step: "09.9"
-status: awaiting-review
+status: done
 gated_on: nothing
-done_when: "uv run pytest tests/gui -q -k 'add_box or splices'"
+done_when: "uv run pytest tests/gui tests/unit -q -k 'add_box or splic or adding_a_node'"
 opened: 2026-08-09
 ---
 
@@ -67,3 +67,10 @@ positions the chain has; the referent's extra card is a mock artifact.
     $ uv run pytest tests/gui -q -k 'add_box or splices'
     181 deselected in 0.69s
     exit: 5
+
+Widened at review 2026-08-09: the criterion selected `tests/gui` only, so the
+mutation the surface issues — `Pipeline.with_node_after` and `AddNode` — was
+outside the thing that certifies this item. The splice is where a chain the
+user did not draw would come from, so a criterion that cannot see it certifies
+the picture and not the write. The widened selector takes 21 cases and nothing
+else, and all 21 were red with `src/` at the parent commit.

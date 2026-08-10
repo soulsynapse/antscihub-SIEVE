@@ -7,12 +7,16 @@
 - 📁 `docs/`
   - 📁 `adr/`
     - 📄 `ADR-0001-panes-house-any-view.md`
+  - 📁 `vocab/`
+    - 📄 `pane.md`
+    - 📄 `view.md`
   - 📄 `ADR-SUMMARY.md`
   - 📄 `SCAFFOLD.md`
+  - 📄 `VOCAB-SUMMARY.md`
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
 - 📁 `scripts/`
-  - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md`, `ADR-SUMMARY.md` — from the index.
+  - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md` and the shelf indexes — from the index.
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
     - 📁 `gui/` — The interactive view: the frame, and what stands in its panes.

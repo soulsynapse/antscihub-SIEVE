@@ -892,8 +892,10 @@ class ParamStereotype(StrEnum):
     place to put a tool's own presentation. The count is `len(ParamStereotype)`
     and is not written into this sentence, because two items each arguing they
     are the next member is how the ordinal goes wrong while the rule stays
-    right. Until that generator exists, `ToolSpec` refusing an unknown kind by
-    name is what stands in as the consumer (`adr/declared-means-verified.md`).
+    right. `ToolSpec` refusing an unknown kind by name is what a member is
+    admitted on before its editor exists, and `STEREOTYPES_WITHOUT_EDITOR` below
+    is what keeps that admission from being silent
+    (`adr/an-unconsumed-member-is-named-in-a-list.md`).
 
     Every kind but `SCALAR_RANGE` and `ENUM` is populated as a whole value of
     several components, and it sits on the one field that holds that value rather
@@ -914,7 +916,9 @@ class ParamStereotype(StrEnum):
     #: An ordered lo/hi pair on a value axis rather than the time axis —
     #: `detect`'s frequency band in Hz, its value band in the incoming signal's
     #: units, its count threshold as a fraction. Which plot the handles are
-    #: grabbed on is undeclared and arrives with the generator that has to know.
+    #: grabbed on is the tool's second declaration and not this one's silence —
+    #: `param_surfaces`, refused in either direction against this kind
+    #: (`adr/a-band-declares-the-surface-it-is-dragged-on.md`).
     BAND = "band"
     #: A rectangle in the frame the node is handed, e.g. `crop`'s `ROI`.
     REGION = "region"
@@ -933,6 +937,18 @@ class ParamStereotype(StrEnum):
     #: else — the alternative is branching on `tool_id`, which the ADR above
     #: and `adr/a-tool-is-one-file.md` each refuse.
     PATH = "path"
+
+
+#: Kinds a user cannot yet populate the way the member names: no entry in
+#: `gui/kind_editors.py`'s map, and a read-only restatement in the panel
+#: standing where the gesture will be. The list only shrinks, and shrinking it
+#: belongs to the commit that lands the editor
+#: (`adr/an-unconsumed-member-is-named-in-a-list.md`), which is what stops a
+#: kind from being minted, deferred, and deferred again with nothing red.
+#: `tests/gui/test_unconsumed_members.py` holds it in both directions.
+STEREOTYPES_WITHOUT_EDITOR: frozenset[ParamStereotype] = frozenset(
+    {ParamStereotype.BAND, ParamStereotype.POINT, ParamStereotype.PATH}
+)
 
 
 class DisplaySurface(StrEnum):
@@ -972,6 +988,20 @@ class DisplaySurface(StrEnum):
     #: a fraction rather than on a tally. That is what lets the pair survive a
     #: change of denominator (`tools/detect.count_band_to_counts`).
     COUNT = "count"
+
+
+#: Surfaces a tool fills and nothing draws: named by the tool that declares one
+#: and by the executor that carries the channel, and by no reader that turns it
+#: into a picture. Shrinks in the commit that lands the painter
+#: (`adr/an-unconsumed-member-is-named-in-a-list.md`); until then this is what a
+#: reader arriving at the member is owed, because a declaration refused in both
+#: directions at registration and at the fill is well-formed either way and says
+#: nothing about whether anyone can see it.
+#: Written out rather than `frozenset(DisplaySurface)`, which would absorb a
+#: fourth member on the day it was minted and report the silence as coverage.
+SURFACES_WITHOUT_PAINTER: frozenset[DisplaySurface] = frozenset(
+    {DisplaySurface.SCALOGRAM, DisplaySurface.TRACE, DisplaySurface.COUNT}
+)
 
 
 #: Contravariant because a `run` is *consumed* with params: a function written

@@ -14,9 +14,12 @@ Per kind and never per tool, which is the generator's asymmetry one surface out:
 with a region gets the viewport without a line here. Unlike the generator's map
 this one is partial by design — a kind with no entry is typed into the panel,
 which is the ordinary case and not a defect. `BAND` is the kind that is neither:
-it is a gesture with no axis to be made on
-(`todo/a-bands-axis-has-no-vocabulary-and-no-plot.md`), so it has no entry here
-and a read-only restatement in the form.
+it names the picture its handles are grabbed on and nothing draws that picture
+yet, so it has no entry here and a read-only restatement in the form. Which is a
+gap rather than a decision, and it is written down as one in
+`tool_base.STEREOTYPES_WITHOUT_EDITOR` — an entry landing here takes the name
+off that list in the same commit
+(`adr/an-unconsumed-member-is-named-in-a-list.md`).
 
 **A drag paints from a draft and announces itself once, on release.** The
 strip's two-tier rule (`timeline/bar.py`), and the reason is sharper for a

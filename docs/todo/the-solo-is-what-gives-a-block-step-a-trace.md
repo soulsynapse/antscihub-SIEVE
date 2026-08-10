@@ -49,6 +49,32 @@ Until then the colouring is fixed over the window (which is what 10.3 claimed)
 but not denominated in the values it is drawn from (which nobody claimed, and a
 reader looking at a coloured arena would assume).
 
+The review of 57e43cb put a number on how far apart the two are, and it is
+further than "means nothing in particular" reads:
+`findings/2026.08.10-the-block-fields-ramp-is-exhausted-four-orders-below-the-values-it-draws.md`.
+On the reference chain the ramp is spent inside the first 0.005% of the value
+span, so what the user sees today is a two-colour field — cold where a block
+measured nothing, hot everywhere else — and the whole of the gradient this item
+is about is unreachable. That is the state the pin has to lift, and the case
+that the two agree is the one thing that would go red if it did not.
+
+## Folded 2026-08-10 (review of 57e43cb): the field is drawn unmagnified
+
+`BlockField.draw`'s docstring rules on the magnified case — the grid runs far
+outside the widget, so the array is bounded by the letterbox rather than by the
+zoom — and nothing in the tree reads it back. Handing `draw` the letterbox in
+place of the magnified view rect survives the whole GUI suite:
+
+    $ uv run python scripts/mutation_sweep.py --file src/sieve/gui/canvas.py --mutant "self._field.draw(painter, painted, box) ==> self._field.draw(painter, box, box)" -- uv run pytest -q tests/gui -k "block_field or magnified or source_pixels_round_trip"
+    SURVIVED  self._field.draw(painter, painted, box)
+
+This is ordinary coverage debt rather than the paint-only blind spot
+`findings/loop/2026.08.09-an-items-clause-that-lands-only-in-paintevent-is-outside-every-oracle.md`
+names — the geometry is already exposed, as `view_rect` and `grid_edges` — and it
+lands here because this item is where it stops being cosmetic: a hit test has to
+read the edges the colours landed on, and under a magnification the two are the
+same call or they are two rectangles. The case that fixes both is one case.
+
 `done_when` at minting, red because nothing matched:
 
     $ uv run pytest tests/gui -q -k soloed_block

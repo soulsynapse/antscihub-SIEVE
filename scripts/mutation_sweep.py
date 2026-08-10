@@ -28,7 +28,10 @@ import, a crash, a mistyped path that collects nothing — prints a clean sweep 
 mutants it never judged, and a clean sweep is what closes an item
 (`docs/findings/loop/2026.08.08-a-crashing-test-command-is-indistinguishable-from-a-killed-mutant.md`).
 So the sweep now runs the command once on the original bytes first and refuses,
-showing the command's own output, unless that baseline is green.
+showing the command's own output, unless that baseline is green. A baseline cannot
+reach the deterministic member of that class — a mutant that leaves the subject
+unparseable is red on the mutated bytes only — so the mutated bytes are compiled
+and the mutant refused rather than scored.
 
 The baseline is also the sweep's clock. The test command after `--` should be the
 narrowest command the subject's own tests constitute — a mutant only a distant test
@@ -141,6 +144,28 @@ def apply_mutant(data: bytes, mutant: Mutant) -> bytes:
     return data.replace(anchor, _match_eol(mutant.replacement, data))
 
 
+def refuse_unparseable(subject: Path, mutant: Mutant, mutated: bytes) -> None:
+    """A mutant the compiler rejects was never applied, so nothing it exits with is a verdict.
+
+    The one member of the false-KILLED class that carries no probability: every oracle
+    imports its subject, an unparseable one raises before a single test runs, and KILLED
+    is read off the non-zero exit. `parse_mutant` strips the separator's padding and not
+    the anchor's indentation, so a replacement quoting an indented line arrives one space
+    short and the two verdicts are a space apart with nothing in the output saying which
+    you got
+    (`docs/findings/loop/2026.08.08-a-crashing-test-command-is-indistinguishable-from-a-killed-mutant.md`).
+    """
+    try:
+        compile(mutated, str(subject), "exec")
+    except SyntaxError as error:
+        raise SweepError(
+            f"the mutant leaves {subject.name} unparseable, so it was never applied and no "
+            f"exit code from it is a verdict: {mutant.label!r} — {type(error).__name__}: "
+            f"{error.msg} (line {error.lineno}) — check the replacement's own indentation, "
+            f"which the separator's padding eats one space of"
+        ) from None
+
+
 def purge_bytecode(repo: Path = REPO) -> None:
     for root in PURGE_ROOTS:
         folder = repo / root
@@ -185,13 +210,16 @@ def _run_bounded(
 ) -> subprocess.CompletedProcess[bytes]:
     """`subprocess.run` whose timeout bounds the call rather than only the child.
 
-    Two departures from `run(capture_output=True, timeout=...)`, both forced by the
-    same measurement — 40.1s of wall clock under a 3s timeout
+    Two departures from `run(capture_output=True, timeout=...)`, answering different
+    things. Killing the process tree is what bounds the call: `run` kills the direct
+    child and then blocks in `communicate()` until every inherited copy of the pipe
+    closes, and `uv run pytest` holds one — 40.1s of wall clock under a 3s timeout
     (`docs/findings/loop/2026.08.08-a-subprocess-timeout-does-not-bound-a-command-whose-grandchild-holds-the-pipe.md`).
-    The streams go to files, because `run` kills the child and then blocks in
-    `communicate()` until every inherited copy of the pipe closes, and a grandchild
-    holds one. And the timeout kills the process tree, because redirection alone
-    returns on time while leaving the work running.
+    The redirection buys capacity rather than promptness: `Popen.wait` waits on the
+    process handle and returns on time whatever the streams are, but nothing here
+    drains a pipe, so under `PIPE` an oracle whose output outgrows the buffer blocks
+    in its own `write`, never exits, and is timed out and scored KILLED
+    (`docs/findings/loop/2026.08.10-a-two-part-fix-is-reported-as-two-kills-and-the-half-that-carries-it-is-the-other-one.md`).
     """
     detach = {} if os.name == "nt" else {"start_new_session": True}
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
@@ -224,7 +252,8 @@ def run_sweep(
     that is red, crashes, or never finishes on unmutated code would print KILLED
     for every mutant it never judged. Each mutant then runs under `mutant_timeout`
     (derived from the baseline's own elapsed time when not given), and a timeout
-    is a kill — the mutant stopped the program terminating.
+    is a kill — the mutant stopped the program terminating. A mutant whose bytes do
+    not compile is refused before it is written, since the baseline cannot see it.
 
     The original bytes are restored after every mutant, inside a `finally`, and
     re-read afterwards to prove the restore happened — a sweep that cannot lose
@@ -256,6 +285,7 @@ def run_sweep(
     results: list[tuple[Mutant, bool]] = []
     for mutant in mutants:
         mutated = apply_mutant(original, mutant)
+        refuse_unparseable(subject, mutant, mutated)
         try:
             subject.write_bytes(mutated)
             purge_bytecode(repo)

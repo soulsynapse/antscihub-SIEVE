@@ -1,7 +1,7 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k a_mutant_that_leaves_the_subject_unparseable_is_refused"
 opened: 2026-08-08
@@ -319,3 +319,41 @@ one to claim. `_tail`'s uncased halves and `ORACLE_BUDGET_SECONDS`'s
 one command beside it — `grep -rn "is_scored_by_its_exit" tests/scripts` comes
 back empty once the capacity case carries a name that claims capacity, and the
 docstrings are corrected in the commit that renames it.
+
+## What landed (2026-08-10)
+
+The gate and the three paragraphs, which the section above asks for in one commit.
+`refuse_unparseable` compiles the mutated bytes and raises `SweepError` before
+they are written, so an unparseable mutant is refused where a non-unique anchor
+is and no verdict prints for it; the module and `run_sweep` docstrings say the
+baseline structurally cannot reach this member, since it is red on the mutated
+bytes only.
+
+`test_a_mutant_that_leaves_the_subject_unparseable_is_refused` runs both forms of
+one mutant against an oracle that `exec`s the subject — the shape every real
+oracle has and the probes in this module deliberately do not. Shown red on the
+unchanged tree by the defect itself: `    a = 100 ==>    a = 100  # tuned`, the
+indentation-shifted form the separator's padding produces, printed `KILLED` and
+exited 0 where the case wants a refusal, while the same mutant written with its
+indentation intact SURVIVED in the assertion above it. That pairing is the case's
+whole content — the two answers are a space apart and the report does not say
+which you got. Killed after the gate landed by
+`refuse_unparseable(subject, mutant, mutated) ==> pass` and by
+`compile(mutated, str(subject), "exec") ==> None`, 2 killed 0 survived over
+`scripts/mutation_sweep.py` against the module as oracle.
+
+The paragraphs: `_run_bounded`'s docstring now attributes the bound to the tree
+kill and the redirection to capacity, cited to the finding that measured it;
+`test_an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit` is
+`test_an_oracle_that_outgrows_the_pipe_buffer_still_finishes`, and its docstring
+says its own oracle is talkative at the baseline too, so it establishes only that
+such an oracle finishes and hands the verdict to the case beside it.
+`grep -rn "is_scored_by_its_exit" tests/scripts` is empty. The two-part-fix
+finding is closed on its own terms by these two paragraphs; the 2026-08-08
+crashing-oracle finding stays open, amended, because only the deterministic
+member is a refusal and the intermittent crash is still scored.
+
+Untouched and unstarted, in the order the section above lists them: `_tail`'s
+uncased halves — dropping `stderr` from its pair survives, as does narrowing the
+twenty-line window to one — and `ORACLE_BUDGET_SECONDS`'s comment, which claims
+its figure makes a stall "structurally impossible" where nothing sums the parts.

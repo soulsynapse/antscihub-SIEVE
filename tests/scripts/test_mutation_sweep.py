@@ -198,6 +198,42 @@ def test_a_refused_anchor_is_reported_rather_than_raised(
     assert "not found" in capsys.readouterr().err
 
 
+def test_a_mutant_that_leaves_the_subject_unparseable_is_refused(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The false KILLED with no probability attached: it fires on any subject, any oracle.
+
+    Written the way it fires, through `parse_mutant`: the separator's padding comes
+    off the replacement and the anchor's indentation does not, so a mutant quoting an
+    indented line loses one leading space and the body stops agreeing with itself.
+    Any oracle that imports the subject exits non-zero on the `IndentationError`, and
+    KILLED is read off any non-zero exit. Both forms of the one mutant are run here
+    because the whole defect is that they differ by a space and the report does not
+    say which you got — the indented form survives, so the shifted form's KILLED
+    convicted a mutant the tests do not kill
+    (`docs/findings/loop/2026.08.08-a-crashing-test-command-is-indistinguishable-from-a-killed-mutant.md`).
+    A mutant that will not compile was never applied, so it is refused like a missing
+    anchor rather than scored.
+    """
+    data = b"def limit():\n    a = 100\n    return a\n"
+    subject = subject_with(repo, data)
+    code = (
+        f"import pathlib; namespace = {{}}; "
+        f"exec(pathlib.Path({str(subject)!r}).read_text(), namespace); "
+        f"raise SystemExit(0 if namespace['limit']() == 100 else 1)"
+    )
+    importing = [sys.executable, "-c", code]
+    kept = run_sweep(subject, [Mutant("    a = 100", "    a = 100  # tuned")], importing, repo)
+    assert [killed for _, killed in kept] == [False]
+
+    argv = ["--file", "src/subject.py", "--mutant", "    a = 100 ==>    a = 100  # tuned"]
+    assert main([*argv, "--", *importing], repo) == 1
+    captured = capsys.readouterr()
+    assert "KILLED" not in captured.out
+    assert "unparseable" in captured.err
+    assert subject.read_bytes() == data
+
+
 def test_a_red_baseline_is_refused_rather_than_swept(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -311,17 +347,20 @@ def test_a_hung_grandchild_does_not_outlive_the_mutant_timeout(repo: Path) -> No
     assert subject.read_bytes() == data
 
 
-def test_an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit(repo: Path) -> None:
-    """Redirecting to files is what keeps a talkative oracle running, not what returns on time.
+def test_an_oracle_that_outgrows_the_pipe_buffer_still_finishes(repo: Path) -> None:
+    """The capacity the redirection buys, which is not the promptness it was credited with.
 
     Nothing in `_run_bounded` drains the streams — it waits on the process handle, so
-    promptness is `Popen.wait`'s and holds whatever the streams are
+    promptness is `Popen.wait`'s and holds whatever the streams are, and substituting
+    `PIPE` for the two file handles is invisible to any case about timing
     (`docs/findings/loop/2026.08.10-a-two-part-fix-is-reported-as-two-kills-and-the-half-that-carries-it-is-the-other-one.md`).
-    Under `PIPE` the child blocks in its own `write` once the buffer fills, never exits,
-    and is timed out — and a timeout is a kill, so the verdict is KILLED for a mutant
-    the tests do not kill. Both streams are filled because either redirection alone
-    would otherwise be the uncased half, and the mutant here survives, which is the
-    verdict a full buffer would silently flip.
+    What it is not invisible to is a megabyte per stream: under `PIPE` the child blocks
+    in its own `write` once the buffer fills and never exits at all. This case runs an
+    oracle that talks that much on every invocation, including the baseline, so it
+    establishes only that such an oracle can finish — the false KILLED the blocking
+    produces is reached by the case below, whose oracle is quiet until the mutant lands.
+    Both streams are filled because either redirection alone would otherwise be the
+    uncased half.
     """
     subject = subject_with(repo, b"limit = 100\n")
     fat = 1 << 20

@@ -101,10 +101,10 @@ from sieve.gui.pinned import (
     surface_note,
 )
 from sieve.gui.project_select import (
+    HeldListings,
     ProjectSelect,
     ask_where,
     library_folder,
-    listings,
     mint,
     projects_in,
     reveal,
@@ -295,6 +295,10 @@ class MainWindow(QMainWindow):
         # and this one read the filesystem, so it is the only one here that can
         # be wrong while the document is untouched (`changeEvent`).
         self._resolved_sources: Mapping[str, tuple[Path, ...]] = {}
+        # What each of those answers was resolved from, so a re-read can tell a
+        # root whose parameter moved from one the document left alone
+        # (`_reread_sources`).
+        self._sources_from: dict[str, Mapping[str, Any]] = {}
         self._order: tuple[Node, ...] = ()
         self._at = 0
         # Which project card wears the accent. The walk's number one position
@@ -330,6 +334,10 @@ class MainWindow(QMainWindow):
         # repaint the viewport without asking the decode thread for a frame it
         # has already sent.
         self._source_frame: tuple[int, QImage] | None = None
+        # What the shelf's cards say, held against the files they were read from:
+        # the pane is rebuilt whole on every move of the accent and nothing a card
+        # says depends on which card is selected (`project_select.HeldListings`).
+        self._listings = HeldListings()
 
         self._player = VideoPlayer(self)
         self._viewport = VideoCanvas()
@@ -479,7 +487,7 @@ class MainWindow(QMainWindow):
             # no card for it to move to.
             self._project_at = self._projects.index(path)
         self._session = Session.open(path)
-        self._reread_graph()
+        self._reread_graph(moved=True)
         self._at = 0
         # The walk's reason one line up: where the previous project's regions had
         # reached is an index into a different set of them.
@@ -521,7 +529,7 @@ class MainWindow(QMainWindow):
         """
         super().changeEvent(event)  # type: ignore[arg-type]
         if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
-            self._reread_graph()
+            self._reread_graph(moved=True)
             self._redraw()
 
     def closeEvent(self, event: object) -> None:
@@ -927,14 +935,24 @@ class MainWindow(QMainWindow):
     def select_project(self, index: int) -> None:
         """Move the accent to project `index`, and open nothing.
 
-        Clamped rather than wrapped, for `_walk_to`'s reason. Nothing is read
-        off disk here beyond what redrawing the shelf reads: selecting is the
-        pointer's Up/Down, and a selection that opened a document would make
-        arrowing down a library the most expensive keystroke in the app.
+        Clamped rather than wrapped, for `_walk_to`'s reason — and returned from
+        where the clamp left the accent where it already was, which is what a
+        held arrow at either end of the shelf is. The pane is rebuilt whole, so
+        without this the keystroke most likely to be *held* is the one that
+        rebuilds a library's worth of cards to draw the same picture.
+
+        Nothing is read off disk. Selecting is the pointer's Up/Down, and a
+        selection that opened a document would make arrowing down a library the
+        most expensive keystroke in the app — which is what the redraw itself was
+        until `HeldListings` stood between it and the files
+        (`findings/2026.08.09-the-shelf-reparses-every-project-per-arrow-key.md`).
         """
         if not self._projects:
             return
-        self._project_at = max(0, min(index, len(self._projects) - 1))
+        moved = max(0, min(index, len(self._projects) - 1))
+        if moved == self._project_at:
+            return
+        self._project_at = moved
         self._control.set_project_select(self._build_project_select())
 
     def enter_project(self, index: int) -> None:
@@ -1140,29 +1158,36 @@ class MainWindow(QMainWindow):
         reason — the track owns which position is showing and nothing about what
         is on one — and rebuilt whole on every move of the selection, because
         that is what the rest of the window does with a redraw.
+
+        What the rebuild costs is the cards. The documents behind them are read
+        by `HeldListings`, which re-reads the ones that moved on disk and hands back the
+        strings it already had for the rest — so a redraw that happened because
+        an accent moved parses nothing.
         """
-        select = ProjectSelect(listings(self._projects), self._project_at, self._library)
+        select = ProjectSelect(self._listings.rows(self._projects), self._project_at, self._library)
         select.selected.connect(self.select_project)
         select.opened.connect(self.enter_project)
         select.revealed.connect(self.reveal_project)
         select.minted.connect(self.new_project)
         return select
 
-    def _reread_graph(self) -> None:
+    def _reread_graph(self, moved: bool = False) -> None:
         """The five facts about the document's shape, taken together.
 
         Together because they are one derivation — the two folds that give each
         node its element kind and its output stream both read the specs and the
         walk, and what the chain starts from is what its sources resolved to —
         and because every caller that invalidates one has invalidated all five:
-        a project opening, a step leaving the chain, and the window becoming the
-        active one again.
+        a project opening, a step leaving or joining the chain, and the window
+        becoming the active one again.
 
-        That third caller is not like the other two. The first four facts are
-        folds over a document that only this window writes, so nothing can move
-        them behind its back; the fifth read the filesystem, and a file dropped
-        into a folder a source names moves it with no gesture and no run
-        (`changeEvent`).
+        That last caller is not like the others, and neither is the fifth fact.
+        The first four are folds over a document that only this window writes, so
+        nothing can move them behind its back and re-deriving them costs a walk
+        of the nodes; the fifth read the filesystem, and a file dropped into a
+        folder a source names moves it with no gesture and no run
+        (`changeEvent`). `moved` is the caller saying that is what happened, and
+        it is what `_reread_sources` splits on.
         """
         session = self._session
         if session is None:
@@ -1172,7 +1197,55 @@ class MainWindow(QMainWindow):
         self._order = node_order(pipeline)
         self._elements = element_kinds(self._order, pipeline, self._specs)
         self._streams = stream_specs(self._order, pipeline, self._specs)
-        self._resolved_sources = resolved_sources(self._order, self._specs)
+        self._reread_sources(moved)
+
+    def _reread_sources(self, moved: bool) -> None:
+        """Re-resolve the source roots whose answer can have changed.
+
+        `moved` is the disk being what moved — a project opening onto a
+        filesystem this window has read nothing of, and the window coming back to
+        find a folder it was away from — and every root is asked again. Otherwise
+        the *document* moved, and a root whose parameters are exactly what its
+        held answer was resolved from cannot be naming anything new: a step
+        leaving the chain cannot have changed what a folder holds.
+
+        The distinction is the one the rest of this item is about
+        (`todo/the-shelf-is-rebuilt-per-keystroke-and-pays-for-it-twice.md`), and
+        it is worth more here than a redraw's worth of parsing. `resolved_sources`
+        is lenient about a folder that is not mounted because it catches
+        `OSError` — but an unresponsive network mount does not raise, it stalls
+        for as long as the platform's timeout with the window frozen behind it,
+        and before this every graph edit spent that.
+        """
+        if self._session is None:
+            self._resolved_sources = {}
+            self._sources_from = {}
+            return
+        asked = (
+            self._order
+            if moved
+            else tuple(
+                node for node in self._order if self._sources_from.get(node.node_id) != node.params
+            )
+        )
+        resolved = dict(self._resolved_sources)
+        resolved.update(resolved_sources(asked, self._specs))
+        # The roots as the document now stands, so a node that was one and has
+        # been retooled into something else leaves with its answer rather than
+        # keeping it. A node that is not a source is never in here, so it is
+        # always in `asked` — where it costs the lookup that skips it and nothing
+        # more.
+        roots = {
+            node.node_id
+            for node in self._order
+            if (spec := self._specs.get(node.node_id)) is not None and spec.source is not None
+        }
+        self._resolved_sources = {
+            node_id: files for node_id, files in resolved.items() if node_id in roots
+        }
+        self._sources_from = {
+            node.node_id: node.params for node in self._order if node.node_id in roots
+        }
 
     def _on_frame_changed(self, index: int, image: QImage, kind: RequestKind) -> None:
         """The transport has reached a frame. Hold it, and decide what to show."""

@@ -19,7 +19,10 @@ The rail is hidden here for the same reason it is hidden at the project
 position: it says where the walk is, and the save screen is not on the walk.
 
 Not what any of them contains — `project_select.py`, `chain_stack.py`,
-`step_pane.py`, `save_screen.py` own those.
+`step_pane.py`, `save_screen.py` own those. What a replaced pane hands its
+replacement is not this module's either: `stack_pane.py` says what survives a
+rebuild, and this is only the one place a rebuild happens, so it is where the
+handover is made.
 Not the canvas: `app.py` swaps that separately and this module never mentions
 it. Not which node is current: that is the window's, passed in on every rebuild
 rather than tracked here, so there is exactly one answer to "where is the walk"
@@ -55,6 +58,7 @@ from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QWidget
 
 from sieve.core.pipeline_model import Node
 from sieve.gui.rail import NodeRail
+from sieve.gui.stack_pane import StackPane
 from sieve.gui.step_pane import StepPane
 
 _SLIDE_DURATION_MS = 260
@@ -122,6 +126,18 @@ class _SlidingPanes(QWidget):
         # Hiding a pane here would hide the thing the next slide reveals.
         widget.show()
         self._relayout()
+
+        # Where the user had scrolled to, then the least move off it that puts
+        # the selection back on screen. Both, and in this order: restoring alone
+        # would leave an arrow key moving an accent the user cannot see, and
+        # revealing alone would put every rebuild back at the top of the stack —
+        # which is rebuilt when a knob is turned, not only when the selection
+        # moves. Done here rather than deferred because the pane is laid out by
+        # the show above, and a correction on the next turn of the event loop is
+        # one the user would watch happen.
+        if isinstance(widget, StackPane) and isinstance(old, StackPane):
+            widget.scroll_to(old.offset())
+            widget.reveal_current()
 
         old.hide()
         old.setParent(None)

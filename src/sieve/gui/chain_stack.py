@@ -112,6 +112,7 @@ from sieve.gui.chrome import (
     rgb,
     stack_stylesheet,
 )
+from sieve.gui.stack_pane import StackPane
 
 
 @dataclass(frozen=True)
@@ -1105,12 +1106,18 @@ class ChainColumn(QWidget):
             painter.drawText(port_label_origin(end, self._lifts[(src, dst)]), label)
 
 
-class PipelinePane(QWidget):
+class PipelinePane(StackPane):
     """The whole position: the project it belongs to, then the steps in it.
 
     What stands above the stack is what the stack belongs to rather than a step
     in it, so the project card is outside the scroll area: scrolling to the foot
     of a long chain must not take away the answer to which project this is.
+
+    A `StackPane` because it is rebuilt whole on every move of the walk and on
+    every turn of a knob, and a chain is longer than most libraries: where the
+    user was reading is the one thing about this pane that is not derived from
+    the document, so it is the one thing the rebuild has to be handed
+    (`stack_pane.py`).
     """
 
     def __init__(
@@ -1225,16 +1232,24 @@ class PipelinePane(QWidget):
             self.column.cards += (self.add_box,)
         self.column.fan = self.fan
 
-        scroll = QScrollArea()
-        scroll.setWidget(self.column)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.scroll = QScrollArea()
+        self.scroll.setWidget(self.column)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        # The box where one is open: it is where the user is standing, and the
+        # card the walk was on is behind it — hidden outright where the box is
+        # anchored (`stack_pane.py`).
+        self.current_card = (
+            self.add_box
+            if self.add_box is not None
+            else (self.cards[current] if 0 <= current < len(self.cards) else None)
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 0)
         layout.setSpacing(6)
         layout.addWidget(self.project_card)
-        layout.addWidget(scroll)
+        layout.addWidget(self.scroll)
 
     @staticmethod
     def _build_output_card(outputs: Outputs) -> ChainCard:

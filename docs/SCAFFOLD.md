@@ -27,6 +27,7 @@ src/sieve/gui/pinned.py                    # The one step held under the canvas:
 src/sieve/gui/project_select.py            # The project position: the library card above one card per project.
 src/sieve/gui/rail.py                      # One tick per node, down the left edge, marking where the walk is.
 src/sieve/gui/save_screen.py               # What the run keeps, and the command that runs it.
+src/sieve/gui/stack_pane.py                # What a rebuilt stack carries over from the pane it replaces.
 src/sieve/gui/step_pane.py                 # The step position: one node's caption, its parameters, and its guidance.
 src/sieve/gui/streams.py                   # What each position of a document actually produces, folded from the source.
 src/sieve/gui/surface_panel.py             # The picture a band's handles are grabbed on, one panel per declared surface.

@@ -20,7 +20,9 @@ file on disk — so the widget holds no `Project`, for the reason it emits no
 holding one it parsed at build time would be holding a value it is not the owner
 of by the time anything asked it for one. `listings` reads, derives three
 strings, and drops what it read; a document that will not parse becomes a row
-that says so rather than a library that will not draw.
+that says so rather than a library that will not draw. What is held between two
+redraws is those strings and never a `Project` — `HeldListings`, which re-reads a
+file whose mtime has moved and nothing else.
 
 **The selection is not here either.** Which card wears the accent is the
 window's, handed down on every rebuild, exactly as the walk's position is
@@ -32,7 +34,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import yaml
@@ -49,6 +51,7 @@ from PySide6.QtWidgets import (
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Project
 from sieve.gui.chain_stack import ChainCard, fixed_card, note_label, title_label
 from sieve.gui.chrome import chrome_button, stack_stylesheet
+from sieve.gui.stack_pane import StackPane
 
 #: Beyond this many days the relative phrasing stops being read as a duration
 #: and starts being counted, so the card gives the date instead.
@@ -210,6 +213,16 @@ def _when(path: Path, now: datetime) -> str:
     return f"saved {saved.date().isoformat()}"
 
 
+def _listing(path: Path, at: datetime) -> Listing:
+    """One card's three lines, read off the file."""
+    return Listing(
+        path=path,
+        name=path.name.removesuffix(PROJECT_SUFFIX),
+        holds=_holds(path),
+        when=_when(path, at),
+    )
+
+
 def listings(paths: Sequence[Path], now: datetime | None = None) -> tuple[Listing, ...]:
     """Read each project and say what a card for it should carry.
 
@@ -218,17 +231,82 @@ def listings(paths: Sequence[Path], now: datetime | None = None) -> tuple[Listin
     test that owned the machine's date. Local time, aware: the comparison is
     against a file's mtime, which is an instant, and the answer is a calendar
     day, which is only a day in some zone.
+
+    Every file, every time. `HeldListings` is what a window redrawing the same
+    library on every keystroke holds instead.
     """
     at = datetime.now(tz=UTC).astimezone() if now is None else now
-    return tuple(
-        Listing(
-            path=path,
-            name=path.name.removesuffix(PROJECT_SUFFIX),
-            holds=_holds(path),
-            when=_when(path, at),
-        )
-        for path in paths
-    )
+    return tuple(_listing(path, at) for path in paths)
+
+
+def _stamp(path: Path, at: datetime) -> tuple[int, int, date] | None:
+    """What a held listing would have to still be true of to be reused.
+
+    The file's own mtime and size, and the reader's calendar day — the last
+    because half of what a card says is "saved yesterday", which goes stale at
+    midnight with the file untouched.
+
+    `None` where the file cannot be statted, which is a listing that may not be
+    held at all: the row it produces says `unreadable`, and the state that
+    produced it is one nothing here can tell has ended.
+    """
+    try:
+        status = path.stat()
+    except OSError:
+        return None
+    return (status.st_mtime_ns, status.st_size, at.date())
+
+
+class HeldListings:
+    """`listings`, minus the documents that have not moved since it last read them.
+
+    Not `Shelf`, which is the word this tree gives to the set of tools a position
+    can be filled from (`app._shelf`, `tool_registry.loaded_shelf`) — a library of
+    projects and a shelf of tools are two things, and the item that opened this
+    calls the project pane a shelf in prose where the code never has
+    (`adr/a-word-has-one-home.md`).
+
+    A card says what a project holds and when it was written, and neither is a
+    fact about which card is selected — so the whole of a shelf redrawn for a
+    moved accent is bytes already read, re-decoded to produce identical strings
+    (`findings/2026.08.09-the-shelf-reparses-every-project-per-arrow-key.md`).
+
+    Keyed on the file rather than on the caller's reason for asking, so the two
+    redraws that *do* need fresh answers get them without saying so: a project
+    saved since the shelf was last drawn has a new mtime, and one written by this
+    very window is the same case. The window holding this is what decides nothing
+    (`gui/app.py`).
+
+    Held per window rather than module-wide: a cache outliving the window it was
+    filled for would be a fact about a filesystem nobody is looking at, and the
+    memory it costs is one row per project in one library.
+    """
+
+    def __init__(self) -> None:
+        self._held: dict[Path, tuple[tuple[int, int, date], Listing]] = {}
+
+    def rows(self, paths: Sequence[Path], now: datetime | None = None) -> tuple[Listing, ...]:
+        """What a card for each of `paths` should carry, reading only what moved.
+
+        `now` is `listings`' parameter and for its reason.
+        """
+        at = datetime.now(tz=UTC).astimezone() if now is None else now
+        held: dict[Path, tuple[tuple[int, int, date], Listing]] = {}
+        rows: list[Listing] = []
+        for path in paths:
+            stamp = _stamp(path, at)
+            standing = self._held.get(path)
+            if standing is not None and stamp is not None and standing[0] == stamp:
+                row = standing[1]
+            else:
+                row = _listing(path, at)
+            if stamp is not None:
+                held[path] = (stamp, row)
+            rows.append(row)
+        # Rebuilt rather than updated, so a library the user has moved off does
+        # not go on being remembered by a window that will never ask again.
+        self._held = held
+        return tuple(rows)
 
 
 def _library_title(folder: Path | None) -> str:
@@ -277,7 +355,7 @@ def _project_card(
     return card
 
 
-class ProjectSelect(QWidget):
+class ProjectSelect(StackPane):
     """The library it is a library of, then the projects in it.
 
     The library card is outside the scroll for the pipeline pane's reason
@@ -353,13 +431,16 @@ class ProjectSelect(QWidget):
             stack.addWidget(card)
         stack.addStretch(1)
 
-        scroll = QScrollArea()
-        scroll.setWidget(column)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.scroll = QScrollArea()
+        self.scroll.setWidget(column)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        # An empty shelf has no card to bring into view, and neither has an index
+        # the caller clamped against a library that has since shrunk.
+        self.current_card = self.cards[current] if 0 <= current < len(self.cards) else None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 0)
         layout.setSpacing(6)
         layout.addWidget(self.library_card)
-        layout.addWidget(scroll)
+        layout.addWidget(self.scroll)

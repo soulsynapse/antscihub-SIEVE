@@ -2,7 +2,7 @@
 title: Only Run writes the document, so closing the window discards every edit
 phase: 9
 priority: high
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui/test_save_and_run.py -q -k 'an_edit_survives_a_close or a_clean_document_writes_nothing'"
 opened: 2026-08-09
@@ -73,3 +73,19 @@ the comparison lives.
     2 passed, 4 deselected in 1.76s
 
 Full suite 1215 passed, `ruff format --check` and `ruff check` clean.
+
+## Reviewed 2026-08-10
+
+Criterion re-run independently: `2 passed, 4 deselected`, exit 0. Both cases
+proved red here rather than on the transcript's word — the `closeEvent` wire
+deleted fails `an_edit_survives_a_close`, and `save_if_edited`'s guard forced
+through fails `a_clean_document_writes_nothing` on the file's bytes. Full suite
+1236 passed. `done_when` untouched and `status` moved only to
+`awaiting-review`.
+
+Set `done` with residue elsewhere, not covered here: the `open_project` half of
+the save-back is a survivor against the whole suite, and `Session.__init__`'s
+`on_disk=False` leg has no production caller — both homed in
+[the-other-way-a-session-ends-writes-nothing-a-case-reads.md](the-other-way-a-session-ends-writes-nothing-a-case-reads.md),
+which is red at minting. The shape is recorded in
+`docs/findings/loop/2026.08.09-a-loud-deferral-covers-for-a-silent-one-in-the-same-sentence.md`.

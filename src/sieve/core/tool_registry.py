@@ -155,8 +155,21 @@ def offered_tools(
     asymmetry one layer down, and this is the layer: `gui` renders the
     shortlist it is handed (`gui-computes-nothing`).
 
-    Two refusals, both about the position rather than about the tool.
-    `StreamSpec.matches` is the first. The second is the element meaning — a
+    Three refusals, all about the position rather than about the tool.
+    `StreamSpec.matches` is the first, and what it is handed has to be the
+    stream the position *resolved* to: a preserving tool declares neither field
+    because it emits what it was handed, so its own `emits` proves nothing and
+    the offer under it was empty
+    (`todo/the-stream-a-position-produces-is-resolved-not-declared.md`).
+
+    The second is that this position has an upstream at all. A source root reads
+    a file and has no input, so it can never be what goes *after* something, and
+    the wildcard `accepts` it carries is a statement about a position it does not
+    have rather than the declared universal the same value is on any other tool
+    (`tools/pick.py`, `adr/an-unstated-field-is-a-claim.md`). Read off `source`,
+    which is the declaration that makes a node a root, and not off a tool id.
+
+    The third is the element meaning — a
     tool that aggregates is implausible over blocks, because a mean of blocks
     is a quantity no count threshold is denominated in, and `node_element`
     already says so by resolving to `None`. A tool declaring no element meaning
@@ -165,14 +178,15 @@ def offered_tools(
     upstream and never recovers, so there is none left here for a tool to lose,
     and the leg that exists to protect it has no subject.
 
-    The source site is not here. Offering against a folder of picked files
-    needs their count and extension class, which arrive with
-    `todo/the-first-source-tool-moves-the-three-single-root-assumptions.md`;
-    the add-tool and swap sites have their facts already.
+    The source site is not here, and the second refusal is why it cannot be: a
+    root's offer is the tools this one excludes, asked against a folder's count
+    and extension class rather than against a stream nothing is feeding it
+    (`todo/the-source-is-a-card-in-the-walk.md`). The add-tool and swap sites
+    have their facts already.
 
     Args:
-        produced: What flows into the position — the upstream node's `emits`,
-            or a source's.
+        produced: What the position above resolved to — `node_stream` folded
+            down the walk, never a single tool's declared `emits`.
         element: What one value of that stream is a value of. `None` where the
             walk lost it or the stream is a table, and a `None` refuses
             nothing: a position whose elements have no meaning is one where
@@ -185,12 +199,13 @@ def offered_tools(
     Returns:
         The plausible specs, tightest `match_slack` first and ties broken by
         id, so the display is a function of the declarations and not of
-        registration order. Empty is a real answer and the common one where the
-        position produced a wildcard: nothing was proven, so nothing is
-        offered.
+        registration order. Empty is a real answer: a position that resolved to
+        nothing proved nothing, and nothing is offered there.
     """
-    scored: list[tuple[int, str, ToolSpec]] = []
+    scored: list[tuple[tuple[int, int], str, ToolSpec]] = []
     for spec in shelf:
+        if spec.source is not None:
+            continue
         slack = spec.accepts.match_slack(produced)
         if slack is None:
             continue

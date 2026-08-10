@@ -2,7 +2,7 @@
 title: The stream a position produces is resolved, not declared
 priority: high
 phase: 3
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests -q -k \"offering_from_a_resolved_source or an_unstated_accepts_field\""
 opened: 2026-08-09

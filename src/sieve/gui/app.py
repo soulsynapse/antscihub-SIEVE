@@ -72,7 +72,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline
-from sieve.core.tool_base import ElementKind, ParamStereotype, ToolSpec
+from sieve.core.tool_base import ElementKind, ParamStereotype, StreamSpec, ToolSpec
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError, offered_tools
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
@@ -104,6 +104,7 @@ from sieve.gui.project_select import (
 )
 from sieve.gui.save_screen import SaveScreen, kept_products
 from sieve.gui.step_pane import StepPane
+from sieve.gui.streams import stream_specs
 from sieve.gui.timeline.bar import TimelineBar
 from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.transport.request_intent import RequestKind
@@ -254,6 +255,10 @@ class MainWindow(QMainWindow):
         # same reason: it is a fact about the graph's shape, and a parameter
         # moves no tool onto or off the graph (`tuning.open`).
         self._elements: Mapping[str, ElementKind | None] = {}
+        # The other half of the same spec, folded down the same walk: what each
+        # node's output stream actually is, which is what a position's offer is
+        # computed against (`gui/streams.py`).
+        self._streams: Mapping[str, StreamSpec | None] = {}
         self._order: tuple[Node, ...] = ()
         self._at = 0
         # Which project card wears the accent. The walk's number one position
@@ -736,21 +741,21 @@ class MainWindow(QMainWindow):
         """What could plausibly stand in the gap under step `site`.
 
         The question is the position's and not the tool's: `offered_tools` is
-        handed what flows into the gap and the element meaning folded to it, and
-        nothing here reads a tool id (`adr/gui-knows-kinds-not-tools.md`). Empty
-        where the gap's step names a tool this install does not have, for the
-        same reason it is empty at a position that proved nothing — there is no
-        declaration to compute an offer from, and most gaps on today's shelf are
-        in exactly that state
+        handed what the gap's step *resolved to* and the element meaning folded
+        to it — the two halves of one walk — and nothing here reads a tool id
+        (`adr/gui-knows-kinds-not-tools.md`). Empty where the gap's step names a
+        tool this install does not have, and where the chain is rooted on one
+        that declares its stream no more completely than a preserving tool does:
+        both are positions with nothing proven about them, which is the state
+        every gap was in before the fold
         (`findings/2026.08.09-the-shelf-declares-too-little-for-eight-of-ten-positions-to-offer-anything.md`).
         """
         if site is None or not 0 <= site < len(self._order):
             return ()
-        node = self._order[site]
-        spec = self._specs.get(node.node_id)
-        if spec is None:
+        produced = self._streams.get(self._order[site].node_id)
+        if produced is None:
             return ()
-        return offered_tools(spec.emits, self._elements.get(node.node_id), self._shelf())
+        return offered_tools(produced, self._elements.get(self._order[site].node_id), self._shelf())
 
     def _offer_over(self, position: int) -> tuple[ToolSpec, ...]:
         """What could plausibly stand *at* `position`, in place of what does.
@@ -936,12 +941,12 @@ class MainWindow(QMainWindow):
         return select
 
     def _reread_graph(self) -> None:
-        """The three facts about the document's shape, taken together.
+        """The four facts about the document's shape, taken together.
 
-        Together because they are one derivation in three steps — the fold that
-        gives each node its element kind reads the specs and the walk — and
-        because every caller that invalidates one has invalidated all three: a
-        project opening, and a step leaving the chain.
+        Together because they are one derivation in four steps — the two folds
+        that give each node its element kind and its output stream both read the
+        specs and the walk — and because every caller that invalidates one has
+        invalidated all four: a project opening, and a step leaving the chain.
         """
         session = self._session
         if session is None:
@@ -950,6 +955,7 @@ class MainWindow(QMainWindow):
         self._specs = resolved_specs(pipeline, self._registry)
         self._order = node_order(pipeline)
         self._elements = element_kinds(self._order, pipeline, self._specs)
+        self._streams = stream_specs(self._order, pipeline, self._specs)
 
     def _on_frame_changed(self, index: int, image: QImage, kind: RequestKind) -> None:
         """The transport has reached a frame. Hold it, and decide what to show."""

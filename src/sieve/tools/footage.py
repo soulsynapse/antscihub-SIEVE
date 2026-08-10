@@ -232,8 +232,10 @@ SOURCE = FootageFile()
     version="1.0.0",
     summary="Read a video file already on disk as this step's frames.",
     # `pick`'s reasoning, unchanged: nothing feeds this node, so the wildcard is
-    # a statement about a position that does not exist, and `ArraySpec.matches`
-    # reads an empty tuple as never plausible so it is not offered downstream.
+    # a statement about a position that does not exist. What keeps it off a
+    # downstream offer is `source` rather than the predicate — an unstated
+    # `accepts` is a declared universal (ADR 32), so the position asks whether it
+    # has an upstream at all (`tool_registry.offered_tools`).
     accepts=ArraySpec(),
     emits=ArraySpec(dtypes=FOOTAGE_DTYPES, channels=FOOTAGE_CHANNELS),
     # One product: frames. Which stretch of which source they are is `path` and

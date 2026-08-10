@@ -660,30 +660,39 @@ class ArraySpec:
         `admits`' dual, and the reason it is a second method rather than a
         threshold on the first: `admits` is false only on proven disjointness,
         this is true only on proven compatibility, and a wildcard is the input
-        that separates them. Ignorance is legal and never plausible, so an
-        empty `dtypes` on either side admits and does not match
+        that separates them
         (`todo/the-offering-predicate-is-not-the-edge-legality-check.md`).
         The failure modes are opposite too — legality must never refuse a graph
         that would have run, an offer must refuse most of the shelf to be worth
         displaying — which is why one function tuned for both would be wrong for
         each.
 
-        Proven, here, is containment rather than overlap: every dtype and
-        channel this position can produce is one the input declares it takes. A
-        partial overlap admits, because the graph may run on the frames in the
-        intersection, and does not match, because the offer would be a tool the
-        source can feed only some of the time.
+        **Which side the wildcard sits on decides what it is**
+        (`adr/an-unstated-field-is-a-claim.md`). Unstated on this side is a tool
+        declaring it takes anything, so it matches: reading it as unproven
+        refused that tool at every position rather than at one, which is a
+        constant and not a shortlist. Unstated on the produced side is a
+        position that has not been resolved, and that still never matches.
+
+        Proven, on the stated fields, is containment rather than overlap: every
+        dtype and channel this position can produce is one the input declares it
+        takes. A partial overlap admits, because the graph may run on the frames
+        in the intersection, and does not match, because the offer would be a
+        tool the source can feed only some of the time.
         """
         return self.match_slack(produced) is not None
 
-    def match_slack(self, produced: StreamSpec) -> int | None:
-        """How much of what this input allows the position does not produce.
+    def match_slack(self, produced: StreamSpec) -> tuple[int, int] | None:
+        """How loosely this input fits the position, lowest fitting tightest.
 
         The display order `matches` is read for, derived from the same
-        comparison rather than from a score: a tool declaring exactly what
-        arrives and nothing else fits the position more tightly than one that
-        would also have taken three dtypes it will never see, and lower comes
-        first. `None` where nothing is proven, which is what `matches` reads.
+        comparison rather than from a score, and lexicographic because the two
+        kinds of looseness are not commensurable: an unstated field tolerates
+        every value there will ever be, so it is counted first and separately
+        from the members a stated field allows and will not see. `(wildcards,
+        unused)`, so a tool naming the dtype it takes sorts ahead of one that
+        takes anything. `None` where nothing is proven, which is what `matches`
+        reads.
         """
         if not isinstance(produced, ArraySpec):
             return None
@@ -691,7 +700,7 @@ class ArraySpec:
         channels = self._unused(self.channels, produced.channels)
         if dtypes is None or channels is None:
             return None
-        return dtypes + channels
+        return (dtypes[0] + channels[0], dtypes[1] + channels[1])
 
     @staticmethod
     def _compatible(required: tuple[Any, ...], produced: tuple[Any, ...]) -> bool:
@@ -700,12 +709,14 @@ class ArraySpec:
         return bool(set(required) & set(produced))
 
     @staticmethod
-    def _unused(required: tuple[Any, ...], produced: tuple[Any, ...]) -> int | None:
-        if not required or not produced:
+    def _unused(required: tuple[Any, ...], produced: tuple[Any, ...]) -> tuple[int, int] | None:
+        if not produced:
             return None
+        if not required:
+            return (1, 0)
         if not set(produced) <= set(required):
             return None
-        return len(set(required) - set(produced))
+        return (0, len(set(required) - set(produced)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -742,24 +753,29 @@ class TableSpec:
         return set(self.columns) <= set(produced.columns)
 
     def matches(self, produced: StreamSpec) -> bool:
-        """`ArraySpec.matches` for rows: proven compatibility, never ignorance."""
+        """`ArraySpec.matches` for rows, wildcard reading and all."""
         return self.match_slack(produced) is not None
 
-    def match_slack(self, produced: StreamSpec) -> int | None:
+    def match_slack(self, produced: StreamSpec) -> tuple[int, int] | None:
         """Columns the table carries that this input has no use for.
 
-        `ArraySpec.match_slack`'s quantity read off the conjunctive side: an
-        input requiring `("x", "y", "frame")` of a table that has exactly those
-        fits it more tightly than one requiring only `("x",)`, and slack counts
-        the difference the same way in both.
+        `ArraySpec.match_slack`'s pair read off the conjunctive side: an input
+        requiring `("x", "y", "frame")` of a table that has exactly those fits
+        it more tightly than one requiring only `("x",)`, and an input naming no
+        column at all takes any table there is — which is
+        `adr/an-unstated-field-is-a-claim.md`'s reading on the third field it
+        rules over, and the reason this returns the same shape rather than a
+        bare count the offer's sort would have to compare against a pair.
         """
         if not isinstance(produced, TableSpec):
             return None
-        if not self.columns or not produced.columns:
+        if not produced.columns:
             return None
+        if not self.columns:
+            return (1, 0)
         if not set(self.columns) <= set(produced.columns):
             return None
-        return len(set(produced.columns) - set(self.columns))
+        return (0, len(set(produced.columns) - set(self.columns)))
 
 
 #: What an edge may carry. A union rather than a base class with two subclasses:
@@ -773,6 +789,40 @@ class TableSpec:
 #: merging step; that protocol is cut here and returns with the first two-input
 #: tool, which is also when the artifact has to learn which port an edge feeds.
 type StreamSpec = ArraySpec | TableSpec
+
+
+def node_stream(declared: StreamSpec, arriving: StreamSpec | None) -> StreamSpec:
+    """One node's output stream, given its input's. `node_element`'s other half.
+
+    A tool leaving a field of `emits` unstated emits *whatever arrived*, which
+    is a claim rather than ignorance wherever there is an upstream to preserve
+    from (`adr/an-unstated-field-is-a-claim.md`). So the fold fills each unstated
+    field from the stream flowing in, and what a position produces stops being a
+    declaration any one tool could have made: `crop` cannot say "uint8 frames of
+    colour", and after this walk its position says it.
+
+    The single-node conversion, kept here beside the declarations it reads while
+    the walk that supplies `arriving` lives with the view that needs it — the
+    split `node_element` takes and for its reason.
+
+    Args:
+        declared: `ToolSpec.emits`.
+        arriving: What flows in, itself resolved. `None` at a root, and at every
+            position below one whose tool this install does not have.
+
+    Returns:
+        `declared` with every unstated field filled from `arriving`. `declared`
+        unchanged where there is nothing to fill from — a root's unstated field
+        is ignorance, and a stream of the other kind cannot answer for it.
+    """
+    if isinstance(declared, ArraySpec) and isinstance(arriving, ArraySpec):
+        return ArraySpec(
+            dtypes=declared.dtypes or arriving.dtypes,
+            channels=declared.channels or arriving.channels,
+        )
+    if isinstance(declared, TableSpec) and isinstance(arriving, TableSpec):
+        return TableSpec(columns=declared.columns or arriving.columns)
+    return declared
 
 
 @dataclass(frozen=True, slots=True)

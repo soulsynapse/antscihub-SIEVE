@@ -23,7 +23,9 @@ would pass against every `accepts` on the shelf and retire `dag.py`'s edge check
 for every graph containing this node. `crop` and `span` are not the precedent
 they look like — both are wildcards on *both* sides of a pass-through, so their
 unstated pair is a statement of preservation and the check still runs against the
-real upstream. A source tool has no upstream to preserve from.
+real upstream. A source tool has no upstream to preserve from, which is also why
+the wildcard on *this* tool's `accepts` costs nothing: an offer asks whether the
+position has an input before it asks what fits there.
 
 What its frames *mean* — that this one is a background rather than a plate — is
 not a question a stream type asks, and this tool does not answer it on any other
@@ -228,8 +230,10 @@ SOURCE = PickedFile()
     # Nothing feeds this node — it is a root by construction, and a root's input
     # is the one edge `dag._edge_faults` never checks. The wildcard is therefore
     # a statement about a position that does not exist rather than the claim of
-    # ignorance the same value on `emits` would be; `ArraySpec.matches` reads an
-    # empty tuple as never plausible, so it is also not offered as a downstream.
+    # ignorance the same value on `emits` would be. It reads as a declared
+    # universal everywhere else (ADR 32), so what keeps this tool off a
+    # downstream offer is `source`, which is the declaration that says there is
+    # no input position to speak of (`tool_registry.offered_tools`).
     accepts=ArraySpec(),
     emits=ArraySpec(dtypes=PICKED_DTYPES, channels=PICKED_CHANNELS),
     # One product. What the picture *means* — a background, a mask, a plate — is

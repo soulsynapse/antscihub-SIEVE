@@ -59,3 +59,22 @@ input is interpreted" — one input, two interpretations, which is a different
 shape from the add box's one entry per spec. What the source resolves to is
 [the-stream-a-position-produces-is-resolved-not-declared](the-stream-a-position-produces-is-resolved-not-declared.md);
 what the user does with an ambiguous resolution is this card.
+
+## Folded 2026-08-09: the root is now the only position that offers nothing
+
+`the-stream-a-position-produces-is-resolved-not-declared` landed the fold, so
+every position below the source resolves and offers what takes its stream. The
+root did not, and `_offer_over` still returns `()` there — that item's body says
+it should stop doing so, and stopping needs an argument `offered_tools` cannot be
+handed: there is no stream flowing into a root, so the accepts-side match is
+vacuous and what actually distinguishes the candidates is that they are sources
+at all. That is the chooser's question rather than the add box's, which is the
+distinction the paragraph above already draws — "one input, two interpretations
+… a different shape from the add box's one entry per spec" — so the shape the
+root offer takes is settled here.
+
+Two facts it can build on. `offered_tools` now refuses a tool declaring `source`,
+because a root cannot be what goes *after* something; the root's offer is that
+refusal read the other way. And the swap button's dead tooltip on the source card
+is asserted in `tests/gui/test_swap_box.py`, so whatever this card does to the
+root position has a test standing on the current answer.

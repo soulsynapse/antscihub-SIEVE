@@ -3,21 +3,23 @@
 Four claims, and the first is the one the other three hang on. **The box never
 writes on opening** — it is a picker, so esc costs nothing and exactly one
 mutation is issued, when an offer is taken. That the offer is the *gap's* is the
-second: it rewrites as the box moves, and it is empty at most gaps on today's
-shelf, which is why the empty case is written first here rather than as an edge.
-The third is the splice, checked as a document mutation rather than as a
-redrawn stack — a chain drawn shorter or longer than the file holds would still
-run what the user is not looking at. The fourth is the picture: the two edges
-the box would be spliced onto are drawn dashed, and the solid edge it interrupts
-is not drawn beside them.
+second: it rewrites as the box moves, because it is computed from what that
+position resolved to rather than from the tool standing above it. The third is
+the splice, checked as a document mutation rather than as a redrawn stack — a
+chain drawn shorter or longer than the file holds would still run what the user
+is not looking at. The fourth is the picture: the two edges the box would be
+spliced onto are drawn dashed, and the solid edge it interrupts is not drawn
+beside them.
 
-The chain is `pick -> crop -> detect`, chosen so both offer cases are reachable
-in one window: `crop` emits an `ArraySpec` stating neither field, so the gap
-under it offers nothing
-(`findings/2026.08.09-the-shelf-declares-too-little-for-eight-of-ten-positions-to-offer-anything.md`),
-while `detect` pins both and the gap under it offers two tools. The gap under
-the last step is a position here where it is not in the referent, because the
-tree's output card is drawn and not modeled
+The chain is `pick -> crop -> detect`. `crop` emits an `ArraySpec` stating
+neither field because it emits what it was handed, so the gap under it is the
+one the resolution is visible at: it offers what takes the source's uint8 frames,
+which is the same list the gap under the source itself offers, while the gap
+under `detect` offers what takes float32 gray
+(`todo/the-stream-a-position-produces-is-resolved-not-declared.md`). An offer
+that is empty is now a chain rooted on something that resolves to nothing, which
+is its own case below. The gap under the last step is a position here where it
+is not in the referent, because the tree's output card is drawn and not modeled
 (`adr/the-output-card-is-a-picture-of-the-write-list.md`) — there is no card
 below the chain for a refusal to be about.
 
@@ -39,7 +41,34 @@ from tests.gui import driving
 _TOOLS = ("pick", "crop", "detect")
 
 #: What the gap under `detect` offers, in the order `offered_tools` scores them.
-_OFFERED = ["detect", "motion_history"]
+#: The two that pin float32 gray exactly lead, then the accepts that also
+#: tolerate dtypes this position will never produce, then the two stating no
+#: field at all. `downsample` and `rescale` are absent on the *other* leg: they
+#: aggregate, and a mean of `detect`'s frame-valued elements has no noun.
+_OFFERED = [
+    "detect",
+    "motion_history",
+    "temporal_baseline",
+    "background_ema",
+    "block_signal",
+    "normalize",
+    "crop",
+    "span",
+]
+
+#: What the gaps under the source and under the `crop` offer — one list, because
+#: `crop` preserves both stream fields and the position it produces is therefore
+#: the source's. `farneback` leads it by taking exactly the one dtype arriving.
+_OVER_FRAMES = [
+    "farneback",
+    "background_ema",
+    "block_signal",
+    "downsample",
+    "normalize",
+    "rescale",
+    "crop",
+    "span",
+]
 
 
 @pytest.fixture
@@ -137,41 +166,64 @@ def test_the_box_opens_in_the_gap_the_walk_is_on_and_writes_nothing(window: Any)
     assert not window.session.can_undo()
 
 
-def test_an_empty_offer_still_opens_a_box_that_says_so(window: Any) -> None:
-    # Most gaps on today's shelf are this one, so it is the case the box is
-    # usually in — and it opens anyway, because the offer is a fact about the
-    # gap and ↑/↓ are how the user reaches the gap that has one. A gesture that
-    # refused here would leave them no way to find the gaps that offer.
-    window.add_step()
+def test_an_empty_offer_still_opens_a_box_that_says_so(qapp, tmp_path: Path) -> None:
+    # A chain rooted on `checkpoint`, which states neither stream field and has
+    # nothing upstream to preserve from — so the root resolves to nothing, the
+    # `crop` below it resolves to nothing, and every gap in the chain is empty.
+    # The box opens anyway, because the offer is a fact about the gap and ↑/↓ are
+    # how the user reaches the gap that has one; a gesture that refused here
+    # would leave them no way to find the gaps that offer.
+    del qapp
+    path = tmp_path / "unresolved.sieve.yaml"
+    Project(
+        source=SourceRef(path="clip.mp4"),
+        pipeline=Pipeline(
+            nodes=(
+                Node(node_id="n0", tool_id="checkpoint", version="1.0.0"),
+                Node(node_id="n1", tool_id="crop", version="1.0.0"),
+            ),
+            edges=(Edge(upstream="n0", downstream="n1"),),
+        ),
+    ).save(path)
+    window = _open(path)
+    try:
+        window.add_step()
 
-    box = _box(window)
-    assert box.offer == ()
-    assert box.offer_buttons == ()
-    assert box.offer_note == "nothing on the shelf declares it could stand here"
-    # The box still says which gap it is in, because that is the half of the
-    # question it can answer here.
-    assert box.note == "after n0 · n1 would read it"
+        box = _box(window)
+        assert box.offer == ()
+        assert box.offer_buttons == ()
+        assert box.offer_note == "nothing on the shelf declares it could stand here"
+        # The box still says which gap it is in, because that is the half of the
+        # question it can answer here.
+        assert box.note == "after n0 · n1 would read it"
 
-    window.take_offer()
+        window.take_offer()
 
-    assert _chain(window) == (list(_TOOLS), [("n0", "n1"), ("n1", "n2")])
-    assert not window.session.can_undo()
+        assert _chain(window) == (["checkpoint", "crop"], [("n0", "n1")])
+        assert not window.session.can_undo()
+    finally:
+        window.close()
 
 
 def test_the_box_moves_through_the_gaps_and_the_offer_rewrites_with_it(window: Any) -> None:
     window.add_step()
-    assert _offered(window) == []
+    assert _offered(window) == _OVER_FRAMES
 
     # ↓ moves the box, not the walk: while a box is open it is the position the
     # keys are about, and the walk is standing behind it.
     window.go_down()
     assert _box(window).site == 1
-    assert _offered(window) == []
+    # Unmoved across the `crop`, which is the resolution asserted from the
+    # outside: the gap under a preserving tool is the gap above it.
+    assert _offered(window) == _OVER_FRAMES
     assert window.current_node.node_id == "n0"
 
     window.go_down()
     assert _box(window).site == 2
+    # And it does move where the stream does: `detect` states float32 gray, so
+    # the gap below it is a different question from the two above.
     assert _offered(window) == _OFFERED
+    assert _OFFERED != _OVER_FRAMES
 
     # The gap under the last step is a position, so ↓ stops at the foot of the
     # chain rather than one short of it.
@@ -197,12 +249,13 @@ def test_walking_the_offer_lights_another_and_leaves_the_document_alone(window: 
     assert _box(window).lit == 1
     assert window.control.current_position() == "pipeline"
 
-    # Wrapped rather than clamped, unlike the walk: the offer is a short ring of
-    # names and neither end is somewhere the user is trying to stop.
+    # Wrapped rather than clamped, unlike the walk: the offer is a ring of names
+    # and neither end is somewhere the user is trying to stop.
+    window.go_back()
+    window.go_back()
+    assert _box(window).lit == len(_OFFERED) - 1
     window.go_forward()
     assert _box(window).lit == 0
-    window.go_back()
-    assert _box(window).lit == 1
 
     assert not window.session.can_undo()
 

@@ -18,11 +18,13 @@ that opened at a position offering nothing would take the card away and leave
 esc as the only exit, where an empty *gap* is merely useless. So the ⇄ is dead
 there, and the method behind it refuses for the same reason.
 
-The chain is `pick -> crop -> detect -> motion_history`, which is the shortest
-one with both cases on screen: only `detect` and its two siblings pin both
-stream fields, so the position under `detect` is the one position of the four
-that offers anything at all
-(`findings/2026.08.09-the-shelf-declares-too-little-for-eight-of-ten-positions-to-offer-anything.md`).
+The chain is `pick -> crop -> detect -> motion_history`, and the position that
+offers nothing is now the root alone: a position's offer is computed from the
+stream it resolved to rather than from its upstream's declaration, so a `crop`
+that preserves uint8 frames offers everything that takes them
+(`todo/the-stream-a-position-produces-is-resolved-not-declared.md`). The root
+has no upstream to resolve from and its own offer is the source question, which
+`todo/the-source-is-a-card-in-the-walk.md` carries.
 
 The picture is last and it is built without a window, the way `test_crop_fan.py`
 builds one: what is under test is the drawing. Two boxes over a fanned card,
@@ -49,8 +51,21 @@ from tests.gui import driving
 _TOOLS = ("pick", "crop", "detect", "motion_history")
 
 #: What the position under `detect` offers, in the order `offered_tools` scores
-#: them — so the swap over `motion_history` opens lit on the second.
-_OFFERED = ["detect", "motion_history"]
+#: them — so the swap over `motion_history` opens lit on the second. The two
+#: that pin `detect`'s float32 gray exactly lead, then the accepts that tolerate
+#: dtypes it will not see, then the two that state no field at all. `downsample`
+#: and `rescale` are absent on the *other* leg: they aggregate, and a mean of
+#: frame-valued elements has no noun.
+_OFFERED = [
+    "detect",
+    "motion_history",
+    "temporal_baseline",
+    "background_ema",
+    "block_signal",
+    "normalize",
+    "crop",
+    "span",
+]
 
 #: A value of the departed tool's, set so the swap has something to drop.
 _TAU = 2.5
@@ -193,16 +208,19 @@ def test_the_anchored_box_has_no_up_and_down_and_still_walks_its_offer(window: A
 
     # ←/→ are the axis it does have, wrapped as they are in a gap.
     window.go_forward()
+    assert _box(window).lit == 2
+    window.go_back()
+    window.go_back()
     assert _box(window).lit == 0
-    window.go_forward()
-    assert _box(window).lit == 1
+    window.go_back()
+    assert _box(window).lit == len(_OFFERED) - 1
     assert window.control.current_position() == "pipeline"
     assert not window.session.can_undo()
 
 
 def test_taking_an_offer_keeps_the_node_it_replaces(window: Any) -> None:
     window.swap_step(3)
-    window.go_forward()
+    window.go_back()
     assert _offered(window)[0] == "detect"
 
     window.take_offer()
@@ -246,18 +264,19 @@ def test_esc_restores_the_step_the_box_was_standing_over(window: Any) -> None:
 def test_a_position_with_nothing_to_offer_has_a_dead_swap_and_opens_no_box(
     window: Any,
 ) -> None:
-    # Three of the four, which is the ordinary state of this shelf rather than an
-    # edge: only a position fed by something pinning both stream fields offers.
+    # The root alone, and it is the resolution that leaves it there rather than
+    # the shelf: every position below it resolved to uint8 frames and offers
+    # what takes them, while the root has no upstream for the offer to be
+    # computed from. Offering against a folder of picked files is a question
+    # this predicate does not answer, so the source is unswappable here rather
+    # than merely unoffered-for.
     cards = window.control.pipeline_pane.cards
-    assert [_swap_button(card).isEnabled() for card in cards] == [False, False, False, True]
-    # The root is one of them for a further reason: offering against a folder of
-    # picked files is a question the predicate does not answer yet, so the source
-    # is unswappable rather than merely unoffered-for.
+    assert [_swap_button(card).isEnabled() for card in cards] == [False, True, True, True]
     assert _swap_button(cards[0]).toolTip() == "Nothing on the shelf declares it could stand here"
 
     # And the method refuses too, because a caller reaching it directly is the
     # case where the button was not the gesture.
-    window.swap_step(1)
+    window.swap_step(0)
 
     assert _box(window) is None
     assert _chain(window) == _UNTOUCHED

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -44,9 +45,12 @@ from PySide6.QtGui import QKeyEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QSpinBox,
+    QToolButton,
     QWidget,
 )
 
@@ -275,6 +279,62 @@ def _stated_value(
     return QLabel(str(value))
 
 
+#: What the field says when the document holds no file for it yet. A sentence
+#: rather than an empty label, because the row is the only thing on a new
+#: project's first card and a blank one reads as a form that failed to build.
+NOTHING_CHOSEN = "no file chosen"
+
+
+def _path_chooser(
+    described: Mapping[str, Any], value: Any, labels: Mapping[str, str], on_edit: _Edit
+) -> QWidget:
+    """The file this parameter names, and the button that opens a picker onto it.
+
+    The chosen path enters as `SetParam` through the ordinary command path, the
+    same as a typed number — which is what makes it undoable and what keeps the
+    document's only writer the one it already had. The picker is a modal only
+    for as long as the choice takes; it writes nothing itself.
+
+    Absolute, and stored as the dialog returned it. A path relative to the
+    project's own folder would survive the project moving, but nothing here
+    knows where that folder is — the form is handed a node and a session, not a
+    directory — and a relative string resolved against the wrong root is a file
+    that silently is not the one picked.
+
+    The label shows the name and carries the whole path as its tooltip: a card
+    is a column narrow enough that a full path would set the pane's width.
+    """
+    del described, labels
+    row = QWidget()
+    layout = QHBoxLayout(row)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(4)
+
+    text = str(value or "")
+    shown = QLabel(Path(text).name if text else NOTHING_CHOSEN)
+    shown.setToolTip(text)
+
+    browse = QToolButton()
+    browse.setText("…")
+    browse.setAutoRaise(True)
+    browse.setToolTip("Choose a file")
+
+    def choose() -> None:
+        # Opened on the folder the current value sits in, so re-picking a
+        # sibling is one dialog rather than a re-navigation.
+        start = str(Path(text).parent) if text else ""
+        chosen, _chose_with = QFileDialog.getOpenFileName(
+            row, "Choose a file", start, "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All files (*)"
+        )
+        if chosen:
+            on_edit(chosen)
+
+    browse.clicked.connect(choose)
+    layout.addWidget(shown, 1)
+    layout.addWidget(browse)
+    return row
+
+
 #: Kind to control, and the whole of this module's tool knowledge. Total over
 #: `ParamStereotype`, which `tests/gui/test_param_generator.py` holds: a kind
 #: minted without an entry here is a parameter no panel can show, and the
@@ -286,12 +346,10 @@ _BUILDERS: dict[ParamStereotype, _Builder] = {
     ParamStereotype.BAND: _stated_value,
     ParamStereotype.REGION: _stated_value,
     ParamStereotype.POINT: _stated_value,
-    # The pattern as written, until there is a picker to open. A file dialog is
-    # the handoff surface this kind names, and it arrives with the card that
-    # holds a source step (`todo/the-source-is-a-card-in-the-walk.md`); what the
-    # panel owes today is the same thing it owes every kind whose editor lives
-    # elsewhere, which is showing the value the document holds.
-    ParamStereotype.PATH: _stated_value,
+    # The one composite kind whose surface is a dialog rather than a drag, so
+    # it is the one this module can build itself: the others are populated from
+    # the canvas, the timeline and the graph panel, which the form does not own.
+    ParamStereotype.PATH: _path_chooser,
 }
 
 

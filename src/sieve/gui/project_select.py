@@ -44,7 +44,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.core.pipeline_model import PROJECT_SUFFIX, Project
+from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline, Project
+from sieve.core.tool_base import ToolSpec
 from sieve.gui.chain_stack import ChainCard, fixed_card, note_label, title_label
 from sieve.gui.chrome import chrome_button, stack_stylesheet
 
@@ -105,12 +106,22 @@ def library_folder(paths: Sequence[Path]) -> Path | None:
     return folders.pop()
 
 
-def mint(directory: Path) -> Path:
-    """Write an empty project into `directory` and say where it landed.
+def mint(directory: Path, source: ToolSpec) -> Path:
+    """Write a project holding one unchosen source into `directory`.
 
-    Empty is the whole of it: no sources, no chain (`adr/a-document-may-name-no-
-    footage.md`, which exists because this document could not otherwise be
-    built). No name is asked for — the name is a knob like any other and a modal
+    It names no footage (`adr/a-document-may-name-no-footage.md`, which exists
+    because this document could not otherwise be built) — `source`'s path
+    parameter is left at its default, so the node stands for a file nobody has
+    picked yet. What it is *not* is an empty graph: the add box splices into a
+    gap between two positions the chain has, so a project with no nodes has no
+    gesture that can give it a first one, and the source card is where the
+    picker lives (`todo/the-source-is-a-card-in-the-walk.md`).
+
+    The spec is handed in rather than looked up, because which tool a new
+    project starts from is the window's answer — it holds the registry and the
+    shelf — and a second lookup here could name a version the shelf does not.
+
+    No name is asked for — the name is a knob like any other and a modal
     at mint time would be the one form in the surface that blocks the walk — so
     the file is named after the first `untitled_N` the folder does not already
     hold. Numbered against the folder rather than against a count of cards,
@@ -130,7 +141,11 @@ def mint(directory: Path) -> Path:
     while f"untitled_{number}{PROJECT_SUFFIX}" in taken:
         number += 1
     path = directory / f"untitled_{number}{PROJECT_SUFFIX}"
-    Project().save(path)
+    # No params, for `take_offer`'s reason: an unset field resolves to the
+    # tool's declared default, and writing the defaults in at mint time would
+    # freeze them against the next version of the tool.
+    node = Node(tool_id=source.tool_id, version=source.version)
+    Project(pipeline=Pipeline(nodes=(node,))).save(path)
     return path
 
 

@@ -266,10 +266,14 @@ def test_new_project_mints_an_empty_project_the_library_lists(window: Any, libra
 
     minted = [path for path in projects_in(library) if path.name.startswith("untitled")]
     assert len(minted) == 2
-    # Empty on disk: no sources and no chain. Adding sources is the next act, on
-    # the card the selection lands on.
-    assert [Project.load(path) == Project() for path in minted] == [True, True]
-    assert listings((minted[0],))[0].holds == "no chain yet · no footage yet"
+    # One source on disk, with nothing chosen. Not an empty graph: the add box
+    # splices into a gap between two positions the chain has, so a project with
+    # no nodes has no gesture that could give it a first one — the file is
+    # picked on this node's own card, which is the next act.
+    chains = [Project.load(path).pipeline.nodes for path in minted]
+    assert [[node.tool_id for node in nodes] for nodes in chains] == [["footage"], ["footage"]]
+    assert [nodes[0].params for nodes in chains] == [{}, {}]
+    assert listings((minted[0],))[0].holds == "1 step · no footage yet"
 
     pane = window.control.project_select
     assert len(pane.cards) == len(_LIBRARY) + 3
@@ -332,8 +336,12 @@ def test_project_cards_up_and_down_move_the_selection_not_the_walk(window: Any) 
 def test_the_library_root_is_a_folder_under_where_the_app_was_launched(
     tmp_path: Path,
 ) -> None:
+    from sieve.core.tool_registry import REGISTRY
+    from sieve.gui.app import MINTED_SOURCE
     from sieve.gui.project_select import LIBRARY_FOLDER, library_root, mint, projects_in
+    from sieve.tools import discover
 
+    discover()
     library = library_root(tmp_path)
     assert library == tmp_path / LIBRARY_FOLDER
     assert library.is_dir()
@@ -341,7 +349,7 @@ def test_the_library_root_is_a_folder_under_where_the_app_was_launched(
     # The gesture the pane exists for lands in the folder and not beside it,
     # which is the whole claim: a mint is a user's document, and the launch
     # directory during development is the repository.
-    minted = mint(library)
+    minted = mint(library, REGISTRY.latest(MINTED_SOURCE))
     assert minted.parent == library
     assert projects_in(tmp_path) == ()
     assert projects_in(library) == (minted,)

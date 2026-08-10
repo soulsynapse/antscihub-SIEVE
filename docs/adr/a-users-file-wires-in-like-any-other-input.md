@@ -34,3 +34,110 @@ that: adding a file is adding a node, choosing among sources is moving an edge,
 and the command layer needs no intent kind it does not already have. It is also
 what [a-tool-is-one-file](a-tool-is-one-file.md) predicts — reading a new kind
 of file is a tool, bought for one module.
+
+One route, not two. A separate path through the executor for user-supplied
+inputs is what [one-execution-path](one-execution-path.md) refuses on the
+preview/production axis, for the reason that applies here unchanged: with two
+routes, the one that was tuned against is not the one that runs.
+
+**The two existing cases are instances, not neighbours.** Read the other way,
+crop serving and checkpoint read-back are the same argument against themselves.
+Each stands a file where a node stood by a path of its own: `resolve_source`
+matches a `CropRecord` against a region the caller derived from the graph and
+returns a file plus a frame numbering, after which the caller has to neutralise
+the node whose output that file already holds; a checkpoint reader would match a
+manifest entry against a node's key and stand in for everything above it. Neither
+is wrong about its case. Both are a second answer to where a node's frames come
+from, reached while a run is planned and recorded nowhere the user can see — and
+one-execution-path's reason survives being lifted from the executor to the
+document: the graph that was tuned against is not the graph that runs, and what
+the store keys agrees with what the reader sees only because two modules were
+written to agree. Under this decision the substitution *is* the document edit. A
+written crop that backs a region is a source tool wired to that crop node's
+consumers, and the crop node is not upstream of the run at all — nothing to
+elide, because nothing in the executed graph names it. A checkpoint is the same
+edit further down. Matching becomes wiring; a plan-time decision becomes a
+mutation the project holds, that the user can see and undo, and that the next run
+does not have to re-derive.
+
+Deciding whether a record still backs a box is real work and none of it is lost —
+the four states are facts about records
+([crop_binding](../todo/a-written-crop-serves-the-run-that-would-have-cut-it.md)),
+and a stale record must still fail toward the parent. What changes is what that
+work produces: an edge to offer, rather than a run already routed.
+
+**The two halves pay differently in keys, and only one of them pays nothing.**
+The crop half is free by construction rather than by assertion: `dag.node_keys`
+folds `source_key(<the file>, decode_format)` into every root and schema v1 puts
+no region in it, so a run rooted on the written crop folds exactly the string a
+source tool over that file folds. That holds only if the crop node is *dropped*
+— a node neutralised at `WHOLE_FRAME` still stands between the source key and
+everything under it and moves every one of those keys. This decision takes the
+dropped reading, which is what collides with
+[05.10](../todo/a-served-run-elides-the-node-its-file-already-holds.md).
+
+The checkpoint half is the opposite, and "every cache key unmoved"
+([PLAN.md](../PLAN.md)) is not the check for it. That gate runs one project
+twice with its checkpoint list changed — Phase 2's "none of them may reach a
+cache key" restated — so it never derives a key both ways and cannot compare a
+bespoke route against a wired one. And a read-back that is a document edit moves
+the key of everything below the checkpointed node, off that node's key and onto
+the written file's identity. Not a wrong answer: the file holds what the node
+computed, and the cost is recomputing downstream entries once. But it is the
+price of the collapse, it is charged only here, and when a reader lands the
+gate's *rerun reading written artifacts* will be a rerun of a mutated project,
+so the gate needs re-stating. That re-statement is the migration's work.
+
+**What forced it is a case with nothing to hang on.** A folder of pre-cropped
+videos has no crop node: no region for `resolve` to be handed, no record for it to
+match, no node for the caller to elide. The substitution mechanism needs the node
+it substitutes for to exist, so a third bespoke path would not be a third of the
+same thing — it would be the first one that could not be written. The general
+mechanism has nothing to ask: the folder is a source tool whose file param
+resolves per replicate, and a project that never cropped anything reads it exactly
+as a project that did. When the edit is made, and by what — an import action, an
+offer a reader accepts — is the migration's question, not this one.
+
+What the key is derived *from* is the whole difference. A node fed by the graph
+keys from the graph, so an edit propagates. A source tool has nothing upstream
+to constrain it, so its key is the file's own content identity — `source_key`
+and `decoder_identity()` exist for exactly that. Get this wrong and swapping one
+background for another is invisible to the store, which serves the first
+model's results under the second's name: well-formed key, plausible frame, no
+symptom.
+
+**Resolution policy stays out of the key.** What is hashed is the resolved
+file's identity, never the rule that found it — neither "this exact path" nor
+"the folder of this name beside the project". A rule in the key makes two
+projects naming one file disagree about it; a rule *instead of* identity makes
+one project agree with itself after the folder is reorganized underneath it.
+`SourceRef` already separates the two for the project's own video, storing a
+path relative to the project directory so the project moves while identity comes
+from the file. A source tool's file param resolves per replicate through the
+ordinary overrides path, so one node can name a pattern and each replicate
+resolve its own file — which is what makes a folder of pre-cropped videos
+expressible without a second mechanism — and what is hashed is still the file
+each replicate resolved to. A pattern resolving to nothing is a run that cannot
+happen; one resolving to several is refused rather than ordered, because "the
+first match" is the filesystem's answer and not the project's.
+
+Three consequences rather than decisions. Which file a node reads changes its
+output, so it is a param and is saved
+([param-not-preference](param-not-preference.md)). A path param is a
+presentation stereotype whose handoff surface is a file or folder picker, which
+is [gui-knows-kinds-not-tools](gui-knows-kinds-not-tools.md)'s licensed
+extension: the tool declaring one writes no GUI code. And a source that is one
+value for the whole run broadcasts it across the span, so a static input needs
+no window shape the per-frame machinery does not already have.
+
+**A source tool is a root by construction**, and the project's own video is not
+its ancestor. Where a single root is assumed — the order a graph is drawn in,
+the source key, and the executor's binding of a node with no upstream — is what
+the first source tool moves. That migration is an item; the decision here is
+only that the root is legal and keys from its own file.
+
+This says nothing about what travels along the wire. That is `StreamKind`'s
+question — arrays and tables today, `detect` consuming a signal series rather
+than frames — and it stays open on the usual terms
+([a-tool-is-one-file](a-tool-is-one-file.md)). Nor does it settle what a frame
+index means when two inputs are videos of different lengths.

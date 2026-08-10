@@ -47,3 +47,32 @@ runs it.
     $ uv run pytest tests/unit/test_executor.py tests/unit/test_cache_key.py -q -k 'two_parents_of_different_lag_align_at_the_child or swapping_two_ports_moves_one_key'
     35 deselected in 0.16s
     exit: 5
+
+## Folded 2026-08-10: the price is three things, and the third is the schema
+
+"Two things, neither of which is a signature change" is wrong about the count and
+about the sentence it excludes. Neither claim above has a subject until the
+document can hold a fan-in, and today it structurally cannot: `Edge` carries
+`upstream` and `downstream` and no port, `Pipeline._referential_integrity`
+raises "two edges feed X" over a set of fed nodes, and `Dag._elements` and
+`_element_names` were deliberately given the same refusal
+([a-nodes-inputs-are-labeled-and-variadic.md](a-nodes-inputs-are-labeled-and-variadic.md))
+so that no site silently keys on the first of two. `accepts` naming one stream
+and `ToolRun` taking one window are the other two,
+[11.3](the-first-multi-input-tool-lifts-the-merge-deferral.md) says this step
+retires all three, and nothing in this body said so.
+
+So the port field lands here — the day `Edge` refers to has arrived when this
+item runs, which is what its docstring says it is waiting for, and the second
+`-k` term above cannot be written without it. Five refusals retire together with
+it — `Pipeline`'s, and the four `(parent,) = fed` unpacks, three in `dag.py` and
+one in `executor.py`. Each was written as a posture rather than an oversight, so
+retiring one is replacing it with the variadic answer it predicted rather than
+deleting it. `with_node_after`
+and `without_node` carry ports through the splice, and `without_node`'s fan-out
+of a removed node's inputs is already written for the case.
+
+The pool item [choosing-among-sources-is-a-move-no-intent-kind-makes.md](choosing-among-sources-is-a-move-no-intent-kind-makes.md)
+is what writes an edge the user re-pointed, and it is deferred on nothing —
+re-pointing needs two producers, not two ports — so whichever runs second inherits
+the other's shape rather than the two colliding.

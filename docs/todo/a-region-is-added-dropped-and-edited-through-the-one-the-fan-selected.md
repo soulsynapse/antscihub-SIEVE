@@ -2,7 +2,7 @@
 title: A region is added, dropped, and edited through the one the fan selected
 priority: high
 phase: 9
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'adding_a_region_selects_it or a_knob_edits_the_selected_regions_own_value'"
 opened: 2026-08-09
@@ -93,3 +93,27 @@ returning `None` rather than anything a widget tests.
 The roots-only clause is now killed by
 `test_a_step_reading_a_reshaped_frame_is_offered_no_regions` — replacing it with
 `True` fails that case, verified through `scripts/mutation_sweep.py`.
+
+## 2026-08-09 (review): green, and two residues that do not live here
+
+`done_when` re-run independently: 2 passed, 214 deselected, exit 0. Full suite
+1229 passed. The two clauses the item posed as sub-questions are both settled in
+the body above and both settled the way the item's own argument pointed, so
+nothing is owed on them.
+
+Both of the run's positive coverage claims hold under an independent sweep —
+`ParamForm(..., replicate_id=self.selected_replicate)` and `cuts_regions`'
+roots-only clause are each KILLED against `tests/gui/test_region_verbs.py`. What
+the run's own scope sentence mis-bounded is the third writer the item body names,
+the canvas drag: the overlays honour an id they are handed and nothing hands them
+the window's. Three survivors, homed with one case in
+`the-gestures-replicate-address-is-carried-by-lines-nothing-reads.md`.
+
+Separately, `add_region` names a region off the count, so a drop in the middle
+followed by a + puts two of a name in the document. Not in scope here — the item
+is silent on names and picking one was the run's to do — and homed in
+`the-plus-names-a-region-off-a-count-so-a-middle-drop-makes-two.md`.
+
+Set `done` rather than reopened because `done_when` is green for both residues
+and would stay green for either fix, so reopening hands a work run a criterion
+that certifies nothing.

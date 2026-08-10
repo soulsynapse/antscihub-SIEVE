@@ -1,9 +1,9 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_that_breaks_under_a_mutant_is_refused_rather_than_killed"
+done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k a_completed_sweep_leaves_a_sidecar_naming_every_replacement_it_applied"
 opened: 2026-08-08
 ---
 
@@ -517,3 +517,67 @@ on a mutant run instead.
 `test_gui_loop_budget.py::test_every_sample_the_session_published_is_gated` red —
 the fifth occurrence of an open finding, not run once more, amended in place with
 the first `over_ms` the four prior occurrences all lost.
+
+## The title is closed and the sidecar is the last clause in the tree (2026-08-10)
+
+Re-verified rather than read off the transcript: the criterion under review is
+green here, the whole module is 30 green, `ruff check` and `ruff format --check`
+are clean, `done_when` was untouched by the worker and `status` moved only to
+`awaiting-review`. Red-before was reproduced by reverting `scripts/mutation_sweep.py`
+alone to its parent and running the case — `assert 0 == 1` with `KILLED    limit
+= 100` and `1 killed, 0 survived` on stdout, the false KILLED itself and not a
+neighbouring red. All three recorded mutants re-run verbatim and reproduce as
+`3 killed, 0 survived`, which is the first cycle on this item where the recorded
+anchors survive a re-run
+(`findings/loop/2026.08.10-a-done-items-mutation-anchor-is-deleted-and-nothing-re-runs-it.md`).
+
+The title's own defect is closed, and so is the finding it was opened on:
+`findings/loop/2026.08.08-a-crashing-test-command-is-indistinguishable-from-a-killed-mutant.md`
+states in one sentence that KILLED read off the mutant's own test failing is what
+would close it, which is what landed. This review moved that status; the run that
+earned it cited the finding three times and left it `open`, which is
+`findings/loop/2026.08.10-a-run-satisfies-a-findings-own-closing-condition-and-leaves-it-open.md`.
+
+Not `done`, and what is left is in the tree rather than ahead of it. The sidecar
+detector folded in on 2026-08-09 is unstarted — `grep -rn "sidecar"
+scripts/mutation_sweep.py` is empty — and it is the last clause here that a `-k`
+can assert. It is also the only one of this item's three tree-is-left-mutated
+modes with no instrument at all: the baseline catches a sweep that *begins*
+mutated, and nothing catches one that ends mutated after exiting, which is three
+recorded occurrences. `done_when` rotates onto the writer, deliberately and not
+onto the pair: the reader is a pytest session hook and `-k "writer or reader"` is
+green for whichever disjunct names nothing
+(`findings/loop/2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing.md`),
+so the case that reads the sidecar and prints the line is the rotation after this
+one and is not certified by this criterion. The writer's own contract is what the
+folded section already fixes: it survives a clean exit, it records the exact
+replacement text of every mutant applied, and it carries a `completed` flag
+separate from that list.
+
+Riding with it in the same commit, covered by prose rather than by the criterion,
+all three from the commit under review and all in the same file:
+
+The module docstring's "Every refusal a mutant can earn is a function of the
+original bytes and the mutant alone, so all of them are raised before the baseline
+runs" is now the paragraph immediately after the one introducing a refusal raised
+from inside the per-mutant loop. The sentence is still true on a narrow reading —
+a broken oracle is not a refusal the *mutant* earned — but the adjacency reads as
+a contradiction, and the hoist's invariant is worth stating with the exception
+named rather than left for the reader to reconcile.
+
+A break refusal mid-sweep discards every verdict already computed: `SweepError`
+propagates out of the loop and `results` goes with it, so a twenty-mutant sweep
+whose third mutant breaks the oracle prints nothing for the two already scored.
+That is the exact cost shape the hoist commit was written to remove, and this one
+cannot be hoisted because it is a runtime property. Whether the refusal prints the
+verdicts it already holds is the run's to settle: they are as trustworthy as ever,
+since exit 1 is the only thing that scored them, but a partial report that reads
+as a sweep is what this whole item exists to prevent, so if they print they print
+labelled as incomplete.
+
+`TESTS_FAILED_EXIT` is pytest's and there is no override. The constant's comment
+justifies that from the tree — every criterion in `docs/todo/` passes a pytest
+session after `--` — but the refusal message a non-pytest oracle would earn says
+"the command breaking rather than its tests failing" without saying that the code
+it wanted is hard-wired, so the one reader who hits it is the one with no way to
+tell what went wrong.

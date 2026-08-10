@@ -1,8 +1,7 @@
 ---
 title: A merge has no way into a document — the box splices one edge and nothing writes a second
-status: deferred
-deferred_for: subject
-gated_on: the-window-grows-a-port-keyed-form-and-the-executor-delays-each-port.md — until `Pipeline` accepts two edges into one node there is no second edge for a surface to write
+status: open
+gated_on: nothing
 priority: normal
 phase: "11"
 done_when: "uv run pytest tests/gui/test_add_box.py -q -k 'a_merge_is_offered_only_where_both_its_ports_can_be_fed or taking_a_merge_wires_both_of_its_ports'"
@@ -102,3 +101,23 @@ reading is changing behaviour that exists rather than adding it.
 
 This item's `done_when` names the offer and the wiring and covers neither of the
 two paragraphs above.
+
+## Reviewed 2026-08-10: `status` and `gated_on` moved on the gate this item said was spent
+
+The fold above is the work run's own, written while it held 11.2 open, and it
+is right that the gate is spent — `status` and `gated_on` are the review's edit
+and they move here. The subject is a two-port spec declared against a test's own
+registry, as `tests/unit/test_executor.py` now does; a shipped merge tool is
+11.3's and this item does not wait on it.
+
+The fold's own closing sentence stands: `done_when` names the offer and the
+wiring and covers neither `without_node`'s port collision nor `offered_tools`'
+new default. Widening it is the next review's, once whoever works this says
+which of the two readings won — the criterion cannot be written to cover a
+ruling that has not been made.
+
+The `offered_tools` skip and the `Edge.port` refusals it stands beside have no
+case at all; that is
+[the-port-refusals-and-the-portless-edge-have-no-case.md](the-port-refusals-and-the-portless-edge-have-no-case.md),
+which pins the conservative default so that this item is changing behaviour
+that is asserted rather than behaviour nothing reads.

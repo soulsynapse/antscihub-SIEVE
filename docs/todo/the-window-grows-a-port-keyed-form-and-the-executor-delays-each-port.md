@@ -1,7 +1,7 @@
 ---
 title: The window grows a port-keyed form, and the executor delays each port to the slowest
 step: "11.2"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_executor.py tests/unit/test_cache_key.py -q -k 'two_parents_of_different_lag_align_at_the_child or swapping_two_ports_moves_one_key'"
 opened: 2026-08-09
@@ -76,3 +76,24 @@ The pool item [choosing-among-sources-is-a-move-no-intent-kind-makes.md](choosin
 is what writes an edge the user re-pointed, and it is deferred on nothing —
 re-pointing needs two producers, not two ports — so whichever runs second inherits
 the other's shape rather than the two colliding.
+
+## Reviewed 2026-08-10: done, and the refusals the fold authorised carry no case
+
+Criterion re-run green at `a318b55`, whole suite 1287 green, ruff clean. Both
+its cases were held under an independent mutant rather than taken from the
+transcript: zeroing `port_delay` in `_bind` fails the alignment case on the
+frame-index guard, and dropping the port from `node_key`'s pairs fails the
+eleven `a_version_bump_moves_the_key` goldens. The crossing case itself
+survives that second mutant — it certifies that the `upstream` position is
+*ordered*, which is the whole of its claim given `Dag.inputs` sorts by port,
+and the goldens are what pin the pairing.
+
+Both of this body's clauses landed and the fold's five refusals retired as
+predicted. What the fold authorised beyond them arrived with no subject: the
+`Edge.port` validator and its absent-port serializer, `ToolSpec._check_ports`'
+three refusals, `PortError`, `Pipeline`'s per-port collision on a *named* port,
+and `offered_tools` skipping a merge. That residue has a home in
+[the-port-refusals-and-the-portless-edge-have-no-case.md](the-port-refusals-and-the-portless-edge-have-no-case.md),
+minted with this review — the search for an existing owner came back empty,
+since every `have-no-case` item in the pool is per-module and these refusals
+did not exist this morning.

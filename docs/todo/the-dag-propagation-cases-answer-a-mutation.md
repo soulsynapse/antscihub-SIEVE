@@ -4,7 +4,7 @@ priority: normal
 phase: 3
 status: done
 gated_on: nothing
-done_when: 'uv run python scripts/mutation_sweep.py --file src/sieve/pipeline/dag.py --mutant "upstream: ElementKind | None = resolved[parent] ==> upstream: ElementKind | None = ElementKind.PIXEL" --mutant "upstream_names = names[parent] ==> upstream_names = SOURCE_ELEMENT_NAMES" --mutant "indexed[node.node_id] = upstream and not spec.rate_changing ==> indexed[node.node_id] = not spec.rate_changing" --mutant "self.elements[node.node_id] is None ==> self.elements[node.node_id] is None and node.node_id == node_id" --mutant "if node.node_id in feeding and self.elements[node.node_id] is None ==> if self.elements[node.node_id] is None" --mutant "feeding.update(self.upstreams[node.node_id]) ==> pass" -- uv run pytest -q tests/unit/test_dag.py'
+done_when: 'uv run python scripts/mutation_sweep.py --file src/sieve/pipeline/dag.py --mutant "return arriving.pop() if len(arriving) == 1 else None ==> return ElementKind.PIXEL" --mutant "upstream_names = arriving.pop() if len(arriving) == 1 else None ==> upstream_names = SOURCE_ELEMENT_NAMES" --mutant "indexed[node.node_id] = upstream and not spec.rate_changing ==> indexed[node.node_id] = not spec.rate_changing" --mutant "self.elements[node.node_id] is None ==> self.elements[node.node_id] is None and node.node_id == node_id" --mutant "if node.node_id in feeding and self.elements[node.node_id] is None ==> if self.elements[node.node_id] is None" --mutant "feeding.update(self.upstreams[node.node_id]) ==> pass" -- uv run pytest -q tests/unit/test_dag.py'
 opened: 2026-08-07
 ---
 
@@ -72,3 +72,17 @@ Closed by the `specify` run that wrote the criterion, which is the one case
 where writing it and finding it green is the answer rather than the wrong
 question: the item's whole subject was whether the probe kills, and running it
 is what specifying it costs.
+
+## Reviewed 2026-08-10: two anchors were deleted by `a318b55` and re-aimed at the fold that replaced them
+
+This item is `done` and its criterion was failing. 11.2 retired the two
+`(parent,) = fed` unpacks these mutants were anchored on — the propagation walk
+now goes through `dag._arriving_element`, which folds a set over every parent —
+so `mutation_sweep` exited 1 on `anchor not found` and had done since that
+commit. Nothing re-runs a `done` item's criterion, which is why it was invisible
+([findings/loop/2026.08.10-a-done-items-mutation-anchor-is-deleted-and-nothing-re-runs-it.md](../findings/loop/2026.08.10-a-done-items-mutation-anchor-is-deleted-and-nothing-re-runs-it.md)).
+
+The two anchors are re-aimed at the expressions that replaced them and the claim
+is unchanged in both: hand the fold's answer down as `PIXEL`, and hand the noun
+down as `SOURCE_ELEMENT_NAMES`. Re-run in this review, 6 killed, 0 survived. The
+other four anchors were untouched by that commit.

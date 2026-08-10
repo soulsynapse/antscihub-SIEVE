@@ -2,9 +2,8 @@
 title: A picked file's meaning is the wiring, and the user is the one who states it
 phase: 2
 priority: normal
-status: deferred
-deferred_for: subject
-gated_on: the-window-grows-a-port-keyed-form-and-the-executor-delays-each-port.md — a node with one input has one place a file can wire to, so there is nothing for the user to say yet
+status: open
+gated_on: nothing
 done_when: "uv run pytest tests/unit/test_intents.py -q -k a_picked_file_is_wired_to_a_named_port"
 opened: 2026-08-09
 ---
@@ -52,3 +51,18 @@ alone:
     $ uv run pytest tests/unit/test_intents.py -q -k a_picked_file_is_wired_to_a_named_port
     7 deselected in 0.13s
     exit: 5
+
+## Reviewed 2026-08-10: the gate lifted at `a318b55`
+
+The port-keyed form landed: `Edge` carries a port, `ToolSpec.accepts` may name
+several, and `dag.py` refuses an edge naming a port its tool has not got. So
+"what does this file wire to" is a question with two answers and the gesture has
+something to operate on. The body above says it becomes real "where a
+subtraction has a plate port and a background port"; the subtraction itself is
+11.3's and is not on the shelf, but the gesture's subject is a tool declaring
+two ports, which a test declares against its own registry today
+(`tests/unit/test_executor.py`). `done_when` names a case in
+`tests/unit/test_intents.py`, which is where that pattern goes.
+
+`status` and `gated_on` moved on the gate lifting; ADR 31 and the two
+constraints below are unchanged.

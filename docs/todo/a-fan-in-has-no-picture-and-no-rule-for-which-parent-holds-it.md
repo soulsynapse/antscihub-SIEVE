@@ -1,8 +1,7 @@
 ---
 title: A fan-in has no picture, and no rule for which parent a child hangs under
-status: deferred
-deferred_for: subject
-gated_on: the-window-grows-a-port-keyed-form-and-the-executor-delays-each-port.md — until a document can hold two edges into one node there is no fan-in to draw or walk
+status: open
+gated_on: nothing
 priority: normal
 phase: "11"
 done_when: "uv run pytest tests/gui/test_chain_edges.py tests/gui/test_walk.py -q -k 'a_second_parent_arrives_at_its_own_arrowhead or a_child_hangs_under_its_first_parent'"
@@ -96,3 +95,23 @@ climb is the fourth site rather than a fifth question.
 The rule the four then share is one ruling, not four: which parent a child hangs
 under in the walk is what the canvas blends over and what the offer is computed
 from, or the stack draws a chain the rest of the window is not talking about.
+
+## Reviewed 2026-08-10: the gate lifted at `a318b55`, and the four sites now disagree in writing
+
+`Pipeline` refuses two edges into one *port* and no longer two into one node, so
+the graph this item is about is buildable — with a two-port spec declared
+against a test's own registry, which is what `tests/unit/test_executor.py` now
+does. No shipped merge tool is needed and none exists; 11.3 is not this item's
+gate.
+
+11.2 also did half of what this item's first paragraph asked for, in the
+direction that makes the rest cheaper: every one of the four sites had a
+docstring claiming there was never a parent to choose between, and each now
+states its own tie-break instead — `gui/walk.py` first-reached,
+`gui/app.py:frame_bearing` last, `gui/app.py:input_of` first,
+`gui/pinned.py` and `gui/streams.py` last. So the disagreement is on the tree in
+its own words and this item is the ruling over it rather than the discovery of
+it. Nothing was *decided*, which is right: the docstrings all cite this file.
+
+`gated_on` and `status` moved on the gate lifting. Nothing in the body below is
+retracted.

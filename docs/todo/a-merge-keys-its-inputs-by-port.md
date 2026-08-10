@@ -1,8 +1,7 @@
 ---
 title: A merge keys its inputs by port, and swapping them moves one key
-status: deferred
-deferred_for: subject
-gated_on: the first multi-input tool, which is what gives `a - b` and `b - a` a subject
+status: done
+gated_on: nothing
 priority: normal
 phase: "03"
 opened: 2026-08-07
@@ -44,3 +43,24 @@ inputs, so ticks will never be this item's subject; only a real multi-input
 tool will. Second, this gate is prose and invisible to the index's
 named-gate scan, so the item that mints the first multi-input tool must cite
 this one in its body — that citation is the whole net.
+
+## Reviewed 2026-08-10: the gate lifted and the claim ran, at `a318b55`
+
+The 2026-08-09 ruling above says this gate is prose, invisible to the index's
+named-gate scan, and that the net is the citation from whichever item mints the
+first multi-input subject. That citation held:
+[the-window-grows-a-port-keyed-form-and-the-executor-delays-each-port.md](the-window-grows-a-port-keyed-form-and-the-executor-delays-each-port.md)
+named this item as its second `-k` term and ran the case as
+`test_cache_key.py::TestWiring::test_swapping_two_ports_moves_one_key` — one
+root, two branches keying differently, a merge reading both, and the crossing
+moving that node's key and no other. The subject is a two-port spec declared
+against the test's own registry rather than a tool on the shelf, which is what
+the item was waiting for: what it needed was "a node that actually has two
+inputs to cross over", not a shipped merge.
+
+Re-run in review, green. This item is on `UNSPECIFIED_DEBT` and so closes with
+no `done_when` of its own; the command that certifies it is 11.2's, which names
+the case by `-k`. What that case does *not* reach is the port label's presence
+in the digest — with the pair flattened to bare keys it still passes, because
+`Dag.inputs` sorts by port and crossing therefore reorders. The eleven
+`a_version_bump_moves_the_key` goldens are what go red for the flattening.

@@ -1,17 +1,21 @@
 """The window: a menu bar, three panes, and the boundaries between them.
 
+The panes are named for where they sit, not for what they will hold; the reason
+is `panes.py`'s, and the same word doing both jobs is why this file says "the
+left pane" and "the left side" and never just "left".
+
 Two of the three boundaries are different in kind and the frame is where that
-difference is stated. Canvas against controls is a splitter — how much room the
+difference is stated. Left against right is a splitter — how much room the
 footage gets against the chain is the user's, and it is the trade they make
-most often. Timeline against both is a seam: the strip is a fixed height,
-because what it draws is the whole asset at a size the layout does not get a
-say in. The menu bar sits above all three and is a boundary of neither kind —
+most often. The bottom against both is a seam: the strip is a fixed height,
+because what it will draw is the whole asset at a size the layout does not get
+a say in. The menu bar sits above all three and is a boundary of neither kind —
 it acts on the window, not on what any pane holds.
 
 A subpane adds a boundary of the seam's kind one level in, and on the axis its
-pane's outer boundary left alone — top and bottom in the canvas and the
-controls, left and right in the timeline. Which sides those are is the pane's
-own and stated there; the window only opens them.
+pane's outer boundary left alone — the top and bottom sides in the left and
+right panes, the left and right sides in the bottom one. Which sides those are
+is the pane's own and stated there; the window only opens them.
 """
 
 from __future__ import annotations
@@ -23,10 +27,10 @@ from sieve.gui.frame.chrome import stylesheet
 from sieve.gui.frame.menu import build_menu_bar, show_about
 from sieve.gui.frame.panes import (
     Side,
-    build_canvas,
-    build_controls,
+    build_bottom,
+    build_left,
+    build_right,
     build_seam,
-    build_timeline,
 )
 
 #: What the window restores down *to*. Kept even though it opens maximized:
@@ -42,9 +46,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SIEVE")
         self.setStyleSheet(stylesheet())
 
-        self.canvas = build_canvas()
-        self.controls = build_controls()
-        self.timeline = build_timeline()
+        self.left = build_left()
+        self.right = build_right()
+        self.bottom = build_bottom()
 
         # Every side a subpane may anchor to, opened blank. The six are the
         # frame's claim about where a view can be put that is not the pane's
@@ -52,7 +56,7 @@ class MainWindow(QMainWindow):
         # the empty panes and the greyed menu items are here on the same terms.
         # Once views arrive these are attached where one is asked for, not on
         # the way up — the resting frame is three panes, not nine.
-        for pane in (self.canvas, self.controls, self.timeline):
+        for pane in (self.left, self.right, self.bottom):
             for side in sorted(pane.anchors, key=lambda side: side.name):
                 pane.attach(side)
 
@@ -61,8 +65,8 @@ class MainWindow(QMainWindow):
         # footage, so a frame that gave either the remainder of a resize would
         # be answering a question the user answers by dragging.
         self.split = QSplitter(Qt.Orientation.Horizontal)
-        self.split.addWidget(self.canvas)
-        self.split.addWidget(self.controls)
+        self.split.addWidget(self.left)
+        self.split.addWidget(self.right)
         self.split.setStretchFactor(0, 1)
         self.split.setStretchFactor(1, 1)
         self.split.setChildrenCollapsible(False)
@@ -74,7 +78,7 @@ class MainWindow(QMainWindow):
         column.setSpacing(0)
         column.addWidget(self.split, 1)
         column.addWidget(build_seam())
-        column.addWidget(self.timeline)
+        column.addWidget(self.bottom)
         self.setCentralWidget(stacked)
         self.setMenuBar(build_menu_bar(self))
 

@@ -1,5 +1,11 @@
 """The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
 
+Each is named for where it sits and not for what it will hold, because a pane
+is the space and never its occupant: `left` stays the left pane whatever view
+is put in it, where `canvas` would be a claim about its contents that the frame
+has no way to keep. The names of the sides a subpane anchors to are the same
+four words, one level in — `bottom left` is the left strip of the bottom pane.
+
 Each pane is a core with room for subpanes around it, and every one of them is
 a `Blank`: a region that fills, names itself, and holds a layout for whatever
 replaces it. Keeping them empty at this stage is what makes the frame's own
@@ -25,14 +31,14 @@ from PySide6.QtWidgets import (
 
 from sieve.gui.palette import DIM, LINE, PANEL
 
-#: The timeline's height: the band plus one control row. Not the user's to
-#: trade against the panes, which is why it is a number here and not a splitter
-#: — the working window is read against the whole asset at a size the layout
-#: does not get a say in.
-TIMELINE_HEIGHT = 128
+#: The bottom pane's height: the timeline band plus one control row. Not the
+#: user's to trade against the other panes, which is why it is a number here and
+#: not a splitter — the working window is read against the whole asset at a size
+#: the layout does not get a say in.
+BOTTOM_HEIGHT = 128
 
 #: How deep a subpane is along the axis it anchors on, across the boundary it
-#: adds. A number rather than a splitter for the same reason the timeline's
+#: adds. A number rather than a splitter for the same reason the bottom pane's
 #: height is one: a strip the user could drag until it swallowed the core would
 #: stop being the smaller pane anchored to a side, which is the whole of what a
 #: subpane is.
@@ -94,12 +100,12 @@ class Pane(QWidget):
     """A core, and the subpanes anchored around it.
 
     Which sides are on offer is the pane's own, and each pane offers the axis
-    its outer boundary does not already answer: the canvas and the controls sit
-    either side of a vertical splitter, so what is left to divide in them is top
-    against bottom; the timeline runs the full width under both, so its spare
-    axis is left against right. Offering both axes in one pane is refused rather
-    than nested — the second cut would have to say which of the two strips owns
-    the corner, and no pane here has a reason to answer that.
+    its outer boundary does not already answer: the left and right panes sit
+    either side of a vertical splitter, so what is left to divide in them is the
+    top side against the bottom; the bottom pane runs the full width under both,
+    so its spare axis is left against right. Offering both axes in one pane is
+    refused rather than nested — the second cut would have to say which of the
+    two strips owns the corner, and no pane here has a reason to answer that.
 
     The pane is the space and never its occupant: a view goes in `body`, which
     is the core's, so attaching a subpane does not move what already stands in
@@ -167,42 +173,43 @@ class Pane(QWidget):
         return self._subpanes.get(side)
 
 
-def build_canvas() -> Pane:
-    """Left: the footage, and every overlay drawn in register with it.
+def build_left() -> Pane:
+    """The left half of the splitter, for the footage and its overlays.
 
-    Bounded below because it is the thing being tuned against — a chain read
-    off a canvas too small to see the animals in is read off nothing.
+    Bounded below because what it will hold is the thing being tuned against —
+    a chain read off a canvas too small to see the animals in is read off
+    nothing.
     """
-    canvas = Pane("canvas", (Side.TOP, Side.BOTTOM))
-    canvas.setMinimumWidth(_MIN_PANE)
-    return canvas
+    left = Pane("left", (Side.TOP, Side.BOTTOM))
+    left.setMinimumWidth(_MIN_PANE)
+    return left
 
 
-def build_controls() -> Pane:
-    """Right: the chain, the walked step's knobs, and what the run will write."""
-    controls = Pane("controls", (Side.TOP, Side.BOTTOM))
-    controls.setMinimumWidth(_MIN_PANE)
-    return controls
+def build_right() -> Pane:
+    """The right half, for the chain, the walked step's knobs, and the run."""
+    right = Pane("right", (Side.TOP, Side.BOTTOM))
+    right.setMinimumWidth(_MIN_PANE)
+    return right
 
 
-def build_timeline() -> Pane:
-    """Bottom: the whole asset, the working window on it, the playhead.
+def build_bottom() -> Pane:
+    """Full width under the other two, for the whole asset and the playhead.
 
-    Full width under the other two panes and not inside either, because the
-    window it carries is where the canvas and every plot on the right are read
-    — one position in one file, held by neither of the two views showing it.
+    Under both and inside neither, because the working window it will carry is
+    where the footage on the left and every plot on the right are read — one
+    position in one file, held by neither of the two views showing it.
     """
-    timeline = Pane("timeline", (Side.LEFT, Side.RIGHT))
-    timeline.setObjectName("timeline")
-    timeline.setFixedHeight(TIMELINE_HEIGHT)
-    timeline.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    return timeline
+    bottom = Pane("bottom", (Side.LEFT, Side.RIGHT))
+    bottom.setObjectName("bottom")
+    bottom.setFixedHeight(BOTTOM_HEIGHT)
+    bottom.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    return bottom
 
 
 def build_seam() -> QWidget:
     """A splitter handle's line where there is no splitter.
 
-    The timeline's height is fixed, so nothing about that boundary is the
+    The bottom pane's height is fixed, so nothing about that boundary is the
     user's to trade; it reads like the other section dividers without
     answering the cursor.
     """

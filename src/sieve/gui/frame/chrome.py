@@ -23,8 +23,8 @@ def stylesheet() -> str:
         QSplitter::handle:vertical {{ height: 3px; }}
         QSplitter::handle:hover {{ background: {rgb(ACCENT)}; }}
         #seam {{ background: {rgb(LINE)}; }}
-        #timeline {{ background: {rgb(STACK_BG)}; }}
-        #timeline QLabel {{ color: {rgb(TEXT)}; }}
+        #bottom {{ background: {rgb(STACK_BG)}; }}
+        #bottom QLabel {{ color: {rgb(TEXT)}; }}
 
         /* The bar sits on the window's ground and closes with the same line a
            seam is made of, so the top boundary reads like the other two. */

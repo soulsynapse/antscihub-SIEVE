@@ -4,6 +4,7 @@
 
 ## `./`
 
+- `.gitattributes`
 - `.gitignore`
 - `.python-version`
 - `CLAUDE.md`

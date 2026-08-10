@@ -1,0 +1,3 @@
+# `core.autocrlf` converts on checkout, and a shell script whose shebang line
+# ends `\r` is run by an interpreter that does not exist. Hooks stay LF.
+.githooks/* text eol=lf

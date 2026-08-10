@@ -77,33 +77,55 @@ def gloss(source: bytes) -> str:
     return doc.strip().splitlines()[0].strip()
 
 
+FOLDER = "📁"
+FILE = "📄"
+
+
+def tree(paths: list[str]) -> dict:
+    """Nest flat paths into `{name: subtree}` dicts, files mapping to `None`."""
+    root: dict = {}
+    for path in paths:
+        node = root
+        parts = PurePosixPath(path).parts
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = None
+    return root
+
+
 def render(paths: list[str], blobs: dict[str, bytes]) -> str:
     glosses = {
         p: gloss(blobs[p]) for p in paths if p.endswith(".py") and p in blobs
     }
 
-    by_dir: dict[str, list[str]] = {}
-    for path in paths:
-        by_dir.setdefault(str(PurePosixPath(path).parent), []).append(path)
+    def entries(node: dict, prefix: str, depth: int) -> list[str]:
+        """One list item per child, directories first, their contents beneath.
 
-    lines = [HEADER, "", TITLE, ""]
-    for directory in sorted(by_dir, key=lambda d: ("" if d == "." else d)):
-        label = "./" if directory == "." else f"{directory}/"
-        init = f"{directory}/__init__.py"
-        heading = f"## `{label}`"
-        if glosses.get(init):
-            heading += f" — {glosses[init]}"
-        lines += [heading, ""]
-        for path in by_dir[directory]:
-            if path == init and glosses.get(init):
+        A directory speaks with its `__init__.py`'s gloss, and that file then
+        keeps quiet: the line is already on the page, one indent shallower.
+        """
+        lines = []
+        indent = "  " * depth
+        dirs = sorted(k for k, v in node.items() if v is not None)
+        files = sorted(k for k, v in node.items() if v is None)
+        for name in dirs:
+            init = f"{prefix}{name}/__init__.py"
+            line = f"{indent}- {FOLDER} `{name}/`"
+            if glosses.get(init):
+                line += f" — {glosses[init]}"
+            lines.append(line)
+            lines += entries(node[name], f"{prefix}{name}/", depth + 1)
+        for name in files:
+            path = f"{prefix}{name}"
+            if name == "__init__.py" and glosses.get(path):
                 continue  # already said, as the directory's own line
-            name = PurePosixPath(path).name
-            entry = f"- `{name}`"
+            line = f"{indent}- {FILE} `{name}`"
             if glosses.get(path):
-                entry += f" — {glosses[path]}"
-            lines.append(entry)
-        lines.append("")
-    return "\n".join(lines)
+                line += f" — {glosses[path]}"
+            lines.append(line)
+        return lines
+
+    return "\n".join([HEADER, "", TITLE, "", *entries(tree(paths), "", 0), ""])
 
 
 def write(root: PurePosixPath, text: str) -> bool:

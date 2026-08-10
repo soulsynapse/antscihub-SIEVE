@@ -7,11 +7,12 @@
 - 📁 `docs/`
   - 📁 `adr/`
     - 📄 `ADR-0001-compartments-house-any-surface.md`
+  - 📄 `ADR-SUMMARY.md`
   - 📄 `SCAFFOLD.md`
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
 - 📁 `scripts/`
-  - 📄 `doc_index.py` — Regenerate `docs/SCAFFOLD.md` from the tree git is about to commit.
+  - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md`, `ADR-SUMMARY.md` — from the index.
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
     - 📁 `gui/` — The interactive surface: the frame, and what stands in its compartments.

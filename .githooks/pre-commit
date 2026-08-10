@@ -1,8 +1,9 @@
 #!/bin/sh
-# Rebuild docs/SCAFFOLD.md from the staged tree and stage it, so the map of
-# where things live arrives in the same commit as the move it describes.
+# Rebuild the generated docs from the staged tree and stage them, so the map of
+# where things live and the shelf of what is settled each arrive in the same
+# commit as the move or the decision it describes.
 #
-# Set SIEVE_SKIP_SCAFFOLD=1 to commit without it.
+# Set SIEVE_SKIP_SCAFFOLD=1 to commit without them.
 set -e
 
 if [ "$SIEVE_SKIP_SCAFFOLD" = "1" ]; then
@@ -11,4 +12,4 @@ fi
 
 root=$(git rev-parse --show-toplevel)
 uv run --quiet python "$root/scripts/doc_index.py" --quiet
-git add -- "$root/docs/SCAFFOLD.md"
+git add -- "$root/docs/SCAFFOLD.md" "$root/docs/ADR-SUMMARY.md"

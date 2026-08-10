@@ -12,39 +12,19 @@ opened: 2026-08-09
 # A picked file's meaning is the wiring, and the user is the one who states it
 
 Minted the same day claiming two live readings, corrected within the hour when
-both turned out to be ruled, and ruled outright an hour after that. The sequence
-is worth keeping because the answer is not either of the things the question
-offered.
+both turned out to be already ruled, and ruled outright an hour after that. The
+sequence is kept because it is the argument for the ADR: a question can read as
+open while every part of its answer is already in the tree, if no ruling cites
+the question by name.
 
-**Neither axis carries it.** A fourth `ElementKind` member is closed by
-[adr/an-outputs-kind-is-the-picture-it-makes.md](../adr/an-outputs-kind-is-the-picture-it-makes.md)
-— "no member is ever added for a tool" — on the reasoning that `ElementKind`
-answers what a node's output *is*, and a scene description is not an answer to
-that. Emission-name keying is refused by the 2026-08-09 ruling on
-[the-offering-predicate-is-not-the-edge-legality-check.md](the-offering-predicate-is-not-the-edge-legality-check.md),
-which answers by derivation: the offer is computed from what the position's
-input resolved to.
-
-**Ruled 2026-08-09 (Kendrick): the meaning is the wiring, and the user states
-it.** VISION's "select what type of output it should broadcast as" survives, and
-what it describes is neither a declaration on the spec nor a derivation — it is
-the user saying what their file wires to. A file the user brought is precisely
-the case where nothing can be derived: a background and a mask resolve
-identically, one `PIXEL` file of the same extension class, so there is no fact in
-hand to compute an answer from. Derivation is how candidates are *offered*, and
-an offer is a suggestion; a file from outside the project is the case where the
-system has no basis to suggest and the user has to be able to say. So the answer
-is asked for rather than inferred, and where it lands is the edge.
-
-That is consistent with everything already settled rather than a new axis beside
-them:
-[adr/a-users-file-wires-in-like-any-other-input.md](../adr/a-users-file-wires-in-like-any-other-input.md)
-already says choosing among sources is moving an edge, and the
-substitution-not-comparison ruling in
-[whether-vision-states-the-background-ab.md](whether-vision-states-the-background-ab.md)
-already says one background is live at a time. What this adds is that the move is
-the user's to make explicitly, by name, rather than something a swap performs
-silently on their behalf.
+**The decision is
+[adr/a-picked-files-meaning-is-the-port-it-wires-to.md](../adr/a-picked-files-meaning-is-the-port-it-wires-to.md)**
+(ADR 31, Kendrick, 2026-08-09), which is where the reasoning lives and what a
+session reading the tool contract will find. It succeeds ADR 18 — that one made
+choosing among sources a move of an edge, this one says who makes the move — and
+it records why neither axis this item was named for can carry the meaning.
+Nothing about the ruling is restated here; what remains below is only what this
+item still owes.
 
 **Deferred on a subject, not a decision.** The gesture has nothing to operate on
 yet: every node in the tree takes one input, so a picked file has exactly one

@@ -89,7 +89,7 @@ from sieve.core.tool_registry import (
     source_tools,
 )
 from sieve.core.types import VideoMetadata
-from sieve.gui.canvas import VideoCanvas
+from sieve.gui.canvas import CanvasPane, VideoCanvas, image_of
 from sieve.gui.chain_stack import Adding, Fan, Outputs, PipelinePane, Regions, Step, Write
 from sieve.gui.chrome import darken_title_bar, window_stylesheet
 from sieve.gui.control import Control
@@ -266,6 +266,22 @@ def frame_bearing(pipeline: Pipeline, specs: Mapping[str, ToolSpec], node_id: st
     return None
 
 
+def input_of(pipeline: Pipeline, node_id: str) -> str | None:
+    """What feeds `node_id`, or `None` where nothing in the graph does.
+
+    `None` is a root, whose input is the frame the run decoded rather than
+    another node's output — which is what `tuning.render_at` reads it as.
+
+    Schema v1 refuses two edges into one node (`walk.py`), the same fact
+    `frame_bearing` above stands on, so there is never a parent to choose
+    between and the answer is a lookup rather than a policy.
+    """
+    for edge in pipeline.edges:
+        if edge.downstream == node_id:
+            return edge.upstream
+    return None
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -361,7 +377,7 @@ class MainWindow(QMainWindow):
         self._tuning = TuningLoop(self._graph, self, registry=self._registry)
         self._tuning.refilled.connect(self._paint_viewport)
 
-        self._canvas = CanvasSlot(self._viewport)
+        self._canvas = CanvasSlot(CanvasPane(self._viewport))
         self._viewing = ViewingColumn(self._canvas, EmptySlot())
         self._control = Control(self._build_project_select())
         self.setCentralWidget(compose(self._viewing, self._control, self._timeline))
@@ -1265,7 +1281,14 @@ class MainWindow(QMainWindow):
         self._paint_viewport(render=kind.may_be_rendered)
 
     def _paint_viewport(self, render: bool = True) -> None:
-        """The watched node's output for the frame under the playhead.
+        """The watched node's output over its input, for the frame under the playhead.
+
+        The composite is `adr/the-walked-step-owns-the-canvas.md`'s, and both of
+        its layers come off the one render `render_at` makes. The input is the
+        upstream node's entry in that same result; at a root it is the decoded
+        frame, and where nothing decoded — a warm re-render of a graph whose
+        roots are all servable — the transport's proxy at this index is the
+        answer, which is the frame already in hand below.
 
         The source frame is the fallback and not the subject: it is what the
         window shows before a pipeline can answer for that index, for a node
@@ -1287,12 +1310,15 @@ class MainWindow(QMainWindow):
         index, image = held
         node = self.viewport_node
         session = self._session
-        values = (
-            None
-            if not render or node is None or session is None
-            else self._tuning.render_at(session.project.pipeline, node, index)
-        )
-        if values is None or not self._viewport.set_values(index, values):
+        if not render or node is None or session is None:
+            values, beneath = None, None
+        else:
+            pipeline = session.project.pipeline
+            values, beneath = self._tuning.render_at(
+                pipeline, node, index, under=input_of(pipeline, node)
+            )
+        under = image if beneath is None else image_of(beneath)
+        if values is None or not self._viewport.set_values(index, values, under=under):
             self._viewport.set_frame(index, image)
             self._viewport.mark_source()
 

@@ -62,6 +62,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from contextlib import ExitStack
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -86,6 +87,19 @@ from sieve.pipeline.series_collector import SeriesCollector, SurfaceCollector
 #: timeout tuned to catch the next keystroke would be a debounce, which decides
 #: on the user's behalf that they have stopped typing.
 _DEFER_MS = 0
+
+
+class Composite(NamedTuple):
+    """The two arrays the canvas draws: a step's result, and what it was made from.
+
+    A pair rather than two calls because they are one render's answer — see
+    `TuningLoop.render_at`. Either half is `None` where the render could not
+    produce it, and the canvas is honest about each: no result is the source
+    frame, and no input is the result drawn alone.
+    """
+
+    result: NDArray[np.float32] | None
+    under: NDArray[np.float32] | None
 
 
 class TuningLoop(QObject):
@@ -287,8 +301,10 @@ class TuningLoop(QObject):
             self._timer.stop()
             self._render()
 
-    def render_at(self, pipeline: Pipeline, node_id: str, index: int) -> NDArray[np.float32] | None:
-        """`node_id`'s output for source frame `index`, off the store the graph uses.
+    def render_at(
+        self, pipeline: Pipeline, node_id: str, index: int, *, under: str | None = None
+    ) -> Composite:
+        """`node_id`'s output over `under`'s, for source frame `index`.
 
         `preview.render_frame` and not a second `render_window`: the picture
         under the playhead is one frame, and re-running the whole window to move
@@ -296,24 +312,42 @@ class TuningLoop(QObject):
         The store is the session's, so everything above the edited node is served
         rather than recomputed — the same mechanism the graph's refill rests on.
 
-        `None` when there is no footage open, and `None` for a render that
-        raised, which is held in `last_error` on the module docstring's terms:
-        the previous frame stays on the viewport, because it is the only thing
-        the next render can be compared against.
+        **Both layers come out of the one render.** `FrameResult` carries every
+        node's output for the frame because the GUI shows intermediates, so the
+        input is an index into the result the output already came from; a second
+        `render_frame` for it would be a second answer to `slider_to_preview`
+        and attributable to neither half of it.
+
+        `under` is the upstream node's id, or `None` for a node with nothing
+        upstream — where the input is the decoded frame the run began from, and
+        so `result.source`. That is itself `None` on a warm re-render where
+        nothing decoded, and the caller holding the transport's proxy at that
+        index is the one that can answer for it (`app._paint_viewport`).
+
+        Both halves are `None` when there is no footage open, and for a render
+        that raised, which is held in `last_error` on the module docstring's
+        terms: the previous frame stays on the viewport, because it is the only
+        thing the next render can be compared against.
         """
         if self._session is None:
-            return None
-        held: list[NDArray[np.float32]] = []
-        try:
-            self._session.render_frame(
-                pipeline,
-                index,
-                on_frame=lambda result: held.append(np.asarray(result[node_id].data, np.float32)),
+            return Composite(None, None)
+        held: list[Composite] = []
+
+        def grab(result: FrameResult) -> None:
+            base = result.source if under is None else result.outputs.get(under)
+            held.append(
+                Composite(
+                    np.asarray(result[node_id].data, np.float32),
+                    None if base is None else np.asarray(base.data, np.float32),
+                )
             )
+
+        try:
+            self._session.render_frame(pipeline, index, on_frame=grab)
         except Exception as error:  # noqa: BLE001 — held, not swallowed; see the docstring
             self._error = error
-            return None
-        return held[0] if held else None
+            return Composite(None, None)
+        return held[0] if held else Composite(None, None)
 
     def _render(self) -> None:
         pipeline, self._pending = self._pending, None

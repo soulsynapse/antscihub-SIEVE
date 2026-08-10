@@ -1,11 +1,19 @@
-"""The viewport: the frame it was last handed, drawn to fit.
+"""The viewport: the composite it was last handed, drawn to fit.
 
-Nothing here decides which frame is shown. It is handed one, it paints it, and
-it holds it only so a resize has something to redraw — the playhead is
-`transport/player.py`'s, the window is `timeline/bar.py`'s, and *which* of the
-two frames a source index now has is `app.py`'s, since only the window knows
-where the walk is standing. A copy of any of the three here would be the stale
-one.
+Nothing here decides which frames are shown. It is handed them, it paints them,
+and it holds them only so a resize has something to redraw — the playhead is
+`transport/player.py`'s, the window is `timeline/bar.py`'s, and *which* frames a
+source index now has is `app.py`'s, since only the window knows where the walk
+is standing. A copy of any of the three here would be the stale one.
+
+**Two layers, one rectangle: the walked step's result over that step's input**
+(`adr/the-walked-step-owns-the-canvas.md`). What makes tuning legible is seeing
+what the step *did*, which is a comparison and not a picture, so the input is
+painted whole and the result over it at an opacity the user holds. Both go into
+the same rect — the input is a different node's output and may be a different
+size, and drawing it anywhere else would be two pictures side by side rather
+than one composite. The pair comes off one render (`gui/tuning.render_at`); the
+opacity is the only thing about the picture this widget decides.
 
 Aspect ratio is preserved and the frame is never enlarged past its own pixels:
 the decode side already hands back a proxy sized for display
@@ -36,12 +44,21 @@ import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPaintEvent
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QVBoxLayout, QWidget
 
 _BACKGROUND = QColor(18, 18, 22)
 _HINT = QColor(120, 120, 130)
 _EMPTY_HINT = "No frame"
 _SOURCE_BADGE = "source"
+
+#: Where the overlay starts, as a percentage. v2's number and its reason: high
+#: enough that a binary mask is unmissable, low enough that the input stays
+#: legible under it.
+DEFAULT_OPACITY = 65
+
+#: The slider's label. The step's own name is the card's, and repeating it here
+#: would be a second answer to which step the canvas is about.
+_OPACITY_LABEL = "result"
 
 
 def image_of(values: NDArray[np.float32]) -> QImage | None:
@@ -83,11 +100,13 @@ def image_of(values: NDArray[np.float32]) -> QImage | None:
 
 
 class VideoCanvas(QWidget):
-    """Draws the most recent frame, centred, letterboxed."""
+    """Draws the most recent composite, centred, letterboxed."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._frame: QImage | None = None
+        self._under: QImage | None = None
+        self._opacity = DEFAULT_OPACITY / 100.0
         self._showing_source = False
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -95,6 +114,21 @@ class VideoCanvas(QWidget):
     def frame(self) -> QImage | None:
         """The image on screen, or None before the first frame arrives."""
         return self._frame
+
+    @property
+    def under(self) -> QImage | None:
+        """What `frame` is drawn over, or None when it is drawn alone."""
+        return self._under
+
+    @property
+    def overlay_opacity(self) -> float:
+        """How much of the result is drawn over its input, in 0..1."""
+        return self._opacity
+
+    @overlay_opacity.setter
+    def overlay_opacity(self, value: float) -> None:
+        self._opacity = min(max(float(value), 0.0), 1.0)
+        self.update()
 
     @property
     def showing_source(self) -> bool:
@@ -111,23 +145,32 @@ class VideoCanvas(QWidget):
         return _SOURCE_BADGE if self._showing_source and self._frame is not None else ""
 
     def set_frame(self, index: int, image: QImage) -> None:
-        """Show `image`. `index` is accepted and ignored — the readout is the bar's."""
+        """Show `image` alone. `index` is accepted and ignored — the readout is the bar's."""
         del index
         self._frame = image
+        # The one frame the window can produce without asking the graph is the
+        # source, and it is nothing's result: leaving the previous step's input
+        # under it would compose two pictures the user never asked to compare.
+        self._under = None
         self.update()
 
-    def set_values(self, index: int, values: NDArray[np.float32]) -> bool:
-        """Show `values` as a frame. False, and nothing shown, if they are no picture.
+    def set_values(
+        self, index: int, values: NDArray[np.float32], under: QImage | None = None
+    ) -> bool:
+        """Show `values` over `under`. False, and nothing shown, if they are no picture.
 
         The refusal is returned rather than raised because the caller has a
         second frame in hand for exactly this case — the source — and a node
         whose output is not an image is an ordinary place for the walk to stand,
-        not an error.
+        not an error. It is the *result* that decides: an input with no picture
+        in it leaves the result drawn alone, which is a step composed over
+        nothing rather than a step that cannot be shown.
         """
         image = image_of(values)
         if image is None:
             return False
         self.set_frame(index, image)
+        self._under = under
         # A render is the watched node's output by definition, which is the one
         # thing that displaces the badge. The refusal above leaves it alone: the
         # caller's next move is to hand back the source and raise it again, and
@@ -139,6 +182,7 @@ class VideoCanvas(QWidget):
     def clear(self) -> None:
         """Return to the empty state. The source has gone."""
         self._frame = None
+        self._under = None
         self._showing_source = False
         self.update()
 
@@ -168,7 +212,15 @@ class VideoCanvas(QWidget):
             painter.end()
             return
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        # Into `box`, which is fitted to the result: the input is what the
+        # result was made from, so the result is the frame whose aspect the
+        # letterbox is about, and a step that reshaped its input is still one
+        # picture of one thing.
+        if self._under is not None:
+            painter.drawImage(box, self._under)
+            painter.setOpacity(self._opacity)
         painter.drawImage(box, self._frame)
+        painter.setOpacity(1.0)
         badge = self.badge_text()
         if badge:
             # Over the frame rather than over the letterbox, which is empty on a
@@ -180,3 +232,47 @@ class VideoCanvas(QWidget):
                 badge,
             )
         painter.end()
+
+
+class CanvasPane(QWidget):
+    """The picture and the one control over it.
+
+    The control is the composite's opacity and nothing else. The three alpha
+    sliders and Shift-to-peek wait for the ring they modulate
+    (`todo/the-in-band-ring-reads-a-mask-no-node-emits.md`), so a row rather
+    than a panel: what would fill a panel is not here yet, and a chrome built
+    for it now would be built against a guess.
+    """
+
+    def __init__(self, canvas: VideoCanvas, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._canvas = canvas
+        self._slider = QSlider(Qt.Orientation.Horizontal)
+        self._slider.setRange(0, 100)
+        self._slider.setValue(DEFAULT_OPACITY)
+        self._slider.setToolTip("How much of the step's result is drawn over its input")
+        self._slider.valueChanged.connect(self._on_opacity)
+
+        column = QVBoxLayout(self)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addWidget(canvas)
+        row = QHBoxLayout()
+        row.setContentsMargins(6, 2, 6, 2)
+        row.addWidget(QLabel(_OPACITY_LABEL))
+        row.addWidget(self._slider)
+        column.addLayout(row)
+
+    @property
+    def canvas(self) -> VideoCanvas:
+        """The picture. What the window paints into and what the editors bind to."""
+        return self._canvas
+
+    @property
+    def opacity_slider(self) -> QSlider:
+        """The one control, for the case that drives it."""
+        return self._slider
+
+    def _on_opacity(self, value: int) -> None:
+        self._canvas.overlay_opacity = value / 100.0

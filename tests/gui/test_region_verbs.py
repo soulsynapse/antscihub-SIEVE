@@ -280,9 +280,9 @@ def test_the_loop_renders_the_region_the_fan_is_standing_on(qapp, placed_regions
         driving.wait_until(lambda: window.tuning.is_open, _TIMEOUT_MS)
         pipeline = window.session.project.pipeline
 
-        north = window.tuning.render_at(pipeline, "n1", 0)
+        north = window.tuning.render_at(pipeline, "n1", 0).result
         window.select_region(1)
-        south = window.tuning.render_at(pipeline, "n1", 0)
+        south = window.tuning.render_at(pipeline, "n1", 0).result
 
         assert window.tuning.last_error is None, window.tuning.last_error
         assert north is not None

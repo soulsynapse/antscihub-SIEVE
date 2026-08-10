@@ -12,7 +12,7 @@ listed below it.
 src/sieve/__init__.py                      # Signal isolation for ethological video events.
 src/sieve/gui/__init__.py                  # Rendering values, emitting intents, holding view state; computes nothing.
 src/sieve/gui/app.py                       # The window: what the parts are, and what the four navigation verbs mean.
-src/sieve/gui/canvas.py                    # The viewport: the frame it was last handed, drawn to fit.
+src/sieve/gui/canvas.py                    # The viewport: the composite it was last handed, drawn to fit.
 src/sieve/gui/chain_stack.py               # The pipeline position: one card per step, scrolling under a fixed project card.
 src/sieve/gui/chrome.py                    # The colours the window is drawn in, and the two sheets that apply them.
 src/sieve/gui/control.py                   # Which of the four positions is showing, and the track that slides between.

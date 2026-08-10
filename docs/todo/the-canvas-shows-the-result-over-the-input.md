@@ -1,7 +1,7 @@
 ---
 title: The canvas shows the walked step's result over its input
 step: "10.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'result_over_input or off_one_render'"
 opened: 2026-08-09

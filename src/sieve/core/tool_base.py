@@ -947,7 +947,7 @@ class ParamStereotype(StrEnum):
 #: kind from being minted, deferred, and deferred again with nothing red.
 #: `tests/gui/test_unconsumed_members.py` holds it in both directions.
 STEREOTYPES_WITHOUT_EDITOR: frozenset[ParamStereotype] = frozenset(
-    {ParamStereotype.BAND, ParamStereotype.POINT, ParamStereotype.PATH}
+    {ParamStereotype.POINT, ParamStereotype.PATH}
 )
 
 
@@ -990,18 +990,18 @@ class DisplaySurface(StrEnum):
     COUNT = "count"
 
 
-#: Surfaces a tool fills and nothing draws: named by the tool that declares one
-#: and by the executor that carries the channel, and by no reader that turns it
-#: into a picture. Shrinks in the commit that lands the painter
-#: (`adr/an-unconsumed-member-is-named-in-a-list.md`); until then this is what a
-#: reader arriving at the member is owed, because a declaration refused in both
-#: directions at registration and at the fill is well-formed either way and says
-#: nothing about whether anyone can see it.
-#: Written out rather than `frozenset(DisplaySurface)`, which would absorb a
-#: fourth member on the day it was minted and report the silence as coverage.
-SURFACES_WITHOUT_PAINTER: frozenset[DisplaySurface] = frozenset(
-    {DisplaySurface.SCALOGRAM, DisplaySurface.TRACE, DisplaySurface.COUNT}
-)
+#: Surfaces a tool fills and nothing draws. Empty since `gui/surface_panel.py`
+#: landed a painter for all three, and empty is the state this is *for*: the set
+#: only shrinks (`adr/an-unconsumed-member-is-named-in-a-list.md`), so a fourth
+#: member minted with nothing drawing it has to be written in here to be legal,
+#: which is the sentence a reader arriving at that member is owed.
+#:
+#: Painted is not the same claim as *editable*. A scalogram is drawn and takes
+#: no handles, because the column a tool fills carries the power and not the
+#: frequencies it was taken at — `gui/surface_panel.EDITABLE_AXIS` is where that
+#: narrower claim lives, and it is a fact about the channel rather than about
+#: this vocabulary.
+SURFACES_WITHOUT_PAINTER: frozenset[DisplaySurface] = frozenset()
 
 
 #: Contravariant because a `run` is *consumed* with params: a function written

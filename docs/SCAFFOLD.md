@@ -29,6 +29,7 @@ src/sieve/gui/rail.py                      # One tick per node, down the left ed
 src/sieve/gui/save_screen.py               # What the run keeps, and the command that runs it.
 src/sieve/gui/step_pane.py                 # The step position: one node's caption, its parameters, and its guidance.
 src/sieve/gui/streams.py                   # What each position of a document actually produces, folded from the source.
+src/sieve/gui/surface_panel.py             # The picture a band's handles are grabbed on, one panel per declared surface.
 src/sieve/gui/timeline/__init__.py         # The full-width band: where a frame lands on the strip, and what a click means.
 src/sieve/gui/timeline/bar.py              # The anchor: one full-width band across the bottom of the window.
 src/sieve/gui/timeline/geometry.py         # Where a frame lands on the strip, and which frame a pixel names.

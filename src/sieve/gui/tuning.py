@@ -30,6 +30,24 @@ discipline `preview.py` describes and is not bought here, where it would be a
 second answer to what supersedes what
 (`todo/the-generated-controls-commit-on-intent-not-on-pass-through.md`).
 
+**The surfaces refill on the same render as the trace, and cost it its re-use.**
+A step whose spec declares display surfaces has them filled by asking the render
+to show that node (`preview.render_window(..., show=)`), which means the node is
+computed rather than served for every frame — the trade
+`adr/a-band-declares-the-surface-it-is-dragged-on.md` takes deliberately. One
+render feeds every collector: the trace's and one per surface, off the same
+consumer, because two renders would double the cost to show two views of one
+edit.
+
+**`band_drag_repaint` is published for every surface refill and not only for a
+drag on a handle.** The key's label names the gesture, and the loop cannot see
+which gesture caused a refill. It does not have to: v3 has no cheap tier — every
+parameter edit on a watched node re-plans, re-keys and re-renders the window
+identically — so a knob's refill and a handle's refill are the same interval
+measured, and a superset of causes reports the same quantity. What would make
+this over-report is exactly the cheap tier the budget's own anchor describes, and
+the commit that lands one is the commit that has to narrow this.
+
 **A refill that raises leaves the mark up.** The panel has two states and
 neither of them is "the render failed"; a graph that answered to the previous
 parameters and says so is the honest reading of a document that has just been
@@ -41,6 +59,8 @@ than swallowed, because a window with no console is where an unreported
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from contextlib import ExitStack
 from pathlib import Path
 
 import numpy as np
@@ -49,14 +69,17 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from sieve.bench.metrics import METRICS
 from sieve.core.pipeline_model import Pipeline, SourceSpan
+from sieve.core.tool_base import DisplaySurface
 from sieve.core.tool_registry import ToolRegistry
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.gui.graph_panel import GraphPanel
+from sieve.gui.surface_panel import SurfacePanel
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import graph_needs_chroma
-from sieve.pipeline.preview import Measure, PreviewSession
-from sieve.pipeline.series_collector import SeriesCollector
+from sieve.pipeline.executor import FrameResult
+from sieve.pipeline.preview import Consumer, Measure, PreviewSession
+from sieve.pipeline.series_collector import SeriesCollector, SurfaceCollector
 
 #: How long a request waits before it renders. Zero: what the delay is for is
 #: reaching the event loop at all, not letting further edits accumulate — a
@@ -104,6 +127,9 @@ class TuningLoop(QObject):
         self._reader: PrefetchFrameSource | None = None
         self._session: PreviewSession | None = None
         self._collector: SeriesCollector | None = None
+        self._shown: str | None = None
+        self._panels: dict[DisplaySurface, SurfacePanel] = {}
+        self._surfaces: list[SurfaceCollector] = []
         self._pending: Pipeline | None = None
         self._error: Exception | None = None
 
@@ -122,6 +148,11 @@ class TuningLoop(QObject):
     def watching(self) -> str | None:
         """The node whose series the panel is drawing, or None."""
         return None if self._collector is None else self._collector.node_id
+
+    @property
+    def showing(self) -> str | None:
+        """The node whose display surfaces are being filled, or None."""
+        return self._shown
 
     @property
     def last_error(self) -> Exception | None:
@@ -165,6 +196,9 @@ class TuningLoop(QObject):
         self._pending = None
         self._session = None
         self._collector = None
+        self._shown = None
+        self._surfaces = []
+        self._panels = {}
         self._panel.set_series(None)
         if self._reader is not None:
             self._reader.close()
@@ -187,6 +221,33 @@ class TuningLoop(QObject):
         )
         self._panel.set_series(None)
 
+    def show(self, node_id: str | None, panels: Mapping[DisplaySurface, SurfacePanel]) -> None:
+        """Fill `node_id`'s declared surfaces into `panels` from now on.
+
+        A fresh collector per surface, for `watch`'s reason and one more: the
+        panels are rebuilt on every move of the walk, and a collector still
+        holding the previous pane's widget would fill a picture nothing is
+        showing.
+
+        Called with the panels the step pane just built, so `node_id` and the
+        keys of `panels` are one answer from one place. Nothing here checks that
+        the node's spec declares them — a surface nobody asked for is filled by
+        nothing and stays empty, which is the state a caller that passed the
+        wrong node sees.
+        """
+        self._shown = None if not panels else node_id
+        self._panels = dict(panels)
+        self._surfaces = (
+            []
+            if self._shown is None
+            else [
+                SurfaceCollector(self._shown, surface, measure=self._measure)
+                for surface in self._panels
+            ]
+        )
+        for panel in self._panels.values():
+            panel.set_picture(None)
+
     # ---- the loop --------------------------------------------------------
 
     def request_refill(self, pipeline: Pipeline) -> None:
@@ -196,10 +257,12 @@ class TuningLoop(QObject):
         showing whatever it had: a window with no footage has no graph to be
         stale about.
         """
-        if self._session is None or self._collector is None:
+        if self._session is None or (self._collector is None and not self._surfaces):
             return
         self._pending = pipeline
         self._panel.mark_stale()
+        for panel in self._panels.values():
+            panel.mark_stale()
         self._timer.start(_DEFER_MS)
 
     def refill_now(self, pipeline: Pipeline) -> None:
@@ -239,14 +302,45 @@ class TuningLoop(QObject):
 
     def _render(self) -> None:
         pipeline, self._pending = self._pending, None
-        if pipeline is None or self._session is None or self._collector is None:
+        if pipeline is None or self._session is None:
+            return
+        if self._collector is None and not self._surfaces:
             return
         self._error = None
         try:
-            with self._collector.refill() as consume:
-                self._session.render_window(pipeline, on_frame=consume)
+            self._refill(pipeline)
         except Exception as error:  # noqa: BLE001 — held, not swallowed; see the docstring
             self._error = error
             return
-        self._panel.set_series(self._collector.series)
+        if self._collector is not None:
+            self._panel.set_series(self._collector.series)
+        for collector in self._surfaces:
+            self._panels[collector.surface].set_picture(collector.picture)
         self.refilled.emit()
+
+    def _refill(self, pipeline: Pipeline) -> None:
+        """One render, feeding the trace's collector and every surface's.
+
+        The spans nest rather than run side by side, which is what a stack of
+        context managers buys and why they are opened in this order: the surface
+        ceilings are the tighter ones, so they sit *inside* the trace's and
+        measure the render without the stack of the series around them. Every
+        consumer is called for every frame, in the order the collectors were
+        opened, because a render is one pass over the window and a second pass
+        per view is the thing the display channel exists to avoid.
+        """
+        consumers: list[Consumer] = []
+
+        def deliver(result: FrameResult) -> None:
+            for consume in consumers:
+                consume(result)
+
+        with ExitStack() as stack:
+            if self._collector is not None:
+                consumers.append(stack.enter_context(self._collector.refill()))
+            for collector in self._surfaces:
+                consumers.append(stack.enter_context(collector.refill()))
+            show = () if self._shown is None else (self._shown,)
+            self._session.render_window(  # type: ignore[union-attr]
+                pipeline, on_frame=deliver, show=show
+            )

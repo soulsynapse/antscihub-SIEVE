@@ -21,6 +21,16 @@ The kind editors are not here and cannot be. A region is drawn on the viewport
 and a span on the band (`kind_editors.py`), so what this position holds for those
 parameters is the form's read-only restatement of the value, with the gesture
 happening on the surface the value is about.
+
+**A band's surface is the exception, and it is here because there is nowhere
+else it could be.** The viewport and the scrubber are the window's own furniture
+and were already on screen; a display surface exists only while a step that
+declares one is being looked at, so it belongs to the step. Above the form,
+against the pane's own reading-order rule: the picture is what the band's
+handles are dragged on, and a control the user has to scroll past its own plot to
+reach is two gestures where the pane promises one. Nothing here fills them — the
+tuning loop does (`tuning.py`), which is the same split the graph under the
+canvas is on.
 """
 
 from __future__ import annotations
@@ -32,6 +42,7 @@ from sieve.core.tool_base import ToolSpec
 from sieve.gui.expander import GuidanceExpander
 from sieve.gui.node_list import NodeBox
 from sieve.gui.param_form import ParamForm
+from sieve.gui.surface_panel import SurfacePanel
 from sieve.session.session import Session
 
 
@@ -56,11 +67,20 @@ class StepPane(QWidget):
         self._box = NodeBox(position, node)
         self.form = ParamForm(session, node.node_id, spec, replicate_id=replicate_id)
         self.expander = GuidanceExpander(spec)
+        #: One panel per surface the tool declares, in the spec's own order so
+        #: two steps of the same tool stack their pictures the same way. Empty
+        #: for every tool with no band, which is every tool but `detect`.
+        self.surfaces = {
+            surface: SurfacePanel(surface)
+            for surface in dict.fromkeys(spec.param_surfaces.values())
+        }
 
         column = QWidget()
         inside = QVBoxLayout(column)
         inside.setContentsMargins(0, 0, 0, 0)
         inside.addWidget(self._box)
+        for panel in self.surfaces.values():
+            inside.addWidget(panel)
         inside.addWidget(self.form)
         inside.addWidget(self.expander)
         inside.addStretch(1)

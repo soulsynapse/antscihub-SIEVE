@@ -2,7 +2,7 @@
 title: A declared surface is drawn by nothing, so a band still has no handles
 priority: high
 phase: 9
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui tests/bench -q -k 'band_surface or band_drag_repaint'"
 opened: 2026-08-09
@@ -117,3 +117,43 @@ list of consumers this item's read path is being built for, so that the shape is
 chosen against four of them rather than one. The surfaces themselves are their
 own work and the review that closes this item should mint or sequence them then,
 when the measurement above has said what they cost.
+
+## Done 2026-08-10: three jobs, one commit, and one of three bands typed
+
+The measurement came first, as the section above asked, and it decided the
+shape: filling the three surfaces takes a warm re-render of the reference
+window from ~4 ms to ~26 ms — the watched node stops being served *and* the
+second derivation runs, and the flatness across five edits says the fill
+dominates — while the drag through the window lands at a 28.5 ms median against
+the 50 ms ceiling
+([2026.08.10](../findings/2026.08.10-the-display-channel-costs-a-watched-nodes-re-use-and-the-band-budget-holds.md)).
+So the picture was built against the channel as it stands: no filler handed the
+span, no memo across a drag, no `IN_DEBT` entry. The redundancy is real and it
+is not a budget miss.
+
+The three: `PreviewSession.render_window/render_frame` take `show=` per render
+and hold nothing; `SurfaceCollector` sits beside `SeriesCollector` sharing its
+stacking and publishing `band_drag_repaint` rather than `slider_to_graph`;
+`gui/surface_panel.py` draws all three kinds and `kind_editors.BandEditor` is
+one editor over them, handed a different panel per parameter. The panels hang in
+the step pane, because a surface exists only while the step declaring it is
+looked at.
+
+**One of the three bands is not draggable, and it is a placement rather than a
+missing editor.** A surface arrives as values with no axis, so a scalogram's
+rows cannot be turned into Hz and `freq_band` keeps the form's control —
+`RegionEditor`'s refusal one kind over. Whether the channel should carry an axis
+is a revision of ADR 23 and is
+[a-surface-carries-its-values-and-not-the-axis-they-sit-on.md](a-surface-carries-its-values-and-not-the-axis-they-sit-on.md),
+minted rather than answered here.
+
+`band_drag_repaint` left `WITHOUT_PRODUCER` and joined `TIMED`, timed only
+through the window: the gesture is a mouse on a widget and has no headless
+referent, which is the first key in the table for which the two files cannot be
+a pair. `SURFACES_WITHOUT_PAINTER` is now empty and `BAND` is off
+`STEREOTYPES_WITHOUT_EDITOR`.
+
+`done_when` on the finished tree:
+
+    $ uv run pytest tests/gui tests/bench -q -k 'band_surface or band_drag_repaint'
+    11 passed, 264 deselected in 1.57s

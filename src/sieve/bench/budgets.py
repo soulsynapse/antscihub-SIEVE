@@ -225,15 +225,17 @@ BUDGETS: dict[str, Budget] = _table(
 #: fourth from a layer that may import this table: `gui/transport/player.py`
 #: publishes `scrub_to_repaint` around the round trip of a drag, and reads its
 #: own degradation threshold from the same row so the trigger and the ceiling
-#: cannot drift apart. The rest are the honest reading of a repo that plots
-#: nothing: nothing under `src/` outside this package names them.
+#: cannot drift apart. 09 took the fifth from the layer that took the third:
+#: `pipeline/series_collector.py` publishes `band_drag_repaint` around the refill
+#: of a display surface, which is the picture a band's handles are dragged on.
+#: The rest are the honest reading of a repo that plots nothing under those
+#: keys: nothing under `src/` outside this package names them.
 WITHOUT_PRODUCER: frozenset[str] = frozenset(
     {
         "open_to_first_frame",
         "scrub_settle",
         "cut_to_ready",
         "tool_to_first_tick",
-        "band_drag_repaint",
         "knob_to_graphs",
         "density_rebuild",
         "knob_to_first_partial",
@@ -262,9 +264,15 @@ WITHOUT_PRODUCER: frozenset[str] = frozenset(
 #: the only place the number is attributable to the pipeline rather than to a
 #: widget.
 #:
-#: The six absent from this set are absent for one of two reasons, neither of
+#: 09 put a clock on the seventh, and this one only through the window:
+#: `band_drag_repaint` is a drag on a pair of handles painted on a display
+#: surface, and the surface is a widget — there is no headless gesture to time it
+#: with, where every key above has one beside it. That asymmetry is the reason
+#: the two files are not one, read from the other end.
+#:
+#: The five absent from this set are absent for one of two reasons, neither of
 #: them oversight: `cut_to_ready` has no headless referent
-#: (`docs/todo/cut-to-ready-gets-a-headless-referent.md`), and the other five are
+#: (`docs/todo/cut-to-ready-gets-a-headless-referent.md`), and the other four are
 #: graph-drawing and tool-adding intervals whose subject arrives with the GUI.
 TIMED: frozenset[str] = frozenset(
     {
@@ -274,6 +282,7 @@ TIMED: frozenset[str] = frozenset(
         "slider_to_preview",
         "slider_to_graph",
         "full_preview_render",
+        "band_drag_repaint",
     }
 )
 

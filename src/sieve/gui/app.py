@@ -73,7 +73,13 @@ from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline, Replicate
-from sieve.core.tool_base import ElementKind, ParamStereotype, StreamSpec, ToolSpec
+from sieve.core.tool_base import (
+    DisplaySurface,
+    ElementKind,
+    ParamStereotype,
+    StreamSpec,
+    ToolSpec,
+)
 from sieve.core.tool_registry import ToolRegistry, UnknownToolError, offered_tools
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
@@ -106,6 +112,7 @@ from sieve.gui.project_select import (
 from sieve.gui.save_screen import SaveScreen, kept_products
 from sieve.gui.step_pane import StepPane
 from sieve.gui.streams import stream_specs
+from sieve.gui.surface_panel import SurfacePanel
 from sieve.gui.timeline.bar import TimelineBar
 from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.transport.request_intent import RequestKind
@@ -1189,6 +1196,7 @@ class MainWindow(QMainWindow):
         self._control.show_graph(
             self._order, self._at, self._build_pipeline_pane(), self._build_step()
         )
+        self._show_surfaces()
         self._rebind_editors()
         self._watch_the_pin()
         self.refill_graph()
@@ -1198,6 +1206,45 @@ class MainWindow(QMainWindow):
         # showing the previous node's output: it says the picture is the source,
         # and that picture is a render — of a node the walk has left.
         self._paint_viewport()
+
+    @property
+    def surfaces(self) -> Mapping[DisplaySurface, SurfacePanel]:
+        """The pictures the current step's bands are dragged on, empty for most steps.
+
+        The step pane's own, because a surface exists only while the step that
+        declares it is being looked at — unlike the graph, which is the *pinned*
+        step's and outlives every walk. Exposed for the reason the graph is: what
+        a band drag repaints is these, and a painted pixel is not something a
+        test or a benchmark can ask about.
+        """
+        pane = self._control.step_pane
+        return pane.surfaces if isinstance(pane, StepPane) else {}
+
+    @property
+    def overlays(self) -> Mapping[str, Any]:
+        """The composite-kind editors bound to the current step, by parameter.
+
+        Exposed for the reason `surfaces` is: the gestures these carry are the
+        ones a budget is measured through, and a benchmark that reached past them
+        to `SetParam` would be timing the layer under the widget — which is the
+        number the headless pass already has (`tests/bench/`). The type is
+        `kind_editors`' own private one; nothing outside reads more of it than
+        the gesture.
+        """
+        return self._editors
+
+    def _show_surfaces(self) -> None:
+        """Point the loop at the current step's surfaces, and at nothing otherwise.
+
+        The current node and not the pinned one, which is the opposite of
+        `_watch_the_pin` and for the same rule read the other way: the panels are
+        *in* the step pane, so they can only ever be about the step on screen.
+        Unconditionally rather than on a change, because the pane — and every
+        panel in it — is rebuilt on every move of the walk, so there is no
+        previous collector whose rows survive the move.
+        """
+        node = self.current_node
+        self._tuning.show(None if node is None else node.node_id, self.surfaces)
 
     def _watch_the_pin(self) -> None:
         """Point the loop at the pinned step, or at nothing if it draws no trace.
@@ -1501,6 +1548,7 @@ class MainWindow(QMainWindow):
                 canvas=self._viewport,
                 timeline=self._timeline.strip,
                 region_extent=extent,
+                bands=self.surfaces,
                 replicate_id=replicate_id,
             )
         )

@@ -13,12 +13,24 @@ Per kind and never per tool, which is the generator's asymmetry one surface out:
 `_EDITORS` is the whole of this module's tool knowledge, and a tool arriving
 with a region gets the viewport without a line here. Unlike the generator's map
 this one is partial by design — a kind with no entry is typed into the panel,
-which is the ordinary case and not a defect. `BAND` is the kind that is neither:
-it names the picture its handles are grabbed on and nothing draws that picture
-yet, so it has no entry here and a read-only restatement in the form. Which is a
-gap rather than a decision, and it is written down as one in
-`tool_base.STEREOTYPES_WITHOUT_EDITOR` — an entry landing here takes the name
-off that list in the same commit
+which is the ordinary case and not a defect.
+
+**`BAND` is one entry over three pictures**, which is what makes it the kind that
+tested whether "per kind" survives contact. A band names the `DisplaySurface` its
+handles are grabbed on and `surface_panel.py` draws all three, so what varies
+between `detect`'s three bands is the axis the same gesture is read on rather
+than the gesture — one editor, handed a different panel per parameter. The
+generator's rule holds unchanged: nothing here learns that the tool is `detect`,
+only that a parameter is a band and which kind of picture the spec says it cuts.
+
+The third of the three is refused, and by the panel rather than here
+(`surface_panel.takes_handles`): a scalogram's rows are the Morlet bank's and
+`freq_band` is in Hz, so a cut on it has no value to commit. That is
+`RegionEditor`'s refusal exactly — an editor is offered only where the gesture's
+coordinates are the ones the value is denominated in — and it is why `BAND`
+comes off `tool_base.STEREOTYPES_WITHOUT_EDITOR` with two of three bands
+editable: the list is about a kind having an editor at all, and the per-surface
+refusal is a placement, not a missing one
 (`adr/an-unconsumed-member-is-named-in-a-list.md`).
 
 **A drag paints from a draft and announces itself once, on release.** The
@@ -45,9 +57,10 @@ from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import QWidget
 
 from sieve.core.pipeline_model import SourceSpan
-from sieve.core.tool_base import ParamStereotype, ToolSpec
+from sieve.core.tool_base import DisplaySurface, ParamStereotype, ToolSpec
 from sieve.core.types import ROI
 from sieve.gui.canvas import VideoCanvas
+from sieve.gui.surface_panel import SurfacePanel
 from sieve.gui.timeline.bar import EDGE_GRAB, Grab, TimelineStrip
 from sieve.gui.timeline.window import ended_at, started_at
 from sieve.session.intents import SetParam, issue
@@ -408,6 +421,142 @@ class SpanEditor(_Editor):
         painter.end()
 
 
+class BandEditor(_Editor):
+    """Two horizontal cuts on the picture the band is declared against.
+
+    `SpanEditor` turned ninety degrees, and deliberately the same shape: two
+    handles, nothing between them, every other press handed to the host. What is
+    not the same is where the numbers come from — a span is in frames and the
+    strip owns that axis, while a band is in whatever the surface's vertical axis
+    is denominated in and `SurfacePanel.value_at` is the only thing that knows.
+    So this class holds the gesture and none of the arithmetic.
+
+    **An unplaced band takes no gesture.** `count_frac` is `None` when the
+    detector is disarmed, and that is "nothing is claimed" rather than a pair at
+    the edges of the axis — so there is no band to grab an edge of, and arming it
+    is the form's. A drag that invented the first pair would arm a detector by
+    brushing a picture.
+
+    **An infinite edge paints at the edge of the axis and drags to a number.**
+    `value_band` opens at ±inf, which is a real value meaning "no cut on this
+    side"; the handle is where the axis ends, and moving it is the user asking
+    for a finite bound. Only the edge that moves is written, so pulling the top
+    down does not quietly close the bottom.
+    """
+
+    def __init__(
+        self,
+        host: SurfacePanel,
+        session: Session,
+        node_id: str,
+        param: str,
+        value: tuple[float, float] | list[float] | None,
+        *,
+        replicate_id: str | None = None,
+    ) -> None:
+        super().__init__(host, session, node_id, param, replicate_id=replicate_id)
+        self._panel = host
+        self._band = None if value is None else (float(value[0]), float(value[1]))
+        self._draft: tuple[float, float] | None = None
+        self._grab: Grab | None = None
+        self.setCursor(Qt.CursorShape.SplitVCursor)
+
+    # ---- geometry --------------------------------------------------------
+
+    @property
+    def shown_band(self) -> tuple[float, float] | None:
+        """The pair on screen: the draft while a handle is held, else the value's."""
+        return self._draft if self._draft is not None else self._band
+
+    def cut_positions(self) -> tuple[float, float] | None:
+        """Where the two cuts are painted, or None when the band is unplaced.
+
+        Clamped to the widget, which is what places an infinite edge: `y_of` of
+        an infinity is an infinity, and a line drawn there is a line nothing can
+        grab.
+        """
+        band = self.shown_band
+        if band is None:
+            return None
+        height = float(self.height())
+        return tuple(  # type: ignore[return-value]
+            min(max(self._panel.y_of(edge), 0.0), height) for edge in band
+        )
+
+    def grab_at(self, position: QPointF) -> Grab | None:
+        """Which cut a press takes hold of, or None for a gesture that is not ours.
+
+        `Grab.START` is the *low* edge, which is the bottom of the plot — the
+        strip's naming, kept because the pair is ordered the same way and a second
+        vocabulary for "the first of two handles" would be one too many.
+        """
+        cuts = self.cut_positions()
+        if cuts is None:
+            return None
+        y = position.y()
+        low, high = cuts
+        if abs(y - low) <= EDGE_GRAB and abs(y - low) <= abs(y - high):
+            return Grab.START
+        if abs(y - high) <= EDGE_GRAB:
+            return Grab.END
+        return None
+
+    def _dragged_to(self, band: tuple[float, float], y: float) -> tuple[float, float]:
+        """Where `band` has been dragged to. Never written; only painted, until release.
+
+        The edge that is not moving is kept exactly, infinity included, and the
+        one that is stops at the other rather than crossing it: a band whose
+        edges swapped would be an ordered pair the document refuses, reported to
+        the user as a validation error for a drag they made in one direction.
+        """
+        value = self._panel.value_at(y)
+        low, high = band
+        if self._grab is Grab.START:
+            return (min(value, high), high)
+        return (low, max(value, low))
+
+    # ---- the gesture -----------------------------------------------------
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        grab = None
+        if event.button() is Qt.MouseButton.LeftButton:
+            grab = self.grab_at(event.position())
+        if grab is None:
+            event.ignore()
+            return
+        self._grab, self._draft = grab, self.shown_band
+        self.update()
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self._draft is None:
+            event.ignore()
+            return
+        self._draft = self._dragged_to(self._draft, event.position().y())
+        self.update()
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self._draft is None:
+            event.ignore()
+            return
+        band = self._dragged_to(self._draft, event.position().y())
+        self._grab, self._draft, self._band = None, None, band
+        self.update()
+        self._commit(list(band))
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        del event
+        cuts = self.cut_positions()
+        if cuts is None:
+            return
+        low, high = cuts
+        painter = QPainter(self)
+        painter.fillRect(QRectF(0.0, high, float(self.width()), low - high), _FILL)
+        painter.setPen(QPen(_MARK, 2.0 if self._grab is not None else 1.0))
+        for y in cuts:
+            painter.drawLine(QPointF(0.0, y), QPointF(float(self.width()), y))
+        painter.end()
+
+
 class _Surfaces(NamedTuple):
     """What an editor may be hung on, and what its value would be denominated in."""
 
@@ -416,18 +565,45 @@ class _Surfaces(NamedTuple):
     #: The size of the frame this node is handed, or None when the caller cannot
     #: say. `RegionEditor` explains why that is a refusal and not a default.
     region_extent: tuple[int, int] | None
+    #: The panel drawing each display surface the node declares. Empty where the
+    #: caller has drawn none, which is a band with no picture to grab handles on
+    #: and therefore no editor — the same shape `region_extent` is a refusal in.
+    bands: Mapping[DisplaySurface, SurfacePanel] = {}
 
 
 def _on_the_canvas(
-    surfaces: _Surfaces, *bound: Any, replicate_id: str | None = None
+    surfaces: _Surfaces, spec: ToolSpec, *bound: Any, replicate_id: str | None = None
 ) -> _Editor | None:
+    del spec
     if surfaces.region_extent is None:
         return None
     return RegionEditor(surfaces.canvas, *bound, surfaces.region_extent, replicate_id=replicate_id)
 
 
-def _on_the_band(surfaces: _Surfaces, *bound: Any, replicate_id: str | None = None) -> _Editor:
+def _on_the_band(
+    surfaces: _Surfaces, spec: ToolSpec, *bound: Any, replicate_id: str | None = None
+) -> _Editor:
+    del spec
     return SpanEditor(surfaces.timeline, *bound, replicate_id=replicate_id)
+
+
+def _on_the_surface(
+    surfaces: _Surfaces, spec: ToolSpec, *bound: Any, replicate_id: str | None = None
+) -> _Editor | None:
+    """The panel this parameter's declared surface is drawn on, or no editor.
+
+    Three ways to be offered nothing, and none of them is a defect: the caller
+    drew no panel for this surface, or drew one whose axis is not the parameter's
+    (`SurfacePanel.takes_handles`). The spec is read for `param_surfaces` and for
+    nothing else — which surface a band names is the one tool fact this module is
+    allowed, and it is a kind.
+    """
+    _session, _node_id, param = bound[0], bound[1], bound[2]
+    del _session, _node_id
+    panel = surfaces.bands.get(spec.param_surfaces[param])
+    if panel is None or not panel.takes_handles:
+        return None
+    return BandEditor(panel, *bound, replicate_id=replicate_id)
 
 
 #: Kind to editor, and the whole of this module's tool knowledge. Partial over
@@ -437,6 +613,7 @@ def _on_the_band(surfaces: _Surfaces, *bound: Any, replicate_id: str | None = No
 _EDITORS = {
     ParamStereotype.REGION: _on_the_canvas,
     ParamStereotype.SPAN: _on_the_band,
+    ParamStereotype.BAND: _on_the_surface,
 }
 
 
@@ -449,6 +626,7 @@ def bind_editors(
     canvas: VideoCanvas,
     timeline: TimelineStrip,
     region_extent: tuple[int, int] | None,
+    bands: Mapping[DisplaySurface, SurfacePanel] | None = None,
     replicate_id: str | None = None,
 ) -> dict[str, _Editor]:
     """An editor over every parameter of `node_id` whose kind is edited by gesture.
@@ -467,19 +645,24 @@ def bind_editors(
     editor rather than one editing in whatever units the canvas happens to be
     showing. See `RegionEditor`.
 
+    `bands` is the panel drawing each display surface this node declares, and
+    what is absent from it is a band with no picture: the same refusal one
+    argument up, for the same reason. The caller draws the panels because it is
+    the one that knows where they hang and what fed them.
+
     `replicate_id` is which region the gesture is about, and `None` is the
     baseline. It has to agree with what `values` was read for or the overlay
     would open on one region's box and commit to another's — which is why both
     are the caller's single answer rather than two lookups made here.
     """
     editors: dict[str, _Editor] = {}
-    surfaces = _Surfaces(canvas, timeline, region_extent)
+    surfaces = _Surfaces(canvas, timeline, region_extent, dict(bands or {}))
     for name, kind in spec.param_stereotypes.items():
         build = _EDITORS.get(kind)
         if build is None:
             continue
         editor = build(
-            surfaces, session, node_id, name, values.get(name), replicate_id=replicate_id
+            surfaces, spec, session, node_id, name, values.get(name), replicate_id=replicate_id
         )
         if editor is not None:
             editors[name] = editor

@@ -43,6 +43,13 @@ misspelling into a first-render failure instead of an unwatched metric.
 `tests/unit/test_preview.py` checks both against `BUDGETS` from a layer that may
 see it.
 
+**The display channel is a render argument, and this module knows nothing else
+about it.** `show` is passed through to `execute` and never held: what it costs
+is that module's paragraph, what fills it is the tool's, and what the columns
+add up to is `series_collector.SurfaceCollector`'s. A session that remembered
+which node was watched would be a second answer to a question the caller's
+screen already answers, and the two would disagree the moment the walk moved.
+
 **A source root is resolved here, per render, and it is the one thing in this
 module that touches the filesystem.** A root that opens its own file is keyed on
 what that file is, so a session that did not resolve it hands the plan no
@@ -97,7 +104,7 @@ the gap that used to make a preview decode the parent while `sieve run` did not.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 
@@ -278,7 +285,13 @@ class PreviewSession:
 
     # ---- renders ---------------------------------------------------------
 
-    def render_window(self, pipeline: Pipeline, on_frame: Consumer | None = None) -> PreviewRender:
+    def render_window(
+        self,
+        pipeline: Pipeline,
+        on_frame: Consumer | None = None,
+        *,
+        show: Collection[str] = (),
+    ) -> PreviewRender:
         """Run `pipeline` over the whole window, delivering frames in order.
 
         Publishes `FIRST_FRAME_BUDGET` around the first frame and
@@ -297,6 +310,13 @@ class PreviewSession:
             on_frame: Called with each frame as it is produced. `None` renders
                 for the store and the timings alone, which is what a headless
                 measurement wants.
+            show: Nodes whose declared display surfaces to fill, handed straight
+                to `execute` — see its docstring for what a watched node costs.
+                Keyword-only and per render rather than session state, for the
+                reason `pipeline` is taken per render: which node's panel is open
+                is a fact about the caller's screen at the moment it asks, and a
+                session holding it would keep filling a surface for a step the
+                user has walked off.
 
         Returns:
             What the render did, including how much of it came from the store.
@@ -313,12 +333,19 @@ class PreviewSession:
             UnrunnableNodeError: if a node cannot be called at all, or returns a
                 frame it was not asked for.
             FormatMismatchError: if the reader's format is not the graph's.
+            UndrawableNodeError: if a node in `show` declares no surface, or
+                fills one with something other than what it declared.
             VideoDecodeError: if a frame the render needs cannot be read.
         """
-        return self._run(self._plan(pipeline, self._window), on_frame, whole=True)
+        return self._run(self._plan(pipeline, self._window), on_frame, whole=True, show=show)
 
     def render_frame(
-        self, pipeline: Pipeline, index: int, on_frame: Consumer | None = None
+        self,
+        pipeline: Pipeline,
+        index: int,
+        on_frame: Consumer | None = None,
+        *,
+        show: Collection[str] = (),
     ) -> PreviewRender:
         """Run `pipeline` for the single source frame `index`.
 
@@ -339,7 +366,10 @@ class PreviewSession:
                 reasons.
         """
         return self._run(
-            self._plan(pipeline, SourceSpan(start=index, end=index + 1)), on_frame, whole=False
+            self._plan(pipeline, SourceSpan(start=index, end=index + 1)),
+            on_frame,
+            whole=False,
+            show=show,
         )
 
     # ---- internals -------------------------------------------------------
@@ -374,7 +404,14 @@ class PreviewSession:
             picked=picked_identities(source_files(dag, validated_params(dag, self._replicate))),
         )
 
-    def _run(self, plan: ExecutionPlan, on_frame: Consumer | None, *, whole: bool) -> PreviewRender:
+    def _run(
+        self,
+        plan: ExecutionPlan,
+        on_frame: Consumer | None,
+        *,
+        whole: bool,
+        show: Collection[str] = (),
+    ) -> PreviewRender:
         """Drive `execute` to exhaustion, timing the first frame and the rest.
 
         `execute` is a generator, so calling it does no work: everything —
@@ -390,7 +427,7 @@ class PreviewSession:
         deliver = _discard if on_frame is None else on_frame
         tally = _Tally()
         with self._measure(WHOLE_WINDOW_BUDGET) if whole else nullcontext():
-            stream = execute(plan, self._reader, store=self._store)
+            stream = execute(plan, self._reader, store=self._store, show=show)
             with self._measure(FIRST_FRAME_BUDGET):
                 # `SourceSpan` cannot be empty and every index at or after
                 # `span.start` is yielded, so there is a first frame whenever

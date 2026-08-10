@@ -331,11 +331,13 @@ def test_an_editor_per_kind_never_per_tool(
     del qapp
     from sieve.gui.kind_editors import _EDITORS, RegionEditor, SpanEditor, bind_editors
 
-    # Both composite kinds a tool on the shelf declares today, and no others:
-    # `BAND` is dragged on an axis nothing has named
-    # (`todo/a-bands-axis-has-no-vocabulary-and-no-plot.md`) and `POINT` is
-    # declared by no tool at all.
-    assert set(_EDITORS) == {ParamStereotype.REGION, ParamStereotype.SPAN}
+    # The three composite kinds a tool on the shelf declares today, and no
+    # others: `POINT` is declared by no tool at all and `PATH` is typed.
+    assert set(_EDITORS) == {
+        ParamStereotype.REGION,
+        ParamStereotype.SPAN,
+        ParamStereotype.BAND,
+    }
 
     editors = bind_editors(
         session,

@@ -4,7 +4,7 @@ priority: high
 phase: 3
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests -q -k offering_from_a_resolved_source"
+done_when: "uv run pytest tests -q -k \"offering_from_a_resolved_source or an_unstated_accepts_field\""
 opened: 2026-08-09
 ---
 
@@ -44,9 +44,16 @@ topological order against one parent per node and is the same walk over the
 other half of the spec. Its hardcoded `PIXEL` root is the one thing not to
 copy.
 
-Two things stay as they are. `ArraySpec.matches` and `match_slack` are not
-touched — the predicate was ruled correct twice and this changes what is handed
-to it. And no field joins `ToolSpec`: an unstated field in `emits` already
+One thing stays as it is, and one no longer does. `ArraySpec.matches` was to be
+untouched on the grounds that the predicate was ruled correct twice and this only
+changes what is handed to it; that is false on the required side, where an empty
+`accepts` field is a tool declaring it takes anything and the predicate read it as
+proving nothing. Twelve of fourteen tools match nothing for *every* produced spec,
+so the fold alone leaves the offer empty — measured in this finding's third
+amendment, ruled at
+[adr/an-unstated-field-is-a-claim.md](../adr/an-unstated-field-is-a-claim.md), and
+its `_unused` change belongs to this item because a resolved position with an empty
+offer is not the feature. What stays: no field joins `ToolSpec`: an unstated field in `emits` already
 means "any", which at an emit position is the same claim as "whatever arrived"
 for every tool on the shelf, so the fold reads a declaration that exists rather
 than adding one ([adr/declared-means-verified.md](../adr/declared-means-verified.md)).
@@ -77,8 +84,10 @@ says to watch, and this is the work that moves it.
     1196 deselected in 0.93s
     exit: 5
 
-The cases the criterion names are the two the fold exists for: the offer under a
-source resolved to one video, and the offer under a `crop` reading that source.
+The cases the criterion names are the two the fold exists for — the offer under a
+source resolved to one video, and the offer under a `crop` reading that source —
+and the third the ADR adds, that a tool leaving an `accepts` field unstated is
+offered where the stated fields fit.
 Both are empty today. `concatenate` is VISION's illustration and not a shelf
 entry, so nothing here may name it.
 

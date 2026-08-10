@@ -86,3 +86,14 @@ have their facts already.
     $ uv run pytest tests -q -k offering
     1000 deselected in 0.91s
     exit: 5
+
+## Amended 2026-08-09: the wildcard clause above is wrong on the required side
+
+The ruling states "a wildcard admits but does not match" of both sides, and
+`ArraySpec.matches`' docstring carries it. It is right about the produced side
+and wrong about the required one, where an empty tuple is a tool declaring it
+takes anything rather than a tool proving nothing — measured, and settled at
+[adr/an-unstated-field-is-a-claim.md](../adr/an-unstated-field-is-a-claim.md),
+which owns the reading and the `_unused` change that follows from it. Nothing
+else here moves: the dual, the yes/no with specificity ordering, and derived
+rather than declared all stand.

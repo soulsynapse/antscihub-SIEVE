@@ -33,3 +33,13 @@ Whatever lands, the case has to drive `TimelineBar` and not the bare `strip`
 fixture. Every existing case that asserts `scrubbed` uses a strip with no
 window, where `grab_at` returns SCRUB everywhere; the bar cannot be in that
 state, which is why nothing went red for this.
+
+Noticed 2026-08-10, same fact read from the other side: `tests/gui/test_app.py`
+says "the bar holds no window until something asks for one" and then sets one,
+and both halves are dead. `TimelineBar._on_opened` calls `bind_source`, which
+adopts `whole_of(frame_count)` — so by the time that line runs the bar already
+holds the whole source, the `set_window` beside the comment restates a span the
+bar chose for itself, and the comment describes a shape the code has left
+behind. Whatever settles the gesture is written against a bar that is never
+windowless once a container is open, so the correction belongs beside it rather
+than as a second answer to when the bar has a window.

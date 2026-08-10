@@ -12,5 +12,6 @@ its group leaves this index while keeping its file.
   - 📄 [pane](vocab/pane.md) — A compartment the window divides into: a region with a boundary, a size policy, and a name, holding whatever is put in it. A pane is the space, never its occupant — it stays a pane while empty, and swapping what stands in it does not make it a different pane.
   - 📄 [subpane](vocab/subpane.md) — A smaller pane anchored to a side inside a main pane.
   - 📄 [view](vocab/view.md) — Anything a pane can house — the occupant, not the space. "Surface" used to mean this and was dropped for doing double duty: a thing a pane houses, and a thing paint lands on. A view names only the first.
+  - 📄 [menu](vocab/menu.md) — The drop menu at the top of the window.
 
-*4 defined.*
+*5 defined.*

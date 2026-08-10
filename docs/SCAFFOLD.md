@@ -8,6 +8,7 @@
   - 📁 `adr/`
     - 📄 `ADR-0001-panes-house-any-view.md`
   - 📁 `vocab/`
+    - 📄 `menu.md`
     - 📄 `pane.md`
     - 📄 `subpane.md`
     - 📄 `view.md`

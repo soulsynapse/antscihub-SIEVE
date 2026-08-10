@@ -1,7 +1,7 @@
 ---
 title: Hovering a cell solos it, and the solo is what gives a block step a trace
 step: "10.4"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k soloed_block"
 opened: 2026-08-09

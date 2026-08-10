@@ -2,7 +2,7 @@
 title: A second source root is drawn over the first root's footage
 priority: high
 phase: "10"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k a_second_source_root_is_not_drawn_over"
 opened: 2026-08-10
@@ -40,3 +40,25 @@ true of a refusal and true of a correct per-root input.
     $ uv run pytest tests/gui -q -k a_second_source_root_is_not_drawn_over
     253 deselected in 1.14s
     exit: 5
+
+## 2026-08-10 (review): closed by the refusal, and the fork was already ruled
+
+`done_when` is `1 passed` here. It discriminates: with `ee5420c`'s two source
+hunks reverted and the case as committed, the under layer is a 160×120
+grayscale of the *project's* clip while the root's own result is a different
+160×120 grayscale, so the assertion fails — the fixture's two files differ, which
+is what its own docstring says it chose `synthetic_video` for. The parent's
+criterion is `3 passed` unchanged beside it, and `tests/gui` is 265.
+
+The fork this item said was not its to make was not made here either.
+`adr/the-walked-step-owns-the-canvas.md` rules it in its own sentence — a source
+step has no input, so its composite is its result alone — so the refusal is the
+bound reading and the per-root input is not owed. The parent carries a dated
+section saying its paragraph 3 is repealed by this.
+
+What the criterion never reaches, and where it went: `app.input_of`'s docstring
+still tells the reader `render_at` reads a root's `None` as the decoded frame,
+which is the sentence this commit repealed two files over. That is
+[input-ofs-docstring-still-says-a-root-is-drawn-over-the-decoded-frame.md](input-ofs-docstring-still-says-a-root-is-drawn-over-the-decoded-frame.md),
+minted because no open item owns `app.py`'s prose and none would have carried
+it.

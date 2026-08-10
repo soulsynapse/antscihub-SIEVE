@@ -108,3 +108,21 @@ reaches are covered where they were before this item
 The only clause left open is the multi-root one above, and it is now
 [a-second-source-root-is-drawn-over-the-first-roots-footage.md](a-second-source-root-is-drawn-over-the-first-roots-footage.md),
 which names surface the tree does not hold yet.
+
+## 2026-08-10 (review): paragraph 3 is repealed, and paragraph 1 is what the tree does
+
+Recorded here because the reading this file certified is no longer the one in
+the code, and a reader who stops at the head or at the first dated section would
+take the wrong one. `ee5420c`, closing the child item above, took paragraph 1
+literally: `render_at` returns no under layer at a source root and
+`_paint_viewport` no longer substitutes `app._source_frame` for one. So
+paragraph 3's "at a root the input is `result.source` … `app._source_frame` is
+the answer, which is v2's semantics", and the first review section's "that
+reading stands", are both history. What settled it was not a preference between
+the two: `adr/the-walked-step-owns-the-canvas.md` says in its own words that a
+source step has no input and its composite is its result alone, so the fork the
+child was minted to hold was already ruled and the per-root input is not owed.
+
+Nothing here reopens. This item's own criterion is green on either reading — at
+a footage root the decoded frame *is* that root's output, so the blend was a
+visual no-op and no pixel this file asserts moved.

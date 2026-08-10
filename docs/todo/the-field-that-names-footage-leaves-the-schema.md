@@ -246,3 +246,23 @@ nothing tests it, so the signature is free" is false.
 asserts on `moved.source` — the field this item removes. So the session that
 takes the second `-k` clause rewrites both cases rather than writing one against
 a free signature, and the first of them is what that clause replaces.
+
+## Folded 2026-08-10: the first leg is green today, on one clause of three
+
+`-k "A or B or C"` selects the union and exits 0 as soon as *any* selected case
+passes, so the first leg went green the moment 11.3's anchoring case landed and
+says nothing at all about the two clauses beside it, neither of which exists:
+
+    $ uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k "a_document_carrying_a_source_key_is_refused or relocating_rewrites_the_source_nodes_path_param or a_relative_source_param_anchors_on_the_project_directory"
+    1 passed, 72 deselected in 0.84s
+    exit: 0
+
+Only the chained `&&` keeps the criterion red, and it is red on the second leg.
+A worker reading the first leg's exit code as its baseline is reading a green
+that two thirds of the removal cannot move. Whatever a review does with the
+splitting question, the union is the wrong connective for a criterion whose
+clauses are meant to land together — three legs asserting three cases would go
+red per clause and green per clause, which is what a criterion is for.
+
+The measurement of what the removal costs is
+[the-footage-field-removal-is-atomic-across-forty-test-modules](../findings/2026.08.10-the-footage-field-removal-is-atomic-across-forty-test-modules.md).

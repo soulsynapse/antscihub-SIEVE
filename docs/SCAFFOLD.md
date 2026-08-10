@@ -13,9 +13,9 @@
     - 📄 `subpane.md`
     - 📄 `view.md`
     - 📄 `window.md`
-  - 📄 `ADR-SUMMARY.md`
+  - 📄 `ADR.md`
   - 📄 `SCAFFOLD.md`
-  - 📄 `VOCAB-SUMMARY.md`
+  - 📄 `VOCAB.md`
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
 - 📁 `scripts/`

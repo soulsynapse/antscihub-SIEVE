@@ -45,8 +45,8 @@ class Shelf(NamedTuple):
 SHELVES = [
     Shelf(
         directory="docs/adr/",
-        doc_path="docs/ADR-SUMMARY.md",
-        title="# ADR-SUMMARY — what is settled",
+        doc_path="docs/ADR.md",
+        title="# ADR — what is settled",
         preamble="""\
 Derived: each line is its ADR's first paragraph, so that file is the home and
 this index cannot drift from it. The shelf an ADR sits on is `group` and its
@@ -56,8 +56,8 @@ its group leaves this index while keeping its number and its file.""",
     ),
     Shelf(
         directory="docs/vocab/",
-        doc_path="docs/VOCAB-SUMMARY.md",
-        title="# VOCAB-SUMMARY — what the words mean",
+        doc_path="docs/VOCAB.md",
+        title="# VOCAB — what the words mean",
         preamble="""\
 Derived: each line is its term's first paragraph, so that file is the home and
 this index cannot drift from it. The shelf a term sits on is `group` and its

@@ -22,6 +22,7 @@ through a field the source key had to be taught.
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -36,12 +37,14 @@ from sieve.core.pipeline_model import (
 )
 from sieve.core.tool_base import (
     SOLE_PORT,
+    SOURCE_ELEMENT_NAMES,
     SPEC_CHANNELS,
     ArraySpec,
     AxisRelation,
     CaptionPart,
     Channel,
     DisplaySurface,
+    ElementKind,
     ElementRelation,
     Emission,
     Mode,
@@ -51,6 +54,7 @@ from sieve.core.tool_base import (
     ValueAxis,
     WarmupKind,
 )
+from sieve.core.tool_registry import ToolRegistry, register_tool
 from sieve.core.types import FrameCount
 from sieve.pipeline import cache_key
 from sieve.pipeline.cache_key import (
@@ -61,6 +65,8 @@ from sieve.pipeline.cache_key import (
     node_key,
     source_key,
 )
+from sieve.pipeline.dag import Dag
+from sieve.pipeline.resolve_source import anchored
 
 
 class BlurParams(ParamsBase):
@@ -154,6 +160,68 @@ CROP_SPEC = make_spec(
     params_model=CropParams,
     param_stereotypes={"region": ParamStereotype.REGION},
 )
+
+#: A scratch shelf, for `test_preview.py`'s reason: the process-wide one is
+#: populated by tool modules at import, so registering into it would make this
+#: file's behaviour depend on whether such an import had already happened. Two
+#: tools rather than one, because the claim below is about the keys *under* a
+#: source and a source alone has nothing under it.
+SHELF = ToolRegistry()
+
+
+class _NothingRead:
+    """A `ToolSource` that resolves its parameter and reads no file.
+
+    `TestPortability`'s case never runs the graph and never stats anything — it
+    hands `node_keys` an identity directly, which is what isolates the spelling
+    of the path from what the path resolves to.
+    """
+
+    #: Own code rather than `decode/`, so this root folds `picked_key`
+    #: (`adr/a-root-keys-by-its-reader.md`). The claim holds for either flavour;
+    #: this is the one whose ancestor is the picked file and nothing else.
+    decoded = False
+
+    def files(self, params: PlateParams, /) -> tuple[Path, ...]:
+        return (Path(params.pattern),)
+
+    def file(self, params: PlateParams, /) -> Path:
+        return Path(params.pattern)
+
+    def read(self, params: PlateParams, index: object, /, *, luma: bool) -> object:
+        raise AssertionError("no case here reads a frame")
+
+
+@register_tool(
+    tool_id="plate",
+    version="1.0.0",
+    summary="Reads the file its own path parameter names.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    emissions=(Emission("plate"),),
+    source=_NothingRead(),
+    element=ElementKind.PIXEL,
+    element_names=SOURCE_ELEMENT_NAMES,
+    param_stereotypes={"pattern": ParamStereotype.PATH},
+    registry=SHELF,
+)
+class PlateParams(ParamsBase):
+    pattern: str = ""
+
+
+@register_tool(
+    tool_id="shade",
+    version="1.0.0",
+    summary="Whatever a source root feeds.",
+    accepts=ArraySpec(),
+    emits=ArraySpec(),
+    emissions=(Emission("out"),),
+    element=ElementRelation.PRESERVED,
+    param_stereotypes={"radius": ParamStereotype.SCALAR_RANGE},
+    registry=SHELF,
+)
+class ShadeParams(ParamsBase):
+    radius: int = 3
 
 
 def sole(key: str) -> tuple[tuple[str | None, str], ...]:
@@ -501,6 +569,68 @@ class TestInputs:
         # wrong cache hit rather than a miss.
         with pytest.raises(ValueError, match="node names"):
             node_key(node, spec=make_spec(version="2.0.0"), upstream=ROOT)
+
+
+class TestPortability:
+    """What a key may not be derived from: where the project file happens to sit.
+
+    `adr/a-users-file-wires-in-like-any-other-input.md`'s exclusion clause, which
+    is the half of it nothing asserted — "what is hashed is the resolved file's
+    identity, never the rule that found it — neither 'this exact path' nor 'the
+    folder of this name beside the project'". Its ordering clause was checked
+    when the anchoring landed and this one was not, so a source node's path
+    parameter reached the digest as the absolute string `resolve_source.anchored`
+    had just made of it
+    (`findings/2026.08.10-anchoring-puts-the-project-directory-into-the-node-key.md`).
+
+    Walked through `anchored` and `Dag.build` rather than by hand, unlike the
+    rest of this file: the rule being excluded is not something `node_key`'s
+    caller passes in, it is a rewrite of the graph one layer up, and a case that
+    spelt the two absolute paths itself would assert that `node_key` ignores a
+    parameter without asserting that the parameter is the one anchoring writes.
+
+    What this does *not* buy is a project that keeps its cache across a move.
+    `source_identity` is `abspath|size|mtime_ns`, so footage carried to a new
+    folder is a new identity by design, and it is the identity that the key
+    below a source is derived from — the same finding's 2026-08-10 amendment.
+    """
+
+    def test_a_projects_location_and_the_key_below_its_source_are_independent(self) -> None:
+        # Three spellings of one document, all naming one file: as it is held,
+        # anchored on one project directory, anchored on another. The identity is
+        # handed over rather than statted, and is the same string in all three,
+        # so the only thing varying is where the project file sits — which is the
+        # variable the ADR says a key may not see. The failure this names is the
+        # one the ADR names: two projects naming one file disagree about it, so
+        # the second reviewer to open a shared background recomputes a chain the
+        # first already has entries for.
+        graph = Pipeline(
+            nodes=(
+                Node(
+                    node_id="s",
+                    tool_id="plate",
+                    version="1.0.0",
+                    params={"pattern": "plate_bg.png"},
+                ),
+                Node(node_id="b", tool_id="shade", version="1.0.0", params={"radius": 5}),
+            ),
+            edges=(Edge(upstream="s", downstream="b"),),
+        )
+
+        def keys(pipeline: Pipeline) -> dict[str, str]:
+            return Dag.build(pipeline, SHELF).node_keys(
+                source="footage|1|2", picked={"s": "one file, one identity"}
+            )
+
+        held = keys(graph)
+        here = keys(anchored(graph, Path("/one/proj"), SHELF))
+        there = keys(anchored(graph, Path("/two/elsewhere"), SHELF))
+
+        # Both nodes, before the equality: a source root whose identity the walk
+        # cannot find is left unkeyed and takes everything below it with it, and
+        # three empty dicts are equal.
+        assert set(held) == {"s", "b"}
+        assert held == here == there
 
 
 class TestLayout:

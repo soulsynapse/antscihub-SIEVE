@@ -45,3 +45,23 @@ place it is most load-bearing, so the sentence wants correcting to name the
 cache-key golden as the one thing that does move and why replacing it at the
 same version is safe. That edit is Kendrick's to make on a settled ADR; this
 item is where the observation waits.
+
+## Folded 2026-08-10 — the third cause recurred, on three goldens at once
+
+[a-projects-directory-is-inside-every-key-below-its-source](a-projects-directory-is-inside-every-key-below-its-source.md)
+excluded a source tool's path parameter from `node_key`'s params position, which
+moved `cache_key_pick_1.0.0.txt`, `cache_key_footage_1.0.0.txt` and
+`cache_key_checkpoint_1.0.0.txt` — every tool on the shelf that declares a
+`ParamStereotype.PATH` — with no tool changing what it computes. So `span`'s
+reshaped model was not a one-off: the general cause is *the derivation of the
+params position changed*, of which a reshaped model and a narrowed digest are
+two instances, and the message's two remedies are wrong for both in the same
+way. The run replaced the three at the same version, on 42612df's precedent.
+
+It is also the case where the safety argument the section above gives —
+`extra="forbid"` refuses a document naming the old fields — does not apply,
+because no field name moved and every old document still loads. The argument
+that holds for both is weaker and sufficient: the new key differs from the old
+one, so old entries are orphaned rather than served, and a derivation change
+that *did not* move a key would be the dangerous one. Worth having in the
+clause, since a reader offered only the schema argument will not find it here.

@@ -27,7 +27,8 @@ with its own code folds `picked_key`. The two are what keeps one graph's two
 roots from folding one identity.
 
 **What is deliberately absent.** Checkpoints, sink paths, the frames a run asks
-for, and the replicate's display name. Narrowing a request changes which frames
+for, the replicate's display name, and a source tool's path parameter — the last
+being the one absence that is a parameter, argued at `node_key`. Narrowing a request changes which frames
 are computed, never what a frame is, and `tools/span.py` is deliberately not an
 exception to that: a span node is a node, its parameters are hashed like any
 other tool's, because a graph that selects is a different graph and the
@@ -304,12 +305,19 @@ def picked_key(identity: str) -> str:
     to the store, which serves the first model's results under the second's name
     — well-formed key, plausible frame, no symptom.
 
-    **The rule that found the file is not in here.** What is hashed is the
-    resolved file's identity and never the pattern, so two projects naming one
-    file agree about it and one project agrees with itself after the folder is
-    reorganized underneath it (`adr/a-users-file-wires-in-like-any-other-input.md`).
-    The pattern is still a parameter and still reaches the node's own key
-    through `params`; what it may not do is stand *instead of* the identity.
+    **The rule that found the file is not in here, and not in the node below it
+    either.** What is hashed is the resolved file's identity and never the
+    pattern, so two projects naming one file agree about it
+    (`adr/a-users-file-wires-in-like-any-other-input.md`). The pattern is still a
+    parameter — saved, deviated per replicate, and what `ToolSource.file`
+    resolves — but `node_key` drops it from the digest for that clause's sake,
+    which is where the argument for the exclusion is written.
+
+    The clause's other half, one project agreeing with itself after the folder is
+    reorganized underneath it, is not this function's to give: `identity` is
+    `source_identity`'s three facts and the first of them is the resolved
+    absolute path, so footage that moved is a new identity by that function's own
+    argument.
 
     Args:
         identity: What identifies the picked file — `source_identity` builds
@@ -340,6 +348,29 @@ def node_key(
     deterministic: defaults are filled in, so a document that omits `factor` and
     one that spells out `factor: 2` are one computation and not two, and enums
     and paths reach the digest as the strings they became in the artifact.
+
+    **A path parameter is the one parameter that does not.** `spec.path_params`
+    are dropped from the params position, and this is the module's "nothing that
+    cannot change the bytes may be" read strictly rather than an exception to it:
+    the file such a parameter names is already in this key, as the identity
+    folded into the `upstream` pair a source root arrives on (`picked_key`,
+    `source_key`), so what the parameter would add is the *rule that found the
+    file* and nothing else. `adr/a-users-file-wires-in-like-any-other-input.md`
+    forbids that rule by name, and the case is `test_cache_key.TestPortability`:
+    `resolve_source.anchored` rewrites a relative path against the project's own
+    directory before anything is keyed, so leaving it in put the folder holding
+    the project file inside every key below its source, and two projects naming
+    one background disagreed about it.
+
+    Scoped by `path_params` alone rather than by asking whether the spec is a
+    source tool, because `ToolSpec._check_source` refuses a path parameter on a
+    tool with nothing that opens it — the two are one declaration, so a second
+    test for it here could only ever disagree with the first. What this does
+    assume is that every path parameter a source declares names a file whose
+    identity reaches `picked`: a source tool that read a *second* file, from a
+    second path parameter, would drop that file out of its key entirely, and the
+    walk that builds `picked` has the same gap for the same reason
+    (`resolve_source.source_files` resolves one file per root).
 
     Args:
         node: The graph node. Its `tool_id` and `version` must match `spec`.
@@ -381,5 +412,5 @@ def node_key(
         [[port, key] for port, key in upstream],
         node.tool_id,
         node.version,
-        params.canonical_json(),
+        params.canonical_json(without=spec.path_params),
     )

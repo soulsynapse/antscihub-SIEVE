@@ -109,7 +109,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass
 from dataclasses import fields as dataclass_fields
 from enum import StrEnum
@@ -420,15 +420,30 @@ class ParamsBase(BaseModel):
             )
         return cls.__tool_spec__
 
-    def canonical_json(self) -> str:
+    def canonical_json(self, *, without: Collection[str] = ()) -> str:
         """Byte-stable JSON of these params, for hashing.
 
         `mode="json"` so enums and paths become the same strings they became in
         the artifact, sorted keys so the string does not depend on field
         declaration order, and no whitespace because a hash input is not read
         by anyone.
+
+        `without` drops named fields, and it is a parameter here rather than a
+        second canonicaliser at the one call site that needs it
+        (`pipeline/cache_key.node_key`): two spellings of "the canonical form"
+        is how the form stops being canonical. Omitted rather than nulled, so a
+        model whose only field is dropped digests `{}` instead of a shape that
+        depends on which fields once existed.
+
+        Args:
+            without: Field names to leave out. A name this model does not have
+                is ignored — the caller's list is derived from a spec, and a
+                spec's `path_params` are already checked against its
+                `params_model`.
         """
-        return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+        dumped = self.model_dump(mode="json")
+        kept = {name: value for name, value in dumped.items() if name not in without}
+        return json.dumps(kept, sort_keys=True, separators=(",", ":"))
 
     def presentation_values(self) -> Mapping[str, str]:
         """Parameter display values that need tool-owned derivation.

@@ -233,10 +233,14 @@ def anchored(
 
     So the anchoring is a rewrite of the graph on the way into a run, before
     anything is keyed. That ordering is the ADR's — "resolution happens before
-    the key" — and it is what leaves
-    `adr/a-users-file-wires-in-like-any-other-input.md`'s rule untouched: the
-    pattern still never enters a key, and what is hashed is still the resolved
-    file's own identity (`cache_key.picked_key`).
+    the key" — and preceding the build is precisely what would put this rewrite's
+    product *into* the build's input, so it is not what leaves
+    `adr/a-users-file-wires-in-like-any-other-input.md`'s exclusion rule
+    untouched. What leaves that rule untouched is `cache_key.node_key` dropping a
+    source tool's path parameter from its digest, which is where the argument
+    lives; until it did, this function's product was the project's own directory
+    inside every key below a source
+    (`findings/2026.08.10-anchoring-puts-the-project-directory-into-the-node-key.md`).
 
     A *rewrite* and not a load step, because the document keeps the relative
     spelling that makes it movable. Nothing here is saved back — a session

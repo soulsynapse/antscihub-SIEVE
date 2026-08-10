@@ -2,7 +2,7 @@
 title: A project's own directory is inside every key below its source root
 priority: high
 phase: 11
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_key.py -q -k a_projects_location_and_the_key_below_its_source"
 opened: 2026-08-10

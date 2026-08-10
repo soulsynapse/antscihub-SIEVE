@@ -5,6 +5,7 @@ Each case pins one of the loop findings the module encodes. The test commands ar
 bytes on disk rather than by an import graph the tmp tree does not have.
 """
 
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -232,6 +233,66 @@ def test_a_mutant_that_leaves_the_subject_unparseable_is_refused(
     assert "KILLED" not in captured.out
     assert "unparseable" in captured.err
     assert subject.read_bytes() == data
+
+
+def test_an_unparseable_mutant_is_refused_before_the_oracle_runs(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every refusal about a mutant reads only the original bytes, so none of them owes an oracle run.
+
+    A mutant list is refused for what it says, not for anything the command reports:
+    the two anchor refusals and the compile gate are pure functions of the file on
+    disk and the `--mutant` string. Raised from inside the per-mutant loop they were
+    paid for anyway — the baseline first, then one timed oracle run per earlier
+    mutant — and the sweep printed nothing for any of it. The trap is routine rather
+    than exotic: the separator eats one space of an indented replacement, so a
+    hand-typed list of twenty mutants hits it on the nineteenth and spends the whole
+    sweep to say so.
+
+    The oracle here writes a marker on every invocation and exits 0, so the
+    assertion is that no subprocess ran at all, baseline included.
+    """
+    data = b"def limit():\n    a = 100\n    return a\n"
+    subject = subject_with(repo, data)
+    marker = repo / "oracle-ran.txt"
+    oracle = [
+        sys.executable,
+        "-c",
+        f"import pathlib; pathlib.Path({str(marker)!r}).write_text('x')",
+    ]
+    argv = [
+        "--file",
+        "src/subject.py",
+        "--mutant",
+        "    return a ==>     return 1",
+        "--mutant",
+        "    a = 100 ==>    a = 100  # tuned",
+    ]
+    assert main([*argv, "--", *oracle], repo) == 1
+    captured = capsys.readouterr()
+    assert "KILLED" not in captured.out
+    assert "unparseable" in captured.err
+    assert not marker.exists()
+    assert subject.read_bytes() == data
+
+
+def test_a_refusal_shows_both_streams_and_more_than_its_last_line(repo: Path) -> None:
+    """`_tail` has two streams and a window, and the only case that read it printed one line.
+
+    Dropping `stderr` from its pair survived a sweep, as did narrowing twenty lines to
+    one, because the red-baseline case prints a single line on stdout — so the pair and
+    the window are what this asserts, over a command loud on both.
+    """
+    finished = subprocess.CompletedProcess(
+        ["cmd"],
+        1,
+        "\n".join(f"out {n}" for n in range(30)).encode(),
+        b"E   ImportError: no such fixture",
+    )
+    shown = mutation_sweep._tail(finished)
+    assert "no such fixture" in shown
+    assert "out 29" in shown and "out 10" in shown
+    assert "out 9" not in shown
 
 
 def test_a_red_baseline_is_refused_rather_than_swept(

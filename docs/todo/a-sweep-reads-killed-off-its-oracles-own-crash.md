@@ -1,7 +1,7 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_unparseable_mutant_is_refused_before_the_oracle_runs"
 opened: 2026-08-08
@@ -390,6 +390,45 @@ oracle was never invoked.
 Riding with it in the same commit, and covered by prose rather than by the
 criterion: `_tail`'s two uncased halves, and `ORACLE_BUDGET_SECONDS`'s
 "structurally impossible" comment.
+
+## What landed (2026-08-10)
+
+The hoist and both ride-alongs, which the section above asks for in one commit.
+`run_sweep` applies and compiles every mutant into a `prepared` list before the
+baseline, so all three per-mutant refusals — anchor absent, anchor duplicated,
+bytes that will not compile — are raised with no subprocess started, and the
+per-mutant loop consumes bytes it no longer computes.
+
+`test_an_unparseable_mutant_is_refused_before_the_oracle_runs` runs a two-mutant
+sweep whose second mutant is the indentation-shifted form, under an oracle that
+writes a marker file on every invocation and exits 0, and asserts the marker is
+absent — no baseline, no first-mutant run. Shown red on the unchanged tree by the
+defect itself: `assert not marker.exists()` failed on `assert not True`, the two
+oracle invocations the old ordering paid for before refusing.
+
+`_tail`'s two uncased halves are covered by
+`test_a_refusal_shows_both_streams_and_more_than_its_last_line`, over a fabricated
+`CompletedProcess` loud on stdout and terse on stderr. It passes on the unchanged
+tree, since the gap was the case and not the code, so red is shown the way the
+neighbour item `every-bounded-declaration-is-run-not-read.md` shows it, by
+sweeping the lines it exists for: dropping `("stderr", finished.stderr)` from the
+pair and `lines: int = 20 ==> 1` both KILLED, 2 killed 0 survived over
+`scripts/mutation_sweep.py` against the module as oracle — the two mutants this
+item recorded as survivors.
+
+`ORACLE_BUDGET_SECONDS`'s comment now says the figure bounds the baseline alone
+and that a sweep's worst case is the budget plus one per-mutant timeout each, no
+smaller than the floor, so "backgrounded and killed at turn end" is unlikely for a
+handful of mutants under a mostly-passing oracle rather than structurally
+impossible.
+
+The hoist paid for itself inside this run: the first attempt at the `_tail` sweep
+mistyped the replacement's indentation and was refused in well under a second with
+no oracle run, where the old ordering would have spent a baseline plus one full
+pytest session first.
+
+Nothing here is left over: the two clauses the previous section lists as riding
+along are both in the commit, and the item's own criterion is the hoist.
 
 The trap itself is not folded in here as work, because the gate is the ruling the
 previous rotation already took over re-founding the signal: `parse_mutant`'s

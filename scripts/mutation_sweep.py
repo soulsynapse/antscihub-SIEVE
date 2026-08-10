@@ -33,6 +33,10 @@ reach the deterministic member of that class — a mutant that leaves the subjec
 unparseable is red on the mutated bytes only — so the mutated bytes are compiled
 and the mutant refused rather than scored.
 
+Every refusal a mutant can earn is a function of the original bytes and the mutant
+alone, so all of them are raised before the baseline runs: a list whose last mutant
+is mistyped costs nothing rather than a full sweep that prints no verdicts.
+
 The baseline is also the sweep's clock. The test command after `--` should be the
 narrowest command the subject's own tests constitute — a mutant only a distant test
 kills is a coverage gap the narrow oracle exposes and a broad one hides — so a
@@ -74,11 +78,12 @@ SEPARATOR = "==>"
 #: a mutant in a test helper is a legal subject.
 PURGE_ROOTS = ("src", "scripts", "tests")
 
-#: How long the baseline may take before the oracle is refused as too broad. The
-#: figure is set so a sweep of a handful of mutants — baseline plus one timed run
-#: each — fits inside a single foreground command in the loop's harness, which is
-#: what makes "backgrounded, then killed at turn end, mutant left in the tree"
-#: structurally impossible rather than a convention an agent must remember.
+#: How long the baseline may take before the oracle is refused as too broad. It
+#: bounds the baseline and nothing else: a sweep's worst case is this figure plus
+#: one per-mutant timeout each, no smaller than the floor below, and nothing sums
+#: those parts against the loop harness's foreground window. So the figure makes
+#: "backgrounded, then killed at turn end, mutant left in the tree" unlikely for
+#: a handful of mutants under an oracle that mostly passes, not impossible.
 ORACLE_BUDGET_SECONDS = 60.0
 
 #: Floor for the per-mutant timeout, so a sub-second baseline does not convict a
@@ -247,19 +252,29 @@ def run_sweep(
 ) -> list[tuple[Mutant, bool]]:
     """Each mutant applied alone against `command`; True in a row means killed.
 
-    The command runs once on the original bytes first, under `oracle_budget` as a
+    Every mutant is applied and compiled first, before a single subprocess starts.
+    Each refusal a mutant can earn — an anchor found nowhere, an anchor found twice,
+    bytes that will not compile — reads only the original file and the `--mutant`
+    string, so none of them owes an oracle run, and raising them from inside the
+    per-mutant loop charged a whole sweep for a typo in its last mutant.
+
+    The command then runs once on the original bytes, under `oracle_budget` as a
     hard timeout, and the sweep refuses unless that baseline is green: a command
     that is red, crashes, or never finishes on unmutated code would print KILLED
     for every mutant it never judged. Each mutant then runs under `mutant_timeout`
     (derived from the baseline's own elapsed time when not given), and a timeout
-    is a kill — the mutant stopped the program terminating. A mutant whose bytes do
-    not compile is refused before it is written, since the baseline cannot see it.
+    is a kill — the mutant stopped the program terminating.
 
     The original bytes are restored after every mutant, inside a `finally`, and
     re-read afterwards to prove the restore happened — a sweep that cannot lose
     the work under test is the entire reason this file exists.
     """
     original = subject.read_bytes()
+    prepared = []
+    for mutant in mutants:
+        mutated = apply_mutant(original, mutant)
+        refuse_unparseable(subject, mutant, mutated)
+        prepared.append((mutant, mutated))
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
     purge_bytecode(repo)
     started = time.monotonic()
@@ -283,9 +298,7 @@ def run_sweep(
         else max(MUTANT_TIMEOUT_FLOOR_SECONDS, 2.0 * elapsed + 1.0)
     )
     results: list[tuple[Mutant, bool]] = []
-    for mutant in mutants:
-        mutated = apply_mutant(original, mutant)
-        refuse_unparseable(subject, mutant, mutated)
+    for mutant, mutated in prepared:
         try:
             subject.write_bytes(mutated)
             purge_bytecode(repo)

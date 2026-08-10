@@ -47,3 +47,28 @@ expressible as a command without pinning the sentences themselves. It is
 drained by a reader at Phase 6's boundary, against the four line ranges named
 above, and the check is that the ADR still says it and the four modules point
 at the ADR.
+
+## 2026-08-09: a fifth site, and its retelling is wrong rather than redundant
+
+`pipeline/preview.py`'s paragraph beginning "**An epsilon-warmup node makes
+every render pay its lead-in.**" is the fifth place the argument is told, and it
+is the only one that adds a claim the ADR does not make: that such a graph
+"decodes and runs its whole lead-in on every single render". Measured on the
+chain VISION opens with, it re-runs the lead-in and decodes none of it — the
+crop above the model keeps its key, its lead-in outputs are entries like any
+others, and every render after the cold one reads all of them back
+([findings/2026.08.09-the-epsilon-chain-repeats-its-lead-in-arithmetic-not-its-decode.md](../findings/2026.08.09-the-epsilon-chain-repeats-its-lead-in-arithmetic-not-its-decode.md)).
+The decode half holds only for an epsilon node with nothing keyed above it.
+
+So this site is not drained the same way as the four above. What comes out of
+them is a retelling that is true; what has to come out of this one is a sentence
+that is false as written, and what replaces it is the condition — the cost is
+the arithmetic, and the decode is paid again only where the model is the root.
+The reader draining this item is the one who should make that edit, because it
+is the same paragraph and the same pass; naming it separately would be a second
+item over one paragraph.
+
+The sentence also carries the number "90 frames for `background_ema`", which is
+a measurement quoted into a durable instruction and wrong for every `alpha` a
+session actually configures — `warmup_frames` refines the bound and the plan
+folds it with what the nodes below ask for. Same edit, same reason.

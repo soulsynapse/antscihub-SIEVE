@@ -2,7 +2,7 @@
 title: The epsilon admission question is owed a measurement, and VISION's lead scenario is what pays for it
 phase: 6
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/bench/test_loop_budget.py tests/unit/test_background_ema.py -q -k 'the_background_chain_pays_its_lead_in or a_sub_epsilon_difference_reaches_a_detection'"
 opened: 2026-08-09
@@ -54,3 +54,32 @@ thing ADR 17 refuses:
     $ uv run pytest tests/bench/test_loop_budget.py tests/unit/test_background_ema.py -q -k 'the_background_chain_pays_its_lead_in or a_sub_epsilon_difference_reaches_a_detection'
     24 deselected in 0.65s
     exit: 5
+
+## 2026-08-09: both halves measured, and the epsilon half closes the ADR's option
+
+Neither number lives here. The epsilon question is answered yes — a residual at
+0.28% of the footage's range, a quarter of what the tool declares, moves the
+windowed in-band count through 3% of its own tunable range and a threshold
+placed in that band disagrees on 3 frames of 80
+([findings/2026.08.09-a-sub-epsilon-residual-flips-a-detection.md](../findings/2026.08.09-a-sub-epsilon-residual-flips-a-detection.md)).
+Admitting the two tools on a measured epsilon is closed rather than deferred,
+and the ADR's paragraph inviting it is now an invitation with an answer beside
+it. Amending a settled decision is not this run's edit; whether that takes a
+successor ADR is Kendrick's.
+
+The cost half is measured too and is smaller than the item assumed: a post-edit
+render on the lead scenario's chain drops reuse from 0.667 to 0.250 and costs 75
+tool calls against 10 for the same 10 answered frames, but it decodes nothing —
+the crop above the model keeps its key and its lead-in entries are read back
+([findings/2026.08.09-the-epsilon-chain-repeats-its-lead-in-arithmetic-not-its-decode.md](../findings/2026.08.09-the-epsilon-chain-repeats-its-lead-in-arithmetic-not-its-decode.md)).
+`preview.py`'s sentence that such a graph "decodes and runs its whole lead-in on
+every single render" is therefore true only for an epsilon node at the root; the
+correction is folded into
+[the-admission-argument-is-retold-in-four-modules.md](the-admission-argument-is-retold-in-four-modules.md),
+which already owns that module's prose about the admission rule.
+
+The remedy this item points at is no longer behind anything: both
+[crop-serving-and-checkpoint-read-back-become-source-tools.md](crop-serving-and-checkpoint-read-back-become-source-tools.md)
+and its checkpoint half are `done`. What the reading above says about scheduling
+it is that the ratio is 7.5x on 160x120 footage and the repeated work is per
+pixel, so the number that decides is one nobody has at resolution.

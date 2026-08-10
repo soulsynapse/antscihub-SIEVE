@@ -14,10 +14,20 @@ the accumulator handed out, while the foreground is the difference taken against
 it after the update. Both goldens are cut from uint8 footage, which is also what
 pins `_narrow`'s rounding — the truncating version differs from this one by a
 level on about half the pixels, and no inequality in this file would notice.
+
+The last case is not about the kernel and is here anyway.
+`adr/cache-admission-is-bounded-warmup.md` refuses this tool a key and leaves
+one revival open with a measurement attached — admitting it on a *measured*
+epsilon, if a residual under the declared threshold turns out not to reach an
+answer anyone reads. That measurement is the two runs this file already knows
+how to build, carried into `detect`, because the gate is the shortest thing a
+residual can be shown to flip and there is nowhere nearer to look. Its numbers
+live in `docs/findings/2026.08.09-a-sub-epsilon-residual-flips-a-detection.md`.
 """
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +47,15 @@ from sieve.tools.background_ema import (
     settle_frames,
 )
 from sieve.tools.background_ema import run as background_ema_run
+from sieve.tools.detect import (
+    DetectParams,
+    band_indices,
+    default_freqs,
+    gate_series,
+    inband_count,
+    morlet_band_power,
+    windowed_mean,
+)
 
 #: The shipped spec. Read through a narrowing helper rather than asserted at
 #: module scope, because `__tool_spec__` is `ToolSpec | None` and a bare
@@ -87,6 +106,33 @@ REGENERATE = (
 
 GOLDENS = Path(__file__).resolve().parents[1] / "goldens"
 
+#: Frames the re-settled run starts at. The cold run starts at zero, so the two
+#: carry different origins into the span they meet on — a re-settled run that
+#: began where the cold one did would be the same run, and the case would be
+#: measuring nothing.
+EPSILON_ENTRY = 40
+
+#: Frames the two runs are compared over, past the re-settled one's warmup.
+#: Enough that a detection window has somewhere to sit away from both edges.
+EPSILON_SPAN_FRAMES = 80
+
+#: Where a served entry would be handed back: the frame the re-settled run has
+#: just finished `warmup_frames` at, which is the entry point ADR 17's rule
+#: describes for the tools it *does* admit.
+EPSILON_SPAN_START = EPSILON_ENTRY + SPEC.warmup_frames.frames
+
+#: What the residual is carried into, and every value is placed on the footage
+#: below rather than carried from anywhere. The rate is the reference fixture's.
+#: The band's low edge is 5 Hz because the transform's reach is charged at it and
+#: the wide-open default would put 164 frames either side of every target
+#: (`tools/detect.wavelet_edge_frames`); the patch blinks inside it. The value
+#: floor and the window are where the in-band count runs over a range instead of
+#: saturating, which is the only state in which a threshold can be placed at all.
+EPSILON_FPS = 20.0
+EPSILON_FREQ_LO = 5.0
+EPSILON_VALUE_FLOOR = 500.0
+EPSILON_WINDOW_FRAMES = 15
+
 
 def kernel(frame: Frame, params: BackgroundEmaParams, state: BackgroundState) -> Frame:
     """One frame through the tool, in v2's argument order for its ported cases."""
@@ -119,6 +165,61 @@ def golden_series() -> npt.NDArray[np.uint8]:
     series = np.random.default_rng(5).integers(0, 256, (24, HEIGHT, WIDTH), dtype=np.uint8)
     series[12:, 2:5, 3:7] = 250
     return series
+
+
+def epsilon_footage() -> npt.NDArray[np.float32]:
+    """Noise with a patch blinking inside `detect`'s band, long enough for both.
+
+    float32 rather than the uint8 an ordinary chain carries, and that choice is
+    about the *premise* rather than the answer: the residual is a fraction of a
+    level here, so a bound stated against a uint8 range would sit a few percent
+    from what the run measures and go red on an unrelated edit to this fixture.
+    The narrowing does not rescue the answer — the uint8 form of this same run
+    is an amendment in the finding, at a whole level of residual and a larger
+    shift in the count than this one produces.
+    """
+    frames = EPSILON_SPAN_START + EPSILON_SPAN_FRAMES
+    rng = np.random.default_rng(11)
+    footage = rng.integers(40, 90, size=(frames, HEIGHT, WIDTH)).astype(np.float32)
+    phase = 2.0 * np.pi * 6.0 * np.arange(frames) / EPSILON_FPS
+    footage[:, 2:6, 3:8] += (60.0 * (0.5 + 0.5 * np.sin(phase)))[:, None, None]
+    return footage
+
+
+def epsilon_foreground(footage: npt.NDArray[np.float32], start: int) -> npt.NDArray[np.float32]:
+    """One run's foreground over the span, as the `(frames, elements)` `detect` reads.
+
+    `start` is where the run's model was seeded, which is the only thing that
+    differs between the two runs this file compares — same footage, same `alpha`,
+    same span, and an origin the answer never quite loses.
+    """
+    params = BackgroundEmaParams(alpha=MIN_ALPHA, emit=Emit.FOREGROUND)
+    state = BackgroundState()
+    rows = []
+    for index in range(start, len(footage)):
+        frame = Frame(data=footage[index], index=index, channels=ChannelSpec.GRAY)
+        produced = kernel(frame, params, state)
+        if index >= EPSILON_SPAN_START:
+            rows.append(np.asarray(produced.data, np.float32).reshape(-1))
+    return np.stack(rows)
+
+
+def epsilon_counts(series: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+    """The windowed in-band count `detect` thresholds, for one run's series.
+
+    `detect` emits the gate and not the number the gate is a comparison of, so
+    the threshold cannot be *placed* between two runs without re-deriving it.
+    This is that derivation, off the same public pieces `detect._chain` composes.
+    It is not a second answer that could drift unnoticed: the case below places a
+    threshold from these numbers and then asks `gate_series` — the tool's own
+    composition — what it decides, so a spelling that had drifted apart from the
+    chain would show up as a gate that did not flip.
+    """
+    freqs = default_freqs(EPSILON_FPS)
+    low, high = band_indices(freqs, EPSILON_FREQ_LO, math.inf)
+    power = morlet_band_power(series, EPSILON_FPS, freqs, low, high, workers=1)
+    counted = inband_count(power, EPSILON_VALUE_FLOOR, math.inf)
+    return windowed_mean(counted, EPSILON_WINDOW_FRAMES, True)
 
 
 def test_the_state_is_what_makes_the_output_differ_for_one_frame() -> None:
@@ -176,6 +277,59 @@ def test_the_model_converges_to_within_the_declared_epsilon_by_the_declared_fram
     # frames must *not* be enough, or `warmup_frames` would be paying for
     # lead-in nobody needs.
     assert divergence_after(SPEC.warmup_frames.frames // 10) > gap * epsilon
+
+
+def test_a_sub_epsilon_difference_reaches_a_detection() -> None:
+    """The measurement ADR 17 left owed, and it closes the option it was owed for.
+
+    The ADR refuses this tool a key and names one way back in: "admitting
+    `background_ema` and `temporal_baseline` on a measured epsilon. Whether a
+    difference below the declared threshold survives into a detection flip is
+    unmeasured, and nothing here admits them." This is that measurement, built
+    as the admission itself would be — a cold run from the first frame of the
+    footage, and a run entering at the span having re-settled over exactly
+    `warmup_frames` first, which is what a served entry hands back.
+
+    The two agree to within the declared epsilon, which is the premise and is
+    asserted rather than assumed. They are not equal, which is what an epsilon
+    warmup means and is asserted too. And the residual reaches the gate: the
+    windowed in-band count differs, so a threshold placed between the two
+    fires for one run and not the other.
+
+    A threshold placed between them is where a tuned threshold *is*. The gesture
+    the product is built around is dragging a handle until the detection just
+    appears, so the band a session ends up in is the band where a residual this
+    size decides the answer — which is why this is a measurement about the
+    product and not an adversarial construction. The size of that band relative
+    to the count's own range is the number that says how often it matters, and
+    it is in the finding.
+    """
+    footage = epsilon_footage()
+    cold = epsilon_foreground(footage, 0)
+    resettled = epsilon_foreground(footage, EPSILON_SPAN_START - SPEC.warmup_frames.frames)
+
+    epsilon = SPEC.settling_epsilon
+    assert epsilon is not None
+    residual = float(np.abs(cold - resettled).max())
+    assert 0.0 < residual <= epsilon * float(footage.max() - footage.min())
+
+    counted = [epsilon_counts(series) for series in (cold, resettled)]
+    frame = int(np.argmax(np.abs(counted[0] - counted[1])))
+    assert counted[0][frame] != counted[1][frame]
+
+    between = (float(counted[0][frame]) + float(counted[1][frame])) / 2.0
+    params = DetectParams(
+        freq_band=(EPSILON_FREQ_LO, math.inf),
+        value_band=(EPSILON_VALUE_FLOOR, math.inf),
+        count_frac=(between / cold.shape[1], math.inf),
+        window_frames=EPSILON_WINDOW_FRAMES,
+        centered=True,
+        fps=EPSILON_FPS,
+    )
+    gates = [gate_series(series, params) for series in (cold, resettled)]
+
+    assert gates[0] is not None and gates[1] is not None
+    assert bool(gates[0][frame]) != bool(gates[1][frame])
 
 
 def test_the_declared_warmup_is_the_worst_case_over_the_legal_alpha_range() -> None:

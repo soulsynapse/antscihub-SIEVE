@@ -56,17 +56,24 @@ therefore carries a sample count assertion, and the samples come from the metric
 bus rather than from local `perf_counter` arithmetic, so a key the session
 stopped publishing is an empty series and a red test rather than a silent one.
 
-**Two of the readings here are judged by no ceiling, and that is deliberate.**
-The reuse split and the collector's share of a refill are numbers the finding's
-argument rests on — which mechanism makes a post-edit render cheap, and whether a
-longer window would cost the render or the assembly — and neither has a ceiling
-anyone has argued for. They are produced by this pass anyway, because the
-alternative is what happened three times: a session builds a scratch probe,
-reports the number, and deletes it, so no review can re-run it and the next
-change to what may be keyed re-orders the same harness from nothing
+**Some of the readings here are judged by no ceiling, and that is deliberate.**
+The reuse split, the collector's share of a refill, and what a chain holding an
+epsilon-warmup node costs are numbers the findings' arguments rest on — which
+mechanism makes a post-edit render cheap, whether a longer window would cost the
+render or the assembly, and whether the store can help the chain VISION
+introduces the product with. None of them has a ceiling anyone has argued for.
+They are produced by this pass anyway, because the alternative is what happened
+three times: a session builds a scratch probe, reports the number, and deletes
+it, so no review can re-run it and the next change to what may be keyed re-orders
+the same harness from nothing
 (`todo/the-reuse-figure-has-no-committed-probe.md`). What they assert is the
 shape the mechanism forces, so a change to the admission rule is red here rather
 than unmeasured.
+
+The last of them runs its own pass over its own window, and the fixture below
+says why: an epsilon-warmup node puts its lead-in in front of the two the
+reference chain already charges, and the window has to start where the clip can
+supply it.
 
 The numbers themselves do not live here — a passing budget test tells the next
 reader nothing about the margin, and margin is what says whether the GUI has
@@ -82,6 +89,7 @@ import subprocess
 import sys
 from collections import Counter
 from collections.abc import Iterator, Mapping
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
@@ -91,16 +99,19 @@ import pytest
 
 from sieve.bench.budgets import IN_DEBT, check
 from sieve.bench.metrics import MetricBus, Recorder, Sample
-from sieve.core.pipeline_model import Pipeline
+from sieve.core.pipeline_model import Edge, Node, Pipeline, SourceSpan
+from sieve.core.types import Frame, FrameIndex
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.decode.reader import VideoReader
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
-from sieve.pipeline.dag import graph_needs_chroma
+from sieve.pipeline.dag import Dag, graph_needs_chroma
+from sieve.pipeline.plan import ExecutionPlan
 from sieve.pipeline.preview import PreviewRender, PreviewSession
 from sieve.pipeline.series_collector import SeriesCollector
 from sieve.tools import discover
-from tests.integration.test_v2_oracle import DETECTOR, SPAN, graph
+from sieve.tools.background_ema import MIN_ALPHA
+from tests.integration.test_v2_oracle import ARENA, BLOCKS, DETECTOR, SPAN, graph
 
 #: Fresh opens of the container, each followed by its first frame. Repeated
 #: because the first open of a process pays for whatever the OS has not cached
@@ -145,6 +156,25 @@ PLAYHEAD_STOPS = (5, 12, 20, 25, 8, 17, 2, 27)
 #: `slider_to_graph` is a per-gesture ceiling and the first render is not a
 #: gesture.
 GRAPH_EDITS = (6, 10, 8, 12, 4)
+
+#: The node the background model enters the reference chain under. VISION's
+#: lead scenario is a generated background feeding a subtraction, and that is
+#: this node emitting its foreground into the block extractor already there.
+BACKGROUND = "background"
+
+#: What the background chain is measured at, and it is not the shipped default.
+#: `background_ema`'s lead-in is `settle_frames(alpha)` and the chain's is that
+#: plus what the two nodes below it ask for, so the default `MIN_ALPHA` charges
+#: more frames than the reference clip holds — a run over it would be measuring
+#: a lead-in the plan clamped rather than one it paid
+#: (`ExecutionPlan.lead_in_shortfall`). The default's declaration is read off a
+#: plan instead of run, in the case below.
+BACKGROUND_ALPHA = 0.5
+
+#: Detection windows dragged through on the background chain, in the shape
+#: `WINDOWS` uses and for its reason: the first is the graph's own, so the first
+#: render is cold and every render after it follows an edit at the leaf.
+BACKGROUND_EDITS = WINDOWS
 
 #: Qt reached by anything this file measures through would make the whole
 #: measurement a different claim. Named rather than probed by prefix so the
@@ -581,3 +611,201 @@ def test_the_measurement_imports_no_qt(reading: Reading) -> None:
     )
 
     assert probe.stdout.strip() == "[]", probe.stdout
+
+
+# ---- the chain the store cannot help --------------------------------------
+
+
+class _CountingSource:
+    """A `FrameSource` that remembers which indices were asked for.
+
+    The one thing a `PreviewRender` cannot say. Its counts are node outputs
+    inside the span, and the question here is about frames outside it — the
+    lead-in and the read-ahead, which are computed, never yielded, and so never
+    tallied (`pipeline/executor.execute`).
+    """
+
+    def __init__(self, inner: PrefetchFrameSource) -> None:
+        self.inner = inner
+        self.reads: list[int] = []
+
+    def read(self, index: int) -> Frame:
+        self.reads.append(index)
+        return self.inner.read(index)
+
+
+class _CountingStore:
+    """A `MemoryFrameStore` that remembers which lookups hit.
+
+    Keyed by `(node key, source index)` as the store is, and translated to node
+    ids by the case below through the plan's own `keys` — a second derivation of
+    a key here would be the failure `cache_key.py` opens by naming.
+    """
+
+    def __init__(self) -> None:
+        self.inner = MemoryFrameStore()
+        self.hits: set[tuple[str, int]] = set()
+
+    def get(self, key: str, index: int | FrameIndex) -> Frame | None:
+        found = self.inner.get(key, index)
+        if found is not None:
+            self.hits.add((key, int(index)))
+        return found
+
+    def put(self, key: str, index: int | FrameIndex, frame: Frame) -> None:
+        self.inner.put(key, index, frame)
+
+
+@dataclass(frozen=True, slots=True)
+class BackgroundReading:
+    """One pass over the lead scenario's chain: a cold render and four edits."""
+
+    #: The span rendered, derived from the chain's own lead-in — see the fixture.
+    window: SourceSpan
+    #: What each render did, in `BACKGROUND_EDITS` order, the cold one first.
+    renders: tuple[PreviewRender, ...]
+    #: Source frames the reader was asked for, per render.
+    decoded: tuple[int, ...]
+    #: Store lookups that hit, per render, as `(node key, source index)`.
+    served: tuple[frozenset[tuple[str, int]], ...]
+
+
+def _with_background(pipeline: Pipeline, alpha: float = BACKGROUND_ALPHA) -> Pipeline:
+    """`pipeline` with an EMA background model spliced under the crop.
+
+    The oracle's graph edited rather than a chain spelled fresh, for the module
+    docstring's reason: a second reference workload here would be a reading that
+    held against footage and a graph nothing else in the repo runs. The splice
+    is the smallest edit that produces VISION's lead scenario — the crop's
+    output goes through the model, and the block extractor reads the difference
+    instead of the pixels.
+    """
+    node = Node(
+        node_id=BACKGROUND,
+        tool_id="background_ema",
+        version="1.0.0",
+        params={"alpha": alpha, "emit": "foreground"},
+    )
+    return pipeline.model_copy(
+        update={
+            "nodes": (*pipeline.nodes, node),
+            "edges": (
+                Edge(upstream=ARENA, downstream=BACKGROUND),
+                Edge(upstream=BACKGROUND, downstream=BLOCKS),
+                Edge(upstream=BLOCKS, downstream=DETECTOR),
+            ),
+        }
+    )
+
+
+def _untimed(key: str) -> AbstractContextManager[None]:
+    """The `measure` this pass runs under, which publishes nothing.
+
+    A reading of counts and not of intervals: the window below is derived from
+    the chain's lead-in and is a different length from `SPAN`, so a
+    `full_preview_render` sample taken here would enter a series the 3 s ceiling
+    is judged on while describing a different render. The counts are what decide
+    whether this chain is worth scheduling, and they have no clock in them.
+    """
+    del key
+    return nullcontext()
+
+
+@pytest.fixture(scope="module")
+def background_reading(stirred_clip: Path) -> Iterator[BackgroundReading]:
+    """One cold render of the background chain and four post-edit renders.
+
+    Its own pass rather than a stage of `reading`, because it needs a different
+    window: `background_ema` puts its warmup in front of the two the oracle
+    chain already charges, and the reference clip is 40 frames. The window is
+    therefore derived from the plan's own `lead_in` rather than chosen — start
+    the span exactly where the declared lead-in can be supplied, so what the
+    renders below walk is a lead-in that was paid and not one
+    `ExecutionPlan.decode_start` clamped away.
+    """
+    discover()
+    baseline = _with_background(graph())
+    source = source_identity(stirred_clip)
+    probe = ExecutionPlan.build(Dag.build(baseline), source=source, span=SPAN)
+    window = SourceSpan(start=probe.lead_in.frames, end=SPAN.end)
+
+    renders: list[PreviewRender] = []
+    decoded: list[int] = []
+    served: list[frozenset[tuple[str, int]]] = []
+    luma = not graph_needs_chroma(baseline)
+    with PrefetchFrameSource(stirred_clip, luma=luma) as reader:
+        counting = _CountingSource(reader)
+        store = _CountingStore()
+        session = PreviewSession(
+            source=source, reader=counting, window=window, measure=_untimed, store=store
+        )
+        for window_frames in BACKGROUND_EDITS:
+            counting.reads.clear()
+            store.hits.clear()
+            renders.append(session.render_window(_with_background(_edited(graph(), window_frames))))
+            decoded.append(len(counting.reads))
+            served.append(frozenset(store.hits))
+
+    yield BackgroundReading(
+        window=window,
+        renders=tuple(renders),
+        decoded=tuple(decoded),
+        served=tuple(served),
+    )
+
+
+def test_the_background_chain_pays_its_lead_in(background_reading: BackgroundReading) -> None:
+    """`test_reuse_on_a_post_edit_render`'s question, asked of the lead scenario.
+
+    That one runs `crop -> block_signal -> detect`, where every node is keyed and
+    an edit at the leaf recomputes the leaf. This one splices `background_ema`
+    under the crop, and the whole tail loses its key with it — an epsilon warmup
+    is refused a key and a node whose upstream has none cannot build one
+    (`cache_key.cache_policy`, `dag.Dag.node_keys`,
+    `adr/cache-admission-is-bounded-warmup.md`). So the chain the product is
+    introduced with is the chain the store cannot help, and these are the counts
+    of what that costs.
+
+    Three of them, and the third is the one nobody had. The plan keys exactly one
+    node, the crop above the model. A post-edit render therefore recomputes every
+    node below that crop at every frame of the span, where the oracle chain
+    recomputes one. And the render walks the *whole decode range* — the lead-in
+    in front of the span and the detector's read-ahead past it — while decoding
+    none of it: the crop is keyed, so its outputs at those frames are in the
+    store from the cold render and are served straight back.
+
+    That last is where `pipeline/preview.py` overstates the price. It says a
+    graph holding such a node "decodes and runs its whole lead-in on every single
+    render", and the decode half holds only when nothing keyed sits above the
+    model. What repeats here is the arithmetic
+    (`docs/findings/2026.08.09-the-epsilon-chain-repeats-its-lead-in-arithmetic-not-its-decode.md`).
+
+    The `alpha` is not the shipped default, and the last assertion is why: at
+    `MIN_ALPHA` this chain declares a lead-in longer than the whole reference
+    clip, so the ratio the counts above describe is a floor rather than the
+    typical case.
+    """
+    cold, *post_edit = background_reading.renders
+    frames = background_reading.window.frame_count
+    tail = len(cold.plan.dag.order) - 1
+
+    assert set(cold.plan.keys) == {ARENA}
+    assert cold.plan.lead_in_shortfall.frames == 0
+    assert [(render.computed, render.from_cache) for render in post_edit] == [
+        (frames * tail, frames)
+    ] * len(post_edit)
+
+    # Nothing is decoded twice, and everything is walked twice: the reader is
+    # asked for the whole decode range once and never again, while the crop is
+    # served from the store at every frame of it on every render after the first.
+    assert background_reading.decoded == (len(cold.plan.decode_range),) + (0,) * len(post_edit)
+    for render, hits in zip(post_edit, background_reading.served[1:], strict=True):
+        assert {index for _, index in hits} == set(render.plan.decode_range)
+
+    # The clip cannot supply the default's lead-in, which is the whole reason
+    # the pass above runs at a faster model than the one a session opens with.
+    default = ExecutionPlan.build(
+        Dag.build(_with_background(graph(), alpha=MIN_ALPHA)), source="", span=SPAN
+    )
+    assert default.lead_in > cold.plan.lead_in
+    assert default.lead_in.frames > len(cold.plan.decode_range)

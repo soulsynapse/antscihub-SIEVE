@@ -62,6 +62,19 @@ the direction, not the wording — or it is additive-only and this migration
 contradicts a rule one item old. That is 11.1's call and not this item's; what
 this item owes 11.1 is that the case exists.
 
+## Folded 2026-08-10: the library card's two lines are both wrong now the mint writes a node
+
+`the-source-is-a-card-in-the-walk` landed `project_select.mint` writing an
+unchosen source node, so an ordinary project reaches `_holds` with the field
+still empty and a graph that holds the answer. Both halves of the line say the
+wrong thing for it: the footage half reads `project.source` and so says "no
+footage yet" for every project the user has ever picked a file for, and the chain
+half counts nodes and so says "1 step" for a project whose chain is empty and
+whose one node is the picker. That is the same reader this item already names —
+it is now wrong on the common case rather than the empty one, and asserted at
+`tests/gui/test_project_cards.py::test_new_project_mints_an_unchosen_source_the_library_lists`,
+which pins today's answer and will need the migration's.
+
 ## What stays where it is
 
 `footage_of` dies with the field, and the case it is owed on

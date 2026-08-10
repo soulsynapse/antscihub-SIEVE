@@ -18,13 +18,15 @@ that opened at a position offering nothing would take the card away and leave
 esc as the only exit, where an empty *gap* is merely useless. So the ⇄ is dead
 there, and the method behind it refuses for the same reason.
 
-The chain is `pick -> crop -> detect -> motion_history`, and the position that
-offers nothing is now the root alone: a position's offer is computed from the
-stream it resolved to rather than from its upstream's declaration, so a `crop`
-that preserves uint8 frames offers everything that takes them
-(`todo/the-stream-a-position-produces-is-resolved-not-declared.md`). The root
-has no upstream to resolve from and its own offer is the source question, which
-`todo/the-source-is-a-card-in-the-walk.md` carries.
+The chain is `pick -> crop -> detect -> motion_history`, and no position in it
+offers nothing: a position's offer is computed from the stream it resolved to
+rather than from its upstream's declaration, so a `crop` that preserves uint8
+frames offers everything that takes them
+(`todo/the-stream-a-position-produces-is-resolved-not-declared.md`), and the
+root asks which tools are sources at all rather than what takes a stream nothing
+is feeding it (`tests/gui/test_source_card.py`). So the empty offer is shown on
+a chain of its own, over a step reading one this install cannot resolve — which
+is the last state a position can be in with nothing proven about it.
 
 The picture is last and it is built without a window, the way `test_crop_fan.py`
 builds one: what is under test is the drawing. Two boxes over a fanned card,
@@ -262,24 +264,41 @@ def test_esc_restores_the_step_the_box_was_standing_over(window: Any) -> None:
 
 
 def test_a_position_with_nothing_to_offer_has_a_dead_swap_and_opens_no_box(
-    window: Any,
+    qapp: Any, tmp_path: Path
 ) -> None:
-    # The root alone, and it is the resolution that leaves it there rather than
-    # the shelf: every position below it resolved to uint8 frames and offers
-    # what takes them, while the root has no upstream for the offer to be
-    # computed from. Offering against a folder of picked files is a question
-    # this predicate does not answer, so the source is unswappable here rather
-    # than merely unoffered-for.
-    cards = window.control.pipeline_pane.cards
-    assert [_swap_button(card).isEnabled() for card in cards] == [False, True, True, True]
-    assert _swap_button(cards[0]).toolTip() == "Nothing on the shelf declares it could stand here"
+    # Nothing resolved above it: a window draws whatever document was opened,
+    # including one naming a tool this install does not have
+    # (`gui/app.resolved_specs`), and the position under such a step is the one
+    # left with no stream to be offered against. Every other position in the
+    # tree has one, the root included.
+    del qapp
+    path = tmp_path / "gap.sieve.yaml"
+    Project(
+        pipeline=Pipeline(
+            nodes=(
+                Node(node_id="n0", tool_id="pick", version="1.0.0"),
+                Node(node_id="n1", tool_id="not_installed", version="1.0.0"),
+                Node(node_id="n2", tool_id="crop", version="1.0.0"),
+            ),
+            edges=(Edge(upstream="n0", downstream="n1"), Edge(upstream="n1", downstream="n2")),
+        )
+    ).save(path)
+    window = _open(path)
+    try:
+        cards = window.control.pipeline_pane.cards
+        assert [_swap_button(card).isEnabled() for card in cards] == [True, True, False]
+        assert (
+            _swap_button(cards[2]).toolTip() == "Nothing on the shelf declares it could stand here"
+        )
 
-    # And the method refuses too, because a caller reaching it directly is the
-    # case where the button was not the gesture.
-    window.swap_step(0)
+        # And the method refuses too, because a caller reaching it directly is
+        # the case where the button was not the gesture.
+        window.swap_step(2)
 
-    assert _box(window) is None
-    assert _chain(window) == _UNTOUCHED
+        assert _box(window) is None
+        assert not window.session.can_undo()
+    finally:
+        window.close()
 
 
 # ---- the picture over a fanned card ---------------------------------------

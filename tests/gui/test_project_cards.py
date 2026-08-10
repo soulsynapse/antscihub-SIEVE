@@ -248,7 +248,7 @@ def _new_button(pane: Any) -> Any:
     return pane.library_card.findChild(QPushButton)
 
 
-def test_new_project_mints_an_empty_project_the_library_lists(
+def test_new_project_mints_an_unchosen_source_the_library_lists(
     window: Any, library: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import sieve.gui.app as app_module
@@ -274,10 +274,16 @@ def test_new_project_mints_an_empty_project_the_library_lists(
 
     minted = [path for path in projects_in(library) if path.name.startswith("untitled")]
     assert len(minted) == 2
-    # Empty on disk: no sources and no chain. Adding sources is the next act, on
-    # the card the selection lands on.
-    assert [Project.load(path) == Project() for path in minted] == [True, True]
-    assert listings((minted[0],))[0].holds == "no chain yet · no footage yet"
+    # One node on disk and no file named: the source picker the project opens on
+    # is a picture of something the graph carries, so the mint has to write it
+    # (`tests/gui/test_source_card.py`). Choosing the footage is the next act.
+    written = [Project.load(path) for path in minted]
+    assert [[(node.tool_id, node.params) for node in held.pipeline.nodes] for held in written] == [
+        [("footage", {})],
+        [("footage", {})],
+    ]
+    assert [held.source for held in written] == [None, None]
+    assert listings((minted[0],))[0].holds == "1 step · no footage yet"
 
     pane = window.control.project_select
     assert len(pane.cards) == len(_LIBRARY) + 3
@@ -373,7 +379,7 @@ def test_new_project_asks_where_the_project_goes(
         assert asked == [opened]
         minted = projects_in(chosen)
         assert len(minted) == 1
-        assert Project.load(minted[0]) == Project()
+        assert [node.tool_id for node in Project.load(minted[0]).pipeline.nodes] == ["footage"]
 
         pane = opened.control.project_select
         assert _titles(pane.cards) == ["untitled_1"]

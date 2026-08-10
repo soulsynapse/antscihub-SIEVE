@@ -7,11 +7,11 @@ first thing a user sees the one surface that does not look like SIEVE — the
 argument `chain_stack.py` makes about the pipeline pane, read at the position
 that comes before it.
 
-The first cut opens a project and mints an empty one; it does not build one from
-a folder of videos (`PLAN.md`, Phase 7). The one thing a mint asks is where the
-document goes (`ask_where`), because that is what a document cannot be written
-without — `mint` writes one naming no footage, and both the name and the footage
-are knobs on the card the selection lands on.
+The first cut opens a project and mints one holding an unchosen source; it does
+not build one from a folder of videos (`PLAN.md`, Phase 7). The one thing a mint
+asks is where the document goes (`ask_where`), because that is what a document
+cannot be written without — the footage is a knob on the source card the project
+opens on, and the name is one on the card the selection lands on.
 
 **What the widget is handed is text, and `listings` is what reads the document
 to produce it.** A card says what its project holds, and that is a fact about a
@@ -48,7 +48,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.core.pipeline_model import PROJECT_SUFFIX, Project
+from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline, Project
+from sieve.core.tool_base import ToolSpec
 from sieve.gui.chain_stack import ChainCard, fixed_card, note_label, title_label
 from sieve.gui.chrome import chrome_button, stack_stylesheet
 from sieve.gui.stack_pane import StackPane
@@ -101,12 +102,22 @@ def library_folder(paths: Sequence[Path]) -> Path | None:
     return folders.pop()
 
 
-def mint(directory: Path) -> Path:
-    """Write an empty project into `directory` and say where it landed.
+def mint(directory: Path, source: ToolSpec) -> Path:
+    """Write a project holding one unchosen source into `directory`.
 
-    Empty is the whole of it: no sources, no chain (`adr/superseded/a-document-
-    may-name-no-footage.md`, dissolved rather than reversed by the schema's own
-    ADR and still the reason this document can be built at all). No name is
+    One node and no file: VISION's new project puts the user "straight into it,
+    where the only pipeline item is the source picker with nothing chosen", and
+    a document holding no node at all could not draw that card — the add box
+    fills a gap between two positions the chain has, so a chain of nothing has
+    no way to acquire a first step (`gui/app.add_step`). Naming no file is a
+    state the document may legitimately hold (`adr/superseded/a-document-may-
+    name-no-footage.md`, dissolved rather than reversed by the schema's own ADR,
+    and every source tool's path field defaults empty for it).
+
+    Which source is the caller's, handed as a spec rather than named here for
+    `adr/gui-knows-kinds-not-tools.md`: `core/tool_registry.source_tools` is what
+    orders the root's offer and its head is what a mint stands on, so the tool
+    the user opens on is the one the swap box opens lit on. No name is
     asked for — the name is a knob like any other, and what `ask_where` asks for
     is the location the document cannot be written without — so the file is
     named after the first `untitled_N` the folder does not already
@@ -127,7 +138,8 @@ def mint(directory: Path) -> Path:
     while f"untitled_{number}{PROJECT_SUFFIX}" in taken:
         number += 1
     path = directory / f"untitled_{number}{PROJECT_SUFFIX}"
-    Project().save(path)
+    node = Node(tool_id=source.tool_id, version=source.version)
+    Project(pipeline=Pipeline(nodes=(node,))).save(path)
     return path
 
 

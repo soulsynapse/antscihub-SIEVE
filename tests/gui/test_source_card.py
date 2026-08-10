@@ -18,6 +18,12 @@ A step that is not a source carries neither, which is the case that separates
 "this source names nothing" from "this is not a source": both are an empty
 ordering, and only one of them is a sentence the card owes.
 
+Two more claims are about the card's *existence* rather than its lines. A minted
+project holds the source node the card draws, because VISION's new project puts
+the user "straight into it, where the only pipeline item is the source picker
+with nothing chosen" — and the root position offers the sources, which is the
+question a root asks in place of the accepts-side one nothing is feeding it.
+
 Qt and `sieve.gui` are imported inside the test bodies, for the reason
 `conftest.py` gives.
 """
@@ -188,6 +194,69 @@ def test_browsing_for_a_folder_writes_the_folder_itself(
     _chooser(unchosen_window.control.pipeline_pane.cards[0]).browse_folder.click()
 
     assert unchosen_window.session.project.params_for(_SOURCE)["path"] == str(folder)
+
+
+def test_a_minted_project_opens_on_a_source_card_with_nothing_chosen(
+    qapp, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """NEW PROJECT writes the node this card is a picture of.
+
+    Driven through `new_project` rather than `mint`, because the claim is what
+    the user is standing in front of and the document is only half of it: a
+    minted file holding a source node that drew no card would be as green.
+
+    The tool is named here and nowhere in `gui`: which source a mint stands on
+    is `tool_registry.source_tools`' head, and that this is the one that reads a
+    video rather than the one that reads what an earlier run wrote is the whole
+    of what the ordering buys.
+    """
+    del qapp
+    import sieve.gui.app as app_module
+    from sieve.gui.app import MainWindow
+    from sieve.gui.chain_stack import NO_RESOLUTION_NOTE
+    from sieve.gui.param_form import UNCHOSEN
+    from sieve.gui.project_select import projects_in
+
+    discover()
+    library = tmp_path / "lib"
+    library.mkdir()
+    monkeypatch.setattr(app_module, "ask_where", lambda parent: library)
+
+    opened = MainWindow((), library=library)
+    try:
+        opened.new_project()
+        opened.open_project(projects_in(library)[0])
+
+        cards = opened.control.pipeline_pane.cards
+        assert len(cards) == 1
+        assert opened.session.project.pipeline.nodes[0].tool_id == "footage"
+        assert cards[0].sources is not None
+        assert cards[0].sources.text() == NO_RESOLUTION_NOTE
+        assert _chooser(cards[0]).shown.text() == UNCHOSEN
+    finally:
+        opened.close()
+
+
+def test_the_root_position_offers_the_source_tools(folder_window: Any) -> None:
+    """`offered_tools`' source refusal, read the other way.
+
+    Nothing flows into a root, so the accepts-side match every other position
+    is offered by is vacuous there and what distinguishes the candidates is
+    that they are sources at all. Sources that say what one of their values
+    means lead, so the head is a file the user chooses rather than a checkpoint
+    an earlier run wrote.
+    """
+    folder_window.swap_step(0)
+
+    box = folder_window.control.pipeline_pane.add_box
+    assert box is not None
+    assert box.anchored
+    assert box.site == 0
+    assert [button.text() for button in box.offer_buttons] == ["footage", "pick", "checkpoint"]
+    # Lit on the source already standing there, which is the swap box's rule
+    # everywhere and says "and it could stay" at the one position that could
+    # never be emptied.
+    assert box.lit == 0
 
 
 def test_a_cancelled_browse_writes_nothing(

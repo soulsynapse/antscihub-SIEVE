@@ -180,10 +180,9 @@ def offered_tools(
     and the leg that exists to protect it has no subject.
 
     The source site is not here, and the second refusal is why it cannot be: a
-    root's offer is the tools this one excludes, asked against a folder's count
-    and extension class rather than against a stream nothing is feeding it
-    (`todo/the-source-is-a-card-in-the-walk.md`). The add-tool and swap sites
-    have their facts already.
+    root's offer is exactly the tools this one excludes, and it is asked without
+    a produced stream at all rather than against one nothing is feeding
+    (`source_tools`). The add-tool and swap sites have their facts already.
 
     Args:
         produced: What the position above resolved to — `node_stream` folded
@@ -218,6 +217,35 @@ def offered_tools(
             continue
         scored.append((slack, spec.tool_id, spec))
     return tuple(spec for _, _, spec in sorted(scored, key=lambda row: row[:2]))
+
+
+def source_tools(shelf: Iterable[ToolSpec]) -> tuple[ToolSpec, ...]:
+    """The shelf narrowed to what can stand at a chain's root.
+
+    `offered_tools`' second refusal read the other way. Nothing flows into a
+    root, so the accepts-side match is vacuous there and the whole of what
+    distinguishes the candidates is that they declare a `source` at all — which
+    is the chooser's question, one input and several readings of it, rather than
+    the add box's one entry per spec (`todo/the-source-is-a-card-in-the-walk.md`).
+
+    **Sources declaring what one of their values means lead, ties by id.** A
+    source that cannot say (`ToolSpec` admits `element=None` for a source tool
+    and for no other kind) is one reading what an earlier run wrote — it stands
+    where any node stood, so it has no element meaning to declare
+    (`tools/checkpoint.py`) — and a project nobody has run yet has nothing for it
+    to point at. Ties by id for `offered_tools`' reason: the display is a
+    function of the declarations and not of registration order. The head is
+    where a mint stands (`gui/project_select.mint`).
+
+    Args:
+        shelf: The specs to consider, for `offered_tools`' reason.
+    """
+    return tuple(
+        sorted(
+            (spec for spec in shelf if spec.source is not None),
+            key=lambda spec: (spec.element is None, spec.tool_id),
+        )
+    )
 
 
 def register_tool(

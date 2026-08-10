@@ -82,7 +82,12 @@ from sieve.core.tool_base import (
     ToolSpec,
     node_param_axis,
 )
-from sieve.core.tool_registry import ToolRegistry, UnknownToolError, offered_tools
+from sieve.core.tool_registry import (
+    ToolRegistry,
+    UnknownToolError,
+    offered_tools,
+    source_tools,
+)
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
 from sieve.gui.chain_stack import Adding, Fan, Outputs, PipelinePane, Regions, Step, Write
@@ -673,9 +678,9 @@ class MainWindow(QMainWindow):
 
         Only where the walk is what the position is about, for `pin_current`'s
         reason, and only where the chain has a gap. A project with no steps has
-        none: a gap is between two positions the chain has, and the first step
-        of an empty project is a source, which is a question the offering
-        predicate does not answer yet (`core/tool_registry.offered_tools`).
+        none: a gap is between two positions the chain has. That is a document
+        written by hand rather than a new project, which is minted holding its
+        source (`gui/project_select.mint`).
         """
         if self.adding:
             self.cancel_add()
@@ -871,13 +876,16 @@ class MainWindow(QMainWindow):
         the swap site and the add site are one predicate under two names rather
         than a second one (`core/tool_registry.offered_tools`).
 
-        Empty at the chain's root, which is what makes the source unswappable:
-        offering against a folder of picked files needs their count and
-        extension class, and that is a question this predicate does not answer
-        yet.
+        The root is the one position asked a different question, and that is
+        what makes the source swappable rather than an exception to the walk:
+        nothing flows into it, so there is no stream for `offered_tools` to
+        match against and what stands there is instead whatever is a source at
+        all (`core/tool_registry.source_tools`).
         """
+        if self._session is None or not 0 <= position < len(self._order):
+            return ()
         feeding = self._feeding(position)
-        return () if feeding is None else self._offer_at(feeding)
+        return source_tools(self._shelf()) if feeding is None else self._offer_at(feeding)
 
     def _feeding(self, position: int) -> int | None:
         """Which position's output `position` reads, or `None` at the root.
@@ -978,9 +986,10 @@ class MainWindow(QMainWindow):
         given none.
 
         Standing on it rather than opening it, which is the referent's ruling
-        and the reason the shelf is the position that mints: the chain pane
-        would show a chain the project does not have, and the next act — adding
-        sources — is a knob on the card the selection just landed on.
+        and the reason the shelf is the position that mints: the next act —
+        choosing the footage — is a knob on the source card, and a chain pane
+        that had walked there would have taken the library away to show one
+        card with nothing on it.
 
         The answer becomes the folder being listed, re-scanned rather than the
         new path being appended, so the shelf stays one folder's own answer in
@@ -992,7 +1001,7 @@ class MainWindow(QMainWindow):
         directory = ask_where(self)
         if directory is None:
             return
-        minted = mint(directory)
+        minted = mint(directory, source_tools(self._shelf())[0])
         self._library = directory
         self._projects = projects_in(directory)
         self._project_at = self._projects.index(minted)

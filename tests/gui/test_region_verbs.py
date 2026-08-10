@@ -28,6 +28,15 @@ would key overrides in a space nothing in the window can name.
 The box drawn on the canvas is the same claim on the other surface, and it is
 `test_kind_editors.py`'s: the overlay is built bare there, where a viewport
 showing a frame does not need a decode thread to have delivered one.
+
+**The last case decodes, because a selection that reaches the document and not
+the render is decorative in the way that matters most.** Every case above reads
+the document back; a preview aimed at the baseline while the fan stands on a
+region would pass all of them and still put the neighbouring region's pixels on
+the canvas. So it is asserted where it is visible — two regions deviating at the
+crop's own box, over footage textured enough that two boxes of one frame are two
+different pictures, with the render taken from the loop the window fills its
+surfaces from.
 """
 
 from __future__ import annotations
@@ -36,6 +45,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Replicate, SourceRef
@@ -44,6 +54,17 @@ from tests.gui import driving
 #: A box on the footage, in source pixels. Small enough that a second region
 #: copied from it is visibly the same rectangle rather than the whole frame.
 _BOX = {"x": 10, "y": 20, "width": 100, "height": 80}
+
+#: The two placed regions of the rendering case, in source pixels. The same size
+#: so the two renders are comparable pixel for pixel rather than by shape, and
+#: over the two corners `stirred_clip` textures differently.
+_NORTH = {"x": 0, "y": 0, "width": 80, "height": 64}
+_SOUTH = {"x": 80, "y": 56, "width": 80, "height": 64}
+
+#: How long the decode thread is given to open the clip. `test_app.py`'s number
+#: and its reason: the wait ends when the thing it waits on does, so a generous
+#: ceiling costs nothing but the flake it prevents.
+_TIMEOUT_MS = 60_000
 
 
 def _project(tools: Sequence[str], replicates: tuple[Replicate, ...], **params: Any) -> Project:
@@ -206,6 +227,73 @@ def test_a_knob_moves_the_baseline_where_the_project_has_no_regions(qapp, tmp_pa
         # The other arm of the one branch: an edit with no region to be about is
         # the node's own value, which is what such a project runs.
         assert window.session.project.pipeline.node("n1").params["factor"] == 4
+
+
+@pytest.fixture
+def placed_regions(stirred_clip: Path, tmp_path: Path) -> Path:
+    """`crop -> downsample` over real footage, the two regions each placed.
+
+    Placed rather than left to follow the baseline: two regions that deviate in
+    nothing render the same picture whichever one a session is aimed at, so the
+    override is what makes the two renders able to disagree.
+    """
+    video = tmp_path / stirred_clip.name
+    video.write_bytes(stirred_clip.read_bytes())
+    path = tmp_path / "arena.sieve.yaml"
+    Project.for_video(video, tmp_path).model_copy(
+        update={
+            "pipeline": Pipeline(
+                nodes=(
+                    Node(node_id="n0", tool_id="crop", version="1.0.0"),
+                    Node(node_id="n1", tool_id="downsample", version="1.0.0"),
+                ),
+                edges=(Edge(upstream="n0", downstream="n1"),),
+            ),
+            "replicates": (
+                Replicate(name="north", overrides={"n0": {"region": _NORTH}}),
+                Replicate(name="south", overrides={"n0": {"region": _SOUTH}}),
+            ),
+        }
+    ).save(path)
+    return path
+
+
+def test_the_loop_renders_the_region_the_fan_is_standing_on(qapp, placed_regions: Path) -> None:
+    """A click onto a square moves the picture, not only the document.
+
+    Taken through `TuningLoop.render_at`, which is what fills the viewport, and
+    at a node *below* the crop, so what is asserted is that the whole tail of
+    the graph follows the selection rather than that the crop node reports its
+    own parameter back.
+
+    Nothing sets the working window: the bar adopts the whole source when the
+    container opens, and a stretch chosen on top of that would be a second thing
+    this case waits for and no part of what it claims.
+    """
+    del qapp
+    from sieve.gui.app import MainWindow
+    from sieve.gui.project_select import projects_in
+
+    window = MainWindow(projects_in(placed_regions.parent))
+    try:
+        window.open_project(placed_regions)
+        driving.wait_until(lambda: window.tuning.is_open, _TIMEOUT_MS)
+        pipeline = window.session.project.pipeline
+
+        north = window.tuning.render_at(pipeline, "n1", 0)
+        window.select_region(1)
+        south = window.tuning.render_at(pipeline, "n1", 0)
+
+        assert window.tuning.last_error is None, window.tuning.last_error
+        assert north is not None
+        assert south is not None
+        # Both boxes, not one and the whole frame: the second render is aimed by
+        # the click, and the first by the aim the preview is opened with, so a
+        # shape that survives says the opening path carries the selection too.
+        assert north.shape == south.shape
+        assert not np.array_equal(north, south)
+    finally:
+        window.close()
 
 
 def test_a_step_reading_a_reshaped_frame_is_offered_no_regions(qapp, tmp_path: Path) -> None:

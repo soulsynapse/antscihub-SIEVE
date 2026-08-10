@@ -996,12 +996,13 @@ class MainWindow(QMainWindow):
         return self._region
 
     @property
-    def selected_replicate(self) -> str | None:
-        """Which replicate every parameter edit is addressed to, or the baseline.
+    def selected_region(self) -> Replicate | None:
+        """The replicate the fan is standing on, or None for the baseline.
 
         The window's own `_region` resolved against the document, and the one
         place that resolution is made: a form and an overlay reading it
-        separately could open on one region and commit to another.
+        separately could open on one region and commit to another, and a preview
+        reading it a third time could render a third.
 
         `None` where the project has no replicates, which is the arm of the
         branch the surface had before there were any — an edit with no region to
@@ -1011,7 +1012,19 @@ class MainWindow(QMainWindow):
         session = self._session
         if session is None or not session.project.replicates:
             return None
-        return session.project.replicates[self._region].replicate_id
+        return session.project.replicates[self._region]
+
+    @property
+    def selected_replicate(self) -> str | None:
+        """Which replicate every parameter edit is addressed to, or the baseline.
+
+        The id of the same region the preview is aimed at, and off the same
+        resolution: the widgets address a replicate by id and the preview is
+        handed the replicate itself, which is two spellings of one selection
+        rather than two selections.
+        """
+        replicate = self.selected_region
+        return None if replicate is None else replicate.replicate_id
 
     def select_region(self, index: int) -> None:
         """A square in the fan: walk onto one of the regions the crop step cuts.
@@ -1097,16 +1110,24 @@ class MainWindow(QMainWindow):
     def refill_graph(self) -> None:
         """Redraw the trace for the document as it now stands.
 
-        The working window is read off the bar on the way past rather than
-        pushed at the preview when it moves: the bar is the one owner of the
-        window (`timeline/bar.py`), and a copy of it in the preview would be the
-        one that went stale.
+        The working window and the selected region are both read on the way past
+        rather than pushed at the preview when they move: the bar is the one
+        owner of the window (`timeline/bar.py`) and `_region` is the one owner of
+        the selection, and a copy of either in the preview would be the one that
+        went stale.
+
+        This is also the one place the region reaches a render, which is why it
+        is here rather than in `select_region`: every gesture that can move the
+        selection — the fan's click, the card's + and −, opening a project —
+        redraws, and a redraw refills. What it aims is both renders, the trace's
+        and the viewport's, because `_paint_viewport` runs off the same session.
         """
         if self._session is None:
             return
         window = self._timeline.window
         if window is None:
             return
+        self._tuning.set_replicate(self.selected_region)
         self._tuning.set_window(window)
         self._tuning.request_refill(self._session.project.pipeline)
 

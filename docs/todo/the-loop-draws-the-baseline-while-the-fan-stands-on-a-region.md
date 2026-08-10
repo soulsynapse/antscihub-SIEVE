@@ -2,7 +2,7 @@
 title: The tuning loop draws the baseline while the fan is standing on a region
 priority: high
 phase: 9
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'the_loop_renders_the_region_the_fan_is_standing_on'"
 opened: 2026-08-09
@@ -38,3 +38,37 @@ correctness one (`docs/VISION.md`).
     $ uv run pytest tests/gui -q -k 'the_loop_renders_the_region_the_fan_is_standing_on'
     216 deselected in 0.67s
     exit: 5
+
+## 2026-08-10 (work): re-aimed, not rebuilt
+
+`done_when` now green:
+
+    $ uv run pytest tests/gui -q -k 'the_loop_renders_the_region_the_fan_is_standing_on'
+    1 passed, 232 deselected in 0.98s
+    exit: 0
+
+The question the item posed is settled the way its own last paragraph points:
+the window re-aims the session (`TuningLoop.set_replicate` forwarding to
+`PreviewSession.set_replicate`) and does not rebuild it. `set_replicate`'s
+refusal is about a session reading a written crop, and the loop's session reads
+the container the transport opened (`app._on_opened` hands it
+`VideoMetadata.path`), so the refusal does not reach this caller — and rebuilding
+would throw away the store, which is the cache hit the item names as what makes
+this an interactive-loop claim rather than only a correctness one.
+
+Pushed from `refill_graph`, beside the working window and for the same reason:
+the bar owns the window and `_region` owns the selection, and a copy of either
+inside the preview is the one that goes stale. That is also the one place it
+needs to be, because every gesture that moves the selection redraws and every
+redraw refills — and it aims both renders at once, the trace's and the
+viewport's, since `_paint_viewport` runs `render_at` off the same session.
+
+`selected_replicate` now derives from a new `selected_region`, so the window
+still resolves `_region` against the document exactly once: the widgets take the
+id and the preview takes the replicate.
+
+What the case measures is the whole tail of the graph: two regions deviating at
+the crop's box over `stirred_clip`, rendered at a node below the crop, before
+and after a click onto the second square. Equal shapes and unequal pixels — the
+shape half is what says the render *before* the click is aimed too, since a
+baseline-aimed first render would be the whole frame.

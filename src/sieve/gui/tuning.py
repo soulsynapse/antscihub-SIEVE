@@ -68,7 +68,7 @@ from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from sieve.bench.metrics import METRICS
-from sieve.core.pipeline_model import Pipeline, SourceSpan
+from sieve.core.pipeline_model import Pipeline, Replicate, SourceSpan
 from sieve.core.tool_base import DisplaySurface
 from sieve.core.tool_registry import ToolRegistry
 from sieve.decode.prefetch import PrefetchFrameSource
@@ -208,6 +208,21 @@ class TuningLoop(QObject):
         """Preview a different stretch. Keeps the store — see `preview.py`."""
         if self._session is not None:
             self._session.set_window(window)
+
+    def set_replicate(self, replicate: Replicate | None) -> None:
+        """Render `replicate`'s parameters from now on, or the baseline for None.
+
+        Re-aimed rather than rebuilt, which is the question
+        `todo/the-loop-draws-the-baseline-while-the-fan-stands-on-a-region.md`
+        posed. `PreviewSession.set_replicate` refuses only for a session reading
+        a written crop, whose file holds one replicate's pixels; this one reads
+        the container the transport opened, so the refusal does not reach it. And
+        a rebuild would drop the store, which is what makes clicking back onto a
+        region a cache hit rather than a second render of a picture the user has
+        already seen.
+        """
+        if self._session is not None:
+            self._session.set_replicate(replicate)
 
     def watch(self, node_id: str | None) -> None:
         """Draw `node_id`'s series from now on, or nothing for None.

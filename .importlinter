@@ -60,8 +60,8 @@ source_modules =
     # `session` is Qt-free by decision, not by layer position: it sits directly
     # under `gui`, so the layers contract permits the import this line forbids —
     # undo/redo as whole pipeline values is the shape that keeps history out of
-    # the widgets (adr/gui-base-is-the-v25-spike.md), and a Qt import here would
-    # be view state moving in with the document.
+    # the widgets (VISION.md's `session` row, which is where that rule lives), and a
+    # Qt import here would be view state moving in with the document.
     sieve.session
     sieve.pipeline
     sieve.bench

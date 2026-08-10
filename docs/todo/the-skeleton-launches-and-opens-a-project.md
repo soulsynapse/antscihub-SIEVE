@@ -10,7 +10,7 @@ opened: 2026-08-08
 # The skeleton launches and opens a project
 
 The spike's `gui/` — app, layout, the control rail, project select, hotkeys —
-adopted over 07.2's session (`adr/gui-base-is-the-v25-spike.md`): the app
+adopted over 07.2's session (`adr/superseded/gui-base-is-the-v25-spike.md`): the app
 launches, opens a project that exists, and walks project → pipeline → step
 with the hotkey scheme, the rail rendering the pipeline's nodes as read from
 the document. Up/down walking a spanning tree over the DAG is the GUI's

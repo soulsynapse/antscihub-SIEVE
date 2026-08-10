@@ -33,7 +33,7 @@ the width back would resize the track in the same turn as the slide it is part
 of.
 
 **Where this departs from the spike it is adopted from**
-(`adr/gui-base-is-the-v25-spike.md`): the spike put its step list at the step
+(`adr/superseded/gui-base-is-the-v25-spike.md`): the spike put its step list at the step
 position and left the pipeline position empty, having designed nothing for it.
 VISION reads the other way round — "at a pipeline view level ... you can press
 up and down to go between them" — so the list of nodes is the pipeline position

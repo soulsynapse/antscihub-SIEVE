@@ -48,10 +48,9 @@ but leaves this index for `docs/adr/superseded/`.
 ## 05 — The GUI
 
 - [The GUI knows kinds, never tools](adr/gui-knows-kinds-not-tools.md) — `gui` reads spec data — param kinds, presentation stereotypes, window shape — and never branches on `tool_id`; widgets and overlays are generated per kind.
-- [The GUI's base is the v2.5 spike, not v2's gui](adr/gui-base-is-the-v25-spike.md) — `gui/` starts from the v2.5 spike's skeleton — `proto_sieve`'s `gui` and `session` — not v2's `gui/`; v2 components port into it where they held, and the layout operates as VISION describes.
 - [The mockup is the GUI's end state, and a position is asked for in the chain](adr/a-position-is-asked-for-in-the-chain.md) — `mockup/mockup.py` is the settled v3 surface: layout, hotkeys and interactions are final. What it does not show lands in a popup — unless the question is *which position*, which is asked in the chain.
 - [The output card is a picture of the write list, not a node](adr/the-output-card-is-a-picture-of-the-write-list.md) — The output step at the foot of the chain is drawn, not modeled: the GUI renders a card over `Project.outputs` with edges derived from the ticks — no output node, no sink shape in the tool contract.
 - [The walked step owns the canvas](adr/the-walked-step-owns-the-canvas.md) — The walked step owns the canvas — its result over its input, its emissions drawn by kind; an ancestor's emissions are a view toggle; the pin owns only the slot below.
 - [An output's kind is the picture it makes](adr/an-outputs-kind-is-the-picture-it-makes.md) — The canvas paints an output by its `ElementKind` — `PIXEL` an image, `BLOCK` a field of cells over its frame, `FRAME` no picture — and no member is ever added for a tool.
 
-*32 settled, 3 superseded.*
+*31 settled, 4 superseded.*

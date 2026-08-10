@@ -16,7 +16,7 @@ outputs to keep, run. The wizard, the replicate tab, the history dialog and
 the sweep view wait — each for a reason rather than for room, the sharpest
 being that a history dialog makes undo a visible object, which is the
 opposite of the two stacks of whole immutable values the v2.5 spike settled
-on (`adr/gui-base-is-the-v25-spike.md`).
+on (`adr/superseded/gui-base-is-the-v25-spike.md`).
 
 The cut is drawn at capability because that is where the cost of being wrong
 is. A layout can be rearranged for nothing; a capability drags machinery

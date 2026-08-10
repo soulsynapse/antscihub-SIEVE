@@ -1,7 +1,7 @@
 """The order Up and Down move through a graph.
 
 A linearization is a presentation choice, not a property of the document
-(`adr/gui-base-is-the-v25-spike.md`): a graph that branches has many depth-first
+(`adr/superseded/gui-base-is-the-v25-spike.md`): a graph that branches has many depth-first
 walks and the pipeline layer has no reason to prefer one. So this lives here,
 above the fence, and the layer below is asked nothing.
 

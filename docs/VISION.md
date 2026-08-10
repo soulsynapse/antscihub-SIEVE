@@ -69,7 +69,7 @@ The **bold** spans in "Owns" are the enumeration inside the prose, and each one 
 | `decode` | **the codec boundary** — **lowering into ffmpeg**, **prefetch**, **decoder identity**; v2 verbatim | Qt; knowing what a tool or a schema is |
 | `cli` | **the headless front end**; with the saved file it is **the cluster handoff** | Qt (`headless`); cv2 — a frame is reached through `decode`, never by a second seek strategy |
 | `gui` | **rendering values**, **emitting intents**, **holding view state** | computing anything — the `gui-computes-nothing` exception list is empty from commit one; a `tool_id` branch ([adr/gui-knows-kinds-not-tools.md](adr/gui-knows-kinds-not-tools.md)); cv2 |
-| `session` | **the open project** and **its history** — undo/redo as two stacks of whole immutable pipeline values ([adr/gui-base-is-the-v25-spike.md](adr/gui-base-is-the-v25-spike.md)) | Qt (`headless`); command inversion — undo moves a pointer, never reverses an edit; computing anything — it holds what `gui` renders and asks `pipeline` for the rest; cv2 (`opencv-containment`) |
+| `session` | **the open project** and **its history** — undo/redo as two stacks of whole immutable pipeline values | Qt (`headless`); command inversion — undo moves a pointer, never reverses an edit; computing anything — it holds what `gui` renders and asks `pipeline` for the rest; cv2 (`opencv-containment`) |
 | `bench` | **the budget table** and **the metric bus** — the loop's claims as numbers | Qt; sitting in the execution path it measures; cv2 (`opencv-containment`) |
 | `storage` | **sink writers** (`crop_writer`, `checkpoint_writer`) | Qt (`headless`); a second output format before someone asks ([PLAN.md](PLAN.md), revival table) |
 

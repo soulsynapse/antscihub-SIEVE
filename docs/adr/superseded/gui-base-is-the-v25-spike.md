@@ -1,8 +1,8 @@
 ---
 title: The GUI's base is the v2.5 spike, not v2's gui
 adr: 14
-position: "05.02"
-status: settled
+status: superseded
+superseded_by: a-position-is-asked-for-in-the-chain
 decided: 2026-08-06
 ---
 
@@ -19,7 +19,7 @@ Qt-free `session/` holding undo/redo as two stacks of whole pipeline values
 whose prefix reuse falls out of the executor's cache. PLAN.md Phase 7 already
 cites two of its decisions; this adopts the skeleton they live in. The
 adoption is `gui/` and `session/` only: the spike's kernel/resolver half is
-the dissolved algebra ([no-kernel-apparatus](no-kernel-apparatus.md)), and
+the dissolved algebra ([no-kernel-apparatus](../no-kernel-apparatus.md)), and
 its colocated `__tests__/` layout stays behind — v3's `tests/` tree is
 already load-bearing. v2 parts whose contracts held — `gui/transport/`,
 `gui/timeline/` — port into the skeleton, not the other way around. The

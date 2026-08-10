@@ -24,8 +24,14 @@ are meant to be answers to facilitate that.
 
 ## Conventions
 
-- Minting a `docs/todo/` item is the exception, not the reflex. Before writing
-  one, search the open items for the module, the symbol, and the claim: if a
+- One fact, one home, and finding the home is a search. Before writing a claim
+  anywhere it will be reread — a backlog item, a finding, an ADR, a docstring
+  saying what a field or a value means — grep `docs/` and `src/` for the
+  module, the symbol, and the claim itself. Whatever already states it is the
+  home; add there. A second statement of one fact cannot go red against the
+  first, so a paraphrase that does not collide is invisible, and stays wrong
+  for as long as nobody rereads both.
+- Minting a `docs/todo/` item is the exception, not the reflex. If a
   not-yet-done item would carry the observation, fold it in there. Two items
   one commit would satisfy are one item. The backlog's cost is its count, and
   a review that mints per observation pays that cost on your behalf.
@@ -33,8 +39,7 @@ are meant to be answers to facilitate that.
   `done_when` — say in your final message that the criterion may no longer
   cover the whole of it, so the review can widen it. A review that folds
   widens in the same commit. Read the pool table in `docs/todo/.index.md`
-  before minting into it — a duplicate that paraphrases rather than collides
-  goes red nowhere.
+  before minting into it.
 - `docs/findings/` folds the same way: one file per truth, not per
   occurrence. A finding that recurs or gains a number takes a dated amendment
   section in the file that holds it. `supersedes` is for a later truth
@@ -42,8 +47,8 @@ are meant to be answers to facilitate that.
 - Comments record what the code cannot show. If a competent reader could
   derive the sentence from the code, delete it. Match the density of the
   file you're in.
-- Docs say why, not what happened. One fact, one home — link, don't restate.
-  Prefer a claim a test can check over prose a reader must trust.
+- Docs say why, not what happened. Link, don't restate. Prefer a claim a test
+  can check over prose a reader must trust.
 - Commits: `type(scope): the sentence, not the changelog line`. Types:
   feat, fix, refactor, perf, docs, test, build, ci, chore.
 - End the session with the branch committed and pushed. Never force-push.

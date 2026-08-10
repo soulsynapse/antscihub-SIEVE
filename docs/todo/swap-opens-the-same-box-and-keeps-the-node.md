@@ -1,7 +1,7 @@
 ---
 title: Swap opens the same box, and keeps the node it is
 step: "09.10"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'swap_box or keeps_the_node'"
 opened: 2026-08-09

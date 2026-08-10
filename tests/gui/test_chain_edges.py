@@ -42,6 +42,7 @@ def _pane(reads: Sequence[tuple[int, ...]]) -> Any:
             node=Node(node_id=f"n{position}", tool_id="downsample", version="1.0.0"),
             knobs=None,
             removable=True,
+            swappable=False,
             reads=sources,
         )
         for position, sources in enumerate(reads)
@@ -56,6 +57,7 @@ def _pane(reads: Sequence[tuple[int, ...]]) -> Any:
         on_open=lambda _position: None,
         on_pin=lambda _position: None,
         on_remove=lambda _position: None,
+        on_swap=lambda _position: None,
     )
     pane.resize(*_PANE_SIZE)
     pane.show()

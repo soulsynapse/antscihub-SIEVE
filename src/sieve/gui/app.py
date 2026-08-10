@@ -109,7 +109,7 @@ from sieve.gui.transport.request_intent import RequestKind
 from sieve.gui.tuning import TuningLoop
 from sieve.gui.walk import node_order
 from sieve.pipeline.shelf import loaded_shelf
-from sieve.session.intents import AddNode, RemoveNode, issue
+from sieve.session.intents import AddNode, RemoveNode, RetoolNode, issue
 from sieve.session.session import Session
 
 
@@ -269,12 +269,15 @@ class MainWindow(QMainWindow):
         # open, and an index into `_order` after — one slot, so pinning is a
         # move of this number and eviction is what that means.
         self._pinned: int | None = None
-        # Which gap the add box is standing in, and which of that gap's offers
-        # is lit. `None` while no box is open, which is not the same as a box at
-        # gap 0 — view state for the pin's reason, and doubly so here: the box
-        # is a picker and the document knows nothing about one being open.
+        # Which position the box is standing at, which of that position's offers
+        # is lit, and whether it stands *in place of* that position's step rather
+        # than in the gap under it. `None` while no box is open, which is not the
+        # same as a box at gap 0 — view state for the pin's reason, and doubly so
+        # here: the box is a picker and the document knows nothing about one
+        # being open.
         self._adding: int | None = None
         self._offer = 0
+        self._anchored = False
         # The overlays are `kind_editors`' own private type, held here only to
         # be torn down and reconnected; nothing in this module reads one.
         self._editors: dict[str, Any] = {}
@@ -567,7 +570,35 @@ class MainWindow(QMainWindow):
             return
         if not self._order or self._control.current_position() not in ("pipeline", "step"):
             return
-        self._adding, self._offer = self._at, 0
+        self._adding, self._offer, self._anchored = self._at, 0, False
+        self._box_keys(True)
+        self._control.show_pipeline()
+        self._redraw()
+
+    def swap_step(self, index: int) -> None:
+        """A card's ⇄: open the same box standing where step `index` is.
+
+        Not a menu, and not a second surface: the question is the position's and
+        the box is what asks a position (`adr/a-position-is-asked-for-in-the-chain.md`).
+        The tool already there is what the offer opens lit on, because the box
+        is standing in its place and the entry a menu would have carried checked
+        is the one saying "and it could stay".
+
+        Refused rather than opened where the position offers nothing, which is
+        the ⇄'s own predicate reached from the other side. The add box opens on
+        an empty gap because ↑/↓ are how the user reaches a gap that offers;
+        this one cannot move, so opening it there would take the card away and
+        leave esc as the only exit.
+        """
+        session = self._session
+        if session is None or not 0 <= index < len(self._order):
+            return
+        offer = self._offer_over(index)
+        if not offer:
+            return
+        tool = self._order[index].tool_id
+        lit = next((at for at, spec in enumerate(offer) if spec.tool_id == tool), 0)
+        self._adding, self._offer, self._anchored = index, lit, True
         self._box_keys(True)
         self._control.show_pipeline()
         self._redraw()
@@ -583,8 +614,12 @@ class MainWindow(QMainWindow):
         Clamped for `_walk_to`'s reason. The lit offer does not travel with it:
         the next gap's offering is a different list, and an index carried into
         it would light whatever happened to be third.
+
+        Nothing at all while the box is anchored: it is standing at a position
+        that exists, and walking it into the gaps would flip it between
+        replacing and inserting as it travelled.
         """
-        if self._adding is None:
+        if self._adding is None or self._anchored:
             return
         site = max(0, min(self._adding + delta, len(self._order) - 1))
         if site == self._adding:
@@ -598,45 +633,69 @@ class MainWindow(QMainWindow):
         Wrapped where the walk is clamped: the offer is a short ring of names
         and neither end is somewhere the user is trying to stop.
         """
-        offer = self._offer_at(self._adding)
+        offer = self._box_offer()
         if not offer:
             return
         self._offer = (self._offer + delta) % len(offer)
         self._redraw()
 
     def take_offer(self) -> None:
-        """Enter, and a click on an offer: splice that step into the gap.
+        """Enter, and a click on an offer: put that tool where the box is standing.
 
-        The one mutation the whole gesture writes, and it is the document's
-        (`session/intents.AddNode`) — a stack drawing a step the file does not
-        hold would be the second answer to what the project computes, and the
-        next `sieve run` would run the chain without it.
+        The one mutation the whole gesture writes, and it is the document's — a
+        stack drawing a chain the file does not hold would be the second answer
+        to what the project computes, and the next `sieve run` would run the one
+        the user is not looking at.
 
-        The walk lands on what was just put there, for the reason a removal
-        lands on the step above: what the user did was put something in the
-        chain, and the next thing they will do is set it up. A box with nothing
-        to offer takes nothing, which is the whole of what enter means there.
+        *Which* mutation is the one thing the two gestures do not share. A box
+        in a gap splices (`session/intents.AddNode`); an anchored one replaces
+        the tool and keeps the name (`RetoolNode`), because `node_id` is what
+        names the artifact on disk, what the checkpoints and sinks hold and what
+        `bench/` addresses — so a swap written as a removal and an addition
+        would break every one of those with nothing going red.
+
+        The walk lands on what the offer put there, for the reason a removal
+        lands on the step above: the next thing the user does is set it up. A
+        box with nothing to offer takes nothing, which is the whole of what
+        enter means there.
         """
         session = self._session
-        offer = self._offer_at(self._adding)
+        offer = self._box_offer()
         if session is None or self._adding is None or not offer:
             return
         spec = offer[self._offer % len(offer)]
         site = self._adding
-        # No params: an unset field resolves to the tool's declared default
-        # (`param_form.py`), and writing those into the document at mint time
-        # would freeze them against the next version of the tool.
-        issue(
-            session,
-            AddNode(
-                site_id=self._order[site].node_id,
-                node=Node(tool_id=spec.tool_id, version=spec.version),
-            ),
-        )
+        anchored = self._anchored
+        if anchored:
+            issue(
+                session,
+                RetoolNode(
+                    node_id=self._order[site].node_id,
+                    tool_id=spec.tool_id,
+                    version=spec.version,
+                ),
+            )
+        else:
+            # No params: an unset field resolves to the tool's declared default
+            # (`param_form.py`), and writing those into the document at mint time
+            # would freeze them against the next version of the tool. A retool
+            # drops the departed tool's for the same reason read backwards.
+            issue(
+                session,
+                AddNode(
+                    site_id=self._order[site].node_id,
+                    node=Node(tool_id=spec.tool_id, version=spec.version),
+                ),
+            )
         self._close_box()
         self._reread_graph()
-        self._at = site + 1
-        self._pinned = None if self._pinned is None else _after_adding(self._pinned, site)
+        self._at = site if anchored else site + 1
+        # The chain is no shorter or longer for a swap, so the slot's index still
+        # means what it meant — and the step it points at is the same position,
+        # which is what keeping the node's identity buys the view state too.
+        self._pinned = (
+            self._pinned if anchored or self._pinned is None else _after_adding(self._pinned, site)
+        )
         self._show_pinned()
         # Rebuilt because the new step is a result the run could be asked to
         # keep, and a checkoff that did not list it would be offering less than
@@ -647,8 +706,9 @@ class MainWindow(QMainWindow):
     def cancel_add(self) -> None:
         """Esc: the box goes and the document is where it was.
 
-        Free because nothing was written when it opened — the gap it is standing
-        in is unchanged until an offer is taken.
+        Free because nothing was written when it opened — the position it is
+        standing at is unchanged until an offer is taken, which is what makes
+        the anchored box's exit restore the card rather than undo anything.
         """
         if self._adding is None:
             return
@@ -658,6 +718,7 @@ class MainWindow(QMainWindow):
     def _close_box(self) -> None:
         """Drop the box and hand enter and esc back, which only an open box owns."""
         self._adding = None
+        self._anchored = False
         self._box_keys(False)
 
     def _shelf(self) -> tuple[ToolSpec, ...]:
@@ -689,6 +750,49 @@ class MainWindow(QMainWindow):
         if spec is None:
             return ()
         return offered_tools(spec.emits, self._elements.get(node.node_id), self._shelf())
+
+    def _offer_over(self, position: int) -> tuple[ToolSpec, ...]:
+        """What could plausibly stand *at* `position`, in place of what does.
+
+        The gap above it, asked again — `offered_tools` is handed what flows
+        into a position and never anything about the tool standing there, so
+        the swap site and the add site are one predicate under two names rather
+        than a second one (`core/tool_registry.offered_tools`).
+
+        Empty at the chain's root, which is what makes the source unswappable:
+        offering against a folder of picked files needs their count and
+        extension class, and that is a question this predicate does not answer
+        yet.
+        """
+        feeding = self._feeding(position)
+        return () if feeding is None else self._offer_at(feeding)
+
+    def _feeding(self, position: int) -> int | None:
+        """Which position's output `position` reads, or `None` at the root.
+
+        At most one: schema v1 refuses two edges into one node
+        (`core/pipeline_model.Pipeline`), so there is no choice to make here
+        that a merging tool has not yet given the document.
+        """
+        session = self._session
+        if session is None or not 0 <= position < len(self._order):
+            return None
+        at = {node.node_id: index for index, node in enumerate(self._order)}
+        node_id = self._order[position].node_id
+        return next(
+            (
+                at[edge.upstream]
+                for edge in session.project.pipeline.edges
+                if edge.downstream == node_id and edge.upstream in at
+            ),
+            None,
+        )
+
+    def _box_offer(self) -> tuple[ToolSpec, ...]:
+        """What the box now open is offering, whichever position it is asking about."""
+        if self._adding is None:
+            return ()
+        return self._offer_over(self._adding) if self._anchored else self._offer_at(self._adding)
 
     def go_up(self) -> None:
         """Up: the previous card of whichever stack the position showing is.
@@ -971,7 +1075,7 @@ class MainWindow(QMainWindow):
         for edge in session.project.pipeline.edges:
             reads[edge.downstream] += (at[edge.upstream],)
         steps: list[Step] = []
-        for node in self._order:
+        for position, node in enumerate(self._order):
             spec = self._specs.get(node.node_id)
             knobs = None
             if spec is not None:
@@ -983,6 +1087,7 @@ class MainWindow(QMainWindow):
                     node=node,
                     knobs=knobs,
                     removable=removable(spec),
+                    swappable=bool(self._offer_over(position)),
                     reads=reads[node.node_id],
                 )
             )
@@ -996,6 +1101,7 @@ class MainWindow(QMainWindow):
             on_open=self._open_step,
             on_pin=self.pin,
             on_remove=self.remove_step,
+            on_swap=self.swap_step,
             on_add=self.add_step,
             fan=self._region_fan(),
             adding=self._adding_box(),
@@ -1013,12 +1119,13 @@ class MainWindow(QMainWindow):
         """
         if self._adding is None:
             return None
-        offer = self._offer_at(self._adding)
+        offer = self._box_offer()
         return Adding(
             site=self._adding,
             offer=tuple(spec.tool_id for spec in offer),
             lit=self._offer % len(offer) if offer else 0,
             on_take=self._take,
+            anchored=self._anchored,
         )
 
     def _take(self, position: int) -> None:

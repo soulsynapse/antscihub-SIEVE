@@ -913,6 +913,38 @@ class Pipeline(_Artifact):
             )
         )
 
+    def with_node_retooled(self, node_id: str, tool_id: str, version: str) -> Self:
+        """Copy where `node_id` runs a different tool and is still `node_id`.
+
+        Not `without_node` followed by `with_node_after`: those two mint a name,
+        and every edge, checkpoint, sink and cached artifact addressing this
+        position is addressed by the one it has. What moves is the tool and the
+        parameters that were its; the node keeps its place in this tuple too,
+        because that place is the walk's tie-break (`gui/walk.py`) and a step
+        that jumped to the foot of the chain for a swap would be reordering the
+        picture to say something about the tool.
+
+        The parameters go rather than being carried across. They were the
+        departed tool's, and a value that survived into a field the arriving
+        tool spells the same way would be a setting the user never made for it.
+
+        Raises:
+            KeyError: if `node_id` names no node.
+        """
+        self.node(node_id)
+        return self.model_validate(
+            self.model_copy(
+                update={
+                    "nodes": tuple(
+                        Node(node_id=node_id, tool_id=tool_id, version=version)
+                        if node.node_id == node_id
+                        else node
+                        for node in self.nodes
+                    )
+                }
+            )
+        )
+
 
 class Project(_Artifact):
     """A source video, what runs on it, and what comes out.
@@ -1167,6 +1199,35 @@ class Project(_Artifact):
                     "outputs": tuple(sink for sink in self.outputs if sink.node_id != node_id),
                     "input_hashes": FrozenMapping(
                         {key: value for key, value in self.input_hashes.items() if key != node_id}
+                    ),
+                }
+            )
+        )
+
+    def with_node_retooled(self, node_id: str, tool_id: str, version: str) -> Self:
+        """Copy where the step runs a different tool and everything naming it still does.
+
+        The mirror of `without_node`, and the contrast with it is the point: a
+        removal drops the overrides, checkpoints, sinks and input hash keyed on
+        the departing name because the name is going. Here the name stays, so
+        every one of those references stays with it — the artifact `node_id`
+        addresses on disk is still this position's, and what `bench/` reports
+        against still lands.
+
+        The overrides are the exception, and for `Pipeline.with_node_retooled`'s
+        reason rather than for `without_node`'s: a per-replicate override is a
+        parameter at a longer address, so it departs with the parameters it is a
+        deviation from.
+
+        Raises:
+            KeyError: if `node_id` names no node.
+        """
+        return self.model_validate(
+            self.model_copy(
+                update={
+                    "pipeline": self.pipeline.with_node_retooled(node_id, tool_id, version),
+                    "replicates": tuple(
+                        replicate.without_override(node_id) for replicate in self.replicates
                     ),
                 }
             )

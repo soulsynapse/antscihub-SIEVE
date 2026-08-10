@@ -540,6 +540,71 @@ class TestSplicingAStepIn:
             self._chain(("a", "b")).with_node_after("b", self._new("a"))
 
 
+class TestSwappingTheToolAtAPosition:
+    """A different tool where one already is, which is neither of the two above.
+
+    The claim is the whole reason it is a third mutation rather than
+    `without_node` followed by `with_node_after`: the pair mints a name, and
+    `node_id` is what names the artifact on disk, what the checkpoints and sinks
+    hold, and what `bench/` addresses. So what this asserts is what survives —
+    every reference, and the position's own place in the walk's tie-break — and
+    the one thing that does not.
+    """
+
+    def test_the_position_keeps_the_node_it_is(self) -> None:
+        swapped = make_project().with_node_retooled("n2", "motion_history", "3.0.0")
+
+        assert [(node.node_id, node.tool_id) for node in swapped.pipeline.nodes] == [
+            ("n1", "crop"),
+            ("n2", "motion_history"),
+        ]
+        assert swapped.pipeline.node("n2").version == "3.0.0"
+        # In place, not appended: this tuple's order is the walk's tie-break
+        # (`gui/walk.py`), so a step that jumped to the foot of the chain for a
+        # swap would be reordering the picture to say something about the tool.
+        assert [edge.model_dump() for edge in swapped.pipeline.edges] == [
+            edge.model_dump() for edge in make_project().pipeline.edges
+        ]
+
+    def test_everything_that_names_the_node_still_names_it(self) -> None:
+        # The contrast with `without_node`, which drops all four. Here the name
+        # stays, so the references to it do — a swap that lost them would leave
+        # the run writing different files and the write list quietly shorter,
+        # with nothing going red.
+        before = make_project()
+        swapped = before.with_node_retooled("n2", "motion_history", "3.0.0")
+
+        assert swapped.checkpoints == before.checkpoints
+        assert [sink.model_dump() for sink in swapped.outputs] == [
+            sink.model_dump() for sink in before.outputs
+        ]
+        assert dict(swapped.input_hashes) == dict(before.input_hashes)
+
+    def test_the_parameters_and_their_per_replicate_pins_go_with_the_tool(self) -> None:
+        # They were the departed tool's. An override is a parameter at a longer
+        # address, so it departs with the parameters it is a deviation from —
+        # and the sibling replicate's pin at the *other* node is untouched,
+        # because nothing happened there.
+        swapped = make_project().with_node_retooled("n2", "motion_history", "3.0.0")
+
+        assert swapped.pipeline.node("n2").params == {}
+        assert swapped.replicate("r1").overrides == {}
+        assert swapped.replicate("r2").overrides == {
+            "n1": {"region": {"x": 64, "y": 0, "width": 64, "height": 64}}
+        }
+
+    def test_retooling_a_step_that_is_not_there_raises_keyerror(self) -> None:
+        # Through both, for `without_node`'s reason: a front end holding a stale
+        # index would otherwise get a document quietly unchanged and no sign
+        # that the swap it thought it made did not happen.
+        project = make_project()
+
+        with pytest.raises(KeyError):
+            project.pipeline.with_node_retooled("ghost", "crop", "1.0.0")
+        with pytest.raises(KeyError):
+            project.with_node_retooled("ghost", "crop", "1.0.0")
+
+
 class TestPerReplicateDeviation:
     def _project(self) -> Project:
         """Two regions and one node carrying two parameters."""

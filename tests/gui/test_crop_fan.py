@@ -45,6 +45,7 @@ def _pane(regions: Sequence[str], selected: int, on_select: Any = None) -> Any:
             node=Node(node_id=f"n{position}", tool_id=tool, version="1.0.0"),
             knobs=None,
             removable=True,
+            swappable=False,
             reads=() if position == 0 else (position - 1,),
         )
         for position, tool in enumerate(("crop", "downsample", "detect"))
@@ -59,6 +60,7 @@ def _pane(regions: Sequence[str], selected: int, on_select: Any = None) -> Any:
         on_open=lambda _position: None,
         on_pin=lambda _position: None,
         on_remove=lambda _position: None,
+        on_swap=lambda _position: None,
         fan=Fan(
             position=0,
             regions=tuple(regions),

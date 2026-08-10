@@ -64,10 +64,10 @@ def window(qapp, project_file: Path) -> Iterator[Any]:
 
 
 def _remove(card: Any) -> Any:
-    """The ✕, which is the last of the card's three head-row buttons."""
+    """The ✕, which is the last of the card's four head-row buttons."""
     from PySide6.QtWidgets import QToolButton
 
-    return card.findChildren(QToolButton)[2]
+    return card.findChildren(QToolButton)[3]
 
 
 def _chain(window: Any) -> tuple[list[str], set[tuple[str, str]]]:

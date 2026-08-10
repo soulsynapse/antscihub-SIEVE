@@ -163,6 +163,35 @@ class AddNode:
         return project.with_pipeline(project.pipeline.with_node_after(self.site_id, self.node))
 
 
+@dataclass(frozen=True, slots=True)
+class RetoolNode:
+    """A different tool at the same position, under the same name.
+
+    Neither `RemoveNode` nor `AddNode` and not the two together, which is the
+    whole reason it is a third kind: the pair would mint a new `node_id`, and
+    `node_id` is what names the artifact on disk, what the checkpoints and sinks
+    hold, and what `bench/` addresses. A swap done as a remove and an add would
+    break every one of those with nothing going red — the run would write
+    different files and the write list would come back quietly shorter.
+
+    The tool is named rather than a `Node` being handed over, unlike `AddNode`:
+    there is no id to mint here, and taking one would make the caller able to
+    rename the position through a mutation about its tool.
+    """
+
+    node_id: str
+    tool_id: str
+    version: str
+
+    def applied_to(self, project: Project) -> Project:
+        """The document with this position running `tool_id`.
+
+        Raises:
+            KeyError: if `node_id` names no node.
+        """
+        return project.with_node_retooled(self.node_id, self.tool_id, self.version)
+
+
 def issue(session: Session, intent: Intent) -> bool:
     """Apply `intent` to `session`'s project and commit the result.
 

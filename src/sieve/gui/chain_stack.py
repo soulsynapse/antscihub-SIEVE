@@ -56,6 +56,15 @@ is taken. That is what makes esc free and what keeps this module ignorant of
 what a tool is — the names it draws are strings, and what comes back is which
 of them was clicked.
 
+**A card's ⇄ is the same box, standing where the card is.** Both gestures ask
+one question of a position — what could be here — and two widgets rendering one
+derivation would be the duplication the merge dissolves. The anchored box has
+one fewer axis rather than a second key map: it is at a position that exists,
+and letting ↑/↓ walk it into the gaps would flip it between replacing and
+inserting as it travelled, which the user could not read off the screen. It
+takes the card's slot in `ChainColumn.cards`, so the edges into and out of the
+position land on it and none of them is dashed — a swap rewires nothing.
+
 Not the chrome: `chrome.py` holds the palette and the sheet this pane wears.
 Not the stage headers the referent draws between groups — what a stage *is* has
 no derivation in the tree (`todo/a-stage-header-groups-by-nothing-the-tree-declares.md`).
@@ -121,6 +130,12 @@ class Step:
     #: Whether the ✕ is offered live. Offered disabled otherwise rather than
     #: left out, so the buttons hold their positions down the whole stack.
     removable: bool
+    #: Whether the ⇄ is. Dead where the position has nothing to offer, which is
+    #: most of them on today's shelf — and unlike the add box, which opens on an
+    #: empty gap because ↑/↓ are how the user reaches a gap that offers, an
+    #: anchored box has no such axis, so opening one here would take the card
+    #: away and leave esc as the only way back.
+    swappable: bool
     #: The positions in the same stack whose output this step reads, in the
     #: document's own order. Positions rather than node ids because the picture
     #: is drawn between cards and the caller is the one holding the walk that
@@ -239,6 +254,29 @@ def _remove_button(removable: bool, on_remove: Callable[[], None]) -> QToolButto
     )
     button.setStyleSheet(f"color: {rgb(DIM)}; border: 0;")
     button.clicked.connect(on_remove)
+    return button
+
+
+def _swap_button(swappable: bool, on_swap: Callable[[], None]) -> QToolButton:
+    """Ask this position what else could stand here: the box, over this card.
+
+    Disabled where nothing is offered rather than left off, for the ✕'s reason
+    one row up — and the sentence it says instead is the position's rather than
+    the button's, because the offer being empty is a fact about what the shelf
+    declares and not about this step
+    (`findings/2026.08.09-the-shelf-declares-too-little-for-eight-of-ten-positions-to-offer-anything.md`).
+    """
+    button = QToolButton()
+    button.setText("⇄")
+    button.setAutoRaise(True)
+    button.setEnabled(swappable)
+    button.setToolTip(
+        "Swap this step — the box stands where it is"
+        if swappable
+        else "Nothing on the shelf declares it could stand here"
+    )
+    button.setStyleSheet(f"color: {rgb(DIM)}; border: 0;")
+    button.clicked.connect(on_swap)
     return button
 
 
@@ -578,11 +616,14 @@ OFFER_COLUMNS = 3
 #: than a blank.
 EMPTY_OFFER_NOTE = "nothing on the shelf declares it could stand here"
 KEY_NOTE = "↑↓ move the box · ←→ the offer · enter takes it · esc cancels"
+#: The same note with the axis the anchored box does not have taken out, rather
+#: than one line offering a key that would do nothing where it is read.
+ANCHORED_KEY_NOTE = "←→ the offer · enter takes it · esc restores the step"
 
 
 @dataclass(frozen=True)
 class Adding:
-    """The box standing in a gap: which gap, what is offered there, which is lit.
+    """The box standing at a position: which one, what is offered there, which is lit.
 
     `on_take` rides here rather than beside it on the pane for `Fan`'s reason: a
     pane with no box open cannot be handed the way to fill one. It is given the
@@ -590,18 +631,28 @@ class Adding:
     the round trip through a widget.
     """
 
-    #: The position whose card the gap is under.
+    #: Where the box stands: the position whose card the gap is under, or — when
+    #: `anchored` — the position whose card it is standing in place of.
     site: int
     #: What could stand there, in the order the caller scored them. Empty is a
     #: real answer and the common one (`core/tool_registry.offered_tools`).
     offer: tuple[str, ...]
     lit: int
     on_take: Callable[[int], None]
+    #: Whether the box replaces `site`'s card rather than opening the gap under
+    #: it. One flag rather than two records because the two gestures ask one
+    #: question of a position and differ in what taking an offer writes, which
+    #: is the caller's half (`session/intents.RetoolNode`).
+    anchored: bool = False
 
 
-def _offer_button(name: str, lit: bool, on_take: Callable[[], None]) -> QPushButton:
+def _offer_button(
+    name: str, lit: bool, on_take: Callable[[], None], anchored: bool = False
+) -> QPushButton:
     """One offer, in the chrome's dress, with the lit one wearing the accent."""
-    button = chrome_button(name, f"Put {name} in this gap")
+    button = chrome_button(
+        name, f"Run {name} at this position" if anchored else f"Put {name} in this gap"
+    )
     button.setCursor(Qt.CursorShape.PointingHandCursor)
     # Its own width rather than a share of the box's: the offering is a set of
     # names, and a grid of equal bars would read as a set of slots.
@@ -616,21 +667,29 @@ def _offer_button(name: str, lit: bool, on_take: Callable[[], None]) -> QPushBut
 
 
 class AddBox(ChainCard):
-    """The step that is not one yet, standing in the gap it would fill."""
+    """The step that is not one yet, standing in the gap it would fill.
+
+    Or standing where a step already is, which is the same box asking the same
+    question of a position that has a tool in it — `anchored`. What differs is
+    the axis it has (none: it is at a position rather than travelling between
+    them), the title, and what taking an offer writes, and none of those is a
+    second widget's worth.
+    """
 
     def __init__(
         self, adding: Adding, number: int, note: str, parent: QWidget | None = None
     ) -> None:
         super().__init__(selected=False, parent=parent)
         self.site = adding.site
-        #: The number the step would carry, which is the gap's own place in the
-        #: chain — so the box reads as the position rather than as a panel
+        self.anchored = adding.anchored
+        #: The number the step would carry, which is the position's own place in
+        #: the chain — so the box reads as the position rather than as a panel
         #: about one.
         self.number = number
         self.offer = adding.offer
         self.lit = adding.lit
-        #: What the splice would do, in the names the picture cannot show until
-        #: it happens.
+        #: What taking an offer would do, in the names the picture cannot show
+        #: until it happens.
         self.note = note
         #: What stands where the offer would, when there is none. Empty string
         #: where there is one, so the two are never both on screen.
@@ -641,7 +700,7 @@ class AddBox(ChainCard):
         layout.setSpacing(4)
 
         head = QHBoxLayout()
-        title = title_label(f"{number}. new step")
+        title = title_label(f"{number}. {'swap' if adding.anchored else 'new step'}")
         title.setStyleSheet(f"color: {rgb(ACCENT)};")
         head.addWidget(title)
         head.addStretch(1)
@@ -649,7 +708,9 @@ class AddBox(ChainCard):
         layout.addLayout(head)
 
         self.offer_buttons = tuple(
-            _offer_button(name, position == adding.lit, partial(adding.on_take, position))
+            _offer_button(
+                name, position == adding.lit, partial(adding.on_take, position), adding.anchored
+            )
             for position, name in enumerate(adding.offer)
         )
         if self.offer_buttons:
@@ -662,7 +723,7 @@ class AddBox(ChainCard):
             layout.addLayout(grid)
         else:
             layout.addWidget(note_label(self.offer_note))
-        layout.addWidget(note_label(KEY_NOTE))
+        layout.addWidget(note_label(ANCHORED_KEY_NOTE if adding.anchored else KEY_NOTE))
 
     def paintEvent(self, event: QPaintEvent) -> None:
         del event
@@ -977,6 +1038,7 @@ class PipelinePane(QWidget):
         on_open: Callable[[int], None],
         on_pin: Callable[[int], None],
         on_remove: Callable[[int], None],
+        on_swap: Callable[[int], None],
         on_add: Callable[[], None] | None = None,
         fan: Fan | None = None,
         adding: Adding | None = None,
@@ -1008,6 +1070,7 @@ class PipelinePane(QWidget):
                 on_open,
                 on_pin,
                 on_remove,
+                on_swap,
             )
             for position, step in enumerate(steps)
         )
@@ -1026,10 +1089,18 @@ class PipelinePane(QWidget):
         # shows, so it is sized for the arrowhead rather than for the rhythm of
         # the cards.
         stack.setSpacing(18)
-        self.fan = self._build_fan(fan, steps)
         self.add_box = self._build_add_box(adding, steps)
+        anchored = None if adding is None or not adding.anchored else adding.site
+        self.fan = self._build_fan(fan, steps, anchored)
         for position, card in enumerate(self.cards):
             stack.addWidget(card)
+            if position == anchored:
+                # The card goes under the box rather than out of the layout: it
+                # is what esc restores, and a widget taken out of the stack to
+                # show a picker would be a rebuild of the pane on the way back.
+                card.setVisible(False)
+                stack.addWidget(self.add_box)
+                continue
             if self.fan is not None and position == self.fan.position:
                 stack.addWidget(self.fan)
             # Below the fan where there is one, because the box stands in the
@@ -1047,7 +1118,15 @@ class PipelinePane(QWidget):
         # of that reason and for a further one — it holds no node at all, so
         # numbering it as a position would put it in the walk's own list.
         self.column.cards = self.cards + (() if self.output_card is None else (self.output_card,))
-        if self.add_box is not None:
+        if anchored is not None:
+            # The box *is* that position for the picture's purposes, so it takes
+            # the slot rather than being added past it: every edge into and out
+            # of the position lands on it, and none of them is provisional —
+            # taking an offer here rewires nothing (`session/intents.RetoolNode`).
+            self.column.cards = (
+                self.column.cards[:anchored] + (self.add_box,) + self.column.cards[anchored + 1 :]
+            )
+        elif self.add_box is not None:
             self.column.hold_box(
                 len(self.column.cards),
                 self.add_box.site,
@@ -1096,10 +1175,20 @@ class PipelinePane(QWidget):
         show until it happens: what the new step would read, and what would read
         it. Read off `Step.reads` inverted, which is the same list the dashed
         edges are drawn from, so the words and the lines cannot disagree.
+
+        The anchored box's note is the other half of that — the name that stays
+        and the parameters that do not, which is the whole of what a swap costs
+        and the one part of it no line in the picture moves for.
         """
         if adding is None:
             return None
         site = steps[adding.site]
+        if adding.anchored:
+            return AddBox(
+                adding,
+                adding.site + 1,
+                f"{site.node.node_id} stays · its knobs go with {site.node.tool_id}",
+            )
         readers = [
             step.node.node_id for position, step in enumerate(steps) if adding.site in step.reads
         ]
@@ -1108,7 +1197,9 @@ class PipelinePane(QWidget):
         )
         return AddBox(adding, adding.site + 2, note)
 
-    def _build_fan(self, fan: Fan | None, steps: Sequence[Step]) -> RegionFan | None:
+    def _build_fan(
+        self, fan: Fan | None, steps: Sequence[Step], anchored: int | None = None
+    ) -> RegionFan | None:
         """The branch below `fan.position`, or nothing where there is no gap for it.
 
         The gap is the one between that card and the nearest card reading it. A
@@ -1117,8 +1208,15 @@ class PipelinePane(QWidget):
         the branch itself. Nothing is drawn for a step whose regions the caller
         found none of, either: a branch of nothing is the plain arrow the rest
         of the stack already draws.
+
+        Nothing either where an anchored box is standing at the fan's own
+        position. The squares are that step's regions — the branch is what its
+        parameters cut — so drawing them under a box asking what should stand
+        there instead would be the picture saying two things at once: that this
+        position cuts three regions, and that it may be about to be a tool that
+        cuts none.
         """
-        if fan is None or not fan.regions:
+        if fan is None or not fan.regions or fan.position == anchored:
             return None
         readers = [
             position
@@ -1144,6 +1242,7 @@ class PipelinePane(QWidget):
         on_open: Callable[[int], None],
         on_pin: Callable[[int], None],
         on_remove: Callable[[int], None],
+        on_swap: Callable[[int], None],
     ) -> ChainCard:
         card = ChainCard(selected=position == current, on_select=lambda: on_select(position))
         layout = QVBoxLayout(card)
@@ -1155,6 +1254,7 @@ class PipelinePane(QWidget):
         head.addStretch(1)
         head.addWidget(_settings_button(lambda: on_open(position)))
         head.addWidget(_pin_button(position == pinned, lambda: on_pin(position)))
+        head.addWidget(_swap_button(step.swappable, lambda: on_swap(position)))
         head.addWidget(_remove_button(step.removable, lambda: on_remove(position)))
         layout.addLayout(head)
         if step.knobs is not None:

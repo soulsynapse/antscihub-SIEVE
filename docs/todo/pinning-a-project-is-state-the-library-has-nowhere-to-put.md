@@ -147,3 +147,43 @@ to account for, not three.
 the item before this section and reaches less again: the list, the ordering and
 now the mint-sets-the-shelf behaviour above are what a run must replace under
 it. The review that takes this widens it.
+
+## Folded 2026-08-10, Kendrick: the screen remembers where projects have been put
+
+Asked for as its own item — "adjust the projects screen so that it remembers
+previously saved project locations" — and it is this one. Under ADR 35 the
+library *is* that memory: the list of locations the app has been shown, held as
+per-user state. A second file for it would be the store minted twice, which is
+the one thing the ADR forbids by name, and this item is where the ADR sends it.
+Phase 9 is already where it sits, so the slotting is a no-op; what the request
+adds is the two gestures the folds above did not name.
+
+A location enters the list when the user puts a project somewhere, and there are
+two ways they do that. `new_project`'s `ask_where` is one, and it is already
+written — its answer is the mint's folder, and today it becomes `_library`,
+which is the list of one kept by accident recorded above; under the store it is
+appended instead. The other is a project the user already has and hands the app
+— the mockup's OPEN LOCATION, which `MOCKUP-MAP.md` puts in the selector row
+beside NEW PROJECT and which nothing in `src` implements. That is the gesture
+"previously saved" is about: a project written before the app knew about it, or
+written by an install on another machine, reaches the shelf only by being shown
+once and then remembered. Without it the list can only ever hold what this
+install minted, and the ADR's "the list of locations the app has been shown" is
+narrower than its own words.
+
+What the list holds is the open question the two gestures do not settle, and it
+wants deciding before the file format is written rather than after. `ask_where`
+answers with a directory and `projects_in` scans it, so the natural entry is a
+folder; the ✕ removes one project with the folder untouched, and a pin marks one
+project, so both of those key by file. A store of folders cannot express either,
+and a store of files re-scans nothing and so never notices a project minted into
+a known folder by something other than this app. The likely answer is that the
+list holds folders and the pins and removals hold paths within them — two keys
+in one file, which is still one home — but it is an answer this item owes rather
+than one it has.
+
+`done_when` is untouched, as everywhere above, and this fold widens the gap
+rather than closing it: it names the pin, and the remembered list, its two
+entry gestures and OPEN LOCATION's absence are now all under it. The review that
+takes this item widens the criterion to the list — a run could satisfy the pin
+against `_library` today and leave every word of this section unbuilt.

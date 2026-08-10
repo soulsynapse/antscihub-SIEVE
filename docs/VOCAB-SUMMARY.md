@@ -8,7 +8,9 @@ order along that shelf is `position`, both placement only — a term that drops
 its group leaves this index while keeping its file.
 
 - 📁 `Layer 1`
+  - 📄 [window](vocab/window.md) — The application. Houses panes.
   - 📄 [pane](vocab/pane.md) — A compartment the window divides into: a region with a boundary, a size policy, and a name, holding whatever is put in it. A pane is the space, never its occupant — it stays a pane while empty, and swapping what stands in it does not make it a different pane.
+  - 📄 [subpane](vocab/subpane.md) — A smaller pane anchored to a side inside a main pane.
   - 📄 [view](vocab/view.md) — Anything a pane can house — the occupant, not the space. "Surface" used to mean this and was dropped for doing double duty: a thing a pane houses, and a thing paint lands on. A view names only the first.
 
-*2 defined.*
+*4 defined.*

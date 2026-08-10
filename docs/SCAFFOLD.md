@@ -9,7 +9,9 @@
     - 📄 `ADR-0001-panes-house-any-view.md`
   - 📁 `vocab/`
     - 📄 `pane.md`
+    - 📄 `subpane.md`
     - 📄 `view.md`
+    - 📄 `window.md`
   - 📄 `ADR-SUMMARY.md`
   - 📄 `SCAFFOLD.md`
   - 📄 `VOCAB-SUMMARY.md`

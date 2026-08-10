@@ -437,11 +437,13 @@ import the tool's module, which is ADR 28's named violation spelled out. Its
 home is a `DisplaySurface` member on the preview-only channel, the licensed
 revision of
 [adr/a-band-declares-the-surface-it-is-dragged-on.md](adr/a-band-declares-the-surface-it-is-dragged-on.md)
-rather than a second vocabulary beside it, and it waits behind
-[todo/a-declared-surface-is-drawn-by-nothing.md](todo/a-declared-surface-is-drawn-by-nothing.md)
-for a measured reason: a watched node is never served from the store, so asking
-the walked step for a fill costs it its re-use on every frame of every drag, and
-that number is that item's to take. The three alpha sliders wait with the ring
+rather than a second vocabulary beside it, and it is
+[todo/the-in-band-ring-reads-a-mask-no-node-emits.md](todo/the-in-band-ring-reads-a-mask-no-node-emits.md).
+It waited behind the read path for a measured reason — a watched node is never
+served from the store, so asking the walked step for a fill costs it its re-use
+on every frame of every drag — and that measurement has since been taken
+([findings/2026.08.10-the-display-channel-costs-a-watched-nodes-re-use-and-the-band-budget-holds.md](findings/2026.08.10-the-display-channel-costs-a-watched-nodes-re-use-and-the-band-budget-holds.md)).
+The three alpha sliders wait with the ring
 they modulate, and Shift-to-peek with them — with one opacity control and no
 ring, the control is peek. So does the ancestor-emission toggle, which ADR 28
 already settles as view state: what it lacks is not a ruling but a subject, and

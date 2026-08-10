@@ -2,7 +2,7 @@
 title: A declared surface is drawn by nothing, so a band still has no handles
 priority: high
 phase: 9
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui tests/bench -q -k 'band_surface or band_drag_repaint'"
 opened: 2026-08-09
@@ -157,3 +157,36 @@ a pair. `SURFACES_WITHOUT_PAINTER` is now empty and `BAND` is off
 
     $ uv run pytest tests/gui tests/bench -q -k 'band_surface or band_drag_repaint'
     11 passed, 264 deselected in 1.57s
+
+## Closed 2026-08-10 at review: two of three stands, and the residue has two homes
+
+Re-run independently: the criterion is `11 passed, 264 deselected`, `exit=0`;
+`ruff check` and `lint-imports` (8 kept, 0 broken) clean. `done_when` was
+untouched and the worker left `awaiting-review`. The measurement landed as a
+finding with its own `source`, and its durable claim is the multiplier rather
+than the milliseconds, which is the right half to carry.
+
+**Two of three satisfies the item as written.** The body asks for "three kinds,
+three ways to place a pair of horizontal cuts", and what the run showed is that
+the third way does not exist to be built: the channel carries values and no
+axis, so a cut on a scalogram has no value to commit. That is a discovery about
+the channel rather than a clause skipped, it is homed in
+[a-surface-carries-its-values-and-not-the-axis-they-sit-on.md](a-surface-carries-its-values-and-not-the-axis-they-sit-on.md)
+as a decision rather than answered inside an implementation, and the refusal it
+leaves in the tree (`surface_panel.EDITABLE_AXIS`) is asserted by a case of its
+own rather than left as an omission.
+
+**The closing obligation this item wrote for its review is discharged in
+[the-in-band-ring-reads-a-mask-no-node-emits.md](the-in-band-ring-reads-a-mask-no-node-emits.md)**,
+and `PLAN.md` and `MOCKUP-MAP.md` now cite that file rather than this one — a
+gate whose lifting is only in prose is
+[a-subject-deferrals-gate-lifts-and-nothing-in-the-repo-notices](../findings/loop/2026.08.09-a-subject-deferrals-gate-lifts-and-nothing-in-the-repo-notices.md).
+The three alpha sliders, Shift-to-peek and the ancestor toggle stay parked
+behind the ring by the same mechanism, one layer down.
+
+One thing the commit's cases do not hold, folded into
+[the-gestures-replicate-address-is-carried-by-lines-nothing-reads.md](the-gestures-replicate-address-is-carried-by-lines-nothing-reads.md):
+the drag case commits a value numerically equal to what the stop-at-the-other
+clamp would commit, so `_dragged_to`'s `START` branch can be replaced by
+`return (high, high)` with all nine `tests/gui/test_band_surface.py` cases
+green. The criterion still kills it, at the benchmark.

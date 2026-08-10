@@ -42,3 +42,25 @@ window can carry it.
     $ uv run pytest tests/gui -q -k binds_its_overlays_at_the_selected_region
     216 deselected in 0.68s
     exit: 5
+
+## Folded 2026-08-10 at review: the band's handle is a fourth line, and its own value is unasserted
+
+`BandEditor` landed with the surface panels and takes `replicate_id` the way
+the other two do, so the survivor list above is four lines rather than three:
+`BandEditor(panel, *bound, replicate_id=replicate_id)` in
+`kind_editors._on_the_surface` is the same drop on the third surface. The
+sentence above about the band's handle being "the same claim on the other
+surface" was written before there was a handle; there is one now, and the case
+this item asks for is the one that reads it.
+
+The same case is owed a second assertion that has nothing to do with the
+address. `test_band_surface.test_a_dragged_band_surface_handle_enters_as_a_set_param`
+drags the low edge to 0.75 on a fixed 0..1 axis where the high edge is 0.75, so
+the value it commits is exactly the value the stop-at-the-other clamp would
+commit for any drag at all: with `_dragged_to`'s `START` branch replaced by
+`return (high, high)`, all nine cases in `tests/gui/test_band_surface.py` pass.
+The criterion as a whole still kills it — `test_band_surface_budget.py`'s
+distinct-band assertion goes red — so the claim is covered, but only by a
+window-driving benchmark, and the unit case that names the claim cannot see it.
+A drag to any value between the edges separates them. The shape is
+[the fixture's convenient value is the claim's own boundary](../findings/loop/2026.08.08-a-per-subject-revert-is-green-when-the-two-expressions-agree-on-every-fixture.md).

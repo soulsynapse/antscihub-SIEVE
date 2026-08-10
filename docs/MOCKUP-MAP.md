@@ -38,7 +38,7 @@ its `src/sieve/gui` counterpart and was reshaped from there.
 - **The canvas contents.** The heat rings and the in-band grid are still
   indicative, and now for a stated reason: they read a mask no node emits, so
   the mockup draws a picture of a decision that has not been made
-  ([todo/a-declared-surface-is-drawn-by-nothing.md](todo/a-declared-surface-is-drawn-by-nothing.md)
+  ([todo/the-in-band-ring-reads-a-mask-no-node-emits.md](todo/the-in-band-ring-reads-a-mask-no-node-emits.md)
   carries it). The rest is no longer sample. The walk owns the surface and
   emission display generates per kind
   ([adr/the-walked-step-owns-the-canvas.md](adr/the-walked-step-owns-the-canvas.md)),

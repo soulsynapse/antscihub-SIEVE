@@ -89,6 +89,7 @@ src/sieve/tools/normalize.py               # Per-frame contrast normalization: `
 src/sieve/tools/pick.py                    # A file the user chose, standing in the graph as a node with no upstream.
 src/sieve/tools/rescale.py                 # Reduce spatial resolution by a float linear scale factor.
 src/sieve/tools/span.py                    # Keep a range of frames, with every frame there could be as the identity value.
+src/sieve/tools/subtract.py                # One stream taken away from another, on two named ports.
 src/sieve/tools/temporal_baseline.py       # Each cell's own null distribution over time, and the signal in units of it.
 src/sieve/decode/__init__.py               # The codec boundary: lowering into ffmpeg, prefetch, decoder identity.
 src/sieve/decode/ffmpeg.py                 # FFmpeg rawvideo source for a crop/scale prefix lowered out of the graph.

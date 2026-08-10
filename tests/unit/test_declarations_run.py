@@ -30,13 +30,14 @@ under test is a declaration shipped tools make.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
 
-from sieve.core.pipeline_model import Node, Pipeline, SourceSpan
+from sieve.core.pipeline_model import Edge, Node, Pipeline, SourceSpan
 from sieve.core.tool_base import (
     SOLE_PORT,
     ArraySpec,
@@ -62,6 +63,9 @@ SHELF = discover()
 
 SOURCE = "footage|1|2"
 NODE = "n"
+
+#: The node that stands above a merging tool, and above nothing else.
+FEEDER = "u"
 
 #: Big enough that a tool dividing the frame into a grid emits more than one
 #: cell — `block_signal`'s automatic block is 64 px at full scale, so a 64x64
@@ -95,6 +99,52 @@ UPSTREAM = ((SOLE_PORT, "upstream-key"),)
 BUMPED = "9.9.9"
 
 
+def upstream_of(spec: ToolSpec) -> ToolSpec | None:
+    """The node a merging tool needs above it, or `None` where it needs none.
+
+    Every other case here is a root and nothing above it, which a tool with
+    named ports cannot be: an unfed port is a graph question `pipeline/dag.py`
+    leaves open and the executor answers by handing the tool nothing, so a
+    merging spec observed as a root is never called at all.
+
+    Which spec fills that place is derived from the declarations rather than
+    named, because a name here is the manifest `adr/a-tool-is-one-file.md`
+    refuses — the shelf's own answer to "what changes least about a frame it is
+    handed", by id so that two equally quiet tools do not make this depend on
+    scan order. One node feeding every port, since what these cases read off the
+    run is the merging tool's own window and not its operands: two upstreams at
+    their defaults would carry the same frames as one.
+    """
+    ports = [accepts for port, accepts in spec.input_ports.items() if port is not None]
+    if not ports:
+        return None
+    for candidate in sorted(SHELF, key=lambda other: other.tool_id):
+        if candidate.source is not None or candidate.accepts_on(SOLE_PORT) is None:
+            continue
+        if candidate.mode is not Mode.STREAMING or candidate.stateful:
+            continue
+        if node_warmup_frames((candidate, candidate.params_model())).frames > 0:
+            continue
+        if all(accepts.admits(candidate.emits) for accepts in ports):
+            return candidate
+    raise AssertionError(
+        f"{spec.tool_id} names input ports and nothing on the shelf can feed them — a merging "
+        "tool arrives with the streams it merges reachable, or these cases cannot run it"
+    )
+
+
+def _handed(window: object) -> int:
+    """Frames the call was handed, whichever shape the window took.
+
+    A port-keyed window's `len` is its port count, which is not what any case
+    here asks about. The executor positions every port at one source frame, so
+    the spans are one width and the maximum is that width.
+    """
+    if isinstance(window, Mapping):
+        return max(len(span) for span in window.values())
+    return len(window)  # pyright: ignore[reportArgumentType]
+
+
 class Footage:
     """Frames a tool's own `accepts` admits, each index a different field.
 
@@ -111,7 +161,9 @@ class Footage:
     """
 
     def __init__(self, spec: ToolSpec, *, altered: int | None = None) -> None:
-        accepts = spec.accepts
+        # The declaration of whatever the reader actually feeds, which for a
+        # merging tool is the node standing above it rather than the tool itself.
+        accepts = (upstream_of(spec) or spec).accepts
         assert isinstance(accepts, ArraySpec)
         self.dtype = np.dtype(accepts.dtypes[0] if accepts.dtypes else "uint8")
         self.channels = accepts.channels[0] if accepts.channels else ChannelSpec.GRAY
@@ -171,7 +223,10 @@ def observe(
     frame, so the width the executor chose is the tool's own declaration and not
     an upstream's lookahead accumulated into it. A source tool is a root that is
     handed nothing at all — the footage below is built and never read — and the
-    pointer it declares instead is the one wrapped.
+    pointer it declares instead is the one wrapped. A merging tool is the one
+    shape that cannot be a root and gets exactly one node above it, chosen for
+    changing as little as anything on the shelf does (`upstream_of`), so the
+    width read off the call is still the tool's own.
     """
     widths: list[int] = []
     shelf = ToolRegistry()
@@ -182,21 +237,22 @@ def observe(
         kernel = spec.run
 
         def recorded(params: object, window: object, state: object, /) -> Frame:
-            widths.append(len(window))  # pyright: ignore[reportArgumentType]
+            widths.append(_handed(window))
             return kernel(params, window, state)  # pyright: ignore[reportArgumentType]
 
         shelf.register(dataclasses.replace(spec, run=recorded))
-    pipeline = Pipeline(
-        nodes=(
-            Node(
-                node_id=NODE,
-                tool_id=spec.tool_id,
-                version=spec.version,
-                params=dict(params or {}),
+    node = Node(node_id=NODE, tool_id=spec.tool_id, version=spec.version, params=dict(params or {}))
+    upstream = upstream_of(spec)
+    if upstream is None:
+        pipeline = Pipeline(nodes=(node,), edges=())
+    else:
+        shelf.register(upstream)
+        pipeline = Pipeline(
+            nodes=(Node(node_id=FEEDER, tool_id=upstream.tool_id, version=upstream.version), node),
+            edges=tuple(
+                Edge(upstream=FEEDER, downstream=NODE, port=port) for port in spec.input_ports
             ),
-        ),
-        edges=(),
-    )
+        )
     plan = ExecutionPlan.build(Dag.build(pipeline, shelf), source=SOURCE, span=span)
     return widths, list(execute(plan, footage))
 

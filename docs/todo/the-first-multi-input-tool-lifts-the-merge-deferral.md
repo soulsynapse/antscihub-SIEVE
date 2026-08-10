@@ -1,7 +1,7 @@
 ---
 title: The first multi-input tool lands, and VISION's lead scenario stops being refused
 step: "11.3"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_subtract.py -q -k 'two_inputs_arrive_on_named_ports or a_crossed_pair_is_not_the_same_graph'"
 opened: 2026-08-09

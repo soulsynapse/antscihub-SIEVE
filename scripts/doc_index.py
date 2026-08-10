@@ -30,9 +30,9 @@ ADR_DOC_PATH = "docs/ADR-SUMMARY.md"
 ADR_TITLE = "# ADR-SUMMARY — what is settled"
 ADR_PREAMBLE = """\
 Derived: each line is its ADR's first paragraph, so that file is the home and
-this index cannot drift from it. The grouping and the order are `position`,
-which is placement only — an ADR that drops it leaves this index while keeping
-its number and its file."""
+this index cannot drift from it. The shelf an ADR sits on is `group` and its
+order along that shelf is `position`, both placement only — an ADR that drops
+its group leaves this index while keeping its number and its file."""
 
 
 def _git(*args: str) -> bytes:
@@ -168,27 +168,33 @@ def natural(text: str) -> list:
 
 
 def render_adrs(paths: list[str], blobs: dict[str, bytes]) -> str:
-    """The shelf of ADRs, grouped by `position`, in SCAFFOLD's indented list.
+    """The shelf of ADRs, grouped by `group`, in SCAFFOLD's indented list.
 
-    An ADR with no `position` is placed nowhere and so appears nowhere; that
-    is the one way off this index, and it leaves the file itself untouched.
+    An ADR with no `group` is placed nowhere and so appears nowhere; that is
+    the one way off this index, and it leaves the file itself untouched.
+    `position` orders a group from the front, and one that omits it sits after
+    everything that named a place, in filename order.
     """
-    shelf: dict[str, list[tuple[str, str, str]]] = {}
+    shelf: dict[str, list[tuple[list, bool, str, str, str, str]]] = {}
     for path in sorted(paths):
         name = path[len(ADR_DIR) :]
         if not path.startswith(ADR_DIR) or "/" in name or name.startswith("_"):
             continue
         fields, paragraph = front_matter(blobs.get(path, b""))
-        if not fields.get("position"):
+        if not fields.get("group"):
             continue
-        shelf.setdefault(fields["position"], []).append(
-            (fields.get("title", name), f"adr/{name}", paragraph)
+        position = fields.get("position", "")
+        shelf.setdefault(fields["group"], []).append(
+            (natural(position), not position, name, fields.get("title", name),
+             f"adr/{name}", paragraph)
         )
 
     lines = []
-    for position in sorted(shelf, key=natural):
-        lines.append(f"- {FOLDER} `{position}`")
-        for title, link, paragraph in shelf[position]:
+    for group in sorted(shelf, key=natural):
+        lines.append(f"- {FOLDER} `{group}`")
+        for _, _, _, title, link, paragraph in sorted(
+            shelf[group], key=lambda entry: (entry[1], entry[0], entry[2])
+        ):
             line = f"  - {FILE} [{title}]({link})"
             if paragraph:
                 line += f" — {paragraph}"

@@ -1,6 +1,7 @@
 ---
 title: A compartment houses any surface
-position: Layer 1
+group: Layer 1
+position: 1
 status: settled
 decided: 2026-08-10
 ---

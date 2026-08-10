@@ -3,9 +3,9 @@
 # ADR-SUMMARY — what is settled
 
 Derived: each line is its ADR's first paragraph, so that file is the home and
-this index cannot drift from it. The grouping and the order are `position`,
-which is placement only — an ADR that drops it leaves this index while keeping
-its number and its file.
+this index cannot drift from it. The shelf an ADR sits on is `group` and its
+order along that shelf is `position`, both placement only — an ADR that drops
+its group leaves this index while keeping its number and its file.
 
 - 📁 `Layer 1`
   - 📄 [A compartment houses any surface](adr/ADR-0001-compartments-house-any-surface.md) — A surface can go anywhere, which is how we buy coarse-grained customization. They might not be happy, they might not look good, they might be clipped, but they can be shoved into any compartment.

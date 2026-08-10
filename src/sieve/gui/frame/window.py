@@ -15,7 +15,8 @@ it acts on the window, not on what any pane holds.
 A subpane adds a boundary of the seam's kind one level in, and on the axis its
 pane's outer boundary left alone — the top and bottom sides in the left and
 right panes, the left and right sides in the bottom one. Which sides those are
-is the pane's own and stated there; the window only opens them.
+is the pane's own and stated there; the window opens none of them, and the
+resting frame is the three panes and the two boundaries between them.
 """
 
 from __future__ import annotations
@@ -26,7 +27,6 @@ from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 from sieve.gui.frame.chrome import stylesheet
 from sieve.gui.frame.menu import build_menu_bar, show_about
 from sieve.gui.frame.panes import (
-    Side,
     build_bottom,
     build_left,
     build_right,
@@ -50,15 +50,11 @@ class MainWindow(QMainWindow):
         self.right = build_right()
         self.bottom = build_bottom()
 
-        # Every side a subpane may anchor to, opened blank. The six are the
-        # frame's claim about where a view can be put that is not the pane's
-        # main occupant, and a claim nothing stands on is one nobody can check;
-        # the empty panes and the greyed menu items are here on the same terms.
-        # Once views arrive these are attached where one is asked for, not on
-        # the way up — the resting frame is three panes, not nine.
-        for pane in (self.left, self.right, self.bottom):
-            for side in sorted(pane.anchors, key=lambda side: side.name):
-                pane.attach(side)
+        # No subpane is opened on the way up. Which sides each pane offers is
+        # still the pane's claim and still checkable by asking it, but a strip
+        # standing blank in every pane costs room in all three and shows a
+        # boundary where the resting frame has none. They are attached where a
+        # view asks for one — the resting frame is three panes, not nine.
 
         # Even stretch, and an even split to start: neither view is the
         # window's main one. The chain is tuned by reading a plot against the

@@ -1,8 +1,8 @@
 ---
 title: A document may name no footage
 adr: 26
-position: "02.04"
-status: settled
+status: superseded
+superseded_by: a-document-names-footage-only-through-a-tool
 decided: 2026-08-09
 ---
 

@@ -23,7 +23,7 @@ and its file in `docs/adr/` but leaves this index.
 - [Crop, span, and the detector are graph nodes](adr/detector-is-a-node.md) — Schema v1 has crop, span, and the detector as graph nodes natively — no `Project.detector`, no `Replicate.roi`, no `Project.clip`.
 - [v2 projects do not import](adr/v2-does-not-import.md) — v3 reads no v2 file: there is no `compat` package and no importer, and no module anywhere spells a v2 field name — schema v1 is written as if v2 never existed.
 - [What can change an output is a param](adr/param-not-preference.md) — A value that can change an output is a param — in the artifact, in the cache key; one that can only change presentation or performance is a preference, and anything ambiguous is a param.
-- [A document may name no footage](adr/a-document-may-name-no-footage.md) — `Project.source` admits `None`: a document with no footage is a valid saved project, and every reader that needs frames refuses it naming the file, rather than the schema refusing the state.
+- [A document names footage only through a tool](adr/a-document-names-footage-only-through-a-tool.md) — `Project.source` and `SourceRef` leave schema v1: a document names footage only in a source tool's path param, stored relative to the project file, and every reader reaches it through the graph.
 
 ## 03 — The repo itself
 
@@ -53,4 +53,4 @@ and its file in `docs/adr/` but leaves this index.
 - [The walked step owns the canvas](adr/the-walked-step-owns-the-canvas.md) — The walked step owns the canvas — its result over its input, its emissions drawn by kind; an ancestor's emissions are a view toggle; the pin owns only the slot below.
 - [An output's kind is the picture it makes](adr/an-outputs-kind-is-the-picture-it-makes.md) — The canvas paints an output by its `ElementKind` — `PIXEL` an image, `BLOCK` a field of cells over its frame, `FRAME` no picture — and no member is ever added for a tool.
 
-*31 settled, 2 superseded.*
+*31 settled, 3 superseded.*

@@ -4,7 +4,7 @@ priority: high
 phase: 11
 status: open
 gated_on: nothing
-done_when: 'uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k "a_document_carrying_a_source_key_is_refused or relocating_rewrites_the_source_nodes_path_param or a_relative_source_param_anchors_on_the_project_directory" && uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name && uv run pytest "tests/gui/test_project_cards.py::test_the_library_line_reads_footage_through_the_graph" -q && uv run pytest tests/unit/test_pipeline_model.py -q -k the_version_a_document_declares_after_the_removal'
+done_when: 'uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k a_document_carrying_a_source_key_is_refused && uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k relocating_rewrites_the_source_nodes_path_param && uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k a_relative_source_param_anchors_on_the_project_directory && uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name && uv run pytest "tests/gui/test_project_cards.py::test_the_library_line_reads_footage_through_the_graph" -q && uv run pytest tests/unit/test_pipeline_model.py -q -k the_version_a_document_declares_after_the_removal'
 opened: 2026-08-10
 ---
 
@@ -266,3 +266,26 @@ red per clause and green per clause, which is what a criterion is for.
 
 The measurement of what the removal costs is
 [the-footage-field-removal-is-atomic-across-forty-test-modules](../findings/2026.08.10-the-footage-field-removal-is-atomic-across-forty-test-modules.md).
+
+## Review 2026-08-10: the union became three legs, and the item did not split
+
+The criterion now spells the first leg as three `&&` invocations of one name
+each, so each clause reports for itself — clauses one and two exit 5 for their
+own absence and the anchoring clause exits 0 for its own case, where the union
+exited 0 for all three. Nothing else in the criterion moved: the connective was
+the defect, not the clause list. The three names keep their order, so the
+sections above that number them ("the first `-k` clause", "the third") still
+point where they did; what is stale is prose numbering *legs* — the card's fold
+calls its own the third, and the command now has six.
+
+The item is not split, and the measurement is why. The finding this item cites
+found no clause satisfiable alone — the corpus encodes the reader-fed root's
+absence, so any stage that leaves the tree runnable is the whole removal — and a
+split into halves that cannot land separately would put two items where one job
+is. What the criterion can now do is say which clause a session is short of;
+what it cannot do is make the job smaller.
+
+`the_version_a_document_declares_after_the_removal` (the last leg) stays as it
+is, and the finding's `closed` entry is the warning that goes with it: the case
+will pass against a tree that has not removed the key, so its red has to come
+from the removal being in place, not from writing the case first.

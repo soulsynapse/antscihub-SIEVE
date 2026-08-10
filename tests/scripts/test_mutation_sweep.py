@@ -468,6 +468,39 @@ def test_an_oracle_talkative_only_on_the_mutant_is_not_scored_killed(repo: Path)
     assert [killed for _, killed in results] == [False]
 
 
+def test_an_oracle_that_breaks_under_a_mutant_is_refused_rather_than_killed(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The item's own title: KILLED is read off any non-zero exit, including a crash.
+
+    The baseline settles every break that is deterministic, and the compile gate the
+    one break a mutant guarantees. An intermittent one is free to land on a mutant run
+    instead — a Windows access violation was measured on `tests/gui` once in nine runs
+    (`docs/findings/loop/2026.08.08-a-crashing-test-command-is-indistinguishable-from-a-killed-mutant.md`)
+    — and then the command that never reached a test prints the same word as the one
+    whose tests failed. What tells them apart is the exit code: pytest says "tests
+    failed" with 1 and reserves the rest for interrupted, internal error, usage error,
+    and nothing collected. The oracle here is green on the original bytes and exits 3
+    once the mutant lands, which is that class made deterministic — the probability
+    belongs to the crash, not to the discrimination.
+    """
+    data = b"limit = 100\n"
+    subject = subject_with(repo, data)
+    breaking = (
+        f"import pathlib, sys; "
+        f"sys.exit(0) if 'limit = 100' in pathlib.Path({str(subject)!r}).read_text() else None; "
+        f"print('INTERNALERROR> Windows fatal exception: access violation', file=sys.stderr); "
+        f"sys.exit(3)"
+    )
+    argv = ["--file", "src/subject.py", "--mutant", "limit = 100 ==> limit = 1"]
+    assert main([*argv, "--", sys.executable, "-c", breaking], repo) == 1
+    captured = capsys.readouterr()
+    assert "KILLED" not in captured.out
+    assert "exits 3" in captured.err
+    assert "access violation" in captured.err
+    assert subject.read_bytes() == data
+
+
 def test_the_mutant_timeout_is_derived_from_the_baseline(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

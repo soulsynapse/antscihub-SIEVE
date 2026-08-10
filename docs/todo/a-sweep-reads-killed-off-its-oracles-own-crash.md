@@ -1,7 +1,7 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_that_breaks_under_a_mutant_is_refused_rather_than_killed"
 opened: 2026-08-08
@@ -479,3 +479,41 @@ refusal rather than `KILLED`. What the exit-code table should be is the run's to
 settle from the tree: pytest's own codes are the contract that matters, since the
 oracle after `--` is a pytest session in every criterion in `docs/todo/` that
 uses this module.
+
+## What landed (2026-08-10)
+
+The discrimination, and nothing else. `TESTS_FAILED_EXIT = 1` is the one non-zero
+exit a mutant can be killed by; every other non-zero exit raises `SweepError` with
+`_tail`'s output, the treatment a red baseline gets. The table is pytest's, named
+in the constant's comment: 1 is "tests failed" and 2 through 5 are interrupted,
+internal error, usage error, and nothing collected, none of which report on the
+mutant, and a platform crash code is not 1 either. The timeout verdict is
+untouched — a mutant that stops the command terminating still broke the program.
+
+`test_an_oracle_that_breaks_under_a_mutant_is_refused_rather_than_killed` runs an
+oracle green on the original bytes that prints an `INTERNALERROR>` line and exits
+3 once the mutant lands, which is the intermittent class made deterministic: the
+probability belongs to the crash, not to the discrimination, and no oracle can be
+made to fault on demand. Shown red on the unchanged tree by the defect itself —
+`scripts/mutation_sweep.py` reverted to HEAD and the case run alone: `assert 0 ==
+1` with `KILLED    limit = 100` and `1 killed, 0 survived` on stdout.
+
+The gate was reshaped once mid-run rather than written twice. The first form asked
+`returncode not in (0, TESTS_FAILED_EXIT)` and then scored `returncode ==
+TESTS_FAILED_EXIT`, and a sweep of it left `killed = finished.returncode ==
+TESTS_FAILED_EXIT ==> != 0` SURVIVED — an equivalent mutant, since past the gate
+the two agree, but an uncased line either way. Reading the constant once and
+gating on the flag closes it: `killed = ... == TESTS_FAILED_EXIT ==> != 0`,
+`if not killed and finished.returncode != 0: ==> if False:`, and
+`TESTS_FAILED_EXIT = 1 ==> = 3` are `3 killed, 0 survived` over
+`scripts/mutation_sweep.py` against the module as oracle.
+
+The module and `run_sweep` docstrings say why the baseline cannot stand in for
+this: it settles the breaks that are deterministic, the compile gate settles the
+one a mutant guarantees, and an intermittent break is by construction free to land
+on a mutant run instead.
+
+`uv run pytest -q --ignore=tests/gui` was 1038 with
+`test_gui_loop_budget.py::test_every_sample_the_session_published_is_gated` red —
+the fifth occurrence of an open finding, not run once more, amended in place with
+the first `over_ms` the four prior occurrences all lost.

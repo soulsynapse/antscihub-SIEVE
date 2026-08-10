@@ -31,7 +31,11 @@ So the sweep now runs the command once on the original bytes first and refuses,
 showing the command's own output, unless that baseline is green. A baseline cannot
 reach the deterministic member of that class — a mutant that leaves the subject
 unparseable is red on the mutated bytes only — so the mutated bytes are compiled
-and the mutant refused rather than scored.
+and the mutant refused rather than scored. Nor can it reach a break that lands on
+a mutant run rather than the baseline, which an intermittent one is free to do, so
+KILLED is read off the one exit code the oracle uses to say its own tests failed
+and every other non-zero exit is refused with the command's output, the way a red
+baseline is.
 
 Every refusal a mutant can earn is a function of the original bytes and the mutant
 alone, so all of them are raised before the baseline runs: a list whose last mutant
@@ -89,6 +93,14 @@ ORACLE_BUDGET_SECONDS = 60.0
 #: Floor for the per-mutant timeout, so a sub-second baseline does not convict a
 #: mutant on scheduler jitter.
 MUTANT_TIMEOUT_FLOOR_SECONDS = 30.0
+
+#: The one non-zero exit that is a verdict rather than a break. Every criterion in
+#: `docs/todo/` that sweeps passes a pytest session after `--`, and pytest says
+#: "tests failed" with 1 and reserves 2 through 5 for interrupted, internal error,
+#: usage error, and nothing collected — none of which report on the mutant. A
+#: platform crash code (a Windows access violation arrives as a large negative)
+#: is not 1 either.
+TESTS_FAILED_EXIT = 1
 
 
 class SweepError(ValueError):
@@ -265,6 +277,12 @@ def run_sweep(
     (derived from the baseline's own elapsed time when not given), and a timeout
     is a kill — the mutant stopped the program terminating.
 
+    A mutant is killed by `TESTS_FAILED_EXIT` and by nothing else non-zero. The
+    baseline settles the breaks that are deterministic; one that fires on a mutant
+    run instead — the access violation measured once in nine runs, an interpreter
+    dying in a native frame — is a command that never judged the mutant, and it is
+    refused with its own output rather than scored.
+
     The original bytes are restored after every mutant, inside a `finally`, and
     re-read afterwards to prove the restore happened — a sweep that cannot lose
     the work under test is the entire reason this file exists.
@@ -304,7 +322,15 @@ def run_sweep(
             purge_bytecode(repo)
             try:
                 finished = _run_bounded(command, repo, env, timeout)
-                results.append((mutant, finished.returncode != 0))
+                killed = finished.returncode == TESTS_FAILED_EXIT
+                if not killed and finished.returncode != 0:
+                    raise SweepError(
+                        f"the test command exits {finished.returncode} under "
+                        f"{mutant.label!r}, which is the command breaking rather than its "
+                        f"tests failing, so KILLED would not say the mutant was judged — "
+                        f"its output:\n{_tail(finished)}"
+                    )
+                results.append((mutant, killed))
             except subprocess.TimeoutExpired:
                 results.append((mutant, True))
         finally:

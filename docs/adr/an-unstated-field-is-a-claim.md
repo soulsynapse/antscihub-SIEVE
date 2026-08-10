@@ -43,7 +43,7 @@ ordering the offer was already ruled to display by
 `matches` stays strictly stronger than `admits`: a partial overlap still admits
 and does not match, and an unresolved *produced* side still never matches.
 
-Not enforceable at registration, which is where [ADR 11](declared-means-verified.md)
+Not enforceable at registration, which is where [ADR 8](declared-means-verified.md)
 would otherwise put it: `crop` means the empty tuple, and nothing distinguishes
 meaning it from forgetting it, so there is no refusal to make by name. What is
 checkable is agreement — the readers above give one unstated field one answer —

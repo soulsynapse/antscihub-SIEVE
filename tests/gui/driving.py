@@ -142,6 +142,39 @@ def key(widget: Any, code: Any, text: str = "") -> None:
     )
 
 
+def activation_change(widget: Any) -> None:
+    """Qt telling a window its activation moved, without saying which way.
+
+    The event carries no payload — which way it went is `isActiveWindow()` — so
+    handing it to a window nobody activated is how the *losing* reading is
+    driven, and `activate` below is the other one.
+    """
+    from PySide6.QtCore import QEvent
+
+    widget.changeEvent(QEvent(QEvent.Type.ActivationChange))
+
+
+def activate(widget: Any, active: bool = True) -> None:
+    """The user coming back to this window, or leaving it.
+
+    Not `show()` and `activateWindow()`, which is the gesture a user makes and
+    is what `test_pinned_slot.py`'s fixture does: the same pair, in the case
+    below, ended a whole-directory run in a native abort after every case had
+    passed, with no attribution
+    (`findings/2026.08.09-a-shown-window-in-one-added-case-aborts-the-gui-run-at-exit.md`).
+    This sets the state the handler reads and sends the event Qt would have
+    sent, which is the same drive without the shown window.
+
+    `QApplication.setActiveWindow` is deprecated and there is no replacement
+    that reaches an unshown window — `QWindow.requestActivate` needs a handle,
+    which is what showing creates.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    QApplication.setActiveWindow(widget if active else None)
+    activation_change(widget)
+
+
 def leave(widget: Any) -> None:
     """The cursor leaving the widget, which is what clears a hover readout."""
     from PySide6.QtCore import QEvent

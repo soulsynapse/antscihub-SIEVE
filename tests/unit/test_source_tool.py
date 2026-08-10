@@ -17,6 +17,10 @@ against a run rather than against a declaration:
 - **The resolution policy stays out of the key and refuses rather than
   ordering.** A pattern naming several files has no answer the filesystem's
   listing order gets to supply, and one naming none is a run that cannot happen.
+- **A folder is the case where several is the answer.** The refusal above is
+  about a pattern standing in for one file; a param that names a folder names
+  everything in it, and the order is the project's rather than the
+  filesystem's (`todo/a-source-param-names-a-folder-and-several-files-are-an-ordering.md`).
 
 The fourth case is about the declaration rather than the run, and is here
 because it is the one claim a run cannot make: an `emits` that left either
@@ -41,6 +45,9 @@ from sieve.pipeline.executor import execute
 from sieve.pipeline.plan import ExecutionPlan
 from sieve.pipeline.resolve_source import picked_identities, source_files
 from sieve.tools import discover
+from sieve.tools.footage import SOURCE as FOOTAGE
+from sieve.tools.footage import FootageParams
+from sieve.tools.pick import SOURCE as PICKED
 from sieve.tools.pick import PickParams
 
 PICK = "background"
@@ -281,6 +288,60 @@ class TestThePatternResolvesToOneFileOrRefuses:
             source_files(dag, _params(dag))
 
         assert PATTERN in str(refused.value)
+
+
+class TestAFolderIsAnOrderingRatherThanAnAmbiguity:
+    def test_a_source_param_naming_a_folder_resolves_to_every_file_in_order(
+        self, tmp_path: Path
+    ) -> None:
+        """The distinction, both halves of it, and what a one-file reader does with it.
+
+        A pattern standing in for one file that catches two is an ambiguity —
+        the user narrows it, and no order the filesystem supplies is the
+        project's answer. A param that names a folder is not that: the answer is
+        everything in it, and the question is what order. Lexicographic, so the
+        answer is the names the user gave their exports and not the sequence a
+        directory happened to be written in.
+
+        The third assertion is where the ordering stops today. `read` hands over
+        one file's frames, so a step reading a folder of two refuses — and it
+        refuses on its own terms rather than on the pattern's, which is the
+        distinction read from the other end.
+        """
+        write_picture(tmp_path / "b_second_bg.png", 10)
+        write_picture(tmp_path / "a_first_bg.png", 20)
+        discover()
+
+        found = PICKED.files(PickParams(pattern=str(tmp_path)))
+
+        assert [path.name for path in found] == ["a_first_bg.png", "b_second_bg.png"]
+        assert [path.name for path in FOOTAGE.files(FootageParams(path=str(tmp_path)))] == [
+            "a_first_bg.png",
+            "b_second_bg.png",
+        ], "one rule, and both source tools read it"
+
+        with pytest.raises(SourceFileError) as ambiguous:
+            PICKED.files(PickParams(pattern=str(tmp_path / PATTERN)))
+        assert "narrow" in str(ambiguous.value)
+
+        with pytest.raises(SourceFileError) as unordered:
+            PICKED.file(PickParams(pattern=str(tmp_path)))
+        assert "narrow" not in str(unordered.value)
+
+    def test_an_unset_param_is_not_the_folder_the_process_happens_to_be_in(self) -> None:
+        """`Path("")` is a directory, and a document with nothing chosen is not.
+
+        The folder branch is a `is_dir` test, and the empty string passes it —
+        so a source nobody has picked a file for would resolve to whatever the
+        process was launched in, which is a run over files the project never
+        named rather than the refusal VISION's new project is owed.
+        """
+        discover()
+
+        with pytest.raises(SourceFileError) as unchosen:
+            PICKED.files(PickParams())
+
+        assert "names no file" in str(unchosen.value)
 
 
 class TestThePickerDeclaresWhatItsFramesAre:

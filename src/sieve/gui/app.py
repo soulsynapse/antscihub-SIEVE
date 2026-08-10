@@ -68,6 +68,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtCore import QEvent
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
@@ -110,6 +111,7 @@ from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.transport.request_intent import RequestKind
 from sieve.gui.tuning import TuningLoop
 from sieve.gui.walk import node_order
+from sieve.pipeline.resolve_source import resolved_sources
 from sieve.pipeline.shelf import loaded_shelf
 from sieve.session.intents import AddNode, RemoveNode, RetoolNode, issue
 from sieve.session.session import Session
@@ -259,6 +261,11 @@ class MainWindow(QMainWindow):
         # node's output stream actually is, which is what a position's offer is
         # computed against (`gui/streams.py`).
         self._streams: Mapping[str, StreamSpec | None] = {}
+        # What each source root's path parameter names on disk, ordered. Beside
+        # the three above and unlike them: those are folds over the document,
+        # and this one read the filesystem, so it is the only one here that can
+        # be wrong while the document is untouched (`changeEvent`).
+        self._resolved_sources: Mapping[str, tuple[Path, ...]] = {}
         self._order: tuple[Node, ...] = ()
         self._at = 0
         # Which project card wears the accent. The walk's number one position
@@ -386,6 +393,17 @@ class MainWindow(QMainWindow):
         return self._session
 
     @property
+    def resolved_sources(self) -> Mapping[str, tuple[Path, ...]]:
+        """The files each source root names, ordered, as of the last re-read.
+
+        `{}` before a project is open, and `()` for a source with nothing
+        chosen or a folder that is not mounted — three states a document may
+        legitimately be in, so none of them is an absence of the mapping
+        (`pipeline/resolve_source.resolved_sources`).
+        """
+        return self._resolved_sources
+
+    @property
     def control(self) -> Control:
         return self._control
 
@@ -442,6 +460,31 @@ class MainWindow(QMainWindow):
             self._player.open(str(source.resolve(path.parent)))
         self._redraw()
         self._control.show_pipeline()
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Coming back to SIEVE re-asks what the document's sources name.
+
+        VISION's new-project scenario drops a second video into the folder a
+        source names while the user is elsewhere, and has them "come back to
+        SIEVE" to find both files showing. That is this: the first input in the
+        product that is neither a user gesture nor a run, and the only one that
+        exists because the answer can move with nothing here having moved it.
+
+        On the way *in* only. Qt sends this event for a window losing activation
+        as well as gaining it, and re-reading on the way out would be claiming
+        the answer can have changed between the user leaving and this window
+        hearing about it — which is the one interval in which nothing happened.
+
+        Not a poll, and deliberately not: a watcher on the folder would make the
+        answer arrive while the user is looking at something else, and a timer
+        would spend the interactive loop's budget on a stat nobody asked for.
+        The gesture that brings them back is the one moment the answer is worth
+        having, which is also the moment it is free.
+        """
+        super().changeEvent(event)  # type: ignore[arg-type]
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+            self._reread_graph()
+            self._redraw()
 
     def closeEvent(self, event: object) -> None:
         """Stop the decode thread before the window goes.
@@ -941,12 +984,20 @@ class MainWindow(QMainWindow):
         return select
 
     def _reread_graph(self) -> None:
-        """The four facts about the document's shape, taken together.
+        """The five facts about the document's shape, taken together.
 
-        Together because they are one derivation in four steps — the two folds
-        that give each node its element kind and its output stream both read the
-        specs and the walk — and because every caller that invalidates one has
-        invalidated all four: a project opening, and a step leaving the chain.
+        Together because they are one derivation — the two folds that give each
+        node its element kind and its output stream both read the specs and the
+        walk, and what the chain starts from is what its sources resolved to —
+        and because every caller that invalidates one has invalidated all five:
+        a project opening, a step leaving the chain, and the window becoming the
+        active one again.
+
+        That third caller is not like the other two. The first four facts are
+        folds over a document that only this window writes, so nothing can move
+        them behind its back; the fifth read the filesystem, and a file dropped
+        into a folder a source names moves it with no gesture and no run
+        (`changeEvent`).
         """
         session = self._session
         if session is None:
@@ -956,6 +1007,7 @@ class MainWindow(QMainWindow):
         self._order = node_order(pipeline)
         self._elements = element_kinds(self._order, pipeline, self._specs)
         self._streams = stream_specs(self._order, pipeline, self._specs)
+        self._resolved_sources = resolved_sources(self._order, self._specs)
 
     def _on_frame_changed(self, index: int, image: QImage, kind: RequestKind) -> None:
         """The transport has reached a frame. Hold it, and decide what to show."""

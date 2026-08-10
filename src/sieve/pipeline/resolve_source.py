@@ -5,6 +5,10 @@ tool is a root whose file is a path parameter, so the document already names
 every external file a run opens. `source_files` walks that out and
 `picked_identities` turns it into what the keys want.
 
+`resolved_sources` is the same walk with a front end asking rather than a run:
+the whole ordering a parameter names instead of the one file a reader takes, and
+lenient where the run refuses.
+
 **What used to be here, and where it went.** This module was also the plan-time
 route that decided, per run, whether a written crop could serve it — a match
 against `CropRecord`, a graph with the crop node dropped, and a reader wrapped
@@ -25,10 +29,13 @@ is a thing they already had.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from sieve.core.tool_base import ParamsBase, SourceFileError
+from pydantic import ValidationError
+
+from sieve.core.pipeline_model import Node
+from sieve.core.tool_base import ParamsBase, SourceFileError, ToolSpec
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag
 
@@ -80,6 +87,58 @@ def source_files(dag: Dag, params: Mapping[str, ParamsBase]) -> dict[str, Path]:
     if faults:
         raise SourceFileError("\n".join(faults))
     return files
+
+
+def resolved_sources(
+    nodes: Iterable[Node], specs: Mapping[str, ToolSpec]
+) -> dict[str, tuple[Path, ...]]:
+    """What each source root's parameter names on disk right now, ordered.
+
+    `source_files` asked of a document rather than of a run, and the two
+    differences are the two callers. This one is *lenient* — a source with
+    nothing chosen, a parameter that will not validate, a folder that is not
+    there — because a window has to draw whatever document was opened and none
+    of those is a reason to refuse to draw it, where a run cannot start without
+    an answer. And it returns the whole ordering rather than one file, because
+    what a folder names is what a front end shows: VISION's scenario has "two
+    files now show in the source tool" and there is no reading of that where the
+    window was told about one.
+
+    The rule itself is not restated. Both walks call the tool's own resolution
+    (`ToolSource.files`, `ToolSource.file`), so a folder means the same thing to
+    the window and to the run, and there is nowhere for the two to drift apart.
+
+    **This is a filesystem read, and it is therefore a fact with a lifetime.** A
+    file dropped into a folder between two calls changes the answer with the
+    document untouched, which is what makes a held copy of this go stale and
+    what its holder has to invalidate on (`gui/app.py`).
+
+    Args:
+        nodes: The document's nodes, in any order — one node's answer does not
+            depend on another's.
+        specs: The spec behind each node id, leniently: `gui/app.resolved_specs`
+            skips a tool this install does not have, and a node with no entry is
+            one nothing can be resolved for.
+
+    Returns:
+        `node_id` to the ordered files it names, for the source roots only, and
+        `()` for a source root whose parameter names nothing that is there.
+    """
+    resolved: dict[str, tuple[Path, ...]] = {}
+    for node in nodes:
+        spec = specs.get(node.node_id)
+        if spec is None or spec.source is None:
+            continue
+        try:
+            params = spec.params_model.model_validate(node.params)
+            resolved[node.node_id] = tuple(spec.source.files(params))
+        except (ValidationError, SourceFileError, OSError):
+            # Three shapes of "no answer yet", and the window draws all three
+            # the same: a document may hold a source nobody has chosen a file
+            # for, and a folder that is not mounted is that document again with
+            # a drive missing rather than a project that is wrong.
+            resolved[node.node_id] = ()
+    return resolved
 
 
 def picked_identities(files: Mapping[str, Path]) -> dict[str, str]:

@@ -59,7 +59,6 @@ for the keys.
 from __future__ import annotations
 
 from functools import lru_cache
-from glob import glob
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +76,8 @@ from sieve.core.tool_base import (
     ParamsBase,
     ParamStereotype,
     SourceFileError,
+    named_files,
+    one_named_file,
 )
 from sieve.core.tool_registry import register_tool
 from sieve.core.types import ChannelSpec, Frame, FrameIndex
@@ -96,9 +97,11 @@ against was made somewhere else — by a colleague, in another tool, or by an
 earlier run you kept.
 
 `pattern` is the file, and it may be a general match like `*_bg.png` rather than
-one name. The match has to land on exactly one file: none means the run cannot
-happen and several means the answer would be whichever the filesystem listed
-first, which is not something a project should depend on. What ends up in the
+one name, or the folder holding it. The match has to land on exactly one file:
+none means the run cannot happen and several means the answer would be whichever
+the filesystem listed first, which is not something a project should depend on.
+A folder is read as everything in it, in name order, so this step wants one that
+holds the one picture. What ends up in the
 cache key is the file the match found and never the match itself, so
 reorganising the folder underneath a project does not invalidate anything, and
 pointing two projects at one file makes them agree about it.
@@ -128,29 +131,24 @@ class PickedFile:
     #: `picked_key` (`adr/a-root-keys-by-its-reader.md`).
     decoded = False
 
+    def files(self, params: PickParams, /) -> tuple[Path, ...]:
+        """Every file `params.pattern` names, ordered (`tool_base.named_files`).
+
+        Raises:
+            SourceFileError: if the pattern matches nothing, or matches more
+                than one file without naming a folder.
+        """
+        return named_files(params.pattern, "pick")
+
     def file(self, params: PickParams, /) -> Path:
         """The one file `params.pattern` names.
 
         Raises:
-            SourceFileError: if the pattern matches no file or more than one.
+            SourceFileError: if the pattern resolves to no file or to several.
                 Both are refused rather than resolved — see this module's
-                header and `SourceFileError`.
+                header, `tool_base.one_named_file`, and `SourceFileError`.
         """
-        found = sorted(path for path in map(Path, glob(params.pattern)) if path.is_file())
-        if not found:
-            raise SourceFileError(
-                f"pick: {params.pattern!r} names no file, so there is nothing for this step to "
-                "read — a run over it cannot happen rather than running over an absence"
-            )
-        if len(found) > 1:
-            listed = ", ".join(str(path) for path in found[:4])
-            raise SourceFileError(
-                f"pick: {params.pattern!r} names {len(found)} files ({listed}"
-                f"{', ...' if len(found) > 4 else ''}) — which of them a step reads is not "
-                "something the filesystem's listing order gets to decide, so narrow the pattern "
-                "to one"
-            )
-        return found[0]
+        return one_named_file(params.pattern, "pick")
 
     def read(self, params: PickParams, index: FrameIndex, /, *, luma: bool) -> Frame:
         """The picked picture, filed under the frame the run is answering for.

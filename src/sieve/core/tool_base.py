@@ -108,6 +108,7 @@ from dataclasses import dataclass, field, is_dataclass
 from dataclasses import fields as dataclass_fields
 from enum import StrEnum
 from fractions import Fraction
+from glob import glob
 from pathlib import Path
 from types import NoneType, UnionType
 from typing import Any, ClassVar, Protocol, TypeVar, get_args, get_origin
@@ -1053,7 +1054,7 @@ class ToolDisplay(Protocol[ParamsT_contra]):
 
 
 class SourceFileError(ValueError):
-    """A source tool's path parameter does not resolve to one readable file.
+    """A source tool's path parameter does not resolve to files it can read.
 
     Two of the three ways it can fail are refused on one set of terms
     (`adr/a-users-file-wires-in-like-any-other-input.md`): a pattern resolving
@@ -1062,7 +1063,108 @@ class SourceFileError(ValueError):
     answer and not the project's. The third is the file that resolved and then
     could not be read as what the tool declared it emits, which is the same
     refusal one step later and has nowhere better to land.
+
+    The second of those is about a *pattern*, and `named_files` draws the line
+    it was always drawn against: a folder resolving to several is the answer
+    rather than the ambiguity.
     """
+
+
+def named_files(param: str, tool_id: str, /) -> tuple[Path, ...]:
+    """The ordered files `param` names, which is one file or a folder's worth.
+
+    **The distinction is what a param that caught two files was standing in
+    for.** A pattern is a name for one file written loosely, so two matches are
+    two answers to a question with one — the user narrows it, and no order the
+    filesystem supplies is the project's. A folder is not a loose name: it names
+    a place, and the files in it are what is there. VISION's new-project
+    scenario swaps a source to "the folder itself", drops a second video in, and
+    expects both to show, so refusing several out of a folder would be refusing
+    the feature (`todo/a-source-param-names-a-folder-and-several-files-are-an-ordering.md`).
+
+    **Lexicographic, and that is the ordering rather than a tiebreak.** Two
+    videos concatenated the wrong way round is a silent wrong answer, not a
+    failed run, so the order has to come from something the user can see and
+    change — the names they gave their exports. `sorted` over the paths is that;
+    the sequence a directory happened to be written in is not.
+
+    Flat, and every file in it. A folder holding something that is not footage
+    resolves to that too, which is a resolution a reader will refuse and not a
+    silent substitution; narrowing it by extension is a declaration no tool
+    carries yet (`todo/the-source-is-a-card-in-the-walk.md`).
+
+    Args:
+        param: The path parameter as the document holds it. An absolute pattern
+            is used as it stands and a relative one resolves against the
+            process's directory, which is what a file picker hands over.
+        tool_id: Named in the refusals, because the user's next action is to fix
+            one node's parameter and the message is what says which.
+
+    Returns:
+        At least one file, ordered. A single-element tuple for the pattern case,
+        which is every case that existed before a folder was one.
+
+    Raises:
+        SourceFileError: if `param` names nothing on disk, if the folder it
+            names is empty, or if it is a pattern matching more than one file.
+    """
+    # `Path("")` is the process's own directory, which `is_dir` answers yes to —
+    # so an unset parameter would resolve to the working directory's contents
+    # rather than to the refusal a document with nothing chosen is owed.
+    folder = Path(param) if param else None
+    if folder is not None and folder.is_dir():
+        listed = sorted(path for path in folder.iterdir() if path.is_file())
+        if not listed:
+            raise SourceFileError(
+                f"{tool_id}: {param!r} is a folder with no file in it, so there is nothing for "
+                "this step to read — a run over it cannot happen rather than running over an "
+                "absence"
+            )
+        return tuple(listed)
+    found = sorted(path for path in map(Path, glob(param)) if path.is_file())
+    if not found:
+        raise SourceFileError(
+            f"{tool_id}: {param!r} names no file, so there is nothing for this step to read — a "
+            "run over it cannot happen rather than running over an absence"
+        )
+    if len(found) > 1:
+        shown = ", ".join(str(path) for path in found[:4])
+        raise SourceFileError(
+            f"{tool_id}: {param!r} names {len(found)} files ({shown}"
+            f"{', ...' if len(found) > 4 else ''}) — which of them a step reads is not something "
+            "the filesystem's listing order gets to decide, so narrow the pattern to one, or name "
+            "the folder itself if what you mean is all of them"
+        )
+    return (found[0],)
+
+
+def one_named_file(param: str, tool_id: str, /) -> Path:
+    """`named_files`' answer where the caller reads one file, refusing an ordering.
+
+    Where the two halves of the resolution part company. `named_files` says what
+    a param names; this says what a step whose `read` hands over one file's
+    frames can do with that — which, for a folder of several, is refuse. The
+    ordering is real and it has no reader: concatenating tools do not exist, and
+    a step that took the first file would be answering a question nobody asked
+    it.
+
+    Separate from the pattern refusal above rather than folded into it, because
+    the two are different mistakes with different fixes: a pattern is narrowed,
+    and a folder waits for something that can read an ordering.
+
+    Raises:
+        SourceFileError: on `named_files`' terms, or if `param` names a folder
+            holding more than one file.
+    """
+    found = named_files(param, tool_id)
+    if len(found) > 1:
+        shown = ", ".join(path.name for path in found[:4])
+        raise SourceFileError(
+            f"{tool_id}: {param!r} holds {len(found)} files ({shown}"
+            f"{', ...' if len(found) > 4 else ''}) and this step reads one — the order they are "
+            "in is the folder's answer and nothing on the shelf reads a sequence of files yet"
+        )
+    return found[0]
 
 
 class ToolSource(Protocol[ParamsT_contra]):
@@ -1099,11 +1201,29 @@ class ToolSource(Protocol[ParamsT_contra]):
     #: the key walk and the format handed to `read` — and neither may guess it.
     decoded: bool
 
-    def file(self, params: ParamsT_contra, /) -> Path:
-        """The one file `params` names.
+    def files(self, params: ParamsT_contra, /) -> tuple[Path, ...]:
+        """Every file `params` names, ordered.
+
+        The resolution itself, and the one a front end asks: what a source is
+        pointed at is a folder's worth of files as readily as one, and a window
+        drawing the source has to be able to show two without the document being
+        wrong (`named_files`).
 
         Raises:
-            SourceFileError: if the pattern names no file or several.
+            SourceFileError: if the parameter names nothing, or names a pattern
+                matching more than one file.
+        """
+        ...
+
+    def file(self, params: ParamsT_contra, /) -> Path:
+        """The one file `params` names, for the callers that read one.
+
+        `files` narrowed by `one_named_file`, and the narrowing is where the
+        ordering a folder resolves to meets a `read` that hands over one file's
+        frames.
+
+        Raises:
+            SourceFileError: if the parameter names no file or several.
         """
         ...
 

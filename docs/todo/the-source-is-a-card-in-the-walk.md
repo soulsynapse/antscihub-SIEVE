@@ -73,6 +73,23 @@ distinction the paragraph above already draws — "one input, two interpretation
 … a different shape from the add box's one entry per spec" — so the shape the
 root offer takes is settled here.
 
+## Folded 2026-08-09: the files the card lists are computed, and nothing paints them
+
+`a-source-param-names-a-folder-and-several-files-are-an-ordering` landed
+`MainWindow.resolved_sources` — per source root, the ordered files its path
+parameter names, re-read when the window becomes the active one again. That is
+what "two files now show in the source tool" is read off, and today nothing
+reads it: the map is held and painted by nothing, which is this card's job and
+was left here rather than given a placeholder consumer.
+
+It also leaves the card a question that could not be answered without it. A
+folder resolves to *every* file in it, flat and unfiltered, because narrowing by
+extension is a declaration no tool carries — so a folder holding a README
+resolves to the README, and what the user sees is a list with something in it
+they did not mean. Whether the chooser narrows the list, the tool declares what
+it can read, or nobody does because a reader refuses it one step later, is a
+question this card is the first to have a reason to ask.
+
 Two facts it can build on. `offered_tools` now refuses a tool declaring `source`,
 because a root cannot be what goes *after* something; the root's offer is that
 refusal read the other way. And the swap button's dead tooltip on the source card

@@ -1,7 +1,7 @@
 ---
 title: The canvas shows the walked step's result over its input
 step: "10.1"
-status: awaiting-review
+status: open
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'result_over_input or off_one_render'"
 opened: 2026-08-09
@@ -43,3 +43,52 @@ pays a render nothing asked for.
     $ uv run pytest tests/gui -q -k 'result_over_input or off_one_render'
     181 deselected in 0.7s
     exit: 5
+
+## 2026-08-10 (review): the criterion is green with the input layer never drawn
+
+Reopened rather than closed. The implementation that landed in `709d6b0` is
+right — `render_at` returns both layers off one render, `input_of` reads the
+single upstream edge, the root falls back to the transport's proxy, and
+`viewport_node` is untouched, so the region editor still gets the source alone.
+What did not land is a criterion that can tell any of that from its absence for
+the claim this item is named for.
+
+Delete one line from `VideoCanvas.paintEvent` — `painter.drawImage(box,
+self._under)`, leaving the layer held, exposed on `.under`, and never
+painted — and `done_when` is still `2 passed`. The three grabs the case
+compares sweep the *result*'s alpha, so at opacity 0.0 the grab is the empty
+letterbox, which differs from the other two exactly as a real input layer
+would. The case's own docstring diagnoses the field-assertion version of this
+hole correctly and the grab version has it too. Mechanism and the mutant's
+exit in
+[findings/loop/2026.08.10-three-grabs-that-all-differ-are-green-with-the-under-layer-never-painted.md](../findings/loop/2026.08.10-three-grabs-that-all-differ-are-green-with-the-under-layer-never-painted.md).
+
+What closes it is one grab pinned to a picture rather than to another grab: at
+opacity 0.0 the canvas must equal the canvas handed the input image as its only
+frame, which is false for a background and false for a layer nobody drew. The
+`off_one_render` half needs nothing — it counts `render_frame` calls and asserts
+`under is not None`, and both move under the mutation that matters to it.
+
+**The two sentences of this item that disagree, and the reading that stands.**
+Paragraph 1 says a source step shows its result alone; paragraph 3 says a root's
+input is `result.source`. The work run read them as consistent — at a footage
+root the decoded frame *is* the root's own output, so the composite is a visual
+no-op — and implemented paragraph 3. That reading stands and is written here
+rather than left in the run log. What it does not cover, and what the next run
+on this item owns: `FrameResult.source` is *one* frame for the whole render, so
+in a graph with more than one source root every root gets the same input layer,
+and a checkpoint-read root (`crop-serving-and-checkpoint-read-back-become-source-tools.md`,
+done) would be drawn over footage it has nothing to do with. Either the composite
+is refused at a source root — which is paragraph 1 read literally — or the root's
+input is read from something that distinguishes the roots. Nothing exercises
+either today.
+
+**The output-card clause is struck from this item.** "The output card shows the
+last real step's result" has no subject in the tree: `_order` is
+`walk.node_order(pipeline)` and the output card is a `chain_stack.Outputs` built
+from `kept_products`, not a `Node`, so the walk cannot stand on it and
+`_paint_viewport` can never be about one. The work run named this and wrote no
+code for it, correctly. It is folded into
+[the-track-is-three-positions-and-the-fourth-is-a-steps-form.md](the-track-is-three-positions-and-the-fourth-is-a-steps-form.md),
+which already owns "the walk stands only where a node is" and the two ways out
+of it. It comes back here only if that item gives the walk a place to stand.

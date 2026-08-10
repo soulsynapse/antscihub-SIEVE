@@ -55,3 +55,28 @@ has one.
     $ uv run pytest tests/gui -q -k the_track_has_three_positions
     223 deselected in 0.65s
     exit: 5
+
+## 2026-08-10 (review): the canvas has a clause waiting on the same ruling
+
+Folded in rather than minted, because it is a consequence of the sentence this
+item already owns — "the walk stands only where a node is" — and not a second
+subject. `the-canvas-shows-the-result-over-the-input.md` (10.1) asserts among
+its clauses that "the output card shows the last real step's result", and that
+clause has nowhere to land for exactly this reason: `MainWindow._order` is
+`walk.node_order(pipeline)`, `_at` indexes it, and the output card is a
+`chain_stack.Outputs` assembled from `kept_products` rather than a `Node`. The
+walk cannot arrive there, so `_paint_viewport` has no state in which it is
+standing on an output card and nothing about the canvas can be written for it.
+10.1's review struck the clause and points here.
+
+This does not widen what has to be decided — it is the same fork the paragraph
+above states, the walk gaining a non-node place to stand or the step position
+learning to build a form from something other than a `Node` and a `ToolSpec`.
+It adds one consequence to whichever answer lands: the picture the canvas paints
+at that position is the last frame-bearing node's result, which is what
+`app.frame_bearing` already computes for every other card, so the canvas needs
+no new rule and only a position it can be asked about.
+
+The criterion above is named for the track's count and does not reach the
+canvas. A session closing this item should widen it, or say here why the
+canvas half is a separate close.

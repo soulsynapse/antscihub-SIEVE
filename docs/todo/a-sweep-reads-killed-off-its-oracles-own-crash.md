@@ -1,9 +1,9 @@
 ---
 title: A sweep reads KILLED off any non-zero exit, including its oracle's own crash
 priority: high
-status: awaiting-review
+status: open
 gated_on: nothing
-done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k an_oracle_talkative_only_on_the_mutant_is_not_scored_killed"
+done_when: "uv run pytest tests/scripts/test_mutation_sweep.py -q -k a_mutant_that_leaves_the_subject_unparseable_is_refused"
 opened: 2026-08-08
 ---
 
@@ -289,3 +289,33 @@ Untouched, in the order the section above lists them: `_run_bounded`'s docstring
 and this rotation's own predecessor docstring — the correcting run owns both
 paragraphs and the capacity case's name with them — then the compile-the-mutant
 gate, `_tail`'s uncased halves, and `ORACLE_BUDGET_SECONDS`'s comment.
+
+## The verdict is reached, and the criterion rotates onto the deterministic member (2026-08-10)
+
+The title's false KILLED is reached by a case for the first time, re-verified
+independently rather than read off the transcript: the criterion is green here,
+`done_when` was untouched and `status` moved only to `awaiting-review`, the
+redirection mutant turns the new case red through the sweep, and the mechanism
+reproduces outside the sweep's alphabet — `run_sweep` in-process against a `PIPE`
+twin of `_run_bounded` returns `[True]`, a scored KILLED with no `SweepError`
+raised, against a mutant whose true verdict is SURVIVED. The whole module is
+green.
+
+It is not `done`, because everything the criterion could not reach is in the
+tree rather than ahead of it, and one run and one commit satisfies all of it:
+the compile-the-mutant gate — the deterministic member of the false-KILLED
+class, which fires on every subject under every oracle and is the only remaining
+clause a `-k` can assert — and, riding with it because they are the same file
+and the same reading, the three paragraphs that now describe a mechanism their
+subject does not have. `_run_bounded`'s docstring credits the redirection with a
+promptness `Popen.wait` supplies;
+`test_an_oracle_whose_output_outgrows_the_pipe_buffer_is_scored_by_its_exit`
+states the KILLED mechanism as though its own case reached it, when what it
+establishes is capacity, and its name claims the verdict the case above is the
+one to claim. `_tail`'s uncased halves and `ORACLE_BUDGET_SECONDS`'s
+"structurally impossible" comment are still here and still smallest.
+
+`done_when` rotates onto the gate. What the paragraphs wait on is checkable in
+one command beside it — `grep -rn "is_scored_by_its_exit" tests/scripts` comes
+back empty once the capacity case carries a name that claims capacity, and the
+docstrings are corrected in the commit that renames it.

@@ -5,6 +5,8 @@
 - 📁 `.githooks/`
   - 📄 `pre-commit`
 - 📁 `docs/`
+  - 📁 `adr/`
+    - 📄 `ADR-0001-compartments-house-any-surface.md`
   - 📄 `SCAFFOLD.md`
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.

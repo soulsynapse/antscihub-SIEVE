@@ -71,3 +71,31 @@ when NEW PROJECT stopped on a schema question.
     $ uv run pytest tests/gui -q -k "when_is_under_what_it_holds or card_arrow_enters"
     181 deselected in 0.65s
     exit: 5
+
+## Folded 2026-08-10: the glyphs this card is to copy are not in the referent's order
+
+"The same `→` and `✕` a step card does" is the argument above, and the step
+card it copies from is itself out of order. The referent's head is
+`→ ⇄ ◆ ✕` (`mockup.py`, the four `head.addWidget` lines of `_card`);
+`chain_stack.ChainStack._build_card` draws `→ ◆ ⇄ ✕`. The swap button landed
+last (09.10) and went in beside the remove rather than beside the settings,
+which is how the two came apart — and neither side argues an order, so what
+is settled is only that they disagree about a surface the map calls the same
+one. One commit fixes both: the step card's head is what the project card's
+head is defined as a copy of, so putting them in one order is the same edit as
+giving this card two of them.
+
+The tests reach these buttons positionally — `findChildren(QToolButton)[2]` is
+"the ⇄, which is the third" in `tests/gui/test_swap_box.py`, `[3]` is "the ✕,
+which is the last" in `tests/gui/test_reads_past.py` — so reordering moves what
+those helpers return and both docstrings state the index they are asserting.
+Whichever order wins, the helpers should find their button by its glyph: an
+index that silently becomes another button is how a reorder passes a suite it
+should have reddened, and this fold is that reorder.
+
+The rest of the referent's buttons were checked at the same time and are not
+owed anything here: `⇄ ◆ ✕ →`, the crop `+`/`−`, ADD STEP, the offer buttons,
+NEW PROJECT, OPEN LOCATION, ▶ and HANDLES are all built and wired, the source
+card's `…` browse is
+[the-source-is-a-card-in-the-walk](the-source-is-a-card-in-the-walk.md), and
+Run is on the output step's form (`save_screen.py`) where the map puts it.

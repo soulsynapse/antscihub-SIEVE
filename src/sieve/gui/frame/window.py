@@ -7,6 +7,11 @@ most often. Timeline against both is a seam: the strip is a fixed height,
 because what it draws is the whole asset at a size the layout does not get a
 say in. The menu bar sits above all three and is a boundary of neither kind —
 it acts on the window, not on what any pane holds.
+
+A subpane adds a boundary of the seam's kind one level in, and on the axis its
+pane's outer boundary left alone — top and bottom in the canvas and the
+controls, left and right in the timeline. Which sides those are is the pane's
+own and stated there; the window only opens them.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 from sieve.gui.frame.chrome import stylesheet
 from sieve.gui.frame.menu import build_menu_bar, show_about
 from sieve.gui.frame.panes import (
+    Side,
     build_canvas,
     build_controls,
     build_seam,
@@ -39,6 +45,16 @@ class MainWindow(QMainWindow):
         self.canvas = build_canvas()
         self.controls = build_controls()
         self.timeline = build_timeline()
+
+        # Every side a subpane may anchor to, opened blank. The six are the
+        # frame's claim about where a view can be put that is not the pane's
+        # main occupant, and a claim nothing stands on is one nobody can check;
+        # the empty panes and the greyed menu items are here on the same terms.
+        # Once views arrive these are attached where one is asked for, not on
+        # the way up — the resting frame is three panes, not nine.
+        for pane in (self.canvas, self.controls, self.timeline):
+            for side in sorted(pane.anchors, key=lambda side: side.name):
+                pane.attach(side)
 
         # Even stretch, and an even split to start: neither view is the
         # window's main one. The chain is tuned by reading a plot against the

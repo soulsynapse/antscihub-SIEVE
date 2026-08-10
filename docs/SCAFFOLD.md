@@ -7,6 +7,7 @@
 - 📁 `docs/`
   - 📁 `adr/`
     - 📄 `ADR-0001-panes-house-any-view.md`
+    - 📄 `ADR-0002-a-subpane-divides-the-spare-axis.md`
   - 📁 `vocab/`
     - 📄 `menu.md`
     - 📄 `pane.md`
@@ -26,7 +27,7 @@
       - 📁 `frame/` — The frame: the window, its three panes, and the chrome between them.
         - 📄 `chrome.py` — What the window wears where no pane covers it.
         - 📄 `menu.py` — The bar across the top, and what the window itself can be asked to do.
-        - 📄 `panes.py` — The three panes the window divides into, and nothing standing in them yet.
+        - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
       - 📄 `palette.py` — The colours every view draws with.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.

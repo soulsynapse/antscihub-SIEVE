@@ -319,11 +319,12 @@ crop-as-contract: a `region` param gets the canvas-draw surface, `span` gets
 timeline handles, a future stamp tool declares `point`; a handoff's output is
 only a param value, entering through the same command path as a spinbox edit.
 One command layer is the document's only writer, keyed by intent kind —
-SetParam addressed by node, param, and an optional replicate (an override is
-the same mutation at a longer address); SetOutputs; AddNode and RemoveNode
-arriving with the surfaces that emit them; a drawn region or dragged span
-enters as SetParam through its editor — dissolving the document/commands
-co-change. Undo/redo is two stacks of whole immutable pipeline values in a
+`session/intents.py` is the enumeration, and a kind arrives with the surface
+that emits it. What the keying buys is visible in `SetParam`: it is addressed
+by node, param, and an optional replicate, so an override is the same mutation
+at a longer address rather than a kind of its own, and a drawn region or
+dragged span enters through its editor rather than through a kind named after
+the gesture — dissolving the document/commands co-change. Undo/redo is two stacks of whole immutable pipeline values in a
 Qt-free session layer, not command inversion — the v2.5 spike proved the
 shape (`proto_sieve/docs/DECISIONS.md`, 2026-08-03): moving a pointer through
 values is cheap on a small value, and prefix reuse falls out of the

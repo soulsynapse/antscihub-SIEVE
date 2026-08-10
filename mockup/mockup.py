@@ -110,27 +110,47 @@ from PySide6.QtWidgets import (
 # ---------------------------------------------------------------------------
 # The sample document.
 
-LIBRARY_ROOT = "D:/ethology/2026"
-LIBRARY = f"library — {LIBRARY_ROOT}"
+LIBRARY = "library"
 
-# Name, what the project holds, and when it was last opened. The second line is
-# what the pipeline's knob rows are here: the thing about the card a click acts on.
+# Name, what the project holds, when it was last opened, and where it lives. The
+# second line is what the pipeline's knob rows are here: the thing about the card
+# a click acts on. The fourth is on no line at all — it is what OPEN LOCATION
+# acts on, and it differs per project because the library is the list of the ones
+# it has been shown rather than a folder it scans. Sample paths, scattered on
+# purpose: a library whose projects all sat under one root would draw the same
+# either way and settle nothing.
 PROJECTS = [
-    ("arena_2026-07-30", "6 sources · 6000 frames @ 30 fps", "opened today"),
-    ("colony_04_stirred", "18 sources · chain saved", "3 days ago"),
-    ("petri_replicates", "4 sources · no chain yet", "last month"),
+    ("arena_2026-07-30", "6 sources · 6000 frames @ 30 fps", "opened today", "D:/ethology/2026"),
+    ("colony_04_stirred", "18 sources · chain saved", "3 days ago", "D:/ethology/2026/colonies"),
+    ("petri_replicates", "4 sources · no chain yet", "last month", "E:/scratch"),
 ]
 
-def add_project() -> None:
+def add_project(parent: QWidget | None = None) -> bool:
     """Another project in the library, holding what a new one holds: nothing.
 
-    Named here rather than through a dialog because the name is a knob like any
-    other — the project card is where it would be edited, and a modal asking for
-    it up front would be the one form in the surface that blocks the walk.
+    The picker is the mint, which is the one modal this surface owns and is not
+    a name being asked for up front: a project file lives where the user put it,
+    the library is the list of the ones it has been shown rather than a folder
+    it scans, and a source is stored relative to the project file — so a
+    document with no location has nowhere to hold the video it is about. The
+    name comes along because a file has one, and it stays a knob on the card.
+    Returns whether one was minted; cancelling leaves the library as it was.
     """
-    PROJECTS.append(
-        (f"untitled_{len(PROJECTS) + 1}", "no sources · no chain yet", "just created")
+    path, _filter = QFileDialog.getSaveFileName(
+        parent, "New project", "", "SIEVE project (*.sieve.yaml);;All files (*)"
     )
+    if not path:
+        return False
+    chosen = Path(path)
+    PROJECTS.append(
+        (
+            chosen.name.removesuffix(".sieve.yaml"),
+            "no sources · no chain yet",
+            "just created",
+            chosen.parent.as_posix(),
+        )
+    )
+    return True
 
 
 def close_project(index: int) -> None:
@@ -3337,7 +3357,7 @@ def build_pipeline_pane(
 
     # What stands above the stack is what the stack belongs to, not a step in
     # it: the project, as the library card is above the project list.
-    name, holds, _opened = PROJECTS[project]
+    name, holds, _opened, _folder = PROJECTS[project]
     project_card = _fixed_card(f"project — {name}", holds)
     # ADD STEP where NEW PROJECT is, and for the same reason: what mints into a
     # container sits on the container's own card, not at the foot of the list
@@ -3467,9 +3487,13 @@ def _chrome_button(text: str, tip: str) -> QPushButton:
     return button
 
 
-def _reveal_project(name: str) -> None:
-    """The project's folder in the system's file manager — the sample path here."""
-    QDesktopServices.openUrl(QUrl.fromLocalFile(f"{LIBRARY_ROOT}/{name}"))
+def _reveal_project(folder: str) -> None:
+    """The project's own folder in the system's file manager — sample paths here.
+
+    Handed the folder rather than deriving it from the name: no root exists to
+    derive it against, which is the whole of what a remembered list changes.
+    """
+    QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
 
 def _open_project_button(index: int, on_open) -> QToolButton:
@@ -3512,7 +3536,7 @@ def _close_project_button(index: int, on_close) -> QToolButton:
 
 
 def _project_card(index: int, current: int, on_select, on_open, on_close) -> ChainCard:
-    name, holds, opened = PROJECTS[index]
+    name, holds, opened, folder = PROJECTS[index]
     card = ChainCard(
         selected=index == current,
         on_select=lambda: on_select(index),
@@ -3541,7 +3565,7 @@ def _project_card(index: int, current: int, on_select, on_open, on_close) -> Cha
     # rebuilt when that moves, so the button travels with the highlight.
     if index == current:
         reveal = _chrome_button("OPEN LOCATION", "Open this project's folder on disk")
-        reveal.clicked.connect(lambda: _reveal_project(name))
+        reveal.clicked.connect(lambda: _reveal_project(folder))
         foot.addWidget(reveal)
     layout.addLayout(foot)
     return card
@@ -3554,7 +3578,7 @@ def build_project_pane(current: int, on_select, on_open, on_new, on_close) -> QW
     # The button is on the library card, not at the foot of the list: a new
     # project is added to the library, the way another region is added on the
     # crop card and not in the fan that shows them.
-    library = _fixed_card(LIBRARY, f"{len(PROJECTS)} projects on disk")
+    library = _fixed_card(LIBRARY, f"{len(PROJECTS)} projects remembered")
     new = _chrome_button("NEW PROJECT", "New project — empty until sources are added")
     new.clicked.connect(on_new)
     library.layout().addWidget(new)
@@ -4127,8 +4151,12 @@ class Control(QWidget):
         Standing on it rather than opening it: the chain pane would show a
         chain the project does not have, and the next act — adding sources —
         is a knob on the card the selection just landed on.
+
+        A cancelled picker moves nothing, which is what makes the mint free to
+        try: the selection stays where the user left it.
         """
-        add_project()
+        if not add_project(self):
+            return
         self.select_project(len(PROJECTS) - 1)
 
     def close_project(self, index: int) -> None:

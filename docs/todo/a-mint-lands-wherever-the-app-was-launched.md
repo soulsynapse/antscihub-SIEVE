@@ -1,14 +1,39 @@
 ---
-title: A mint lands wherever the app was launched, and the library is that folder
+title: A mint asks where the project goes, and nothing defaults anywhere
 phase: 9
 priority: high
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/gui/test_project_cards.py -k library_root -q"
+done_when: "uv run pytest tests/gui/test_project_cards.py -q -k 'new_project_asks_where_the_project_goes or a_cancelled_ask_mints_nothing'"
 opened: 2026-08-09
 ---
 
-# A mint lands wherever the app was launched, and the library is that folder
+# A mint asks where the project goes, and nothing defaults anywhere
+
+[adr/a-project-lives-where-the-user-put-it.md](../adr/a-project-lives-where-the-user-put-it.md)
+rules on this item by path: a project file's location is the user's, chosen when
+it is minted, and no directory is the library. So NEW PROJECT asks — a file
+dialog whose answer is the path the empty document is written to — and there is
+no location it falls back to when the user gives none. A cancelled ask mints
+nothing, which is the whole of "nothing defaults anywhere": a default location is
+the only thing that can produce the stray mints recorded twice below, so removing
+it rather than relocating it is what ends them.
+
+`library_root` is the default the ADR removes, and `main`'s `Path.cwd()` is where
+it is asked. Both come out with the ask, not before it — a pane with no library
+and no picker lists nothing. What replaces the scan is the remembered list of
+locations the app has been shown, and where that list is stored the ADR
+deliberately leaves open; the storage question and the pin that shares it are in
+[pinning-a-project-is-state-the-library-has-nowhere-to-put.md](pinning-a-project-is-state-the-library-has-nowhere-to-put.md),
+which the ADR names as the claimant that should land with it. This item's
+criterion asserts the ask and the absence of a default, and deliberately says
+nothing about the list, because a criterion over the list would pin a decision
+nobody has made.
+
+## As minted 2026-08-09: the launch directory's folder, superseded
+
+Kept rather than cut: the sections after it are dated records that argue against
+it and refer back to it, and the recurrences they hold are ADR 35's evidence.
 
 `main` builds the window with `projects_in(Path.cwd())` and `library=Path.cwd()`,
 so the library is whatever directory the process started in and NEW PROJECT
@@ -120,3 +145,44 @@ them can be satisfied by this item's criterion.
 `projects/` default, not a remembered choice. The review that takes this item
 decides whether to widen it or leave the remembered half to its own item once the
 folder chooser has a surface.
+
+## 2026-08-09: repointed under ADR 35, criterion replaced
+
+ADR 35 settled the day this item's last section was written and overrules it by
+path. The head of the file is the item under that ruling; everything from "As
+minted" down is the record it replaces, left in place because two of its sections
+are the evidence the ADR cites — two stray `untitled_1.sieve.yaml` files from a
+clean tree in two days — and a successor file would lose them.
+
+`done_when` was replaced rather than widened, on Kendrick's instruction and not by
+a worker's judgement. The old criterion (`-k library_root`) is green on the
+unchanged tree against two tests that already exist, and it pins the very default
+the ADR removes: widening it would have made this item assert the thing it now
+exists to delete. The new one names the ask and the cancelled ask, red at
+repointing because nothing matches:
+
+    $ uv run pytest tests/gui/test_project_cards.py -q -k 'new_project_asks_where_the_project_goes or a_cancelled_ask_mints_nothing'
+    12 deselected in 0.13s
+    exit: 5
+
+The remembered half folded above — which folder to list, which card the selection
+starts on — goes with the storage question to the pinning item, which ADR 35 names
+as the other claimant and which now carries a dated section for it. It is not
+this item's criterion for the reason the ADR gives: the list's home is undecided.
+
+Two things for whoever implements this, found while repointing and left here
+rather than fixed, since they are the implementation's to change:
+
+`project_select.mint`'s docstring argues against the decision. "A modal at mint
+time would be the one form in the surface that blocks the walk" is the cost ADR 35
+takes deliberately, calling it a revision of the surface rather than a cleanup
+([a-position-is-asked-for-in-the-chain](../adr/a-position-is-asked-for-in-the-chain.md)).
+The sentence is still true about the *name* — the ask is for a location, and the
+name comes from it — but as written it reads as an argument against a settled
+decision, and the ask lands in that function's caller.
+
+The same docstring cites `adr/a-document-may-name-no-footage.md`, which `b3aff03`
+moved to `docs/adr/superseded/`. That commit's citation sweep missed it because
+the path is hyphen-wrapped across two lines. The argument still holds — ADR 34
+dissolves that subject rather than reversing it — so it is the citation that is
+stale and not the reason it gives.

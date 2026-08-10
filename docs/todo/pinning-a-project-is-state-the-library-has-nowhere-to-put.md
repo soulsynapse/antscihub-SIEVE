@@ -40,3 +40,35 @@ deciding together even though only one of them is minted here.
     $ uv run pytest tests/gui/test_project_cards.py -q -k 'a_pinned_project_leads_the_stack or pinning_survives_a_relaunch'
     10 deselected in 0.13s
     exit: 5
+
+## 2026-08-09: the premise is answered, and the store is now this item's whole of it
+
+[adr/a-project-lives-where-the-user-put-it.md](../adr/a-project-lives-where-the-user-put-it.md)
+rules on the disagreement above rather than leaving it: the library is the list
+of locations the app has been shown, held as per-user state, and the ADR cites
+this item's own argument as part of why — a scan has nowhere to put a pin, a list
+has somewhere for both. So VISION's sentence is not superseded by the mockup; the
+mockup's row is a pane drawn over a scan, and the scan is what goes. The ✕ in
+that row is the ADR's own evidence, since taking a project out of the library
+with the folder untouched is not something a scan can do.
+
+What that leaves here is the store, and the ADR names this item as where it is
+decided: "v3 holds no per-user state at all today, and the first thing that needs
+it decides its home; the pinning item above is the other claimant and should land
+with it rather than beside it." Landing *with* it is the constraint — a pin file
+minted beside a separately-invented library file is two homes for one kind of
+state.
+
+Folded from [a-mint-lands-wherever-the-app-was-launched.md](a-mint-lands-wherever-the-app-was-launched.md),
+which repointed under the same ADR and can no longer carry them: the remembered
+library folder, and which card the selection starts on. Both are the same shape as
+a pin — an answer the user gave that no scan can rediscover, and specifically not
+an mtime, which is why `project_select.py` makes the card's foot say *written*
+rather than *opened*. Three claimants, one store, and this item is where it is
+chosen.
+
+`done_when` above is untouched and does not reach the folds: it names the pin
+alone, and a run that satisfies it will have had to decide the store anyway. The
+review that takes this item decides whether to widen it to the remembered folder
+and the remembered selection, or to leave those to their own items once the store
+exists.

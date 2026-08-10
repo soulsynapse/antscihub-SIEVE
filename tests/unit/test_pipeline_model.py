@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from sieve.core import pipeline_model
 from sieve.core.pipeline_model import (
     SCHEMA_VERSION,
     CropRecord,
@@ -249,6 +250,38 @@ class TestPurity:
         # the document describes, and would report success.
         with pytest.raises(ValidationError, match="schema version"):
             Project.from_yaml(f"schema_version: {SCHEMA_VERSION + 1}\nsource: {{path: a.MP4}}\n")
+
+    def test_a_load_keeps_the_version_it_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The other half of the refusal above, and the half that has no subject
+        # while `SCHEMA_VERSION` is 1 — so the build is moved rather than the
+        # document, which is the only direction that exists to move. A reader
+        # that restamped would make the stamp a fact about which build last
+        # touched the file instead of about what the file says
+        # (`adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md`).
+        monkeypatch.setattr(pipeline_model, "SCHEMA_VERSION", SCHEMA_VERSION + 1)
+
+        project = Project.from_yaml(f"schema_version: {SCHEMA_VERSION}\nsource: {{path: a.MP4}}\n")
+
+        assert project.schema_version == SCHEMA_VERSION
+
+    def test_an_older_document_round_trips_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # `test_saving_twice_writes_identical_bytes` for the case that crosses
+        # builds: opening someone else's project and saving it must not be an
+        # edit. Bytes rather than the field alone, because the stamp is the one
+        # thing a newer build can change without any user asking it to, and a
+        # document it relabelled is one the build that wrote it then refuses by
+        # a version number rather than by anything the user did.
+        path = tmp_path / "arena.sieve.yaml"
+        make_project().save(path)
+        written = path.read_text(encoding="utf-8")
+        monkeypatch.setattr(pipeline_model, "SCHEMA_VERSION", SCHEMA_VERSION + 1)
+
+        Project.load(path).save(path)
+
+        assert path.read_text(encoding="utf-8") == written
+        assert Project.load(path).schema_version == SCHEMA_VERSION
 
 
 class TestReferentialIntegrity:

@@ -1,7 +1,7 @@
 ---
 title: A load restamps the version it read, and no rule says a bump must be additive
 step: "11.1"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_pipeline_model.py -q -k 'a_load_keeps_the_version_it_read or an_older_document_round_trips_unchanged'"
 opened: 2026-08-09

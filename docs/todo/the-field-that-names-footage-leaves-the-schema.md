@@ -84,6 +84,24 @@ on every project rather than only the empty one.
     ERROR: not found: …::test_the_library_line_reads_footage_through_the_graph
     exit: 4
 
+## Folded 2026-08-10: 11.1 ruled, and it leaves this item the question of whether the number moves
+
+[adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md](../adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md)
+(38) is 11.1's answer, and it rules the way the section above hoped: a removal is
+allowed and paid at the version, which for this migration is `extra="forbid"`
+refusing every document still carrying `source:` by name — the first `-k` clause
+is that price, written as a case. What the ADR does not decide, because it is
+this bump's and not the rule's, is whether `SCHEMA_VERSION` becomes 2 here at
+all. The stamp rises when a build writes content the declared version does not
+have, and this bump writes none: it takes a key away, and a v1 document that
+still carries the key does not open under either number. So a v1 document
+written after this lands is the same bytes as one written before it, minus a
+key, and there is no build the number would tell anything a refusal by name does
+not already say. The argument for moving it anyway is that a removal is exactly
+the change a stamp exists to record; the argument against is that a number
+nothing reads differently is a number that lies about being load-bearing. This
+item's session picks one and says which in the commit.
+
 ## What stays where it is
 
 `footage_of` dies with the field, and the case it is owed on

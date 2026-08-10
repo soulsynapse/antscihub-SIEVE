@@ -26,6 +26,7 @@ but leaves this index for `docs/adr/superseded/`.
 - [What can change an output is a param](adr/param-not-preference.md) — A value that can change an output is a param — in the artifact, in the cache key; one that can only change presentation or performance is a preference, and anything ambiguous is a param.
 - [A document names footage only through a tool](adr/a-document-names-footage-only-through-a-tool.md) — `Project.source` and `SourceRef` leave schema v1: a document names footage only in a source tool's path param, stored relative to the project file, and every reader reaches it through the graph.
 - [A project lives where the user put it, and the library remembers](adr/a-project-lives-where-the-user-put-it.md) — A project file's location is the user's, chosen when it is minted, and no directory is the library: the library is the list of locations the app has been shown, held as per-user state.
+- [A bump adds, and a removal is paid at the version](adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md) — A schema bump adds fields and never repurposes one, a bump that removes one is paid in full at that version, and a load keeps the version it read.
 
 ## 03 — The repo itself
 
@@ -54,4 +55,4 @@ but leaves this index for `docs/adr/superseded/`.
 - [The walked step owns the canvas](adr/the-walked-step-owns-the-canvas.md) — The walked step owns the canvas — its result over its input, its emissions drawn by kind; an ancestor's emissions are a view toggle; the pin owns only the slot below.
 - [An output's kind is the picture it makes](adr/an-outputs-kind-is-the-picture-it-makes.md) — The canvas paints an output by its `ElementKind` — `PIXEL` an image, `BLOCK` a field of cells over its frame, `FRAME` no picture — and no member is ever added for a tool.
 
-*32 settled, 5 superseded.*
+*33 settled, 5 superseded.*

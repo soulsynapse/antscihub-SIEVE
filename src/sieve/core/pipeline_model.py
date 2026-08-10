@@ -85,7 +85,9 @@ from sieve.core.types import ROI
 #: reader refuses a document from the future rather than guessing at it: the
 #: failure mode of guessing is a run that completes and is wrong. v1 is the
 #: floor — there is no earlier v3 document and no importer for a v2 one
-#: (`adr/v2-does-not-import.md`), so nothing here migrates.
+#: (`adr/v2-does-not-import.md`), so nothing here migrates. What a bump may do
+#: to the fields below it is
+#: `adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md`.
 SCHEMA_VERSION = 1
 
 #: Project files are named `<video stem>.sieve.yaml` and live *beside* the
@@ -1007,18 +1009,17 @@ class Project(_Artifact):
     @field_validator("schema_version")
     @classmethod
     def _readable(cls, value: int) -> int:
-        """Refuse a document from the future; restamp everything else as ours.
+        """Refuse a document from the future; keep the version anything else read.
 
-        The restamp keeps the check honest over a project's life: a front end
-        saves by copying the `Project` it opened, so without it the stamp of the
-        oldest file in the history is carried forever. A document this build
-        accepted *is* a document in this build's schema.
+        The stamp is the document's claim about itself, not a record of which
+        build last opened it, which is why a load that accepts an older one
+        leaves it alone (`adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md`).
         """
         if value > SCHEMA_VERSION:
             raise ValueError(
                 f"project uses schema version {value}; this build reads up to {SCHEMA_VERSION}"
             )
-        return SCHEMA_VERSION
+        return value
 
     @model_validator(mode="after")
     def _references_resolve(self) -> Self:

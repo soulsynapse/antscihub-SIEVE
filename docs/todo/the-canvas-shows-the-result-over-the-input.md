@@ -1,7 +1,7 @@
 ---
 title: The canvas shows the walked step's result over its input
 step: "10.1"
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'result_over_input or off_one_render'"
 opened: 2026-08-09
@@ -92,3 +92,19 @@ code for it, correctly. It is folded into
 [the-track-is-three-positions-and-the-fourth-is-a-steps-form.md](the-track-is-three-positions-and-the-fourth-is-a-steps-form.md),
 which already owns "the walk stands only where a node is" and the two ways out
 of it. It comes back here only if that item gives the walk a place to stand.
+
+## 2026-08-10 (review): closed, and the criterion discriminates both layers
+
+`done_when` is `3 passed` here. The pinned case kills `painter.drawImage(box,
+self._under) ==> pass`, and the two cases that predate it still let that mutant
+survive, so the kill is the pinned grab's and not an artefact of running more
+cases. The input's *identity* is pinned as well, which the reopening paragraph
+did not claim of it: `input_of`'s `return edge.upstream ==> return None` — the
+mutant that redirects the under layer from the parent entry to the decoded
+source — is KILLED under the same criterion. The clauses this criterion never
+reaches are covered where they were before this item
+(`viewport_node`'s two `None`s, in `tests/gui/test_app.py`).
+
+The only clause left open is the multi-root one above, and it is now
+[a-second-source-root-is-drawn-over-the-first-roots-footage.md](a-second-source-root-is-drawn-over-the-first-roots-footage.md),
+which names surface the tree does not hold yet.

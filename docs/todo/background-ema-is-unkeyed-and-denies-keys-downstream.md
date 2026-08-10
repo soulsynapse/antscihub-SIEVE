@@ -2,7 +2,7 @@
 title: The epsilon admission question is owed a measurement, and VISION's lead scenario is what pays for it
 phase: 6
 priority: high
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/bench/test_loop_budget.py tests/unit/test_background_ema.py -q -k 'the_background_chain_pays_its_lead_in or a_sub_epsilon_difference_reaches_a_detection'"
 opened: 2026-08-09

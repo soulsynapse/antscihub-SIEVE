@@ -45,6 +45,17 @@ command layer's (`session/intents.RemoveNode`), and a stack that closed the
 chain on screen over a document still holding the step would be the second
 answer the fence exists to prevent.
 
+**A gap is a position, and `AddBox` is what stands in it.** The question ADD
+STEP asks first is *which gap*, and the gaps are what this stack is already
+drawing — so the affordance is a card in the chain rather than a panel in the
+chrome that would have to name the position in words
+(`adr/a-position-is-asked-for-in-the-chain.md`). It never writes: the box is a
+picker, the offer it renders is a shortlist the caller computed
+(`core/tool_registry.offered_tools`), and one mutation is issued when an offer
+is taken. That is what makes esc free and what keeps this module ignorant of
+what a tool is — the names it draws are strings, and what comes back is which
+of them was clicked.
+
 Not the chrome: `chrome.py` holds the palette and the sheet this pane wears.
 Not the stage headers the referent draws between groups — what a stage *is* has
 no derivation in the tree (`todo/a-stage-header-groups-by-nothing-the-tree-declares.md`).
@@ -55,6 +66,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from math import ceil
 
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -68,16 +80,29 @@ from PySide6.QtGui import (
     QPolygonF,
 )
 from PySide6.QtWidgets import (
+    QGridLayout,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from sieve.core.pipeline_model import Node
-from sieve.gui.chrome import ACCENT, DIM, LINE, PANEL, STACK_BG, TEXT, rgb, stack_stylesheet
+from sieve.gui.chrome import (
+    ACCENT,
+    DIM,
+    LINE,
+    PANEL,
+    STACK_BG,
+    TEXT,
+    chrome_button,
+    rgb,
+    stack_stylesheet,
+)
 
 
 @dataclass(frozen=True)
@@ -298,6 +323,14 @@ def edge_lanes(edges: Sequence[tuple[int, int]]) -> dict[tuple[int, int], int]:
 def lane_x(left: float, lane: int) -> float:
     """Where `lane` runs, beside a card whose left edge is at `left`."""
     return left + EDGE_STUB + EDGE_LANE * lane
+
+
+def _stroke(colour: QColor, dashed: bool) -> QPen:
+    """The pen an edge is drawn with. Dashed is the accent's, and means unwritten."""
+    pen = QPen(colour, 1.0)
+    if dashed:
+        pen.setStyle(Qt.PenStyle.DashLine)
+    return pen
 
 
 def arrowhead(end: QPointF) -> QPolygonF:
@@ -523,6 +556,129 @@ class Outputs:
     on_open: Callable[[], None]
 
 
+# ---------------------------------------------------------------------------
+# The box in the gap: which position, and what could stand in it.
+#
+# It is a `ChainCard` so the column's edge painters reach it by the one path they
+# reach everything — a geometry read off `cards[slot]` — and so it wears the fill
+# and the numbering the chain wears. Dashed for the same reason its edges are:
+# nothing has been written, and the solid chain around it is still what the
+# document holds.
+#
+# It builds none of its own contents. The offer is the *gap's*, computed above
+# this module and handed down as names; which of them is lit is the window's
+# state, so the box is rebuilt as the site moves rather than holding a selection
+# that could disagree with it. The walk cannot stand on it, because there is no
+# step there to stand on.
+
+#: How many offers stand in a row before the next one wraps.
+OFFER_COLUMNS = 3
+#: What a box with nothing to offer says where the offer would be. Most gaps on
+#: today's shelf are in this state, so it is a sentence the surface owes rather
+#: than a blank.
+EMPTY_OFFER_NOTE = "nothing on the shelf declares it could stand here"
+KEY_NOTE = "↑↓ move the box · ←→ the offer · enter takes it · esc cancels"
+
+
+@dataclass(frozen=True)
+class Adding:
+    """The box standing in a gap: which gap, what is offered there, which is lit.
+
+    `on_take` rides here rather than beside it on the pane for `Fan`'s reason: a
+    pane with no box open cannot be handed the way to fill one. It is given the
+    *position* in the offer rather than the name, so nothing about a tool makes
+    the round trip through a widget.
+    """
+
+    #: The position whose card the gap is under.
+    site: int
+    #: What could stand there, in the order the caller scored them. Empty is a
+    #: real answer and the common one (`core/tool_registry.offered_tools`).
+    offer: tuple[str, ...]
+    lit: int
+    on_take: Callable[[int], None]
+
+
+def _offer_button(name: str, lit: bool, on_take: Callable[[], None]) -> QPushButton:
+    """One offer, in the chrome's dress, with the lit one wearing the accent."""
+    button = chrome_button(name, f"Put {name} in this gap")
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    # Its own width rather than a share of the box's: the offering is a set of
+    # names, and a grid of equal bars would read as a set of slots.
+    button.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+    if lit:
+        button.setStyleSheet(
+            button.styleSheet()
+            + f"QPushButton {{ border-color: {rgb(ACCENT)}; color: {rgb(ACCENT)}; }}"
+        )
+    button.clicked.connect(on_take)
+    return button
+
+
+class AddBox(ChainCard):
+    """The step that is not one yet, standing in the gap it would fill."""
+
+    def __init__(
+        self, adding: Adding, number: int, note: str, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(selected=False, parent=parent)
+        self.site = adding.site
+        #: The number the step would carry, which is the gap's own place in the
+        #: chain — so the box reads as the position rather than as a panel
+        #: about one.
+        self.number = number
+        self.offer = adding.offer
+        self.lit = adding.lit
+        #: What the splice would do, in the names the picture cannot show until
+        #: it happens.
+        self.note = note
+        #: What stands where the offer would, when there is none. Empty string
+        #: where there is one, so the two are never both on screen.
+        self.offer_note = "" if adding.offer else EMPTY_OFFER_NOTE
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 8)
+        layout.setSpacing(4)
+
+        head = QHBoxLayout()
+        title = title_label(f"{number}. new step")
+        title.setStyleSheet(f"color: {rgb(ACCENT)};")
+        head.addWidget(title)
+        head.addStretch(1)
+        head.addWidget(note_label(note))
+        layout.addLayout(head)
+
+        self.offer_buttons = tuple(
+            _offer_button(name, position == adding.lit, partial(adding.on_take, position))
+            for position, name in enumerate(adding.offer)
+        )
+        if self.offer_buttons:
+            grid = QGridLayout()
+            grid.setContentsMargins(0, 2, 0, 0)
+            grid.setSpacing(4)
+            for position, button in enumerate(self.offer_buttons):
+                grid.addWidget(button, position // OFFER_COLUMNS, position % OFFER_COLUMNS)
+            grid.setColumnStretch(OFFER_COLUMNS, 1)
+            layout.addLayout(grid)
+        else:
+            layout.addWidget(note_label(self.offer_note))
+        layout.addWidget(note_label(KEY_NOTE))
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        del event
+        painter = QPainter(self)
+        tint = QColor(ACCENT)
+        tint.setAlpha(14)
+        painter.fillRect(self.rect(), PANEL)
+        painter.fillRect(self.rect(), tint)
+        pen = QPen(ACCENT, 1)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        painter.end()
+
+
 class ChainColumn(QWidget):
     """The stack's column, with the chain's edges drawn under its cards.
 
@@ -575,6 +731,57 @@ class ChainColumn(QWidget):
         }
         self.cards: tuple[ChainCard, ...] = ()
         self.fan: RegionFan | None = None
+        self._box: tuple[int, int, tuple[int, ...]] | None = None
+
+    def hold_box(self, slot: int, site: int, readers: Sequence[int]) -> None:
+        """Give the box at `cards[slot]` the lanes the edges it interrupts had.
+
+        Its lanes are borrowed rather than assigned, so the picture does not
+        shift sideways when the box opens: an edge that moved to enter the box
+        would be saying the chain had been rerouted rather than interrupted.
+
+        Called by the caller once the box is in the layout and in `cards`, for
+        the reason `cards` itself is.
+        """
+        self._box = (slot, site, tuple(readers))
+        trunk = min((lane for (src, _), lane in self._lanes.items() if src == site), default=0)
+        self._lanes[(site, slot)] = trunk
+        for reader in readers:
+            self._lanes[(slot, reader)] = self._lanes.get((site, reader), trunk)
+
+    @property
+    def box_slot(self) -> int | None:
+        """Which of `cards` the box is, or `None` while none is open."""
+        return None if self._box is None else self._box[0]
+
+    def provisional_edges(self) -> tuple[tuple[int, int], ...]:
+        """The edges the box would be spliced onto, which are the ones drawn dashed.
+
+        Out of the gap's step into the box, and out of the box into whatever read
+        past the gap — `Step.reads` inverted, and the picture of what taking an
+        offer would write.
+        """
+        if self._box is None:
+            return ()
+        slot, site, readers = self._box
+        return ((site, slot),) + tuple((slot, reader) for reader in readers)
+
+    def painted_edges(self) -> tuple[tuple[int, int], ...]:
+        """The chain's own edges that are still drawn solid while a box stands in it.
+
+        An edge the box interrupts is not one of them: what is on screen has to
+        be one chain, and a solid line running past the box beside the dashed
+        pair replacing it would be the picture saying both. Only the edges into
+        *steps* are interrupted — a write into the output card names its node
+        and survives the splice untouched
+        (`adr/the-output-card-is-a-picture-of-the-write-list.md`), so a box that
+        dimmed it would be claiming a rewiring the mutation does not make.
+        """
+        if self._box is None:
+            return self.edges
+        _slot, site, readers = self._box
+        interrupted = {(site, reader) for reader in readers}
+        return tuple(edge for edge in self.edges if edge not in interrupted)
 
     def port_labels(self) -> dict[tuple[int, int], str]:
         """The product written beside each arrowhead that is named at all."""
@@ -621,7 +828,7 @@ class ChainColumn(QWidget):
         origin = self.fan.geometry().topLeft()
         return [tile.translated(origin) for tile in self.fan.tile_rects()]
 
-    def fanned_edge(self) -> FannedEdge:
+    def fanned_edge(self, dst: int | None = None) -> FannedEdge:
         """Out of the fanned card into every region, and on out of the one selected.
 
         One run across the gap and a vertical drop off it into each square: what
@@ -630,9 +837,15 @@ class ChainColumn(QWidget):
         what an arrowhead means everywhere else in the stack. The way out
         mirrors it back onto the trunk, so the lane the rest of the stack is
         drawn in survives the branch.
+
+        `dst` is where the way out lands, and it is the fan's reader unless a
+        box is standing in the gap the fan hangs in — the branch itself is the
+        card's and is not provisional, but where it continues to is exactly what
+        the box is asking about.
         """
         assert self.fan is not None
-        src, dst = self.fan.position, self.fan.reader
+        src = self.fan.position
+        dst = self.fan.reader if dst is None else dst
         above, below = self.cards[src].geometry(), self.cards[dst].geometry()
         tiles = self.fan_tiles()
         x = lane_x(above.left(), self._lanes[(src, dst)])
@@ -660,23 +873,47 @@ class ChainColumn(QWidget):
         painter.fillRect(self.rect(), STACK_BG)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         fanned = None if self.fan is None else (self.fan.position, self.fan.reader)
-        for src, dst in self.edges:
+        for src, dst in self.painted_edges():
             if (src, dst) == fanned:
                 self._paint_fanned_edge(painter)
             else:
                 self._paint_edge(painter, src, dst)
+        self._paint_provisional(painter)
         painter.end()
 
-    def _paint_fanned_edge(self, painter: QPainter) -> None:
+    def _paint_provisional(self, painter: QPainter) -> None:
+        """The edges the box would be spliced onto, dashed because it is not.
+
+        Drawn after the chain's own, so the pair replacing an interrupted edge
+        lands over the cards the interruption exposed rather than under them.
+        """
+        if self._box is None:
+            return
+        slot, site, readers = self._box
+        if self.fan is not None and site == self.fan.position:
+            self._paint_fanned_edge(painter, slot, provisional=True)
+        else:
+            self._paint_edge(painter, site, slot, dashed=True)
+        for reader in readers:
+            self._paint_edge(painter, slot, reader, dashed=True)
+
+    def _paint_fanned_edge(
+        self, painter: QPainter, dst: int | None = None, provisional: bool = False
+    ) -> None:
         """The branch, with everything but the selected region's reach held back.
 
         The run is drawn twice so the reach to the selected square is at the
         chain's own weight and the rest of it is not, the way the drops off it
         are: what is dimmed is the part of the picture describing a chain the
         walk is not on.
+
+        `provisional` dashes the way out and nothing else. The branch is the
+        card's own and is real whether or not a box is open; what is not yet
+        written is where the selected region's chain continues to, which is the
+        one segment the box is standing in the way of.
         """
         assert self.fan is not None
-        edge = self.fanned_edge()
+        edge = self.fanned_edge(dst)
         unlit = QColor(LINE)
         unlit.setAlpha(UNLIT_ALPHA)
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -698,21 +935,22 @@ class ChainColumn(QWidget):
             painter.setBrush(colour)
             painter.drawPolygon(arrowhead(drop[1]))
 
-        painter.setPen(QPen(LINE, 1.0))
+        painter.setPen(_stroke(LINE if not provisional else ACCENT, provisional))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         for start, end in zip(edge.rejoin, edge.rejoin[1:], strict=False):
             painter.drawLine(start, end)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(LINE)
+        painter.setBrush(ACCENT if provisional else LINE)
         painter.drawPolygon(arrowhead(edge.rejoin[-1]))
 
-    def _paint_edge(self, painter: QPainter, src: int, dst: int) -> None:
+    def _paint_edge(self, painter: QPainter, src: int, dst: int, dashed: bool = False) -> None:
         start, end = self.edge_line(src, dst)
-        painter.setPen(QPen(LINE, 1.0))
+        colour = ACCENT if dashed else LINE
+        painter.setPen(_stroke(colour, dashed))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawLine(start, end)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(LINE)
+        painter.setBrush(colour)
         painter.drawPolygon(arrowhead(end))
         label = self._labels.get((src, dst))
         if label is not None:
@@ -739,7 +977,9 @@ class PipelinePane(QWidget):
         on_open: Callable[[int], None],
         on_pin: Callable[[int], None],
         on_remove: Callable[[int], None],
+        on_add: Callable[[], None] | None = None,
         fan: Fan | None = None,
+        adding: Adding | None = None,
         outputs: Outputs | None = None,
         parent: QWidget | None = None,
     ) -> None:
@@ -747,6 +987,16 @@ class PipelinePane(QWidget):
         self.setStyleSheet(stack_stylesheet())
 
         self.project_card = fixed_card(f"project — {project}")
+        if on_add is not None:
+            # On the project card and not at the foot of the stack, for the
+            # library card's reason (`project_select.py`): a step is added to
+            # this chain, and the gap it goes in is asked for afterwards rather
+            # than fixed by where the button stands. Absent where the caller
+            # offered no way to add, which is the only honest alternative to a
+            # button that would refuse whenever it was pressed.
+            add = chrome_button("ADD STEP", "Add a step — the box asks which gap")
+            add.clicked.connect(on_add)
+            self.project_card.layout().addWidget(add)
         self.cards = tuple(
             self._build_card(
                 position,
@@ -777,10 +1027,15 @@ class PipelinePane(QWidget):
         # the cards.
         stack.setSpacing(18)
         self.fan = self._build_fan(fan, steps)
+        self.add_box = self._build_add_box(adding, steps)
         for position, card in enumerate(self.cards):
             stack.addWidget(card)
             if self.fan is not None and position == self.fan.position:
                 stack.addWidget(self.fan)
+            # Below the fan where there is one, because the box stands in the
+            # gap that step's output crosses and the fan is the first thing in it.
+            if self.add_box is not None and position == self.add_box.site:
+                stack.addWidget(self.add_box)
         if self.output_card is not None:
             stack.addSpacing(ceil(self.column.label_headroom()))
             stack.addWidget(self.output_card)
@@ -788,8 +1043,21 @@ class PipelinePane(QWidget):
         # The output card is a card of the column and not of the pane: the lines
         # are drawn between cards by position and its position is the foot of the
         # stack, while `cards` is the walk's own list and the walk never stands
-        # on a card no node is behind.
+        # on a card no node is behind. The box is past both, for the second half
+        # of that reason and for a further one — it holds no node at all, so
+        # numbering it as a position would put it in the walk's own list.
         self.column.cards = self.cards + (() if self.output_card is None else (self.output_card,))
+        if self.add_box is not None:
+            self.column.hold_box(
+                len(self.column.cards),
+                self.add_box.site,
+                tuple(
+                    position
+                    for position, step in enumerate(steps)
+                    if self.add_box.site in step.reads
+                ),
+            )
+            self.column.cards += (self.add_box,)
         self.column.fan = self.fan
 
         scroll = QScrollArea()
@@ -819,6 +1087,26 @@ class PipelinePane(QWidget):
         row.addStretch(1)
         row.addWidget(_settings_button(outputs.on_open))
         return card
+
+    @staticmethod
+    def _build_add_box(adding: Adding | None, steps: Sequence[Step]) -> AddBox | None:
+        """The box in the gap under `adding.site`, or nothing where none is open.
+
+        The note it carries is the splice in the two names the picture cannot
+        show until it happens: what the new step would read, and what would read
+        it. Read off `Step.reads` inverted, which is the same list the dashed
+        edges are drawn from, so the words and the lines cannot disagree.
+        """
+        if adding is None:
+            return None
+        site = steps[adding.site]
+        readers = [
+            step.node.node_id for position, step in enumerate(steps) if adding.site in step.reads
+        ]
+        note = f"after {site.node.node_id}" + (
+            f" · {', '.join(readers)} would read it" if readers else ""
+        )
+        return AddBox(adding, adding.site + 2, note)
 
     def _build_fan(self, fan: Fan | None, steps: Sequence[Step]) -> RegionFan | None:
         """The branch below `fan.position`, or nothing where there is no gap for it.

@@ -468,6 +468,78 @@ class TestRemovingAStep:
             project.without_node("ghost")
 
 
+class TestSplicingAStepIn:
+    """Adding a node into a gap, which is `without_node` run backwards.
+
+    The claim worth testing is not that the two look symmetrical but that they
+    are inverses: removing what was just spliced has to give back the graph it
+    was spliced into, edge order included, or the pair disagree about what a gap
+    is and the disagreement shows up as a chain the user did not draw.
+    """
+
+    @staticmethod
+    def _chain(*edges: tuple[str, str]) -> Pipeline:
+        ids = sorted({end for edge in edges for end in edge})
+        return Pipeline(
+            nodes=tuple(Node(node_id=node_id, tool_id="blur", version="1.0.0") for node_id in ids),
+            edges=tuple(Edge(upstream=up, downstream=down) for up, down in edges),
+        )
+
+    @staticmethod
+    def _new(node_id: str = "n") -> Node:
+        return Node(node_id=node_id, tool_id="blur", version="1.0.0")
+
+    def test_the_new_step_reads_the_gaps_step_and_is_read_by_what_read_past_it(self) -> None:
+        spliced = self._chain(("a", "b"), ("b", "c")).with_node_after("b", self._new())
+
+        assert [node.node_id for node in spliced.nodes] == ["a", "b", "c", "n"]
+        assert {(edge.upstream, edge.downstream) for edge in spliced.edges} == {
+            ("a", "b"),
+            ("b", "n"),
+            ("n", "c"),
+        }
+
+    def test_the_gap_at_the_foot_has_nothing_reading_past_it(self) -> None:
+        # The last gap is a gap: nothing read past it, so the splice is the one
+        # edge and the new step is the chain's new foot.
+        spliced = self._chain(("a", "b")).with_node_after("b", self._new())
+
+        assert {(edge.upstream, edge.downstream) for edge in spliced.edges} == {
+            ("a", "b"),
+            ("b", "n"),
+        }
+
+    def test_every_reader_past_the_gap_reads_the_new_step_and_not_only_the_first(self) -> None:
+        spliced = self._chain(("a", "b"), ("b", "c"), ("b", "d")).with_node_after("b", self._new())
+
+        assert {(edge.upstream, edge.downstream) for edge in spliced.edges} == {
+            ("a", "b"),
+            ("b", "n"),
+            ("n", "c"),
+            ("n", "d"),
+        }
+
+    @pytest.mark.parametrize("site", ["a", "b", "c"])
+    def test_removing_what_was_spliced_gives_back_the_graph_it_went_into(self, site: str) -> None:
+        # Edge order and all: the walk breaks sibling ties on it (`gui/walk.py`),
+        # so an inverse that returned the same set in another order would move
+        # branches the user never touched.
+        before = self._chain(("a", "b"), ("b", "c"), ("b", "d"))
+
+        assert before.with_node_after(site, self._new()).without_node("n") == before
+
+    def test_splicing_under_a_step_that_is_not_there_raises_keyerror(self) -> None:
+        with pytest.raises(KeyError):
+            self._chain(("a", "b")).with_node_after("ghost", self._new())
+
+    def test_a_node_id_the_graph_already_holds_is_refused(self) -> None:
+        # The graph's own referential integrity, reached through the splice: a
+        # second `b` would make every edge naming `b` ambiguous, and the
+        # checkpoints and sinks that name it too.
+        with pytest.raises(ValidationError, match="duplicate node_id"):
+            self._chain(("a", "b")).with_node_after("b", self._new("a"))
+
+
 class TestPerReplicateDeviation:
     def _project(self) -> Project:
         """Two regions and one node carrying two parameters."""

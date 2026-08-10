@@ -1,7 +1,7 @@
 ---
 title: A gap is a position, and the box fills it
 step: "09.9"
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: "uv run pytest tests/gui -q -k 'add_box or splices'"
 opened: 2026-08-09

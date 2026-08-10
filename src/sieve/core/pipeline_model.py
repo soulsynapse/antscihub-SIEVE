@@ -879,6 +879,40 @@ class Pipeline(_Artifact):
             )
         )
 
+    def with_node_after(self, site_id: str, node: Node) -> Self:
+        """Copy with `node` spliced into the gap under `site_id`.
+
+        `without_node` run backwards, and exactly: the new step reads what the
+        gap's step emits, and every edge that read past the gap now reads the
+        new step. Removing what this splices returns the graph it was spliced
+        into — edge order included — which is the check that the two agree
+        about what a gap is rather than merely looking symmetrical.
+
+        Appended rather than inserted, because position in this tuple is a
+        tie-break and not the picture: the order Up and Down move in is folded
+        from the edges (`gui/walk.py`), so an insertion would renumber
+        everything below the gap to say what one edge already says.
+
+        Raises:
+            KeyError: if `site_id` names no node.
+            ValueError: if `node.node_id` is one the graph already holds.
+        """
+        self.node(site_id)
+        rewired = tuple(
+            Edge(upstream=node.node_id, downstream=edge.downstream)
+            if edge.upstream == site_id
+            else edge
+            for edge in self.edges
+        )
+        return self.model_validate(
+            self.model_copy(
+                update={
+                    "nodes": self.nodes + (node,),
+                    "edges": rewired + (Edge(upstream=site_id, downstream=node.node_id),),
+                }
+            )
+        )
+
 
 class Project(_Artifact):
     """A source video, what runs on it, and what comes out.

@@ -73,10 +73,10 @@ from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
 from sieve.core.pipeline_model import PROJECT_SUFFIX, Node, Pipeline
 from sieve.core.tool_base import ElementKind, ParamStereotype, ToolSpec
-from sieve.core.tool_registry import ToolRegistry, UnknownToolError
+from sieve.core.tool_registry import ToolRegistry, UnknownToolError, offered_tools
 from sieve.core.types import VideoMetadata
 from sieve.gui.canvas import VideoCanvas
-from sieve.gui.chain_stack import Fan, Outputs, PipelinePane, Step, Write
+from sieve.gui.chain_stack import Adding, Fan, Outputs, PipelinePane, Step, Write
 from sieve.gui.chrome import darken_title_bar, window_stylesheet
 from sieve.gui.control import Control
 from sieve.gui.graph_panel import GraphPanel
@@ -109,7 +109,7 @@ from sieve.gui.transport.request_intent import RequestKind
 from sieve.gui.tuning import TuningLoop
 from sieve.gui.walk import node_order
 from sieve.pipeline.shelf import loaded_shelf
-from sieve.session.intents import RemoveNode, issue
+from sieve.session.intents import AddNode, RemoveNode, issue
 from sieve.session.session import Session
 
 
@@ -184,6 +184,19 @@ def _after_removing(position: int, index: int) -> int:
     return max(0, position - 1) if position >= index else position
 
 
+def _after_adding(position: int, index: int) -> int:
+    """Where a walk or a pin standing at `position` lands once a step goes in under `index`.
+
+    The new step lands immediately below the gap's own: `walk.py` visits a node
+    and then what it feeds, and the splice leaves the gap's step feeding the new
+    one and nothing else. So everything below the gap counts one higher and
+    everything at or above it is where it was — a stack renumbers under an
+    insertion the way it renumbers under a removal, and an index left alone
+    would quietly be about a different node.
+    """
+    return position + 1 if position > index else position
+
+
 def frame_bearing(pipeline: Pipeline, specs: Mapping[str, ToolSpec], node_id: str) -> str | None:
     """The nearest node at or above `node_id` whose output is a picture.
 
@@ -256,6 +269,12 @@ class MainWindow(QMainWindow):
         # open, and an index into `_order` after — one slot, so pinning is a
         # move of this number and eviction is what that means.
         self._pinned: int | None = None
+        # Which gap the add box is standing in, and which of that gap's offers
+        # is lit. `None` while no box is open, which is not the same as a box at
+        # gap 0 — view state for the pin's reason, and doubly so here: the box
+        # is a picker and the document knows nothing about one being open.
+        self._adding: int | None = None
+        self._offer = 0
         # The overlays are `kind_editors`' own private type, held here only to
         # be torn down and reconnected; nothing in this module reads one.
         self._editors: dict[str, Any] = {}
@@ -285,7 +304,8 @@ class MainWindow(QMainWindow):
         self._control = Control(self._build_project_select())
         self.setCentralWidget(compose(self._viewing, self._control, self._timeline))
 
-        bind_navigation_hotkeys(self)
+        self._box_keys = bind_navigation_hotkeys(self)
+        self._box_keys(False)
 
     @property
     def player(self) -> VideoPlayer:
@@ -432,7 +452,13 @@ class MainWindow(QMainWindow):
         A no-op at the project position — there is nothing further back, and the
         session underneath it is left open so that Right returns to exactly the
         node the walk was on.
+
+        An open box owns this pair as well as Up and Down: it is a position the
+        walk cannot stand on, so while it is there both pairs are about it.
         """
+        if self.adding:
+            self.move_offer(-1)
+            return
         position = self._control.current_position()
         if position == "save":
             self._control.show_step()
@@ -450,8 +476,12 @@ class MainWindow(QMainWindow):
 
         A no-op at the project position with nothing open — there is no
         workspace to move into until a project has been chosen — and at the save
-        position, which is the end of the line.
+        position, which is the end of the line. An open box takes it, for
+        `go_back`'s reason.
         """
+        if self.adding:
+            self.move_offer(1)
+            return
         position = self._control.current_position()
         if position == "project":
             if self._session is not None:
@@ -519,14 +549,160 @@ class MainWindow(QMainWindow):
         self._control.set_save_screen(self._build_save_screen(session))
         self._redraw()
 
+    def add_step(self) -> None:
+        """ADD STEP, and A: open the box in the gap under the walk, or take it back.
+
+        Nothing is written. The box is a picker — it asks which gap and what
+        should go in it, and the one mutation the gesture makes is issued when
+        an offer is taken (`take_offer`), which is what makes esc free.
+
+        Only where the walk is what the position is about, for `pin_current`'s
+        reason, and only where the chain has a gap. A project with no steps has
+        none: a gap is between two positions the chain has, and the first step
+        of an empty project is a source, which is a question the offering
+        predicate does not answer yet (`core/tool_registry.offered_tools`).
+        """
+        if self.adding:
+            self.cancel_add()
+            return
+        if not self._order or self._control.current_position() not in ("pipeline", "step"):
+            return
+        self._adding, self._offer = self._at, 0
+        self._box_keys(True)
+        self._control.show_pipeline()
+        self._redraw()
+
+    @property
+    def adding(self) -> bool:
+        """Whether a box is standing in the chain waiting to be filled."""
+        return self._adding is not None
+
+    def move_box(self, delta: int) -> None:
+        """Up/Down while a box is open move the box, not the walk.
+
+        Clamped for `_walk_to`'s reason. The lit offer does not travel with it:
+        the next gap's offering is a different list, and an index carried into
+        it would light whatever happened to be third.
+        """
+        if self._adding is None:
+            return
+        site = max(0, min(self._adding + delta, len(self._order) - 1))
+        if site == self._adding:
+            return
+        self._adding, self._offer = site, 0
+        self._redraw()
+
+    def move_offer(self, delta: int) -> None:
+        """Left/Right while a box is open walk its offers, not the panes.
+
+        Wrapped where the walk is clamped: the offer is a short ring of names
+        and neither end is somewhere the user is trying to stop.
+        """
+        offer = self._offer_at(self._adding)
+        if not offer:
+            return
+        self._offer = (self._offer + delta) % len(offer)
+        self._redraw()
+
+    def take_offer(self) -> None:
+        """Enter, and a click on an offer: splice that step into the gap.
+
+        The one mutation the whole gesture writes, and it is the document's
+        (`session/intents.AddNode`) — a stack drawing a step the file does not
+        hold would be the second answer to what the project computes, and the
+        next `sieve run` would run the chain without it.
+
+        The walk lands on what was just put there, for the reason a removal
+        lands on the step above: what the user did was put something in the
+        chain, and the next thing they will do is set it up. A box with nothing
+        to offer takes nothing, which is the whole of what enter means there.
+        """
+        session = self._session
+        offer = self._offer_at(self._adding)
+        if session is None or self._adding is None or not offer:
+            return
+        spec = offer[self._offer % len(offer)]
+        site = self._adding
+        # No params: an unset field resolves to the tool's declared default
+        # (`param_form.py`), and writing those into the document at mint time
+        # would freeze them against the next version of the tool.
+        issue(
+            session,
+            AddNode(
+                site_id=self._order[site].node_id,
+                node=Node(tool_id=spec.tool_id, version=spec.version),
+            ),
+        )
+        self._close_box()
+        self._reread_graph()
+        self._at = site + 1
+        self._pinned = None if self._pinned is None else _after_adding(self._pinned, site)
+        self._show_pinned()
+        # Rebuilt because the new step is a result the run could be asked to
+        # keep, and a checkoff that did not list it would be offering less than
+        # the document computes.
+        self._control.set_save_screen(self._build_save_screen(session))
+        self._redraw()
+
+    def cancel_add(self) -> None:
+        """Esc: the box goes and the document is where it was.
+
+        Free because nothing was written when it opened — the gap it is standing
+        in is unchanged until an offer is taken.
+        """
+        if self._adding is None:
+            return
+        self._close_box()
+        self._redraw()
+
+    def _close_box(self) -> None:
+        """Drop the box and hand enter and esc back, which only an open box owns."""
+        self._adding = None
+        self._box_keys(False)
+
+    def _shelf(self) -> tuple[ToolSpec, ...]:
+        """One version of each tool, which is the shelf a gap is offered from.
+
+        Which version a step is minted at is not a question the gap is asking —
+        two entries of one tool would read as two tools — so the newest stands
+        for it, and the older ones stay reachable through a document that
+        already names one (`core/tool_registry.ToolRegistry.latest`).
+        """
+        return tuple(self._registry.latest(tool_id) for tool_id in self._registry.ids())
+
+    def _offer_at(self, site: int | None) -> tuple[ToolSpec, ...]:
+        """What could plausibly stand in the gap under step `site`.
+
+        The question is the position's and not the tool's: `offered_tools` is
+        handed what flows into the gap and the element meaning folded to it, and
+        nothing here reads a tool id (`adr/gui-knows-kinds-not-tools.md`). Empty
+        where the gap's step names a tool this install does not have, for the
+        same reason it is empty at a position that proved nothing — there is no
+        declaration to compute an offer from, and most gaps on today's shelf are
+        in exactly that state
+        (`findings/2026.08.09-the-shelf-declares-too-little-for-eight-of-ten-positions-to-offer-anything.md`).
+        """
+        if site is None or not 0 <= site < len(self._order):
+            return ()
+        node = self._order[site]
+        spec = self._specs.get(node.node_id)
+        if spec is None:
+            return ()
+        return offered_tools(spec.emits, self._elements.get(node.node_id), self._shelf())
+
     def go_up(self) -> None:
         """Up: the previous card of whichever stack the position showing is.
 
         Two selections exist at once — which project the shelf is on and where
         the walk is — and the key moves the one the user is looking at. Moving
         both would leave the walk somewhere the user never went, in a graph they
-        may not have opened yet.
+        may not have opened yet. A third arrives while a box is open, and it
+        takes the pair: the box is where the user is standing and the walk is
+        behind it.
         """
+        if self.adding:
+            self.move_box(-1)
+            return
         if self._control.current_position() == "project":
             self.select_project(self._project_at - 1)
             return
@@ -534,6 +710,9 @@ class MainWindow(QMainWindow):
 
     def go_down(self) -> None:
         """Down: the next card of whichever stack the position showing is."""
+        if self.adding:
+            self.move_box(1)
+            return
         if self._control.current_position() == "project":
             self.select_project(self._project_at + 1)
             return
@@ -817,9 +996,35 @@ class MainWindow(QMainWindow):
             on_open=self._open_step,
             on_pin=self.pin,
             on_remove=self.remove_step,
+            on_add=self.add_step,
             fan=self._region_fan(),
+            adding=self._adding_box(),
             outputs=self._outputs(session),
         )
+
+    def _adding_box(self) -> Adding | None:
+        """The box's state for the pane, or nothing where none is open.
+
+        The offer is recomputed here rather than held beside `_adding`, for the
+        output card's reason: it is a function of the position and the shelf, so
+        a copy kept across a move of the box would be the one that went stale
+        against the gap it is now in. What crosses into the pane is names — the
+        surface renders a shortlist it is handed and computes nothing.
+        """
+        if self._adding is None:
+            return None
+        offer = self._offer_at(self._adding)
+        return Adding(
+            site=self._adding,
+            offer=tuple(spec.tool_id for spec in offer),
+            lit=self._offer % len(offer) if offer else 0,
+            on_take=self._take,
+        )
+
+    def _take(self, position: int) -> None:
+        """A click on an offer: light it, and take it. The pointer's Right-then-enter."""
+        self._offer = position
+        self.take_offer()
 
     def _outputs(self, session: Session) -> Outputs:
         """The card at the foot of the chain, and the writes reaching into it.

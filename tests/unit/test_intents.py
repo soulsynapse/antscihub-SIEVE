@@ -31,7 +31,7 @@ from sieve.core.tool_base import (
     ToolSpec,
 )
 from sieve.pipeline.cache_key import node_key
-from sieve.session.intents import RemoveNode, SetOutputs, SetParam, issue
+from sieve.session.intents import AddNode, RemoveNode, SetOutputs, SetParam, issue
 from sieve.session.session import Session
 
 
@@ -145,6 +145,39 @@ def test_removing_a_node_is_a_whole_value_like_any_other_edit(tmp_path: Path) ->
     pipeline = session.project.pipeline
     assert [node.node_id for node in pipeline.nodes] == ["n1", "n3"]
     assert [(edge.upstream, edge.downstream) for edge in pipeline.edges] == [("n1", "n3")]
+    assert session.undo() == before
+
+
+def test_adding_a_node_splices_it_and_undoes_as_one_value(tmp_path: Path) -> None:
+    path = tmp_path / "arena.sieve.yaml"
+    Project(
+        source=SourceRef(path="arena.MP4"),
+        checkpoints=("n1",),
+        pipeline=Pipeline(
+            nodes=tuple(
+                Node(node_id=node_id, tool_id="threshold", version="1.0.0")
+                for node_id in ("n1", "n2")
+            ),
+            edges=(Edge(upstream="n1", downstream="n2"),),
+        ),
+    ).save(path)
+    session = Session.open(path)
+    before = session.project
+
+    issue(
+        session,
+        AddNode(site_id="n1", node=Node(node_id="n3", tool_id="threshold", version="1.0.0")),
+    )
+
+    pipeline = session.project.pipeline
+    assert [(edge.upstream, edge.downstream) for edge in pipeline.edges] == [
+        ("n3", "n2"),
+        ("n1", "n3"),
+    ]
+    # An arriving node is named by nothing the document holds beside the graph,
+    # which is the asymmetry with `RemoveNode`: no checkpoint, sink, override or
+    # input hash is touched, so the splice is `with_pipeline` and nothing else.
+    assert session.project.checkpoints == ("n1",)
     assert session.undo() == before
 
 

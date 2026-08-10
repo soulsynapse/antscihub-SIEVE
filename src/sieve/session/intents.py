@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from sieve.core.pipeline_model import Project, Sink
+from sieve.core.pipeline_model import Node, Project, Sink
 from sieve.session.session import Session
 
 
@@ -123,6 +123,44 @@ class RemoveNode:
             KeyError: if `node_id` names no node.
         """
         return project.without_node(self.node_id)
+
+
+@dataclass(frozen=True, slots=True)
+class AddNode:
+    """One step into the gap under another, read by whatever read past it.
+
+    `RemoveNode` run backwards, and the pair is where the semantics of a gap are
+    settled: what the box on the pipeline position offers is a position, and
+    taking an offer has to write the chain the dashed edges drew
+    (`gui/chain_stack.py`).
+
+    **`Project.with_pipeline` rather than a `Project.with_node_after`, and the
+    asymmetry with removal is the point.** A departing node leaves its name in
+    the checkpoints, the sinks, the input hashes and every replicate's
+    overrides, which is why `Project.without_node` exists beside the graph's
+    own. An arriving one is named by none of them — it has computed nothing yet
+    — so the graph is the whole of what moves, and a `Project` method here would
+    be a second name for `with_pipeline`.
+
+    The node is built by the caller rather than named by tool id, because
+    minting one needs a version and a `node_id` and neither is a fact this layer
+    holds. Its `params` are ordinarily empty, which is not a gap: an unset field
+    resolves to the tool's declared default (`resolved_params`, `param_form.py`),
+    and writing those defaults into the document at mint time would freeze them
+    against the next version of the tool.
+    """
+
+    site_id: str
+    node: Node
+
+    def applied_to(self, project: Project) -> Project:
+        """The document with the step spliced into the gap under `site_id`.
+
+        Raises:
+            KeyError: if `site_id` names no node.
+            ValidationError: if the node's id is one the graph already holds.
+        """
+        return project.with_pipeline(project.pipeline.with_node_after(self.site_id, self.node))
 
 
 def issue(session: Session, intent: Intent) -> bool:

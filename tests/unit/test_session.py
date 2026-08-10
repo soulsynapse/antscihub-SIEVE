@@ -11,14 +11,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Node, Pipeline, Project
 from sieve.session.session import Session
 
 
 def _project(level: float) -> Project:
     """A one-node project distinguishable only by the value under tuning."""
     return Project(
-        source=SourceRef(path="arena.MP4"),
         pipeline=Pipeline(
             nodes=(
                 Node(node_id="n1", tool_id="threshold", version="1.0.0", params={"level": level}),

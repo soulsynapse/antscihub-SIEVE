@@ -56,6 +56,7 @@ from sieve.tools import discover
 from sieve.tools.crop import CropParams
 from sieve.tools.crop import run as crop_frame
 from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES
+from tests.projects import project_over
 
 #: Wholly inside the 160x120 fixture and at an odd origin in both axes, so a
 #: codec that quietly re-aligned the crop to a macroblock grid would show up.
@@ -444,7 +445,7 @@ def _project(
 ) -> Path:
     """Write a one-arena project over `video` into `directory`, and return its path."""
     target = _replicate() if replicate is None else replicate
-    project = Project.for_video(video, directory).with_pipeline(pipeline).with_replicates((target,))
+    project = project_over(video, directory, pipeline).with_replicates((target,))
     path = directory / PROJECT_NAME
     project.save(path)
     return path

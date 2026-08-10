@@ -32,6 +32,7 @@ from sieve.core.pipeline_model import (
     Sink,
 )
 from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES
+from tests.projects import project_over, rooted_on
 
 runner = CliRunner()
 
@@ -39,17 +40,21 @@ runner = CliRunner()
 def _project(video: Path, directory: Path, *, replicates: tuple[Replicate, ...] = ()) -> Path:
     """Write a one-node project beside `video` and return its path."""
     project = (
-        Project.for_video(video, directory)
+        Project()
         .with_pipeline(
-            Pipeline(
-                nodes=(
-                    Node(
-                        node_id="down",
-                        tool_id="downsample",
-                        version="1.0.0",
-                        params={"factor": 2},
-                    ),
-                )
+            rooted_on(
+                Pipeline(
+                    nodes=(
+                        Node(
+                            node_id="down",
+                            tool_id="downsample",
+                            version="1.0.0",
+                            params={"factor": 2},
+                        ),
+                    )
+                ),
+                video,
+                directory,
             )
         )
         .with_replicates(replicates)
@@ -85,8 +90,11 @@ def test_two_replicates_run_and_the_second_reuses_the_first(
 
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert lines[0] == "arena 1: 4 frames, 4 node outputs computed, 0 from cache"
-    assert lines[1] == "arena 2: 4 frames, 0 node outputs computed, 4 from cache"
+    # Eight and not four: the graph is two nodes now, the footage root and the
+    # step under it (`adr/a-document-names-footage-only-through-a-tool.md`), and
+    # the root computes per frame like any other.
+    assert lines[0] == "arena 1: 4 frames, 8 node outputs computed, 0 from cache"
+    assert lines[1] == "arena 2: 4 frames, 0 node outputs computed, 8 from cache"
 
 
 def test_a_project_with_no_replicates_runs_its_graph_once(
@@ -106,7 +114,7 @@ def test_a_project_with_no_replicates_runs_its_graph_once(
 
     assert result.exit_code == 0, result.output
     assert result.output.splitlines() == [
-        "baseline: 4 frames, 4 node outputs computed, 0 from cache"
+        "baseline: 4 frames, 8 node outputs computed, 0 from cache"
     ]
 
 
@@ -125,7 +133,10 @@ def test_a_run_with_no_frames_covers_the_whole_video(synthetic_video: Path, tmp_
 
     assert result.exit_code == 0, result.output
     assert result.output.splitlines() == [
-        f"arena 1: {FIXTURE_FRAMES} frames, {FIXTURE_FRAMES} node outputs computed, 0 from cache"
+        (
+            f"arena 1: {FIXTURE_FRAMES} frames, {FIXTURE_FRAMES * 2} node outputs computed, "
+            "0 from cache"
+        )
     ]
 
 
@@ -145,7 +156,9 @@ def _looking_ahead(video: Path, directory: Path) -> Path:
     declares a lookahead (`adr/detector-is-a-node.md` is why it can be a node at
     all), and it wants a per-block signal under it.
     """
-    project = Project.for_video(video, directory).with_pipeline(
+    project = project_over(
+        video,
+        directory,
         Pipeline(
             nodes=(
                 Node(
@@ -174,7 +187,7 @@ def _looking_ahead(video: Path, directory: Path) -> Path:
                 ),
             ),
             edges=(Edge(upstream="blocks", downstream="detector"),),
-        )
+        ),
     )
     path = directory / "detecting.sieve.yaml"
     project.save(path)
@@ -302,8 +315,10 @@ def test_a_tool_this_build_does_not_have_is_named_before_anything_decodes(
     too broadly and reports a generic failure, or too narrowly and shows a
     traceback.
     """
-    project = Project.for_video(synthetic_video, tmp_path).with_pipeline(
-        Pipeline(nodes=(Node(node_id="w", tool_id="wavelet_bands", version="2.1.0"),))
+    project = project_over(
+        synthetic_video,
+        tmp_path,
+        Pipeline(nodes=(Node(node_id="w", tool_id="wavelet_bands", version="2.1.0"),)),
     )
     path = tmp_path / "missing.sieve.yaml"
     project.save(path)
@@ -322,3 +337,31 @@ def test_a_tool_this_build_does_not_have_is_named_before_anything_decodes(
 #: which file is opened, which nodes are in the graph, and that a checkpointed
 #: crop node is left alone — is now `tests/integration/test_crop_serving.py`'s,
 #: stated against the edit rather than against a route.
+
+
+def test_a_project_whose_graph_has_no_source_root_refuses_by_name(tmp_path: Path) -> None:
+    """The refusal `Project.source`'s removal moved rather than retired.
+
+    `adr/a-document-names-footage-only-through-a-tool.md` dissolves the state
+    the schema used to admit — a `source` of `None` — into a graph with no
+    source root, and says the refusal it bought "moves to where the graph can be
+    seen". So a project under construction is still a sentence naming the file
+    the user has to go and add footage to, and not an `IndexError` out of a walk
+    over an empty tuple.
+
+    Named by the *document* rather than by the node, because the user is looking
+    at a library and the actionable half of the news is which of those projects
+    it was. A graph is asserted rather than an empty one so the refusal cannot
+    be coming from having nothing to run.
+    """
+    path = tmp_path / "under-construction.sieve.yaml"
+    Project(
+        pipeline=Pipeline(nodes=(Node(node_id="down", tool_id="downsample", version="1.0.0"),))
+    ).save(path)
+
+    result = runner.invoke(app, ["run", str(path), "--frames", "0:4"])
+
+    assert result.exit_code == 1
+    assert str(path) in result.stderr
+    assert "names no footage" in result.stderr
+    assert "Traceback" not in result.stderr

@@ -95,6 +95,7 @@ from tests.conftest import (
     STIRRED_FOREGROUND,
     STIRRED_SEED,
 )
+from tests.projects import rooted_on
 
 runner = CliRunner()
 
@@ -275,9 +276,9 @@ def replicates() -> tuple[Replicate, ...]:
 
 def project(video: Path, directory: Path) -> Path:
     """Write v3's half of the oracle beside `video` and return its path."""
-    document = Project.for_video(video, directory).model_copy(
+    document = Project().model_copy(
         update={
-            "pipeline": graph(),
+            "pipeline": rooted_on(graph(), video, directory),
             "replicates": replicates(),
             "checkpoints": (BLOCKS, DETECTOR),
         }

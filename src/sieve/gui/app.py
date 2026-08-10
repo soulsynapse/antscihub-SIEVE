@@ -126,7 +126,7 @@ from sieve.gui.transport.player import VideoPlayer
 from sieve.gui.transport.request_intent import RequestKind
 from sieve.gui.tuning import TuningLoop
 from sieve.gui.walk import node_order
-from sieve.pipeline.resolve_source import anchored, resolved_sources
+from sieve.pipeline.resolve_source import anchored, named_footage, resolved_sources
 from sieve.pipeline.shelf import loaded_shelf
 from sieve.session.intents import (
     AddNode,
@@ -531,15 +531,18 @@ class MainWindow(QMainWindow):
         self._pinned = default_pinned(self._order, self._elements)
         self._show_pinned()
         self._control.set_save_screen(self._build_save_screen(self._session))
-        # The path is resolved against the project's own directory and handed
-        # over as a string: whether the file is there is the decode thread's
-        # answer to give, and a check here would be a second one that could
-        # disagree with it. A project that names no footage has nothing to hand
-        # it — the window opens on the chain it does not have yet, which is where
-        # a source is added (`adr/superseded/a-document-may-name-no-footage.md`).
-        source = self._session.project.source
-        if source is not None:
-            self._player.open(str(source.resolve(path.parent)))
+        # The footage comes out of the graph like every other file the document
+        # names (`pipeline/resolve_source.footage_root`), anchored against the
+        # project's own directory and handed over as the spelling it resolved to:
+        # whether the file is there is the decode thread's answer to give, and a
+        # check here would be a second one that could disagree with it. A graph
+        # rooting on no source has nothing to hand it — the window opens on the
+        # chain it does not have yet, which is where a source is added.
+        footage = named_footage(
+            anchored(self._session.project.pipeline, path.parent), self._registry
+        )
+        if footage:
+            self._player.open(footage)
         self._redraw()
         self._control.show_pipeline()
 
@@ -1370,7 +1373,12 @@ class MainWindow(QMainWindow):
         if not render or node is None or session is None:
             values, beneath = None, None
         else:
-            pipeline = session.project.pipeline
+            # Anchored, for `refill_graph`'s reason and now with a root that
+            # needs it: the footage is a source node's path param
+            # (`adr/a-document-names-footage-only-through-a-tool.md`), so a
+            # render off the document's own spelling would look for the video
+            # beside this process rather than beside the project.
+            pipeline = anchored(session.project.pipeline, session.path.parent)
             values, beneath = self._tuning.render_at(
                 pipeline, node, index, under=input_of(pipeline, node)
             )

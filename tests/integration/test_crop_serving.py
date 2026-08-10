@@ -66,9 +66,10 @@ from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
 from sieve.pipeline.plan import ExecutionPlan, validated_params
 from sieve.pipeline.preview import PreviewSession
-from sieve.pipeline.resolve_source import picked_identities, source_files
+from sieve.pipeline.resolve_source import anchored, picked_identities, source_files
 from sieve.pipeline.source_home import SourceHome
 from sieve.tools import discover
+from tests.projects import footage_of, project_over, rooted_on
 
 runner = CliRunner()
 
@@ -112,12 +113,7 @@ def _project(
     """A project over `video`, saved beside it. Returns the file it was saved to."""
     discover()
     path = directory / PROJECT_NAME
-    (
-        Project.for_video(video, directory)
-        .with_pipeline(pipeline)
-        .with_replicates(replicates)
-        .save(path)
-    )
+    (project_over(video, directory, pipeline).with_replicates(replicates).save(path))
     return path
 
 
@@ -128,20 +124,23 @@ def _cut(project_path: Path, replicate_id: str = "a") -> None:
 
 
 def _home(project: Project, project_path: Path) -> SourceHome:
-    return SourceHome.for_video(project.source_path(project_path), project_path.parent)
+    return SourceHome.for_video(footage_of(project, project_path), project_path.parent)
 
 
 def _watch_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
     """Every video the run loop opens, in order, still opening each of them.
 
-    The one thing the printed counts cannot say. A run that reads the parent
-    reports exactly the numbers a correctly served run reports, and every frame
-    it produces is a whole frame where a box was asked for.
+    What it pins is `run_cmd._reads_the_footage`, and since
+    `adr/a-document-names-footage-only-through-a-tool.md` that is a claim about
+    every document rather than about served ones: a project names its footage in
+    a source node, so every root of every graph opens its own file and the run
+    builds no reader at all. The log is therefore empty on both sides of the
+    edit, and it stays here because a run that started building a reader again
+    would be one deciding for itself what the footage is.
 
-    A served graph appears here as *silence*: the file a `footage` node reads is
-    opened by that tool and never by this loop, and `run_cmd` opens no container
-    at all when no root is fed by one. So the parent's absence from this log is
-    the assertion, and which file was read instead is the pixel case's.
+    Which file each side actually read is the pixel case's — the counts cannot
+    say it, since a run that re-cut whole frames from the parent prints exactly
+    the numbers a correctly served one prints.
     """
     opened: list[Path] = []
     real = run_cmd.frame_source
@@ -161,10 +160,10 @@ def _plan(project: Project, project_path: Path, replicate: Replicate | None) -> 
     answers to this and a helper that resolved differently from either would be
     a third answer nothing runs.
     """
-    dag = Dag.build(project.pipeline)
+    dag = Dag.build(anchored(project.pipeline, project_path.parent))
     return ExecutionPlan.build(
         dag,
-        source=source_identity(project.source_path(project_path)),
+        source=source_identity(footage_of(project, project_path)),
         span=SPAN,
         replicate=replicate,
         picked=picked_identities(source_files(dag, validated_params(dag, replicate))),
@@ -184,11 +183,21 @@ class TestTheEditTheProjectHolds:
         **The node count does not move, and that is the shape of this
         substitution rather than a miss.** The plan-time route this replaces
         dropped the crop node and left the graph one node shorter; a source tool
-        is a node, so what a served run saves is the parent decode and the cut,
-        not an entry in the tally. Which is why the file that was opened is
-        asserted here and the count is only asserted to be unchanged: the counts
-        a correct run prints and the counts of a run that quietly re-cut whole
-        frames from the parent are the same counts.
+        is a node, so what a served run saves is the cut, not an entry in the
+        tally. Which is why the file that was opened is asserted here and the
+        count is only asserted to be unchanged: the counts a correct run prints
+        and the counts of a run that quietly re-cut whole frames from the parent
+        are the same counts.
+
+        What the served run no longer saves is the *parent decode*, and the graph
+        is why. The document names its footage in a source node
+        (`adr/a-document-names-footage-only-through-a-tool.md`), so the parent is
+        a root of the served graph too — reading nothing, since the crop that
+        read it was the thing replaced, and computed anyway because the executor
+        computes every node the graph holds. `opened` stays empty for the served
+        run because the run's own reader is what it watches and that reader is
+        never built (`run_cmd._reads_the_footage`); the parent's frames come out
+        of the source tool's own pool instead.
         """
         path = _project(synthetic_video, tmp_path, replicates=(_replicate(),))
         frames = f"{SPAN.start}:{SPAN.end}"
@@ -201,18 +210,22 @@ class TestTheEditTheProjectHolds:
 
         assert unserved.exit_code == 0, unserved.output
         assert served.exit_code == 0, served.output
-        assert [node.tool_id for node in served_project.pipeline.nodes] == ["footage", "downsample"]
+        assert [node.tool_id for node in served_project.pipeline.nodes] == [
+            "footage",
+            "footage",
+            "downsample",
+        ]
         assert served_project.crops, "the record survives the edit that reads it"
         record = served_project.crops[0]
         assert glob(served_project.params_for(CUT, "a")["path"]) == [str(record.resolve(tmp_path))]
         assert served_project.params_for(CUT, "a")["first_index"] == record.span.start
         answered = SPAN.frame_count
         expected = [
-            f"Arena 1: {answered} frames, {answered * 2} node outputs computed, 0 from cache"
+            f"Arena 1: {answered} frames, {answered * 3} node outputs computed, 0 from cache"
         ]
         assert unserved.output.splitlines() == expected
         assert served.output.splitlines() == expected
-        assert opened == [synthetic_video], "only the unserved run opened the parent"
+        assert opened == [], "neither run built a reader of its own; every root opens its file"
 
     def test_the_served_root_folds_the_key_its_file_would_fold_as_footage(
         self, synthetic_video: Path, tmp_path: Path
@@ -267,7 +280,7 @@ class TestTheEditTheProjectHolds:
         path = _project(synthetic_video, tmp_path, replicates=(_replicate(),))
         _cut(path)
         recorded = Project.load(path)
-        moved = recorded.with_pipeline(GRAPH).with_replicates(
+        moved = recorded.with_pipeline(rooted_on(GRAPH, synthetic_video, tmp_path)).with_replicates(
             (_replicate(ROI(x=18, y=9, width=64, height=48)),)
         )
 
@@ -373,10 +386,15 @@ class TestTheWayBackFromAServedProject:
         assert len(after.crops) == 2
         assert after.params_for(CUT, "a") != after.params_for(CUT, "b"), "one file each"
         answered = SPAN.frame_count
+        # The second arena finds the parent footage root's entries: the served
+        # graph still holds that root, and it is the one node the two replicates
+        # do not deviate, so it is computed once and looked up once.
         assert result.output.splitlines() == [
-            f"Arena {index + 1}: {answered} frames, {answered * 2} node outputs computed, "
-            "0 from cache"
-            for index in range(2)
+            f"Arena 1: {answered} frames, {answered * 3} node outputs computed, 0 from cache",
+            (
+                f"Arena 2: {answered} frames, {answered * 2} node outputs computed, "
+                f"{answered} from cache"
+            ),
         ]
 
 
@@ -442,8 +460,9 @@ class TestEveryFrontEndIsServedAlike:
                 replicate=project.replicates[0],
                 store=MemoryFrameStore(),
             )
-            first = session.render_window(project.pipeline)
-            again = session.render_window(project.pipeline)
+            graph = anchored(project.pipeline, path.parent)
+            first = session.render_window(graph)
+            again = session.render_window(graph)
 
         assert first.frames == SPAN.frame_count
         assert reads == [], "the parent reader was never asked for a frame"
@@ -486,7 +505,7 @@ class TestEveryFrontEndIsServedAlike:
                 replicate=replicate,
                 store=MemoryFrameStore(),
             )
-            rendered = session.render_window(project.pipeline)
+            rendered = session.render_window(anchored(project.pipeline, path.parent))
 
         assert dry.exit_code == 0, dry.output
         assert set(rendered.plan.keys) == node_ids
@@ -562,7 +581,7 @@ def _outputs(project: Project, project_path: Path) -> list[NDArray[Any]]:
     discover()
     replicate = project.replicates[0]
     plan = _plan(project, project_path, replicate)
-    with VideoReader(project.source_path(project_path), luma=plan.luma) as reader:
+    with VideoReader(footage_of(project, project_path), luma=plan.luma) as reader:
         return [np.array(result[DOWN].data) for result in execute(plan, reader)]
 
 

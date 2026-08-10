@@ -30,9 +30,10 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef, SourceSpan
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceSpan
 from sieve.tools import discover
 from tests.gui import driving
+from tests.projects import over
 
 #: `crop` at the root, so its `region` is denominated in the footage, and one
 #: node under it with no stereotype of its own — which is what separates "the
@@ -77,7 +78,6 @@ _TIMEOUT_MS = 60_000
 @pytest.fixture
 def project_file(tmp_path: Path) -> Path:
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(node_id=_ROOT, tool_id="crop", version="1.0.0"),
@@ -128,21 +128,25 @@ def tunable_project(synthetic_video: Path, tmp_path: Path) -> Path:
     video = tmp_path / synthetic_video.name
     video.write_bytes(synthetic_video.read_bytes())
     path = tmp_path / "clip.sieve.yaml"
-    Project.for_video(video, tmp_path).model_copy(
-        update={
-            "pipeline": Pipeline(
-                nodes=(
-                    Node(node_id=_COARSE, tool_id="downsample", version="1.0.0"),
-                    Node(
-                        node_id=_BLOCKS,
-                        tool_id="block_signal",
-                        version="1.0.0",
-                        params={"signal": _SHOWN, "block": _ONE_BLOCK},
+    over(
+        Project().model_copy(
+            update={
+                "pipeline": Pipeline(
+                    nodes=(
+                        Node(node_id=_COARSE, tool_id="downsample", version="1.0.0"),
+                        Node(
+                            node_id=_BLOCKS,
+                            tool_id="block_signal",
+                            version="1.0.0",
+                            params={"signal": _SHOWN, "block": _ONE_BLOCK},
+                        ),
                     ),
-                ),
-                edges=(Edge(upstream=_COARSE, downstream=_BLOCKS),),
-            )
-        }
+                    edges=(Edge(upstream=_COARSE, downstream=_BLOCKS),),
+                )
+            }
+        ),
+        video,
+        tmp_path,
     ).save(path)
     return path
 
@@ -187,6 +191,7 @@ def test_a_dropped_write_leaves_the_graph_where_it_was(qapp, tunable_project: Pa
         # The walk onto the node fills its graph, and that render is the
         # session's cold one. Waited for so the mark asserted below is about
         # this gesture rather than about a panel that had never come clean.
+        window.go_down()
         window.go_down()
         assert window.current_node is not None
         assert window.current_node.node_id == _BLOCKS
@@ -249,6 +254,7 @@ def test_the_source_badge_rises_on_a_drag_and_falls_on_the_settle(
         window.open_project(tunable_project)
         driving.wait_until(lambda: window.player.metadata is not None, _TIMEOUT_MS)
         window.timeline.set_window(SourceSpan(start=0, end=window.player.metadata.frame_count))
+        window.go_down()
         window.go_down()
         assert window.current_node is not None and window.current_node.node_id == _BLOCKS
         _settled(window)

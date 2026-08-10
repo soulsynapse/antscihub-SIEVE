@@ -47,7 +47,7 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Sink, SourceRef
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Sink
 from tests.gui import driving
 
 _TOOLS = ("pick", "crop", "detect", "motion_history")
@@ -77,7 +77,6 @@ _TAU = 2.5
 def project_file(tmp_path: Path) -> Path:
     path = tmp_path / "arena.sieve.yaml"
     Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=tuple(
                 Node(

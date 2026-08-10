@@ -26,7 +26,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef, SourceSpan
+from sieve.core.pipeline_model import Node, Pipeline, Project, SourceSpan
 from sieve.core.tool_base import (
     ArraySpec,
     AxisRelation,
@@ -45,6 +45,7 @@ from sieve.core.types import ChannelSpec, Frame
 from sieve.pipeline.series_collector import CollectedSeries
 from sieve.session.session import Session
 from tests.gui import driving
+from tests.projects import project_over
 
 _NODE = "n0"
 
@@ -138,7 +139,6 @@ def _spec() -> ToolSpec:
 def session(tmp_path: Path) -> Session:
     """One node of the tool above, with every band placed."""
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(
@@ -439,7 +439,6 @@ def test_a_scalogram_handle_reads_the_declared_axis(
     assert panel.value_at(panel.y_of(bank[7])) == pytest.approx(bank[7])
 
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(
@@ -545,7 +544,7 @@ def test_the_window_draws_the_band_surfaces_of_the_step_it_stands_on(
     video = tmp_path / stirred_clip.name
     video.write_bytes(stirred_clip.read_bytes())
     path = tmp_path / "stirred.sieve.yaml"
-    Project.for_video(video, tmp_path).model_copy(update={"pipeline": graph()}).save(path)
+    project_over(video, tmp_path, graph()).save(path)
 
     window = MainWindow(projects_in(tmp_path))
     try:
@@ -553,6 +552,7 @@ def test_the_window_draws_the_band_surfaces_of_the_step_it_stands_on(
         window.open_project(path)
         driving.wait_until(lambda: window.player.metadata is not None, 60_000)
         window.timeline.set_window(SourceSpan(start=SPAN.start, end=SPAN.end))
+        window.go_down()
         window.go_down()
         window.go_down()
         assert window.current_node is not None

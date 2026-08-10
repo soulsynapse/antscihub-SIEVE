@@ -1,12 +1,14 @@
 """Schema v1: the saved document a run is reproducible from.
 
-Given this document, the source video it names, and the external files its
-nodes name, any executor — CLI, GUI, or a batch job on a cluster — performs the
-same run and writes the same files. The external files are in that sentence
-because a source tool is a root whose file is a parameter, so a project may read
-pictures the video knows nothing about; *which* files those are is derived from
-the graph and never recorded here (`pipeline/resolve_source.source_files`), and
-what is recorded is only `input_hashes`, the claim that the file found is the
+Given this document and the external files its nodes name, any executor — CLI,
+GUI, or a batch job on a cluster — performs the same run and writes the same
+files. The footage is one of those external files and has no field of its own:
+a document names it only in a source tool's path param
+(`adr/a-document-names-footage-only-through-a-tool.md`), so *which* files a run
+opens — the video included — is derived from the graph and never recorded here
+(`pipeline/resolve_source.source_files`, and `resolve_source.footage_root` for
+which of them a run calls the footage), and what is recorded is only
+`input_hashes`, the claim that the file found is the
 file that was meant. That is the whole contract, and it is why nothing here may
 depend on anything that exists in only one of those three: no widget geometry,
 no zoom, no scrub position, no cache directory, no thread count. `extra="forbid"` throughout is
@@ -136,18 +138,6 @@ INPUT_HASH_ALGORITHM = "blake2b-256"
 #: of the time and a video in the folder-of-sources case, and the second is what
 #: this is sized for.
 _HASH_BLOCK = 1 << 20
-
-
-class NoFootage(ValueError):
-    """A reader that needs frames was handed a document that names none.
-
-    The cost of `adr/superseded/a-document-may-name-no-footage.md`, borne where the ADR
-    says it is borne: the schema admits the under-construction state, so each
-    reader over `source_path` refuses it. Named rather than an `AttributeError`
-    off `None`, and carrying the project file rather than the field, because the
-    user is looking at a library and the actionable half of the news is which of
-    those projects has no footage yet.
-    """
 
 
 class ExternalInputChanged(ValueError):
@@ -355,39 +345,6 @@ class _Artifact(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid", ser_json_inf_nan="constants")
-
-
-class SourceRef(_Artifact):
-    """The video a project is about, named relative to the project file.
-
-    `path` is *not* resolved against the working directory — it means nothing
-    without the directory holding the project file, which is why every reader
-    goes through `resolve`. An absolute path would make a project unopenable the
-    moment the folder moved.
-    """
-
-    path: str
-
-    @field_validator("path")
-    @classmethod
-    def _non_empty(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("source path must not be empty")
-        return value
-
-    @classmethod
-    def relative_to(cls, video: Path, project_dir: Path) -> Self:
-        """Reference `video` from a project file living in `project_dir`."""
-        return cls(path=_posix_relative(video, project_dir))
-
-    def resolve(self, project_dir: Path) -> Path:
-        """The video's location, given where the project file was read from.
-
-        Normalized, so that two references to one file compare equal. Returning
-        the raw join instead would leave `..` segments in the result, and the
-        first caller comparing two resolved paths would be comparing spellings.
-        """
-        return _resolved(Path(project_dir, self.path))
 
 
 class SourceSpan(_Artifact):
@@ -983,27 +940,22 @@ class Pipeline(_Artifact):
 
 
 class Project(_Artifact):
-    """A source video, what runs on it, and what comes out.
+    """What runs, on what it runs, and what comes out.
 
     The whole reproducible unit. Everything a run needs beyond this is either
     machine configuration (where the cache lives, how many workers) or
     presentation (zoom, panel layout, which overlay is showing), and neither
     belongs in a document two machines are supposed to agree about.
 
-    Narrowed by `adr/superseded/a-document-may-name-no-footage.md`, which is why `source`
-    may be `None`: reproducibility is a property of a document that *can* run,
-    and a project under construction is one `source_path` refuses rather than
-    one the schema does. Everything else here holds of it unchanged — a
-    no-footage document that is handed frames later runs what it always said it
-    would.
+    **The footage is in the graph and nowhere here**
+    (`adr/a-document-names-footage-only-through-a-tool.md`). A project under
+    construction is a graph with no source root, which needs no field and no
+    affordance: the state that used to be `source=None` is now the absence of a
+    node, and the refusal a reader owed it moves to where the graph can be seen
+    (`pipeline/resolve_source.NoFootage`).
     """
 
     schema_version: int = SCHEMA_VERSION
-    #: `None` while the project names no footage — a real state, and the one a
-    #: newly minted project is in (`adr/superseded/a-document-may-name-no-footage.md`).
-    #: What it costs is `source_path`'s refusal, which every reader needing
-    #: frames goes through.
-    source: SourceRef | None = None
     #: Ordered, and the order is meaningful: it is the order the user drew them
     #: in and the order per-replicate outputs are written in.
     replicates: tuple[Replicate, ...] = ()
@@ -1124,10 +1076,10 @@ class Project(_Artifact):
     def save(self, path: Path) -> None:
         """Write to `path` as-is.
 
-        Deliberately does not rebase `source`: it cannot, because a relative
-        path does not carry the directory it was relative *to*, so a `save` that
-        silently reinterpreted one would corrupt exactly the projects it was
-        meant to help. Saving somewhere new goes through `relocated`.
+        Deliberately rebases nothing: it cannot, because a relative path does
+        not carry the directory it was relative *to*, so a `save` that silently
+        reinterpreted one would corrupt exactly the projects it was meant to
+        help. Saving somewhere new goes through `relocated`.
         """
         path.write_text(self.to_yaml(), encoding="utf-8")
 
@@ -1136,24 +1088,44 @@ class Project(_Artifact):
         """Read the project at `path`.
 
         Paths in the result stay relative — resolve them against `path.parent`,
-        which `source_path` does for you.
+        which `pipeline/resolve_source.anchored` does for a node's path params
+        and each artifact's own `resolve` does for the rest.
         """
         return cls.from_yaml(path.read_text(encoding="utf-8"))
 
     # ---- convenience -----------------------------------------------------
 
-    @classmethod
-    def for_video(cls, video: Path, project_dir: Path | None = None) -> Self:
-        """An empty project for `video`, by default anchored beside it."""
-        directory = project_dir if project_dir is not None else video.parent
-        return cls(source=SourceRef.relative_to(video, directory))
-
-    def relocated(self, from_dir: Path, to_dir: Path) -> Self:
+    def relocated(
+        self,
+        from_dir: Path,
+        to_dir: Path,
+        path_params: Mapping[str, Collection[str]] | None = None,
+    ) -> Self:
         """Copy with every stored path re-expressed relative to `to_dir`.
 
         Both directories are arguments because rebasing genuinely needs both:
         the stored paths are meaningless without the directory they were written
         against.
+
+        The footage moves with them and it moves as a node's parameter
+        (`adr/a-document-names-footage-only-through-a-tool.md`), which is why
+        `path_params` is asked for rather than derived: *which* parameter of
+        which node names a file is `ToolSpec.path_params`' answer, and this
+        module does not ask the registry anything. A caller that hands over
+        nothing rebases sinks and crops alone, which is a project whose graph
+        reads no file of its own.
+
+        Args:
+            from_dir: The directory the stored paths are written against.
+            to_dir: The directory they are to be written against.
+            path_params: Per node id, the parameters holding a path — from
+                `ToolSpec.path_params` for the node's tool. A parameter that is
+                unset or empty is left alone: a source nobody has chosen a file
+                for names no file to rebase.
+
+        Returns:
+            The copy. An absolute parameter comes back relative, because
+            relative to the project file is the spelling a stored path has.
         """
 
         def rebase_sink(sink: Sink) -> Sink:
@@ -1164,37 +1136,23 @@ class Project(_Artifact):
                 update={"path": _posix_relative(record.resolve(from_dir), to_dir)}
             )
 
-        source = self.source
+        def rebase_node(node: Node) -> Node:
+            moved = {
+                name: _posix_relative(Path(from_dir, held), to_dir)
+                for name in (path_params or {}).get(node.node_id, ())
+                if isinstance(held := node.params.get(name), str) and held
+            }
+            return moved_default(node, moved) if moved else node
+
         return self.model_copy(
             update={
-                "source": (
-                    None
-                    if source is None
-                    else SourceRef.relative_to(source.resolve(from_dir), to_dir)
+                "pipeline": self.pipeline.model_copy(
+                    update={"nodes": tuple(rebase_node(node) for node in self.pipeline.nodes)}
                 ),
                 "outputs": tuple(rebase_sink(sink) for sink in self.outputs),
                 "crops": tuple(rebase_crop(record) for record in self.crops),
             }
         )
-
-    def source_path(self, project_path: Path) -> Path:
-        """The video, resolved against the project file it was read from.
-
-        **The one gate between the admitted no-footage state and everything that
-        needs frames.** Every front end reaches the footage through this, so the
-        refusal is stated once here rather than as a `None` check per caller —
-        and a caller that skipped it would be reading `source` directly, which is
-        a visibly different line.
-
-        Raises:
-            NoFootage: if the document names no footage yet.
-        """
-        source = self.source
-        if source is None:
-            raise NoFootage(
-                f"{project_path} names no footage: add a source to it before running it"
-            )
-        return source.resolve(project_path.parent)
 
     def with_replicates(self, replicates: Sequence[Replicate]) -> Self:
         """Copy carrying a different set of replicates, in order."""

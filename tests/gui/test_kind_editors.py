@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Node, Pipeline, Project, Replicate, SourceRef
+from sieve.core.pipeline_model import Node, Pipeline, Project, Replicate
 from sieve.core.tool_base import (
     ArraySpec,
     ElementRelation,
@@ -99,7 +99,6 @@ def _spec() -> ToolSpec:
 def session(tmp_path: Path) -> Session:
     """One node of the tool above, with both composite parameters set."""
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(
@@ -204,7 +203,6 @@ def test_a_drawn_region_lands_on_the_replicate_it_was_drawn_for(
     session = Session(
         tmp_path / "clip.sieve.yaml",
         Project(
-            source=SourceRef(path="clip.mp4"),
             replicates=(north, south),
             pipeline=Pipeline(
                 nodes=(

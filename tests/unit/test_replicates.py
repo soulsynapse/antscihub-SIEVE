@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from sieve.core.pipeline_model import Project, Replicate, SourceRef
+from sieve.core.pipeline_model import Project, Replicate
 
 
 def _replicate(name: str) -> Replicate:
@@ -114,7 +114,6 @@ class TestOverrides:
 class TestLookup:
     def _project(self) -> Project:
         return Project(
-            source=SourceRef(path="arena.MP4"),
             replicates=(Replicate(name="one", replicate_id="r1"),),
         )
 

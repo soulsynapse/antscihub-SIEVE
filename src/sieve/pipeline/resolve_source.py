@@ -14,6 +14,12 @@ half of the resolution the tools cannot do: a path stored relative to the
 project file means nothing to a tool that never saw the document
 (`adr/a-document-names-footage-only-through-a-tool.md`).
 
+`footage_root` is the same ADR read from the other end. The document has no
+field naming the video, so *which* of a graph's source roots a run means when it
+says "the footage" is a question about the graph, and this is the one place that
+answers it — the CLI's `source` and `source_end`, the window's player, and the
+library card's footage line all read it here rather than each picking a root.
+
 **What used to be here, and where it went.** This module was also the plan-time
 route that decided, per run, whether a written crop could serve it — a match
 against `CropRecord`, a graph with the crop node dropped, and a reader wrapped
@@ -34,16 +40,180 @@ is a thing they already had.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 
 from pydantic import ValidationError
 
-from sieve.core.pipeline_model import Node, Pipeline, moved_default
+from sieve.core.pipeline_model import Node, Pipeline, Replicate, moved_default, resolved_params
 from sieve.core.tool_base import ParamsBase, SourceFileError, ToolSpec
 from sieve.core.tool_registry import REGISTRY, ToolRegistry, UnknownToolError
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag
+
+
+class NoFootage(ValueError):
+    """A reader that needs frames was handed a graph that roots on none.
+
+    What `adr/superseded/a-document-may-name-no-footage.md` bought, moved to
+    where the graph can be seen: the state refused is a document with no decoded
+    source root, which is the shape a project under construction has and is one
+    `Dag.build` can already describe. Named rather than an `IndexError` off an
+    empty walk, and carrying the project file rather than the graph, because the
+    user is looking at a library and the actionable half of the news is which of
+    those projects has no footage yet.
+    """
+
+
+def footage_root(
+    pipeline: Pipeline, registry: ToolRegistry | None = None
+) -> tuple[Node, ToolSpec] | None:
+    """Which of `pipeline`'s source roots is *the footage*, with its tool.
+
+    **The tie-break, and it is stated nowhere else.** Removing `Project.source`
+    removes the field and not the question: `ExecutionPlan.build` still takes one
+    `source` string and one `source_end`, `Dag.node_keys` still folds that string
+    into every reader-fed root, and a window still opens one player. So a graph
+    that roots on two files has to say which of them those readers mean, and the
+    answer here is *the first decoded source root in document order*.
+
+    Decoded rather than any source root, because the readers that ask are the
+    ones that decode: `source_end` is a frame count out of a container, and a
+    `pick` root over a background still is not the video however early it is
+    written (`core/tool_base.ToolSource.decoded`,
+    `adr/a-root-keys-by-its-reader.md`). Document order rather than the
+    topological one, because a root has no ancestors to be sorted behind and
+    document order is the order the user drew the steps in — the same tie-break
+    the walk breaks its siblings on (`gui/walk.py`), and one available to a
+    caller holding a `Pipeline` that will not build.
+
+    Two roots read through the decoder is therefore a document whose *second*
+    video is footage to the executor and not to the plan's span. That is
+    admitted rather than refused: the graph is legal, every node computes, and
+    the only thing the choice moves is which container the fallback span is
+    taken from.
+
+    Args:
+        pipeline: The graph, `anchored` already if the caller wants the file
+            rather than the spelling.
+        registry: Where tools are looked up, for `anchored`'s reason.
+
+    Returns:
+        The node and its spec, or `None` for a graph that decodes no file of its
+        own — a project under construction, or one served entirely by roots that
+        read their own files with their own code.
+    """
+    shelf = REGISTRY if registry is None else registry
+
+    def resolved(node: Node) -> ToolSpec | None:
+        try:
+            return shelf.get(node.tool_id, node.version)
+        except UnknownToolError:
+            # `anchored`'s treatment of a missing tool, for its reason: a window
+            # drawing a document has to survive one, and a root this install
+            # cannot resolve is not a root it can call the footage either.
+            return None
+
+    return _first_decoded_root(pipeline, resolved)
+
+
+def footage_root_of(dag: Dag) -> tuple[Node, ToolSpec] | None:
+    """`footage_root` asked of a graph that has built, against the graph's specs.
+
+    The same tie-break and not a second one: a caller holding a `Dag` has the
+    resolved spec per node already, and looking each up again could answer off a
+    different shelf than the one the graph was built against.
+    """
+    return _first_decoded_root(dag.pipeline, lambda node: dag.specs.get(node.node_id))
+
+
+def _first_decoded_root(
+    pipeline: Pipeline, spec_of: Callable[[Node], ToolSpec | None]
+) -> tuple[Node, ToolSpec] | None:
+    """`footage_root`'s walk, over whatever answers what a node's tool is."""
+    fed = {edge.downstream for edge in pipeline.edges}
+    for node in pipeline.nodes:
+        if node.node_id in fed:
+            continue
+        spec = spec_of(node)
+        if spec is not None and spec.source is not None and spec.source.decoded:
+            return node, spec
+    return None
+
+
+def footage_file(
+    pipeline: Pipeline,
+    project_path: Path,
+    registry: ToolRegistry | None = None,
+    replicates: Sequence[Replicate] = (),
+) -> Path:
+    """The file the footage root reads, resolved.
+
+    **The baseline first, then the fan-out, because a path parameter is an
+    ordinary parameter.** `Replicate.overrides` is sparse over arbitrary names
+    and asks nothing about what a parameter means, so a document may deviate its
+    footage root per arena and leave the node's own `path` empty — a folder of
+    already-cut files is exactly that project. The callers of this each want one
+    video for the whole invocation (a span's end, a checkpoint folder's name),
+    which is what the departed schema field gave them, so the answer is the
+    first target that resolves one: the baseline where there is one, and
+    otherwise the first replicate in document order. Every *key* is still the
+    per-replicate walk's (`source_files`), so nothing about what a run computes
+    reads this.
+
+    Args:
+        pipeline: The graph, `anchored` against the project file's directory —
+            a relative parameter read against the process's directory here would
+            be the anchoring undone one call later.
+        project_path: The project file, named in the refusal because that is the
+            actionable half of it.
+        registry: Where tools are looked up.
+        replicates: The document's replicates, in order, for the fan-out clause
+            above. Omitting them asks the baseline alone.
+
+    Raises:
+        NoFootage: if the graph roots on no decoded source.
+        SourceFileError: if no target's parameters name one file — the
+            baseline's message when there are no replicates, and the last
+            replicate's otherwise.
+        ValidationError: if its parameters are not valid for its tool.
+    """
+    found = footage_root(pipeline, registry)
+    if found is None:
+        raise NoFootage(
+            f"{project_path} names no footage: add a source to its pipeline before running it"
+        )
+    node, spec = found
+    assert spec.source is not None  # `footage_root` is defined by it
+    absent: SourceFileError | None = None
+    for target in (None, *replicates):
+        params = spec.params_model.model_validate(resolved_params(node, target))
+        try:
+            return spec.source.file(params)
+        except SourceFileError as error:
+            absent = error
+    assert absent is not None  # the loop runs at least once
+    raise absent
+
+
+def named_footage(pipeline: Pipeline, registry: ToolRegistry | None = None) -> str:
+    """What the footage root's path parameter names, as written; `""` for none.
+
+    `footage_file` for a caller that must not touch the filesystem — a library
+    card drawing forty projects, and a window handing a path to the decode
+    thread whose answer about whether the file is there is the one that counts
+    (`gui/app.open_project`). It reports the spelling and asks nothing of disk,
+    so a source nobody has chosen a file for and a graph with no source root
+    both come back empty, which is one state to the person looking at the shelf.
+    """
+    found = footage_root(pipeline, registry)
+    if found is None:
+        return ""
+    node, spec = found
+    for name in spec.path_params:
+        if isinstance(held := node.params.get(name), str) and held:
+            return held
+    return ""
 
 
 def anchored(
@@ -53,9 +223,10 @@ def anchored(
 
     **Where a source tool's path is anchored, and it is here rather than in the
     tool** (`adr/a-document-names-footage-only-through-a-tool.md`). The property
-    `SourceRef` existed for — a path meaningless without the directory holding
-    the project file, so that a folder can move and the project still open — is
-    the source node's path param's now, and a param cannot carry it on its own:
+    the schema's own footage field existed for — a path meaningless without the
+    directory holding the project file, so that a folder can move and the project
+    still open — is every source node's path param's now, and a param cannot
+    carry it on its own:
     the tools resolve a pattern with no idea what document it came out of, and
     one taught the project directory would be `pipeline` resolving a second time
     (`tools/footage.FootageFile.file`).

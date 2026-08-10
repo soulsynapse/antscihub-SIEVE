@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project
 from tests.gui import driving
 
 _TOOLS = ("crop", "downsample", "detect")
@@ -40,7 +40,6 @@ _CRAMPED = 60
 @pytest.fixture
 def project_file(tmp_path: Path) -> Path:
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=tuple(
                 Node(node_id=f"n{i}", tool_id=tool, version="1.0.0")

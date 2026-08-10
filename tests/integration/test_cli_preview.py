@@ -29,7 +29,8 @@ from sieve.bench.budgets import BUDGETS
 from sieve.bench.metrics import Recorder, Sample
 from sieve.cli.app import app
 from sieve.cli.preview_cmd import _timings
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Replicate
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Replicate
+from tests.projects import project_over
 
 runner = CliRunner()
 
@@ -53,9 +54,7 @@ def _pipeline() -> Pipeline:
 def _project(
     video: Path, directory: Path, *, replicates: tuple[Replicate, ...] = (), name: str = "arena"
 ) -> Path:
-    project = (
-        Project.for_video(video, directory).with_pipeline(_pipeline()).with_replicates(replicates)
-    )
+    project = project_over(video, directory, _pipeline()).with_replicates(replicates)
     path = directory / f"{name}.sieve.yaml"
     project.save(path)
     return path
@@ -99,10 +98,13 @@ def test_a_repeated_render_reuses_the_store_and_reports_both_budgets(
 
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert lines[0] == "arena 1: window 10:14, 2 nodes"
-    assert lines[1] == "render 1: 4 frames 10:14, 8 node outputs computed, 0 from cache (0% reuse)"
+    # Three nodes and twelve outputs: the footage is a root of the graph now
+    # (`adr/a-document-names-footage-only-through-a-tool.md`), so the chain the
+    # command reports is one longer than the tools the case wired.
+    assert lines[0] == "arena 1: window 10:14, 3 nodes"
+    assert lines[1] == "render 1: 4 frames 10:14, 12 node outputs computed, 0 from cache (0% reuse)"
     assert (
-        lines[2] == "render 2: 4 frames 10:14, 0 node outputs computed, 8 from cache (100% reuse)"
+        lines[2] == "render 2: 4 frames 10:14, 0 node outputs computed, 12 from cache (100% reuse)"
     )
     assert "slider_to_preview: median" in result.output
     assert "full_preview_render: median" in result.output
@@ -132,7 +134,7 @@ def test_an_edit_below_the_root_is_reported_as_a_half_reuse(
     assert result.exit_code == 0, result.output
     assert (
         "render 2: 4 frames 10:14 after tail:factor=4, 4 node outputs computed, "
-        "4 from cache (50% reuse)" in result.output
+        "8 from cache (67% reuse)" in result.output
     )
 
 
@@ -152,10 +154,10 @@ def test_an_edit_of_a_project_with_no_replicates_moves_the_node_itself(
     result = _invoke(project, "--frames", "10:14", "--repeat", "2", "--edit", "tail:factor=4")
 
     assert result.exit_code == 0, result.output
-    assert result.output.splitlines()[0] == "baseline: window 10:14, 2 nodes"
+    assert result.output.splitlines()[0] == "baseline: window 10:14, 3 nodes"
     assert (
         "render 2: 4 frames 10:14 after tail:factor=4, 4 node outputs computed, "
-        "4 from cache (50% reuse)" in result.output
+        "8 from cache (67% reuse)" in result.output
     )
 
 
@@ -225,8 +227,8 @@ def test_one_frame_publishes_only_the_slider_budget(synthetic_video: Path, tmp_p
 
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert lines[0] == "arena 1: frame 11, 2 nodes"
-    assert lines[1] == "render 1: 1 frames 11:12, 2 node outputs computed, 0 from cache (0% reuse)"
+    assert lines[0] == "arena 1: frame 11, 3 nodes"
+    assert lines[1] == "render 1: 1 frames 11:12, 3 node outputs computed, 0 from cache (0% reuse)"
     assert "slider_to_preview: median" in result.output
     assert "full_preview_render" not in result.output
 
@@ -251,8 +253,8 @@ def test_the_named_replicate_is_the_one_previewed(synthetic_video: Path, tmp_pat
     defaulted = _invoke(project, "--frames", "10:14")
 
     assert named.exit_code == 0, named.output
-    assert named.output.splitlines()[0] == "arena 2: window 10:14, 2 nodes"
-    assert defaulted.output.splitlines()[0] == "arena 1: window 10:14, 2 nodes"
+    assert named.output.splitlines()[0] == "arena 2: window 10:14, 3 nodes"
+    assert defaulted.output.splitlines()[0] == "arena 1: window 10:14, 3 nodes"
 
 
 def test_an_unknown_replicate_is_refused(synthetic_video: Path, tmp_path: Path) -> None:

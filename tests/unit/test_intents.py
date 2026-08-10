@@ -21,7 +21,6 @@ from sieve.core.pipeline_model import (
     Project,
     Replicate,
     Sink,
-    SourceRef,
 )
 from sieve.core.tool_base import (
     SOLE_PORT,
@@ -79,7 +78,6 @@ ROOT = "root-key"
 
 def _project(*replicates: Replicate) -> Project:
     return Project(
-        source=SourceRef(path="arena.MP4"),
         replicates=replicates,
         pipeline=Pipeline(
             nodes=(
@@ -198,7 +196,6 @@ def test_set_outputs_moves_no_cache_key(tmp_path: Path) -> None:
 def test_removing_a_node_is_a_whole_value_like_any_other_edit(tmp_path: Path) -> None:
     path = tmp_path / "arena.sieve.yaml"
     Project(
-        source=SourceRef(path="arena.MP4"),
         pipeline=Pipeline(
             nodes=tuple(
                 Node(node_id=node_id, tool_id="threshold", version="1.0.0")
@@ -224,7 +221,6 @@ def test_removing_a_node_is_a_whole_value_like_any_other_edit(tmp_path: Path) ->
 def test_adding_a_node_splices_it_and_undoes_as_one_value(tmp_path: Path) -> None:
     path = tmp_path / "arena.sieve.yaml"
     Project(
-        source=SourceRef(path="arena.MP4"),
         checkpoints=("n1",),
         pipeline=Pipeline(
             nodes=tuple(
@@ -257,7 +253,6 @@ def test_adding_a_node_splices_it_and_undoes_as_one_value(tmp_path: Path) -> Non
 def test_retooling_a_node_keeps_the_node_and_undoes_as_one_value(tmp_path: Path) -> None:
     path = tmp_path / "arena.sieve.yaml"
     Project(
-        source=SourceRef(path="arena.MP4"),
         checkpoints=("n2",),
         outputs=(Sink(sink_id="s1", node_id="n2", format="csv", path="out"),),
         pipeline=Pipeline(

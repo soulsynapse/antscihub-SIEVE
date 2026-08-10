@@ -32,9 +32,11 @@ from sieve.decode.reader import VideoReader
 from sieve.pipeline.cache_key import node_key, picked_key, source_identity, source_key
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
-from sieve.pipeline.plan import ExecutionPlan
+from sieve.pipeline.plan import ExecutionPlan, validated_params
+from sieve.pipeline.resolve_source import anchored, picked_identities, source_files
 from sieve.storage.checkpoint_writer import BASELINE_DIR, MANIFEST_NAME, checkpoints_dir
 from sieve.tools import discover
+from tests.projects import footage_of, project_over
 
 runner = CliRunner()
 
@@ -80,10 +82,8 @@ def _project(
 ) -> Path:
     """Write the project into `directory` and return its path."""
     directory.mkdir(parents=True, exist_ok=True)
-    project = (
-        Project.for_video(video, directory)
-        .with_pipeline(pipeline)
-        .model_copy(update={"checkpoints": checkpoints})
+    project = project_over(video, directory, pipeline).model_copy(
+        update={"checkpoints": checkpoints}
     )
     path = directory / PROJECT_NAME
     Project.model_validate(project).save(path)
@@ -100,9 +100,17 @@ def _computed(project_path: Path, node_id: str) -> list[NDArray[Any]]:
     """What a run of this document produces in memory, frame by frame."""
     discover()
     project = Project.load(project_path)
-    video = project.source_path(project_path)
+    video = footage_of(project, project_path)
+    # Anchored and picked: the footage is a source root now
+    # (`adr/a-document-names-footage-only-through-a-tool.md`), so the graph has
+    # to be resolved against the project's own directory and its file's identity
+    # has to reach the keys, exactly as `sieve run` does both.
+    dag = Dag.build(anchored(project.pipeline, project_path.parent))
     plan = ExecutionPlan.build(
-        Dag.build(project.pipeline), source=source_identity(video), span=SPAN
+        dag,
+        source=source_identity(video),
+        span=SPAN,
+        picked=picked_identities(source_files(dag, validated_params(dag, None))),
     )
     with VideoReader(video, luma=plan.luma) as reader:
         return [np.array(result[node_id].data) for result in execute(plan, reader)]

@@ -125,7 +125,9 @@ def preview_project(
     """
     discover()
     project = load_project(project_path)
-    video = footage_of(project, project_path)
+    video = footage_of(
+        anchored(project.pipeline, project_path.parent), project_path, project.replicates
+    )
     target = _target(project, replicate_id)
     parsed = _parse_edits(project, edits or ())
     if parsed and repeat < 2:

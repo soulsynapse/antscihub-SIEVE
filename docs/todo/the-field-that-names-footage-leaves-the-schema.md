@@ -2,7 +2,7 @@
 title: The field that names footage leaves the schema, and every reader reaches it through the graph
 priority: high
 phase: 11
-status: open
+status: awaiting-review
 gated_on: nothing
 done_when: 'uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k a_document_carrying_a_source_key_is_refused && uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k relocating_rewrites_the_source_nodes_path_param && uv run pytest tests/unit/test_pipeline_model.py tests/unit/test_source_tool.py -q -k a_relative_source_param_anchors_on_the_project_directory && uv run pytest tests/integration/test_cli_run.py -q -k a_project_whose_graph_has_no_source_root_refuses_by_name && uv run pytest "tests/gui/test_project_cards.py::test_the_library_line_reads_footage_through_the_graph" -q && uv run pytest tests/unit/test_pipeline_model.py -q -k the_version_a_document_declares_after_the_removal'
 opened: 2026-08-10
@@ -289,3 +289,58 @@ what it cannot do is make the job smaller.
 is, and the finding's `closed` entry is the warning that goes with it: the case
 will pass against a tree that has not removed the key, so its red has to come
 from the removal being in place, not from writing the case first.
+
+## 2026-08-10: the removal landed whole, and it cost three rulings the item did not name
+
+Every clause is green and the corpus is migrated in one commit — `1296 passed`,
+which is the suite plus the two cases the criterion's fourth and fifth legs were
+waiting for. What is worth recording is not the diff but the three questions the
+removal forced, because none of them is in the sections above.
+
+**`SCHEMA_VERSION` stays 1**, on ADR 38's plain words: the stamp "rises only when
+a build writes into it something the declared version does not have", and a
+removal writes nothing new. `test_the_version_a_document_declares_after_the_removal`
+pins it — the stamp, the absence of the key, and that a document written after
+the removal reads back at 1. The "Review 2026-08-10" section above is right that
+this leaves
+[a-removals-price-is-charged-only-to-the-old-document](../findings/2026.08.10-a-removals-price-is-charged-only-to-the-old-document.md)
+unpaid: a post-removal document still opens clean on a pre-removal build, which
+then tells the user to add footage to a project that names it in a node param.
+That is a successor ADR's to overturn, and the criterion is satisfiable under
+either branch, so it stays pinned at what this build actually writes.
+
+**Which decoded root is "the footage" is `resolve_source.footage_root`, and the
+tie-break is the first decoded source root in document order.** Decoded rather
+than any source root, because the readers that ask are the ones that decode — a
+`pick` over a background is not the video. Document order rather than the
+topological one, because a root has no ancestors to sort behind and document
+order is available to a caller holding a graph that will not build, which the
+library card is. `footage_file` then resolves that root's param under the
+baseline first and the replicates in order, because a path param is an ordinary
+param and a folder of already-cut files deviates it per arena and leaves the
+node's own empty.
+
+**Crop serving would have died with the field, and did not.** `crop_roots`
+recognised a crop of the footage as *a root* crop node; under the ADR the
+footage is a node, so every such crop is fed by it and the mechanism found
+nothing. It now matches a crop node whose upstream is empty or is exactly the
+footage root, and `_wired` cuts the edge into a node it turns into a source tool
+— a source tool with an upstream reads a file and a stream at once. `_uncut`
+puts that edge back, which is what keeps the pair an edit and its undo.
+
+Two things this leaves behind, neither of them this item's:
+
+- The parent footage root survives a serving edit with nothing reading it, and
+  the executor computes every node the graph holds, so a fully served run still
+  decodes the parent once per frame. Keeping it is deliberate — it is where
+  `source_end` comes from, and dropping it would make a default-span run over a
+  served project cover the crop file's length in the source's numbering — so the
+  fix is on the executor's side, not the document's.
+  `tests/integration/test_crop_serving.py::test_the_served_graph_holds_no_crop_node`
+  says so in its own words rather than claiming a saving it no longer makes.
+- `run_cmd`'s reader is now unreachable for any document. Every root of every
+  graph opens its own file once the footage is a source node, so
+  `_reads_the_footage` is false for everything a front end can write and
+  `frame_source`, `PrefetchFrameSource`'s use here and `_UNFED` are reached only
+  by a graph rooted on a plain tool — which is the state the CLI refuses by name
+  one line earlier.

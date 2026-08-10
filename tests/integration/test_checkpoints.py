@@ -38,7 +38,8 @@ from sieve.decode.reader import VideoReader
 from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.executor import execute
-from sieve.pipeline.plan import ExecutionPlan
+from sieve.pipeline.plan import ExecutionPlan, validated_params
+from sieve.pipeline.resolve_source import anchored, picked_identities, source_files
 from sieve.storage.checkpoint_writer import (
     BASELINE_DIR,
     MANIFEST_NAME,
@@ -49,6 +50,7 @@ from sieve.storage.checkpoint_writer import (
 )
 from sieve.tools import discover
 from tests.conftest import FIXTURE_FRAMES
+from tests.projects import footage_of, project_over
 
 runner = CliRunner()
 
@@ -98,8 +100,7 @@ def _project(
     """
     directory.mkdir(parents=True, exist_ok=True)
     project = (
-        Project.for_video(video, directory)
-        .with_pipeline(pipeline)
+        project_over(video, directory, pipeline)
         .with_replicates(replicates)
         .model_copy(update={"checkpoints": checkpoints})
     )
@@ -128,7 +129,7 @@ def _with_checkpoints(project_path: Path, checkpoints: tuple[str, ...]) -> None:
 
     In place, and revalidated, so that the two invocations compared below differ
     in the list and in nothing else — not in the folder, not in the file name,
-    and not in a second `Project.for_video` call's idea of the source path.
+    and not in a second idea of where its footage is.
     """
     edited = Project.load(project_path).model_copy(update={"checkpoints": checkpoints})
     Project.model_validate(edited).save(project_path)
@@ -138,18 +139,24 @@ def _plan(project_path: Path, replicate: Replicate | None) -> ExecutionPlan:
     """The plan `sieve run` builds for this document, rebuilt outside it."""
     discover()
     project = Project.load(project_path)
+    dag = Dag.build(anchored(project.pipeline, project_path.parent))
+    # The footage root is a source root, so its file's identity is what keys it
+    # and the whole chain below it — a plan built without `picked` leaves every
+    # node uncacheable (`pipeline/dag.node_keys`).
+    picked = picked_identities(source_files(dag, validated_params(dag, replicate)))
     return ExecutionPlan.build(
-        Dag.build(project.pipeline),
-        source=source_identity(project.source_path(project_path)),
+        dag,
+        source=source_identity(footage_of(project, project_path)),
         span=SPAN,
         replicate=replicate,
+        picked=picked,
     )
 
 
 def _computed(project_path: Path, node_id: str, replicate: Replicate | None) -> list[NDArray[Any]]:
     """What a run of this document produces in memory, frame by frame."""
     plan = _plan(project_path, replicate)
-    video = Project.load(project_path).source_path(project_path)
+    video = footage_of(Project.load(project_path), project_path)
     with VideoReader(video, luma=plan.luma) as reader:
         return [np.array(result[node_id].data) for result in execute(plan, reader)]
 
@@ -186,7 +193,9 @@ class TestTheCheckpointListIsNotAnInput:
 
         assert Project.load(project_path).checkpoints == ()
         keys = re.findall(r"\bkey ([0-9a-f]+)", kept)
-        assert len(set(keys)) == 2, f"two distinct keys, or the comparison is vacuous: {kept}"
+        # Three: the footage root keys too
+        # (`adr/a-document-names-footage-only-through-a-tool.md`).
+        assert len(set(keys)) == 3, f"three distinct keys, or the comparison is vacuous: {kept}"
         assert emptied == kept
 
 

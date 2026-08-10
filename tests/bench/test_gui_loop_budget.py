@@ -59,7 +59,7 @@ from numpy.typing import NDArray
 
 from sieve.bench.budgets import IN_DEBT
 from sieve.bench.metrics import METRICS, MetricBus, Recorder, Sample
-from sieve.core.pipeline_model import Project, SourceSpan
+from sieve.core.pipeline_model import SourceSpan
 from sieve.decode.prefetch import PrefetchFrameSource
 from sieve.pipeline.cache import MemoryFrameStore
 from sieve.pipeline.cache_key import source_identity
@@ -74,6 +74,7 @@ from tests.bench.test_loop_budget import (
 )
 from tests.gui import driving
 from tests.integration.test_v2_oracle import BLOCKS, DETECTOR, SPAN, graph
+from tests.projects import project_over
 
 # Set before the first `QGuiApplication` is constructed, for the reason
 # `tests/gui/conftest.py` gives: a laptop with a display would otherwise open a
@@ -152,7 +153,7 @@ def _window(stirred_clip: Path, directory: Path) -> Any:
     video = directory / stirred_clip.name
     video.write_bytes(stirred_clip.read_bytes())
     path = directory / "stirred.sieve.yaml"
-    Project.for_video(video, directory).model_copy(update={"pipeline": graph()}).save(path)
+    project_over(video, directory, graph()).save(path)
 
     window = MainWindow(projects_in(directory))
     window.show()
@@ -204,6 +205,10 @@ def reading(stirred_clip: Path, tmp_path_factory: pytest.TempPathFactory) -> Ite
     try:
         # The cold render the walk to the detector sets off, before any clock
         # below is read: it is the session's first and no gesture caused it.
+        # Three steps and not two: the footage is a root of the graph now
+        # (`adr/a-document-names-footage-only-through-a-tool.md`), so the walk
+        # starts on it rather than on the first tool below it.
+        window.go_down()
         window.go_down()
         window.go_down()
         assert window.current_node is not None and window.current_node.node_id == DETECTOR
@@ -404,6 +409,7 @@ def test_the_frame_under_the_playhead_is_the_pipelines_and_not_the_sources(
     try:
         window.go_down()
         window.go_down()
+        window.go_down()
         assert window.current_node is not None and window.current_node.node_id == DETECTOR
         _settle_graph(window)
         window.player.seek(_VIEWED)
@@ -452,6 +458,7 @@ def test_a_drag_shows_the_decoded_frame_and_the_release_shows_the_render(
     window = _window(stirred_clip, directory)
     delivered: list[Any] = []
     try:
+        window.go_down()
         window.go_down()
         window.go_down()
         _settle_graph(window)

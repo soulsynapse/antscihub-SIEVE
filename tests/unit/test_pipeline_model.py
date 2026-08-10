@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from sieve.core import pipeline_model
@@ -21,12 +23,10 @@ from sieve.core.pipeline_model import (
     Edge,
     ExternalInputChanged,
     Node,
-    NoFootage,
     Pipeline,
     Project,
     Replicate,
     Sink,
-    SourceRef,
     SourceSpan,
     as_project_path,
     project_path_for,
@@ -37,6 +37,12 @@ from sieve.core.types import ROI
 
 def make_project() -> Project:
     """A project exercising every field, so a round trip can lose one."""
+    footage = Node(
+        node_id="n0",
+        tool_id="footage",
+        version="1.0.0",
+        params={"path": "../footage/arena.MP4"},
+    )
     crop = Node(
         node_id="n1",
         tool_id="crop",
@@ -45,7 +51,6 @@ def make_project() -> Project:
     )
     threshold = Node(node_id="n2", tool_id="threshold", version="2.1.0", params={"level": 0.25})
     return Project(
-        source=SourceRef(path="../footage/arena.MP4"),
         replicates=(
             Replicate(
                 name="Replicate 1",
@@ -59,8 +64,8 @@ def make_project() -> Project:
             ),
         ),
         pipeline=Pipeline(
-            nodes=(crop, threshold),
-            edges=(Edge(upstream="n1", downstream="n2"),),
+            nodes=(footage, crop, threshold),
+            edges=(Edge(upstream="n0", downstream="n1"), Edge(upstream="n1", downstream="n2")),
         ),
         checkpoints=("n1",),
         outputs=(
@@ -104,18 +109,21 @@ class TestRoundTrip:
 
         assert first.read_text(encoding="utf-8") == second.read_text(encoding="utf-8")
 
-    def test_relocating_rebases_every_stored_path(self, tmp_path: Path) -> None:
-        # Moving a project folder is how footage reaches a cluster. The source,
-        # the sink directories and the written crops all have to follow, and a
-        # rebase that handled only the source would be found by a run that wrote
-        # its outputs into whatever happened to sit beside the new location.
+    def test_relocating_rewrites_the_source_nodes_path_param(self, tmp_path: Path) -> None:
+        # Moving a project folder is how footage reaches a cluster. The footage,
+        # the sink directories and the written crops all have to follow — and the
+        # footage now follows as a parameter on the node that holds it
+        # (`adr/a-document-names-footage-only-through-a-tool.md`), which is why
+        # the caller hands over which params are paths and this layer asks the
+        # registry nothing.
         old_dir = tmp_path / "old"
         new_dir = tmp_path / "nested" / "new"
         project = make_project()
 
-        moved = project.relocated(old_dir, new_dir)
+        moved = project.relocated(old_dir, new_dir, {"n0": ("path",)})
 
-        assert moved.source.resolve(new_dir) == project.source.resolve(old_dir)
+        held = moved.pipeline.node("n0").params["path"]
+        assert Path(new_dir, held).resolve() == Path(old_dir, "../footage/arena.MP4").resolve()
         assert moved.outputs[0].resolve(new_dir) == project.outputs[0].resolve(old_dir)
         assert moved.crops[0].resolve(new_dir) == project.crops[0].resolve(old_dir)
 
@@ -129,7 +137,6 @@ class TestIndependenceFromTheRegistry:
         # turn that into a parse failure naming nothing.
         text = """
 schema_version: 1
-source: {path: arena.MP4}
 pipeline:
   nodes:
     - {node_id: n1, tool_id: wavelet_bands, version: 2.1.0, params: {bands: 6}}
@@ -158,9 +165,7 @@ pipeline:
         # results.
         with pytest.raises(ValidationError, match="node_id must match"):
             Project.from_yaml(
-                "source: {path: arena.MP4}\n"
-                "pipeline:\n"
-                "  nodes: [{node_id: ../escape, tool_id: downsample, version: 1.0.0}]\n"
+                "pipeline:\n  nodes: [{node_id: ../escape, tool_id: downsample, version: 1.0.0}]\n"
             )
         with pytest.raises(ValidationError, match="node_id must match"):
             Node(node_id="a/b", tool_id="downsample", version="1.0.0")
@@ -173,9 +178,7 @@ pipeline:
             Node(node_id="abc\n", tool_id="downsample", version="1.0.0")
         with pytest.raises(ValidationError, match="node_id must match"):
             Project.from_yaml(
-                "source: {path: arena.MP4}\n"
-                "pipeline:\n"
-                '  nodes: [{node_id: "abc\\n", tool_id: downsample, version: 1.0.0}]\n'
+                'pipeline:\n  nodes: [{node_id: "abc\\n", tool_id: downsample, version: 1.0.0}]\n'
             )
         # Looser than `tool_id`'s, and it has to be: the generated id is
         # `uuid4().hex`, which begins with a digit more often than not.
@@ -207,15 +210,11 @@ pipeline:
         # takes the escape — which is what a hand edit is.
         with pytest.raises(ValidationError, match="tool_id must match"):
             Project.from_yaml(
-                "source: {path: arena.MP4}\n"
-                "pipeline:\n"
-                '  nodes: [{node_id: n1, tool_id: "downsample\\n", version: 1.0.0}]\n'
+                'pipeline:\n  nodes: [{node_id: n1, tool_id: "downsample\\n", version: 1.0.0}]\n'
             )
         with pytest.raises(ValidationError, match=re.escape("version must be MAJOR.MINOR.PATCH")):
             Project.from_yaml(
-                "source: {path: arena.MP4}\n"
-                "pipeline:\n"
-                '  nodes: [{node_id: n1, tool_id: downsample, version: "1.0.0\\n"}]\n'
+                'pipeline:\n  nodes: [{node_id: n1, tool_id: downsample, version: "1.0.0\\n"}]\n'
             )
 
 
@@ -227,12 +226,10 @@ class TestPurity:
         # to force. Without this, an unknown key would round-trip out and the
         # document would quietly stop being the thing two machines agree about.
         with pytest.raises(ValidationError):
-            Project.from_yaml("source: {path: arena.MP4}\nzoom: 2.5\n")
+            Project.from_yaml("zoom: 2.5\n")
         with pytest.raises(ValidationError):
             Project.from_yaml(
-                "source: {path: arena.MP4}\n"
-                "pipeline:\n"
-                "  nodes: [{tool_id: downsample, version: 1.0.0, scroll_x: 40}]\n"
+                "pipeline:\n  nodes: [{tool_id: downsample, version: 1.0.0, scroll_x: 40}]\n"
             )
 
     def test_node_carries_identity_and_nothing_else(self) -> None:
@@ -249,7 +246,7 @@ class TestPurity:
         # fields it did not understand would run a pipeline that is not the one
         # the document describes, and would report success.
         with pytest.raises(ValidationError, match="schema version"):
-            Project.from_yaml(f"schema_version: {SCHEMA_VERSION + 1}\nsource: {{path: a.MP4}}\n")
+            Project.from_yaml(f"schema_version: {SCHEMA_VERSION + 1}\n")
 
     def test_a_load_keeps_the_version_it_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # The other half of the refusal above, and the half that has no subject
@@ -260,7 +257,7 @@ class TestPurity:
         # (`adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md`).
         monkeypatch.setattr(pipeline_model, "SCHEMA_VERSION", SCHEMA_VERSION + 1)
 
-        project = Project.from_yaml(f"schema_version: {SCHEMA_VERSION}\nsource: {{path: a.MP4}}\n")
+        project = Project.from_yaml(f"schema_version: {SCHEMA_VERSION}\n")
 
         assert project.schema_version == SCHEMA_VERSION
 
@@ -299,7 +296,6 @@ class TestReferentialIntegrity:
         # assembled, which on a cluster is hours later.
         with pytest.raises(ValidationError, match="sink names no such node"):
             Project(
-                source=SourceRef(path="arena.MP4"),
                 outputs=(Sink(node_id="ghost", format="csv", path="detections"),),
             )
 
@@ -320,7 +316,6 @@ class TestReferentialIntegrity:
         # two arenas whose results cannot be told apart after the fact.
         with pytest.raises(ValidationError, match="duplicate replicate_id"):
             Project(
-                source=SourceRef(path="arena.MP4"),
                 replicates=(
                     Replicate(name="one", replicate_id="r1"),
                     Replicate(name="two", replicate_id="r1"),
@@ -334,7 +329,6 @@ class TestReferentialIntegrity:
         node = Node(node_id="n1", tool_id="blur", version="1.0.0")
         with pytest.raises(ValidationError, match="duplicate checkpoint"):
             Project(
-                source=SourceRef(path="arena.MP4"),
                 pipeline=Pipeline(nodes=(node,)),
                 checkpoints=("n1", "n1"),
             )
@@ -346,7 +340,6 @@ class TestReferentialIntegrity:
         node = Node(node_id="n1", tool_id="blur", version="1.0.0")
         with pytest.raises(ValidationError, match="duplicate sink_id"):
             Project(
-                source=SourceRef(path="arena.MP4"),
                 pipeline=Pipeline(nodes=(node,)),
                 outputs=(
                     Sink(sink_id="s1", node_id="n1", format="csv", path="a"),
@@ -407,7 +400,6 @@ class TestReferentialIntegrity:
         # handed the dead id.
         with pytest.raises(ValidationError, match="overrides no such node"):
             Project(
-                source=SourceRef(path="arena.MP4"),
                 replicates=(Replicate(name="one", overrides={"ghost": {"level": 0.5}}),),
             )
 
@@ -588,6 +580,7 @@ class TestSwappingTheToolAtAPosition:
         swapped = make_project().with_node_retooled("n2", "motion_history", "3.0.0")
 
         assert [(node.node_id, node.tool_id) for node in swapped.pipeline.nodes] == [
+            ("n0", "footage"),
             ("n1", "crop"),
             ("n2", "motion_history"),
         ]
@@ -645,7 +638,6 @@ class TestPerReplicateDeviation:
             node_id="n1", tool_id="threshold", version="1.0.0", params={"level": 0.5, "blur": 3}
         )
         return Project(
-            source=SourceRef(path="arena.MP4"),
             replicates=(
                 Replicate(name="one", replicate_id="r1"),
                 Replicate(name="two", replicate_id="r2"),
@@ -713,7 +705,7 @@ class TestPerReplicateDeviation:
         banded = Node(
             node_id="n1", tool_id="wavelet_bands", version="1.0.0", params={"cuts": [1, 2]}
         )
-        project = Project(source=SourceRef(path="arena.MP4"), pipeline=Pipeline(nodes=(banded,)))
+        project = Project(pipeline=Pipeline(nodes=(banded,)))
 
         with pytest.raises(TypeError):
             project.params_for("n1")["cuts"].append(3)
@@ -773,7 +765,7 @@ class TestCropRecords:
         # Two records for one cut are two files claiming to be the same thing,
         # and `backs` would answer yes for both. `with_crop` is the path that
         # cannot produce the pair the document refuses.
-        project = Project(source=SourceRef(path="arena.MP4"))
+        project = Project()
         first = self._record()
         again = self._record(path="crops/r1-retry.mkv")
 
@@ -784,7 +776,7 @@ class TestCropRecords:
             recorded.with_crops((first, again))
 
     def test_a_record_of_a_different_cut_is_kept_beside_it(self) -> None:
-        project = Project(source=SourceRef(path="arena.MP4"))
+        project = Project()
         first = self._record()
         other = self._record(path="crops/r2.mkv", region=ROI(64, 0, 64, 64))
 
@@ -797,7 +789,6 @@ class TestCropRecords:
 class TestExternalInputs:
     def _project(self) -> Project:
         return Project(
-            source=SourceRef(path="arena.MP4"),
             pipeline=Pipeline(nodes=(Node(node_id="bg", tool_id="pick", version="1.0.0"),)),
         )
 
@@ -835,7 +826,7 @@ class TestExternalInputs:
         # the graph has lost is a claim nothing will ever check, and it would
         # survive every save until a new node happened to take the id.
         with pytest.raises(ValidationError, match="input hash names no such node"):
-            Project(source=SourceRef(path="arena.MP4"), input_hashes={"bg": "blake2b-256:0"})
+            Project(input_hashes={"bg": "blake2b-256:0"})
 
 
 class TestBlankStringsAreRefused:
@@ -846,10 +837,6 @@ class TestBlankStringsAreRefused:
     wrong one. Whitespace counts as blank for the same reason — `" "` resolves
     identically and reads as a real entry in the YAML.
     """
-
-    def test_a_source_path_that_names_no_file_is_refused(self) -> None:
-        with pytest.raises(ValidationError, match="source path must not be empty"):
-            SourceRef(path="   ")
 
     def test_a_sink_path_that_names_no_directory_is_refused(self) -> None:
         # A sink writes one output per replicate into the directory it names, so
@@ -876,46 +863,62 @@ class TestBlankStringsAreRefused:
                 )
 
 
-class TestADocumentMayNameNoFootage:
-    """The under-construction state is a valid document, and its cost is borne here.
+class TestTheDocumentNamesNoFootage:
+    """The field is gone and the graph carries it, so this is about what is *not* here.
 
-    `adr/superseded/a-document-may-name-no-footage.md`. The state comes from the mint —
-    NEW PROJECT writes a project with no sources and no chain, and the next act
-    is adding one — so the schema admits it rather than refusing a project the
-    user is halfway through making. What that buys is paid for by every reader
-    that needs frames: it refuses naming the file, which is the second case
-    here.
+    `adr/a-document-names-footage-only-through-a-tool.md`. The under-construction
+    state that `adr/superseded/a-document-may-name-no-footage.md` bought a `None`
+    for is now a graph with no source root, which needs no field and no
+    affordance — so what is left to check here is the price ADR 38 charges for
+    the removal, and that a rebase still moves what a document under
+    construction does hold.
     """
 
-    def test_a_document_naming_no_footage_round_trips(self, tmp_path: Path) -> None:
-        path = tmp_path / "untitled_1.sieve.yaml"
-        Project().save(path)
+    def test_a_document_carrying_a_source_key_is_refused(self) -> None:
+        # The removal's whole price, and it is charged by name
+        # (`adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md`): a v1
+        # document written before the bump does not open again. `extra="forbid"`
+        # is what makes that a message rather than a field silently ignored and
+        # a run over footage the document thought it had named.
+        text = """
+        schema_version: 1
+        source:
+          path: ../footage/arena.MP4
+        pipeline:
+          nodes: []
+          edges: []
+        """
+        with pytest.raises(ValidationError, match="source"):
+            Project.from_yaml(dedent(text))
 
-        reopened = Project.load(path)
+    def test_the_version_a_document_declares_after_the_removal(self, tmp_path: Path) -> None:
+        # Which number a removal stamps, pinned rather than left to the reader of
+        # an ADR. It stays 1: the stamp "rises only when a build writes into it
+        # something the declared version does not have"
+        # (`adr/a-bump-adds-and-a-removal-is-paid-at-the-version.md`), and a
+        # removal writes nothing new — a post-removal document is the bytes a
+        # pre-removal one was, minus a key. A build that moved the number would
+        # be refusing v1 documents that this one opens unchanged.
+        path = tmp_path / "arena.sieve.yaml"
+        make_project().save(path)
 
-        assert reopened.source is None
-        assert reopened == Project()
+        written = yaml.safe_load(path.read_text(encoding="utf-8"))
 
-    def test_no_footage_refuses_the_reader_that_needs_frames_by_name(self, tmp_path: Path) -> None:
-        # Naming the file rather than the field: what the reader was handed is a
-        # path, and "this project has no footage" is only actionable if the user
-        # is told which of the projects in the library it was.
-        path = tmp_path / "untitled_1.sieve.yaml"
-
-        with pytest.raises(NoFootage, match=re.escape(str(path))):
-            Project().source_path(path)
+        assert written["schema_version"] == 1 == SCHEMA_VERSION
+        assert "source" not in written
+        assert Project.load(path).schema_version == 1
 
     def test_relocating_with_no_footage_rebases_what_it_does_name(self, tmp_path: Path) -> None:
-        # A project under construction still holds sinks and crops if it was
-        # emptied of its source rather than minted, and a rebase that tripped
-        # over the absent one would take the rest of the move with it.
-        project = make_project().model_copy(update={"source": None})
+        # A project under construction still holds sinks and crops, and a rebase
+        # handed no path params at all — a graph reading no file of its own —
+        # must still take the rest of the move.
+        project = make_project()
         old_dir = tmp_path / "old"
         new_dir = tmp_path / "new"
 
         moved = project.relocated(old_dir, new_dir)
 
-        assert moved.source is None
+        assert moved.pipeline == project.pipeline
         assert moved.outputs[0].resolve(new_dir) == project.outputs[0].resolve(old_dir)
 
 

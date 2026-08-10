@@ -32,7 +32,6 @@ from sieve.core.pipeline_model import (
     Pipeline,
     Project,
     Replicate,
-    SourceRef,
     resolved_params,
 )
 from sieve.core.tool_base import (
@@ -184,7 +183,6 @@ def make_project(*replicates: Replicate) -> Project:
        └─> c
     """
     return Project(
-        source=SourceRef(path="arena.mp4"),
         replicates=replicates,
         pipeline=Pipeline(
             nodes=(make_node("a", radius=3), make_node("b", radius=5), make_node("c", radius=7)),

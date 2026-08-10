@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Node, Pipeline, Project
 from sieve.session.session import Session
 from tests.gui import driving
 
@@ -75,7 +75,6 @@ BRIGHT_HALF = 255
 def session(tmp_path: Path) -> Session:
     """One node carrying a region, with no tool behind it — see `test_kind_editors.py`."""
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(

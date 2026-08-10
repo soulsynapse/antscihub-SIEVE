@@ -35,7 +35,7 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project
 from tests.gui import driving
 
 _TOOLS = ("pick", "crop", "detect")
@@ -75,7 +75,6 @@ _OVER_FRAMES = [
 def project_file(tmp_path: Path) -> Path:
     path = tmp_path / "arena.sieve.yaml"
     Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=tuple(
                 Node(node_id=f"n{i}", tool_id=tool, version="1.0.0")
@@ -176,7 +175,6 @@ def test_an_empty_offer_still_opens_a_box_that_says_so(qapp, tmp_path: Path) -> 
     del qapp
     path = tmp_path / "unresolved.sieve.yaml"
     Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(node_id="n0", tool_id="checkpoint", version="1.0.0"),

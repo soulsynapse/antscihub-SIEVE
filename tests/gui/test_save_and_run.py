@@ -39,7 +39,7 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Sink, SourceRef
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Sink
 from sieve.core.tool_base import (
     ArraySpec,
     ElementRelation,
@@ -106,7 +106,6 @@ def _specs() -> dict[str, ToolSpec]:
 def _project(**fields: Any) -> Project:
     """A two-node chain over footage that is deliberately not there."""
     return Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(node_id="n0", tool_id="one_product", version="1.0.0"),
@@ -175,12 +174,12 @@ def test_the_run_button_issues_the_cli_command(qapp, tmp_path: Path) -> None:
         "it is not on PATH in this environment"
     )
     path = tmp_path / "clip.sieve.yaml"
-    # A registered tool, so what the CLI stops at is the footage rather than the
-    # graph: the document the GUI saved is one it read, resolved and planned.
+    # A registered tool and no source root, so what the CLI stops at is the
+    # footage rather than the graph: the document the GUI saved is one it read
+    # and resolved (`adr/a-document-names-footage-only-through-a-tool.md`).
     discover()
     spec = REGISTRY.latest("downsample")
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(nodes=(Node(node_id="n0", tool_id=spec.tool_id, version=spec.version),)),
     )
     session = Session(path, project)
@@ -198,7 +197,7 @@ def test_the_run_button_issues_the_cli_command(qapp, tmp_path: Path) -> None:
     driving.wait_until(lambda: not screen.running(), _RUN_TIMEOUT_MS)
 
     # The CLI's own words, surfaced rather than swallowed.
-    assert "source video is not where the project says" in screen.message()
+    assert "names no footage" in screen.message()
 
 
 def test_a_second_click_while_a_run_is_in_flight_does_nothing(qapp, tmp_path: Path) -> None:
@@ -223,7 +222,6 @@ def test_a_second_click_while_a_run_is_in_flight_does_nothing(qapp, tmp_path: Pa
     discover()
     spec = REGISTRY.latest("downsample")
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(nodes=(Node(node_id="n0", tool_id=spec.tool_id, version=spec.version),)),
     )
     session = Session(path, project)
@@ -241,7 +239,7 @@ def test_a_second_click_while_a_run_is_in_flight_does_nothing(qapp, tmp_path: Pa
 
     # And the one run that did start still reported, rather than having had its
     # message cleared out from under it.
-    assert "source video is not where the project says" in screen.message()
+    assert "names no footage" in screen.message()
 
 
 def test_a_command_that_will_not_start_says_so(qapp, tmp_path: Path, monkeypatch) -> None:
@@ -285,7 +283,6 @@ def chain_file(tmp_path: Path) -> Path:
     discover()
     spec = REGISTRY.latest("downsample")
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(node_id="n0", tool_id=spec.tool_id, version=spec.version),

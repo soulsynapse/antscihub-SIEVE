@@ -39,12 +39,13 @@ from typing import Any
 import pytest
 
 from sieve.bench.metrics import METRICS, Recorder, Sample
-from sieve.core.pipeline_model import Project, SourceSpan
+from sieve.core.pipeline_model import SourceSpan
 from sieve.core.tool_base import DisplaySurface
 from sieve.tools import discover
 from tests.bench.test_loop_budget import within_budget
 from tests.gui import driving
 from tests.integration.test_v2_oracle import DETECTOR, SPAN, graph
+from tests.projects import project_over
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -88,13 +89,16 @@ def _window(stirred_clip: Path, directory: Path) -> Any:
     video = directory / stirred_clip.name
     video.write_bytes(stirred_clip.read_bytes())
     path = directory / "stirred.sieve.yaml"
-    Project.for_video(video, directory).model_copy(update={"pipeline": graph()}).save(path)
+    project_over(video, directory, graph()).save(path)
 
     window = MainWindow(projects_in(directory))
     window.show()
     window.open_project(path)
     driving.wait_until(lambda: window.player.metadata is not None, _TIMEOUT_MS)
     window.timeline.set_window(SourceSpan(start=SPAN.start, end=SPAN.end))
+    # Three: the footage root is the walk's first position
+    # (`adr/a-document-names-footage-only-through-a-tool.md`).
+    window.go_down()
     window.go_down()
     window.go_down()
     assert window.current_node is not None and window.current_node.node_id == DETECTOR

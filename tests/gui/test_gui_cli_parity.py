@@ -46,6 +46,7 @@ from sieve.storage.checkpoint_writer import checkpoints_dir, replicate_dir
 from sieve.tools import discover
 from tests.gui import driving
 from tests.integration.test_v2_oracle import ARENA, DETECTOR, SPAN, graph
+from tests.projects import footage_of, project_over
 
 runner = CliRunner()
 
@@ -79,7 +80,7 @@ def project_file(stirred_clip: Path, tmp_path: Path) -> Path:
     video = tmp_path / stirred_clip.name
     video.write_bytes(stirred_clip.read_bytes())
     path = tmp_path / "stirred.sieve.yaml"
-    Project.for_video(video, tmp_path).model_copy(update={"pipeline": graph()}).save(path)
+    project_over(video, tmp_path, graph()).save(path)
     return path
 
 
@@ -121,7 +122,9 @@ def test_the_trace_the_window_drew_is_what_the_command_computes(
     window = _open(project_file)
     try:
         # Down to the detector, which is where the graph the user reads comes
-        # from and the last node of the chain.
+        # from and the last node of the chain. Three steps: the footage is a root
+        # of the graph (`adr/a-document-names-footage-only-through-a-tool.md`).
+        window.go_down()
         window.go_down()
         window.go_down()
         assert window.current_node is not None
@@ -176,7 +179,7 @@ def test_the_trace_the_window_drew_is_what_the_command_computes(
     result = runner.invoke(app, ["run", str(project_file), "--frames", f"{SPAN.start}:{SPAN.end}"])
     assert result.exit_code == 0, result.output
 
-    video = Project.load(project_file).source.resolve(tmp_path)
+    video = footage_of(Project.load(project_file), project_file)
     base = replicate_dir(checkpoints_dir(video, tmp_path), None)
     # Node and product, which is what a checkpoint file is named for
     # (`storage/checkpoint_writer.py`); `detect` has the one.
@@ -200,6 +203,7 @@ def test_the_window_edited_the_document_the_command_read(qapp, project_file: Pat
     window = _open(project_file)
     try:
         before = Project.load(project_file)
+        window.go_down()
         window.go_down()
         window.go_down()
         window.control.step_pane.form.widget("window_frames").setValue(_EDITED_WINDOW)

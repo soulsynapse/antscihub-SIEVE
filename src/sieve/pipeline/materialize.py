@@ -291,7 +291,7 @@ def _digest(array: NDArray[Any]) -> str:
 def _relative_posix(target: Path, base: Path) -> str:
     """`target` relative to `base` as POSIX, or absolute across drives.
 
-    The same rule `SourceRef` and `Sink` follow, spelt here because those reach
+    The same rule `Sink` and `CropRecord` follow, spelt here because those reach
     it through a private helper on the artifact model and a fourth caller
     importing a private name is worse than four lines.
     """

@@ -36,10 +36,10 @@ from typing import Any
 import numpy as np
 import pytest
 
-from sieve.core.pipeline_model import Project
 from sieve.tools import discover
 from tests.gui import driving
 from tests.integration.test_v2_oracle import BLOCKS, SPAN, graph
+from tests.projects import project_over
 
 #: `test_block_field.py`'s ceiling and its reason: every wait ends when the thing
 #: it waits on does, so a generous one costs only the flake it prevents.
@@ -80,7 +80,7 @@ def block_project(stirred_clip: Path, tmp_path: Path) -> Path:
     video = tmp_path / stirred_clip.name
     video.write_bytes(stirred_clip.read_bytes())
     path = tmp_path / "clip.sieve.yaml"
-    Project.for_video(video, tmp_path).model_copy(update={"pipeline": graph()}).save(path)
+    project_over(video, tmp_path, graph()).save(path)
     return path
 
 
@@ -264,6 +264,7 @@ def test_a_soloed_cell_is_the_pinned_block_steps_trace_and_the_fields_axis(
         window.open_project(block_project)
         driving.wait_until(lambda: window.player.metadata is not None, _TIMEOUT_MS)
         window.timeline.set_window(SPAN)
+        window.go_down()
         window.go_down()
         assert window.current_node is not None and window.current_node.node_id == BLOCKS
         # The pin the item is about: the slot under the canvas is given to the

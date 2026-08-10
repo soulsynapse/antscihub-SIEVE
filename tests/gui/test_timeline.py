@@ -26,9 +26,10 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef, SourceSpan
+from sieve.core.pipeline_model import Edge, Node, Pipeline, SourceSpan
 from tests.conftest import FIXTURE_FPS, FIXTURE_FRAMES
 from tests.gui import driving
+from tests.projects import project_over
 
 OPEN_TIMEOUT_MS = 15_000
 FRAME_TIMEOUT_MS = 5_000
@@ -575,9 +576,10 @@ class TestTheSkeletonBindsTheSource:
         from sieve.gui.app import MainWindow
 
         shutil.copy(synthetic_video, tmp_path / "clip.mp4")
-        project = Project(
-            source=SourceRef(path="clip.mp4"),
-            pipeline=Pipeline(
+        project = project_over(
+            tmp_path / "clip.mp4",
+            tmp_path,
+            Pipeline(
                 nodes=(
                     Node(node_id="n0", tool_id="downsample", version="1.0.0"),
                     Node(node_id="n1", tool_id="crop", version="1.0.0"),

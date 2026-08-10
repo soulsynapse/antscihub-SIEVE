@@ -35,7 +35,7 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Sink, SourceRef
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Sink
 from sieve.core.tool_base import (
     ArraySpec,
     ElementRelation,
@@ -106,7 +106,6 @@ def _specs() -> dict[str, ToolSpec]:
 def _project(**fields: Any) -> Project:
     """A two-node chain over footage that is deliberately not there."""
     return Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=(
                 Node(node_id="n0", tool_id="one_product", version="1.0.0"),
@@ -158,7 +157,6 @@ def _pane(reads: Sequence[tuple[int, ...]], writes: Sequence[tuple[int, str]]) -
 def project_file(tmp_path: Path) -> Path:
     """`pick -> crop -> downsample -> detect`, with two of the four kept."""
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=tuple(
                 Node(node_id=f"n{i}", tool_id=tool, version="1.0.0")

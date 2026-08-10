@@ -27,7 +27,8 @@ from typing import Any
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project
+from sieve.tools import discover
 from tests.gui import driving
 
 #: How many steps each project in the library holds. Three projects because two
@@ -40,14 +41,22 @@ _TOOLS = ("crop", "downsample", "detect")
 
 
 def _write(path: Path, steps: int, source: str = "clip.mp4") -> Path:
+    """A project of `steps` tools under a footage root naming `source`.
+
+    The root is not one of the steps and the card must not count it as one
+    (`gui/project_select._holds`): a document's footage is a node now
+    (`adr/a-document-names-footage-only-through-a-tool.md`), and a chain of two
+    that read as three would say so for every project in the library.
+    """
     project = Project(
-        source=SourceRef(path=source),
         pipeline=Pipeline(
-            nodes=tuple(
-                Node(node_id=f"n{i}", tool_id=_TOOLS[i], version="1.0.0") for i in range(steps)
+            nodes=(
+                Node(node_id="src", tool_id="footage", version="1.0.0", params={"path": source}),
+                *(Node(node_id=f"n{i}", tool_id=_TOOLS[i], version="1.0.0") for i in range(steps)),
             ),
             edges=tuple(
-                Edge(upstream=f"n{i}", downstream=f"n{i + 1}") for i in range(max(0, steps - 1))
+                Edge(upstream="src" if i == 0 else f"n{i - 1}", downstream=f"n{i}")
+                for i in range(steps)
             ),
         ),
     )
@@ -113,6 +122,8 @@ def test_project_cards_are_one_per_project_under_a_library_card(window: Any, lib
 def test_project_cards_say_what_each_holds_and_when_it_was_written(tmp_path: Path) -> None:
     from sieve.gui.project_select import listings
 
+    discover()
+
     arena = _write(tmp_path / "arena.sieve.yaml", 2)
     one = _write(tmp_path / "one.sieve.yaml", 1, source="pans/dish.mp4")
     empty = _write(tmp_path / "empty.sieve.yaml", 0)
@@ -149,6 +160,41 @@ def test_project_cards_say_what_each_holds_and_when_it_was_written(tmp_path: Pat
     assert rows["broken"].when == f"saved {long_ago.date().isoformat()}"
 
 
+def test_the_library_line_reads_footage_through_the_graph(tmp_path: Path) -> None:
+    """Both halves of the card come out of the graph, and neither counts the other's node.
+
+    `adr/a-document-names-footage-only-through-a-tool.md` leaves the document no
+    field to read, so a card that still had one would be saying "no footage yet"
+    about every project a user has ever picked a file for. What makes the
+    counting half a claim too is `the-source-is-a-card-in-the-walk`: a mint
+    writes an unchosen source node, so a chain length read off `len(nodes)` says
+    "1 step" for a project with no chain at all.
+
+    Three documents, one per way the pair can be wrong: a picked source under a
+    chain, a source node with nothing chosen, and a graph with no source root at
+    all — which is what a project emptied of its footage looks like now, and
+    which the card has to survive rather than treat as unreadable.
+    """
+    from sieve.gui.project_select import listings
+
+    discover()
+    picked = _write(tmp_path / "picked.sieve.yaml", 2, source="pans/dish.mp4")
+    unchosen = tmp_path / "unchosen.sieve.yaml"
+    Project(
+        pipeline=Pipeline(nodes=(Node(node_id="src", tool_id="footage", version="1.0.0"),))
+    ).save(unchosen)
+    rootless = tmp_path / "rootless.sieve.yaml"
+    Project(pipeline=Pipeline(nodes=(Node(node_id="n0", tool_id="crop", version="1.0.0"),))).save(
+        rootless
+    )
+
+    rows = {row.name: row for row in listings((picked, unchosen, rootless))}
+
+    assert rows["picked"].holds == "2 steps · dish.mp4"
+    assert rows["unchosen"].holds == "no chain yet · no footage yet"
+    assert rows["rootless"].holds == "1 step · no footage yet"
+
+
 def test_project_cards_click_selects_and_does_not_enter(window: Any) -> None:
     driving.click(window.control.project_select.cards[2], 4.0, 4.0)
 
@@ -177,7 +223,9 @@ def test_project_cards_double_click_enters_the_pipeline_position(
     # its chain — the second click carries the selection with it, or it opens
     # whichever project the accent was on before.
     assert window.control.pipeline_pane.project_card.findChild(QLabel).text() == "project — colony"
-    assert len(window.control.pipeline_pane.cards) == _LIBRARY["colony"]
+    # The footage root is a card in the chain even though it is not a step the
+    # library's line counts (`tests/gui/test_source_card.py`).
+    assert len(window.control.pipeline_pane.cards) == _LIBRARY["colony"] + 1
 
 
 def _reveal_buttons(cards: Any) -> list[Any]:
@@ -282,8 +330,9 @@ def test_new_project_mints_an_unchosen_source_the_library_lists(
         [("footage", {})],
         [("footage", {})],
     ]
-    assert [held.source for held in written] == [None, None]
-    assert listings((minted[0],))[0].holds == "1 step · no footage yet"
+    # Both halves of the card read the graph and each leaves the other's node
+    # out: the picker is the footage, so it is neither a step nor a file chosen.
+    assert listings((minted[0],))[0].holds == "no chain yet · no footage yet"
 
     pane = window.control.project_select
     assert len(pane.cards) == len(_LIBRARY) + 3
@@ -322,6 +371,8 @@ def test_new_project_mints_into_an_empty_library(
 
 def test_project_cards_up_and_down_move_the_selection_not_the_walk(window: Any) -> None:
     driving.double_click(window.control.project_select.cards[0], 4.0, 4.0)
+    # Two steps down: the walk starts on the footage root.
+    window.go_down()
     window.go_down()
     assert window.current_node.node_id == "n1"
 

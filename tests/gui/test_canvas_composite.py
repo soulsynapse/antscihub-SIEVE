@@ -28,8 +28,10 @@ from typing import Any
 import pytest
 
 from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceSpan
+from sieve.pipeline.resolve_source import anchored
 from sieve.tools import discover
 from tests.gui import driving
+from tests.projects import over
 
 #: A downsample at the root and a motion history under it. The second's picture
 #: differs from the first's, which a step that only rescales its input —
@@ -62,16 +64,20 @@ def two_picture_project(stirred_clip: Path, tmp_path: Path) -> Path:
     video = tmp_path / stirred_clip.name
     video.write_bytes(stirred_clip.read_bytes())
     path = tmp_path / "clip.sieve.yaml"
-    Project.for_video(video, tmp_path).model_copy(
-        update={
-            "pipeline": Pipeline(
-                nodes=(
-                    Node(node_id=_COARSE, tool_id="downsample", version="1.0.0"),
-                    Node(node_id=_MOTION, tool_id="motion_history", version="1.0.0"),
-                ),
-                edges=(Edge(upstream=_COARSE, downstream=_MOTION),),
-            )
-        }
+    over(
+        Project().model_copy(
+            update={
+                "pipeline": Pipeline(
+                    nodes=(
+                        Node(node_id=_COARSE, tool_id="downsample", version="1.0.0"),
+                        Node(node_id=_MOTION, tool_id="motion_history", version="1.0.0"),
+                    ),
+                    edges=(Edge(upstream=_COARSE, downstream=_MOTION),),
+                )
+            }
+        ),
+        video,
+        tmp_path,
     ).save(path)
     return path
 
@@ -90,30 +96,40 @@ def two_root_project(stirred_clip: Path, synthetic_video: Path, tmp_path: Path) 
     elsewhere = tmp_path / synthetic_video.name
     elsewhere.write_bytes(synthetic_video.read_bytes())
     path = tmp_path / "two-roots.sieve.yaml"
-    Project.for_video(video, tmp_path).model_copy(
-        update={
-            "pipeline": Pipeline(
-                nodes=(
-                    Node(node_id=_COARSE, tool_id="downsample", version="1.0.0"),
-                    Node(
-                        node_id=_ELSEWHERE,
-                        tool_id="footage",
-                        version="1.0.0",
-                        params={"path": str(elsewhere)},
+    over(
+        Project().model_copy(
+            update={
+                "pipeline": Pipeline(
+                    nodes=(
+                        Node(node_id=_COARSE, tool_id="downsample", version="1.0.0"),
+                        Node(
+                            node_id=_ELSEWHERE,
+                            tool_id="footage",
+                            version="1.0.0",
+                            params={"path": str(elsewhere)},
+                        ),
                     ),
-                ),
-                edges=(),
-            )
-        }
+                    edges=(),
+                )
+            }
+        ),
+        video,
+        tmp_path,
     ).save(path)
     return path
 
 
 def _opened(window: Any, project: Path) -> None:
-    """Open, adopt the whole clip as the window, and walk onto the second node."""
+    """Open, adopt the whole clip as the window, and walk onto the second tool.
+
+    Two steps down and not one: the footage is a root of the graph
+    (`adr/a-document-names-footage-only-through-a-tool.md`), so it holds the
+    walk's first position and the chain starts below it.
+    """
     window.open_project(project)
     driving.wait_until(lambda: window.player.metadata is not None, _TIMEOUT_MS)
     window.timeline.set_window(SourceSpan(start=0, end=window.player.metadata.frame_count))
+    window.go_down()
     window.go_down()
     assert window.current_node is not None and window.current_node.node_id == _MOTION
     window.player.seek(_AT)
@@ -282,6 +298,7 @@ def test_a_second_source_root_is_not_drawn_over_the_first_roots_footage(
         driving.wait_until(lambda: window.player.metadata is not None, _TIMEOUT_MS)
         window.timeline.set_window(SourceSpan(start=0, end=window.player.metadata.frame_count))
         window.go_down()
+        window.go_down()
         assert window.current_node is not None and window.current_node.node_id == _ELSEWHERE
 
         window.player.seek(_AT)
@@ -293,7 +310,11 @@ def test_a_second_source_root_is_not_drawn_over_the_first_roots_footage(
         assert window.tuning.last_error is None, window.tuning.last_error
 
         own = image_of(
-            window.tuning.render_at(window.session.project.pipeline, _ELSEWHERE, _AT).result
+            window.tuning.render_at(
+                anchored(window.session.project.pipeline, two_root_project.parent),
+                _ELSEWHERE,
+                _AT,
+            ).result
         )
         assert own is not None
 

@@ -46,6 +46,7 @@ from glob import escape
 
 from sieve.core.pipeline_model import (
     CropRecord,
+    Edge,
     Node,
     Pipeline,
     Project,
@@ -56,6 +57,7 @@ from sieve.core.tool_base import ParamsBase
 from sieve.core.types import ROI
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.plan import validated_params
+from sieve.pipeline.resolve_source import footage_root, footage_root_of
 from sieve.pipeline.source_home import SourceHome
 from sieve.tools.crop import CropParams
 
@@ -186,12 +188,20 @@ def unserving_edit(project: Project, home: SourceHome, *, dag: Dag | None = None
 def _uncut(pipeline: Pipeline, backing: Mapping[str, Mapping[str | None, CropRecord]]) -> Pipeline:
     """`pipeline` with each node in `backing` turned back into a `crop` node.
 
-    Mirrors `_wired` on both counts: the node id and its edges survive, and the
-    node's own parameters carry the box only when there is no fan-out to carry
-    it — a fanned-out project's boxes differ per replicate, so the baseline goes
-    back to `crop`'s own default and `_undeviated` writes the pins.
+    Mirrors `_wired` on both counts: the node id and its outgoing edges survive,
+    and the node's own parameters carry the box only when there is no fan-out to
+    carry it — a fanned-out project's boxes differ per replicate, so the
+    baseline goes back to `crop`'s own default and `_undeviated` writes the pins.
+
+    The edge `_wired` cut is put back, which is what makes the pair an edit and
+    its undo rather than two edits: a crop of the footage reads the footage
+    root, and a restored crop node left as a root would be a crop of the run's
+    reader in a document that no longer has one
+    (`adr/a-document-names-footage-only-through-a-tool.md`). The parent is the
+    graph's own footage root, which the forward edit left in place for exactly
+    this.
     """
-    return Pipeline(
+    restored = Pipeline(
         nodes=tuple(
             Node(
                 node_id=node.node_id,
@@ -209,6 +219,25 @@ def _uncut(pipeline: Pipeline, backing: Mapping[str, Mapping[str | None, CropRec
         ),
         edges=pipeline.edges,
     )
+    parent = _parent_footage(restored, backing)
+    if parent is None:
+        return restored
+    return restored.model_copy(
+        update={
+            "edges": restored.edges
+            + tuple(Edge(upstream=parent, downstream=node_id) for node_id in backing)
+        }
+    )
+
+
+def _parent_footage(pipeline: Pipeline, restored: Mapping[str, object]) -> str | None:
+    """The footage root the un-served crop nodes are cuts of, if the graph has one."""
+    found = footage_root(
+        pipeline.model_copy(
+            update={"nodes": tuple(node for node in pipeline.nodes if node.node_id not in restored)}
+        )
+    )
+    return None if found is None else found[0].node_id
 
 
 def _undeviated(
@@ -239,8 +268,14 @@ def crop_roots(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[tuple[str, R
     type *is* the claim that a file can stand where this node stands, and
     `pipeline` stays out of the business of knowing tools by name.
 
-    Roots only, because a record is cut from the parent footage and a crop of
-    some other node's output is a crop of something no file on disk holds.
+    **Cutting the footage, which since
+    `adr/a-document-names-footage-only-through-a-tool.md` is one clause and not
+    one shape.** A record is cut from the parent footage, so what qualifies is a
+    crop node nothing has reshaped above — and the footage reaches the graph as
+    a source node now, so that is either a root or a node whose only upstream is
+    the footage root (`resolve_source.footage_root_of`). A crop of any other
+    node's output is a crop of something no file on disk holds, and roots alone
+    would have retired the whole mechanism the day the field left the schema.
 
     All of them rather than the one, and the reason narrowed when the route
     became an edit. Serving used to replace the run's whole reader, so a second
@@ -258,13 +293,15 @@ def crop_roots(dag: Dag, params: Mapping[str, ParamsBase]) -> tuple[tuple[str, R
             to and nothing re-derives an override.
 
     Returns:
-        `(node_id, region)` per root crop node, in graph order.
+        `(node_id, region)` per crop node cutting the footage, in graph order.
     """
+    found = footage_root_of(dag)
+    unreshaped = () if found is None else (found[0].node_id,)
     return tuple(
         (node.node_id, resolved.region)
         for node in dag.order
         if isinstance(resolved := params[node.node_id], CropParams)
-        and not dag.upstreams[node.node_id]
+        and dag.upstreams[node.node_id] in ((), unreshaped)
     )
 
 
@@ -293,10 +330,18 @@ def _wired(
 ) -> Pipeline:
     """`pipeline` with each of `node_ids` turned into a `footage` node.
 
-    The node id and every edge touching it survive, which is the whole reason
+    The node id and every edge *out of* it survive, which is the whole reason
     the substitution is an edit rather than a graph rewrite: the consumers of a
     crop node are the consumers of the file that holds its output, so nothing
     below the seam moves and no checkpoint, override or sink has to be renamed.
+
+    The edges *into* it do not survive, and since
+    `adr/a-document-names-footage-only-through-a-tool.md` there is one to cut: a
+    crop of the footage is fed by the footage root (`crop_roots`), and a source
+    tool with an upstream is a node reading a file and a stream at once. What
+    the parent root then feeds is whatever else was reading it, and nothing when
+    every crop of it was served — a graph that still names the project's footage
+    and no longer reads it.
 
     `chosen` fills the nodes' own parameters, for a project with no fan-out. In
     a fanned-out project the files differ per replicate, so the node is left at
@@ -318,7 +363,7 @@ def _wired(
             else node
             for node in pipeline.nodes
         ),
-        edges=pipeline.edges,
+        edges=tuple(edge for edge in pipeline.edges if edge.downstream not in node_ids),
     )
 
 

@@ -53,6 +53,7 @@ from sieve.core.tool_base import ToolSpec
 from sieve.gui.chain_stack import ChainCard, fixed_card, note_label, title_label
 from sieve.gui.chrome import chrome_button, stack_stylesheet
 from sieve.gui.stack_pane import StackPane
+from sieve.pipeline.resolve_source import footage_root, named_footage
 
 #: Beyond this many days the relative phrasing stops being read as a duration
 #: and starts being counted, so the card gives the date instead.
@@ -189,12 +190,17 @@ def _holds(path: Path) -> str:
         project = Project.load(path)
     except (OSError, ValueError, yaml.YAMLError):
         return "unreadable"
-    steps = len(project.pipeline.nodes)
-    chain = "no chain yet" if steps == 0 else f"{steps} step{'' if steps == 1 else 's'}"
+    # The footage root is not a step. A minted project's one node is the source
+    # picker (`mint`), so counting nodes would call an empty chain "1 step" and
+    # every chain one longer than the user drew — the card's two halves read the
+    # same graph and each has to leave the other's node out of its count.
+    named = named_footage(project.pipeline)
+    steps = len(project.pipeline.nodes) - (1 if footage_root(project.pipeline) else 0)
+    chain = "no chain yet" if steps <= 0 else f"{steps} step{'' if steps == 1 else 's'}"
     # The file and not the path it is spelt with: a card is a card wide, and the
     # folder is the same for every project in a library often enough that
     # showing it would spend that width on the part that never differs.
-    footage = "no footage yet" if project.source is None else Path(project.source.path).name
+    footage = Path(named).name if named else "no footage yet"
     return f"{chain} · {footage}"
 
 

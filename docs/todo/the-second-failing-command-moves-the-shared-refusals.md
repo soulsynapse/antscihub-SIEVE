@@ -193,3 +193,22 @@ not spend a session pinning it first.
 
 The `cli/common.py` question itself is untouched by the ADR and stays here; the
 migration takes only the one member whose subject it removes.
+
+## 2026-08-10: the fourth refusal was not deleted, and its case now exists
+
+The section above expected `footage_of` to go with the field. It did not:
+[the-field-that-names-footage-leaves-the-schema](the-field-that-names-footage-leaves-the-schema.md)
+landed and the helper is still in `run_cmd`, still imported by `preview` and
+`materialize`, with the graph for a subject instead of a field — it takes the
+anchored `Pipeline` and refuses on `resolve_source.NoFootage`, which is where the
+model's exception moved. So nothing about this item's placement question changed:
+`footage_of` is still a member of the shared vocabulary and still travels with
+whatever `cli/common.py` becomes.
+
+What did change is that the missing case is no longer missing.
+`tests/integration/test_cli_run.py::test_a_project_whose_graph_has_no_source_root_refuses_by_name`
+is the migration's fourth criterion clause and it drives one command through the
+refusal — the bullet in the 2026-08-09 section is discharged, and the mutation it
+describes (deleting the `except`) now has a case that goes red for it. The two
+other commands are still covered only by the helper being one helper, which is
+the argument that section makes rather than a gap it names.

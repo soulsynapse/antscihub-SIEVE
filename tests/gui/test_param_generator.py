@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from pydantic import Field
 
-from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Node, Pipeline, Project
 from sieve.core.tool_base import (
     ArraySpec,
     AxisRelation,
@@ -112,7 +112,6 @@ def _spec() -> ToolSpec:
 def session(tmp_path: Path) -> Session:
     """One node of the tool above, with every parameter left at its default."""
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(nodes=(Node(node_id=_NODE, tool_id="stereotypical", version="1.0.0"),)),
     )
     return Session(tmp_path / "clip.sieve.yaml", project)

@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project
 from tests.gui import driving
 
 _TOOLS = ("downsample", "crop", "detect")
@@ -32,14 +32,14 @@ _TOOLS = ("downsample", "crop", "detect")
 
 @pytest.fixture
 def project_file(tmp_path: Path) -> Path:
-    """A three-node chain saved beside a video that need not exist.
+    """A three-node chain, rooted on no source at all.
 
-    Nothing in this file decodes: `SourceRef` is a string relative to the
-    project's own directory, and the skeleton renders the graph without ever
-    resolving it.
+    Nothing in this file decodes and nothing here needs footage: the skeleton
+    renders whatever graph the document holds, and a graph with no source root
+    is a document the schema admits (`adr/a-document-names-footage-only-through-
+    a-tool.md`) rather than one the window has to refuse to draw.
     """
     project = Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=tuple(
                 Node(node_id=f"n{i}", tool_id=tool, version="1.0.0")

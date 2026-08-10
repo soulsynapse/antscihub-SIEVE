@@ -34,11 +34,12 @@ import numpy as np
 from typer.testing import CliRunner
 
 from sieve.cli.app import app
-from sieve.core.pipeline_model import Node, Pipeline, Project, SourceRef
+from sieve.core.pipeline_model import Node, Pipeline, Project
 from sieve.pipeline.dag import Dag
 from sieve.pipeline.plan import validated_params
 from sieve.pipeline.resolve_source import source_files
 from sieve.tools import discover
+from tests.projects import project_over
 
 runner = CliRunner()
 
@@ -76,7 +77,7 @@ def write_project(video: Path, directory: Path, pipeline: Pipeline, **hashes: Pa
     The keyword form is the document's claim about what a node reads —
     `background=<file>` records `content_hash` for the node called `background`.
     """
-    project = Project.for_video(video, directory).with_pipeline(pipeline)
+    project = project_over(video, directory, pipeline)
     for node_id, file in hashes.items():
         project = project.with_input_hash(node_id, file)
     path = directory / "arena.sieve.yaml"
@@ -172,7 +173,7 @@ def test_the_list_follows_a_rewired_graph_with_nothing_to_migrate(tmp_path: Path
             downsample(),
         )
     )
-    project = Project(source=SourceRef(path="arena.MP4"), pipeline=before)
+    project = Project(pipeline=before)
 
     rewired = project.with_pipeline(after)
     listed = source_files(Dag.build(after), validated_params(Dag.build(after)))

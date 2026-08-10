@@ -52,6 +52,7 @@ from sieve.pipeline.crop_binding import (
 from sieve.pipeline.crop_serving import serving_edit
 from sieve.pipeline.source_home import SourceHome
 from sieve.tools import discover
+from tests.projects import rooted_on
 
 ARENA = ROI(x=100, y=100, width=64, height=48)
 CUT = "cut"
@@ -306,14 +307,23 @@ class TestTheTwinsCannotDisagree:
         """
         discover()
         project = (
-            Project.for_video(tmp_path / "arena.MP4", tmp_path)
+            Project()
             .with_pipeline(
-                Pipeline(
-                    nodes=(
-                        Node(node_id=CUT, tool_id="crop", version="1.0.0", params=_pinned(ARENA)),
-                        Node(node_id="down", tool_id="downsample", version="1.0.0"),
+                rooted_on(
+                    Pipeline(
+                        nodes=(
+                            Node(
+                                node_id=CUT,
+                                tool_id="crop",
+                                version="1.0.0",
+                                params=_pinned(ARENA),
+                            ),
+                            Node(node_id="down", tool_id="downsample", version="1.0.0"),
+                        ),
+                        edges=(Edge(upstream=CUT, downstream="down"),),
                     ),
-                    edges=(Edge(upstream=CUT, downstream="down"),),
+                    tmp_path / "arena.MP4",
+                    tmp_path,
                 )
             )
             .with_crop(record)

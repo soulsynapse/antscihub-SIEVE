@@ -107,7 +107,9 @@ def materialize_replicate(
     """
     discover()
     project = load_project(project_path)
-    video = footage_of(project, project_path)
+    video = footage_of(
+        anchored(project.pipeline, project_path.parent), project_path, project.replicates
+    )
 
     try:
         source = source_identity(video)

@@ -87,7 +87,7 @@ from pydantic import ValidationError
 
 from sieve.core.pipeline_model import (
     ExternalInputChanged,
-    NoFootage,
+    Pipeline,
     Project,
     Replicate,
     Sink,
@@ -102,7 +102,13 @@ from sieve.pipeline.cache_key import source_identity
 from sieve.pipeline.dag import Dag, GraphError, InvalidParamsError
 from sieve.pipeline.executor import FrameSource, UnrunnableNodeError, execute
 from sieve.pipeline.plan import ExecutionPlan, validated_params
-from sieve.pipeline.resolve_source import anchored, picked_identities, source_files
+from sieve.pipeline.resolve_source import (
+    NoFootage,
+    anchored,
+    footage_file,
+    picked_identities,
+    source_files,
+)
 from sieve.storage.checkpoint_writer import CheckpointWriteError, CheckpointWriter, Kept
 from sieve.tools import discover
 
@@ -135,10 +141,11 @@ def run_project(
     discover()
     project = load_project(project_path)
     _refuse_sinks(project)
-    video = footage_of(project, project_path)
+    graph = anchored(project.pipeline, project_path.parent)
+    video = footage_of(graph, project_path, project.replicates)
 
     try:
-        dag = Dag.build(anchored(project.pipeline, project_path.parent))
+        dag = Dag.build(graph)
     except GraphError as error:
         raise refuse(str(error)) from error
     try:
@@ -507,21 +514,27 @@ def load_project(path: Path) -> Project:
         raise refuse(f"{path} is not a valid project:\n{error}") from error
 
 
-def footage_of(project: Project, path: Path) -> Path:
-    """The video `project` names, or refuse because it names none.
+def footage_of(graph: Pipeline, path: Path, replicates: Sequence[Replicate] = ()) -> Path:
+    """The video `graph` roots on, or refuse because it roots on none.
 
-    Every command that decodes goes through this rather than `source_path`
-    directly, so the one state the schema now admits and no run can proceed
-    from (`adr/superseded/a-document-may-name-no-footage.md`) is a refusal with an exit
-    code rather than a traceback out of the model.
+    Every command that decodes goes through this rather than picking a root of
+    its own, so which root is the footage is decided once
+    (`resolve_source.footage_root`) and a document under construction is a
+    refusal with an exit code rather than a traceback out of a walk.
+
+    Takes the *anchored* graph, because what a relative parameter means is the
+    project file's directory and this resolves the parameter to a file.
 
     Raises:
-        typer.Exit: code 1 if the document names no footage yet.
+        typer.Exit: code 1 if the graph roots on no decoded source, or if the
+            root it does name resolves to no file or to several.
     """
     try:
-        return project.source_path(path)
-    except NoFootage as error:
+        return footage_file(graph, path, replicates=replicates)
+    except (NoFootage, SourceFileError) as error:
         raise refuse(str(error)) from error
+    except ValidationError as error:
+        raise refuse(f"{path} names footage its source tool refuses:\n{error}") from error
 
 
 def parse_span(frames: str) -> SourceSpan:

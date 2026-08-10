@@ -48,8 +48,10 @@ from typing import Any
 import numpy as np
 import pytest
 
-from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Replicate, SourceRef
+from sieve.core.pipeline_model import Edge, Node, Pipeline, Project, Replicate
+from sieve.pipeline.resolve_source import anchored
 from tests.gui import driving
+from tests.projects import over
 
 #: A box on the footage, in source pixels. Small enough that a second region
 #: copied from it is visibly the same rectangle rather than the whole frame.
@@ -69,7 +71,6 @@ _TIMEOUT_MS = 60_000
 
 def _project(tools: Sequence[str], replicates: tuple[Replicate, ...], **params: Any) -> Project:
     return Project(
-        source=SourceRef(path="clip.mp4"),
         pipeline=Pipeline(
             nodes=tuple(
                 Node(
@@ -240,20 +241,24 @@ def placed_regions(stirred_clip: Path, tmp_path: Path) -> Path:
     video = tmp_path / stirred_clip.name
     video.write_bytes(stirred_clip.read_bytes())
     path = tmp_path / "arena.sieve.yaml"
-    Project.for_video(video, tmp_path).model_copy(
-        update={
-            "pipeline": Pipeline(
-                nodes=(
-                    Node(node_id="n0", tool_id="crop", version="1.0.0"),
-                    Node(node_id="n1", tool_id="downsample", version="1.0.0"),
+    over(
+        Project().model_copy(
+            update={
+                "pipeline": Pipeline(
+                    nodes=(
+                        Node(node_id="n0", tool_id="crop", version="1.0.0"),
+                        Node(node_id="n1", tool_id="downsample", version="1.0.0"),
+                    ),
+                    edges=(Edge(upstream="n0", downstream="n1"),),
                 ),
-                edges=(Edge(upstream="n0", downstream="n1"),),
-            ),
-            "replicates": (
-                Replicate(name="north", overrides={"n0": {"region": _NORTH}}),
-                Replicate(name="south", overrides={"n0": {"region": _SOUTH}}),
-            ),
-        }
+                "replicates": (
+                    Replicate(name="north", overrides={"n0": {"region": _NORTH}}),
+                    Replicate(name="south", overrides={"n0": {"region": _SOUTH}}),
+                ),
+            }
+        ),
+        video,
+        tmp_path,
     ).save(path)
     return path
 
@@ -278,7 +283,10 @@ def test_the_loop_renders_the_region_the_fan_is_standing_on(qapp, placed_regions
     try:
         window.open_project(placed_regions)
         driving.wait_until(lambda: window.tuning.is_open, _TIMEOUT_MS)
-        pipeline = window.session.project.pipeline
+        # Anchored, as the window itself renders it: a source root's path is
+        # stored relative to the project file, so a graph handed over as the
+        # document spells it looks for the video beside this process.
+        pipeline = anchored(window.session.project.pipeline, placed_regions.parent)
 
         north = window.tuning.render_at(pipeline, "n1", 0).result
         window.select_region(1)

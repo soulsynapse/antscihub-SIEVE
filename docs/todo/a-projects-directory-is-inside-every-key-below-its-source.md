@@ -2,7 +2,7 @@
 title: A project's own directory is inside every key below its source root
 priority: high
 phase: 11
-status: awaiting-review
+status: done
 gated_on: nothing
 done_when: "uv run pytest tests/unit/test_cache_key.py -q -k a_projects_location_and_the_key_below_its_source"
 opened: 2026-08-10
@@ -55,3 +55,20 @@ the whole of the gap:
 
 Write which assertion into the case before writing code, so it is not derived
 from what the code turned out to do.
+
+## Closed 2026-08-10 by review — the exclusion branch, and one sentence above is contested
+
+`a1ce8d0` took the exclusion branch and `TestPortability` holds the case; the
+review re-ran the criterion, reverted `node_key`'s one line to see the case go
+red on both nodes, and found the suite green. What is *not* settled is this
+item's own motivating sentence — "what a user sees after moving a project folder
+is a document that opens, every file resolving, and every node below the source
+recomputing" — which reads the ADR's second exclusion clause as a property owed.
+The review reads that clause as the second of two named defects, in which case
+the recomputation is `source_identity` working and the item asked for something
+the ADR never promised. The ruling and the four texts that follow it are
+[whether-the-adrs-second-exclusion-clause-is-owed](whether-the-adrs-second-exclusion-clause-is-owed.md),
+argued in
+[the ADR's second exclusion clause names a defect and is read as a promise](../findings/2026.08.10-the-adrs-second-exclusion-clause-names-a-defect-and-is-read-as-a-promise.md).
+Closed rather than reopened because no reading of the clause asks for a
+different `node_key`.

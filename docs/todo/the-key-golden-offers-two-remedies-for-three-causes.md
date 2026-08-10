@@ -4,7 +4,7 @@ priority: low
 phase: 8
 status: open
 gated_on: nothing
-done_when: "uv run pytest tests/unit/test_declarations_run.py -q -k a_reshaped_params_model_moves_the_key_without_a_version_bump"
+done_when: 'uv run pytest tests/unit/test_declarations_run.py -q -k a_reshaped_params_model_moves_the_key_without_a_version_bump && uv run pytest tests/unit/test_declarations_run.py -q -k a_narrowed_params_digest_moves_the_key_without_a_version_bump'
 opened: 2026-08-08
 ---
 
@@ -65,3 +65,10 @@ that holds for both is weaker and sufficient: the new key differs from the old
 one, so old entries are orphaned rather than served, and a derivation change
 that *did not* move a key would be the dangerous one. Worth having in the
 clause, since a reader offered only the schema argument will not find it here.
+
+The 2026-08-10 review widened `done_when` to cover this section: two commands
+joined by `&&` rather than one `-k` disjunction, because a disjunction is green
+for the disjunct that names nothing
+([findings/loop](../findings/loop/2026.08.09-a-k-disjunction-is-green-for-the-disjunct-that-names-nothing.md)).
+The second names the narrowed-digest instance, so the message's missing clause
+has to be asserted for both causes and not only for a reshaped model.

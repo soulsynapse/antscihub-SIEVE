@@ -40,3 +40,22 @@ already builds a `PATH` field as the value the document holds, which is the
 placeholder this card replaces with a chooser. `status` and `gated_on` moved on
 that; the work below is unchanged, including the append-on-browse row that is
 still Kendrick's to confirm in review.
+
+## 2026-08-09: the mint writes the node this card draws
+
+A minted project holds `nodes: []`, and nothing in the GUI can give it a first
+one. `add_step` returns early on an empty `_order` — a gap is between two
+positions the chain has — and `AddNode` issues only from `take_offer`, so the
+add box is the sole writer and it cannot open. The card cannot be a picture of
+something the graph carries while the graph carries nothing, so the mint writes
+the source node with no file chosen and this card draws it: VISION's last
+scenario has the new project put the user "straight into it, where the only
+pipeline item is the source picker with nothing chosen".
+
+The chooser's answer is *which reading*, not only which file. VISION has two
+files in a folder match both a concatenating tool and a folder of pre-cropped
+videos, and offers both "with the tool picker display: the user decides how the
+input is interpreted" — one input, two interpretations, which is a different
+shape from the add box's one entry per spec. What the source resolves to is
+[the-stream-a-position-produces-is-resolved-not-declared](the-stream-a-position-produces-is-resolved-not-declared.md);
+what the user does with an ambiguous resolution is this card.

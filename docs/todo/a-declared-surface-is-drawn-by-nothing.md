@@ -76,3 +76,44 @@ draws the picture and leaves the budget unmeasured cannot report green.
     $ uv run pytest tests/gui -q -k band_surface
     122 deselected in 0.63s
     exit: 5
+
+## Folded 2026-08-09: the four things PLAN says are waiting behind this item
+
+`PLAN.md`'s Phase 10 parks four surfaces and names this item as what they wait
+behind; `MOCKUP-MAP.md` says the same, that the heat rings and the in-band grid
+"read a mask no node emits" and that this item carries it. Neither was true of
+the body above, which is about `PreviewSession`'s request, the collector's extra
+dimension, the `BAND` editor and the repaint budget, and says nothing about any
+of them. This section is the repair — the claim made true rather than a fifth
+Phase-10 item minted beside four that are already sequenced.
+
+**The in-band ring.** v2 draws it off `detect`'s gate mask, which is no node's
+product: `emissions` is `("gate",)` and the mask never leaves the node, so a
+painter reaching for it would import the tool's module, which is the violation
+[adr/gui-knows-kinds-not-tools.md](../adr/gui-knows-kinds-not-tools.md) names
+outright. Its home is a `DisplaySurface` member on the preview-only channel —
+the licensed revision of
+[a-band-declares-the-surface-it-is-dragged-on.md](../adr/a-band-declares-the-surface-it-is-dragged-on.md)
+rather than a second vocabulary beside it — which is to say it is another
+consumer of exactly the read path this item builds, and the reason it waits is
+the measurement in the section above: a watched node is never served from the
+store, so asking the walked step for a fill costs its re-use on every frame of
+every drag.
+
+**The three alpha sliders and Shift-to-peek** wait with the ring they modulate.
+`PLAN.md` states the reason and it is worth keeping because it is a scope fence
+rather than a delay: with one opacity control and no ring, the control is peek —
+so 10.1's single user-held opacity is not a first slider of three, and a session
+that generalizes it into one has built the panel before the picture.
+
+**The ancestor-emission toggle** is the odd one out and does not wait on the read
+path at all.
+[adr/the-walked-step-owns-the-canvas.md](../adr/the-walked-step-owns-the-canvas.md)
+already settles it as view state; what it lacks is a subject, and it gains one
+from a second picture-bearing ancestor or from the ring, whichever arrives first.
+
+None of this widens `done_when`, and it should not: what is folded here is the
+list of consumers this item's read path is being built for, so that the shape is
+chosen against four of them rather than one. The surfaces themselves are their
+own work and the review that closes this item should mint or sequence them then,
+when the measurement above has said what they cost.

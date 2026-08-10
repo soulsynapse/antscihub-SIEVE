@@ -1,6 +1,71 @@
-# Architecture review, 2026-08-07 — parked, not adopted
+# Architecture review, 2026-08-07 — dispositioned 2026-08-09, superseded in part
 
-Status: **holding doc.** Nothing here binds. Each conclusion becomes real only
+Status: **dispositioned, and stale where it touches the GUI.** This survey was
+written the evening of 2026-08-07. The mockup build ran 2026-08-08/09 and
+settled most of what the review calls unproven, so its GUI verdicts describe a
+tree that no longer exists: read [MOCKUP-MAP.md](MOCKUP-MAP.md) and the 09.x
+items for those, not this. Kendrick's own reading, and the reason this section
+exists (2026-08-09): "arch review is stale and likely predates all the changes
+that came with the full mockup build."
+
+What was done with it, so nothing here has to be re-litigated from the snapshot:
+each verdict below was **re-verified against the tree as it is now**, and only
+what survived that check became an item. Where the review and the current tree
+disagreed, the tree won and the item says the smaller, truer thing — three of
+them changed shape that way, listed under "corrected" below. Nothing was minted
+on this document's authority; it is cited in the items only as where an
+observation was first written down, never as its evidence.
+
+**Became items.** The undesigned semantic axis →
+[todo/which-axis-carries-a-meaning-like-generated-background.md](todo/which-axis-carries-a-meaning-like-generated-background.md)
+(struck out of the `done` item that had reserved it, and now listed in PLAN's
+Open questions). The merge, with both of the costs this review priced →
+[Phase 11](PLAN.md) as three sequenced steps. `background_ema`'s epsilon warmup
+denying keys downstream →
+[todo/background-ema-is-unkeyed-and-denies-keys-downstream.md](todo/background-ema-is-unkeyed-and-denies-keys-downstream.md),
+raised to `high` because it is the loop budget failing on VISION's lead
+scenario. The missing intent-kind list →
+[todo/the-intent-kind-list-has-no-referent.md](todo/the-intent-kind-list-has-no-referent.md).
+"Deterministic run as a param" →
+[todo/a-deterministic-run-is-a-spec-constant-where-vision-says-param.md](todo/a-deterministic-run-is-a-spec-constant-where-vision-says-param.md).
+Project identity and the opening screen's registry → folded into
+[todo/a-mint-lands-wherever-the-app-was-launched.md](todo/a-mint-lands-wherever-the-app-was-launched.md)
+plus [todo/pinning-a-project-is-state-the-library-has-nowhere-to-put.md](todo/pinning-a-project-is-state-the-library-has-nowhere-to-put.md).
+
+**Corrected on re-check, and the corrections are the point of this pass.**
+*Schema forward-evolution*: the review says `extra="forbid"` plus
+restamp-to-current is data-destroying once two builds coexist. Refuse-the-future
+is in fact already built (`Project._known_schema_version` raises on a higher
+version), so what survives is only the restamp and the absent additive-only rule
+— [todo/a-load-restamps-the-version-it-read.md](todo/a-load-restamps-the-version-it-read.md),
+which is 11.1 because the `Edge.port` bump is its first live test. *Autosave and
+history snapshots*: the real state is worse and more specific than "no autosave"
+— `Session.save()` has exactly one caller in the tree, so the document is
+written only when the user presses Run
+([todo/only-run-writes-the-document.md](todo/only-run-writes-the-document.md)).
+*Cost estimates*: the review's preference for measurement-based estimation is
+carried, but the screen it argued about was dissolved by the mockup, which is
+why the item is against the output card's form
+([todo/the-process-overview-estimates-what-a-run-will-cost.md](todo/the-process-overview-estimates-what-a-run-will-cost.md)).
+
+**Became revival rows** rather than items, in PLAN's table: v1's `TrackStamp`
+split, the three-state coverage vocabulary, and a sweep view. Each has a record
+behind it and no trigger; a revival row is what an argued proposal with no
+measured need is worth.
+
+**Refused or already answered.** The reviewer-log signals are spent: the
+41-items-without-`done_when` count is now a frozen, shrink-only ledger in
+`scripts/doc_index.py`, the crashing-oracle signal is an open item, and the
+here-string trap reached CLAUDE.md. The "utility given up" list beyond the three
+rows above — detection-quality feedback, sampling strategies, surrogate
+calibration, the CSV sink — is neither adopted nor refused here: none of it is
+a defect against a written claim, and each would need its own VISION paragraph
+saying what it costs before it could be an item.
+
+Everything below this line is the 2026-08-07 text, unedited. Its GUI half is
+history.
+
+Original status note: **holding doc.** Nothing here binds. Each conclusion becomes real only
 when it is minted as an ADR, folded into an item, or refuted — and several of
 the items it names were edited by the loop the same evening this was written,
 so re-read every cited item at adoption time rather than trusting this

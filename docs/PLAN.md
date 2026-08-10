@@ -453,6 +453,49 @@ source pixels as the same region drawn at the fit; `slider_to_preview` and
 `scrub_to_repaint` still measured green through the GUI at the reference block
 count; the `gui-computes-nothing` exception list still empty.
 
+## Phase 11 — The merge, and what it turns over
+
+VISION's lead scenario — a generated background and a color threshold both
+reaching a subtraction step — is the one thing in this document that is
+structurally *refused* rather than merely unbuilt: `Pipeline` raises on a second
+edge into a node, `accepts` names one stream, `ToolRun` takes one window. It sits
+after the canvas rather than among the tools for a reason of size, not of value.
+It drags a schema rule, an extension to the one execution loop, a `HASH_VERSION`
+bump that turns the whole store over, and a decision that is Kendrick's, and
+none of those is an aside a GUI phase can carry beside its own work.
+
+The rule comes first (11.1). A load currently restamps the version it read, which
+is inert at one schema version and stops being inert at the first bump — and
+11.2's bump is that first one, so whatever discipline it runs under is the
+default for every bump after it. v2's record is the argument: five schema
+versions in thirteen days, four purely additive, zero transform code written.
+
+Then the extension (11.2), whose price is two things a signature change does not
+cover. The executor's no-alignment invariant breaks the moment two parents have
+different lag, so each port needs a delay buffer of `max_lag - lag[port]` — new
+machinery inside the loop [adr/one-execution-path.md](adr/one-execution-path.md)
+makes expensive to get wrong, since a misaligned merge is wrong identically in
+preview and production and parity testing cannot see it. And the node key's one
+`upstream` slot becomes ordered `(port, key)` pairs, which moves the digest of
+every node with a parent.
+
+Then the tool (11.3), which is what lifts
+[todo/a-merge-keys-its-inputs-by-port.md](todo/a-merge-keys-its-inputs-by-port.md)
+— deferred since 2026-08-07 for want of a subject, on a gate written in prose
+that the index's named-gate scan cannot see, so the citation from the item that
+mints the tool is the entire net.
+
+What this phase does not decide is what its tool would most like to know: which
+of two inputs is "the background" is a meaning, not a type, and
+[todo/which-axis-carries-a-meaning-like-generated-background.md](todo/which-axis-carries-a-meaning-like-generated-background.md)
+is where that is ruled. It is `deferred_for: decision` and appears under "Open
+questions" below; a phase that answered it by naming a port would be smuggling a
+scene description into a signature.
+
+Gate: two parents of different lag align at their child; a graph and its
+port-swapped twin are not the same graph and exactly one key moved; the merge
+deferral is lifted rather than re-argued.
+
 ## Not built, and what revives it
 
 | Not built | Revived by |
@@ -469,6 +512,9 @@ count; the `gui-computes-nothing` exception list still empty.
 | An A/B of two backgrounds — both roots alive, a comparison surface (`todo/whether-vision-states-the-background-ab.md`) | a real tuning ask with a workload attached, restored as its own VISION paragraph saying outright what it costs |
 | v2 project import (`compat/`) | a real v2 project that must come over (`adr/v2-does-not-import.md`) |
 | nox, completion tool, graph-system | something here concretely needing the mechanism |
+| A sweep view — a surface over what `sieve sweep` measures | a second machine whose measurements disagree with `mutual/shares.py`'s constants. The last of the four surfaces Phase 7 parked (wizard, replicate tab, history dialog, sweep view) with no discharge: the wizard became a `ToolSpec` field, the replicate tab became the crop fan, the history dialog was ruled out on its own reason, and this one was only waiting. A command whose output nobody has had to compare across machines does not need a viewer |
+| v1's `TrackStamp` split — params that invalidate a retained expensive intermediate separated from params re-derived from it instantly | a threshold drag that is measured slow over a retained upstream output. v3's invalidation is cache-key transitivity plus bounded-warmup admission, which is per-frame; v1's record says the split is what made a whole-clip re-tune feel instant. It is a second answer to the budget and only a missed budget buys one (`adr/correctness-is-the-default.md`) |
+| The three-state coverage vocabulary — unexamined, examined-and-quiet, examined-under-stale-settings, painted as different surfaces | a session where the first two are confused for each other. VISION's "a stale frame is labeled stale" is the honesty half and is already owed; painting the *third* state distinctly is the part v1 built and v2 recorded as its own standing failure to collapse |
 | `bench/retention_trace.py` — recording a tuning session and replaying it through candidate proxy-retention policies | a Phase-7 proxy ring plus a proposal to change its policy; the module exists because a reasoned guess about retention is not adoptable without a replay, and there is nothing to replay until the ring is built |
 
 ## Port disposition
@@ -514,7 +560,18 @@ drawn from, which is the plotting path and not the run path.
 Each carries a decision item in `docs/todo/`, so a question blocking a step
 is visible in the index rather than only here.
 
-None open. The three that stood here on 2026-08-08 — the external-input
+**Which axis carries a meaning like "generated background."** An `Emission` name
+or a fourth `ElementKind` member, and it is Kendrick's
+([todo/which-axis-carries-a-meaning-like-generated-background.md](todo/which-axis-carries-a-meaning-like-generated-background.md)).
+Three of VISION's scenarios and Phase 11's tool spend the answer. It stood here
+in substance since 2026-08-07 without being listed, because it was reserved
+inside a section of an item that then went `done` — and this list reads item
+status, not item bodies, so "None open" was true of the index and false of the
+tree for two days. The lesson is the strike-out, not the question: a decision
+reserved for a person needs a file of its own the moment the item carrying it
+can be closed around it.
+
+The three that stood here on 2026-08-08 — the external-input
 identity, the background A/B, and the type gate — were ruled in one pass, and
 each ruling is a dated section in the item that carried the question.
 

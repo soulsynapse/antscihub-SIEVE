@@ -81,3 +81,38 @@ The cases the criterion names are the two the fold exists for: the offer under a
 source resolved to one video, and the offer under a `crop` reading that source.
 Both are empty today. `concatenate` is VISION's illustration and not a shelf
 entry, so nothing here may name it.
+
+## Folded 2026-08-09: the same scenario's other half, and it is a refusal today
+
+The paragraph above quotes VISION's sentence about the offer; the sentences
+either side of it are about the source itself, and nothing carries them. The user
+"swaps the source to the folder itself — SIEVE shows the folder as the source,
+and the one video in it", then drops a second video in and comes back, and SIEVE
+"re-reads the folders the project's own source params name; two files now show in
+the source tool, and the box has changed to match".
+
+Two things there that the resolution above stands on and cannot assume. A source
+param has to be able to *be* a folder, and several files resolving from one param
+has to stop being an error: the landed source tool pins the opposite outcome —
+[the-first-source-tool-moves-the-three-single-root-assumptions.md](the-first-source-tool-moves-the-three-single-root-assumptions.md)
+carries `a_pattern_matching_several_files_is_refused` in its criterion, and its
+body states the policy as "one resolving to several is refused rather than
+ordered". That refusal was right for a pattern standing in for one file and is
+the wrong answer for a folder, so what is owed is the distinction rather than a
+reversal — and the ordering question the refusal was avoiding comes back with it,
+since two videos concatenated in the wrong order is a silent wrong answer rather
+than a failed run.
+
+And the re-read has a trigger nobody has named. "Comes back to SIEVE" is a window
+regaining focus, which is the first thing in the product whose input is neither a
+user gesture nor a run — so it is view state that invalidates a resolution, and
+the resolution is what this item's fold is computed from. A stale offer is the
+visible failure; a stale *resolution* under a live offer is the quiet one.
+
+This is folded rather than minted because the offer and what it is derived from
+are one question and were split across two scenarios only by where VISION put the
+sentence. `done_when` above is untouched and does not reach either half: it names
+the offer under a source resolved to one video, and both additions here are about
+a source resolving to more than one. The review that takes this item should widen
+it or split the folder half back out — the second is defensible, and this note is
+the record of why it was not done unilaterally.

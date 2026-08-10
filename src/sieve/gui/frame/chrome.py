@@ -12,7 +12,7 @@ import sys
 
 from PySide6.QtWidgets import QWidget
 
-from sieve.gui.palette import ACCENT, LINE, STACK_BG, TEXT, rgb
+from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 
 
 def stylesheet() -> str:
@@ -25,6 +25,40 @@ def stylesheet() -> str:
         #seam {{ background: {rgb(LINE)}; }}
         #timeline {{ background: {rgb(STACK_BG)}; }}
         #timeline QLabel {{ color: {rgb(TEXT)}; }}
+
+        /* The bar sits on the window's ground and closes with the same line a
+           seam is made of, so the top boundary reads like the other two. */
+        #menubar {{
+            background: {rgb(STACK_BG)};
+            color: {rgb(TEXT)};
+            border-bottom: 1px solid {rgb(LINE)};
+            padding: 2px 4px;
+        }}
+        #menubar::item {{ background: transparent; padding: 4px 10px; }}
+        #menubar::item:selected {{ background: {rgb(PANEL_HOT)}; }}
+        #menubar::item:pressed {{ background: {rgb(PANEL)}; }}
+
+        /* Dropped menus are panes, not ground: a panel fill inside a hairline,
+           the same pairing every card in the compartments will use. */
+        QMenu {{
+            background: {rgb(PANEL)};
+            color: {rgb(TEXT)};
+            border: 1px solid {rgb(LINE)};
+            padding: 4px 0;
+        }}
+        QMenu::item {{ padding: 5px 28px 5px 20px; }}
+        QMenu::item:selected {{ background: {rgb(PANEL_HOT)}; }}
+        QMenu::item:disabled {{ color: {rgb(DIM)}; }}
+        QMenu::separator {{
+            height: 1px;
+            background: {rgb(LINE)};
+            margin: 4px 8px;
+        }}
+
+        /* Anchored to the class and reaching only into its own label: a dialog
+           the frame raises is not a compartment, and nothing inside one is. */
+        QMessageBox {{ background: {rgb(PANEL)}; }}
+        QMessageBox QLabel {{ color: {rgb(TEXT)}; }}
     """
 
 

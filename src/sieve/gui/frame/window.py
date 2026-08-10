@@ -1,11 +1,12 @@
-"""The window: three compartments and the boundaries between them.
+"""The window: a menu bar, three compartments, and the boundaries between them.
 
 Two of the three boundaries are different in kind and the frame is where that
 difference is stated. Canvas against controls is a splitter — how much room the
 footage gets against the chain is the user's, and it is the trade they make
 most often. Timeline against both is a seam: the strip is a fixed height,
 because what it draws is the whole asset at a size the layout does not get a
-say in.
+say in. The menu bar sits above all three and is a boundary of neither kind —
+it acts on the window, not on what any compartment holds.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from sieve.gui.frame.compartments import (
     build_seam,
     build_timeline,
 )
+from sieve.gui.frame.menu import build_menu_bar, show_about
 
 #: What the window restores down *to*. Kept even though it opens maximized:
 #: without it the restored size — and with it whether the title bar can be
@@ -47,8 +49,8 @@ class MainWindow(QMainWindow):
         self.split.addWidget(self.controls)
         self.split.setStretchFactor(0, 1)
         self.split.setStretchFactor(1, 1)
-        self.split.setSizes([_WINDOW_WIDTH // 2, _WINDOW_WIDTH // 2])
         self.split.setChildrenCollapsible(False)
+        self.even_split()
 
         stacked = QWidget()
         column = QVBoxLayout(stacked)
@@ -58,6 +60,32 @@ class MainWindow(QMainWindow):
         column.addWidget(build_seam())
         column.addWidget(self.timeline)
         self.setCentralWidget(stacked)
+        self.setMenuBar(build_menu_bar(self))
 
         self.resize(_WINDOW_WIDTH, _WINDOW_HEIGHT)
         self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
+
+    def even_split(self) -> None:
+        """Hand the panes the same width, whatever the window is now.
+
+        Halving the splitter's own width rather than the window's: by the time
+        a user asks for this the window has been resized and the two numbers
+        have parted, and the sizes are read back against the splitter.
+        """
+        half = max(self.split.width(), _WINDOW_WIDTH) // 2
+        self.split.setSizes([half, half])
+
+    def toggle_full_screen(self) -> None:
+        """Full screen and back, without deciding what 'back' is.
+
+        `showNormal` would restore *down*, losing a maximized window's state;
+        the frame opens maximized, so leaving full screen has to put back the
+        state the window was actually in.
+        """
+        if self.isFullScreen():
+            self.setWindowState(self.windowState() & ~Qt.WindowState.WindowFullScreen)
+        else:
+            self.setWindowState(self.windowState() | Qt.WindowState.WindowFullScreen)
+
+    def about(self) -> None:
+        show_about(self)

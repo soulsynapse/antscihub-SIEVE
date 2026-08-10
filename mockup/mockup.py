@@ -1,50 +1,5 @@
 """The GUI as the tree has it, copied into one runnable file with mock data.
 
-Nothing imports from `sieve`: this is a surface to reshape toward VISION
-without touching the app, so every widget here is a plain-PySide6 copy of its
-`src/sieve/gui` counterpart — same layout, colors, sizes, and hotkeys, with
-the session, specs, and pipeline replaced by the sample document at the top.
-
-Where a widget has no counterpart yet it is VISION's shape, not the tree's:
-`PinnedStep` is the one step held under the canvas, which the tree currently
-fills with a generic trace. `MockComposite` is the other one, and it is v2's
-`gui/composite_view.py` rather than an invention — the tree's `canvas.py` is a
-viewport that paints the frame it was handed, and what the walk needs over it
-is the composite: the walked step's output over that step's input, and the
-block grid where the output is a block series.
-
-`crop-1` is the third, and it is `docs/adr/gui-knows-kinds-not-tools.md` worked
-through rather than a tool the tree has: a rect param whose generated editor is
-a box drawn on the canvas, with the card's spin boxes editing the same value
-through the same clamp. Neither surface owns it, and what the box keeps is what
-every step after it is given — the grid downstream is laid over the kept region,
-which is the consequence a decoration would not have. It cuts a set of regions
-rather than one, so it is also where the stack has to draw a step with more
-outputs than the card below it can read: a row of numbered squares in the gap,
-an arrow into each from the card that made them, and the chain continuing out of
-the one the user selected.
-
-`output-1` is the fourth: what leaves the chain is a step at the foot of it and
-not a screen beside it, so the write list is that step's param and the edges
-into its card are what is ticked. The save position went with it — a pane whose
-whole content was one step's form is that step's form.
-
-`_AddBox` is the fifth, and it is why a popup is not the default for every
-question (`docs/adr/a-position-is-asked-for-in-the-chain.md`): a step that is
-not one yet, opened into the chain by the project card's ADD STEP and moved
-through it with the same ↑/↓ that move the walk.
-VISION's add-tool box is "below the last step" because that is where its
-scenario stands; what a position *is* does not change further up, so the box
-goes wherever the chain has a gap, and the offer it holds is the position's.
-
-It is also what ⇄ opens, standing over the card instead of between two: adding
-and swapping are one question asked of a gap and of a card, so there is no swap
-menu. The modes differ underneath, where a swap keeps the node it is — its id,
-its edges, the ticks naming it — and an add mints one. That difference is the
-reason a swap is not a remove and an add, and it is invisible on screen, which
-is why it is written here and in `MOCKUP-MAP.md` rather than left to be read
-off the picture.
-
 Run: `uv run python mockup/mockup.py`
 """
 
@@ -112,13 +67,7 @@ from PySide6.QtWidgets import (
 
 LIBRARY = "library"
 
-# Name, what the project holds, when it was last opened, and where it lives. The
-# second line is what the pipeline's knob rows are here: the thing about the card
-# a click acts on. The fourth is on no line at all — it is what OPEN LOCATION
-# acts on, and it differs per project because the library is the list of the ones
-# it has been shown rather than a folder it scans. Sample paths, scattered on
-# purpose: a library whose projects all sat under one root would draw the same
-# either way and settle nothing.
+
 PROJECTS = [
     ("arena_2026-07-30", "6 sources · 6000 frames @ 30 fps", "opened today", "D:/ethology/2026"),
     ("colony_04_stirred", "18 sources · chain saved", "3 days ago", "D:/ethology/2026/colonies"),

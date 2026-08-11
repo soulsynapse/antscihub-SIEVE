@@ -6,6 +6,8 @@ This document is for my own thoughts on the process. It is not binding, it is ju
 
 - Use logic gates to combine tools. Can probably be icons below the card maybe.
 - Properties to join.. either the property comes first or the operation?
+- Signal to user when they're not picking up something that is basically free?
+- Add decode speed on player somewhere?
 
 ## Thoughts on decode
 

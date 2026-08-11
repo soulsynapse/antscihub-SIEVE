@@ -46,6 +46,17 @@ from typing import Any
 _NAME = "SIEVE"
 _FILE = "settings.json"
 
+#: Names a document to use instead of the per-user one. Set by a run that must
+#: not touch the person at the keyboard — a check that launches SIEVE, clicks a
+#: palette and closes it would otherwise leave their palette changed, and the
+#: change is silent because it is exactly what the application is supposed to do
+#: when someone clicks a palette. An environment variable rather than an
+#: argument because the writers are `palette` and `metrics`, reached through
+#: `stored`/`remember` from wherever a view happens to be built, and threading a
+#: path to them would put a test's concern in every constructor between here and
+#: there.
+_OVERRIDE = "SIEVE_SETTINGS"
+
 #: The document as last read or written, or `None` before it has been read.
 #: Held so that reading a preference is not a file open — `stored()` is called
 #: during startup and could be called from a view being built, and neither is a
@@ -59,7 +70,16 @@ def path() -> Path:
     Per-user and outside the project tree, because a preference follows the
     person and not the footage: two projects opened by the same user get the
     same palette, and a project copied to a colleague does not carry it.
+
+    `SIEVE_SETTINGS` names another document and is taken as given — a full path
+    to a file, not a directory to put `settings.json` in, so a run can point at
+    a name of its choosing inside a temporary directory it already owns. An
+    empty or unset variable is the per-user document, so clearing it is how a
+    shell gets back to being a person rather than a test.
     """
+    override = os.environ.get(_OVERRIDE)
+    if override:
+        return Path(override)
     return _directory() / _FILE
 
 

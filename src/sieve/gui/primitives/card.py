@@ -46,7 +46,7 @@ is on it.
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal, SignalInstance
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
@@ -88,12 +88,11 @@ _RULE_PAD = 2
 #: progress widget.
 _METER_H = 4
 
-#: How far the hovered edge moves off `LINE` toward the ink. Taken as a fraction
-#: rather than as a ninth colour: every palette here answers `line` and `text`,
-#: and a hover edge is a step between two roles that already exist rather than a
-#: decision each palette would have to make again. The fraction is the one the
-#: mockup's two greys sit at, which is small on purpose — the pointer's real
-#: answer is the four icons appearing, and the edge is only confirming it.
+#: How far the hovered edge moves off `LINE` toward the ink, through
+#: `palette.mix` — see there for why a hover is a step between two roles rather
+#: than a ninth colour. The fraction is the one the mockup's two greys sit at,
+#: which is small on purpose: the pointer's real answer is the four icons
+#: appearing, and the edge is only confirming it.
 _HOVER_EDGE = 0.22
 
 #: Which lucide icon each verb wears, pinned to the names the card knows them by
@@ -104,20 +103,6 @@ _OPEN = "arrow-right"
 _SWAP = "arrow-right-left"
 _PIN = "pin"
 _REMOVE = "x"
-
-
-def _toward(start: QColor, end: QColor, fraction: float) -> QColor:
-    """A colour a fraction of the way from one role to another.
-
-    Mixed at every repaint rather than kept, because the roles are mutated in
-    place when the palette changes (`palette.py`) and a colour cached off them
-    would be the one thing on the card still wearing the old greys.
-    """
-    return QColor(
-        round(start.red() + (end.red() - start.red()) * fraction),
-        round(start.green() + (end.green() - start.green()) * fraction),
-        round(start.blue() + (end.blue() - start.blue()) * fraction),
-    )
 
 
 class Card(QFrame):
@@ -424,7 +409,7 @@ class Card(QFrame):
         if self._selected:
             edge = ACCENT
         elif self._hovered:
-            edge = _toward(LINE, TEXT, _HOVER_EDGE)
+            edge = palette.mix(LINE, TEXT, _HOVER_EDGE)
         else:
             edge = LINE
         painter.setPen(QPen(edge, 1))

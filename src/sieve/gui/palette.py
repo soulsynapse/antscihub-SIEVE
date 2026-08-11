@@ -406,6 +406,28 @@ def rgb(color: QColor) -> str:
     return f"rgb({color.red()},{color.green()},{color.blue()})"
 
 
+def mix(start: QColor, end: QColor, fraction: float) -> QColor:
+    """A colour a fraction of the way from one role to another.
+
+    Here rather than in whichever widget wanted it first, because more than one
+    does and the states they want it for are the same state: a hovered card's
+    edge and a hovered button's fill are both *a step off the role it rests at,
+    toward the ink*. Taken as a step between two roles rather than as a ninth
+    and tenth colour, so every palette keeps answering eight questions and a
+    hover is not a decision each of them has to make again.
+
+    Whoever calls it calls it at the moment of drawing or of building a sheet,
+    and never keeps what comes back. The roles are mutated in place when the
+    palette changes, and a colour mixed off them and held would be the one thing
+    on screen still wearing the old greys.
+    """
+    return QColor(
+        round(start.red() + (end.red() - start.red()) * fraction),
+        round(start.green() + (end.green() - start.green()) * fraction),
+        round(start.blue() + (end.blue() - start.blue()) * fraction),
+    )
+
+
 def _remembered() -> Palette:
     """The palette last chosen, if it is still one of the palettes on offer.
 

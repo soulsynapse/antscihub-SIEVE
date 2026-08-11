@@ -18,6 +18,15 @@ seen in. They are two files because a card is put in things other than a stack,
 not because the decisions are separable: the card's fill and the stack's ground
 are the same choice made once, and either moved alone stops being it.
 
+`button.py` is the first thing here that is a *control* rather than a surface,
+and it arrived from `mockup/paper_primitives.py` ahead of a view asking for one
+— which is the opposite of how the shapes above it got here, and is deliberate.
+A card or a section is a picture two views turned out to be drawing; emphasis is
+a budget spent across the whole application, and the first view to grow a filled
+button would be the one setting that budget for every view after it. Settling it
+before there are three is what keeps *one filled button per screen* a rule
+rather than a description of whichever screen was built first.
+
 `view.py` is the third shape and is under the other two rather than beside them:
 the head a pane wears was the stack's band until a view that is not a column of
 cards wanted the same line at its top, and it moved here so that a head is one
@@ -27,10 +36,23 @@ these.
 
 from __future__ import annotations
 
+from sieve.gui.primitives.button import DEFAULT, GHOST, PRIMARY, SUBTLE, Button
 from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.sections import Section, SectionCard
 from sieve.gui.primitives.stack import CardStack
 from sieve.gui.primitives.view import View
 
-__all__ = ["Card", "CardStack", "Section", "SectionCard", "SectionNav", "View"]
+__all__ = [
+    "DEFAULT",
+    "GHOST",
+    "PRIMARY",
+    "SUBTLE",
+    "Button",
+    "Card",
+    "CardStack",
+    "Section",
+    "SectionCard",
+    "SectionNav",
+    "View",
+]

@@ -36,6 +36,7 @@
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
+          - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.
           - 📄 `view.py` — The canvas as a stage: content held at its own shape, and the room around it.
         - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.
           - 📄 `nav.py` — The sections down the left, and which one is being read.

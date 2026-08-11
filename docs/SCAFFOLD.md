@@ -79,6 +79,8 @@
             - 📄 `view.py` — The glyphs as a table: one row per icon, one column per way it is drawn.
           - 📄 `gallery.py` — A scrolling column of alternatives, each under its name and its argument.
           - 📄 `view.py` — The dev bench as a card: the sections there are, and what each is for.
+        - 📁 `pipeline/` — The pipeline: the chain of steps in the open project.
+          - 📄 `view.py` — The chain as a view: the head over it, and the room its steps will stand in.
         - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.
           - 📄 `minor_visuals.py` — How round the cards are and how large each kind of text is, on five sliders.
           - 📄 `palettes.py` — The palettes on offer, light then dark, with the one in use marked.
@@ -87,6 +89,8 @@
           - 📄 `card.py` — One project, as a card the pointer and the keyboard reach the same way.
           - 📄 `project.py` — One project as the list reads it: a name and three lines already written.
           - 📄 `view.py` — The library as a column of cards: which projects there are, and which is current.
+        - 📁 `step/` — The step: the one in the chain the user is standing on, and its knobs.
+          - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
       - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.

@@ -30,9 +30,11 @@ here, because the swipe is the window's to hold and the keyboard is not the
 frame's to interpret twice. The same two moves are in the head of the view
 standing on the track, as the pair of arrows `swipe.py` builds — put there from
 here, since knowing there is a track to walk is the frame's and not the view's.
-The two positions still standing blank have no head to carry a pair, so they
-have no way out but the keys until a view lands in them; that is the blank
-missing, not the pair being withheld.
+All three positions carry a pair, because all three now stand a view with a
+head: the library, the chain in the project it opens, and the step walked into
+from that chain. The two behind the library are their chassis and nothing more
+— a head, and a room saying what is not standing in it yet — which is all the
+pair needed to be reachable there by the pointer as well as by the keys.
 
 Neither view names the pane it is in. The canvas is a view (ADR-0001) and would
 house on the right or on the swipe unchanged; the left pane holding it is this
@@ -41,7 +43,9 @@ file's answer, and moving it is an edit here and nowhere else.
 The first of those positions houses the project list, which is the first view to
 land. The window is what puts it there and hands it what to show — the view
 names no pane and no position, so where it stands is the frame's answer and
-changing it is an edit here.
+changing it is an edit here. The other two house the pipeline and the step on
+the same terms, and in the same order the track already ran in: out to the
+library, in to the chain, in again to the step being tuned.
 
 Two views stand in neither a pane nor a position. Preferences are about the
 application rather than about the project, and the dev bench is about the tree
@@ -81,8 +85,10 @@ from sieve.gui.frame.swipe import POSITIONS, Arrows, build_swipe
 from sieve.relaunch import relaunch
 from sieve.gui.view.canvas import Canvas
 from sieve.gui.view.dev import Dev
+from sieve.gui.view.pipeline import Pipeline
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
+from sieve.gui.view.step import Step
 
 #: What the window restores down *to*. Kept even though it opens maximized:
 #: without it the restored size — and with it whether the title bar can be
@@ -135,6 +141,18 @@ class MainWindow(QMainWindow):
         # Opening a project is a move inward along the same line ← and → walk,
         # so it is the swipe's step and not a second kind of navigation.
         self.projects.opened.connect(lambda _project: self.swipe_forward())
+
+        # The other two positions, housed the same way and each given its own
+        # pair: a pair is the position's way out and not the pane's, so a head
+        # that had to borrow one from whatever was in front would be a view that
+        # knew what it was standing beside.
+        self.pipeline = Pipeline()
+        self.swipe.position(POSITIONS.index("pipeline")).body.addWidget(self.pipeline)
+        self.pipeline.set_arrows(Arrows(self.swipe))
+
+        self.step = Step()
+        self.swipe.position(POSITIONS.index("step")).body.addWidget(self.step)
+        self.step.set_arrows(Arrows(self.swipe))
 
         # No subpane is opened on the way up. Which sides each pane offers and
         # how many each stacks is still the pane's claim and still checkable by

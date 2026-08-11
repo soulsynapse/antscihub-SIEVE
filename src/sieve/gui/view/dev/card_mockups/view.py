@@ -14,25 +14,18 @@ first row is `primitives/card.py` itself, and `look.py`'s `as built, redrawn` is
 the second — the two sitting one above the other is what makes a drift visible
 instead of hidden.
 
-The column scrolls, since the looks will outgrow any card the bench stands in
-long before the list of them is finished, and a section that fixed its own
-height would be a section that decided how many alternatives are allowed.
+The column, the ground it is drawn on and the block each look sits in are the
+bench's (`gallery.py`), which is what leaves this file holding only the pair.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from sieve.gui.palette import DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
+from sieve.gui.palette import DIM, rgb
 from sieve.gui.primitives import Card
+from sieve.gui.view.dev.gallery import GUTTER, Gallery, Variant
 from sieve.gui.view.dev.card_mockups.look import (
     KNOBS,
     LOOKS,
@@ -42,10 +35,6 @@ from sieve.gui.view.dev.card_mockups.look import (
     line,
 )
 
-#: The gap between looks and the margin around the column, one number for both,
-#: for the reason the project list uses one.
-_GUTTER = 10
-
 #: How wide a mock card is drawn. Fixed rather than sharing the row's width,
 #: because how a title elides and how four icons crowd a head are the things
 #: being compared and both are answers to a width — two cards of different
@@ -54,104 +43,25 @@ _GUTTER = 10
 _CARD = 300
 
 
-def _sheet() -> str:
-    """Scoped to this section's own objects. It is standing inside a card whose
-    own sheet is already set on an ancestor, so a bare-class rule here would be
-    the second stylesheet reaching the same labels.
-
-    The column is `STACK_BG` and not the panel fill the rest of the bench wears,
-    because that is the ground a card is really seen on — the project list
-    already stacks its cards on it. Drawn on a panel instead, a look whose
-    selected state *is* a panel fill would vanish into the background and the
-    gallery would be showing a fault the pane does not have.
-    """
-    return f"""
-        #gallery {{ background: {rgb(STACK_BG)}; border: 1px solid {rgb(LINE)}; }}
-        #gscroll {{ background: {rgb(STACK_BG)}; border: 0; }}
-        #gcolumn {{ background: {rgb(STACK_BG)}; }}
-        #vname {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #vgloss {{ color: {rgb(DIM)}; }}
-        #vrule {{ background: {rgb(LINE)}; }}
-        QScrollBar:vertical {{
-            background: {rgb(STACK_BG)};
-            width: 8px;
-            margin: 0;
-        }}
-        QScrollBar::handle:vertical {{
-            background: {rgb(LINE)};
-            min-height: 24px;
-        }}
-        QScrollBar::handle:vertical:hover {{ background: {rgb(PANEL_HOT)}; }}
-        QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
-        QScrollBar::add-page, QScrollBar::sub-page {{ background: {rgb(PANEL)}; }}
-    """
-
-
-class CardMockups(QWidget):
+class CardMockups(Gallery):
     """Every candidate card, drawn beside the one the application has."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setObjectName("gallery")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(_sheet())
-
-        column = QWidget()
-        column.setObjectName("gcolumn")
-        stack = QVBoxLayout(column)
-        stack.setContentsMargins(_GUTTER, _GUTTER, _GUTTER, _GUTTER)
-        stack.setSpacing(_GUTTER)
-
-        stack.addWidget(
-            _variant(
-                "the card as built",
-                "`primitives/card.py` itself, not a drawing of it — every look "
-                "below is a change from this",
-                _real_pair(),
-            )
+        super().__init__(
+            (
+                Variant(
+                    "the card as built",
+                    "`primitives/card.py` itself, not a drawing of it — every "
+                    "look below is a change from this",
+                    _real_pair(),
+                ),
+                *(
+                    Variant(look.name, look.gloss, _mock_pair(look))
+                    for look in LOOKS
+                ),
+            ),
+            parent,
         )
-        for look in LOOKS:
-            stack.addWidget(_variant(look.name, look.gloss, _mock_pair(look)))
-        # Last, so a short list sits at the top of the panel rather than spread
-        # down whatever height the bench ends up with.
-        stack.addStretch(1)
-
-        scroll = QScrollArea()
-        scroll.setObjectName("gscroll")
-        scroll.setWidget(column)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        body = QVBoxLayout(self)
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(0)
-        body.addWidget(scroll)
-
-
-def _variant(name: str, gloss: str, cards: QWidget) -> QWidget:
-    """One look's block: what it is called, what it costs, and the pair."""
-    block = QWidget()
-
-    title = QLabel(name)
-    title.setObjectName("vname")
-    note = QLabel(gloss)
-    note.setObjectName("vgloss")
-    note.setWordWrap(True)
-
-    rule = QFrame()
-    rule.setObjectName("vrule")
-    rule.setFixedHeight(1)
-
-    stack = QVBoxLayout(block)
-    stack.setContentsMargins(0, 0, 0, 0)
-    stack.setSpacing(4)
-    stack.addWidget(title)
-    stack.addWidget(note)
-    stack.addWidget(cards)
-    stack.addSpacing(2)
-    stack.addWidget(rule)
-    return block
 
 
 def _row(left: QWidget, right: QWidget) -> QWidget:
@@ -175,14 +85,14 @@ def _row(left: QWidget, right: QWidget) -> QWidget:
     current.setObjectName("vgloss")
 
     labels = QHBoxLayout()
-    labels.setSpacing(_GUTTER)
+    labels.setSpacing(GUTTER)
     labels.addWidget(at_rest, 0)
     labels.addSpacing(_CARD - at_rest.sizeHint().width())
     labels.addWidget(current, 0)
     labels.addStretch(1)
 
     cards = QHBoxLayout()
-    cards.setSpacing(_GUTTER)
+    cards.setSpacing(GUTTER)
     cards.addWidget(left, 0, Qt.AlignmentFlag.AlignTop)
     cards.addWidget(right, 0, Qt.AlignmentFlag.AlignTop)
     cards.addStretch(1)

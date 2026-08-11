@@ -1,4 +1,4 @@
-"""The palettes on offer, dark then light, with the one in use marked.
+"""The palettes on offer, light then dark, with the one in use marked.
 
 The first section of preferences to hold anything, and it holds a choice the
 rest of the card cannot: a palette is the one setting whose effect is the card
@@ -102,7 +102,7 @@ class Palettes(QWidget):
     It scrolls, because the list is a catalogue and a section that fixed its own
     height would be a section deciding how many palettes are allowed.
 
-    The rows are grouped rather than sorted into one run: dark against light is
+    The rows are grouped rather than sorted into one run: light against dark is
     the first thing the user is choosing between, and a flat list of every name
     at once makes them find the boundary themselves every time they open this.
     """
@@ -119,7 +119,14 @@ class Palettes(QWidget):
         stack = QVBoxLayout(column)
         stack.setContentsMargins(_GUTTER, _GUTTER, _GUTTER, _GUTTER)
         stack.setSpacing(_GUTTER)
-        for dark, heading in ((True, "dark"), (False, "light")):
+        # Light first, and this is the section's order rather than
+        # `palette.PALETTES`'. That sequence is dark-first because dark is the
+        # default and the longer list; a chooser is answering a different
+        # question, and the group a user is most often coming here to *find* is
+        # the one that is not already on. Reached by filtering the one sequence
+        # twice rather than by concatenating two, so the order within a group
+        # stays the palette module's to decide.
+        for dark, heading in ((False, "light"), (True, "dark")):
             label = QLabel(heading)
             label.setObjectName("pgroup")
             stack.addWidget(label)

@@ -1,5 +1,10 @@
 """The library as a column of cards: which projects there are, and which is current.
 
+The band and the ground are `primitives/stack.py`'s, and were this file's until
+the card mock up settled what that band looks like. What is left here is the part
+that is about the library: which projects there are, which one is being stood on,
+and what the two verbs — standing and opening — mean.
+
 The list holds the selection and the cards do not: a card that decided it was
 current would have to hear about every other card to stop being it, and the one
 thing that is true of the whole column — exactly one row is where the user is
@@ -23,53 +28,20 @@ from __future__ import annotations
 from typing import Iterable, Sequence
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QScrollArea,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QLabel, QWidget
 
-from sieve.gui import palette
-from sieve.gui.palette import DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
+from sieve.gui.primitives import CardStack
 from sieve.gui.view.project_list.card import ProjectCard
 from sieve.gui.view.project_list.project import Project
 
-#: The gap between cards, and the margin around the column. One number for both,
-#: so the outermost card sits off the pane's edge by the same distance it sits
-#: off its neighbour and the column reads as evenly spaced at both ends.
-_GUTTER = 6
+#: The gap between rows, in place of the stack's own. The mockup's 26 is room for
+#: the chain's edges to descend through and there are none here, so the number is
+#: the one that keeps a three-line card reading as a row of one list rather than
+#: as a list of its own.
+_GAP = 6
 
 
-def _sheet() -> str:
-    """Scoped to this view's own objects, never to a bare class: it is set on a
-    widget the frame houses, and a `QLabel` rule here would still be reaching
-    into whatever else the pane comes to hold."""
-    return f"""
-        #projects {{ background: {rgb(STACK_BG)}; }}
-        #scroll {{ background: {rgb(STACK_BG)}; border: 0; }}
-        #column {{ background: {rgb(STACK_BG)}; }}
-        #heading {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #count, #empty {{ color: {rgb(DIM)}; }}
-        QScrollBar:vertical {{
-            background: {rgb(STACK_BG)};
-            width: 8px;
-            margin: 0;
-        }}
-        QScrollBar::handle:vertical {{
-            background: {rgb(LINE)};
-            min-height: 24px;
-        }}
-        QScrollBar::handle:vertical:hover {{ background: {rgb(PANEL_HOT)}; }}
-        QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
-        QScrollBar::add-page, QScrollBar::sub-page {{ background: {rgb(PANEL)}; }}
-    """
-
-
-class ProjectList(QWidget):
+class ProjectList(CardStack):
     """Every project the library remembers, one card each, one of them current.
 
     Handed its projects rather than fetching them: there is no library to fetch
@@ -90,12 +62,7 @@ class ProjectList(QWidget):
     def __init__(
         self, projects: Iterable[Project] = (), parent: QWidget | None = None
     ) -> None:
-        super().__init__(parent)
-        self.setObjectName("projects")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._restyle()
-        palette.CHANGED.connect(self._restyle)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        super().__init__("projects", gap=_GAP, parent=parent)
         # The list answers ↑/↓, so it has to be reachable by tabbing as well as
         # by clicking — a surface that only takes focus from the pointer is one
         # the keyboard cannot get back to after any other widget has had it.
@@ -106,49 +73,9 @@ class ProjectList(QWidget):
         self._nothing: QLabel | None = None
         self._current = -1
 
-        self._heading = QLabel("projects")
-        self._heading.setObjectName("heading")
-        self._count = QLabel()
-        self._count.setObjectName("count")
-
-        head = QHBoxLayout()
-        head.setContentsMargins(_GUTTER, _GUTTER, _GUTTER, 0)
-        head.addWidget(self._heading)
-        head.addStretch(1)
-        head.addWidget(self._count)
-
-        self._column = QWidget()
-        self._column.setObjectName("column")
-        self._stack = QVBoxLayout(self._column)
-        self._stack.setContentsMargins(_GUTTER, _GUTTER, _GUTTER, _GUTTER)
-        self._stack.setSpacing(_GUTTER)
-        self._stack.addStretch(1)
-
-        self._scroll = QScrollArea()
-        self._scroll.setObjectName("scroll")
-        self._scroll.setWidget(self._column)
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-
-        body = QVBoxLayout(self)
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(_GUTTER)
-        body.addLayout(head)
-        body.addWidget(self._scroll, 1)
-
         self.show_projects(projects)
 
     # -- what is on the surface ------------------------------------------
-
-    def _restyle(self) -> None:
-        """The column's own sheet again, in the palette now in use. The cards
-        redress themselves — each is subscribed, because the list builds and
-        drops them as the library changes and one that dressed its children
-        would have to do it again on every rebuild."""
-        self.setStyleSheet(_sheet())
 
     def show_projects(self, projects: Iterable[Project]) -> None:
         """Draw this library, keeping the selection on the same project if it is
@@ -173,40 +100,41 @@ class ProjectList(QWidget):
         return None
 
     def _rebuild(self) -> None:
-        for card in self._cards:
-            self._stack.removeWidget(card)
-            card.deleteLater()
+        # The stack drops the empty-library sentence along with the cards, since
+        # it stands in the same column, so `_nothing` is cleared here rather than
+        # in `_empty_state` — a label left named after `clear()` deleted it is a
+        # handle to a widget that is going away.
+        self.clear()
         self._cards = []
+        self._nothing = None
         self._current = -1
 
         for index, project in enumerate(self._projects):
             card = ProjectCard(project)
             card.selected.connect(lambda index=index: self.select(index))
             card.opened.connect(lambda index=index: self.open(index))
-            # Before the stretch, which is the last item and is what keeps a
-            # short library at the top of the pane instead of spread down it.
-            self._stack.insertWidget(self._stack.count() - 1, card)
+            self.add_card(card)
             self._cards.append(card)
 
-        self._count.setText(
-            f"{len(self._projects)} remembered" if self._projects else ""
-        )
+        self.set_note(f"{len(self._projects)} remembered" if self._projects else "")
         self._empty_state()
 
     def _empty_state(self) -> None:
         """What an empty library says. A sentence and not a blank pane: a list
         with nothing in it and a list that failed to load look identical, and
-        only one of them is worth the user waiting on."""
-        if self._nothing is not None:
-            self._stack.removeWidget(self._nothing)
-            self._nothing.deleteLater()
-        self._nothing = None
+        only one of them is worth the user waiting on.
+
+        It wears the band's note name, which is the stack's dim line: this *is*
+        that line, moved into the column because it is about the column and not
+        about the library as a whole, and a second object name for one colour is
+        a second place that colour can be decided.
+        """
         if self._projects:
             return
         self._nothing = QLabel("no projects yet")
-        self._nothing.setObjectName("empty")
+        self._nothing.setObjectName("stacknote")
         self._nothing.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._stack.insertWidget(self._stack.count() - 1, self._nothing)
+        self.add_card(self._nothing)
 
     # -- standing, and moving -------------------------------------------
 
@@ -220,7 +148,7 @@ class ProjectList(QWidget):
         self._current = index
         card = self._cards[index]
         card.set_selected(True)
-        self._scroll.ensureWidgetVisible(card)
+        self.ensure_visible(card)
         self.selected.emit(self._projects[index])
 
     def step(self, delta: int) -> None:

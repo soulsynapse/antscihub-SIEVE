@@ -48,6 +48,7 @@
         - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.
         - 📄 `nav.py` — The sections down the left of a card, and which one is being read.
         - 📄 `sections.py` — A card of sections: a list down the left, one of them read on the right.
+        - 📄 `stack.py` — The header and the ground under it: where a column of cards lives.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
           - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.

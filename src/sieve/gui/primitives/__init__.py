@@ -119,6 +119,24 @@ rather than decline it. Every control declines on the grounds that the slider is
 *card corners*; a banner is a full-width block with a title on a ground, which
 is a card in everything but the verbs, and one that kept its own corner would be
 the one shape in a stack not moving when the stack did.
+
+`table.py` is the fifth surface and the first thing here that holds *data*. The
+others are handed whatever a view builds and know nothing about it; this is
+handed rows, and a row is a fact about something the user did not draw. It
+arrives ahead of a view for the reason `check.py` names while settling on it —
+the write list, a run's steps against their costs, and a sheet of detections are
+one picture drawn three times, and the first to invent a header, a rule and a
+current row would be fixing all three.
+
+Settling it turned no constant public and spent one instead. `nav.MARK_W` was
+made public by `segmented.py`, which wears the mark along a bar's foot rather
+than down a row's side; a table's rows wear it exactly where the nav's entries
+do, which is what makes *this is the current one* one drawing in this tree
+rather than a family of them. What it refuses is the mockup's accent wash under
+the selected row, on `segmented.py`'s grounds, and the mockup's mono numerals,
+on `field.py`'s — a family is the tree's first and belongs in `metrics.py` when
+it is chosen, and right-alignment is the half of that treatment that costs no
+decision.
 """
 
 from __future__ import annotations
@@ -135,6 +153,7 @@ from sieve.gui.primitives.segmented import Segmented
 from sieve.gui.primitives.select import Select
 from sieve.gui.primitives.slider import Slider
 from sieve.gui.primitives.stack import CardStack
+from sieve.gui.primitives.table import Column, Table
 from sieve.gui.primitives.view import View
 
 __all__ = [
@@ -154,6 +173,7 @@ __all__ = [
     "Card",
     "CardStack",
     "Check",
+    "Column",
     "Field",
     "LineField",
     "Pill",
@@ -163,5 +183,6 @@ __all__ = [
     "Segmented",
     "Select",
     "Slider",
+    "Table",
     "View",
 ]

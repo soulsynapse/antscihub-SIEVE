@@ -18,6 +18,14 @@ time a screen was added would make "which pane" unanswerable.
 The track is moved rather than the positions: one animated property, and every
 position keeps the geometry it was given, so a plot mid-refill in the position
 being left does not also get resized on its way off screen.
+
+`Arrows` is the same two moves where the pointer can reach them. The keys are
+the frame's and fire wherever focus is (`hotkeys.py`), which is what makes them
+the track's own; a user working with the mouse has no such thing, and a screen
+whose only way onward is a key is a screen that reads as having no way onward.
+They live here rather than in the head they stand in because which way the track
+can still go is the swipe's fact and nobody else's — an arrow that stayed lit at
+the end of the line would be offering the move `step` already refuses.
 """
 
 from __future__ import annotations
@@ -29,9 +37,13 @@ from PySide6.QtCore import (
     QAbstractAnimation,
     QEasingCurve,
     QPropertyAnimation,
+    QSize,
+    Qt,
+    Signal,
 )
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QToolButton, QWidget
 
+from sieve.gui import icons, palette
 from sieve.gui.frame.panes import Blank
 
 #: How long the slide takes. Long enough to be read as travel and not a cut,
@@ -46,6 +58,13 @@ SLIDE_MS = 260
 #: mean out and in, and nothing has to say which way is which.
 POSITIONS = ("project", "pipeline", "step")
 
+#: Which lucide icon each direction wears. The same arrow the card's *open* verb
+#: wears, because it means the same thing one level up — onward into what you are
+#: standing on — and a second glyph for one direction of one line would be the
+#: track claiming to be a different kind of motion than the work it walks.
+_BACK = "arrow-left"
+_FORWARD = "arrow-right"
+
 
 class Swipe(QWidget):
     """A track of positions inside one pane, one of them in front at a time.
@@ -55,6 +74,12 @@ class Swipe(QWidget):
     pane-widths along the track has been pulled. Positions are the swipe's
     children only through the track, so nothing outside sees them move.
     """
+
+    #: Which position is now in front. Emitted when the slide starts rather than
+    #: when it lands, for the reason `current()` reports from the start: what is
+    #: drawn about where the user is standing has to be true of where the next
+    #: keystroke will act, not of where the track has got to this frame.
+    moved = Signal(int)
 
     def __init__(
         self, positions: Sequence[QWidget], parent: QWidget | None = None
@@ -131,6 +156,7 @@ class Swipe(QWidget):
         self._animation.setStartValue(self._offset)
         self._animation.setEndValue(float(index))
         self._animation.start()
+        self.moved.emit(index)
 
     def step(self, delta: int) -> None:
         """Move `delta` positions, stopping at the ends rather than wrapping.
@@ -160,6 +186,76 @@ class Swipe(QWidget):
         for index, position in enumerate(self._positions):
             position.setGeometry(index * width, 0, width, height)
         self._set_offset(self._offset)
+
+
+class Arrows(QWidget):
+    """← and → for one swipe, as two buttons a head can stand.
+
+    Held against the swipe rather than handed two callables: what the pair has to
+    say is not only *move* but *whether there is anywhere to move to*, and only
+    the swipe knows where its ends are. So it walks with `step` — the same clamp
+    the keys get, so neither route can take the track somewhere the other cannot
+    — and re-faces itself on `moved`, whichever of the two moved it.
+
+    An end is a disabled button and not a hidden one. The pair is the same two
+    presses in the same two places on every position, and a way back that
+    vanished at the first position would move the other arrow sideways at exactly
+    the moment the user is looking for where they came from.
+    """
+
+    def __init__(self, swipe: Swipe, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._swipe = swipe
+        self._back = self._button(_BACK, "Back one position (←)", -1)
+        self._forward = self._button(_FORWARD, "On one position (→)", +1)
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+        row.addWidget(self._back)
+        row.addWidget(self._forward)
+        # The head's sheet dresses what the head builds, and these are the
+        # caller's; the rule is scoped to this widget's own subtree, which a
+        # sheet set here is, so it reaches the two buttons and nothing else.
+        self.setStyleSheet(
+            "QToolButton { border: 0; padding: 0 2px; background: transparent; }"
+        )
+
+        swipe.moved.connect(self._reface)
+        # Bound methods and never lambdas, for the reason `view.py` gives: a
+        # lambda closing over `self` keeps a dead pair subscribed to the palette.
+        palette.CHANGED.connect(self._redraw)
+        self._reface(swipe.current())
+
+    def _button(self, glyph: str, tip: str, delta: int) -> QToolButton:
+        button = QToolButton()
+        button.setIcon(icons.icon(glyph))
+        button.setIconSize(QSize(icons.SIZE, icons.SIZE))
+        button.setAutoRaise(True)
+        button.setToolTip(tip)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Never focus. The position in front owns ↑ and ↓ and answers them from
+        # whatever holds focus inside it; an arrow that took focus on the click
+        # would leave the user having moved the track and lost the list.
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        # `*_` swallows `clicked`'s checked flag, which these are not.
+        button.clicked.connect(lambda *_: self._swipe.step(delta))
+        return button
+
+    def _reface(self, index: int) -> None:
+        """Refuse the direction the track has no room left in."""
+        self._back.setEnabled(index > 0)
+        self._forward.setEnabled(index < self._swipe.count() - 1)
+
+    def _redraw(self) -> None:
+        """The glyphs again in the palette now in use.
+
+        An icon is a pixmap drawn at the colours the palette held when the button
+        was built, which is the half no stylesheet reaches — `card.py` on why the
+        same slot exists there.
+        """
+        self._back.setIcon(icons.icon(_BACK))
+        self._forward.setIcon(icons.icon(_FORWARD))
 
 
 def build_swipe(pane: str = "right", names: Iterable[str] = POSITIONS) -> Swipe:

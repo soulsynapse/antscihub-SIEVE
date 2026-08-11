@@ -39,6 +39,7 @@
       - 📁 `icons/` — Lucide's line icons, tinted to the palette and handed out as `QIcon`s.
         - 📁 `lucide/`
           - 📄 `LICENSE`
+          - 📄 `arrow-left.svg`
           - 📄 `arrow-right-left.svg`
           - 📄 `arrow-right.svg`
           - 📄 `folder-open.svg`

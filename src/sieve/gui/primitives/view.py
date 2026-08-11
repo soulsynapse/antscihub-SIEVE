@@ -22,6 +22,21 @@ verbs act on the whole pane, there are only ever a couple of them, and which two
 depends on what the pane is about — an empty row of them minted here would be
 this file deciding that for every view at once.
 
+What it does settle is where a pair of arrows stands, for a view that is one of
+several the pane moves between: `set_arrows` takes the pair and puts it at the
+band's far end, after the note. The pair itself is not minted here and this file
+knows nothing about what it moves — that is the frame's, because only the frame
+knows the run of views is a run at all. What is settled is the position, for the
+reason the whole band is: two views on one track that each placed their own way
+back would be two answers to where the way back is, and the user would have to
+find it again on arriving.
+
+The far end and not the leading one, which is the alignment above deciding it
+rather than a preference: the title stands on the same x as the contents under
+it, and anything put before the title walks that x by its own width — a head
+with a way out would be a head whose name no longer lines up with the column
+below it, and only the heads that had one.
+
 `CardStack` is this with a scrolling column of cards under it, and is a subclass
 rather than a widget holding one: the head was the stack's until a second view
 wanted the same band, and a stack that kept its own copy would be the second
@@ -93,6 +108,7 @@ class View(QWidget):
 
         self._title = QLabel(title)
         self._title.setObjectName("viewtitle")
+        self._arrows: QWidget | None = None
         self._note = QLabel()
         self._note.setObjectName("viewnote")
 
@@ -108,10 +124,13 @@ class View(QWidget):
         self._head.setContentsMargins(PAD_X, PAD_Y, PAD_X, PAD_Y)
         self._head.setSpacing(12)
         self._head.addWidget(self._title)
-        # The stretch is what the caller's own figures land before, and the note
-        # is what they land after — see `head()`. Both indices are read off the
-        # layout rather than remembered, so neither moves when the other fills.
+        # The stretch is what the caller's own figures land before — see
+        # `add_figure`, which counts them rather than reading an index off the
+        # layout: what is past the stretch is no longer only the note, so an
+        # arithmetic on `count()` would put the next figure at whichever end the
+        # last thing added happened to leave nearer.
         self._head.addStretch(1)
+        self._figures = 0
         self._head.addWidget(self._note)
 
         # The room is a widget and not a bare layout, so that it is something with
@@ -155,13 +174,45 @@ class View(QWidget):
         dash would be a figure the view never claimed."""
         self._note.setText(note)
 
-    def head(self) -> QHBoxLayout:
-        """The band's row, for a view with something to count.
+    def set_arrows(self, arrows: QWidget | None) -> None:
+        """Stand a pair of arrows at the band's far end, or take them away.
+
+        Last in the row, past the note: the title holds the left of the band
+        because the contents under it are read down that x, so what a head gains
+        it gains at the other end. Nothing else about the pair is this file's —
+        what the two presses do, and whether either is refused at an end, are the
+        caller's, since only it knows there is a run of views to be at the end of.
+
+        Passing `None` puts the head back to a title with no way out of it. The
+        pair is taken out of the row rather than hidden, so a head that is no
+        longer one of several does not pay the arrows' width in air.
+        """
+        if self._arrows is not None:
+            self._head.removeWidget(self._arrows)
+            self._arrows.setParent(None)
+        self._arrows = arrows
+        if arrows is not None:
+            self._head.addWidget(arrows)
+
+    def add_figure(self, figure: QWidget) -> None:
+        """One more of the view's own figures, beside the title.
 
         The chain's is two figures and their labels — what it costs a frame, and
         what that is in frames per second — and those are the view's because only
-        it knows what is being measured. Insert at `head().count() - 2` to sit
-        beside the title, which is before the stretch and before the note.
+        it knows what is being measured. They land in the order they are added,
+        after the title and before the stretch, so what the view counts stays
+        with the name of the thing counted and never drifts to the far end.
+        """
+        self._figures += 1
+        self._head.insertWidget(self._figures, figure)
+
+    def head(self) -> QHBoxLayout:
+        """The band's row itself, for what `add_figure` does not cover.
+
+        Handed out rather than kept private because a head is a row and a caller
+        with something else to put in one should not have to be a subclass. Where
+        the row's own three go is settled here — title, figures, note, arrows —
+        and a caller reaching past that is choosing its own place in it.
         """
         return self._head
 

@@ -27,7 +27,12 @@ side on a track it slides along. A swipe is a view in a pane like any other and
 not a fourth pane — what it changes is the right pane's occupant, never how many
 panes there are. Which keys walk it is `hotkeys.py`'s; the verbs they call are
 here, because the swipe is the window's to hold and the keyboard is not the
-frame's to interpret twice.
+frame's to interpret twice. The same two moves are in the head of the view
+standing on the track, as the pair of arrows `swipe.py` builds — put there from
+here, since knowing there is a track to walk is the frame's and not the view's.
+The two positions still standing blank have no head to carry a pair, so they
+have no way out but the keys until a view lands in them; that is the blank
+missing, not the pair being withheld.
 
 Neither view names the pane it is in. The canvas is a view (ADR-0001) and would
 house on the right or on the swipe unchanged; the left pane holding it is this
@@ -72,7 +77,7 @@ from sieve.gui.frame.panes import (
     build_right,
     build_seam,
 )
-from sieve.gui.frame.swipe import POSITIONS, build_swipe
+from sieve.gui.frame.swipe import POSITIONS, Arrows, build_swipe
 from sieve.relaunch import relaunch
 from sieve.gui.view.canvas import Canvas
 from sieve.gui.view.dev import Dev
@@ -120,6 +125,13 @@ class MainWindow(QMainWindow):
         # been decided — which ADR-0001 says is nowhere.
         self.projects = ProjectList()
         self.swipe.position(POSITIONS.index("project")).body.addWidget(self.projects)
+        # The arrows go in the head of the view standing on the track, and the
+        # window is what puts them there for the same reason it houses the view:
+        # the track is the frame's and a view that hung its own pair would be
+        # claiming to know it was one of several. One pair per position — they
+        # are the position's way out, not the pane's, so each head carries its
+        # own rather than the pane keeping one above whatever is in front.
+        self.projects.set_arrows(Arrows(self.swipe))
         # Opening a project is a move inward along the same line ← and → walk,
         # so it is the swipe's step and not a second kind of navigation.
         self.projects.opened.connect(lambda _project: self.swipe_forward())

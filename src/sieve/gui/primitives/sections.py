@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from typing import Callable, NamedTuple, Sequence
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -60,8 +60,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import metrics, palette
-from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
+from sieve.gui import icons, metrics, palette
+from sieve.gui.palette import DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 from sieve.gui.primitives.button import GHOST, Button
 from sieve.gui.primitives.nav import SectionNav
 
@@ -69,6 +69,11 @@ from sieve.gui.primitives.nav import SectionNav
 #: reason the project list uses one: the outermost row sits off the card's edge
 #: by the distance it sits off its neighbour.
 GUTTER = 10
+
+#: The close verb, named once here for the reason `card.py` names its four: the
+#: string is a lucide filename, and a typo in it raises at the first draw rather
+#: than at the line that wrote it.
+_CLOSE = "x"
 
 
 class Section(NamedTuple):
@@ -134,8 +139,7 @@ def _sheet() -> str:
             font-weight: 600;
         }}
         #gloss, #empty {{ color: {rgb(DIM)}; font-size: {metrics.pt("gloss")}pt; }}
-        #done {{ color: {rgb(DIM)}; border: 0; padding: 0 6px; }}
-        #done:hover {{ color: {rgb(ACCENT)}; }}
+        #done {{ border: 0; padding: 0 6px; }}
     """
 
 
@@ -178,6 +182,12 @@ class SectionCard(QWidget):
         # drops the connection when the widget goes, where a lambda closing over
         # `self` would keep a dead card subscribed and call into it.
         palette.CHANGED.connect(self._restyle)
+        # And the close icon, which the sheet no longer reaches: it is a pixmap
+        # drawn at the colours in force when it was made, so a palette change has
+        # to draw it again. Its own slot and not `_restyle`, for `card.py`'s
+        # reason — a size change does not touch a pixmap, and answering both
+        # signals in one slot would redraw the icon every time a slider moved.
+        palette.CHANGED.connect(self._redress)
         # The same sheet carries the corner and the three text sizes, so the
         # answer to both signals is the one string built again. Two connections
         # and not one signal, for the reason `metrics.py` gives: what they are
@@ -196,9 +206,13 @@ class SectionCard(QWidget):
         title = QLabel(heading)
         title.setObjectName("heading")
 
-        done = QToolButton()
+        #: The close, kept as an attribute only so a palette change can redraw
+        #: it: an icon is a pixmap tinted when it was made, where the glyph it
+        #: replaces was recoloured by the sheet alone.
+        done = self._done = QToolButton()
         done.setObjectName("done")
-        done.setText("✕")
+        done.setIcon(icons.icon(_CLOSE))
+        done.setIconSize(QSize(icons.SIZE, icons.SIZE))
         done.setAutoRaise(True)
         done.setToolTip(f"Close {heading} (Esc)")
         done.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -220,8 +234,8 @@ class SectionCard(QWidget):
         head.setSpacing(GUTTER)
         head.addWidget(title, 1)
         # Left of the close, because it is the quieter of the two verbs and the
-        # one the user is less often reaching for, and because ✕ has been in the
-        # corner since before there was anything beside it.
+        # one the user is less often reaching for, and because the close has been
+        # in the corner since before there was anything beside it.
         if self._reset is not None:
             head.addWidget(self._reset)
         head.addWidget(done)
@@ -263,6 +277,10 @@ class SectionCard(QWidget):
 
     def _restyle(self) -> None:
         self.setStyleSheet(_sheet())
+
+    def _redress(self) -> None:
+        """The close drawn again at the colours now in force."""
+        self._done.setIcon(icons.icon(_CLOSE))
 
     def _show_section(self, index: int) -> None:
         """Turn the right side to the section now being stood on. Out of range

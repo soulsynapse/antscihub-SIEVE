@@ -217,18 +217,27 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowState(self.windowState() | Qt.WindowState.WindowFullScreen)
 
-    def open_preferences(self) -> None:
-        """Stand the preferences over the panes, and hold the frame's keys.
+    def toggle_preferences(self) -> None:
+        """The preferences over the panes, or away again if they are already up.
 
-        Asking again while they are already up is a re-raise and not a second
-        card: the bar's title stays clickable under nothing, and Ctrl+, is the
-        same request from the keyboard.
+        The title stays visible and clickable above what it opened, which is
+        the whole point of hanging the card off it — so the press that is
+        obviously available while the card is up has to be the one that puts it
+        back, and a re-raise there would be a click that does nothing. Ctrl+,
+        is the same request from the keyboard and toggles with it.
+
+        Asking while the bench is standing turns the overlay to preferences
+        rather than closing it: the press means "put *this* away" only when
+        this is what is there.
 
         Dropped from under the bar's own title rather than centred, so what is
         on screen is read as having come from what was clicked — the title
         stays visible above it, and Ctrl+, arrives at the same place, which is
         what keeps the keyboard's route and the pointer's showing one thing.
         """
+        if self.overlay.showing(self.preferences):
+            self.close_overlay()
+            return
         self._raise(self.preferences, preferences_anchor(self.bar))
 
     def open_dev(self) -> None:

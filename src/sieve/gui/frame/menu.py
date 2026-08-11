@@ -54,7 +54,7 @@ class Button(NamedTuple):
 #: The preferences verb, named apart from the bar it sits on because the frame
 #: has to find it again: what it opens is stood under it, so where it is drawn
 #: is a number someone asks for and not only a label the builder consumes.
-_PREFERENCES = Button("&Preferences", "open_preferences", "Ctrl+,")
+_PREFERENCES = Button("&Preferences", "toggle_preferences", "Ctrl+,")
 
 #: The bar, left to right. Preferences sits between the window's own views and
 #: the help, where a File menu would otherwise have buried it: it is about the

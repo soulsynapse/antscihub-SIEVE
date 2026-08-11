@@ -165,6 +165,16 @@ class Overlay(QWidget):
         )
         self.body.setContentsMargins(self._inset(view), _GAP, _MARGIN, _MARGIN)
 
+    def showing(self, view: QWidget) -> bool:
+        """Is `view` the one currently standing, and is the scrim up at all?
+
+        Asked by whoever can be pressed twice: the second press means "put this
+        away" only when the thing it opens is what is already there, and the
+        same press while another view is standing is a request to turn the
+        overlay to this one.
+        """
+        return self.isVisible() and self._view() is view
+
     def _view(self) -> QWidget | None:
         """Whichever view is standing on the scrim, or nothing yet.
 

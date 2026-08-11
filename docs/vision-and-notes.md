@@ -18,7 +18,8 @@ This document is for my own thoughts on the process. It is not binding, it is ju
   - Only materialize the user's loop window
   - Keep the user's crop's loop window in memory, if possible.
 
-## Thoughts on truly cheapness categories
+## Thoughts on truly cheap types of operations
 
 - Most things that can be represented as RLEs, especially bitwise RLE. Adding a few more to an RLE isn't bad either.
 - Full frame reduction, anything that collapsed the image to numbers typically.
+- Most pointwise operations: one pixel, no neighborhood. Integration, thresholding, absolute difference, **look-up table remapping**, MHI decay step.

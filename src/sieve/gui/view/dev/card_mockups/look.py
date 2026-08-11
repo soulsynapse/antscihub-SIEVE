@@ -23,6 +23,14 @@ knobs. Everything else — where each of those goes, how many lines they take,
 what is loud and what is quiet, whether anything is hidden until the card is
 current — is what the looks below differ on.
 
+`header bar` breaks that floor upward rather than downward: it draws the four
+knobs and the title like everything else, and then a kind icon and a progress
+meter besides. That is a real asymmetry and it is deliberate — the argument the
+look is making is that the strip and the foot are *room*, and a look claiming to
+have found room cannot be judged empty. What is not allowed is the other
+direction: a look that dropped a knob or a verb would be a different card, not a
+different look.
+
 Nothing here reuses `primitives/card.py`. The real card builds its own head and
 re-sets its own sheet, so a look that changed either would have to widen it, and
 widening the card to draw the alternatives to the card presumes the answer. The
@@ -35,6 +43,7 @@ from __future__ import annotations
 from typing import Callable, NamedTuple
 
 from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -69,6 +78,17 @@ _VERBS: tuple[tuple[str, str], ...] = (
 #: the baseline and the mocks cannot come to be holding different steps.
 TITLE = "threshold"
 KNOBS: tuple[tuple[str, str], ...] = (("sensitivity", "0.42"), ("min area", "120 px"))
+
+#: What the step is drawn as where a look puts a glyph beside the name. A knobbed
+#: step is a slider bank, which is the one thing every card in the chain has and
+#: the one thing that differs between them by kind rather than by name.
+GLYPH = "sliders-horizontal"
+
+#: How full the meter is drawn. A fraction and not a percentage string: a meter
+#: is a width, and the moment it is a string somebody draws it by parsing one.
+#: Neither end, so the mock shows both the fill and the groove it runs in — a
+#: meter mocked at 0 or 1 is a meter with half of itself untested by the eye.
+FULL = 0.62
 
 
 def line(knob: tuple[str, str]) -> str:
@@ -214,12 +234,30 @@ def _table(selected: bool) -> str:
 def _bar(selected: bool) -> str:
     """The title in a strip of its own, in the ground colour rather than the
     card's fill, so it reads as the card's chrome and the fill below it reads as
-    the card's contents.
+    the card's contents. Under the contents, a 4px meter saying how far along
+    whatever the step is doing has got.
+
+    The strip is drawn the same in both states — same fill, same hairline under
+    it. It has to be legible on every card, since it is what says where one
+    card's values stop, and a divider that brightened on the current card would
+    make the chrome itself the selection mark: the eye would read a *different*
+    header rather than the same header on a selected card. Selection is left to
+    the card's border and the title's colour, and the strip is left saying only
+    that it is a strip. What keeps it visible without being loud is that it says
+    so twice and quietly — a fill a step darker than the card and a hairline —
+    rather than once and brightly.
 
     Its cost is written into these rules and not only into the gloss: `#mockbar`
     is painted unconditionally, so the `#mock:hover` fill reaches the body and
     stops at the strip. A hovered card lights up under its own header, which is
     the price of giving the header a fill of its own.
+
+    The meter's fill follows selection instead of being accent everywhere. The
+    accent means *this is what you are acting on* (`palette.py`), and a column of
+    twenty cards each with an accent stripe along its bottom spends that meaning
+    on twenty things at once. Dim at rest is still a readable bar against the
+    `STACK_BG` groove, and the meter is not carrying selection alone — the border
+    and the title are already saying it.
     """
     return f"""
         #mock {{
@@ -229,7 +267,7 @@ def _bar(selected: bool) -> str:
         #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
         #mockbar {{
             background: {rgb(STACK_BG)};
-            border-bottom: 1px solid {rgb(ACCENT if selected else LINE)};
+            border-bottom: 1px solid {rgb(LINE)};
         }}
         #mocktitle {{
             color: {rgb(ACCENT if selected else TEXT)};
@@ -237,6 +275,8 @@ def _bar(selected: bool) -> str:
         }}
         #mockname {{ color: {rgb(DIM)}; }}
         #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
         QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
     """
 
@@ -374,11 +414,19 @@ def _shape_table(card: MockCard) -> None:
 
 
 def _shape_bar(card: MockCard) -> None:
-    """The head lifted into a strip of its own, full bleed to the card's edges.
+    """The head lifted into a strip of its own, full bleed to the card's edges,
+    with the step's icon ahead of its name and a meter across the card's foot.
 
     Which is why this shape takes the card's margins away and gives them back
-    inside the two halves: a strip inset by 8px is a panel sitting on a card,
+    inside the three parts: a strip inset by 8px is a panel sitting on a card,
     and the argument here is that the title is the card's lid.
+
+    The icon leads the title rather than sitting with the verbs at the other end.
+    It is not a verb — nothing happens when it is clicked — and a glyph in a row
+    of four things that do act is a fifth button that refuses to be pressed. Ahead
+    of the name it is read as part of the name: what *kind* of step this is,
+    answered before the name says which one, which is what makes a column of
+    twenty scannable by shape before it is read by word.
     """
     card.column.setContentsMargins(0, 0, 0, 0)
     card.column.setSpacing(0)
@@ -389,6 +437,7 @@ def _shape_bar(card: MockCard) -> None:
     inside = QHBoxLayout(bar)
     inside.setContentsMargins(8, 5, 6, 5)
     inside.setSpacing(4)
+    inside.addWidget(_glyph(GLYPH, ACCENT if card.selected else DIM))
     inside.addWidget(_label(TITLE, "mocktitle"), 1)
     inside.addWidget(card.verbs)
     card.column.addWidget(bar)
@@ -396,6 +445,62 @@ def _shape_bar(card: MockCard) -> None:
     body = _knob_grid()
     body.setContentsMargins(8, 7, 8, 8)
     card.column.addLayout(body)
+
+    card.column.addWidget(_meter(FULL))
+
+
+#: How tall the meter is, and the number the look is named for. Four pixels is
+#: the smallest bar that still reads as a length rather than as a hairline that
+#: happens to be two colours, and it is small enough that a card carrying one is
+#: not a card carrying a progress widget.
+_METER = 4
+
+
+def _meter(full: float) -> QWidget:
+    """A 4px bar across the card's foot saying how far along the step is.
+
+    The fill is a stretch factor and not a fixed width, so the bar stays right at
+    any card width — the mocks are drawn at one width but the pane they will sit
+    in is a splitter, and a meter that only reads at 300px is a meter that will
+    be wrong the first time somebody drags the seam. Thousandths, because a
+    stretch is an integer ratio and hundredths visibly quantise a slow bar.
+
+    Full bleed like the strip above it and for the same reason: inset by the
+    body's 8px it would be a widget lying on the card, and what it is is the
+    card's own foot. Both children are told to style their background, since a
+    plain `QWidget` ignores a sheet's `background` without it.
+    """
+    bar = QWidget()
+    bar.setObjectName("mockmeter")
+    bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    bar.setFixedHeight(_METER)
+
+    done = QWidget()
+    done.setObjectName("mockfull")
+    done.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+    inside = QHBoxLayout(bar)
+    inside.setContentsMargins(0, 0, 0, 0)
+    inside.setSpacing(0)
+    filled = max(0, min(1000, round(full * 1000)))
+    inside.addWidget(done, filled)
+    inside.addStretch(1000 - filled)
+    return bar
+
+
+def _glyph(name: str, colour: QColor) -> QLabel:
+    """An icon beside a label rather than on a button.
+
+    A `QLabel` holding a pixmap and not a `QToolButton`: a tool button in the
+    head would be hoverable and pressable, and this one means nothing when
+    pressed. Its colour is chosen here and not in the dress, because a pixmap is
+    not text and no stylesheet rule reaches inside one — which is the same trade
+    `icons/__init__.py` describes making for the verbs.
+    """
+    label = QLabel()
+    label.setPixmap(icons.pixmap(name, colour))
+    label.setFixedSize(QSize(icons.SIZE, icons.SIZE))
+    return label
 
 
 def _shape_chip(card: MockCard) -> None:
@@ -543,10 +648,15 @@ LOOKS: tuple[Look, ...] = (
     ),
     Look(
         "header bar",
-        "the title in a full-bleed strip in the ground colour, verbs in it with "
-        "the title — the head becomes chrome and everything below it is "
-        "contents, which is what tells a reader where one card's values stop. "
-        "Costs a second fill per card and takes the hover tint off the head",
+        "the title in a full-bleed strip in the ground colour, its kind as an "
+        "icon ahead of the name and the verbs at the far end — the head becomes "
+        "chrome and everything below it is contents, which is what tells a "
+        "reader where one card's values stop. The strip is drawn identically on "
+        "both cards, so it stays a strip rather than becoming a second selection "
+        "mark. A 4px meter across the foot says how far along the step is, which "
+        "is the one number a long crop or a full-clip pass has that no knob row "
+        "can hold. Costs a second fill per card, takes the hover tint off the "
+        "head, and adds four pixels every card pays whether or not it is running",
         _bar,
         _shape_bar,
     ),

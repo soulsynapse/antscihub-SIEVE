@@ -41,6 +41,7 @@
           - 📄 `arrow-right.svg`
           - 📄 `folder-open.svg`
           - 📄 `pin.svg`
+          - 📄 `sliders-horizontal.svg`
           - 📄 `x.svg`
       - 📁 `primitives/` — The shapes a view is built out of, owned by none of them.
         - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.

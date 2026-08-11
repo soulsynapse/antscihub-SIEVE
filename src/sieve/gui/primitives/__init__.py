@@ -17,6 +17,12 @@ together in `mockup/paper_cards.py` — the card, and the header and ground it i
 seen in. They are two files because a card is put in things other than a stack,
 not because the decisions are separable: the card's fill and the stack's ground
 are the same choice made once, and either moved alone stops being it.
+
+`view.py` is the third shape and is under the other two rather than beside them:
+the head a pane wears was the stack's band until a view that is not a column of
+cards wanted the same line at its top, and it moved here so that a head is one
+decision rather than one per pane. Everything a view stands in starts as one of
+these.
 """
 
 from __future__ import annotations
@@ -25,5 +31,6 @@ from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.sections import Section, SectionCard
 from sieve.gui.primitives.stack import CardStack
+from sieve.gui.primitives.view import View
 
-__all__ = ["Card", "CardStack", "Section", "SectionCard", "SectionNav"]
+__all__ = ["Card", "CardStack", "Section", "SectionCard", "SectionNav", "View"]

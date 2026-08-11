@@ -1,9 +1,13 @@
 """The library as a column of cards: which projects there are, and which is current.
 
-The band and the ground are `primitives/stack.py`'s, and were this file's until
-the card mock up settled what that band looks like. What is left here is the part
-that is about the library: which projects there are, which one is being stood on,
-and what the two verbs — standing and opening — mean.
+The ground is `primitives/stack.py`'s and the head over it is
+`primitives/view.py`'s, and both were this file's — the band until the card mock
+up settled what a header looks like, and then the head itself once a pane that
+is not a column of cards wanted the same line at its top. The title it carries
+is `Projects` for now: what a pane's head says is the pane's own claim, and this
+one has no library to name itself after yet. What is left here is the part that
+is about the library: which projects there are, which one is being stood on, and
+what the two verbs — standing and opening — mean.
 
 The list holds the selection and the cards do not: a card that decided it was
 current would have to hear about every other card to stop being it, and the one
@@ -62,7 +66,7 @@ class ProjectList(CardStack):
     def __init__(
         self, projects: Iterable[Project] = (), parent: QWidget | None = None
     ) -> None:
-        super().__init__("projects", gap=_GAP, parent=parent)
+        super().__init__("Projects", gap=_GAP, parent=parent)
         # The list answers ↑/↓, so it has to be reachable by tabbing as well as
         # by clicking — a surface that only takes focus from the pointer is one
         # the keyboard cannot get back to after any other widget has had it.
@@ -124,7 +128,7 @@ class ProjectList(CardStack):
         with nothing in it and a list that failed to load look identical, and
         only one of them is worth the user waiting on.
 
-        It wears the band's note name, which is the stack's dim line: this *is*
+        It wears the band's note name, which is the head's dim line: this *is*
         that line, moved into the column because it is about the column and not
         about the library as a whole, and a second object name for one colour is
         a second place that colour can be decided.
@@ -132,7 +136,7 @@ class ProjectList(CardStack):
         if self._projects:
             return
         self._nothing = QLabel("no projects yet")
-        self._nothing.setObjectName("stacknote")
+        self._nothing.setObjectName("viewnote")
         self._nothing.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.add_card(self._nothing)
 

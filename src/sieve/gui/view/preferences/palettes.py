@@ -9,8 +9,8 @@ no *apply* and nothing to confirm.
 What a row shows is the palette's own colours and not the current ones. Every
 other surface in the application follows `palette.CHANGED`; the swatches are the
 one thing that must not, because they are what the choice is *between*, and a
-strip that redrew itself in the palette already in use would show nine identical
-rows. They are set once, from literals, and never restyled.
+strip that redrew itself in the palette already in use would show every row
+identical. They are set once, from literals, and never restyled.
 
 Which palettes there are, what each is for, and how they sort into dark and
 light is `palette.py`'s — this file draws them and reads none of the values. It
@@ -65,22 +65,22 @@ def _sheet() -> str:
     it is set on a widget standing inside a card whose sheet is already on an
     ancestor, and a bare `QLabel` rule here would reach the card's heading."""
     return f"""
-        #appearance {{
+        #palettes {{
             background: {rgb(PANEL_HOT)};
             border: 1px solid {rgb(LINE)};
         }}
-        #ascroll {{ background: {rgb(PANEL_HOT)}; border: 0; }}
-        #acolumn {{ background: {rgb(PANEL_HOT)}; }}
-        #agroup {{ color: {rgb(DIM)}; font-weight: 600; }}
-        #arow {{
+        #pscroll {{ background: {rgb(PANEL_HOT)}; border: 0; }}
+        #pcolumn {{ background: {rgb(PANEL_HOT)}; }}
+        #pgroup {{ color: {rgb(DIM)}; font-weight: 600; }}
+        #prow {{
             background: {rgb(PANEL)};
             border: 1px solid {rgb(LINE)};
             border-left: {_EDGE}px solid {rgb(PANEL)};
         }}
-        #arow:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #arow[chosen="true"] {{ border-left-color: {rgb(ACCENT)}; }}
-        #aname {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #agloss {{ color: {rgb(DIM)}; }}
+        #prow:hover {{ background: {rgb(PANEL_HOT)}; }}
+        #prow[chosen="true"] {{ border-left-color: {rgb(ACCENT)}; }}
+        #pname {{ color: {rgb(TEXT)}; font-weight: 600; }}
+        #pgloss {{ color: {rgb(DIM)}; }}
         QScrollBar:vertical {{
             background: {rgb(PANEL_HOT)};
             width: 8px;
@@ -96,32 +96,32 @@ def _sheet() -> str:
     """
 
 
-class Appearance(QWidget):
+class Palettes(QWidget):
     """Every palette as a row, under the two headings, one of them chosen.
 
     It scrolls, because the list is a catalogue and a section that fixed its own
     height would be a section deciding how many palettes are allowed.
 
     The rows are grouped rather than sorted into one run: dark against light is
-    the first thing the user is choosing between, and a flat list of nine names
-    makes them find the boundary themselves every time they open this.
+    the first thing the user is choosing between, and a flat list of every name
+    at once makes them find the boundary themselves every time they open this.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setObjectName("appearance")
+        self.setObjectName("palettes")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         self._rows: list[_Row] = []
 
         column = QWidget()
-        column.setObjectName("acolumn")
+        column.setObjectName("pcolumn")
         stack = QVBoxLayout(column)
         stack.setContentsMargins(_GUTTER, _GUTTER, _GUTTER, _GUTTER)
         stack.setSpacing(_GUTTER)
         for dark, heading in ((True, "dark"), (False, "light")):
             label = QLabel(heading)
-            label.setObjectName("agroup")
+            label.setObjectName("pgroup")
             stack.addWidget(label)
             for entry in palette.PALETTES:
                 if entry.dark != dark:
@@ -140,7 +140,7 @@ class Appearance(QWidget):
         # is a few pixels each and reads as the rows being roomy.
 
         scroll = QScrollArea()
-        scroll.setObjectName("ascroll")
+        scroll.setObjectName("pscroll")
         scroll.setWidget(column)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -173,7 +173,7 @@ class _Row(QFrame):
     It reports being picked and marks nothing — the section holds which row is
     chosen, for the reason the nav holds it rather than its entries: the one
     thing true of the whole column is that exactly one is, and a row that
-    decided for itself would have to hear about the other eight to stop being it.
+    decided for itself would have to hear about all the others to stop being it.
 
     The pointer is the only way in. ↑ and ↓ inside the card belong to the
     section nav and mean *the next section*, and a list that took them would
@@ -186,7 +186,7 @@ class _Row(QFrame):
 
     def __init__(self, entry: palette.Palette, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setObjectName("arow")
+        self.setObjectName("prow")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # The height a row wants depends on the width it is given, because the
@@ -204,7 +204,7 @@ class _Row(QFrame):
         self.scheme = entry
 
         name = QLabel(entry.name)
-        name.setObjectName("aname")
+        name.setObjectName("pname")
         gloss = _Gloss(entry.gloss)
 
         words = QVBoxLayout()
@@ -259,7 +259,7 @@ class _Gloss(QLabel):
 
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
-        self.setObjectName("agloss")
+        self.setObjectName("pgloss")
         self.setWordWrap(True)
         policy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         policy.setHeightForWidth(True)

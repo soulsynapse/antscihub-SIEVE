@@ -17,9 +17,9 @@ A section may hand over a widget or hand over nothing. Nothing is not a blank
 panel per section: the sections with no body differ by two strings, and a stack
 holding one identical widget each would keep them all alive to say which is on
 top, a fact the nav already holds. So they share one frame that is retold, and
-only a section that brought something of its own costs a widget. Preferences is
-the whole-card case of that — four sections, no bodies, one frame — and the dev
-view is the mixed one.
+only a section that brought something of its own costs a widget. A card whose
+sections are all places rather than things is the whole-card case of that — one
+frame, retold — and both cards here are the mixed one.
 
 The card holds no state beyond which section is open, which is its own posture
 and not anything about what the sections are for. Closing is emitted and never
@@ -100,9 +100,9 @@ class SectionCard(QWidget):
     """A heading, a note, and sections listed left against one read right.
 
     Handed its sections and its size rather than choosing either. What the card
-    is about is the view's, and the numbers are too: 820×320 suits four rows of
-    a label and a control, and a bench holding a gallery does not, so the caller
-    that knows which it is passes them.
+    is about is the view's, and the numbers are too: what suits a column of a
+    label and a control per row is not what suits a bench holding a gallery, so
+    the caller that knows which it is passes them.
 
     Fixed at whatever it was passed, though, and that is the card's own claim
     rather than the caller's: the nav is walked with ↑ and ↓, and a card sized

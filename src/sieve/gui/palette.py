@@ -34,7 +34,7 @@ asking what colour to draw with, and only one of the two is a view's business.
 
 The choice outlives the process, and it is `use()` that writes it down rather
 than whatever called `use()`. A chooser that saved its own click would be right
-only while it was the only way to change one — the same argument the appearance
+only while it was the only way to change one — the same argument the palette
 section makes for marking its rows off `CHANGED` instead of off the click — and
 a second caller, a hotkey or a system-theme follower, would silently not stick.
 Passing through here is what makes a palette change persistent, so there is one
@@ -59,10 +59,10 @@ class Palette(NamedTuple):
     would be one the tree draws with a hole in it, and a ninth added here is a
     role every palette below has to answer.
 
-    `gloss` is what the choice is actually between. A list of nine names is a
-    list of nine moods; the line under each says what it is *for* — long
-    sessions, projected footage, a figure being screenshotted into a paper — and
-    that is the half worth reading.
+    `gloss` is what the choice is actually between. A list of names is a list of
+    moods; the line under each says what it is *for* — long sessions, projected
+    footage, a figure being screenshotted into a paper, an accent that survives
+    a colour-vision deficiency — and that is the half worth reading.
 
     `dark` is not derivable from the values without picking a threshold, and a
     threshold is a decision better made once by whoever chose the colours than
@@ -180,6 +180,53 @@ _DARK: tuple[Palette, ...] = (
         dim=_c(130, 152, 159),
         accent=_c(92, 196, 214),
     ),
+    # The colour-vision-safe pair, and what that can and cannot mean here. The
+    # accents are Okabe & Ito's set (Okabe and Ito, *Color Universal Design*,
+    # 2008) — eight hues chosen to stay mutually distinct under protanopia,
+    # deuteranopia and tritanopia, and the set most reproducible work in the
+    # figure-drawing literature has settled on.
+    #
+    # But that set solves a problem this module does not have. Okabe–Ito is
+    # designed for *categorical* colour, where a reader must tell series apart
+    # by hue; a palette here commits to exactly one hue, against greys. So what
+    # makes these two safe is not the hue at all — it is that the greys carry no
+    # hue to be confused with the accent, and that the accent clears 4.5:1
+    # against `panel` on luminance alone, so a user who sees none of its colour
+    # still sees the selection. Borrowing the hue is what makes them *also* the
+    # right pair to sample a plot's series colours out of when the plotting
+    # views land, which is the reason to take the accents from a categorical set
+    # rather than tune two more one-offs.
+    #
+    # Two darks and not one because Okabe–Ito's blue and its warm end fail for
+    # different people: the blues are the axis tritanopia degrades, the warm end
+    # is the one protanopes see least brightly. Neither is a fallback for the
+    # other, so both are on offer and the gloss says which is which.
+    Palette(
+        "okabe-ito",
+        "colour-vision safe: neutral grey, Okabe–Ito sky blue",
+        True,
+        stack_bg=_c(25, 25, 25),
+        panel=_c(32, 32, 32),
+        panel_hot=_c(42, 42, 42),
+        line=_c(70, 70, 70),
+        scrim=_c(12, 12, 12, 212),
+        text=_c(240, 240, 240),
+        dim=_c(160, 160, 160),
+        accent=_c(86, 180, 233),
+    ),
+    Palette(
+        "okabe-ito warm",
+        "colour-vision safe: the same greys, orange — no blue to lose",
+        True,
+        stack_bg=_c(25, 25, 25),
+        panel=_c(32, 32, 32),
+        panel_hot=_c(42, 42, 42),
+        line=_c(70, 70, 70),
+        scrim=_c(12, 12, 12, 212),
+        text=_c(240, 240, 240),
+        dim=_c(160, 160, 160),
+        accent=_c(230, 159, 0),
+    ),
 )
 
 #: The light palettes. Not a dark one inverted: a light surface wants a smaller
@@ -240,6 +287,24 @@ _LIGHT: tuple[Palette, ...] = (
         text=_c(24, 32, 44),
         dim=_c(100, 111, 128),
         accent=_c(62, 78, 168),
+    ),
+    # The light half of the pair above, and the accent is Okabe–Ito's blue
+    # rather than its sky blue: the sky blue is what clears 4.5:1 against a dark
+    # panel, and the same hue against a near-white one is a step of almost
+    # nothing. Which end of a hue reads as the accent depends on which ground it
+    # is on, which is the reason this list is not the dark list inverted.
+    Palette(
+        "okabe-ito light",
+        "colour-vision safe on white — for a figure or a bright room",
+        False,
+        stack_bg=_c(224, 224, 224),
+        panel=_c(252, 252, 252),
+        panel_hot=_c(240, 240, 240),
+        line=_c(184, 184, 184),
+        scrim=_c(20, 20, 20, 120),
+        text=_c(24, 24, 24),
+        dim=_c(96, 96, 96),
+        accent=_c(0, 114, 178),
     ),
 )
 

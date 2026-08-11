@@ -11,7 +11,7 @@ greyed entries rather than a different one: a settings screen that grew a
 control the day the setting behind it landed would never, at any point, say what
 the application is configurable *about*. Written out and empty, it says so from
 the start, and each section is a place controls land rather than a place they
-have to be argued for. `appearance` is the first to have had something land in
+have to be argued for. `palette` is the first to have had something land in
 it, and the others stay listed and empty on exactly the same terms as before.
 
 The view holds no preference and reads none. Where a setting is kept is
@@ -27,7 +27,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QWidget
 
 from sieve.gui.primitives import Section, SectionCard
-from sieve.gui.view.preferences.appearance import Appearance
+from sieve.gui.view.preferences.palettes import Palettes
 
 #: How wide the card is allowed to get. A settings row is a label and a control
 #: on one line, and a card that took the window's width would put a full screen
@@ -42,7 +42,7 @@ _WIDTH = 820
 #: How tall the card stands, whichever section is open. Sized to the tallest
 #: section and not to the current one — why it is fixed at all is the card's,
 #: and stated there. That was the longest gloss while every section was empty;
-#: it is now `appearance`, which is a list, and the number is what shows enough
+#: it is now `palette`, which is a list, and the number is what shows enough
 #: of that list to read as one rather than as a row with a scrollbar beside it.
 _HEIGHT = 430
 
@@ -64,10 +64,15 @@ def _sections() -> tuple[Section, ...]:
         Section("playback", "how much footage is decoded ahead, and how much is held"),
         Section("chain", "what a new step starts at, and what a run writes out"),
         Section(
-            "appearance",
-            "the palette everything is drawn in, and how large the text is",
-            Appearance(),
+            "palette",
+            "the colours everything is drawn in, including colour-vision-safe sets",
+            Palettes(),
         ),
+        # Split off `palette` when that section was named for its one control
+        # rather than for appearance at large. Text size was listed under the
+        # old name and is not a colour, and a promise the card had already made
+        # is not one to drop because the section it was made in narrowed.
+        Section("text", "how large the text is, and how tight the rows are"),
     )
 
 

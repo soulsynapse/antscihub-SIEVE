@@ -21,6 +21,7 @@
   - 📄 `VOCAB.md`
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
+  - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.
 - 📁 `scripts/`
   - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md` and the shelf indexes — from the index.
 - 📁 `src/`

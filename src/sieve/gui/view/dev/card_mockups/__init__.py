@@ -14,7 +14,7 @@ answered by looking at the alternatives at the size they will be seen.
 Two files, for `view/__init__.py`'s reason: `look.py` is the candidates and the
 widget that draws one, `view.py` is how a pair of them is laid out. A look is
 added by appending to `LOOKS` and neither is opened. The scrolling column both
-sit in is the bench's own (`dev/gallery.py`), shared with the title mock ups.
+sit in is the bench's own (`dev/gallery.py`), for the next section to share.
 """
 
 from __future__ import annotations

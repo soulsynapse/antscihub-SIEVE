@@ -1,11 +1,11 @@
 """A scrolling column of alternatives, each under its name and its argument.
 
-The frame the card mock ups drew, lifted out of them when the title mock ups
-turned out to be the same picture — and lifted rather than copied for the reason
-`primitives/sections.py` was: two sections drawing one column from two files is
-two places a gutter, a ground colour or a scrollbar can come to differ, and a
-gallery whose blocks are spaced differently from the gallery beside it is one
-where the spacing reads as something the looks are saying.
+The frame the card mock ups drew, lifted out of them once a second section
+turned out to want the same picture — and lifted rather than copied for the
+reason `primitives/sections.py` was: two sections drawing one column from two
+files is two places a gutter, a ground colour or a scrollbar can come to differ,
+and a gallery whose blocks are spaced differently from the gallery beside it is
+one where the spacing reads as something the looks are saying.
 
 What it owns is the column: the ground the alternatives are seen on, the scroll
 that lets the list outgrow the bench, and the block a variant is drawn in — its

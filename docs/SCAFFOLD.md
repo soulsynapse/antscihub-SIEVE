@@ -61,6 +61,7 @@
         - 📄 `slider.py` — The horizontal slider — the control the interactive loop exists for.
         - 📄 `stack.py` — The ground a column of cards lives on, under the head every view wears.
         - 📄 `table.py` — The ruled table: many rows of the same facts, with one of them picked out.
+        - 📄 `tabs.py` — The tab row: a few sections across the top, and which one the room shows.
         - 📄 `view.py` — The head a pane wears, and the room under it: the chassis every view stands in.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.

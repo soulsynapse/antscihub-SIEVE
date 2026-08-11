@@ -194,6 +194,32 @@ pixel size; this fixes both its thickness and its length, because a mark whose
 meaning *is* its size cannot also take that size from a preference — two bars in
 one column at two sizes would not be comparable, and comparison is the whole of
 what the shape is for.
+
+`tabs.py` is not a fifth answer to *pick one* — `segmented.py` closed that set —
+but the second answer to `nav.py`'s question, which is *which section am I
+reading*. The split is what a click does after it: a bar sets a value and leaves
+the screen where it was, and a tab replaces the room under it. There are two
+shapes for that one question because there are two rooms. A section list is a
+fixed 150px column, which is the right price in a card with a pane's width to
+spend and the wrong one in the right pane, where three words down the side take a
+third of the form they are listing; across the top the same three words cost one
+line at any width.
+
+Settling it turned no constant public and instead put `nav.MARK_W` on its third
+shape — down a row's side, along a bar's foot, and now under a word. Which
+raises the one collision in this package that is a thin distinction rather than
+an argued one: a tab row and a segmented bar are both a row of words with an
+accent rule beneath one of them, and what tells them apart is the enclosure. A
+bar is closed — hairline all round, panel fill, a corner at each end — and reads
+as one control holding a value; a tab row has no box, and its floor runs the
+full width of what is beneath it, which is what says the room below belongs to
+the tab above. That is also the one place the two shapes' size policies disagree,
+and the disagreement is the point rather than an oversight.
+
+What it declines is the mockup's bold on the open tab, for a reason no other file
+here has had: bold is wider, so the lit tab's span grows and every tab after it
+steps sideways as the selection moves — which is the fault `nav.MARK_W` is
+reserved under every entry to avoid, in the one axis a reserved mark cannot fix.
 """
 
 from __future__ import annotations
@@ -213,6 +239,7 @@ from sieve.gui.primitives.select import Select
 from sieve.gui.primitives.slider import Slider
 from sieve.gui.primitives.stack import CardStack
 from sieve.gui.primitives.table import Column, Table
+from sieve.gui.primitives.tabs import Tabs
 from sieve.gui.primitives.view import View
 
 __all__ = [
@@ -245,5 +272,6 @@ __all__ = [
     "Select",
     "Slider",
     "Table",
+    "Tabs",
     "View",
 ]

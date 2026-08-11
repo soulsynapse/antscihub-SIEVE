@@ -46,6 +46,7 @@
           - 📄 `sliders-horizontal.svg`
           - 📄 `x.svg`
       - 📁 `primitives/` — The shapes a view is built out of, owned by none of them.
+        - 📄 `banner.py` — The banner: what the application has to say about something it just did.
         - 📄 `button.py` — The text button, in the four weights of emphasis a screen is allowed.
         - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.
         - 📄 `check.py` — The checkbox and the radio: one box, ticked or not, with its label beside it.

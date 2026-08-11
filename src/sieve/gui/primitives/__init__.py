@@ -103,10 +103,27 @@ one every palette commits to, so the dot takes the accent, the ink and `DIM`,
 and the word — which the mockup already says is what carries the meaning — does
 the rest. What that costs is a fourth state, failure, which cannot be told from
 *off* without the hue and so is not offered here at all.
+
+`banner.py` is the second mark and is where that cost was paid. A pill is the
+size of a word and can say what state a thing is in; it cannot say why, and a
+failed run, a missing input and two files written are three things every view in
+this tree can end up having to report. So the refusal is made once more and
+answered rather than deferred: the mockup's four kinds are told apart by a
+painted *shape* — a dot, a tick, a cross, a triangle — and the only colour spent
+is the one question the tree can ask, which is whether the thing wants the user
+now. That is the accent for a warning and a failure and `DIM` for a note and a
+report, so four kinds cost no role at all.
+
+It is also the first thing here besides the card to follow `metrics.radius()`
+rather than decline it. Every control declines on the grounds that the slider is
+*card corners*; a banner is a full-width block with a title on a ground, which
+is a card in everything but the verbs, and one that kept its own corner would be
+the one shape in a stack not moving when the stack did.
 """
 
 from __future__ import annotations
 
+from sieve.gui.primitives.banner import DONE, FAIL, NOTE, WARN, Banner
 from sieve.gui.primitives.button import DEFAULT, GHOST, PRIMARY, SUBTLE, Button
 from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.check import Check
@@ -122,12 +139,17 @@ from sieve.gui.primitives.view import View
 
 __all__ = [
     "DEFAULT",
+    "DONE",
+    "FAIL",
     "GHOST",
     "IDLE",
     "LIVE",
+    "NOTE",
     "OFF",
     "PRIMARY",
     "SUBTLE",
+    "WARN",
+    "Banner",
     "Button",
     "Card",
     "CardStack",

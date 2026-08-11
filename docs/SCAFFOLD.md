@@ -36,6 +36,7 @@
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.
+          - 📄 `nav.py` — The sections down the left, and which one is being read.
           - 📄 `view.py` — Preferences as a card: the sections there will be, and what each is for.
         - 📁 `project_list/` — The library: every project remembered, and which one the work is standing in.
           - 📄 `card.py` — One project, as a card the pointer and the keyboard reach the same way.

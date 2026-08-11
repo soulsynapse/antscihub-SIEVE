@@ -14,7 +14,7 @@ outside, which is the arrangement `chrome.py` refuses to do from the window.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFrame,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from sieve.gui import icons
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 from sieve.gui.view.project_list.project import Project
 
@@ -46,10 +47,20 @@ def _sheet(selected: bool) -> str:
         #card:hover {{ background: {rgb(PANEL_HOT)}; }}
         #name {{ color: {rgb(TEXT)}; font-weight: 600; }}
         #line {{ color: {rgb(DIM)}; }}
-        QToolButton {{ color: {rgb(DIM)}; border: 0; padding: 0 4px; }}
-        QToolButton:hover {{ color: {rgb(ACCENT)}; }}
-        QToolButton:disabled {{ color: {rgb(LINE)}; }}
+        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
     """
+
+
+def _button(glyph: str, tip: str) -> QToolButton:
+    """One of the row's icons. The colours are the icon's three modes and not a
+    stylesheet rule, since `color:` reaches text and an icon is a pixmap —
+    `gui/icons` says the rest of it."""
+    button = QToolButton()
+    button.setIcon(icons.icon(glyph))
+    button.setIconSize(QSize(icons.SIZE, icons.SIZE))
+    button.setAutoRaise(True)
+    button.setToolTip(tip)
+    return button
 
 
 class ProjectCard(QFrame):
@@ -89,10 +100,7 @@ class ProjectCard(QFrame):
         column.addWidget(_Line(project.opened, "line"))
 
     def _open_button(self) -> QToolButton:
-        button = QToolButton()
-        button.setText("→")
-        button.setAutoRaise(True)
-        button.setToolTip("Open this project")
+        button = _button("arrow-right", "Open this project")
         button.clicked.connect(self.opened)
         return button
 
@@ -104,10 +112,7 @@ class ProjectCard(QFrame):
         would make the user select a project to do something that never touches
         the selection.
         """
-        button = QToolButton()
-        button.setText("⌸")
-        button.setAutoRaise(True)
-        button.setToolTip(f"Show {self.project.folder} on disk")
+        button = _button("folder-open", f"Show {self.project.folder} on disk")
         button.clicked.connect(self._reveal)
         return button
 

@@ -1,11 +1,11 @@
 """The card: a titled panel with the four verbs that act on what it holds.
 
-The four are the mockup's chain card, lifted out of it — open its settings (→),
-swap what stands here (⇄), pin it below the canvas (◆), drop it (✕). They are in
-that order on every card and in that order whether or not the card can take
-them, because the position of a glyph is how it is found on the twentieth card
-as much as the first: a card that cannot be removed offers a disabled ✕ with a
-tooltip saying why, rather than a gap that shifts the other three left.
+The four are the mockup's chain card, lifted out of it — open its settings, swap
+what stands here, pin it below the canvas, drop it. They are in that order on
+every card and in that order whether or not the card can take them, because the
+position of an icon is how it is found on the twentieth card as much as the
+first: a card that cannot be removed offers a disabled ✕ with a tooltip saying
+why, rather than a gap that shifts the other three left.
 
 The card emits and does not act. `removed` says the user asked; what a removal
 does to the chain, the library, or the disk is the view's, which is what lets
@@ -22,7 +22,7 @@ so the rules reach the labels and buttons inside it and nothing outside.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal, SignalInstance
+from PySide6.QtCore import QSize, Qt, Signal, SignalInstance
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sieve.gui import icons
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 
 #: How wide the selected card's leading edge is. Wide enough to read from the
@@ -40,13 +41,14 @@ from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 #: which is why the edge is on every card and only its colour changes.
 _EDGE = 3
 
-#: The glyphs, pinned to the names the card knows them by rather than spelled at
-#: each use: the pair on `pin` is one state drawn two ways, and a hollow ◇ that
-#: had drifted from its filled ◆ would be two icons for one thing.
-_OPEN = "→"
-_SWAP = "⇄"
-_PIN = ("◇", "◆")
-_REMOVE = "✕"
+#: Which lucide icon each verb wears, pinned to the names the card knows them by
+#: rather than spelled at each use. `pin` appears once and not twice: pinned is
+#: the same shape with its inside filled, so the two states cannot drift apart
+#: into two drawings of one thing.
+_OPEN = "arrow-right"
+_SWAP = "arrow-right-left"
+_PIN = "pin"
+_REMOVE = "x"
 
 
 class Card(QFrame):
@@ -97,10 +99,10 @@ class Card(QFrame):
         head.setSpacing(4)
         head.addWidget(self._title)
         head.addStretch(1)
-        self._open = self._icon(_OPEN, "open", "Open this card's settings", self.opened)
-        self._swap = self._icon(_SWAP, "swap", "Swap for another tool", self.swapped)
-        self._pin = self._icon(_PIN[0], "pin", "Pin below the canvas", self.pinned)
-        self._remove = self._icon(_REMOVE, "remove", "Remove this", self.removed)
+        self._open = self._button(_OPEN, "open", "Open this card's settings", self.opened)
+        self._swap = self._button(_SWAP, "swap", "Swap for another tool", self.swapped)
+        self._pin = self._button(_PIN, "pin", "Pin below the canvas", self.pinned)
+        self._remove = self._button(_REMOVE, "remove", "Remove this", self.removed)
         for button in (self._open, self._swap, self._pin, self._remove):
             head.addWidget(button)
         column.addLayout(head)
@@ -114,12 +116,13 @@ class Card(QFrame):
 
         self._dress()
 
-    def _icon(
+    def _button(
         self, glyph: str, name: str, tip: str, signal: SignalInstance
     ) -> QToolButton:
         button = QToolButton()
         button.setObjectName(name)
-        button.setText(glyph)
+        button.setIcon(icons.icon(glyph))
+        button.setIconSize(QSize(icons.SIZE, icons.SIZE))
         button.setAutoRaise(True)
         button.setToolTip(tip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -157,11 +160,21 @@ class Card(QFrame):
         return self._selected
 
     def set_pinned(self, pinned: bool) -> None:
-        """Filled ◆ and accent when pinned, and disabled with it: the button is
+        """Filled and accented when pinned, and disabled with it: the button is
         the pin's state as well as the way to set it, and a pinned card that
-        still offered the click would be offering a no-op."""
+        still offered the click would be offering a no-op.
+
+        Which is why the pinned icon hands the accent to `disabled` as well as
+        to `normal`. A disabled button is drawn in `Disabled` mode and nowhere
+        else, so a pin that only accented its `normal` pixmap would go grey at
+        the moment it became the pinned one — the state saying least where it
+        matters most.
+        """
         self._pinned = pinned
-        self._pin.setText(_PIN[1] if pinned else _PIN[0])
+        ink = ACCENT if pinned else DIM
+        self._pin.setIcon(
+            icons.icon(_PIN, normal=ink, disabled=ink if pinned else LINE, filled=pinned)
+        )
         self._pin.setEnabled(not pinned)
         self._pin.setToolTip(
             "Already pinned below the canvas" if pinned else "Pin below the canvas"
@@ -172,7 +185,7 @@ class Card(QFrame):
         return self._pinned
 
     def set_removable(self, removable: bool, reason: str = "") -> None:
-        """Offer ✕ or refuse it in place. `reason` is what the refusal says —
+        """Offer the ✕ or refuse it in place. `reason` is what the refusal says —
         a disabled button with the tooltip it had when it worked tells the user
         what it would do and not why it will not."""
         self._remove.setEnabled(removable)
@@ -188,12 +201,13 @@ class Card(QFrame):
         would need an unpolish/polish pair to take, and this is one string on
         one widget.
 
-        `#pin` outranks `QToolButton:disabled` — an id selector beats a type and
-        a pseudo-state — so the pinned ◆ keeps the accent that says it is the
-        pinned one instead of greying out into the disabled colour.
+        The buttons take no colour here. A stylesheet's `color:` reaches text
+        and an icon is a pixmap, so what a `QToolButton:hover` rule used to do
+        is now three pixmaps in the one `QIcon` and Qt's own choice between
+        them; leaving a dead rule behind would read as the thing still setting
+        the colour. The sheet keeps their geometry, which is still its.
         """
         edge = ACCENT if self._selected else PANEL
-        pin = ACCENT if self._pinned else DIM
         self.setStyleSheet(f"""
             #card {{
                 background: {rgb(PANEL)};
@@ -202,10 +216,7 @@ class Card(QFrame):
             }}
             #card:hover {{ background: {rgb(PANEL_HOT)}; }}
             #title {{ color: {rgb(TEXT)}; font-weight: 600; }}
-            QToolButton {{ color: {rgb(DIM)}; border: 0; padding: 0 4px; }}
-            QToolButton:hover {{ color: {rgb(ACCENT)}; }}
-            QToolButton:disabled {{ color: {rgb(LINE)}; }}
-            #pin {{ color: {rgb(pin)}; }}
+            QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
         """)
 
     # -- what the pointer does ---------------------------------------------

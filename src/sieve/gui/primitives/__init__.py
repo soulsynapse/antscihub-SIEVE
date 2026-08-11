@@ -242,6 +242,40 @@ fill, which is the first refusal here that is about the fills rather than the
 hues — `PANEL_HOT` is what a control wears under the pointer, and an absence lit
 like a hovered control would be the loudest quiet thing on the screen. What is
 inside the box is whatever it is standing on, which is the truthful drawing.
+
+`facts.py` is the fifth mark and the third file here to arrive on `menu.py`'s
+grounds — a debt already three copies deep. The project card writes what a
+project holds and when it was opened as two lines under its name, the card
+mockups lay their knobs out as a grid of label and value, and the step card the
+whole mockup is drawn around is a name over exactly this list; three views have
+each decided how a named fact is written, and the fourth would have made it four.
+It is the plainest of the marks: a pill says what state a thing is in, a banner
+says what happened to it, a meter says how much of something it is, and this says
+everything else that is known and takes no gesture for any of it.
+
+What settling it does that no other file here has had to is state the relation
+between two shapes that are the same drawing at right angles. This is `table.py`
+transposed, and they are two files because they give opposite answers to *who
+picks the column width*, for the same reason about the data in each: a table is
+many rows of the same facts, so a width is declared once and every row puts that
+fact in the same place; this is one thing's different facts, so there is no
+second row to line up with and a declared width would be a number nobody could
+check. The widest name sets the column instead.
+
+It turned no constant public and refused the tree's own name/gloss pairing, which
+is the first refusal here aimed at this folder rather than at the mockup. That
+pair is vertical — `banner.py` and `empty.py` write a name with a quiet line
+under it, subordinate because it is underneath — and these two are read across,
+where a name set smaller would become a caption over the column instead of the
+left half of one line. So both take `name` and the ink does the telling apart,
+`DIM` on what the fact is called and `TEXT` on what it says, which is the right
+way round and not the obvious one.
+
+The one thing it adds that the mockup does not draw is the em dash under a fact
+with no value, and it is written down rather than invented: `table.py` already
+names `—` as the thing that lands in a numeric column beside a size. A blank
+right-hand side and a fact that was never listed look identical, and *measured
+and came back empty* is a different claim from *does not apply*.
 """
 
 from __future__ import annotations
@@ -251,6 +285,7 @@ from sieve.gui.primitives.button import DEFAULT, GHOST, PRIMARY, SUBTLE, Button
 from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.check import Check
 from sieve.gui.primitives.empty import Empty
+from sieve.gui.primitives.facts import Fact, Facts
 from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.menu import Menu
 from sieve.gui.primitives.meter import Meter
@@ -284,6 +319,8 @@ __all__ = [
     "Check",
     "Column",
     "Empty",
+    "Fact",
+    "Facts",
     "Field",
     "LineField",
     "Menu",

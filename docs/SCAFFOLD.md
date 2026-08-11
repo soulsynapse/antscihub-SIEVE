@@ -51,6 +51,7 @@
         - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.
         - 📄 `check.py` — The checkbox and the radio: one box, ticked or not, with its label beside it.
         - 📄 `empty.py` — The empty state: a room with nothing in it, saying what would put something there.
+        - 📄 `facts.py` — The fact list: what is known about one thing, each name beside its answer.
         - 📄 `field.py` — The text field, and the labelled frame with the focus ring around it.
         - 📄 `menu.py` — The menu: a list of verbs standing over the work, grouped, with its keys shown.
         - 📄 `meter.py` — The meter: a quantity drawn as a length, in a groove the length is read off.

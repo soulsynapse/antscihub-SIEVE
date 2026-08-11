@@ -21,4 +21,4 @@ This document is for my own thoughts on the process. It is not binding, it is ju
 ## Thoughts on truly cheapness categories
 
 - Most things that can be represented as RLEs, especially bitwise RLE. Adding a few more to an RLE isn't bad either.
-- 
+- Full frame reduction, anything that collapsed the image to numbers typically.

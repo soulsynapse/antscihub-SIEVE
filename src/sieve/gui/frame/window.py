@@ -19,12 +19,19 @@ strips on that one axis. Which sides those are and how deep they stack is the
 pane's own and stated there; the window opens none of them, and the resting
 frame is the three panes and the two boundaries between them.
 
-The right pane is the one pane that stands something at rest: a swipe, which is
-the three screens that pane houses laid side by side on a track it slides along.
-That is a view in a pane like any other and not a fourth pane — what the swipe
-changes is the right pane's occupant, never how many panes there are. Which keys
-walk it is `hotkeys.py`'s; the verbs they call are here, because the swipe is the
-window's to hold and the keyboard is not the frame's to interpret twice.
+Two of the three panes stand something at rest, and they stand it differently.
+The left pane holds one view, the canvas — the footage and what is drawn over
+it — put in whole, because there is nothing to choose between there. The right
+pane holds a swipe, which is the three screens that pane houses laid side by
+side on a track it slides along. A swipe is a view in a pane like any other and
+not a fourth pane — what it changes is the right pane's occupant, never how many
+panes there are. Which keys walk it is `hotkeys.py`'s; the verbs they call are
+here, because the swipe is the window's to hold and the keyboard is not the
+frame's to interpret twice.
+
+Neither view names the pane it is in. The canvas is a view (ADR-0001) and would
+house on the right or on the swipe unchanged; the left pane holding it is this
+file's answer, and moving it is an edit here and nowhere else.
 
 The first of those positions houses the project list, which is the first view to
 land. The window is what puts it there and hands it what to show — the view
@@ -57,6 +64,7 @@ from sieve.gui.frame.panes import (
 )
 from sieve.gui.frame.swipe import POSITIONS, build_swipe
 from sieve.relaunch import relaunch
+from sieve.gui.view.canvas import Canvas
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
 
@@ -76,6 +84,14 @@ class MainWindow(QMainWindow):
         self.left = build_left()
         self.right = build_right()
         self.bottom = build_bottom()
+
+        # The canvas stands in the left pane's core, for the same reason the
+        # swipe stands in the right pane's: `body` is the core's, so the pane
+        # can still anchor a strip top or bottom without the canvas being what
+        # gets cut. It goes in whole rather than on a track — the left pane
+        # shows one thing and the choice of which is not the user's to walk.
+        self.canvas = Canvas()
+        self.left.body.addWidget(self.canvas)
 
         # The swipe goes in the core's layout, which is what `body` is, so the
         # right pane can still take a subpane on either side without the track

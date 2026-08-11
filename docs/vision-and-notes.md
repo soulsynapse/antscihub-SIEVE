@@ -18,7 +18,7 @@ This document is for my own thoughts on the process. It is not binding, it is ju
   - Only materialize the user's loop window
   - Keep the user's crop's loop window in memory, if possible.
 
-## Thoughts on truly cheap types of operations
+## Thoughts on truly cheap types of operations (Tier 1)
 
 - Most things that can be represented as RLEs, especially bitwise RLE. Adding a few more to an RLE isn't bad either.
 - Full frame reduction, anything that collapsed the image to numbers typically.
@@ -27,3 +27,16 @@ This document is for my own thoughts on the process. It is not binding, it is ju
 ## Thoughts on other frameworks
 
 - JAABA encodes some good information
+
+## Other tiers?
+
+- Retaining image detail? Texture?
+- Signal amplification?
+- Temporal sampling?
+- Downsampling?
+- Aliasing?
+
+## Overcoming limitations
+
+- Figure out if you can pin point the window when it happened, then use more expensive tools on just those windows if necessary
+- Downsampling regimes can *improve* signal (e.g., overcoming compression artifacts)

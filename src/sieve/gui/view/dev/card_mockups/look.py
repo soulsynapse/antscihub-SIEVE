@@ -2,34 +2,45 @@
 
 A look is a dress and an arrangement: what the card is painted in when it is
 selected and when it is not, and where the title, the four verbs and the knobs
-stand. Both halves, together, because the two are not independent — a title
-drawn as a filled chip is also the thing carrying selection, so the card's edge
-has nothing left to do, and a look that paired that chip with the edge dress
-would be arguing for two selection markers at once. A look is therefore a whole
-design and is written as one, rather than a point in a grid of dresses × shapes
-whose cells mostly nobody would ship.
+stand. Both halves, together, because the two are not independent — a strip that
+takes the accent when the card is current is also the thing carrying selection,
+so the card's edge has nothing left to do, and a look that paired that strip
+with an accent border would be arguing for two selection markers at once. A look
+is therefore a whole design and is written as one, rather than a point in a grid
+of dresses × shapes whose cells mostly nobody would ship.
+
+The bench has narrowed. Every look below except the first is a *header bar*: a
+full-bleed strip in the ground colour carrying the step's kind, its name and the
+four verbs, a body of knobs under it, and a meter across the foot. The
+arguments the earlier bench held about the card's edge — accent left rail,
+accent rule on the lid, no hairline at all — are mostly settled by that chassis,
+because a card bounded above by a strip and below by a meter is already bounded;
+what is left of them survives here as `borderless`, which is that argument asked
+again in the one form the chassis does not answer. The rest of the looks differ
+on what the chassis leaves open: what the body says, what leads the strip, and
+where and how thick the meter runs.
+
+`as built, redrawn` stays at the top and stays un-headered on purpose. It is not
+a candidate — it is the drift canary, drawn by this file and stood under the
+real card in the gallery so a difference between them is visible rather than
+hidden. Turning it into a header bar would leave the gallery with no baseline.
+
+What is fixed is what a card has to display: its title, the four verbs, and its
+knobs. A look that dropped a knob or a verb would be a different card, not a
+different look. `percent in the strip` adds a thing rather than dropping one,
+which is allowed and is the whole of its argument.
 
 The dresses are written out one per look and share no fragments on purpose.
 These are alternatives, and a fragment two of them read would mean editing one
 look changed another — which is exactly the drift a side-by-side comparison is
 supposed to make visible rather than hide. The arrangements are the other way
-round: `_label`, `_knob_grid` and the like are shared, because those are the
-card's *contents* and every look is required to be drawn holding the same
-contents. A shape that built its own knob rows could quietly show different
-knobs, and then the gallery would be comparing content and look at once.
-
-What is fixed is what a card has to display: its title, the four verbs, and its
-knobs. Everything else — where each of those goes, how many lines they take,
-what is loud and what is quiet, whether anything is hidden until the card is
-current — is what the looks below differ on.
-
-`header bar` breaks that floor upward rather than downward: it draws the four
-knobs and the title like everything else, and then a kind icon and a progress
-meter besides. That is a real asymmetry and it is deliberate — the argument the
-look is making is that the strip and the foot are *room*, and a look claiming to
-have found room cannot be judged empty. What is not allowed is the other
-direction: a look that dropped a knob or a verb would be a different card, not a
-different look.
+round: `_chassis`, `_strip`, `_meter`, `_knob_grid` and the like are shared,
+because those are the card's *contents and frame* and every look is required to
+be drawn holding the same contents in the same frame. That division moved when
+the bench narrowed — the strip and the meter used to belong to one look and now
+belong to all of them, so they crossed from the unshared half of the file to the
+shared half. The test has not changed: a thing every look must draw identically
+is shared, and a thing the looks are arguing about is written out per look.
 
 Nothing here reuses `primitives/card.py`. The real card builds its own head and
 re-sets its own sheet, so a look that changed either would have to widen it, and
@@ -49,6 +60,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -110,8 +122,8 @@ class Look(NamedTuple):
 
     `shape` is handed the card and fills it — the title, the verb row and the
     knobs, in whatever arrangement the look is about. It reads `card.selected`,
-    since an arrangement is allowed to differ between the two states and one of
-    these is exactly that.
+    since an arrangement is allowed to differ between the two states and two of
+    these are exactly that.
 
     `fade` hides the verbs until the pointer arrives. Its own field rather than
     a shape, because it is true or false of *any* arrangement that keeps the
@@ -134,8 +146,9 @@ class Look(NamedTuple):
 
 
 def _as_built(selected: bool) -> str:
-    """The card as `primitives/card.py` draws it, redrawn here as the mock the
-    others are varied from — the real one is in the gallery too, above these."""
+    """The card as `primitives/card.py` draws it, redrawn here as the baseline
+    the header bars are varied from — the real one is in the gallery too, above
+    this."""
     edge = ACCENT if selected else PANEL
     return f"""
         #mock {{
@@ -146,87 +159,6 @@ def _as_built(selected: bool) -> str:
         #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
         #mocktitle {{ color: {rgb(TEXT)}; font-weight: 600; }}
         #mockline {{ color: {rgb(DIM)}; }}
-        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
-    """
-
-
-def _fill(selected: bool) -> str:
-    """Selection as a fill instead of an edge — the arrangement `card.py`
-    refused, drawn so the refusal can be checked rather than taken. The cost is
-    at the bottom of the card: hover is a fill too, so a hovered card and a
-    selected one are one picture, and the accent title is all that separates
-    them."""
-    return f"""
-        #mock {{
-            background: {rgb(PANEL_HOT if selected else PANEL)};
-            border: 1px solid {rgb(ACCENT if selected else LINE)};
-        }}
-        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #mocktitle {{
-            color: {rgb(ACCENT if selected else TEXT)};
-            font-weight: 600;
-        }}
-        #mockline {{ color: {rgb(DIM)}; }}
-        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
-    """
-
-
-def _rule(selected: bool) -> str:
-    """The accent moved from the leading side to the top, full width. Louder at
-    a glance down a column, and it costs a card's worth of vertical rhythm — the
-    rule is a boundary the eye reads as a gap between cards, not as one card's
-    lid."""
-    return f"""
-        #mock {{
-            background: {rgb(PANEL)};
-            border: 1px solid {rgb(LINE)};
-            border-top: 3px solid {rgb(ACCENT if selected else PANEL)};
-        }}
-        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #mocktitle {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #mockline {{ color: {rgb(DIM)}; }}
-        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
-    """
-
-
-def _flat(selected: bool) -> str:
-    """No hairline at all: the cards are told apart by the gutter and by their
-    fill against the pane's darker ground. Quietest in a long column, and it
-    gives up the one thing a border does that a gutter cannot — saying where a
-    card ends when the next one has scrolled off."""
-    # The unselected edge is the card's own fill and not `transparent`: the
-    # column behind is a different colour, and a see-through edge would show it
-    # as a dark stripe down every card that is not current.
-    edge = ACCENT if selected else PANEL
-    return f"""
-        #mock {{
-            background: {rgb(PANEL_HOT if selected else PANEL)};
-            border: 0;
-            border-left: 3px solid {rgb(edge)};
-        }}
-        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #mocktitle {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #mockline {{ color: {rgb(DIM)}; }}
-        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
-    """
-
-
-def _table(selected: bool) -> str:
-    """The knobs as a two-column table. The value column is the only thing that
-    changes while a slider is dragged, so it is the one drawn in `TEXT` and the
-    names are handed to `DIM` — the opposite weighting to a line that reads
-    `sensitivity — 0.42`, where the label is as loud as the number."""
-    edge = ACCENT if selected else PANEL
-    return f"""
-        #mock {{
-            background: {rgb(PANEL)};
-            border: 1px solid {rgb(LINE)};
-            border-left: 3px solid {rgb(edge)};
-        }}
-        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #mocktitle {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #mockname {{ color: {rgb(DIM)}; }}
-        #mockvalue {{ color: {rgb(TEXT)}; }}
         QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
     """
 
@@ -281,183 +213,456 @@ def _bar(selected: bool) -> str:
     """
 
 
-def _chip(selected: bool) -> str:
-    """The title as a filled tag, which is also where the selection lives — so
-    the card keeps no accent edge and no accent border at all.
+def _bar_lines(selected: bool) -> str:
+    """The same chassis with the body back to one `name — value` line per knob.
 
-    The selected chip's text is `STACK_BG` and not `TEXT`: the accent is a light
-    teal, and light text on it is the one combination in this palette with no
-    contrast left.
+    Worth drawing because the table under a strip is doing two things at once —
+    the strip already gives the card a left edge to hang names from, and a right
+    aligned value column adds a second. A line reads as a sentence and a table
+    reads as data; which of the two a knob row is is exactly the open question.
+    Both halves of the line are `DIM` here, as the built card has them.
     """
     return f"""
         #mock {{
             background: {rgb(PANEL)};
-            border: 1px solid {rgb(LINE)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
         }}
         #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #mockchip {{
-            background: {rgb(ACCENT if selected else PANEL_HOT)};
-            color: {rgb(STACK_BG if selected else TEXT)};
-            border: 1px solid {rgb(ACCENT if selected else LINE)};
-            font-weight: 600;
-            padding: 1px 7px;
+        #mockbar {{
+            background: {rgb(STACK_BG)};
+            border-bottom: 1px solid {rgb(LINE)};
         }}
-        #mockname {{ color: {rgb(DIM)}; }}
-        #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
+        #mockline {{ color: {rgb(DIM)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
         QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
     """
 
 
-def _values_first(selected: bool) -> str:
-    """The values given the size and the step name given up as the loud thing.
-    What a user scans a tuned chain for is the numbers, not the step names they
-    chose; the cost is that a card whose name has gone quiet is harder to find
-    when the chain is long and the values mean nothing yet.
+def _bar_values(selected: bool) -> str:
+    """Values at fifteen pixels in the body, with the strip left alone.
 
-    The one place in the gallery that sets a font size. A value drawn at the
-    body size and merely coloured `TEXT` is what `table` already is, and the
-    argument here is that the number should be reachable at a glance from the
-    far side of the pane — which is a size, not a weight.
+    This is the one pairing the earlier bench could not make: `values first`
+    used to spend the card's head on a small caps eyebrow to get the numbers
+    top billing, and with a strip carrying the name there is nothing left for
+    the body to do but be numbers. The name is in the chrome, the numbers are
+    the contents, and the two are no longer competing for one line.
     """
-    edge = ACCENT if selected else PANEL
     return f"""
         #mock {{
             background: {rgb(PANEL)};
-            border: 1px solid {rgb(LINE)};
-            border-left: 3px solid {rgb(edge)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
         }}
         #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #mockeyebrow {{
-            color: {rgb(ACCENT if selected else DIM)};
-            text-transform: uppercase;
-            letter-spacing: 1px;
+        #mockbar {{
+            background: {rgb(STACK_BG)};
+            border-bottom: 1px solid {rgb(LINE)};
+        }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
         }}
         #mockname {{ color: {rgb(DIM)}; }}
         #mockbig {{ color: {rgb(TEXT)}; font-size: 15px; font-weight: 600; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
         QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
     """
 
 
-def _collapsed(selected: bool) -> str:
-    """Two lines at rest and the table only when current. The summary is `DIM`
-    and the table's values are `TEXT`, so opening a card is a step up in weight
-    as well as in height and the eye is told which card it is reading."""
-    edge = ACCENT if selected else PANEL
+def _bar_collapsed(selected: bool) -> str:
+    """One dim summary line at rest, the table only when current.
+
+    Folding is cheaper under a header bar than it was without one. The card's
+    chrome — strip, meter — is the same height in both states, so what reflows
+    when selection moves is only the body between them, and the column's rhythm
+    of lids and feet survives the reflow. The summary is `DIM` against the
+    table's `TEXT` values, so opening a card steps up in weight as well as in
+    height.
+    """
     return f"""
         #mock {{
-            background: {rgb(PANEL_HOT if selected else PANEL)};
-            border: 1px solid {rgb(LINE)};
-            border-left: 3px solid {rgb(edge)};
+            background: {rgb(PANEL)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
         }}
         #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #mocktitle {{ color: {rgb(TEXT)}; font-weight: 600; }}
+        #mockbar {{
+            background: {rgb(STACK_BG)};
+            border-bottom: 1px solid {rgb(LINE)};
+        }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
         #mocksum {{ color: {rgb(DIM)}; }}
         #mockname {{ color: {rgb(DIM)}; }}
         #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
         QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
     """
 
 
-def _rail(selected: bool) -> str:
-    """A leading rail of its own carrying the step index, wide enough to hold a
-    number instead of the 3px an edge needs. The chain is ordered and nothing
-    else on the card says so; the accent moves onto the rail, so the index and
-    the selection are one mark rather than two things down the same side."""
+def _bar_accent(selected: bool) -> str:
+    """Selection moved onto the strip — the refusal the committed look wrote
+    down, drawn so it can be checked rather than taken on the argument.
+
+    The whole lid takes the accent and the card keeps no accent border, so there
+    is one mark per card instead of two. It reads from much further away than a
+    1px border does, which is the case for it. Against it is what the committed
+    dress says: with the strip painted differently on the current card, the eye
+    is asked to recognise the header shape itself as the selection mark, and a
+    column scanned quickly reads that as a different kind of card rather than as
+    the same card selected.
+
+    Selected text on the strip is `STACK_BG`, not `TEXT`: the accent is a light
+    teal and light text on it is the one combination in this palette with no
+    contrast left. The glyph is handed the same colour in the shape, since no
+    stylesheet rule reaches inside a pixmap.
+    """
+    strip = ACCENT if selected else STACK_BG
     return f"""
         #mock {{
             background: {rgb(PANEL)};
             border: 1px solid {rgb(LINE)};
         }}
         #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #mockrail {{ background: {rgb(ACCENT if selected else STACK_BG)}; }}
-        #mocklead {{
-            color: {rgb(STACK_BG if selected else DIM)};
+        #mockbar {{
+            background: {rgb(strip)};
+            border-bottom: 1px solid {rgb(strip if selected else LINE)};
+        }}
+        #mocktitle {{
+            color: {rgb(STACK_BG if selected else TEXT)};
             font-weight: 600;
         }}
-        #mocktitle {{ color: {rgb(TEXT)}; font-weight: 600; }}
         #mockname {{ color: {rgb(DIM)}; }}
         #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
         QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
     """
 
 
-# -- the arrangements ------------------------------------------------------
-#
-# Each is handed the card and fills `card.column`. They share the content
-# helpers at the bottom of the file, and nothing else.
+def _bar_numbered(selected: bool) -> str:
+    """The step's index leading the strip in place of the kind glyph.
 
-
-def _shape_head(card: MockCard) -> None:
-    """Title and verbs on one line, then one line per knob. What is built."""
-    card.column.addLayout(_head(_label(TITLE, "mocktitle"), card.verbs))
-    for knob in KNOBS:
-        card.column.addWidget(_label(line(knob), "mockline"))
-
-
-def _shape_verbs_below(card: MockCard) -> None:
-    """The verbs off the title line and under the knobs, so the whole width is
-    the title's before it has to elide."""
-    card.column.addWidget(_label(TITLE, "mocktitle"))
-    for knob in KNOBS:
-        card.column.addWidget(_label(line(knob), "mockline"))
-    below = QHBoxLayout()
-    below.setSpacing(4)
-    below.addStretch(1)
-    below.addWidget(card.verbs)
-    card.column.addLayout(below)
-
-
-def _shape_table(card: MockCard) -> None:
-    """The knobs as name and value in two columns."""
-    card.column.addLayout(_head(_label(TITLE, "mocktitle"), card.verbs))
-    card.column.addLayout(_knob_grid())
-
-
-def _shape_bar(card: MockCard) -> None:
-    """The head lifted into a strip of its own, full bleed to the card's edges,
-    with the step's icon ahead of its name and a meter across the card's foot.
-
-    Which is why this shape takes the card's margins away and gives them back
-    inside the three parts: a strip inset by 8px is a panel sitting on a card,
-    and the argument here is that the title is the card's lid.
-
-    The icon leads the title rather than sitting with the verbs at the other end.
-    It is not a verb — nothing happens when it is clicked — and a glyph in a row
-    of four things that do act is a fifth button that refuses to be pressed. Ahead
-    of the name it is read as part of the name: what *kind* of step this is,
-    answered before the name says which one, which is what makes a column of
-    twenty scannable by shape before it is read by word.
+    The chain is ordered and nothing else on the card says so. The index rail
+    the earlier bench drew spent 22px of every card's width saying it; in the
+    strip it costs a dozen pixels of a row that already exists. What it costs
+    instead is the lead position: the glyph said what *kind* of step this is
+    before the name said which one, and a number says neither. The index is
+    `DIM` and tabular-width so a two-digit step does not shove the title.
     """
-    card.column.setContentsMargins(0, 0, 0, 0)
-    card.column.setSpacing(0)
+    return f"""
+        #mock {{
+            background: {rgb(PANEL)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
+        }}
+        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
+        #mockbar {{
+            background: {rgb(STACK_BG)};
+            border-bottom: 1px solid {rgb(LINE)};
+        }}
+        #mocklead {{ color: {rgb(ACCENT if selected else DIM)}; font-weight: 600; }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
+        #mockname {{ color: {rgb(DIM)}; }}
+        #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
+        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
+    """
 
-    bar = QWidget()
-    bar.setObjectName("mockbar")
-    bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-    inside = QHBoxLayout(bar)
-    inside.setContentsMargins(8, 5, 6, 5)
-    inside.setSpacing(4)
-    inside.addWidget(_glyph(GLYPH, ACCENT if card.selected else DIM))
-    inside.addWidget(_label(TITLE, "mocktitle"), 1)
-    inside.addWidget(card.verbs)
-    card.column.addWidget(bar)
 
-    body = _knob_grid()
-    body.setContentsMargins(8, 7, 8, 8)
-    card.column.addLayout(body)
+def _bar_borderless(selected: bool) -> str:
+    """The card's hairline dropped entirely; the strip and the meter bound it.
 
-    card.column.addWidget(_meter(FULL))
+    This is the old `flat` argument asked again where it is strongest. A card
+    with a dark lid and a dark foot already has a top and a bottom edge that are
+    darker than its fill, so the hairline around it is drawing a boundary that
+    is mostly already drawn, and the sides are held by the gutter. What it gives
+    up is the same thing `flat` gave up — the card's left and right edges, which
+    only matter against a pane the same colour as the card.
+
+    Selection has to move somewhere with the border gone, so it is on the body
+    fill and the title, and the meter's accent is doing more work here than
+    anywhere else on the bench.
+    """
+    return f"""
+        #mock {{
+            background: {rgb(PANEL_HOT if selected else PANEL)};
+            border: 0;
+        }}
+        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
+        #mockbar {{ background: {rgb(STACK_BG)}; }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
+        #mockname {{ color: {rgb(DIM)}; }}
+        #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
+        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
+    """
 
 
-#: How tall the meter is, and the number the look is named for. Four pixels is
-#: the smallest bar that still reads as a length rather than as a hairline that
-#: happens to be two colours, and it is small enough that a card carrying one is
-#: not a card carrying a progress widget.
+def _bar_meter_high(selected: bool) -> str:
+    """The meter moved from the foot to directly under the strip.
+
+    All of the card's chrome then sits in one block at the top — lid, progress,
+    then contents — and the card's bottom edge is the plain hairline every other
+    card in the column has, which is easier to keep aligned than a coloured
+    foot. Against it: a bar immediately under a title is the shape every browser
+    and installer uses for *this title is loading*, so the eye attaches it to the
+    header rather than to the step. The groove is `PANEL` here and not
+    `STACK_BG`, since it now sits on the body's fill rather than on the card's
+    edge, and a `STACK_BG` groove there would read as a second divider.
+    """
+    return f"""
+        #mock {{
+            background: {rgb(PANEL)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
+        }}
+        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
+        #mockbar {{
+            background: {rgb(STACK_BG)};
+            border-bottom: 1px solid {rgb(LINE)};
+        }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
+        #mockname {{ color: {rgb(DIM)}; }}
+        #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(PANEL)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
+        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
+    """
+
+
+def _bar_meter_inset(selected: bool) -> str:
+    """A 6px rounded meter inset to the body's margin instead of a 4px foot.
+
+    Which makes it a progress *widget* rather than the card's foot, and that is
+    the argument: a bar with ends and a visible groove is read as a measurement
+    of the thing above it, where a full-bleed 4px strip is read as an edge that
+    happens to be two colours. The cost is that the card now contains a control
+    it does not contain, and 6px plus the margin is roughly triple the height
+    the foot version spends on every card whether or not it is running.
+    """
+    return f"""
+        #mock {{
+            background: {rgb(PANEL)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
+        }}
+        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
+        #mockbar {{
+            background: {rgb(STACK_BG)};
+            border-bottom: 1px solid {rgb(LINE)};
+        }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
+        #mockname {{ color: {rgb(DIM)}; }}
+        #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; border-radius: 3px; }}
+        #mockfull {{
+            background: {rgb(ACCENT if selected else DIM)};
+            border-radius: 3px;
+        }}
+        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
+    """
+
+
+def _bar_meter_divider(selected: bool) -> str:
+    """The strip's own divider *is* the meter: 2px, filled from the left.
+
+    The cheapest version of the idea — the card grows by one pixel over a plain
+    hairline and by nothing at all over the divider it already had, so a chain
+    of twenty cards pays nothing in height for saying how far each has got. The
+    groove is `LINE`, the divider's colour, so an idle card looks exactly like a
+    card with a divider and a running one looks like the divider filling in.
+
+    Against it, and it is the same objection the 4px foot was chosen over:
+    two pixels is a hairline that happens to be two colours. It cannot be read
+    from across the pane, and on the card where progress matters most — a long
+    full-clip pass — the one number worth watching is the hardest thing on the
+    card to see.
+    """
+    return f"""
+        #mock {{
+            background: {rgb(PANEL)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
+        }}
+        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
+        #mockbar {{ background: {rgb(STACK_BG)}; }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
+        #mockname {{ color: {rgb(DIM)}; }}
+        #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(LINE)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
+        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
+    """
+
+
+def _bar_percent(selected: bool) -> str:
+    """The meter's number written out in the strip, before the verbs.
+
+    A bar answers *roughly how far*, and there is no length at which it answers
+    *how much longer*. The number does, and the strip is the one row on the card
+    with somewhere to put it — right-aligned against the verbs, `DIM`, so it
+    reads as chrome and not as a knob value.
+
+    Two costs. The number is the only text on the card that changes while
+    nothing is being dragged, and a column of twenty of them ticking is motion
+    the tuning loop did not ask for; and the strip is now four things wide, so
+    a step name has less room before it elides than in any other look here.
+    """
+    return f"""
+        #mock {{
+            background: {rgb(PANEL)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
+        }}
+        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
+        #mockbar {{
+            background: {rgb(STACK_BG)};
+            border-bottom: 1px solid {rgb(LINE)};
+        }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
+        #mockpct {{ color: {rgb(DIM)}; }}
+        #mockname {{ color: {rgb(DIM)}; }}
+        #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
+        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
+    """
+
+
+def _bar_hover(selected: bool) -> str:
+    """The committed dress, with the verbs hidden until the pointer arrives.
+
+    A dress of its own rather than `_bar` reused with `fade=True`, because the
+    two are different arguments and this file's rule is that a shared fragment
+    means editing one look changes another. The claim: four icons on every card
+    is twenty-four in a six-step chain, and a strip whose height is fixed
+    (`_STRIP`) can drop them and get them back without the card moving a pixel —
+    which is what made hover verbs unaffordable when the head was a text row
+    that sized itself. Resting cards are then a column of kinds and names.
+    The cost is the old one and it is not fixed by the strip: a verb nobody
+    hovers is a verb nobody finds.
+    """
+    return f"""
+        #mock {{
+            background: {rgb(PANEL)};
+            border: 1px solid {rgb(ACCENT if selected else LINE)};
+        }}
+        #mock:hover {{ background: {rgb(PANEL_HOT)}; }}
+        #mockbar {{
+            background: {rgb(STACK_BG)};
+            border-bottom: 1px solid {rgb(LINE)};
+        }}
+        #mocktitle {{
+            color: {rgb(ACCENT if selected else TEXT)};
+            font-weight: 600;
+        }}
+        #mockname {{ color: {rgb(DIM)}; }}
+        #mockvalue {{ color: {rgb(TEXT)}; }}
+        #mockmeter {{ background: {rgb(STACK_BG)}; }}
+        #mockfull {{ background: {rgb(ACCENT if selected else DIM)}; }}
+        QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
+    """
+
+
+# -- the chassis -----------------------------------------------------------
+#
+# What every header bar draws identically, held here rather than in each shape
+# for the reason the module docstring gives: these are the frame the looks are
+# argued inside, not the thing being argued about.
+
+#: How tall the strip is. Fixed rather than left to its contents, so a look that
+#: hides the verbs does not get a shorter lid than one that shows them — the
+#: gallery is read down a column and a header that changed height between looks
+#: would be a difference nobody asked for. Tall enough for a `QToolButton`
+#: holding a 16px icon, which is the tallest thing in the row.
+_STRIP = 28
+
+#: The body's margins: level with the strip's leading inset, so a knob name and
+#: the title above it stand on one x.
+_BODY = (8, 7, 8, 8)
+
+#: How tall the meter is where a look does not say otherwise, and the number the
+#: committed look was drawn with. Four pixels is the smallest bar that still
+#: reads as a length rather than as a hairline that happens to be two colours,
+#: and it is small enough that a card carrying one is not a card carrying a
+#: progress widget. `meter as the divider` and `inset meter` are the two looks
+#: arguing with that number, from either side of it.
 _METER = 4
 
 
-def _meter(full: float) -> QWidget:
-    """A 4px bar across the card's foot saying how far along the step is.
+def _chassis(card: MockCard, *pieces: QWidget | QLayout) -> None:
+    """Stack the card's parts full bleed, in order, with nothing between them.
+
+    The card's own margins go to zero and each piece gives itself back whatever
+    inset it wants. That is the whole of what makes a header bar a header bar: a
+    strip inset by 8px is a panel sitting on a card, and the argument every look
+    below is making is that the strip is the card's lid and the meter is its
+    foot.
+    """
+    card.column.setContentsMargins(0, 0, 0, 0)
+    card.column.setSpacing(0)
+    for piece in pieces:
+        if isinstance(piece, QWidget):
+            card.column.addWidget(piece)
+        else:
+            card.column.addLayout(piece)
+
+
+def _strip_row(card: MockCard, lead: QWidget, *tail: QWidget) -> QWidget:
+    """The lid: what the card leads with, its name, and the verbs at the far end.
+
+    `lead` is a widget and not a name, because the looks disagree about what
+    leads — a kind glyph on most of them, a step index on one. Whatever it is,
+    it is not a verb: nothing happens when it is pressed, and a glyph in a row
+    of four things that do act is a fifth button that refuses to be pressed.
+    Ahead of the name it is read as part of the name, which is what makes a
+    column of twenty scannable by shape before it is read by word.
+
+    `tail` is whatever goes between the title and the verbs, which is nothing on
+    every look but `percent in the strip`. The verbs are added last here rather
+    than passed in, so no look can accidentally put them anywhere but the end of
+    the row.
+    """
+    bar = QWidget()
+    bar.setObjectName("mockbar")
+    bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    bar.setFixedHeight(_STRIP)
+    inside = QHBoxLayout(bar)
+    inside.setContentsMargins(8, 0, 6, 0)
+    inside.setSpacing(4)
+    inside.addWidget(lead)
+    inside.addWidget(_label(TITLE, "mocktitle"), 1)
+    for extra in tail:
+        inside.addWidget(extra)
+    inside.addWidget(card.verbs)
+    return bar
+
+
+def _meter(full: float, height: int = _METER) -> QWidget:
+    """A bar across the card saying how far along the step is.
 
     The fill is a stretch factor and not a fixed width, so the bar stays right at
     any card width — the mocks are drawn at one width but the pane they will sit
@@ -465,15 +670,13 @@ def _meter(full: float) -> QWidget:
     be wrong the first time somebody drags the seam. Thousandths, because a
     stretch is an integer ratio and hundredths visibly quantise a slow bar.
 
-    Full bleed like the strip above it and for the same reason: inset by the
-    body's 8px it would be a widget lying on the card, and what it is is the
-    card's own foot. Both children are told to style their background, since a
-    plain `QWidget` ignores a sheet's `background` without it.
+    Both children are told to style their background, since a plain `QWidget`
+    ignores a sheet's `background` without it.
     """
     bar = QWidget()
     bar.setObjectName("mockmeter")
     bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-    bar.setFixedHeight(_METER)
+    bar.setFixedHeight(height)
 
     done = QWidget()
     done.setObjectName("mockfull")
@@ -493,9 +696,9 @@ def _glyph(name: str, colour: QColor) -> QLabel:
 
     A `QLabel` holding a pixmap and not a `QToolButton`: a tool button in the
     head would be hoverable and pressable, and this one means nothing when
-    pressed. Its colour is chosen here and not in the dress, because a pixmap is
-    not text and no stylesheet rule reaches inside one — which is the same trade
-    `icons/__init__.py` describes making for the verbs.
+    pressed. Its colour is chosen at the call site and not in the dress, because
+    a pixmap is not text and no stylesheet rule reaches inside one — which is the
+    same trade `icons/__init__.py` describes making for the verbs.
     """
     label = QLabel()
     label.setPixmap(icons.pixmap(name, colour))
@@ -503,34 +706,44 @@ def _glyph(name: str, colour: QColor) -> QLabel:
     return label
 
 
-def _shape_chip(card: MockCard) -> None:
-    """The title as a tag rather than as bold text.
+def _kind(card: MockCard) -> QLabel:
+    """The step's kind, tinted for the state the card is in. Accent when current
+    because the title beside it is, and a dim glyph next to an accent name reads
+    as an icon that failed to update rather than as chrome."""
+    return _glyph(GLYPH, ACCENT if card.selected else DIM)
 
-    The chip is added without a stretch factor and with the stretch after it, so
-    it is the width of the name it holds — a chip taking the row's remainder is
-    a header bar with rounded ends and not a tag.
+
+# -- the arrangements ------------------------------------------------------
+#
+# Each is handed the card and fills `card.column` out of the chassis above and
+# the content helpers at the bottom of the file, and holds nothing else.
+
+
+def _shape_head(card: MockCard) -> None:
+    """Title and verbs on one line, then one line per knob. What is built."""
+    card.column.addLayout(_head(_label(TITLE, "mocktitle"), card.verbs))
+    for knob in KNOBS:
+        card.column.addWidget(_label(line(knob), "mockline"))
+
+
+def _shape_bar(card: MockCard) -> None:
+    """Strip, table, 4px foot. The header bar as it stands."""
+    _chassis(card, _strip_row(card, _kind(card)), _inset(_knob_grid()), _meter(FULL))
+
+
+def _shape_bar_lines(card: MockCard) -> None:
+    """The same, with the body as one line per knob."""
+    _chassis(card, _strip_row(card, _kind(card)), _inset(_line_stack()), _meter(FULL))
+
+
+def _shape_bar_values(card: MockCard) -> None:
+    """The same, with the values at 15px and their names beside them.
+
+    The names go to the right of the values rather than above them: the strip
+    has already spent the card's top line on the step's name, and a second
+    label line under it would put two names over one number.
     """
-    chip = _label(TITLE, "mockchip")
-    chip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-    head = QHBoxLayout()
-    head.setSpacing(4)
-    head.addWidget(chip, 0)
-    head.addStretch(1)
-    head.addWidget(card.verbs)
-    card.column.addLayout(head)
-    card.column.addLayout(_knob_grid())
-
-
-def _shape_values_first(card: MockCard) -> None:
-    """The step name as a small caps eyebrow and each value as the big text.
-
-    The verbs stay on the eyebrow's line rather than dropping to the values',
-    which would put the row of icons at the same weight as the numbers it is
-    supposed to sit quietly beside.
-    """
-    card.column.addLayout(_head(_label(TITLE, "mockeyebrow"), card.verbs))
     grid = QGridLayout()
-    grid.setContentsMargins(0, 2, 0, 0)
     grid.setHorizontalSpacing(8)
     grid.setVerticalSpacing(2)
     for row, (name, value) in enumerate(KNOBS):
@@ -539,112 +752,115 @@ def _shape_values_first(card: MockCard) -> None:
         label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         grid.addWidget(label, row, 1)
     grid.setColumnStretch(1, 1)
-    card.column.addLayout(grid)
+    _chassis(card, _strip_row(card, _kind(card)), _inset(grid), _meter(FULL))
 
 
-def _shape_collapsed(card: MockCard) -> None:
+def _shape_bar_collapsed(card: MockCard) -> None:
     """One summary line at rest; the table only on the current card.
 
-    The verbs are on the head in both states rather than appearing with the
-    table. A verb that arrives only once the card is current is a verb that
+    The verbs stay in the strip in both states rather than arriving with the
+    table. A verb that appears only once the card is current is a verb that
     cannot be used to make a card current, and ✕ on a card you did not want to
     select is the commonest of the four.
     """
-    card.column.addLayout(_head(_label(TITLE, "mocktitle"), card.verbs))
     if card.selected:
-        card.column.addLayout(_knob_grid())
+        body: QLayout = _knob_grid()
     else:
-        card.column.addWidget(_label(" · ".join(v for _, v in KNOBS), "mocksum"))
+        body = QVBoxLayout()
+        body.setSpacing(0)
+        body.addWidget(_label(" · ".join(v for _, v in KNOBS), "mocksum"))
+    _chassis(card, _strip_row(card, _kind(card)), _inset(body), _meter(FULL))
 
 
-def _shape_rail(card: MockCard) -> None:
-    """A full-height leading rail holding the step index, then the usual head
-    and table in the room left over."""
-    card.column.setContentsMargins(0, 0, 0, 0)
-    card.column.setSpacing(0)
+def _shape_bar_numbered(card: MockCard) -> None:
+    """The index in the lead position instead of the kind glyph.
 
-    rail = QWidget()
-    rail.setObjectName("mockrail")
-    rail.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-    rail.setFixedWidth(22)
-    inside = QVBoxLayout(rail)
-    inside.setContentsMargins(0, 7, 0, 0)
-    index = _label(str(card.index), "mocklead")
-    index.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-    inside.addWidget(index)
-    inside.addStretch(1)
-
-    right = QVBoxLayout()
-    right.setContentsMargins(8, 6, 8, 8)
-    right.setSpacing(4)
-    right.addLayout(_head(_label(TITLE, "mocktitle"), card.verbs))
-    right.addLayout(_knob_grid())
-
-    beside = QHBoxLayout()
-    beside.setContentsMargins(0, 0, 0, 0)
-    beside.setSpacing(0)
-    beside.addWidget(rail)
-    beside.addLayout(right, 1)
-    card.column.addLayout(beside)
+    Given the glyph's fixed width so the titles down a column start on one x
+    whether the step is 3 or 12, and centred in it — a number that grew the lead
+    would shove every title on the card by a digit.
+    """
+    lead = _label(str(card.index), "mocklead")
+    lead.setFixedWidth(icons.SIZE)
+    lead.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    _chassis(card, _strip_row(card, lead), _inset(_knob_grid()), _meter(FULL))
 
 
-#: The shapes on the bench, in the order they are argued about. `as built` is
-#: first so every look below it is read as a change *from* something, and the
-#: real card stands above all of them in the gallery. The dress-only looks come
-#: before the rearrangements, since a reader who has not yet seen what selection
-#: costs cannot judge a shape that moves it somewhere else.
+def _shape_bar_meter_high(card: MockCard) -> None:
+    """The meter directly under the strip instead of across the foot."""
+    _chassis(
+        card, _strip_row(card, _kind(card)), _meter(FULL), _inset(_knob_grid())
+    )
+
+
+def _shape_bar_meter_inset(card: MockCard) -> None:
+    """A taller meter held off the card's edges by the body's own margin."""
+    held = QHBoxLayout()
+    held.setContentsMargins(8, 0, 8, 8)
+    held.addWidget(_meter(FULL, 6))
+    body = _inset(_knob_grid())
+    body.setContentsMargins(8, 7, 8, 6)
+    _chassis(card, _strip_row(card, _kind(card)), body, held)
+
+
+def _shape_bar_meter_divider(card: MockCard) -> None:
+    """No foot: the 2px line under the strip is the meter.
+
+    The strip's own `border-bottom` is dropped in this look's dress, so the
+    meter is the divider rather than sitting under one — two lines there would
+    be three pixels of chrome pretending to be one.
+    """
+    _chassis(
+        card, _strip_row(card, _kind(card)), _meter(FULL, 2), _inset(_knob_grid())
+    )
+
+
+def _shape_bar_percent(card: MockCard) -> None:
+    """The meter's number in the strip, between the title and the verbs."""
+    percent = _label(f"{round(FULL * 100)}%", "mockpct")
+    _chassis(
+        card,
+        _strip_row(card, _kind(card), percent),
+        _inset(_knob_grid()),
+        _meter(FULL),
+    )
+
+
+def _shape_bar_accent(card: MockCard) -> None:
+    """The committed arrangement with everything in the lid tinted for it.
+
+    Its own shape and not `_shape_bar` reused, for the reason `_glyph` exists at
+    all: a pixmap's colour is chosen where it is built, and on a selected card
+    here the strip behind it is the accent, so the `ACCENT` glyph and the `DIM`
+    verbs every other look leads with would be smudges on a teal bar. All of
+    them go to `STACK_BG`, which is what the title beside them uses.
+
+    The verbs are rebuilt rather than recoloured, since the card hands its
+    arrangement a row it has already made. Their hover colour goes to `STACK_BG`
+    too, which is the accent lid's third cost and the one nothing can be done
+    about: the accent is already on the strip, so there is none left to mark the
+    verb under the pointer with, and the `autoRaise` frame is all that is left
+    saying which one is about to be pressed.
+    """
+    if card.selected:
+        card.verbs = _verb_row(STACK_BG, STACK_BG)
+    lead = _glyph(GLYPH, STACK_BG if card.selected else DIM)
+    _chassis(card, _strip_row(card, lead), _inset(_knob_grid()), _meter(FULL))
+
+
+#: The looks on the bench, in the order they are argued about. `as built` is
+#: first and is the only one that is not a header bar — the real card stands
+#: above it in the gallery and the two together are what makes drift visible.
+#: Then the header bar as it stands, then the looks that vary its body, then its
+#: strip, then its meter: a reader who has not seen the chassis whole cannot
+#: judge a variation on one third of it.
 LOOKS: tuple[Look, ...] = (
     Look(
         "as built, redrawn",
         "the current dress, drawn by this file — if it differs from the real "
-        "card above, this file has drifted and is what to fix",
+        "card above, this file has drifted and is what to fix. The only look "
+        "here with no header bar, kept as the thing the rest are changes from",
         _as_built,
         _shape_head,
-    ),
-    Look(
-        "verbs on hover",
-        "four icons on every card is twenty-four icons in a six-step chain; "
-        "hidden until the pointer arrives, the column is only titles and values "
-        "— and a verb nobody hovers is a verb nobody finds",
-        _as_built,
-        _shape_head,
-        fade=True,
-    ),
-    Look(
-        "verbs below",
-        "the title line becomes only the title, so a long step name has the "
-        "whole width before it elides; costs a row of height on every card",
-        _as_built,
-        _shape_verbs_below,
-    ),
-    Look(
-        "fill, not edge",
-        "selection as a filled panel — reads from further away than a 3px edge, "
-        "and collides with hover, which is also a fill",
-        _fill,
-        _shape_head,
-    ),
-    Look(
-        "accent rule on top",
-        "the same accent across the card's lid instead of down its side",
-        _rule,
-        _shape_head,
-    ),
-    Look(
-        "flat, no hairline",
-        "borders dropped; the gutter and the fill do the separating",
-        _flat,
-        _shape_head,
-    ),
-    Look(
-        "table",
-        "knob names left and values in a right-aligned column of their own, so "
-        "a chain's numbers land on one x and are read by moving the eye "
-        "straight down; the ragged `name — value` line cannot be scanned that "
-        "way. Costs the names their weight, and a value long enough to reach "
-        "the names is a value that will collide with one",
-        _table,
-        _shape_table,
     ),
     Look(
         "header bar",
@@ -661,41 +877,118 @@ LOOKS: tuple[Look, ...] = (
         _shape_bar,
     ),
     Look(
-        "title as a chip",
-        "the name as a filled tag, which is where selection lives too, so the "
-        "card carries no accent edge — one mark instead of two down one side, "
-        "and the mark is on the thing that names the card. Costs the width of "
-        "the tag's padding, and a long name makes a very wide tag",
-        _chip,
-        _shape_chip,
+        "lines, not a table",
+        "the same chassis with `sensitivity — 0.42` per knob instead of two "
+        "columns. A line is read as a sentence and a table as data; the table "
+        "puts every value in a chain on one x, and the line keeps the knob's "
+        "name at the weight of the thing it names. Cheapest to fill from a step "
+        "that has not decided how many knobs it has",
+        _bar_lines,
+        _shape_bar_lines,
     ),
     Look(
         "values first",
-        "the numbers at fifteen pixels and the step name a small caps eyebrow "
-        "above them — a tuned chain is scanned for values, and this is the only "
-        "look where they are reachable from the far side of the pane. Costs the "
-        "most height of anything here, and a chain nobody has tuned yet is a "
-        "column of large meaningless numbers over quiet names",
-        _values_first,
-        _shape_values_first,
+        "the numbers at fifteen pixels in the body, reachable from the far side "
+        "of the pane, with the step's name left to the strip — the pairing the "
+        "old `values first` could not make, since it had to spend the head on an "
+        "eyebrow to get the numbers top billing. Costs the most height here, and "
+        "a chain nobody has tuned yet is a column of large meaningless numbers",
+        _bar_values,
+        _shape_bar_values,
     ),
     Look(
         "collapsed until current",
         "values folded to one dim summary line at rest and opened to the table "
-        "only on the current card — twenty steps fit in the pane at once. Costs "
-        "the thing the fold is for: the values you scan a chain for are the "
-        "ones now hidden, and the column reflows every time selection moves",
-        _collapsed,
-        _shape_collapsed,
+        "only on the current card — twenty steps fit in the pane at once, and "
+        "the chrome above and below the fold does not move when selection does. "
+        "Costs the thing the fold is for: the values you scan a chain for are "
+        "the ones now hidden",
+        _bar_collapsed,
+        _shape_bar_collapsed,
     ),
     Look(
-        "index rail",
-        "a full-height leading rail holding the step number, carrying the "
-        "accent instead of the edge — the chain is ordered and this is the only "
-        "look that says so. Costs 22px of every card, including the cards in a "
-        "list that has no order at all",
-        _rail,
-        _shape_rail,
+        "accent strip",
+        "the lid itself takes the accent on the current card and the border "
+        "gives it up — one selection mark instead of two, and it reads from "
+        "across the room. This is the arrangement the committed look wrote a "
+        "paragraph refusing: with the strip painted differently, the eye reads a "
+        "different *kind* of card rather than the same card selected. Drawn so "
+        "the refusal can be checked instead of taken. Costs the verbs their "
+        "hover tint on the current card — the accent is under them now",
+        _bar_accent,
+        _shape_bar_accent,
+    ),
+    Look(
+        "numbered strip",
+        "the step's index in the lead position instead of its kind — the chain "
+        "is ordered and nothing else on the card says so, and the strip says it "
+        "for a dozen pixels where the old index rail spent 22 of every card's "
+        "width. Costs the lead: a glyph says what kind of step this is before "
+        "the name says which one, and a number says neither",
+        _bar_numbered,
+        _shape_bar_numbered,
+    ),
+    Look(
+        "borderless",
+        "the hairline dropped: a dark lid and a dark foot already give the card "
+        "a top and a bottom edge, and the gutter holds the sides. Quietest thing "
+        "on the bench in a long column. Costs the one thing a border does that a "
+        "lid and a gutter cannot — saying where a card ends when the pane behind "
+        "it is the card's own colour",
+        _bar_borderless,
+        _shape_bar,
+    ),
+    Look(
+        "meter under the head",
+        "the meter moved from the foot to under the strip, so all the chrome is "
+        "one block at the top and the card's bottom edge stays a plain hairline. "
+        "Costs the meter its subject: a bar directly under a title is the shape "
+        "every installer uses for *this title is loading*, and the eye attaches "
+        "it to the header rather than to the step",
+        _bar_meter_high,
+        _shape_bar_meter_high,
+    ),
+    Look(
+        "inset meter",
+        "6px, rounded, held off the card's edges by the body's margin — a bar "
+        "with ends reads as a measurement of the card, where a full-bleed 4px "
+        "strip reads as an edge that happens to be two colours. Costs about "
+        "triple the height, and makes the card look like it contains a control "
+        "it does not contain",
+        _bar_meter_inset,
+        _shape_bar_meter_inset,
+    ),
+    Look(
+        "meter as the divider",
+        "no foot at all: the 2px line under the strip is the meter, so progress "
+        "costs the card nothing in height over the divider it already had. Costs "
+        "legibility, which is the whole point of a meter — on the long full-clip "
+        "pass where progress matters most, it is the hardest thing on the card "
+        "to see",
+        _bar_meter_divider,
+        _shape_bar_meter_divider,
+    ),
+    Look(
+        "percent in the strip",
+        "the meter's number written out before the verbs, because a bar answers "
+        "*roughly how far* at any length and never answers *how much longer*. "
+        "Costs the title its room — the strip is four things wide now — and puts "
+        "the only text on the card that changes while nothing is being dragged "
+        "into twenty cards at once",
+        _bar_percent,
+        _shape_bar_percent,
+    ),
+    Look(
+        "verbs on hover",
+        "the strip holds only the kind and the name until the pointer arrives. "
+        "Four icons on every card is twenty-four in a six-step chain, and a "
+        "fixed-height strip can drop them and get them back without the card "
+        "moving a pixel — which is what made this unaffordable when the head "
+        "sized itself. Costs the old thing hover costs: a verb nobody hovers is "
+        "a verb nobody finds",
+        _bar_hover,
+        _shape_bar,
+        fade=True,
     ),
 )
 
@@ -725,7 +1018,7 @@ class MockCard(QFrame):
 
         #: Read by the arrangements. `selected` because a shape is allowed to
         #: differ between the two states, and `index` because one of them puts a
-        #: step number on the card.
+        #: step number in the strip.
         self.selected = selected
         self.index = index
 
@@ -738,9 +1031,10 @@ class MockCard(QFrame):
         self.column.setSpacing(4)
         look.shape(self)
 
-        #: Hidden rather than left out, so the card is the height it would be
-        #: with the row showing and does not jump under the pointer — which is
-        #: half of what this look has to be judged on.
+        #: Hidden rather than left out. On the un-headered baseline this is what
+        #: keeps the card the height it would be with the row showing; on a
+        #: header bar the strip's fixed height already guarantees that, which is
+        #: half of what `verbs on hover` is claiming.
         self._fades = look.fade
         if self._fades:
             self.verbs.setVisible(False)
@@ -759,8 +1053,16 @@ class MockCard(QFrame):
 # -- what every arrangement is drawn holding -------------------------------
 
 
+def _inset(body: QLayout) -> QLayout:
+    """A body layout given the card's margins back, since the chassis took the
+    card's own away. Handed the layout and returning it, so a shape reads as one
+    expression rather than as three statements about margins."""
+    body.setContentsMargins(*_BODY)
+    return body
+
+
 def _head(title: QLabel, verbs: QWidget) -> QHBoxLayout:
-    """The title with the verbs at the end of its line.
+    """The title with the verbs at the end of its line, for the baseline.
 
     The title takes the row's remainder rather than a stretch sitting after it,
     the way `project_list/card.py` does: a label reports no width of its own
@@ -796,9 +1098,26 @@ def _knob_grid() -> QGridLayout:
     return grid
 
 
-def _verb_row() -> QWidget:
+def _line_stack() -> QVBoxLayout:
+    """The knobs as one `name — value` line each, which is what is built."""
+    stack = QVBoxLayout()
+    stack.setContentsMargins(0, 0, 0, 0)
+    stack.setSpacing(4)
+    for knob in KNOBS:
+        stack.addWidget(_label(line(knob), "mockline"))
+    return stack
+
+
+def _verb_row(normal: QColor = DIM, active: QColor = ACCENT) -> QWidget:
     """The four icons as one widget, so a look can move them or hide them
-    without the arrangement having to know there are four."""
+    without the arrangement having to know there are four.
+
+    The two colours are arguments because one look draws the verbs on an accent
+    lid, where the defaults are a grey icon and a teal hover both sitting on
+    teal. A pixmap's colour is chosen where it is built and no sheet reaches
+    inside one, so a look that changes the ground under the verbs has to hand
+    them their colours here.
+    """
     row = QWidget()
     layout = QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
@@ -808,7 +1127,7 @@ def _verb_row() -> QWidget:
     layout.setSpacing(4)
     for glyph, tip in _VERBS:
         button = QToolButton()
-        button.setIcon(icons.icon(glyph))
+        button.setIcon(icons.icon(glyph, normal, active))
         button.setIconSize(QSize(icons.SIZE, icons.SIZE))
         button.setAutoRaise(True)
         button.setToolTip(tip)

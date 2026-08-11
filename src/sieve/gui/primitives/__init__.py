@@ -32,7 +32,14 @@ of reason: focus is not a card's decision or a form's, it is where the keyboard
 is pointing, and a tree with two answers to that has none. Held here rather than
 in whichever view first wanted somewhere to type.
 
-`view.py` is the third shape and is under the other two rather than beside them:
+`slider.py` is the third control and is the first thing here that arrived the
+ordinary way rather than ahead of a view: preferences had built one, the mockup
+had settled the same shape, and the tuning pane this project is for wants a third
+— which is the same *two views turned out to be drawing this* that lifted the
+card and the sections, and not the budget argument the two controls above it were
+settled on.
+
+`view.py` is the fourth shape and is under the other two rather than beside them:
 the head a pane wears was the stack's band until a view that is not a column of
 cards wanted the same line at its top, and it moved here so that a head is one
 decision rather than one per pane. Everything a view stands in starts as one of
@@ -46,6 +53,7 @@ from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.sections import Section, SectionCard
+from sieve.gui.primitives.slider import Slider
 from sieve.gui.primitives.stack import CardStack
 from sieve.gui.primitives.view import View
 
@@ -62,5 +70,6 @@ __all__ = [
     "Section",
     "SectionCard",
     "SectionNav",
+    "Slider",
     "View",
 ]

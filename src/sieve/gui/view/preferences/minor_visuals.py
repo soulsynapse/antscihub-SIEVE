@@ -47,24 +47,18 @@ from PySide6.QtWidgets import (
     QLabel,
     QScrollArea,
     QSizePolicy,
-    QSlider,
     QVBoxLayout,
     QWidget,
 )
 
 from sieve.gui import metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
+from sieve.gui.primitives import Slider
 
 #: The gap between rows and the margin around them, one number for both, for the
 #: reason every other column here uses one: the outermost row sits off the
 #: panel's edge by the distance it sits off its neighbour.
 _GUTTER = 8
-
-#: The slider's parts. The groove is a hairline in `LINE` because it is a track
-#: and not a control; the part behind the handle is the accent, so the answer to
-#: *how far along is this* is readable without finding the handle first.
-_GROOVE = 3
-_HANDLE = 12
 
 #: The widest reading a value can take — a sign, two digits, a space, a unit —
 #: measured rather than guessed at a pixel count, because the readouts are drawn
@@ -78,9 +72,10 @@ def _sheet() -> str:
     it is set on a widget standing inside a card whose sheet is already on an
     ancestor, and a bare `QLabel` rule here would reach the card's heading.
 
-    The `QSlider` rules are the one exception to that and have to be, since a
-    slider has no object name of its own here and its sub-controls are addressed
-    by class. They stay safe because this widget holds no slider it did not make.
+    There is no exception to that any more. The sliders dress themselves
+    (`primitives/slider.py`), which is where the class-scoped `QSlider` rules
+    this used to carry went — they were safe only while this widget held no
+    slider it had not made.
     """
     return f"""
         #mvpanel {{
@@ -105,23 +100,6 @@ def _sheet() -> str:
         }}
         #mvgloss {{ color: {rgb(DIM)}; font-size: {metrics.pt("gloss")}pt; }}
         #mvvalue {{ color: {rgb(ACCENT)}; font-size: {metrics.pt("name")}pt; }}
-        QSlider::groove:horizontal {{
-            background: {rgb(LINE)};
-            height: {_GROOVE}px;
-            border-radius: {_GROOVE // 2}px;
-        }}
-        QSlider::sub-page:horizontal {{
-            background: {rgb(ACCENT)};
-            height: {_GROOVE}px;
-            border-radius: {_GROOVE // 2}px;
-        }}
-        QSlider::handle:horizontal {{
-            background: {rgb(ACCENT)};
-            width: {_HANDLE}px;
-            border-radius: {_HANDLE // 2}px;
-            margin: -{(_HANDLE - _GROOVE) // 2}px 0;
-        }}
-        QSlider::handle:horizontal:hover {{ background: {rgb(TEXT)}; }}
         QScrollBar:vertical {{
             background: {rgb(PANEL_HOT)};
             width: 8px;
@@ -271,7 +249,9 @@ class _Row(QFrame):
     itself, which is what lets the gloss be a sentence rather than a fragment
     cut to fit beside a control. The slider is under both and takes the row's
     whole width — the range is small enough that a short slider would put two
-    values on one pixel, and there is nothing to its right worth the room.
+    values on one pixel, and there is nothing to its right worth the room. That
+    the wheel rolls past it rather than moving it is `primitives/slider.py`'s,
+    and matters most here: these rows live in a scroll deep enough to need one.
 
     It reports where it was dragged to and sets nothing. Which is the same split
     the palette rows make and for the stronger reason here: the value this row
@@ -326,10 +306,7 @@ class _Row(QFrame):
         note.setObjectName("mvgloss")
         note.setWordWrap(True)
 
-        self._slider = _Slider()
-        self._slider.setRange(low, high)
-        self._slider.setSingleStep(1)
-        self._slider.setPageStep(1)
+        self._slider = Slider(low, high)
         self._slider.valueChanged.connect(self.moved)
 
         column = QVBoxLayout(self)
@@ -355,14 +332,12 @@ class _Row(QFrame):
     def refresh(self) -> None:
         """Put the slider where the setting is and say what that comes to.
 
-        `setValue` to the value already held emits nothing, so this is safe to
-        call from the slot the slider's own move ends up in — which is exactly
-        where it is called from, since every row refreshes on `metrics.CHANGED`
-        and one of the rows is what caused it.
+        `show_value` is the silent move and is what makes this safe to call from
+        the slot the slider's own move ends up in — which is exactly where it is
+        called from, since every row refreshes on `metrics.CHANGED` and one of
+        the rows is what caused it.
         """
-        self._slider.blockSignals(True)
-        self._slider.setValue(self._held())
-        self._slider.blockSignals(False)
+        self._slider.show_value(self._held())
         shown = self._shown() if self._shown is not None else self._held()
         self._value.setText(f"{shown} {self._unit}")
         # Measured now rather than fixed at a pixel count, because the font this
@@ -370,26 +345,3 @@ class _Row(QFrame):
         # a different width at 7pt and at 20, and a box sized for one clips or
         # gapes at the other.
         self._value.setFixedWidth(self._value.fontMetrics().horizontalAdvance(_WIDEST))
-
-
-class _Slider(QSlider):
-    """A horizontal slider that lets the wheel past it.
-
-    The rows live in a scroll, and a `QSlider` takes the wheel whether or not it
-    has focus — so a user rolling down this section to reach the last row would
-    change every setting they passed on the way, with no gesture anywhere in
-    that saying they meant to touch any of them. Refused here rather than on the
-    row, because the child is what the event reaches first and a parent cannot
-    decline on its behalf; ignoring it is what sends it up to the scroll.
-
-    The keyboard still moves it, which is the point of keeping focus reachable:
-    ← and → on a focused slider are a deliberate gesture in a way the wheel over
-    an unfocused one is not.
-    """
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(Qt.Orientation.Horizontal, parent)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
-    def wheelEvent(self, event) -> None:
-        event.ignore()

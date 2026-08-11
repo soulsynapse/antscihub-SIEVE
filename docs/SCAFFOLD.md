@@ -51,6 +51,7 @@
         - 📄 `field.py` — The text field, and the labelled frame with the focus ring around it.
         - 📄 `nav.py` — The sections down the left of a card, and which one is being read.
         - 📄 `sections.py` — A card of sections: a list down the left, one of them read on the right.
+        - 📄 `slider.py` — The horizontal slider — the control the interactive loop exists for.
         - 📄 `stack.py` — The ground a column of cards lives on, under the head every view wears.
         - 📄 `view.py` — The head a pane wears, and the room under it: the chassis every view stands in.
       - 📁 `view/` — The views: what stands in a pane, one folder each.

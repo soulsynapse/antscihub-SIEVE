@@ -40,3 +40,7 @@ This document is for my own thoughts on the process. It is not binding, it is ju
 
 - Figure out if you can pin point the window when it happened, then use more expensive tools on just those windows if necessary
 - Downsampling regimes can *improve* signal (e.g., overcoming compression artifacts)
+
+## Communicating limitations
+
+- Computer vision isn't going to recover what you can't make out in the video to begin with.

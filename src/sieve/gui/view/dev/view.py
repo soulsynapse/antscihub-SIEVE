@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QWidget
 
 from sieve.gui.primitives import Section, SectionCard
 from sieve.gui.view.dev.card_mockups import CardMockups
+from sieve.gui.view.dev.title_mockups import TitleMockups
 
 #: How wide and tall the bench stands. Bigger than preferences and for the
 #: opposite reason: preferences holds rows of a label and a control, where extra
@@ -43,6 +44,11 @@ def _sections() -> tuple[Section, ...]:
             "card mock ups",
             "the shapes a card could take, drawn beside each other",
             CardMockups(),
+        ),
+        Section(
+            "title mock ups",
+            "the shapes a pane's head could take, over the pane it heads",
+            TitleMockups(),
         ),
         Section("palette", "every colour in `palette.py`, on the ground it is used on"),
         Section(

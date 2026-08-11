@@ -54,6 +54,9 @@
           - 📁 `card_mockups/` — Card mock ups: the shapes a card could take, drawn beside each other.
             - 📄 `look.py` — One way a card could look, and the handful of ways being considered.
             - 📄 `view.py` — The looks laid out one under another, each shown selected and not.
+          - 📁 `title_mockups/` — Title mock ups: the shapes a pane's head could take, drawn beside each other.
+            - 📄 `look.py` — One way a pane's head could look, and the handful being considered.
+            - 📄 `view.py` — The heads laid out one under another, each over a stub of the pane it heads.
           - 📄 `gallery.py` — A scrolling column of alternatives, each under its name and its argument.
           - 📄 `view.py` — The dev bench as a card: the sections there are, and what each is for.
         - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.

@@ -12,6 +12,7 @@ import sys
 
 from PySide6.QtWidgets import QWidget
 
+from sieve.gui import palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 
 
@@ -62,19 +63,26 @@ def stylesheet() -> str:
     """
 
 
-def darken_title_bar(window: QWidget) -> None:
-    """Ask DWM for the dark frame, since Qt does not carry the palette there.
+def dress_title_bar(window: QWidget) -> None:
+    """Ask DWM for the frame that matches the palette, since Qt does not carry
+    one there.
 
     The title bar is the OS's, not Qt's: without this the window wears the
-    system light frame over a dark app whatever the stylesheet says. Attribute
-    20 is `DWMWA_USE_IMMERSIVE_DARK_MODE`; on anything that is not a recent
-    Windows the call simply fails and the frame stays the platform's.
+    system frame whatever the stylesheet says, which under the dark palettes is
+    a light bar over a dark application. Attribute 20 is
+    `DWMWA_USE_IMMERSIVE_DARK_MODE`; on anything that is not a recent Windows
+    the call simply fails and the frame stays the platform's.
+
+    Asked for on every palette change and not once at startup, because the
+    answer is not a constant: half the palettes want the light bar back, and a
+    window that only ever darkened it would put a dark frame over `paper`.
     """
     if sys.platform != "win32":
         return
     try:
         from ctypes import byref, c_int, windll
 
-        windll.dwmapi.DwmSetWindowAttribute(int(window.winId()), 20, byref(c_int(1)), 4)
+        dark = c_int(1 if palette.current().dark else 0)
+        windll.dwmapi.DwmSetWindowAttribute(int(window.winId()), 20, byref(dark), 4)
     except (OSError, AttributeError, ImportError):
         pass

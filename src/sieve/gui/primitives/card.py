@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import icons
+from sieve.gui import icons, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 
 #: How wide the selected card's leading edge is. Wide enough to read from the
@@ -115,6 +115,7 @@ class Card(QFrame):
         column.addLayout(self._body)
 
         self._dress()
+        palette.CHANGED.connect(self._restyle)
 
     def _button(
         self, glyph: str, name: str, tip: str, signal: SignalInstance
@@ -218,6 +219,26 @@ class Card(QFrame):
             #title {{ color: {rgb(TEXT)}; font-weight: 600; }}
             QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
         """)
+
+    def _restyle(self) -> None:
+        """The sheet again in the palette now in use, and the icons drawn again
+        with it.
+
+        The icons are the half a sheet cannot reach. A `QIcon` is three pixmaps
+        drawn at the colours the palette held when the button was built, so a
+        card that only re-set its stylesheet would come back in the new greys
+        wearing the old palette's glyphs. The pin goes through `set_pinned`
+        rather than being rebuilt here, because its colour is its state and only
+        that verb knows both.
+        """
+        for button, glyph in (
+            (self._open, _OPEN),
+            (self._swap, _SWAP),
+            (self._remove, _REMOVE),
+        ):
+            button.setIcon(icons.icon(glyph))
+        self.set_pinned(self._pinned)
+        self._dress()
 
     # -- what the pointer does ---------------------------------------------
 

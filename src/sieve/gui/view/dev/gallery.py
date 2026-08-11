@@ -24,8 +24,9 @@ from __future__ import annotations
 
 from typing import Iterable, NamedTuple
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QLabel,
     QScrollArea,
@@ -33,6 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sieve.gui import palette
 from sieve.gui.palette import DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 
 #: The gap between blocks and the margin around the column, one number for both,
@@ -105,7 +107,6 @@ class Gallery(QWidget):
         super().__init__(parent)
         self.setObjectName("gallery")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(sheet())
 
         column = QWidget()
         column.setObjectName("gcolumn")
@@ -118,17 +119,50 @@ class Gallery(QWidget):
         # down whatever height the bench ends up with.
         stack.addStretch(1)
 
-        scroll = QScrollArea()
-        scroll.setObjectName("gscroll")
-        scroll.setWidget(column)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        #: Held so a restyle can wake it — see `_restyle`.
+        self._scroll = QScrollArea()
+        self._scroll.setObjectName("gscroll")
+        self._scroll.setWidget(column)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         body = QVBoxLayout(self)
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
-        body.addWidget(scroll)
+        body.addWidget(self._scroll)
+
+        # Last, because the restyle reaches for the scroll and there has to be
+        # one to reach for.
+        self._restyle()
+        palette.CHANGED.connect(self._restyle)
+
+    def _restyle(self) -> None:
+        """The gallery's own rules again, and the scroll told to measure again.
+
+        The second half is not optional here, and it is this scroll and not
+        every scroll that needs it. A `QScrollArea` sizes the widget it holds
+        from that widget's hint, and it recomputes on a layout request — one it
+        has already answered by the time the drawings inside have finished
+        changing shape, because a section's rebuild happens in a slot on the
+        same signal. Left alone the column keeps the height it wanted before,
+        and every block in it is squeezed to fit a column shorter than its
+        contents.
+
+        Deferred to a zero timer rather than posted as an event, and that is not
+        style. Qt compresses queued layout requests: one posted while the
+        scroll's own is still in the queue is dropped on the floor, and the
+        surviving one is the early answer that was wrong. A timer is a different
+        queue and cannot be folded into that, so it lands after the whole
+        emission — whichever order the slots on `CHANGED` ran in.
+        """
+        self.setStyleSheet(sheet())
+        QTimer.singleShot(0, self, self._remeasure)
+
+    def _remeasure(self) -> None:
+        """Ask the scroll to size its contents again, now that they have
+        stopped changing shape."""
+        QApplication.sendEvent(self._scroll, QEvent(QEvent.Type.LayoutRequest))
 
 
 def _block(variant: Variant) -> QWidget:

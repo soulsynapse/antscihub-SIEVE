@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sieve.gui import palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 from sieve.gui.primitives.nav import SectionNav
 
@@ -126,7 +127,14 @@ class SectionCard(QWidget):
         super().__init__(parent)
         self.setObjectName("sections")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(_sheet())
+        self._restyle()
+        # A stylesheet is a string built from the palette's values as they were,
+        # so it is remade when they change. The same pair appears on every widget
+        # here that dresses itself with one, and it is always a bound method and
+        # never a lambda: PySide6 holds a receiver's bound method weakly and
+        # drops the connection when the widget goes, where a lambda closing over
+        # `self` would keep a dead card subscribed and call into it.
+        palette.CHANGED.connect(self._restyle)
         self.setFixedWidth(width)
         self.setFixedHeight(height)
         # Its own size and no more: the overlay centres it, so a card that asked
@@ -186,6 +194,9 @@ class SectionCard(QWidget):
         column.addLayout(head)
         column.addWidget(subtitle)
         column.addLayout(body, 1)
+
+    def _restyle(self) -> None:
+        self.setStyleSheet(_sheet())
 
     def _show_section(self, index: int) -> None:
         """Turn the right side to the section now being stood on. Out of range

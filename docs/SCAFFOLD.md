@@ -58,12 +58,13 @@
           - 📄 `gallery.py` — A scrolling column of alternatives, each under its name and its argument.
           - 📄 `view.py` — The dev bench as a card: the sections there are, and what each is for.
         - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.
+          - 📄 `appearance.py` — The palettes on offer, dark then light, with the one in use marked.
           - 📄 `view.py` — Preferences as a card: the sections there will be, and what each is for.
         - 📁 `project_list/` — The library: every project remembered, and which one the work is standing in.
           - 📄 `card.py` — One project, as a card the pointer and the keyboard reach the same way.
           - 📄 `project.py` — One project as the list reads it: a name and three lines already written.
           - 📄 `view.py` — The library as a column of cards: which projects there are, and which is current.
-      - 📄 `palette.py` — The colours every view draws with.
+      - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
     - 📄 `relaunch.py` — Start SIEVE over: the same command, in place of the process running it.
 - 📄 `.gitattributes`

@@ -6,17 +6,21 @@ view needed the same picture. What is left here is the part that is about
 preferences: which sections there are, what each is for, and how much room four
 rows of a label and a control want.
 
-Every section is bodiless, and that is the same claim `menu.py` makes with its
+Most sections are bodiless, and that is the same claim `menu.py` makes with its
 greyed entries rather than a different one: a settings screen that grew a
 control the day the setting behind it landed would never, at any point, say what
 the application is configurable *about*. Written out and empty, it says so from
 the start, and each section is a place controls land rather than a place they
-have to be argued for.
+have to be argued for. `appearance` is the first to have had something land in
+it, and the others stay listed and empty on exactly the same terms as before.
 
 The view holds no preference and reads none. There is nowhere to keep one yet,
 no settings document and no place one would be written, and a view that picked
 somewhere would be that decision, made in a view — which is the same refusal the
-project list makes about the library it lists.
+project list makes about the library it lists. The palette a user picks is the
+live one and not a stored one for that reason: it lasts as long as the process,
+and the section says so rather than pretending at persistence it has nowhere to
+put.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QWidget
 
 from sieve.gui.primitives import Section, SectionCard
+from sieve.gui.view.preferences.appearance import Appearance
 
 #: How wide the card is allowed to get. A settings row is a label and a control
 #: on one line, and a card that took the window's width would put a full screen
@@ -35,20 +40,36 @@ from sieve.gui.primitives import Section, SectionCard
 #: to fit on one line.
 _WIDTH = 820
 
-#: How tall the card stands, whichever section is open. Sized to the longest
-#: gloss and not to the current one — why it is fixed at all is the card's, and
-#: stated there.
-_HEIGHT = 320
+#: How tall the card stands, whichever section is open. Sized to the tallest
+#: section and not to the current one — why it is fixed at all is the card's,
+#: and stated there. That was the longest gloss while every section was empty;
+#: it is now `appearance`, which is a list, and the number is what shows enough
+#: of that list to read as one rather than as a row with a scrollbar beside it.
+_HEIGHT = 430
 
-#: The sections, each a name and the one line saying what falls under it. Named
-#: for what the user is deciding rather than for the module that will answer it:
-#: a row called `decode` is a row only the person who wrote the decoder can find.
-_SECTIONS: tuple[Section, ...] = (
-    Section("library", "where projects are kept, and which one opens on start"),
-    Section("playback", "how much footage is decoded ahead, and how much is held"),
-    Section("chain", "what a new step starts at, and what a run writes out"),
-    Section("appearance", "the palette, and how large the text is drawn"),
-)
+def _sections() -> tuple[Section, ...]:
+    """The sections, each a name, the one line saying what falls under it, and
+    the surface it opens — or nothing, for one that is a place rather than a
+    thing. Named for what the user is deciding rather than for the module that
+    will answer it: a row called `decode` is a row only the person who wrote the
+    decoder can find.
+
+    A function and not a module-level tuple, for the reason the dev bench's is
+    one: a section with a body has to build a widget, a widget cannot exist
+    before the `QApplication` does, and at import that aborts the process rather
+    than raising — the one failure a reader cannot debug from a traceback, since
+    there is not one.
+    """
+    return (
+        Section("library", "where projects are kept, and which one opens on start"),
+        Section("playback", "how much footage is decoded ahead, and how much is held"),
+        Section("chain", "what a new step starts at, and what a run writes out"),
+        Section(
+            "appearance",
+            "the palette everything is drawn in, and how large the text is",
+            Appearance(),
+        ),
+    )
 
 
 class Preferences(SectionCard):
@@ -57,8 +78,8 @@ class Preferences(SectionCard):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(
             "preferences",
-            "nothing here is settable yet — these are the sections",
-            _SECTIONS,
+            "the palette is live; the rest are the sections it will land beside",
+            _sections(),
             _WIDTH,
             _HEIGHT,
             parent,

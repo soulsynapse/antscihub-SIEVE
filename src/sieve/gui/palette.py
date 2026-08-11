@@ -1,39 +1,318 @@
-"""The colours every view draws with.
+"""The colours every view draws with, and the palettes they are drawn from.
 
 Held above `frame` because the frame is not the only thing that reads them: the
 panes' contents paint cards, plots and footage against the same values,
 and a palette owned by the frame would be imported back up out of it by
 everything the frame contains.
+
+There are eight colours and they are *roles*, not preferences — a card asks for
+the panel fill and never for a particular grey, so a view is written once and a
+palette is what it comes out looking like. `Palette` is one full set of the
+eight, `PALETTES` is every set on offer, and the module constants are whichever
+set is currently in use.
+
+Those constants are mutated in place rather than rebound, and that is the whole
+of how a change reaches the tree. Every consumer writes `from sieve.gui.palette
+import PANEL`, which binds the object at import; rebinding the name here would
+change nothing anywhere else, and the alternative — rewriting every call site to
+go through the module — would put a dotted lookup in the paint path of the one
+loop this project promises not to stall. A `QColor` is mutable, so the object a
+view is already holding becomes the new colour and a `paintEvent` needs nothing
+said to it at all.
+
+What that does not reach is a stylesheet, which is a string built once from the
+values as they were. So `CHANGED` is emitted after the swap, and a widget that
+dressed itself with one re-runs its own sheet function on hearing it. The icons
+are the third case: a pixmap is drawn at a colour and cached on that colour's
+`rgba`, so a mutated colour is a cache miss rather than a stale hit — but a
+`QIcon` already handed to a button is a drawing that has to be made again, which
+is the holder's to do in the same slot.
+
+`current()` is what a chooser reads to mark the palette in use; nothing else
+should need it, since asking *which* palette is on is a different question from
+asking what colour to draw with, and only one of the two is a view's business.
 """
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor
 
-#: The ground the panes leave uncovered — the menu bar's strip, splitter seams.
-STACK_BG = QColor(24, 26, 30)
 
-#: A pane's own fill, and the lighter one a control wears against it.
-PANEL = QColor(31, 33, 38)
-PANEL_HOT = QColor(38, 41, 47)
+class Palette(NamedTuple):
+    """One complete set of the eight roles, under a name and its argument.
 
-#: Hairlines and dividers. Legible on `PANEL`; against `STACK_BG` it is what a
-#: seam is made of rather than a line drawn on one.
-LINE = QColor(55, 58, 66)
+    Every field is a role rather than a colour: what changes between palettes is
+    the eight values, never which eight there are. A palette that left one out
+    would be one the tree draws with a hole in it, and a ninth added here is a
+    role every palette below has to answer.
 
-#: What a view standing over the panes lays over them. Dark and translucent
-#: rather than opaque: the work is not being replaced, only stood in front of,
-#: and it stays visible enough to say so while being too dim to read against.
-SCRIM = QColor(12, 13, 16, 210)
+    `gloss` is what the choice is actually between. A list of nine names is a
+    list of nine moods; the line under each says what it is *for* — long
+    sessions, projected footage, a figure being screenshotted into a paper — and
+    that is the half worth reading.
 
-TEXT = QColor(230, 231, 235)
-DIM = QColor(139, 142, 152)
+    `dark` is not derivable from the values without picking a threshold, and a
+    threshold is a decision better made once by whoever chose the colours than
+    inferred at every call site. It is what sorts the list into the two groups
+    the user is really choosing between first.
+    """
 
-#: The one colour that means *this is what you are acting on*: a hovered seam,
-#: a selected crop, a detected block.
-ACCENT = QColor(94, 200, 180)
+    name: str
+    gloss: str
+    dark: bool
+
+    #: The ground the panes leave uncovered — the menu bar's strip, splitter
+    #: seams. Never a panel: it is what a panel is seen *against*.
+    stack_bg: QColor
+
+    #: A pane's own fill, and the lighter one a control wears against it. In a
+    #: light palette `panel_hot` is the darker of the two, since the move that
+    #: means "the pointer is here" is a step away from the panel and not
+    #: unconditionally upward.
+    panel: QColor
+    panel_hot: QColor
+
+    #: Hairlines and dividers. Legible on `panel`; against `stack_bg` it is what
+    #: a seam is made of rather than a line drawn on one.
+    line: QColor
+
+    #: What a view standing over the panes lays over them. Dark and translucent
+    #: in every palette, light ones included: the work is not being replaced,
+    #: only stood in front of, and dimming is what says so. A light scrim over
+    #: light panes would raise nothing and read as fog. Alpha is lower in the
+    #: light palettes because the same veil over a bright ground hides more.
+    scrim: QColor
+
+    text: QColor
+    dim: QColor
+
+    #: The one colour that means *this is what you are acting on*: a hovered
+    #: seam, a selected crop, a detected block. It is the only hue any palette
+    #: here commits to, which is why they differ by it more than by their greys.
+    accent: QColor
+
+
+def _c(*rgba: int) -> QColor:
+    """A colour from its channels. Written out rather than as a hex string so an
+    alpha is a fourth number instead of a convention about digit count."""
+    return QColor(*rgba)
+
+
+#: The dark palettes. Dark is the default and the longer list because the work is
+#: footage: a bright surround around a video pane is what the eye adapts to, and
+#: everything shown in the frame is then judged against the wrong white.
+_DARK: tuple[Palette, ...] = (
+    Palette(
+        "slate",
+        "neutral cool grey, teal accent — the default",
+        True,
+        stack_bg=_c(24, 26, 30),
+        panel=_c(31, 33, 38),
+        panel_hot=_c(38, 41, 47),
+        line=_c(55, 58, 66),
+        scrim=_c(12, 13, 16, 210),
+        text=_c(230, 231, 235),
+        dim=_c(139, 142, 152),
+        accent=_c(94, 200, 180),
+    ),
+    Palette(
+        "graphite",
+        "no hue in the greys, so only an overlay carries one",
+        True,
+        stack_bg=_c(26, 26, 26),
+        panel=_c(33, 33, 33),
+        panel_hot=_c(42, 42, 42),
+        line=_c(61, 61, 61),
+        scrim=_c(13, 13, 13, 210),
+        text=_c(233, 233, 233),
+        dim=_c(146, 146, 146),
+        accent=_c(214, 158, 74),
+    ),
+    Palette(
+        "ink",
+        "blue-black, the highest contrast here — a bright room",
+        True,
+        stack_bg=_c(16, 19, 27),
+        panel=_c(22, 26, 36),
+        panel_hot=_c(31, 37, 49),
+        line=_c(48, 56, 73),
+        scrim=_c(8, 10, 15, 215),
+        text=_c(234, 238, 246),
+        dim=_c(134, 145, 165),
+        accent=_c(96, 160, 240),
+    ),
+    Palette(
+        "basalt",
+        "warm-neutral greys — least harsh over a long session",
+        True,
+        stack_bg=_c(28, 26, 24),
+        panel=_c(36, 33, 31),
+        panel_hot=_c(45, 41, 38),
+        line=_c(64, 59, 54),
+        scrim=_c(15, 14, 12, 210),
+        text=_c(235, 231, 226),
+        dim=_c(154, 146, 136),
+        accent=_c(209, 138, 86),
+    ),
+    Palette(
+        "abyss",
+        "deep blue-green, low throughout — a darkened room",
+        True,
+        stack_bg=_c(17, 26, 30),
+        panel=_c(23, 34, 39),
+        panel_hot=_c(30, 44, 50),
+        line=_c(48, 68, 76),
+        scrim=_c(8, 14, 17, 212),
+        text=_c(226, 236, 239),
+        dim=_c(130, 152, 159),
+        accent=_c(92, 196, 214),
+    ),
+)
+
+#: The light palettes. Not a dark one inverted: a light surface wants a smaller
+#: step between `panel` and `stack_bg` than a dark one does, because the same
+#: difference in luminance reads as a bigger difference the brighter the ground.
+#: They exist for the two cases dark does not serve — a screen under room lights
+#: or daylight, and a pane about to be screenshotted into a figure whose journal
+#: prints on white.
+_LIGHT: tuple[Palette, ...] = (
+    Palette(
+        "paper",
+        "warm off-white, deep teal — like a printed figure",
+        False,
+        stack_bg=_c(226, 222, 214),
+        panel=_c(247, 245, 240),
+        panel_hot=_c(237, 234, 227),
+        line=_c(205, 200, 190),
+        scrim=_c(40, 36, 30, 120),
+        text=_c(32, 31, 28),
+        dim=_c(108, 104, 96),
+        accent=_c(20, 122, 110),
+    ),
+    Palette(
+        "lab",
+        "cool neutral white — the least colour decision here",
+        False,
+        stack_bg=_c(222, 225, 229),
+        panel=_c(250, 251, 252),
+        panel_hot=_c(240, 242, 245),
+        line=_c(202, 207, 214),
+        scrim=_c(24, 28, 34, 120),
+        text=_c(26, 30, 36),
+        dim=_c(104, 112, 124),
+        accent=_c(30, 102, 190),
+    ),
+    Palette(
+        "parchment",
+        "cream and warm ink — the least blue light here",
+        False,
+        stack_bg=_c(231, 223, 208),
+        panel=_c(250, 246, 237),
+        panel_hot=_c(242, 236, 224),
+        line=_c(212, 203, 186),
+        scrim=_c(46, 38, 26, 120),
+        text=_c(42, 36, 27),
+        dim=_c(122, 112, 95),
+        accent=_c(170, 84, 32),
+    ),
+    Palette(
+        "mist",
+        "cool blue-grey, indigo accent — quieter than `lab`",
+        False,
+        stack_bg=_c(214, 220, 228),
+        panel=_c(246, 249, 252),
+        panel_hot=_c(234, 239, 245),
+        line=_c(196, 205, 216),
+        scrim=_c(20, 28, 40, 120),
+        text=_c(24, 32, 44),
+        dim=_c(100, 111, 128),
+        accent=_c(62, 78, 168),
+    ),
+)
+
+#: Every palette on offer, dark first. One sequence rather than two exported
+#: lists, so a caller that wants the split makes it from `dark` and a caller that
+#: only wants "all of them, in order" does not have to concatenate anything.
+PALETTES: tuple[Palette, ...] = _DARK + _LIGHT
+
+#: What the application comes up in. `slate` because it is the palette the tree
+#: was drawn against, so the default is the one every screenshot and every
+#: docstring's colour claim already describes.
+DEFAULT = _DARK[0]
+
+
+class _Notifier(QObject):
+    """Carrier for the one signal. A `Signal` has to live on a `QObject`, and a
+    module is not one."""
+
+    changed = Signal()
+
+
+#: Held so it is not collected out from under the signal — a bound `Signal`
+#: does not keep its owner alive.
+_notifier = _Notifier()
+
+#: The palette in use has been swapped. Whoever built a stylesheet out of these
+#: values, or handed a `QIcon` to a button, has to make it again; whoever paints
+#: in a `paintEvent` is already holding the new colours and needs only a repaint.
+CHANGED = _notifier.changed
+
+# The live colours. Empty here and filled by the `use()` at the bottom of the
+# module: two places stating slate's greys is one place for them to disagree.
+STACK_BG = QColor()
+PANEL = QColor()
+PANEL_HOT = QColor()
+LINE = QColor()
+SCRIM = QColor()
+TEXT = QColor()
+DIM = QColor()
+ACCENT = QColor()
+
+#: `None` only during this module's own import, between the colours being
+#: declared and the `use()` at the foot filling them. Nothing outside can
+#: observe it: an importer holds the module only after that line has run.
+_current: Palette | None = None
+
+
+def current() -> Palette:
+    """The palette in use, for whoever is drawing the choice between them."""
+    assert _current is not None
+    return _current
+
+
+def use(palette: Palette) -> None:
+    """Draw everything in `palette` from here on.
+
+    Each live colour is assigned into rather than replaced, because that object
+    is what every view is already holding — see the module docstring. Asking for
+    the palette already in use does nothing rather than emitting: `CHANGED` costs
+    a stylesheet rebuild and an icon redraw everywhere in the tree, and a chooser
+    that re-picks the current row on every arrow key would pay it each time.
+    """
+    global _current
+    if palette is _current:
+        return
+    _current = palette
+    for live, chosen in (
+        (STACK_BG, palette.stack_bg),
+        (PANEL, palette.panel),
+        (PANEL_HOT, palette.panel_hot),
+        (LINE, palette.line),
+        (SCRIM, palette.scrim),
+        (TEXT, palette.text),
+        (DIM, palette.dim),
+        (ACCENT, palette.accent),
+    ):
+        live.setRgba(chosen.rgba())
+    CHANGED.emit()
 
 
 def rgb(color: QColor) -> str:
     """A colour as a stylesheet's `rgb(...)`, since Qt's own repr is not one."""
     return f"rgb({color.red()},{color.green()},{color.blue()})"
+
+
+use(DEFAULT)

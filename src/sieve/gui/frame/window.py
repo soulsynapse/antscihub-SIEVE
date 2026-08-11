@@ -61,7 +61,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 
-from sieve.gui.frame.chrome import stylesheet
+from sieve.gui import palette
+from sieve.gui.frame.chrome import dress_title_bar, stylesheet
 from sieve.gui.frame.hotkeys import bind_hotkeys, suspend_hotkeys
 from sieve.gui.frame.menu import build_menu_bar, preferences_anchor, show_about
 from sieve.gui.frame.overlay import Overlay
@@ -89,7 +90,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("SIEVE")
-        self.setStyleSheet(stylesheet())
+        self._restyle()
+        palette.CHANGED.connect(self._restyle)
 
         self.left = build_left()
         self.right = build_right()
@@ -175,6 +177,31 @@ class MainWindow(QMainWindow):
 
         self.resize(_WINDOW_WIDTH, _WINDOW_HEIGHT)
         self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
+
+    def _restyle(self) -> None:
+        """Wear the palette now in use — the chrome's own sheet, and a repaint
+        of everything under it.
+
+        The sheet is the window's half. The other half is every widget that
+        paints itself in a `paintEvent` — the panes' placeholders, the canvas,
+        the overlay's scrim — which is already holding the new colours, because
+        the palette mutates them in place, and needs only to be told to draw
+        again. Walked rather than left to Qt: re-setting a stylesheet repolishes
+        the tree but does not promise a repaint of a widget whose appearance
+        came from a painter and not from a rule.
+
+        Done here and not in each of them because it is one traversal on a
+        change the user makes by hand, against a `paintEvent` per widget per
+        frame in the loop this project exists to keep fast.
+        """
+        self.setStyleSheet(stylesheet())
+        for child in self.findChildren(QWidget):
+            child.update()
+        self.update()
+        # The title bar is the OS's and outside every one of those, which is why
+        # it is asked for separately and by the only widget that has a native
+        # handle to name.
+        dress_title_bar(self)
 
     def even_split(self) -> None:
         """Hand the panes the same width, whatever the window is now.

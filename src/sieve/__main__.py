@@ -7,13 +7,14 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from sieve.gui.frame import MainWindow
-from sieve.gui.frame.chrome import darken_title_bar
 
 
 def main() -> None:
     app = QApplication(sys.argv)
+    # The title bar is the window's own now — it has to be asked for again every
+    # time the palette changes, and half the palettes want the light one, so it
+    # is not something an entry point can set once on the way up.
     window = MainWindow()
-    darken_title_bar(window)
     window.show()
     sys.exit(app.exec())
 

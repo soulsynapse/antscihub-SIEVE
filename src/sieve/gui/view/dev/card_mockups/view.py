@@ -23,6 +23,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from sieve.gui import palette
 from sieve.gui.palette import DIM, rgb
 from sieve.gui.primitives import Card
 from sieve.gui.view.dev.gallery import GUTTER, Gallery, Variant
@@ -122,13 +123,27 @@ def _real_card(selected: bool) -> Card:
     card = Card(TITLE)
     card.set_selected(selected)
     for knob in KNOBS:
-        label = QLabel(line(knob))
-        # The real card's sheet dresses `#title` and leaves the body to the
-        # view, so the gallery says what a body line looks like — as the chain
-        # will have to when it fills one.
-        label.setStyleSheet(f"color: {rgb(DIM)};")
-        card.add_row(label)
+        card.add_row(_BodyLine(line(knob)))
     return card
+
+
+class _BodyLine(QLabel):
+    """One line of the baseline card's body, in the quiet ink.
+
+    The real card's sheet dresses `#title` and leaves the body to the view, so
+    the gallery is what says what a body line looks like — as the chain will
+    have to when it fills one. A class rather than a `setStyleSheet` on a plain
+    label because that sheet is a string built from a colour that changes: the
+    line has to be something with a slot to hear about it.
+    """
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._restyle()
+        palette.CHANGED.connect(self._restyle)
+
+    def _restyle(self) -> None:
+        self.setStyleSheet(f"color: {rgb(DIM)};")
 
 
 def _mock_pair(look: Look) -> QWidget:

@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sieve.gui import palette
 from sieve.gui.palette import DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 from sieve.gui.view.project_list.card import ProjectCard
 from sieve.gui.view.project_list.project import Project
@@ -92,7 +93,8 @@ class ProjectList(QWidget):
         super().__init__(parent)
         self.setObjectName("projects")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(_sheet())
+        self._restyle()
+        palette.CHANGED.connect(self._restyle)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         # The list answers ↑/↓, so it has to be reachable by tabbing as well as
         # by clicking — a surface that only takes focus from the pointer is one
@@ -140,6 +142,13 @@ class ProjectList(QWidget):
         self.show_projects(projects)
 
     # -- what is on the surface ------------------------------------------
+
+    def _restyle(self) -> None:
+        """The column's own sheet again, in the palette now in use. The cards
+        redress themselves — each is subscribed, because the list builds and
+        drops them as the library changes and one that dressed its children
+        would have to do it again on every rebuild."""
+        self.setStyleSheet(_sheet())
 
     def show_projects(self, projects: Iterable[Project]) -> None:
         """Draw this library, keeping the selection on the same project if it is

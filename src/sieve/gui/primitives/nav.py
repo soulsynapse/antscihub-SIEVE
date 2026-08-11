@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sieve.gui import palette
 from sieve.gui.palette import ACCENT, LINE, PANEL, PANEL_HOT, TEXT, rgb
 
 #: How wide the entry's leading edge is. On every entry and not the current one
@@ -144,7 +145,12 @@ class _Entry(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        #: Held rather than read back off the sheet, because the sheet is rebuilt
+        #: whenever the palette changes and it has to come back in the state the
+        #: nav last put the entry in.
+        self._selected = False
         self.set_selected(False)
+        palette.CHANGED.connect(self._restyle)
 
         label = QLabel(name)
         label.setObjectName("label")
@@ -158,7 +164,12 @@ class _Entry(QFrame):
         """Wear the accent edge, or give it back. Re-set rather than toggled
         through a dynamic property: a property needs an unpolish/polish pair to
         take, and this is one string on one widget."""
-        self.setStyleSheet(_sheet(selected))
+        self._selected = selected
+        self._restyle()
+
+    def _restyle(self) -> None:
+        """The same sheet again, in whatever the palette is now."""
+        self.setStyleSheet(_sheet(self._selected))
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:

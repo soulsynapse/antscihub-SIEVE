@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from sieve.gui import icons
+from sieve.gui import icons, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 from sieve.gui.view.project_list.project import Project
 
@@ -80,6 +80,10 @@ class ProjectCard(QFrame):
         self.setObjectName("card")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        #: Held rather than read back off the sheet, which is rebuilt whenever
+        #: the palette changes and has to come back in the state the list last
+        #: put the card in.
+        self._selected = False
         self.set_selected(False)
 
         column = QVBoxLayout(self)
@@ -92,12 +96,19 @@ class ProjectCard(QFrame):
         # it: the label reports no width of its own, so a stretch would be the
         # only thing in the row asking for room and would get all of it.
         head.addWidget(_Line(project.name, "name"), 1)
-        head.addWidget(self._open_button())
-        head.addWidget(self._reveal_button())
+        #: Held so the icons can be drawn again when the palette changes — a
+        #: `QIcon` is pixmaps at the colours in force when it was made, and a
+        #: stylesheet cannot reach one.
+        self._open = self._open_button()
+        self._reveal = self._reveal_button()
+        head.addWidget(self._open)
+        head.addWidget(self._reveal)
         column.addLayout(head)
 
         column.addWidget(_Line(project.holds, "line"))
         column.addWidget(_Line(project.opened, "line"))
+
+        palette.CHANGED.connect(self._restyle)
 
     def _open_button(self) -> QToolButton:
         button = _button("arrow-right", "Open this project")
@@ -123,7 +134,14 @@ class ProjectCard(QFrame):
         """Wear the accent edge, or give it back. Re-set rather than toggled
         through a dynamic property: a property would need an unpolish/polish
         pair to take, and this is one string on one widget."""
+        self._selected = selected
         self.setStyleSheet(_sheet(selected))
+
+    def _restyle(self) -> None:
+        """The sheet and both icons again, in the palette now in use."""
+        self.setStyleSheet(_sheet(self._selected))
+        self._open.setIcon(icons.icon("arrow-right"))
+        self._reveal.setIcon(icons.icon("folder-open"))
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:

@@ -66,7 +66,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import icons
+from sieve.gui import icons, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 
 #: The four verbs, in the order `primitives/card.py` fixes them in and with the
@@ -1015,6 +1015,10 @@ class MockCard(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(look.dress(selected))
+        #: Kept so the card can be drawn again in a palette it has not seen. The
+        #: bench is where a palette gets judged, so a mock still wearing the old
+        #: greys would be the one card on screen lying about what was picked.
+        self._look = look
 
         #: Read by the arrangements. `selected` because a shape is allowed to
         #: differ between the two states, and `index` because one of them puts a
@@ -1039,6 +1043,29 @@ class MockCard(QFrame):
         if self._fades:
             self.verbs.setVisible(False)
 
+        palette.CHANGED.connect(self._restyle)
+
+    def _restyle(self) -> None:
+        """The dress again, and the card's contents built again under it.
+
+        Rebuilt rather than recoloured, which is the bargain `_shape_lid`
+        already makes one row at a time: a shape builds pixmaps — the verb
+        icons, the strip's glyph — at the colours in force while it ran, and a
+        pixmap is not something a stylesheet can reach. Re-running the shape is
+        the only thing that catches all of them, wherever a look happened to put
+        them, and it is what keeps this file free of a second list of everything
+        a look might have drawn.
+
+        The teardown is affordable because this is the bench: it happens when
+        someone picks a palette, not while a slider is moving.
+        """
+        self.setStyleSheet(self._look.dress(self.selected))
+        _empty(self.column)
+        self.verbs = _verb_row()
+        self._look.shape(self)
+        if self._fades:
+            self.verbs.setVisible(False)
+
     def enterEvent(self, event) -> None:
         if self._fades:
             self.verbs.setVisible(True)
@@ -1051,6 +1078,24 @@ class MockCard(QFrame):
 
 
 # -- what every arrangement is drawn holding -------------------------------
+
+
+def _empty(layout: QLayout) -> None:
+    """Take everything out of a layout and destroy it, nested layouts included.
+
+    Taking an item out does not unparent the widget in it: a rebuild without
+    this leaves the old drawing alive, still a child of the card, painted under
+    the new one at whatever geometry it last had.
+    """
+    while (item := layout.takeAt(0)) is not None:
+        widget = item.widget()
+        if widget is not None:
+            widget.setParent(None)
+            widget.deleteLater()
+        inner = item.layout()
+        if inner is not None:
+            _empty(inner)
+            inner.deleteLater()
 
 
 def _inset(body: QLayout) -> QLayout:

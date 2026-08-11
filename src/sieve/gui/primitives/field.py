@@ -92,9 +92,15 @@ _RING_ALPHA = 64
 #: The box around the text, and the corner on it. The corner is this file's and
 #: not `metrics.radius()`, for `button.py`'s reason: that slider is *card
 #: corners*, and a user squaring off their cards did not ask for square fields.
+#:
+#: It is public because it is not this control's corner but the *ring's*:
+#: `Field.paintEvent` draws the glow at whatever it holds plus the inset, so a
+#: control that named a corner of its own would be a control the ring no longer
+#: follows. Anything meant to stand inside a `Field` — `select.py` does — takes
+#: this one rather than restating a 4 free to drift from it.
 _PAD_X = 8
 _PAD_Y = 4
-_RADIUS = 4
+RADIUS = 4
 
 #: The gap between a label, its control and its hint. Tight, because the three
 #: are one thing and the space between fields is what separates them from the
@@ -157,14 +163,14 @@ class LineField(QLineEdit):
         is the first claim in this module's docstring; a lighter fill would make
         it a `SUBTLE` button with a cursor in it.
         """
-        right = 0 if self._joined else _RADIUS
+        right = 0 if self._joined else RADIUS
         self.setStyleSheet(f"""
             #field {{
                 background: {rgb(PANEL)};
                 color: {rgb(TEXT)};
                 border: 1px solid {rgb(mix(LINE, TEXT, EDGE))};
-                border-top-left-radius: {_RADIUS}px;
-                border-bottom-left-radius: {_RADIUS}px;
+                border-top-left-radius: {RADIUS}px;
+                border-bottom-left-radius: {RADIUS}px;
                 border-top-right-radius: {right}px;
                 border-bottom-right-radius: {right}px;
                 padding: {_PAD_Y}px {_PAD_X}px;
@@ -291,7 +297,7 @@ class Field(QWidget):
         box = QRectF(self._control.geometry()).adjusted(-inset, -inset, inset, inset)
         painter.setPen(QPen(ring(), RING_W))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(box, _RADIUS + inset, _RADIUS + inset)
+        painter.drawRoundedRect(box, RADIUS + inset, RADIUS + inset)
         painter.end()
 
 
@@ -348,8 +354,8 @@ class _United(QWidget):
                 color: {rgb(DIM)};
                 border: 1px solid {rgb(mix(LINE, TEXT, EDGE))};
                 border-left: 0;
-                border-top-right-radius: {_RADIUS}px;
-                border-bottom-right-radius: {_RADIUS}px;
+                border-top-right-radius: {RADIUS}px;
+                border-bottom-right-radius: {RADIUS}px;
                 padding: {_PAD_Y}px {_PAD_X}px;
                 font-size: {metrics.pt("gloss")}pt;
             }}

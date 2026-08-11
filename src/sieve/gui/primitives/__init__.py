@@ -54,6 +54,20 @@ having no wrapper to paint one for it. Each is imported from the file that makes
 the case rather than restated — a second 0.14 written here would be a second
 answer to *what does the pointer do*, free to drift from the first.
 
+`select.py` is the fifth control and arrives the way the first two did. It is
+the third answer to *pick one* — the radio is a fixed few all visible, the
+section list is a few that move you, this is many — and what it settles is not
+the box but the list that drops out of it: the first dropdown, the first
+completer and the first inline menu are one decision, and the tree already made
+it for the window's menus in `frame/chrome.py`. Taking that dress rather than
+the mockup's accent wash is what keeps a dropped select and a dropped menu one
+object instead of two.
+
+Settling it turned a third constant public, for a reason the other two do not
+have. `field.RADIUS` is not a corner a control chooses; it is the corner
+`Field` draws its focus ring at, so a styled control meant to stand inside one
+takes that number or gets a ring that no longer follows its box.
+
 `view.py` is the fourth shape and is under the other two rather than beside them:
 the head a pane wears was the stack's band until a view that is not a column of
 cards wanted the same line at its top, and it moved here so that a head is one
@@ -69,6 +83,7 @@ from sieve.gui.primitives.check import Check
 from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.sections import Section, SectionCard
+from sieve.gui.primitives.select import Select
 from sieve.gui.primitives.slider import Slider
 from sieve.gui.primitives.stack import CardStack
 from sieve.gui.primitives.view import View
@@ -87,6 +102,7 @@ __all__ = [
     "Section",
     "SectionCard",
     "SectionNav",
+    "Select",
     "Slider",
     "View",
 ]

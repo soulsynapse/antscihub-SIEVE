@@ -74,6 +74,9 @@
           - 📁 `card_mockups/` — Card mock ups: the shapes a card could take, drawn beside each other.
             - 📄 `look.py` — One way a card could look, and the handful of ways being considered.
             - 📄 `view.py` — The looks laid out one under another, each shown selected and not.
+          - 📁 `icon_sheet/` — Icons: every vendored lucide glyph, in each ink a widget draws it in.
+            - 📄 `sheet.py` — What is vendored, what each glyph was vendored to say, and the inks it wears.
+            - 📄 `view.py` — The glyphs as a table: one row per icon, one column per way it is drawn.
           - 📄 `gallery.py` — A scrolling column of alternatives, each under its name and its argument.
           - 📄 `view.py` — The dev bench as a card: the sections there are, and what each is for.
         - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.

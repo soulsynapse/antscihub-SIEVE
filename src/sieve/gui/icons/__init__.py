@@ -12,11 +12,12 @@ drawing. So `icon()` returns all of them at once, as the three modes Qt already
 switches between — `Normal`, `Active` under the pointer, `Disabled` — and the
 call site keeps the one line it had.
 
-The SVGs are vendored under `lucide/` rather than depended on: they are five
-files of two paths each, the set changes on Lucide's release schedule and not
-ours, and a tuning loop that must not stall is not somewhere to discover an icon
-went missing. `lucide/LICENSE` is the ISC notice they arrive under, which the
-copies have to carry.
+The SVGs are vendored under `lucide/` rather than depended on: they are a
+handful of files of two paths each, the set changes on Lucide's release schedule
+and not ours, and a tuning loop that must not stall is not somewhere to discover
+an icon went missing. `lucide/LICENSE` is the ISC notice they arrive under,
+which the copies have to carry. What is vendored at any moment is what `names()`
+answers, and that folder is the only authority on it.
 """
 
 from __future__ import annotations
@@ -43,6 +44,20 @@ SIZE = 16
 #: here, at the one place the number is applied, rather than in the vendored
 #: files, which stay byte-identical to what upstream shipped.
 _STROKE = 2.25
+
+
+def names() -> tuple[str, ...]:
+    """Every glyph there is to ask for, in the order a list of them reads in.
+
+    The folder and not a written-down list, because the two would be a pair that
+    can disagree and only one of them can be drawn: a name here with no file
+    behind it raises at the first `icon()`, and a file nobody listed would be
+    invisible to the bench that exists to show what is vendored. Uncached, so a
+    glyph dropped in while the tree is being edited is there the next time the
+    bench is opened rather than the next time the process starts — which is the
+    only caller, and the cost is one directory listing.
+    """
+    return tuple(sorted(path.stem for path in _SVG.glob("*.svg")))
 
 
 @lru_cache(maxsize=None)

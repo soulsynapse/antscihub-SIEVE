@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QWidget
 
 from sieve.gui.primitives import Section, SectionCard
 from sieve.gui.view.dev.card_mockups import CardMockups
+from sieve.gui.view.dev.icon_sheet import IconSheet
 
 #: How wide and tall the bench stands. Bigger than preferences and for the
 #: opposite reason: preferences holds rows of a label and a control, where extra
@@ -46,7 +47,10 @@ def _sections() -> tuple[Section, ...]:
         ),
         Section("palette", "every colour in `palette.py`, on the ground it is used on"),
         Section(
-            "icons", "every vendored lucide glyph, in the three modes a button wears"
+            "icons",
+            "every vendored lucide glyph, grouped by what it is here to say and "
+            "drawn in each ink a widget gives it",
+            IconSheet(),
         ),
         Section(
             "frame", "the panes and swipe positions, and which view is standing where"

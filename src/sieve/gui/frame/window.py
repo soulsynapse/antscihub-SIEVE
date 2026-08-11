@@ -30,6 +30,14 @@ The first of those positions houses the project list, which is the first view to
 land. The window is what puts it there and hands it what to show — the view
 names no pane and no position, so where it stands is the frame's answer and
 changing it is an edit here.
+
+One view stands in neither a pane nor a position. Preferences are about the
+application rather than about the project, so they are put on an overlay over
+the panes (`overlay.py`) — which takes no room from them, and is why the count
+of panes is unchanged by there being a fourth thing the window can show. The
+frame's keys are held while it is up: they are the window's and fire wherever
+focus is, which is what makes them frame-wide and exactly what must not walk a
+track the user cannot currently see.
 """
 
 from __future__ import annotations
@@ -38,8 +46,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 
 from sieve.gui.frame.chrome import stylesheet
-from sieve.gui.frame.hotkeys import bind_hotkeys
+from sieve.gui.frame.hotkeys import bind_hotkeys, suspend_hotkeys
 from sieve.gui.frame.menu import build_menu_bar, show_about
+from sieve.gui.frame.overlay import Overlay
 from sieve.gui.frame.panes import (
     build_bottom,
     build_left,
@@ -47,6 +56,7 @@ from sieve.gui.frame.panes import (
     build_seam,
 )
 from sieve.gui.frame.swipe import POSITIONS, build_swipe
+from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
 
 #: What the window restores down *to*. Kept even though it opens maximized:
@@ -117,6 +127,17 @@ class MainWindow(QMainWindow):
         #: only by walking the window's children.
         self.hotkeys = bind_hotkeys(self)
 
+        # Preferences stand over the panes rather than in one, and the overlay
+        # covers what the central widget covers — the three panes and the two
+        # boundaries between them, and not the bar the user asked from. Built
+        # here and hidden: it takes no room, so the resting frame is still three
+        # panes, and there is nothing to construct on the way to showing it.
+        self.overlay = Overlay(stacked)
+        self.preferences = Preferences()
+        self.overlay.body.addWidget(self.preferences)
+        self.preferences.closed.connect(self.close_preferences)
+        self.overlay.dismissed.connect(lambda: suspend_hotkeys(self.hotkeys, False))
+
         self.resize(_WINDOW_WIDTH, _WINDOW_HEIGHT)
         self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
 
@@ -149,6 +170,22 @@ class MainWindow(QMainWindow):
             self.setWindowState(self.windowState() & ~Qt.WindowState.WindowFullScreen)
         else:
             self.setWindowState(self.windowState() | Qt.WindowState.WindowFullScreen)
+
+    def open_preferences(self) -> None:
+        """Stand the preferences over the panes, and hold the frame's keys.
+
+        Asking again while they are already up is a re-raise and not a second
+        card: the bar's title stays clickable under nothing, and Ctrl+, is the
+        same request from the keyboard.
+        """
+        suspend_hotkeys(self.hotkeys, True)
+        self.overlay.raise_over()
+
+    def close_preferences(self) -> None:
+        """Uncover the panes. The keys come back with the overlay's own signal,
+        so the two ways the user closes this and the one the frame does all
+        restore them in the same place."""
+        self.overlay.dismiss()
 
     def about(self) -> None:
         show_about(self)

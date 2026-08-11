@@ -30,10 +30,13 @@
         - 📄 `chrome.py` — What the window wears where no pane covers it.
         - 📄 `hotkeys.py` — The keys the window answers, and never what answering them does.
         - 📄 `menu.py` — The bar across the top, and what the window itself can be asked to do.
+        - 📄 `overlay.py` — What stands over the panes instead of in one.
         - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
         - 📄 `swipe.py` — The run of views a pane shows one at a time, and the slide between them.
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
+        - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.
+          - 📄 `view.py` — Preferences as a card: the sections there will be, and what each is for.
         - 📁 `project_list/` — The library: every project remembered, and which one the work is standing in.
           - 📄 `card.py` — One project, as a card the pointer and the keyboard reach the same way.
           - 📄 `project.py` — One project as the list reads it: a name and three lines already written.

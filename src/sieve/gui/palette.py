@@ -21,6 +21,11 @@ PANEL_HOT = QColor(38, 41, 47)
 #: seam is made of rather than a line drawn on one.
 LINE = QColor(55, 58, 66)
 
+#: What a view standing over the panes lays over them. Dark and translucent
+#: rather than opaque: the work is not being replaced, only stood in front of,
+#: and it stays visible enough to say so while being too dim to read against.
+SCRIM = QColor(12, 13, 16, 210)
+
 TEXT = QColor(230, 231, 235)
 DIM = QColor(139, 142, 152)
 

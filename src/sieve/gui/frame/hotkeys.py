@@ -21,7 +21,7 @@ repeat rate rather than at the user's.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 from PySide6.QtGui import QKeySequence, QShortcut
 
@@ -56,3 +56,17 @@ def bind_hotkeys(window: MainWindow) -> list[QShortcut]:
         shortcut.activated.connect(getattr(window, verb))
         shortcuts.append(shortcut)
     return shortcuts
+
+
+def suspend_hotkeys(shortcuts: Iterable[QShortcut], suspended: bool) -> None:
+    """Take the frame's keys away while something stands over the panes.
+
+    A shortcut on the window fires wherever focus is, which is what makes it the
+    frame's rather than a view's — and is exactly wrong while a view is covering
+    the panes: ← and → would walk a track the user cannot see, and they would
+    come back to a swipe standing somewhere they never took it. So the keys are
+    held for as long as the cover is up, rather than every verb learning to ask
+    whether it should run.
+    """
+    for shortcut in shortcuts:
+        shortcut.setEnabled(not suspended)

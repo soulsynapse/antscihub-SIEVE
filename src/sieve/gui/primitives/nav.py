@@ -40,7 +40,12 @@ from sieve.gui.palette import ACCENT, LINE, PANEL, PANEL_HOT, TEXT, rgb
 #: How wide the entry's leading edge is. On every entry and not the current one
 #: alone — only its colour changes, so the label does not step sideways as the
 #: selection arrives.
-_EDGE = 3
+#:
+#: Public, because it is not this list's look: it is how wide the mark that says
+#: *this is the current one* is drawn, and `segmented.py` wears the same mark
+#: along the foot of a bar rather than down the side of a row. A second 3 written
+#: there would be a second answer, free to drift from the nav in the next card.
+MARK_W = 3
 
 #: The gap between entries and the margin around them, one number for both, so
 #: the outermost entry sits off the column's edge by the distance it sits off
@@ -59,7 +64,7 @@ def _sheet(selected: bool) -> str:
         #entry {{
             background: {rgb(PANEL)};
             border: 1px solid {rgb(LINE)};
-            border-left: {_EDGE}px solid {rgb(edge)};
+            border-left: {MARK_W}px solid {rgb(edge)};
         }}
         #entry:hover {{ background: {rgb(PANEL_HOT)}; }}
         #label {{ color: {rgb(TEXT)}; font-size: {metrics.pt("name")}pt; }}

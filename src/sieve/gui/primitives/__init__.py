@@ -68,6 +68,21 @@ have. `field.RADIUS` is not a corner a control chooses; it is the corner
 `Field` draws its focus ring at, so a styled control meant to stand inside one
 takes that number or gets a ring that no longer follows its box.
 
+`segmented.py` is the sixth control and closes the set of *pick one*: the radio
+is a fixed few each readable alone, the section list is a few that move you, the
+select is many that will not stand open, and this is the few whose options only
+mean anything against each other. Four controls rather than one that stretches,
+because the question a view actually has is how many and how they are read, and
+there is an answer at each size.
+
+Settling it turned a fourth constant public, and the reason is the one the other
+three have. `nav.MARK_W` is not a nav's look; it is how wide the mark that says
+*this is the current one* is drawn, and a bar wearing that mark along its foot
+rather than down its side is the same decision seen on the other axis. What the
+bar does *not* borrow is the accent wash the mockup lights its current segment
+with — the tree's answer to which of a visible few is current is already the
+nav's edge, and a wash would be both a ninth role and a second answer.
+
 `view.py` is the fourth shape and is under the other two rather than beside them:
 the head a pane wears was the stack's band until a view that is not a column of
 cards wanted the same line at its top, and it moved here so that a head is one
@@ -83,6 +98,7 @@ from sieve.gui.primitives.check import Check
 from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.sections import Section, SectionCard
+from sieve.gui.primitives.segmented import Segmented
 from sieve.gui.primitives.select import Select
 from sieve.gui.primitives.slider import Slider
 from sieve.gui.primitives.stack import CardStack
@@ -102,6 +118,7 @@ __all__ = [
     "Section",
     "SectionCard",
     "SectionNav",
+    "Segmented",
     "Select",
     "Slider",
     "View",

@@ -27,6 +27,11 @@ button would be the one setting that budget for every view after it. Settling it
 before there are three is what keeps *one filled button per screen* a rule
 rather than a description of whichever screen was built first.
 
+`field.py` is the second control and arrived the same way and for the same kind
+of reason: focus is not a card's decision or a form's, it is where the keyboard
+is pointing, and a tree with two answers to that has none. Held here rather than
+in whichever view first wanted somewhere to type.
+
 `view.py` is the third shape and is under the other two rather than beside them:
 the head a pane wears was the stack's band until a view that is not a column of
 cards wanted the same line at its top, and it moved here so that a head is one
@@ -38,6 +43,7 @@ from __future__ import annotations
 
 from sieve.gui.primitives.button import DEFAULT, GHOST, PRIMARY, SUBTLE, Button
 from sieve.gui.primitives.card import Card
+from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.sections import Section, SectionCard
 from sieve.gui.primitives.stack import CardStack
@@ -51,6 +57,8 @@ __all__ = [
     "Button",
     "Card",
     "CardStack",
+    "Field",
+    "LineField",
     "Section",
     "SectionCard",
     "SectionNav",

@@ -17,13 +17,15 @@ should ask itself is how many, and it has an answer at each size rather than one
 control that stretches badly across all three.
 
 The popup takes the menu's dress and not the mockup's, and that is a deliberate
-departure. `frame/chrome.py` already answered what a list appearing over the
-work looks like — a `PANEL` fill inside a `LINE` hairline, with the highlighted
-row in `PANEL_HOT` — and the mockup's accent wash under the highlighted item
-would make a dropped select and a dropped menu two different objects on one
-screen. The rule is duplicated here rather than reached for, because Qt scopes a
-popup's sheet through the widget that owns it and this one is not on the window;
-what is not duplicated is the decision, which stays chrome's.
+departure. `menu.py` answers what a list appearing over the work looks like — a
+`PANEL` fill inside a `LINE` hairline, with the highlighted row in `PANEL_HOT` —
+and the mockup's accent wash under the highlighted item would make a dropped
+select and a dropped menu two different objects on one screen. The rule is
+restated here rather than reached for, because a combo's popup is a
+`QAbstractItemView` and not a `QMenu`, so there is no selector the two can share;
+what is not restated is the decision, which is `menu.py`'s. It was chrome's when
+this file was written, and these two copies with a comment between them are the
+reason it moved.
 
 The chevron is painted and not styled, for `check.py`'s reason exactly.
 `QComboBox::down-arrow` takes its whole appearance from an `image:` the moment a
@@ -158,7 +160,7 @@ class Select(QComboBox):
             #select::drop-down {{ border: 0; width: 0; background: transparent; }}
             #select::down-arrow {{ image: none; width: 0; height: 0; }}
 
-            /* The dropped list, in the dress `frame/chrome.py` gives a menu. */
+            /* The dropped list, in the dress `menu.py` gives a menu. */
             #select QAbstractItemView {{
                 background: {rgb(PANEL)};
                 color: {rgb(TEXT)};

@@ -137,6 +137,36 @@ the selected row, on `segmented.py`'s grounds, and the mockup's mono numerals,
 on `field.py`'s — a family is the tree's first and belongs in `metrics.py` when
 it is chosen, and right-alignment is the half of that treatment that costs no
 decision.
+
+`menu.py` is the sixth surface and the only thing here that arrived because the
+tree was already paying for not having it. Every other file was lifted ahead of
+a view or when a second view turned out to be drawing the same picture; this one
+is a decision that had *two* copies before it had a home — `frame/chrome.py`
+answered what a list appearing over the work looks like, `select.py` took that
+answer deliberately and then wrote the rules out again, and the comment naming
+which was the original is what a drift starts as. So the dress moves here and
+chrome takes it from this file, which leaves the window's chrome dressing the
+window rather than also being the tree's only copy of a shape any card can open.
+`select.py` still restates it, and that one is not duplication that can be
+removed: a combo's popup is a `QAbstractItemView` and a menu is a `QMenu`, and
+no selector reaches both.
+
+Settling it turned no constant public and declined three things. The danger red
+goes on `button.py`'s grounds, for the third time after `pill.py` and
+`banner.py` — what the mockup paints red is a destructive verb, and the word is
+what carries that here. The accent wash under the highlighted row goes on the
+grounds that were the point of moving the file at all: a dropped select and a
+dropped menu are one object on one screen, and that object's highlight is
+`PANEL_HOT`. The corner goes for a reason none of the others have — a menu is a
+top-level popup, and a rounded one needs a translucent background whose corners
+a compositor rather than Qt has to answer.
+
+What it keeps from the mockup, and chrome does not have, is the captioned group
+and the shortcut column: the two things that make a menu of fifteen verbs
+readable rather than a wall. Neither is Qt's own drawing. The caption is a
+disabled row holding a label rather than `addSection`, whose look is the
+platform's — the same reason `segmented.py` is not a `QTabBar` — and the column
+is only the room reserved for a shortcut Qt already draws right-aligned.
 """
 
 from __future__ import annotations
@@ -146,6 +176,7 @@ from sieve.gui.primitives.button import DEFAULT, GHOST, PRIMARY, SUBTLE, Button
 from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.check import Check
 from sieve.gui.primitives.field import Field, LineField
+from sieve.gui.primitives.menu import Menu
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.pill import IDLE, LIVE, OFF, Pill
 from sieve.gui.primitives.sections import Section, SectionCard
@@ -176,6 +207,7 @@ __all__ = [
     "Column",
     "Field",
     "LineField",
+    "Menu",
     "Pill",
     "Section",
     "SectionCard",

@@ -13,7 +13,8 @@ import sys
 from PySide6.QtWidgets import QWidget
 
 from sieve.gui import palette
-from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
+from sieve.gui.palette import ACCENT, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
+from sieve.gui.primitives import menu
 
 
 def stylesheet() -> str:
@@ -40,21 +41,12 @@ def stylesheet() -> str:
         #menubar::item:pressed {{ background: {rgb(PANEL)}; }}
 
         /* Dropped menus are panes, not ground: a panel fill inside a hairline,
-           the same pairing every card in the panes will use. */
-        QMenu {{
-            background: {rgb(PANEL)};
-            color: {rgb(TEXT)};
-            border: 1px solid {rgb(LINE)};
-            padding: 4px 0;
-        }}
-        QMenu::item {{ padding: 5px 28px 5px 20px; }}
-        QMenu::item:selected {{ background: {rgb(PANEL_HOT)}; }}
-        QMenu::item:disabled {{ color: {rgb(DIM)}; }}
-        QMenu::separator {{
-            height: 1px;
-            background: {rgb(LINE)};
-            margin: 4px 8px;
-        }}
+           the same pairing every card in the panes will use. The rules are
+           `primitives/menu.py`'s and not written out here — the argument was
+           this file's and the drawing is now shared with every menu a view
+           opens, which is not something the window's chrome should be the only
+           copy of. */
+        {menu.sheet()}
 
         /* Anchored to the class and reaching only into its own label: a dialog
            the frame raises is not a pane, and nothing inside one is. */

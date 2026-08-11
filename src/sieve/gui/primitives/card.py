@@ -60,6 +60,7 @@ from PySide6.QtWidgets import (
 
 from sieve.gui import icons, metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, TEXT, rgb
+from sieve.gui.primitives import meter
 
 #: The card's corner is `metrics.radius()` and no longer a number here. The
 #: argument for the 6 it defaults to is still the card's — small enough to read
@@ -82,11 +83,10 @@ _RULE_PAST = 26
 _RULE_H = 1
 _RULE_PAD = 2
 
-#: How tall the meter across the foot is. Four pixels is the smallest bar that
-#: still reads as a length rather than as a hairline that happens to be two
-#: colours, and small enough that a card carrying one is not a card carrying a
-#: progress widget.
-_METER_H = 4
+#: How tall the meter across the foot is, and how it is drawn — both now
+#: `meter.py`'s, which is where the argument for the four pixels moved when the
+#: table turned out to want the same bar in a cell. What is left here is whether
+#: there is a foot at all, which is the card's.
 
 #: How far the hovered edge moves off `LINE` toward the ink, through
 #: `palette.mix` — see there for why a hover is a step between two roles rather
@@ -257,7 +257,7 @@ class Card(QFrame):
         cards that measure something are the only ones that look like they do.
         """
         self._meter = None if full is None else max(0.0, min(1.0, full))
-        room = _METER_H if self._meter is not None else 0
+        room = meter.HEIGHT if self._meter is not None else 0
         self.layout().setContentsMargins(0, 0, 0, room)
         self.update()
 
@@ -378,22 +378,23 @@ class Card(QFrame):
         if self._meter is not None:
             # Clipped by the shape, because the foot runs into two rounded
             # corners and a rectangle drawn there would put square ends outside
-            # the card it is the foot of.
+            # the card it is the foot of. Which is also why the ends are square:
+            # this bar has no corner of its own, and the one it wears is the
+            # card's — `meter.py` on which shape says which thing.
             painter.save()
             painter.setClipPath(shape)
-            foot = QRectF(box.left(), box.bottom() - _METER_H, box.width(), _METER_H)
-            # The groove is `LINE` and not `STACK_BG`: the card's foot sits
-            # against the ground, and a groove in the ground's own colour is a
-            # groove that disappears — the bar would then be a length with
-            # nothing to be a fraction of.
-            painter.fillRect(foot, LINE)
-            done = QRectF(foot)
-            done.setWidth(foot.width() * self._meter)
-            # Accent only on the current card. The accent means *this is what you
-            # are acting on*, and a column of twenty cards each with an accent
-            # stripe along its bottom spends that meaning on twenty things at
-            # once; dim against the groove is still a readable length.
-            painter.fillRect(done, ACCENT if self._selected else DIM)
+            meter.draw(
+                painter,
+                QRectF(box.left(), box.bottom() - meter.HEIGHT, box.width(), meter.HEIGHT),
+                self._meter,
+                # Accent only on the current card. The accent means *this is what
+                # you are acting on*, and a column of twenty cards each with an
+                # accent stripe along its bottom spends that meaning on twenty
+                # things at once; dim against the groove is still a readable
+                # length.
+                current=self._selected,
+                round_ends=False,
+            )
             painter.restore()
 
         # The rule: from the card's inset to `_RULE_PAST` past the title, and

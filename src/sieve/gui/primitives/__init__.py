@@ -167,6 +167,33 @@ readable rather than a wall. Neither is Qt's own drawing. The caption is a
 disabled row holding a label rather than `addSection`, whose look is the
 platform's — the same reason `segmented.py` is not a `QTabBar` — and the column
 is only the room reserved for a shortcut Qt already draws right-aligned.
+
+`meter.py` is the third mark and arrived for `menu.py`'s reason rather than for
+the other two marks': a pill says what state a thing is in and a banner says what
+happened to it, and this is the one that is a number — but what moved it here is
+that the tree was already paying. `card.py` held the only copy, four pixels
+across a card's foot with its own height and its own rule for the accent, and
+`table.py` landed with cells that take a widget beside a numeric column, which is
+the mockup's `Cellbar` and the second place the same bar is wanted. So the
+drawing moves here and the card takes it from this file, which leaves the card
+deciding whether it has a foot rather than also being the tree's only answer to
+what a length looks like.
+
+Settling it turned `card.py`'s meter height public and paid the hue refusal a
+fourth time, at a cost the earlier three did not have. The mockup lights the bar
+amber past the step's share of the frame budget; the accent is the only hue and
+already means *the one you are acting on*, so the two questions collapse and what
+the tree keeps is selection — which is what the card was already doing with it. A
+meter therefore cannot say *this is expensive*. The number at the other end of
+the row says it instead, which is what the mockup's own card draws beside the
+bar, and it says it in milliseconds rather than in a threshold somebody picked.
+
+The one thing it declines that no other file here has had to is the type slider.
+Every mark and control above either follows a text role or fixes a drawing at a
+pixel size; this fixes both its thickness and its length, because a mark whose
+meaning *is* its size cannot also take that size from a preference — two bars in
+one column at two sizes would not be comparable, and comparison is the whole of
+what the shape is for.
 """
 
 from __future__ import annotations
@@ -177,6 +204,7 @@ from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.check import Check
 from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.menu import Menu
+from sieve.gui.primitives.meter import Meter
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.pill import IDLE, LIVE, OFF, Pill
 from sieve.gui.primitives.sections import Section, SectionCard
@@ -208,6 +236,7 @@ __all__ = [
     "Field",
     "LineField",
     "Menu",
+    "Meter",
     "Pill",
     "Section",
     "SectionCard",

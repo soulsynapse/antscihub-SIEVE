@@ -52,6 +52,7 @@
         - 📄 `check.py` — The checkbox and the radio: one box, ticked or not, with its label beside it.
         - 📄 `field.py` — The text field, and the labelled frame with the focus ring around it.
         - 📄 `menu.py` — The menu: a list of verbs standing over the work, grouped, with its keys shown.
+        - 📄 `meter.py` — The meter: a quantity drawn as a length, in a groove the length is read off.
         - 📄 `nav.py` — The sections down the left of a card, and which one is being read.
         - 📄 `pill.py` — The pill: a word saying what state a thing is in, with a dot beside it.
         - 📄 `sections.py` — A card of sections: a list down the left, one of them read on the right.

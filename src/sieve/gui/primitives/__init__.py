@@ -88,6 +88,21 @@ the head a pane wears was the stack's band until a view that is not a column of
 cards wanted the same line at its top, and it moved here so that a head is one
 decision rather than one per pane. Everything a view stands in starts as one of
 these.
+
+`pill.py` is the first thing here that is neither: a surface is what the work is
+seen in and a control is what it is done with, and this is a mark the interface
+*makes* about something and takes no gesture for. It arrives the way the budget
+controls did — ahead of a view asking — because what a state looks like is spent
+everywhere, and the first view to draw a running step would be fixing it for all
+of them.
+
+Settling it turned no constant public and refused a role instead, which is the
+same answer `button.py` gave danger and is worth having given twice. The mockup
+lights its three states green, amber and grey; two of those are hues past the
+one every palette commits to, so the dot takes the accent, the ink and `DIM`,
+and the word — which the mockup already says is what carries the meaning — does
+the rest. What that costs is a fourth state, failure, which cannot be told from
+*off* without the hue and so is not offered here at all.
 """
 
 from __future__ import annotations
@@ -97,6 +112,7 @@ from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.check import Check
 from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.nav import SectionNav
+from sieve.gui.primitives.pill import IDLE, LIVE, OFF, Pill
 from sieve.gui.primitives.sections import Section, SectionCard
 from sieve.gui.primitives.segmented import Segmented
 from sieve.gui.primitives.select import Select
@@ -107,6 +123,9 @@ from sieve.gui.primitives.view import View
 __all__ = [
     "DEFAULT",
     "GHOST",
+    "IDLE",
+    "LIVE",
+    "OFF",
     "PRIMARY",
     "SUBTLE",
     "Button",
@@ -115,6 +134,7 @@ __all__ = [
     "Check",
     "Field",
     "LineField",
+    "Pill",
     "Section",
     "SectionCard",
     "SectionNav",

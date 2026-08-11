@@ -51,6 +51,7 @@
         - 📄 `check.py` — The checkbox and the radio: one box, ticked or not, with its label beside it.
         - 📄 `field.py` — The text field, and the labelled frame with the focus ring around it.
         - 📄 `nav.py` — The sections down the left of a card, and which one is being read.
+        - 📄 `pill.py` — The pill: a word saying what state a thing is in, with a dot beside it.
         - 📄 `sections.py` — A card of sections: a list down the left, one of them read on the right.
         - 📄 `segmented.py` — The segmented bar: a fixed few, side by side, exactly one of them on.
         - 📄 `select.py` — The select: one of many, from a list that is not standing open.

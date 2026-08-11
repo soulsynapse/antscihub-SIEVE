@@ -6,9 +6,13 @@ re-importing would leave every object built from the old modules still standing
 looking at is a mix of two versions of the code with no way to tell which one
 answered. Replacing the process is the only reload that cannot be partial.
 
-Nothing is carried across, because there is nothing to carry yet: a project is
-not opened, so the window has no state a restart loses. That stops being true
-the moment one is, and this is the file where "reload keeps X" would be written.
+Nothing is handed to the new process, because there is nothing to hand it yet: a
+project is not opened, so the window has no state a restart loses. What survives
+a relaunch survives it the same way it survives a reboot — the palette comes
+back because it is in the settings document, not because this file carried it —
+and that is the arrangement to keep reaching for. This is the file where "reload
+keeps X" would be written for an X that is genuinely of *this run* and has
+nowhere on disk to be.
 
 The command is rebuilt rather than guessed, and there are two of them to rebuild
 because the app has two entry points — a console script, which is an executable

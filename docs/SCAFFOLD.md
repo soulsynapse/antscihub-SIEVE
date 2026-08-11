@@ -67,6 +67,7 @@
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
     - 📄 `relaunch.py` — Start SIEVE over: the same command, in place of the process running it.
+    - 📄 `settings.py` — What the user has set, kept where the next run will find it.
 - 📄 `.gitattributes`
 - 📄 `.gitignore`
 - 📄 `.python-version`

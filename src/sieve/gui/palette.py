@@ -31,6 +31,14 @@ is the holder's to do in the same slot.
 `current()` is what a chooser reads to mark the palette in use; nothing else
 should need it, since asking *which* palette is on is a different question from
 asking what colour to draw with, and only one of the two is a view's business.
+
+The choice outlives the process, and it is `use()` that writes it down rather
+than whatever called `use()`. A chooser that saved its own click would be right
+only while it was the only way to change one — the same argument the appearance
+section makes for marking its rows off `CHANGED` instead of off the click — and
+a second caller, a hotkey or a system-theme follower, would silently not stick.
+Passing through here is what makes a palette change persistent, so there is one
+place that has to be reached and no way to change the palette that skips it.
 """
 
 from __future__ import annotations
@@ -39,6 +47,8 @@ from typing import NamedTuple
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor
+
+from sieve import settings
 
 
 class Palette(NamedTuple):
@@ -238,10 +248,18 @@ _LIGHT: tuple[Palette, ...] = (
 #: only wants "all of them, in order" does not have to concatenate anything.
 PALETTES: tuple[Palette, ...] = _DARK + _LIGHT
 
-#: What the application comes up in. `slate` because it is the palette the tree
-#: was drawn against, so the default is the one every screenshot and every
-#: docstring's colour claim already describes.
+#: What the application comes up in when nothing has been chosen. `slate`
+#: because it is the palette the tree was drawn against, so the default is the
+#: one every screenshot and every docstring's colour claim already describes.
 DEFAULT = _DARK[0]
+
+#: What the choice is called in the settings document. The *name* is stored and
+#: not the eight colours: a palette is a set of decisions this module is allowed
+#: to revise — a grey lifted, an accent retuned — and a document holding the
+#: values would pin a user to whichever version of `slate` they first launched.
+#: A name that no longer matches anything resolves to the default, which is the
+#: behaviour a renamed or retired palette should have.
+_KEY = "palette"
 
 
 class _Notifier(QObject):
@@ -284,15 +302,23 @@ def current() -> Palette:
 
 
 def use(palette: Palette) -> None:
-    """Draw everything in `palette` from here on.
+    """Draw everything in `palette` from here on, and in it again next run.
 
     Each live colour is assigned into rather than replaced, because that object
     is what every view is already holding — see the module docstring. Asking for
-    the palette already in use does nothing rather than emitting: `CHANGED` costs
-    a stylesheet rebuild and an icon redraw everywhere in the tree, and a chooser
-    that re-picks the current row on every arrow key would pay it each time.
+    the palette already in use redraws nothing rather than emitting: `CHANGED`
+    costs a stylesheet rebuild and an icon redraw everywhere in the tree, and a
+    chooser that re-picks the current row on every arrow key would pay it each
+    time.
+
+    It is still written down in that case, above the early return and not below
+    it. What the document holds and what the process is drawing in can differ —
+    an unreadable settings file leaves the run at the default with nothing
+    stored — and asking for the palette already on screen is exactly the gesture
+    a user makes to insist on it.
     """
     global _current
+    settings.remember(_KEY, palette.name)
     if palette is _current:
         return
     _current = palette
@@ -315,4 +341,25 @@ def rgb(color: QColor) -> str:
     return f"rgb({color.red()},{color.green()},{color.blue()})"
 
 
-use(DEFAULT)
+def _remembered() -> Palette:
+    """The palette last chosen, if it is still one of the palettes on offer.
+
+    Matched by name against `PALETTES` rather than trusted: the document is
+    written by a version of this module that may not be the one reading it, and
+    is a file a user is invited to edit. Anything that does not name a palette
+    here — a retired one, a typo, a number — comes up as the default, which is
+    what a first run does and needs no other handling.
+    """
+    name = settings.stored(_KEY)
+    for palette in PALETTES:
+        if palette.name == name:
+            return palette
+    return DEFAULT
+
+
+# At import, because the colours are what everything below this module is built
+# out of: a window that came up in the default and was re-dressed once the
+# settings were read would show the wrong palette for as long as it took, which
+# is a flash of the wrong application on every launch. Reading the document here
+# is the one disk touch on the way up, and it is a few hundred bytes.
+use(_remembered())

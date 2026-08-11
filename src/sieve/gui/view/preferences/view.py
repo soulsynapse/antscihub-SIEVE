@@ -14,13 +14,12 @@ the start, and each section is a place controls land rather than a place they
 have to be argued for. `appearance` is the first to have had something land in
 it, and the others stay listed and empty on exactly the same terms as before.
 
-The view holds no preference and reads none. There is nowhere to keep one yet,
-no settings document and no place one would be written, and a view that picked
-somewhere would be that decision, made in a view — which is the same refusal the
-project list makes about the library it lists. The palette a user picks is the
-live one and not a stored one for that reason: it lasts as long as the process,
-and the section says so rather than pretending at persistence it has nowhere to
-put.
+The view holds no preference and reads none. Where a setting is kept is
+`sieve/settings.py`'s and what it means is its own module's — the palette a user
+picks is written down by `palette.use()`, not by the row that was clicked — and
+a view that opened the settings document itself would be making that decision in
+a view, which is the same refusal the project list makes about the library it
+lists. What is here is where a setting is *reachable*, and nothing else.
 """
 
 from __future__ import annotations
@@ -78,7 +77,7 @@ class Preferences(SectionCard):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(
             "preferences",
-            "the palette is live; the rest are the sections it will land beside",
+            "kept between runs; the empty sections are where the rest will land",
             _sections(),
             _WIDTH,
             _HEIGHT,

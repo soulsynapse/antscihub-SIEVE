@@ -17,11 +17,11 @@ light is `palette.py`'s — this file draws them and reads none of the values. I
 is the split preferences makes everywhere else too: the view is where a setting
 is reachable, never where its content is decided.
 
-Nothing is written down. The pick lasts as long as the process, because there is
-no settings document to put it in and no place one would go, and a view that
-picked somewhere would be that decision made in a view — which is the refusal
-`view.py` states for the card as a whole and this section does not get to break
-just because it is the first one with a control in it.
+The pick outlasts the run, and nothing here writes it. `palette.use()` is what
+records it, so a palette changed by something that is not this section is
+remembered on the same terms — the same reason the mark is moved off
+`palette.CHANGED` and not off the click. This section reports a row was picked;
+what that means, and how long it lasts, is the palette's.
 """
 
 from __future__ import annotations

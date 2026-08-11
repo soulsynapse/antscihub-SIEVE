@@ -34,6 +34,8 @@
         - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
         - 📄 `swipe.py` — The run of views a pane shows one at a time, and the slide between them.
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
+      - 📁 `primitives/` — The shapes a view is built out of, owned by none of them.
+        - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
           - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.

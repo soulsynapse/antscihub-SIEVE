@@ -13,6 +13,7 @@ plays.
   where a wrong one gets fixed. Hooks are tracked in `.githooks/`, so a fresh
   clone turns them on with `git config core.hooksPath .githooks`;
   `SIEVE_SKIP_SCAFFOLD=1` commits without one.
+- ADRs can be suggested, but never minted unprompted.
 
 ## Environment
 

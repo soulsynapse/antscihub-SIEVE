@@ -78,6 +78,7 @@
             - 📄 `sheet.py` — What is vendored, what each glyph was vendored to say, and the inks it wears.
             - 📄 `view.py` — The glyphs as a table: one row per icon, one column per way it is drawn.
           - 📄 `gallery.py` — A scrolling column of alternatives, each under its name and its argument.
+          - 📄 `icon_grid.py` — All icons: every vendored glyph laid out to be looked through, nothing else.
           - 📄 `view.py` — The dev bench as a card: the sections there are, and what each is for.
         - 📁 `pipeline/` — The pipeline: the chain of steps in the open project.
           - 📄 `view.py` — The chain as a view: the head over it, and the room its steps will stand in.

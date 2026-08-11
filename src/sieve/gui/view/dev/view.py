@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QWidget
 
 from sieve.gui.primitives import Section, SectionCard
 from sieve.gui.view.dev.card_mockups import CardMockups
+from sieve.gui.view.dev.icon_grid import IconGrid
 from sieve.gui.view.dev.icon_sheet import IconSheet
 
 #: How wide and tall the bench stands. Bigger than preferences and for the
@@ -51,6 +52,12 @@ def _sections() -> tuple[Section, ...]:
             "every vendored lucide glyph, grouped by what it is here to say and "
             "drawn in each ink a widget gives it",
             IconSheet(),
+        ),
+        Section(
+            "all icons",
+            "the same set with nothing said about it — every glyph at one size, "
+            "wrapped, for finding out what is in here",
+            IconGrid(),
         ),
         Section(
             "frame", "the panes and swipe positions, and which view is standing where"

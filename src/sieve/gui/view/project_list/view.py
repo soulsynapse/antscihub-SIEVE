@@ -32,9 +32,9 @@ from __future__ import annotations
 from typing import Iterable, Sequence
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QLabel, QWidget
+from PySide6.QtWidgets import QWidget
 
-from sieve.gui.primitives import CardStack
+from sieve.gui.primitives import CardStack, Empty
 from sieve.gui.view.project_list.card import ProjectCard
 from sieve.gui.view.project_list.project import Project
 
@@ -74,7 +74,7 @@ class ProjectList(CardStack):
 
         self._projects: list[Project] = []
         self._cards: list[ProjectCard] = []
-        self._nothing: QLabel | None = None
+        self._nothing: Empty | None = None
         self._current = -1
 
         self.show_projects(projects)
@@ -128,16 +128,22 @@ class ProjectList(CardStack):
         with nothing in it and a list that failed to load look identical, and
         only one of them is worth the user waiting on.
 
-        It wears the band's note name, which is the head's dim line: this *is*
-        that line, moved into the column because it is about the column and not
-        about the library as a whole, and a second object name for one colour is
-        a second place that colour can be decided.
+        `primitives/empty.py`'s shape rather than this file's dim label, which is
+        where that shape came from — the list said this in words before the
+        section card and the canvas did, and the primitive is the three of them
+        settled once. What it adds is the second line, and the second line is the
+        half this copy never had: *no projects yet* is the fact, and naming the
+        move that ends it is what makes an empty library different from a broken
+        one. The move is named and not offered, because the verb that makes a
+        project is not this view's — see the module docstring on where opening
+        goes — and a button here would be a second place it lived.
         """
         if self._projects:
             return
-        self._nothing = QLabel("no projects yet")
-        self._nothing.setObjectName("viewnote")
-        self._nothing.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._nothing = Empty(
+            "No projects yet",
+            "Make one to start, and it is remembered here.",
+        )
         self.add_card(self._nothing)
 
     # -- standing, and moving -------------------------------------------

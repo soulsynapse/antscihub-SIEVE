@@ -220,6 +220,28 @@ What it declines is the mockup's bold on the open tab, for a reason no other fil
 here has had: bold is wider, so the lit tab's span grows and every tab after it
 steps sideways as the selection moves — which is the fault `nav.MARK_W` is
 reserved under every entry to avoid, in the one axis a reserved mark cannot fix.
+
+`empty.py` is the fourth mark and the second file here to arrive on `menu.py`'s
+grounds rather than ahead of a view — except that the debt was three copies deep
+and not two. The project list, the section card's placeholder and the canvas each
+say in words that they have nothing to show, which is the right call made three
+times over, and the fourth pane with nothing in it would have made it four. What
+the mockup has that none of the three do is the line after the fact: an empty list
+and a list that failed to load look identical, and naming the move the user has
+not made yet is what tells them apart. So the library's copy takes this and the
+other two are argued for where they are — the placeholder retells a section's own
+name and gloss, which is not this shape, and the canvas paints its sentence into a
+stage rect it computes on every resize, which no widget dropped into a layout can
+be laid out against.
+
+Settling it turned no constant public and spent one drawing nothing else here
+has. The edge is dashed, and it is the only broken line in the tree: everything
+else in `LINE` bounds something that is *there*, and the one thing this must not
+look like is a card that arrived empty. It also refuses the mockup's near-white
+fill, which is the first refusal here that is about the fills rather than the
+hues — `PANEL_HOT` is what a control wears under the pointer, and an absence lit
+like a hovered control would be the loudest quiet thing on the screen. What is
+inside the box is whatever it is standing on, which is the truthful drawing.
 """
 
 from __future__ import annotations
@@ -228,6 +250,7 @@ from sieve.gui.primitives.banner import DONE, FAIL, NOTE, WARN, Banner
 from sieve.gui.primitives.button import DEFAULT, GHOST, PRIMARY, SUBTLE, Button
 from sieve.gui.primitives.card import Card
 from sieve.gui.primitives.check import Check
+from sieve.gui.primitives.empty import Empty
 from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.menu import Menu
 from sieve.gui.primitives.meter import Meter
@@ -260,6 +283,7 @@ __all__ = [
     "CardStack",
     "Check",
     "Column",
+    "Empty",
     "Field",
     "LineField",
     "Menu",

@@ -28,6 +28,11 @@ which is not redundant with the ring: the ring is a glow at low alpha and says
 *here*, the border says *this one*, and a field whose resting edge is already
 darkened needs both to move visibly.
 
+A wrapper is how a *styled* control gets one and not what the ring is. `EDGE`,
+`RING_W`, `RING_GAP` and `ring()` are public so a widget that paints itself can
+draw the same glow inside its own rect without a `Field` around it, which is
+what `check.py` does; the argument for each stays here, where it is made.
+
 `Button` recolours its border on focus and paints nothing, and that is the same
 decision rather than a different one — a button's box is already the thing being
 pointed at, and it is pressed and left rather than typed into.
@@ -60,16 +65,28 @@ from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, mix, rg
 #: further under the pointer. The first is what "editable" is made of; it is
 #: under `card.py`'s hover step on purpose, so the darker edge of a field and the
 #: answer a card gives the pointer are never the same colour.
-_EDGE = 0.14
-_EDGE_HOVER = 0.30
+#:
+#: Public, because "editable" is not this widget's look — it is the one step that
+#: tells a control the user may change from the panel it stands on, and the
+#: checkbox in `check.py` has to be made of the same step or the tree would have
+#: two answers to it. Named here rather than in a module both import, because
+#: this is where the claim is argued and a constant is best read beside its
+#: argument.
+EDGE = 0.14
+EDGE_HOVER = 0.30
 
 #: The ring: how wide, how far outside the control, and how much of the accent it
 #: keeps. It is a glow and not a line — at full strength it would be a second
 #: border around the first, which is the thickening this exists instead of. The
 #: alpha is high enough to read on `panel` in a dark palette, where a fraction
 #: tuned on white disappears.
-_RING_W = 3
-_RING_GAP = 3
+#:
+#: Public for the reason `EDGE` is, and more so: focus is the one thing on screen
+#: the keyboard is pointing at, so a second glow tuned somewhere else would be a
+#: second answer to *where am I*. A widget that paints its own ring — `check.py`
+#: does, having no wrapper — draws this one at this width.
+RING_W = 3
+RING_GAP = 3
 _RING_ALPHA = 64
 
 #: The box around the text, and the corner on it. The corner is this file's and
@@ -145,7 +162,7 @@ class LineField(QLineEdit):
             #field {{
                 background: {rgb(PANEL)};
                 color: {rgb(TEXT)};
-                border: 1px solid {rgb(mix(LINE, TEXT, _EDGE))};
+                border: 1px solid {rgb(mix(LINE, TEXT, EDGE))};
                 border-top-left-radius: {_RADIUS}px;
                 border-bottom-left-radius: {_RADIUS}px;
                 border-top-right-radius: {right}px;
@@ -155,7 +172,7 @@ class LineField(QLineEdit):
                 selection-background-color: {rgb(ACCENT)};
                 selection-color: {rgb(PANEL)};
             }}
-            #field:hover {{ border-color: {rgb(mix(LINE, TEXT, _EDGE_HOVER))}; }}
+            #field:hover {{ border-color: {rgb(mix(LINE, TEXT, EDGE_HOVER))}; }}
             #field:focus {{ border-color: {rgb(ACCENT)}; }}
             #field:disabled {{
                 background: {rgb(PANEL_HOT)};
@@ -199,7 +216,7 @@ class Field(QWidget):
         # The inset on every side is the room the ring is drawn in — a wrapper
         # with no margins would clip it against its own edge, and a ring that is
         # three sides of a rectangle is a rendering fault rather than a state.
-        column.setContentsMargins(_RING_GAP, _RING_GAP, _RING_GAP, _RING_GAP)
+        column.setContentsMargins(RING_GAP, RING_GAP, RING_GAP, RING_GAP)
         column.setSpacing(_SPACING)
         if label:
             column.addWidget(self._label)
@@ -270,15 +287,15 @@ class Field(QWidget):
         # Half the pen outside the control's edge and half in, so the ring abuts
         # the border rather than overlapping it — the control paints after this
         # and would take back whatever fell inside.
-        inset = _RING_W / 2
+        inset = RING_W / 2
         box = QRectF(self._control.geometry()).adjusted(-inset, -inset, inset, inset)
-        painter.setPen(QPen(_ring(), _RING_W))
+        painter.setPen(QPen(ring(), RING_W))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(box, _RADIUS + inset, _RADIUS + inset)
         painter.end()
 
 
-def _ring() -> QColor:
+def ring() -> QColor:
     """The accent at the alpha a glow wears, built at the moment of drawing.
 
     Never held, for the reason `palette.mix` gives: the roles are mutated in
@@ -329,7 +346,7 @@ class _United(QWidget):
             #funit {{
                 background: {rgb(PANEL_HOT)};
                 color: {rgb(DIM)};
-                border: 1px solid {rgb(mix(LINE, TEXT, _EDGE))};
+                border: 1px solid {rgb(mix(LINE, TEXT, EDGE))};
                 border-left: 0;
                 border-top-right-radius: {_RADIUS}px;
                 border-bottom-right-radius: {_RADIUS}px;

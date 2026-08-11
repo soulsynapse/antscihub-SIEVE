@@ -61,7 +61,12 @@ GHOST = "ghost"
 #: past that. Two steps of the same move rather than two colours: press has to be
 #: visibly more than hover, since a pointer that is already over the button is
 #: holding the hover state while it clicks.
-_HOVER = 0.14
+#:
+#: `HOVER` is public and `_PRESS` is not, which is the difference between a
+#: filled *thing* and a button: anything in this tree that is filled with a role
+#: answers the pointer by this much — the accent-filled checkbox in `check.py`
+#: does — while being pressed and held is something only a button is.
+HOVER = 0.14
 _PRESS = 0.26
 
 #: How far a hovered edge moves off `LINE`, matching the card's — a bordered
@@ -197,9 +202,9 @@ def _hover(kind: str) -> tuple[str, QColor, str]:
     a ghost that only took a fill on hover would be answering half.
     """
     if kind == PRIMARY:
-        return rgb(mix(ACCENT, TEXT, _HOVER)), PANEL, rgb(mix(ACCENT, TEXT, _HOVER))
+        return rgb(mix(ACCENT, TEXT, HOVER)), PANEL, rgb(mix(ACCENT, TEXT, HOVER))
     if kind == SUBTLE:
-        step = rgb(mix(PANEL_HOT, TEXT, _HOVER))
+        step = rgb(mix(PANEL_HOT, TEXT, HOVER))
         return step, TEXT, step
     if kind == GHOST:
         return rgb(PANEL_HOT), TEXT, _NONE
@@ -215,7 +220,7 @@ def _pressed(kind: str) -> str:
     """
     if kind == PRIMARY:
         return rgb(mix(ACCENT, TEXT, _PRESS))
-    return rgb(mix(PANEL_HOT, TEXT, _PRESS - _HOVER))
+    return rgb(mix(PANEL_HOT, TEXT, _PRESS - HOVER))
 
 
 def _off_fill(kind: str) -> str:

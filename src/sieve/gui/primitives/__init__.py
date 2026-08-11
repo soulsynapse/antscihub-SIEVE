@@ -39,6 +39,21 @@ had settled the same shape, and the tuning pane this project is for wants a thir
 card and the sections, and not the budget argument the two controls above it were
 settled on.
 
+`check.py` is the fourth control and arrived the way the first two did rather
+than the way the slider did: what a *set* state looks like is a mark spent
+everywhere — a write list, a choice of estimator, a row of options in a box — and
+the first view to draw a ticked box would be fixing it for every view after.
+Emphasis is the buttons' budget and focus is the field's; this is the third of
+the same kind, and it is why the three of them are settled before there are three
+views to argue over them.
+
+Settling it is also what turned two constants public. A checkbox is editable, so
+its resting edge is the step `field.py` argues for; it is filled, so it answers
+the pointer by the step `button.py` argues for; and it paints its own focus ring,
+having no wrapper to paint one for it. Each is imported from the file that makes
+the case rather than restated — a second 0.14 written here would be a second
+answer to *what does the pointer do*, free to drift from the first.
+
 `view.py` is the fourth shape and is under the other two rather than beside them:
 the head a pane wears was the stack's band until a view that is not a column of
 cards wanted the same line at its top, and it moved here so that a head is one
@@ -50,6 +65,7 @@ from __future__ import annotations
 
 from sieve.gui.primitives.button import DEFAULT, GHOST, PRIMARY, SUBTLE, Button
 from sieve.gui.primitives.card import Card
+from sieve.gui.primitives.check import Check
 from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.nav import SectionNav
 from sieve.gui.primitives.sections import Section, SectionCard
@@ -65,6 +81,7 @@ __all__ = [
     "Button",
     "Card",
     "CardStack",
+    "Check",
     "Field",
     "LineField",
     "Section",

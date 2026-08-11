@@ -44,12 +44,18 @@
           - 📄 `x.svg`
       - 📁 `primitives/` — The shapes a view is built out of, owned by none of them.
         - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.
+        - 📄 `nav.py` — The sections down the left of a card, and which one is being read.
+        - 📄 `sections.py` — A card of sections: a list down the left, one of them read on the right.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
           - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.
           - 📄 `view.py` — The canvas as a stage: content held at its own shape, and the room around it.
+        - 📁 `dev/` — The dev view: the application looked at by whoever is building it.
+          - 📁 `card_mockups/` — Card mock ups: the shapes a card could take, drawn beside each other.
+            - 📄 `look.py` — One way a card could look, and the handful of ways being considered.
+            - 📄 `view.py` — The looks laid out one under another, each shown selected and not.
+          - 📄 `view.py` — The dev bench as a card: the sections there are, and what each is for.
         - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.
-          - 📄 `nav.py` — The sections down the left, and which one is being read.
           - 📄 `view.py` — Preferences as a card: the sections there will be, and what each is for.
         - 📁 `project_list/` — The library: every project remembered, and which one the work is standing in.
           - 📄 `card.py` — One project, as a card the pointer and the keyboard reach the same way.

@@ -81,9 +81,24 @@ _BAR: tuple[Drop | Button, ...] = (
         ),
     ),
     _PREFERENCES,
+    #: The dev bench is under Help and nowhere else. It is not a View entry —
+    #: those change how the window is divided, and the bench is a thing standing
+    #: over the division rather than a shape of it — and it is not a title of its
+    #: own beside Preferences, because the bar is a picture of what the
+    #: application is *for*, and the bench is not part of that. Help is where the
+    #: things about the program rather than about the work already sit.
+    #:
+    #: Ctrl+D is carried here rather than in `hotkeys.py`. A shortcut on a
+    #: `QAction` is the action's, the same way Ctrl+, is preferences'; `_KEYS`
+    #: is for keys with nothing on the bar to hang from, and a binding in both
+    #: places is one Qt reports as ambiguous and then answers with neither.
     Drop(
         "&Help",
-        (("&About SIEVE", "about", ""),),
+        (
+            ("&Dev view", "open_dev", "Ctrl+D"),
+            None,
+            ("&About SIEVE", "about", ""),
+        ),
     ),
 )
 

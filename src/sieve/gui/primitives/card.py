@@ -14,7 +14,7 @@ the same widget stand in a list of projects and in a stack of steps.
 Selection is an accent edge down the leading side rather than a fill, so a card
 that is current and a card that is hovered are never the same picture — the fill
 is the pointer's answer and the edge is the selection's, and both can be true at
-once (`project_list/card.py` and `preferences/nav.py` make the same split).
+once (`project_list/card.py` and `primitives/nav.py` make the same split).
 
 The card paints nothing itself and wears a stylesheet scoped to its own widget,
 so the rules reach the labels and buttons inside it and nothing outside.

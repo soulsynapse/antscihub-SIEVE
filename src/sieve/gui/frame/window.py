@@ -38,13 +38,22 @@ land. The window is what puts it there and hands it what to show — the view
 names no pane and no position, so where it stands is the frame's answer and
 changing it is an edit here.
 
-One view stands in neither a pane nor a position. Preferences are about the
-application rather than about the project, so they are put on an overlay over
-the panes (`overlay.py`) — which takes no room from them, and is why the count
-of panes is unchanged by there being a fourth thing the window can show. The
-frame's keys are held while it is up: they are the window's and fire wherever
-focus is, which is what makes them frame-wide and exactly what must not walk a
-track the user cannot currently see.
+Two views stand in neither a pane nor a position. Preferences are about the
+application rather than about the project, and the dev bench is about the tree
+rather than about either, so both are put on an overlay over the panes
+(`overlay.py`) — which takes no room from them, and is why the count of panes is
+unchanged by there being things the window can show that are not in one. They
+share the one overlay and the window says which is standing, because which one
+the user asked for is the only part of it the views cannot know. The frame's
+keys are held while either is up: they are the window's and fire wherever focus
+is, which is what makes them frame-wide and exactly what must not walk a track
+the user cannot currently see.
+
+Where each is dropped differs, and the difference is what opened it. Preferences
+hang off their own title on the bar, which stays visible above them. The bench
+is reached from inside the Help drop or from Ctrl+D — the drop closes on the
+click and the key never opened one, so there is nothing left on screen to hang
+from, and it is centred instead.
 """
 
 from __future__ import annotations
@@ -65,6 +74,7 @@ from sieve.gui.frame.panes import (
 from sieve.gui.frame.swipe import POSITIONS, build_swipe
 from sieve.relaunch import relaunch
 from sieve.gui.view.canvas import Canvas
+from sieve.gui.view.dev import Dev
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
 
@@ -148,15 +158,19 @@ class MainWindow(QMainWindow):
         #: only by walking the window's children.
         self.hotkeys = bind_hotkeys(self)
 
-        # Preferences stand over the panes rather than in one, and the overlay
-        # covers what the central widget covers — the three panes and the two
-        # boundaries between them, and not the bar the user asked from. Built
-        # here and hidden: it takes no room, so the resting frame is still three
-        # panes, and there is nothing to construct on the way to showing it.
+        # Preferences and the dev bench stand over the panes rather than in one,
+        # and the overlay covers what the central widget covers — the three
+        # panes and the two boundaries between them, and not the bar the user
+        # asked from. Both built here and hidden: neither takes room, so the
+        # resting frame is still three panes, and there is nothing to construct
+        # on the way to showing either. One overlay for the two of them, since
+        # there is one scrim and one way back to the work.
         self.overlay = Overlay(stacked)
         self.preferences = Preferences()
-        self.overlay.body.addWidget(self.preferences)
-        self.preferences.closed.connect(self.close_preferences)
+        self.dev = Dev()
+        for view in (self.preferences, self.dev):
+            self.overlay.body.addWidget(view)
+            view.closed.connect(self.close_overlay)
         self.overlay.dismissed.connect(lambda: suspend_hotkeys(self.hotkeys, False))
 
         self.resize(_WINDOW_WIDTH, _WINDOW_HEIGHT)
@@ -215,13 +229,39 @@ class MainWindow(QMainWindow):
         stays visible above it, and Ctrl+, arrives at the same place, which is
         what keeps the keyboard's route and the pointer's showing one thing.
         """
-        suspend_hotkeys(self.hotkeys, True)
-        self.overlay.raise_over(preferences_anchor(self.bar))
+        self._raise(self.preferences, preferences_anchor(self.bar))
 
-    def close_preferences(self) -> None:
-        """Uncover the panes. The keys come back with the overlay's own signal,
-        so the two ways the user closes this and the one the frame does all
-        restore them in the same place."""
+    def open_dev(self) -> None:
+        """Ctrl+D, or Help ▸ Dev view: the bench over the panes.
+
+        Centred rather than anchored, and that is not a smaller version of the
+        preferences decision but the other side of it: a view is dropped under
+        the thing that opened it so it reads as having come from there, and the
+        bench is opened from an entry inside a drop that closes on the click, or
+        from a key that opened no drop at all. Hung off the Help title it would
+        be hanging off something the user was not looking at.
+
+        Asking again while it is already up is a re-raise and not a second card,
+        and asking for it while preferences are up turns the overlay to it
+        rather than stacking one over the other.
+        """
+        self._raise(self.dev, None)
+
+    def _raise(self, view: QWidget, left: int | None) -> None:
+        """Stand a view on the scrim and hold the frame's keys while it is up.
+
+        The one place the two overlay views are raised from, so what covering
+        the panes costs is stated once: a second verb that raised its own view
+        and forgot the keys would leave ← and → walking a track nobody can see.
+        """
+        suspend_hotkeys(self.hotkeys, True)
+        self.overlay.stand(view)
+        self.overlay.raise_over(left)
+
+    def close_overlay(self) -> None:
+        """Uncover the panes, whichever view was standing. The keys come back
+        with the overlay's own signal, so the two ways the user closes this and
+        the one the frame does all restore them in the same place."""
         self.overlay.dismiss()
 
     def about(self) -> None:

@@ -1,4 +1,10 @@
-"""The sections down the left, and which one is being read.
+"""The sections down the left of a card, and which one is being read.
+
+Held here rather than beside the first view that wanted one: preferences and the
+dev view are the same shape — a list of sections against one of them open — and
+a nav that lived in `view/preferences/` would be imported back up out of it by
+the second card to need it. What the names mean is the caller's; the nav is
+handed strings and reports an index, and has never heard of a setting.
 
 The nav holds the selection and the entries do not, for the reason the project
 list holds it rather than its cards: the one thing true of the whole column —

@@ -25,6 +25,13 @@ as belonging to what was clicked, where a centred one is read as belonging to
 the window. The caller names the x, because the overlay knows the surface and
 not what is drawn over it.
 
+More than one view may live on the scrim, and exactly one stands on it at a
+time. They are held together rather than the overlay being built per view,
+because there is one scrim, one Escape and one way back to the panes, and a
+second overlay would be a second answer to all three that could be up at the
+same time as the first. Which one is standing is the frame's to say, since the
+frame is what knows the user asked for preferences rather than for the bench.
+
 The scrim is what says *this is not a pane*: the work stays where it was and
 stays legible under it, and no boundary has moved, so nothing has to be put
 back when the overlay goes. Clicking it is the way out that needs nothing
@@ -97,6 +104,21 @@ class Overlay(QWidget):
         host.installEventFilter(self)
         self.hide()
 
+    def stand(self, view: QWidget) -> None:
+        """Make `view` the one on the scrim, and hide whatever was.
+
+        Separate from `raise_over` because they answer different questions —
+        which view, and where it sits — and only one of them changes when the
+        window is resized. Called before raising rather than as part of it, so
+        an overlay that is already up can be turned to another view without
+        going down and coming back.
+        """
+        for index in range(self.body.count()):
+            standing = self.body.itemAt(index).widget()
+            if standing is not None:
+                standing.setVisible(standing is view)
+        self._place()
+
     def raise_over(self, left: int | None = None) -> None:
         """Cover the host, in front of whatever it is showing, and take focus.
 
@@ -144,9 +166,21 @@ class Overlay(QWidget):
         self.body.setContentsMargins(self._inset(view), _GAP, _MARGIN, _MARGIN)
 
     def _view(self) -> QWidget | None:
-        """Whatever is standing on the scrim, or nothing yet."""
-        item = self.body.itemAt(0)
-        return item.widget() if item is not None else None
+        """Whichever view is standing on the scrim, or nothing yet.
+
+        The visible one and not the first: a layout ignores a hidden widget, so
+        the others take no room, but `itemAt(0)` would still hand back the view
+        that happens to have been added first — and the anchor and the inset
+        would then be measured against a card the user cannot see.
+
+        Nothing standing is a real answer and not an error. The overlay is built
+        before the frame hands it any view, and the host can resize in between.
+        """
+        for index in range(self.body.count()):
+            view = self.body.itemAt(index).widget()
+            if view is not None and not view.isHidden():
+                return view
+        return None
 
     def _inset(self, view: QWidget) -> int:
         """The asked-for anchor, unless the view would hang off the right edge.

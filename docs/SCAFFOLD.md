@@ -44,6 +44,7 @@
           - 📄 `view.py` — The library as a column of cards: which projects there are, and which is current.
       - 📄 `palette.py` — The colours every view draws with.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
+    - 📄 `relaunch.py` — Start SIEVE over: the same command, in place of the process running it.
 - 📄 `.gitattributes`
 - 📄 `.gitignore`
 - 📄 `.python-version`

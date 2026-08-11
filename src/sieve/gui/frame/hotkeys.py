@@ -36,9 +36,16 @@ if TYPE_CHECKING:  # importing it for real would close the loop back to `window`
 #: not bound — they mean the next row of whatever holds focus, and a view that
 #: has rows answers them itself; bound here they would fire for the position in
 #: front as easily as for the one the user is looking at.
+#:
+#: Ctrl+R is on no menu, and is the reason this table is not the bar's leftovers:
+#: reloading is not part of the picture the bar draws of what the application is
+#: — it acts on the run rather than on the window or on a project, which is the
+#: line `menu.py` keeps — but it is still something the frame can do, and a key
+#: is where a thing the user does between edits belongs.
 _KEYS: tuple[tuple[str, str], ...] = (
     ("Left", "swipe_back"),
     ("Right", "swipe_forward"),
+    ("Ctrl+R", "reload"),
 )
 
 

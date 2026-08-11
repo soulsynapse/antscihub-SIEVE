@@ -56,6 +56,7 @@ from sieve.gui.frame.panes import (
     build_seam,
 )
 from sieve.gui.frame.swipe import POSITIONS, build_swipe
+from sieve.relaunch import relaunch
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
 
@@ -158,6 +159,17 @@ class MainWindow(QMainWindow):
     def swipe_forward(self) -> None:
         """→: one position in."""
         self.swipe.step(+1)
+
+    def reload(self) -> None:
+        """Ctrl+R: start the application over on the code as it is now.
+
+        The window is closed first so what the user sees go away is the old run
+        and not a frame that stopped answering: the process is replaced without
+        unwinding, so nothing after the call runs and Qt is never asked to shut
+        down. What replacing it means is `relaunch.py`'s.
+        """
+        self.close()
+        relaunch()
 
     def toggle_full_screen(self) -> None:
         """Full screen and back, without deciding what 'back' is.

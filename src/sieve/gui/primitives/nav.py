@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import palette
+from sieve.gui import metrics, palette
 from sieve.gui.palette import ACCENT, LINE, PANEL, PANEL_HOT, TEXT, rgb
 
 #: How wide the entry's leading edge is. On every entry and not the current one
@@ -62,7 +62,7 @@ def _sheet(selected: bool) -> str:
             border-left: {_EDGE}px solid {rgb(edge)};
         }}
         #entry:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #label {{ color: {rgb(TEXT)}; }}
+        #label {{ color: {rgb(TEXT)}; font-size: {metrics.pt("name")}pt; }}
     """
 
 
@@ -151,6 +151,7 @@ class _Entry(QFrame):
         self._selected = False
         self.set_selected(False)
         palette.CHANGED.connect(self._restyle)
+        metrics.CHANGED.connect(self._restyle)
 
         label = QLabel(name)
         label.setObjectName("label")

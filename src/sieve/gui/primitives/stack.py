@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import palette
+from sieve.gui import metrics, palette
 from sieve.gui.palette import DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 
 #: The gap between cards, and it is deliberately not the margin around them. The
@@ -92,8 +92,12 @@ def sheet() -> str:
         }}
         #stackscroll {{ background: {rgb(STACK_BG)}; border: 0; }}
         #stackground {{ background: {rgb(STACK_BG)}; }}
-        #stacktitle {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #stacknote {{ color: {rgb(DIM)}; }}
+        #stacktitle {{
+            color: {rgb(TEXT)};
+            font-size: {metrics.pt("heading")}pt;
+            font-weight: 600;
+        }}
+        #stacknote {{ color: {rgb(DIM)}; font-size: {metrics.pt("gloss")}pt; }}
         QScrollBar:vertical {{
             background: {rgb(STACK_BG)};
             width: {_BAR_W}px;
@@ -189,6 +193,7 @@ class CardStack(QWidget):
         # method weakly and drops the connection when the widget goes, where a
         # lambda closing over `self` would keep a dead stack subscribed.
         palette.CHANGED.connect(self._restyle)
+        metrics.CHANGED.connect(self._restyle)
 
     # -- the band ----------------------------------------------------------
 

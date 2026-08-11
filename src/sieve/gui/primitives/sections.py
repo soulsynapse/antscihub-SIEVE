@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import palette
+from sieve.gui import metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 from sieve.gui.primitives.nav import SectionNav
 
@@ -77,20 +77,37 @@ class Section(NamedTuple):
 def _sheet() -> str:
     """Scoped to this card's own objects, never to a bare class: it is set on a
     widget the frame houses and whose right side holds whatever a caller handed
-    over, and a `QLabel` rule here would reach into both."""
+    over, and a `QLabel` rule here would reach into both.
+
+    The corner is on `#sections` and not on `#placeholder`, and that is the
+    distinction `metrics.radius()` is about: this widget is a card, and the panel
+    on its right is a panel inside one. Rounding every rectangle in the tree
+    would spend the setting on things a user changing *the corner of the cards*
+    did not ask to move, and would put a curve on the one surface — the reading
+    side — that a section's own contents are laid out square against.
+    """
     return f"""
         #sections {{
             background: {rgb(PANEL)};
             border: 1px solid {rgb(LINE)};
+            border-radius: {metrics.radius()}px;
         }}
-        #heading {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #note {{ color: {rgb(DIM)}; }}
+        #heading {{
+            color: {rgb(TEXT)};
+            font-size: {metrics.pt("heading")}pt;
+            font-weight: 600;
+        }}
+        #note {{ color: {rgb(DIM)}; font-size: {metrics.pt("gloss")}pt; }}
         #placeholder {{
             background: {rgb(PANEL_HOT)};
             border: 1px solid {rgb(LINE)};
         }}
-        #name {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #gloss, #empty {{ color: {rgb(DIM)}; }}
+        #name {{
+            color: {rgb(TEXT)};
+            font-size: {metrics.pt("name")}pt;
+            font-weight: 600;
+        }}
+        #gloss, #empty {{ color: {rgb(DIM)}; font-size: {metrics.pt("gloss")}pt; }}
         #done {{ color: {rgb(DIM)}; border: 0; padding: 0 6px; }}
         #done:hover {{ color: {rgb(ACCENT)}; }}
     """
@@ -135,6 +152,12 @@ class SectionCard(QWidget):
         # drops the connection when the widget goes, where a lambda closing over
         # `self` would keep a dead card subscribed and call into it.
         palette.CHANGED.connect(self._restyle)
+        # The same sheet carries the corner and the three text sizes, so the
+        # answer to both signals is the one string built again. Two connections
+        # and not one signal, for the reason `metrics.py` gives: what they are
+        # telling this card is different, even where what it does about them is
+        # not.
+        metrics.CHANGED.connect(self._restyle)
         self.setFixedWidth(width)
         self.setFixedHeight(height)
         # Its own size and no more: the overlay centres it, so a card that asked

@@ -14,7 +14,7 @@ outside, which is the arrangement `chrome.py` refuses to do from the window.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFrame,
@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from sieve.gui import icons, palette
+from sieve.gui import icons, metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 from sieve.gui.view.project_list.project import Project
 
@@ -43,10 +43,15 @@ def _sheet(selected: bool) -> str:
             background: {rgb(PANEL)};
             border: 1px solid {rgb(LINE)};
             border-left: {_EDGE}px solid {rgb(edge)};
+            border-radius: {metrics.radius()}px;
         }}
         #card:hover {{ background: {rgb(PANEL_HOT)}; }}
-        #name {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #line {{ color: {rgb(DIM)}; }}
+        #name {{
+            color: {rgb(TEXT)};
+            font-size: {metrics.pt("name")}pt;
+            font-weight: 600;
+        }}
+        #line {{ color: {rgb(DIM)}; font-size: {metrics.pt("gloss")}pt; }}
         QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
     """
 
@@ -109,6 +114,13 @@ class ProjectCard(QFrame):
         column.addWidget(_Line(project.opened, "line"))
 
         palette.CHANGED.connect(self._restyle)
+        # Only the sheet, not the icons: those are pixmaps at the palette's
+        # colours and a size never touches them (`primitives/card.py` splits the
+        # two slots for the same reason).
+        metrics.CHANGED.connect(self._remeasure)
+
+    def _remeasure(self) -> None:
+        self.setStyleSheet(_sheet(self._selected))
 
     def _open_button(self) -> QToolButton:
         button = _button("arrow-right", "Open this project")
@@ -181,6 +193,24 @@ class _Line(QLabel):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        self._elide()
+
+    def changeEvent(self, event) -> None:
+        """A cut is made in a font, so it has to be made again when the font
+        moves.
+
+        The width the label was given does not change when the text size does —
+        the card is as wide as the pane — so no `resizeEvent` arrives to redo
+        the cut, and a name elided at 9pt and then drawn at 14 runs out past its
+        own ellipsis. This is the only place that hears about it: the sheet is
+        set on the card and the font arrives here as a `FontChange`.
+        """
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange:
+            self._elide()
+
+    def _elide(self) -> None:
+        """The line cut to the room it has, measured in the font it now has."""
         self.setText(
             self.fontMetrics().elidedText(
                 self._full, Qt.TextElideMode.ElideRight, self.width()

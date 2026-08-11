@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import palette
+from sieve.gui import metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 
 #: The gap between rows and the margin around them, one number for both, for the
@@ -71,7 +71,11 @@ def _sheet() -> str:
         }}
         #pscroll {{ background: {rgb(PANEL_HOT)}; border: 0; }}
         #pcolumn {{ background: {rgb(PANEL_HOT)}; }}
-        #pgroup {{ color: {rgb(DIM)}; font-weight: 600; }}
+        #pgroup {{
+            color: {rgb(DIM)};
+            font-size: {metrics.pt("gloss")}pt;
+            font-weight: 600;
+        }}
         #prow {{
             background: {rgb(PANEL)};
             border: 1px solid {rgb(LINE)};
@@ -79,8 +83,12 @@ def _sheet() -> str:
         }}
         #prow:hover {{ background: {rgb(PANEL_HOT)}; }}
         #prow[chosen="true"] {{ border-left-color: {rgb(ACCENT)}; }}
-        #pname {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #pgloss {{ color: {rgb(DIM)}; }}
+        #pname {{
+            color: {rgb(TEXT)};
+            font-size: {metrics.pt("name")}pt;
+            font-weight: 600;
+        }}
+        #pgloss {{ color: {rgb(DIM)}; font-size: {metrics.pt("gloss")}pt; }}
         QScrollBar:vertical {{
             background: {rgb(PANEL_HOT)};
             width: 8px;
@@ -160,6 +168,10 @@ class Palettes(QWidget):
 
         self._restyle()
         palette.CHANGED.connect(self._restyle)
+        # The rows carry the two text sizes, so a size change is this sheet
+        # again. The swatches are untouched by either signal — they are drawn
+        # from literals and never restyled, which is the whole point of them.
+        metrics.CHANGED.connect(self._restyle)
 
     def _restyle(self) -> None:
         """Wear the palette now in use, and move the mark to the row that is it.

@@ -11,8 +11,9 @@ greyed entries rather than a different one: a settings screen that grew a
 control the day the setting behind it landed would never, at any point, say what
 the application is configurable *about*. Written out and empty, it says so from
 the start, and each section is a place controls land rather than a place they
-have to be argued for. `palette` is the first to have had something land in
-it, and the others stay listed and empty on exactly the same terms as before.
+have to be argued for. `palette` and `minor visuals` are the two that have had
+something land in them, and the others stay listed and empty on exactly the same
+terms as before.
 
 The view holds no preference and reads none. Where a setting is kept is
 `sieve/settings.py`'s and what it means is its own module's — the palette a user
@@ -27,6 +28,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QWidget
 
 from sieve.gui.primitives import Section, SectionCard
+from sieve.gui.view.preferences.minor_visuals import MinorVisuals
 from sieve.gui.view.preferences.palettes import Palettes
 
 #: How wide the card is allowed to get. A settings row is a label and a control
@@ -41,10 +43,14 @@ _WIDTH = 820
 
 #: How tall the card stands, whichever section is open. Sized to the tallest
 #: section and not to the current one — why it is fixed at all is the card's,
-#: and stated there. That was the longest gloss while every section was empty;
-#: it is now `palette`, which is a list, and the number is what shows enough
-#: of that list to read as one rather than as a row with a scrollbar beside it.
-_HEIGHT = 430
+#: and stated there. That was the longest gloss while every section was empty,
+#: then `palette`, which is a list and wanted enough of it to read as one rather
+#: than as a row with a scrollbar beside it. It is now `minor visuals`, which is
+#: a countable five rows rather than a catalogue: the number is what stands all
+#: five at the default text size, so the section that sets the sizes is not the
+#: one section a user has to scroll to finish reading. It scrolls anyway at the
+#: sizes it can be set to, which is the point of it scrolling.
+_HEIGHT = 545
 
 def _sections() -> tuple[Section, ...]:
     """The sections, each a name, the one line saying what falls under it, and
@@ -68,11 +74,24 @@ def _sections() -> tuple[Section, ...]:
             "the colours everything is drawn in, including colour-vision-safe sets",
             Palettes(),
         ),
-        # Split off `palette` when that section was named for its one control
-        # rather than for appearance at large. Text size was listed under the
-        # old name and is not a colour, and a promise the card had already made
-        # is not one to drop because the section it was made in narrowed.
-        Section("text", "how large the text is, and how tight the rows are"),
+        # `text` was the section this one is now, and it is folded in rather
+        # than left standing beside it. It was split off `palette` to keep a
+        # promise the card had made about text size, and this section keeps that
+        # promise with controls under it — an empty `text` left below would be
+        # the card offering the same setting twice, once where it works and once
+        # where it says nothing is here yet, which is worse than either.
+        #
+        # The name is the user's word and not the tree's. What falls under it is
+        # a corner radius and four point sizes: small, unrelated to each other,
+        # and none of them a decision about what the application *does*. There
+        # is no module these are the settings of — they reach `primitives/` and
+        # every view at once through `gui/metrics.py` — so naming the section
+        # for one would name it after the wrong half.
+        Section(
+            "minor visuals",
+            "how round the cards are, and how large each kind of text is",
+            MinorVisuals(),
+        ),
     )
 
 

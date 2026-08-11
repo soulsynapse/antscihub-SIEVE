@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import palette
+from sieve.gui import metrics, palette
 from sieve.gui.palette import DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 
 #: The gap between blocks and the margin around the column, one number for both,
@@ -75,8 +75,12 @@ def sheet() -> str:
         #gallery {{ background: {rgb(STACK_BG)}; border: 1px solid {rgb(LINE)}; }}
         #gscroll {{ background: {rgb(STACK_BG)}; border: 0; }}
         #gcolumn {{ background: {rgb(STACK_BG)}; }}
-        #vname {{ color: {rgb(TEXT)}; font-weight: 600; }}
-        #vgloss {{ color: {rgb(DIM)}; }}
+        #vname {{
+            color: {rgb(TEXT)};
+            font-size: {metrics.pt("name")}pt;
+            font-weight: 600;
+        }}
+        #vgloss {{ color: {rgb(DIM)}; font-size: {metrics.pt("gloss")}pt; }}
         #vrule {{ background: {rgb(LINE)}; }}
         QScrollBar:vertical {{
             background: {rgb(STACK_BG)};
@@ -136,6 +140,7 @@ class Gallery(QWidget):
         # one to reach for.
         self._restyle()
         palette.CHANGED.connect(self._restyle)
+        metrics.CHANGED.connect(self._restyle)
 
     def _restyle(self) -> None:
         """The gallery's own rules again, and the scroll told to measure again.

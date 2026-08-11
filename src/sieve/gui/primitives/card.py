@@ -58,13 +58,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.gui import icons, palette
+from sieve.gui import icons, metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, TEXT, rgb
 
-#: The card's corner. Small enough to read as a cut corner rather than as a
-#: pill, which is what keeps a column of twenty of them looking like a stack of
-#: cards and not a stack of buttons.
-_RADIUS = 6
+#: The card's corner is `metrics.radius()` and no longer a number here. The
+#: argument for the 6 it defaults to is still the card's — small enough to read
+#: as a cut corner rather than as a pill, which is what keeps a column of twenty
+#: of them looking like a stack of cards and not a stack of buttons — but it is
+#: an argument for a default rather than for the only value allowed, and it is
+#: made in `metrics.py` beside the range it bounds. Read in `paintEvent` and
+#: never held: see that module on why a size is asked for and a colour is not.
 
 #: Where the head and the body hold their contents off the card's edge, and so
 #: also where the rule under the head starts: the rule, the title and every knob
@@ -207,6 +210,7 @@ class Card(QFrame):
 
         self._dress()
         palette.CHANGED.connect(self._restyle)
+        metrics.CHANGED.connect(self._remeasure)
 
     def _button(
         self, glyph: str, name: str, tip: str, signal: SignalInstance
@@ -320,7 +324,11 @@ class Card(QFrame):
         do is three pixmaps in the one `QIcon` and Qt's own choice between them.
         """
         self.setStyleSheet(f"""
-            #title {{ color: {rgb(TEXT)}; font-weight: 600; }}
+            #title {{
+                color: {rgb(TEXT)};
+                font-size: {metrics.pt("name")}pt;
+                font-weight: 600;
+            }}
             QToolButton {{ border: 0; padding: 0 4px; background: transparent; }}
         """)
 
@@ -348,6 +356,18 @@ class Card(QFrame):
         self._dress()
         self.update()
 
+    def _remeasure(self) -> None:
+        """The sheet again at the size now in force, and a repaint for the corner.
+
+        Its own slot rather than `_restyle`, and the difference is the icons.
+        Those are pixmaps drawn at the palette's colours, so a colour change has
+        to redraw all four; a size change does not touch them, and a card that
+        answered both signals in one slot would redraw every icon in the tree
+        each time a slider moved one point.
+        """
+        self._dress()
+        self.update()
+
     # -- what it draws -----------------------------------------------------
 
     def paintEvent(self, event) -> None:
@@ -365,8 +385,9 @@ class Card(QFrame):
         # so a border drawn on the widget's own rect loses its outer half to the
         # edge of the widget and comes back looking like half a line.
         box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        corner = metrics.radius()
         shape = QPainterPath()
-        shape.addRoundedRect(box, _RADIUS, _RADIUS)
+        shape.addRoundedRect(box, corner, corner)
         painter.fillPath(shape, PANEL)
 
         if self._meter is not None:

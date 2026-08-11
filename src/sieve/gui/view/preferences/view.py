@@ -47,8 +47,10 @@ from sieve.gui.view.preferences.nav import SectionNav
 #: of space between the two — the overlay has room to spare, and spending all of
 #: it makes the pair harder to read, not easier. Wider than the reading side
 #: alone wants, by about what the nav takes: the list is beside the section, not
-#: carved out of it.
-_WIDTH = 660
+#: carved out of it. The nav is a fixed column, so every width added past that
+#: lands on the reading side, where a row's label and its control are what have
+#: to fit on one line.
+_WIDTH = 820
 
 #: How tall the card stands, whichever section is open. The nav is walked with
 #: ↑ and ↓, and a card sized to its current section would resize under the key

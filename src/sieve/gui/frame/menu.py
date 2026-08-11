@@ -51,6 +51,11 @@ class Button(NamedTuple):
     shortcut: str
 
 
+#: The preferences verb, named apart from the bar it sits on because the frame
+#: has to find it again: what it opens is stood under it, so where it is drawn
+#: is a number someone asks for and not only a label the builder consumes.
+_PREFERENCES = Button("&Preferences", "open_preferences", "Ctrl+,")
+
 #: The bar, left to right. Preferences sits between the window's own views and
 #: the help, where a File menu would otherwise have buried it: it is about the
 #: application rather than about a project, and the bar is the only place that
@@ -75,7 +80,7 @@ _BAR: tuple[Drop | Button, ...] = (
             ("&Full screen", "toggle_full_screen", "F11"),
         ),
     ),
-    Button("&Preferences", "open_preferences", "Ctrl+,"),
+    _PREFERENCES,
     Drop(
         "&Help",
         (("&About SIEVE", "about", ""),),
@@ -122,6 +127,24 @@ def _action(
     else:
         action.triggered.connect(getattr(window, method))
     return action
+
+
+def preferences_anchor(bar: QMenuBar) -> int:
+    """Where the preferences title starts, in the bar's own x.
+
+    Asked by whoever stands the preferences up, so the card can hang off the
+    thing that was clicked rather than off the middle of the window. The bar
+    and the panes share the window's left edge, so the number needs no
+    translating on the way to the surface the card lands on.
+
+    Read from the laid-out bar and not from a width added up here: the titles
+    are as wide as the platform's font drew them, and a builder that guessed
+    would be right on exactly one machine.
+    """
+    for action in bar.actions():
+        if action.text() == _PREFERENCES.label:
+            return bar.actionGeometry(action).left()
+    return 0
 
 
 def show_about(window: MainWindow) -> None:

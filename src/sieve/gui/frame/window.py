@@ -54,7 +54,7 @@ from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 
 from sieve.gui.frame.chrome import stylesheet
 from sieve.gui.frame.hotkeys import bind_hotkeys, suspend_hotkeys
-from sieve.gui.frame.menu import build_menu_bar, show_about
+from sieve.gui.frame.menu import build_menu_bar, preferences_anchor, show_about
 from sieve.gui.frame.overlay import Overlay
 from sieve.gui.frame.panes import (
     build_bottom,
@@ -139,7 +139,11 @@ class MainWindow(QMainWindow):
         column.addWidget(build_seam())
         column.addWidget(self.bottom)
         self.setCentralWidget(stacked)
-        self.setMenuBar(build_menu_bar(self))
+        #: Held rather than reached for through `menuBar()`, because the frame
+        #: asks it where its preferences title was drawn every time it stands
+        #: them up.
+        self.bar = build_menu_bar(self)
+        self.setMenuBar(self.bar)
         #: Held rather than dropped so the bindings are reachable by name, not
         #: only by walking the window's children.
         self.hotkeys = bind_hotkeys(self)
@@ -205,9 +209,14 @@ class MainWindow(QMainWindow):
         Asking again while they are already up is a re-raise and not a second
         card: the bar's title stays clickable under nothing, and Ctrl+, is the
         same request from the keyboard.
+
+        Dropped from under the bar's own title rather than centred, so what is
+        on screen is read as having come from what was clicked — the title
+        stays visible above it, and Ctrl+, arrives at the same place, which is
+        what keeps the keyboard's route and the pointer's showing one thing.
         """
         suspend_hotkeys(self.hotkeys, True)
-        self.overlay.raise_over()
+        self.overlay.raise_over(preferences_anchor(self.bar))
 
     def close_preferences(self) -> None:
         """Uncover the panes. The keys come back with the overlay's own signal,

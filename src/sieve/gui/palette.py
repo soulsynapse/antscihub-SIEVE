@@ -401,6 +401,22 @@ def use(palette: Palette) -> None:
     CHANGED.emit()
 
 
+def reset() -> None:
+    """Draw everything in the default palette again, and remember no choice.
+
+    Applied first and forgotten second, which is the only order that works:
+    `use()` writes down the palette it is handed, so a key cleared before the
+    call would be written straight back by it. What is left is the state a first
+    run is in, and that is the reason for forgetting rather than storing
+    `DEFAULT.name` — which palette is the default is a decision this module is
+    allowed to revise, on the same grounds `_KEY` gives for storing a name
+    rather than eight colours, and a document naming today's answer is a user
+    pinned to it for every run after.
+    """
+    use(DEFAULT)
+    settings.forget(_KEY)
+
+
 def rgb(color: QColor) -> str:
     """A colour as a stylesheet's `rgb(...)`, since Qt's own repr is not one."""
     return f"rgb({color.red()},{color.green()},{color.blue()})"

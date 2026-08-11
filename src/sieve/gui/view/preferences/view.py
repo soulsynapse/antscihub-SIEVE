@@ -21,12 +21,20 @@ picks is written down by `palette.use()`, not by the row that was clicked — an
 a view that opened the settings document itself would be making that decision in
 a view, which is the same refusal the project list makes about the library it
 lists. What is here is where a setting is *reachable*, and nothing else.
+
+The two resets are named on the same terms and are the sharpest case of it: a
+section is handed `palette.reset` and `metrics.reset` rather than a list of keys
+to clear, because what a section's defaults *are* is the setting owner's — the
+base text size defaults to the platform's, which is a fact no view could be
+trusted to restate. There is one per section and no reset for the card, which is
+`primitives/sections.py`'s argument and made there.
 """
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import QWidget
 
+from sieve.gui import metrics, palette
 from sieve.gui.primitives import Section, SectionCard
 from sieve.gui.view.preferences.minor_visuals import MinorVisuals
 from sieve.gui.view.preferences.palettes import Palettes
@@ -73,6 +81,7 @@ def _sections() -> tuple[Section, ...]:
             "palette",
             "the colours everything is drawn in, including colour-vision-safe sets",
             Palettes(),
+            palette.reset,
         ),
         # `text` was the section this one is now, and it is folded in rather
         # than left standing beside it. It was split off `palette` to keep a
@@ -91,6 +100,7 @@ def _sections() -> tuple[Section, ...]:
             "minor visuals",
             "how round the cards are, and how large each kind of text is",
             MinorVisuals(),
+            metrics.reset,
         ),
     )
 

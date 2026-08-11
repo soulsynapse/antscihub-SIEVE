@@ -195,6 +195,26 @@ def use_text(role: str, points: int) -> None:
     _set(_trim_key(role), _clamp(points, TRIM_MIN, TRIM_MAX))
 
 
+def reset() -> None:
+    """Put the corner and all four sizes back to what they came at.
+
+    The keys are forgotten rather than written back at their defaults, and for
+    the base that is the whole of the argument: its default is the platform's
+    own size (`size()`), so a reset that stored today's reading would override a
+    system-wide accessibility setting the moment the user next changed it there
+    — which is the thing this module refuses to do on a first run and should not
+    do on a reset either. The radius and the trims are forgotten on the milder
+    version of the same point: a default here is a number this file may revise.
+
+    One `CHANGED` for all five, with the font installed before it goes out —
+    `use_size`'s order, for `use_size`'s reason.
+    """
+    for key in (_RADIUS_KEY, _SIZE_KEY, *(_trim_key(text.key) for text in TEXTS)):
+        settings.forget(key)
+    _install()
+    CHANGED.emit()
+
+
 def install() -> None:
     """Put the remembered base size on the application, before anything is built.
 
@@ -209,6 +229,13 @@ def install() -> None:
     right either way; what is lost is the size of the text no sheet names, which
     stays at the platform's until the user next moves the control.
     """
+    # The platform's size is read here rather than left to whoever first needs
+    # it, and this is the only moment it can be: the line below writes the
+    # remembered size onto the application's own font, and every reading after
+    # that is this module's answer coming back (`_system_size()`). The reader
+    # that would otherwise be first is `reset()`, which runs after a whole
+    # session of the font carrying something else.
+    _system_size()
     _install()
 
 

@@ -21,6 +21,23 @@ only a section that brought something of its own costs a widget. A card whose
 sections are all places rather than things is the whole-card case of that — one
 frame, retold — and both cards here are the mixed one.
 
+A section may also hand over a way of putting itself back, and the card draws
+one button for it — per section, and never a *reset everything*. That is the
+sections' own shape rather than a policy about settings: what a card of sections
+holds is one region that changes as the nav moves, so the one thing on screen
+worth undoing is the one being read. A card-wide reset would be a button whose
+effect is mostly in sections the user is not looking at, and the confirmation it
+would then need is a dialog this shape does not otherwise want. The button says
+the section's name for the same reason it stands where it does — it is in the
+head, beside a heading naming the whole card, and *reset* alone there would read
+as the card.
+
+What putting a section back *means* is never the card's, and not the section
+widget's either: the callable a section arrives with is the setting owner's —
+`palette.reset`, `metrics.reset` — which is the split every other write in this
+tree makes, and it matters most here because a reset is the one gesture that
+touches keys no control on the card is showing.
+
 The card holds no state beyond which section is open, which is its own posture
 and not anything about what the sections are for. Closing is emitted and never
 done: the card does not know it is standing on an overlay, and the frame is what
@@ -29,7 +46,7 @@ put it there (`overlay.py`).
 
 from __future__ import annotations
 
-from typing import NamedTuple, Sequence
+from typing import Callable, NamedTuple, Sequence
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -45,6 +62,7 @@ from PySide6.QtWidgets import (
 
 from sieve.gui import metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
+from sieve.gui.primitives.button import GHOST, Button
 from sieve.gui.primitives.nav import SectionNav
 
 #: The gap between rows and the margin around them, one number for both, for the
@@ -67,11 +85,19 @@ class Section(NamedTuple):
     `body` is `None` for a section that is a place things will land rather than
     a place they have landed. It is a promise the card keeps visibly, the same
     claim `menu.py` makes with its greyed entries.
+
+    `reset` is what putting this section back the way it came costs, or `None`
+    for a section there is nothing to put back — which is every section holding
+    no body, and any section whose contents are looked at rather than set. It is
+    a callable and not a flag because the card cannot know what a section's
+    defaults are; whoever owns the setting says, and the card only offers the
+    gesture.
     """
 
     name: str
     gloss: str
     body: QWidget | None = None
+    reset: Callable[[], None] | None = None
 
 
 def _sheet() -> str:
@@ -178,9 +204,26 @@ class SectionCard(QWidget):
         done.setCursor(Qt.CursorShape.PointingHandCursor)
         done.clicked.connect(self.closed)
 
+        #: The one reset button, renamed as the nav moves, or `None` on a card
+        #: no section of which can be put back — the dev bench is one, and a
+        #: button that was dead in every section would be the card offering a
+        #: gesture it has no answer to anywhere.
+        self._reset: Button | None = None
+        if any(section.reset is not None for section in self._sections):
+            # Ghost and small: the loudest thing in this head is the heading,
+            # and a bordered button beside it would be the card's own most
+            # emphatic element pointing at the one verb that undoes work.
+            self._reset = Button("", GHOST, small=True)
+            self._reset.clicked.connect(self._put_back)
+
         head = QHBoxLayout()
         head.setSpacing(GUTTER)
         head.addWidget(title, 1)
+        # Left of the close, because it is the quieter of the two verbs and the
+        # one the user is less often reaching for, and because ✕ has been in the
+        # corner since before there was anything beside it.
+        if self._reset is not None:
+            head.addWidget(self._reset)
         head.addWidget(done)
 
         subtitle = QLabel(note)
@@ -227,11 +270,53 @@ class SectionCard(QWidget):
         if not 0 <= index < len(self._sections):
             return
         section = self._sections[index]
+        self._offer_reset(section)
         if section.body is not None:
             self._pages.setCurrentWidget(section.body)
             return
         self._placeholder.retell(section.name, section.gloss)
         self._pages.setCurrentWidget(self._placeholder)
+
+    def _offer_reset(self, section: Section) -> None:
+        """Name the button after the section now open, or take it off the head.
+
+        Hidden rather than greyed, which is not what this tree does elsewhere:
+        `card.py` and `menu.py` disable a verb that exists here and cannot be
+        taken *now*, and a section with no defaults is one this verb does not
+        apply to at all — a greyed *reset library* would promise a gesture that
+        arrives with the section's controls rather than one that is unavailable.
+        Nothing steps sideways when it goes, since the heading takes the stretch
+        and the close button is the far edge either way.
+        """
+        if self._reset is None:
+            return
+        self._reset.setVisible(section.reset is not None)
+        if section.reset is None:
+            return
+        self._reset.setText(f"reset {section.name}")
+        self._reset.setToolTip(f"Put {section.name} back to what it came with")
+
+    def _put_back(self) -> None:
+        """Ask the section now open to put itself back.
+
+        The section is read off the nav at the moment of the click rather than
+        held from when the button was last renamed. The two cannot disagree
+        while this button is the only way in, which is exactly the kind of claim
+        that stops being true the first time a hotkey or a menu entry reaches
+        the same verb.
+
+        Nothing is confirmed. Every section that carries a reset is one whose
+        settings apply where they are made and are shown by the card you are
+        standing on — see `view/preferences/palettes.py` — so the result is on
+        screen before the pointer has moved, and a dialog would be asking about
+        something the user is about to see either way.
+        """
+        index = self.nav.current()
+        if not 0 <= index < len(self._sections):
+            return
+        reset = self._sections[index].reset
+        if reset is not None:
+            reset()
 
 
 class _Placeholder(QFrame):

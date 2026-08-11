@@ -230,15 +230,24 @@ class Overlay(QWidget):
     def mousePressEvent(self, event) -> None:
         """A click on the scrim is a click outside, and closes.
 
-        Only the scrim's own: the view standing on it is a child widget and
-        takes its clicks itself, so this is reached exactly when the pointer
-        landed on nothing.
+        Where the pointer landed is asked of the geometry and not inferred from
+        having been reached: a press on a widget that does not want it is
+        *ignored* rather than consumed, and Qt walks it up to the parent — so a
+        view whose card is a plain surface, and not only its buttons, hands the
+        overlay every click on its own background. Read that as a click outside
+        and preferences close under the finger of whoever was reaching for a
+        control. `childAt` separates the two cases the arrival of the event
+        cannot: nothing under the pointer is the scrim, and anything under it is
+        the view, whether or not the view had a use for the press.
         """
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.dismiss()
-            event.accept()
-            return
-        super().mousePressEvent(event)
+        if self.childAt(event.position().toPoint()) is None:
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.dismiss()
+        # Accepted either way, landed on or not. What is behind the scrim is out
+        # of reach while it is up, and a press left ignored here is one Qt hands
+        # on to the host — the panes, which would then act on a click the user
+        # aimed at what is covering them.
+        event.accept()
 
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape:

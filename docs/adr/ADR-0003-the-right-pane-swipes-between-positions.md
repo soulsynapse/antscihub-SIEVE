@@ -39,3 +39,12 @@ than re-bound per position; ↑ and ↓ stay unbound, held for whatever selectio
 the position in view owns. Clamped at the ends and not wrapped: a wrap would put
 the user at the far end of the work with the slide saying they had walked one
 step further into it.
+
+The track takes that axis last rather than first, which is the clause the
+positions did not need and the shapes inside them do. A tab row and a segmented
+bar run on a line of their own, and a user who has put the keyboard on one is
+looking straight at the line they mean; the track is the line they are standing
+*in*, which is the further of the two. So a widget that claims ← or → gets it,
+and the track answers only where nothing nearer did. It is still one motion
+spelled one way — the alternative is a modifier, which would buy the track a
+vocabulary item it needs nowhere else in order to settle two widgets.

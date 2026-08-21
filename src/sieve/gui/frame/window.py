@@ -72,7 +72,7 @@ from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 
 from sieve.gui import palette
 from sieve.gui.frame.chrome import dress_title_bar, stylesheet
-from sieve.gui.frame.hotkeys import bind_hotkeys, suspend_hotkeys
+from sieve.gui.frame.hotkeys import answer_key, bind_hotkeys, suspend_hotkeys
 from sieve.gui.frame.menu import build_menu_bar, preferences_anchor, show_about
 from sieve.gui.frame.overlay import Overlay
 from sieve.gui.frame.panes import (
@@ -187,7 +187,8 @@ class MainWindow(QMainWindow):
         self.bar = build_menu_bar(self)
         self.setMenuBar(self.bar)
         #: Held rather than dropped so the bindings are reachable by name, not
-        #: only by walking the window's children.
+        #: only by walking the window's children, and because the keys the frame
+        #: takes last are read off it rather than bound to anything.
         self.hotkeys = bind_hotkeys(self)
 
         # Preferences and the dev bench stand over the panes rather than in one,
@@ -207,6 +208,20 @@ class MainWindow(QMainWindow):
 
         self.resize(_WINDOW_WIDTH, _WINDOW_HEIGHT)
         self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
+
+    def keyPressEvent(self, event) -> None:
+        """Answer a key nothing in front of the window wanted.
+
+        The end of the walk, and the reason `hotkeys.py` leaves ← and → unbound:
+        a `QShortcut` is offered a key before the focused widget, so a segmented
+        bar or a tab row standing in a pane could never take the axis it runs on.
+        An unhandled key arrives here instead, after everything nearer the user
+        has declined it, which is the order the frame wants.
+        """
+        if answer_key(self.hotkeys, event):
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _restyle(self) -> None:
         """Wear the palette now in use — the chrome's own sheet, and a repaint

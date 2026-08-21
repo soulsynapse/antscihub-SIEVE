@@ -19,6 +19,7 @@
   - 📄 `ADR.md`
   - 📄 `SCAFFOLD.md`
   - 📄 `VOCAB.md`
+  - 📄 `vision-and-notes.md`
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
   - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.

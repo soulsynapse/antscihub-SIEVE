@@ -24,6 +24,10 @@ crop), one RAM cache in front of it, and every knob 02–05 put numbers behind:
 
 Every request logs task, route and ms; runs are keyed by stack config;
 graphs and stats accumulate per launch and autosave to explorer-logs/.
+"walk params" drives the whole space unattended — miss policies cold, fill
+orders and chunk sizes against the scripted scrub, the pollution story with
+bypass off then on, and the fill→persist→evict→flow happy path — so a
+launch can feel every measured verdict without hunting for it.
 
 Run:
     uv run --group experiments python experiments/storage-experiments/explorer.py
@@ -44,7 +48,7 @@ from pathlib import Path
 import av
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -177,13 +181,17 @@ class RamTier:
         return None
 
     def nearest(self, rel: int):
-        with self.lock:
-            if not self.d:
+        with self.lock:  # read the value under the lock too - the fill
+            if not self.d:  # thread evicts between a peek and a fetch
                 return None
             best = min(self.d, key=lambda k: abs(k - rel))
-        if abs(best - rel) <= NEAR_RADIUS:
-            return best, self.d[best]
+            if abs(best - rel) <= NEAR_RADIUS:
+                return best, self.d[best]
         return None
+
+    def snapshot(self) -> dict[int, np.ndarray]:
+        with self.lock:
+            return dict(self.d)
 
     def put(self, rel: int, arr: np.ndarray) -> None:
         with self.lock:
@@ -309,8 +317,17 @@ class RunLog:
 
 
 class StorageExplorer(QMainWindow):
+    #: worker threads report through queued signals — a widget touched from a
+    #: worker thread is the crash, not a style point
+    persist_done = Signal(float)
+    persist_failed = Signal(str)
+    flow_done = Signal(float, int)
+
     def __init__(self):
         super().__init__()
+        self.persist_done.connect(self._persist_landed)
+        self.persist_failed.connect(self._persist_broke)
+        self.flow_done.connect(self._flow_landed)
         self.setWindowTitle("storage explorer — feel the tier stack")
         self.resize(1680, 900)
         with av.open(str(BIG)) as c:
@@ -427,6 +444,15 @@ class StorageExplorer(QMainWindow):
             "20 Hz, 100 fetches — the same hands the harness used, so felt "
             "and measured sessions land in comparable logs.")
         self.scrub_btn.clicked.connect(self._scripted_scrub)
+        self.walk_btn = QPushButton("walk params")
+        self.walk_btn.setToolTip(
+            "drive the whole parameter space while you watch: each miss "
+            "policy cold, each fill order and chunk size against the "
+            "scripted scrub, the pollution story with bypass off then on, "
+            "then the happy path — fill to full, persist, shrink RAM, hop "
+            "on the cut, re-pay flow. Every leg lands in the graphs and "
+            "stats as its own config.")
+        self.walk_btn.clicked.connect(self._walk)
 
         row1 = QHBoxLayout()
         for w in (self.fill_box, self.chunk_box, self.budget_spin,
@@ -438,7 +464,7 @@ class StorageExplorer(QMainWindow):
         row2 = QHBoxLayout()
         row2.addStretch(1)
         for w in (self.play_btn, self.rev_btn, self.hop_btn, self.thru_btn,
-                  self.scrub_btn):
+                  self.scrub_btn, self.walk_btn):
             row2.addWidget(w)
         top = QVBoxLayout()
         top.addLayout(row1)
@@ -643,14 +669,20 @@ class StorageExplorer(QMainWindow):
         self.hud.setText("play thru running…")
         self.hud.repaint()
         before = time.perf_counter()
+        image = None
         for rel in range(SPAN):
             run = self._current_run()
             t0 = time.perf_counter()
-            image, route = self._serve(rel, "thru", exact=True)
+            try:
+                image, route = self._serve(rel, "thru", exact=True)
+            except Exception as exc:  # noqa: BLE001 - one bad frame is a datum
+                run.log("thru", rel, f"err {exc!r}"[:40], 0.0)
+                continue
             run.log("thru", rel, route, (time.perf_counter() - t0) * 1000)
         wall = time.perf_counter() - before
         self.pos = SPAN - 1
-        self._show(image)
+        if image is not None:
+            self._show(image)
         if self.run:
             self.run.walls.append(
                 {"what": "play-thru", "wall_s": round(wall, 2),
@@ -679,93 +711,205 @@ class StorageExplorer(QMainWindow):
             return
         self.request(self._scrub_targets.pop(0), "scrub")
 
-    # ── persist / flow / reset ───────────────────────────────────────────
-    def _persist(self) -> None:
-        if len(self.cache) < SPAN or self.fill.running() and len(
-                self.fill.filled) < SPAN:
-            if len(self.cache) < SPAN:
-                self.hud.setText(
-                    f"persist needs full coverage ({len(self.cache)}/{SPAN} "
-                    "cached) — turn fill on and let it finish, or raise the "
-                    "budget")
+    # ── the walk: every knob driven while the hands watch ────────────────
+    def _announce(self, text: str) -> None:
+        self.hud.setText(text)
+        self.hud.repaint()
+        QApplication.processEvents()
+
+    def _walk_scrub(self, n: int = 60, seed: int = 7,
+                    pace_s: float = 0.03) -> None:
+        rng = random.Random(seed)
+        anchor = rng.randrange(SPAN)
+        for _ in range(n):
+            if rng.random() < 0.12:
+                anchor = rng.randrange(SPAN)
+            target = max(0, min(SPAN - 1, round(rng.gauss(anchor, 8))))
+            self.request(target, "scrub")
+            QApplication.processEvents()
+            time.sleep(pace_s)
+
+    def _walk_wait_fill(self, timeout_s: float = 90.0) -> bool:
+        deadline = time.perf_counter() + timeout_s
+        while len(self.cache) < SPAN and time.perf_counter() < deadline:
+            if not self.fill.running():
+                return len(self.cache) >= SPAN
+            QApplication.processEvents()
+            time.sleep(0.05)
+        return len(self.cache) >= SPAN
+
+    def _walk(self) -> None:
+        if self._busy:
+            return
+        self.walk_btn.setEnabled(False)
+        try:
+            # leg 1: each miss policy against a cold cache, no fill
+            for idx, label in ((0, "block: the honest ~300 ms"),
+                               (1, "kf-snap: wrong by Δ, ~50 ms"),
+                               (2, "nearest-cached: instant, wrong by Δ")):
+                self._reset()
+                self.miss_box.setCurrentIndex(idx)
+                self._announce(f"[walk] miss policy — {label}")
+                self._walk_scrub(40)
+
+            # leg 2: fill orders x chunk sizes against the scripted scrub
+            self.miss_box.setCurrentIndex(0)
+            for fill_idx, chunk_idx in ((1, 0), (1, 2), (2, 2)):
+                self._reset()
+                self.chunk_box.setCurrentIndex(chunk_idx)
+                self.fill_box.setCurrentIndex(fill_idx)
+                self._announce(
+                    f"[walk] {self.fill_box.currentText()} · "
+                    f"{self.chunk_box.currentText()} — feel the misses "
+                    "thin out (02: sequential + big chunks wins)")
+                self._walk_scrub(80)
+
+            # leg 3: the pollution story (03)
+            for bypass, tag in ((False, "play FILLS the cache — watch the "
+                                        "return scrub stall"),
+                                (True, "play BYPASSES — the return scrub "
+                                       "stays hot")):
+                self._reset()
+                self.miss_box.setCurrentIndex(0)
+                self.budget_spin.setValue(60)
+                self.bypass.setChecked(bypass)
+                self._announce(f"[walk] pollution: {tag}")
+                self._walk_scrub(40, seed=11)
+                self._announce("[walk] play thru…")
+                self._play_through()
+                self._announce("[walk] …and back to where you were")
+                self._walk_scrub(40, seed=11)
+            self.budget_spin.setValue(SPAN)
+            self.bypass.setChecked(True)
+
+            # leg 4: the happy path — fill, persist, evict onto the cut, flow
+            self._reset()
+            self.chunk_box.setCurrentIndex(2)
+            self.fill_box.setCurrentIndex(1)
+            self._announce("[walk] filling to full coverage…")
+            if not self._walk_wait_fill():
+                self._announce("[walk] fill did not complete; stopping here")
                 return
+            self._announce("[walk] persisting the cut from RAM…")
+            wall = self._encode_cut(self.cache.snapshot())
+            self._persist_landed(wall)
+            self._announce(
+                f"[walk] cut landed in {wall:.1f}s — shrinking RAM to 30 "
+                "frames, hopping: routes go cut, not miss")
+            self.budget_spin.setValue(30)
+            for _ in range(30):
+                self.request(self._rng.randrange(SPAN), "hop")
+                QApplication.processEvents()
+                time.sleep(0.02)
+            self._announce("[walk] re-paying flow over what RAM still holds…")
+            snapshot = self.cache.snapshot()
+            arrays = [snapshot[k] for k in sorted(snapshot)]
+            if len(arrays) >= 2:
+                wall = self._flow_sweep(arrays)
+                self._flow_landed(wall, len(arrays))
+            self._save_log()
+            self._redraw_graphs()
+            self._announce(
+                "[walk] done — stats compare every leg; budget is 30 and "
+                "the cut is live, so keep hopping to feel the tier order")
+        finally:
+            self.walk_btn.setEnabled(True)
+
+    # ── persist / flow / reset ───────────────────────────────────────────
+    @staticmethod
+    def _encode_cut(snapshot: dict[int, np.ndarray]) -> float:
+        before = time.perf_counter()
+        GROWN_CUT.parent.mkdir(exist_ok=True)
+        with av.open(str(GROWN_CUT), "w") as out:
+            stream = out.add_stream("libx264", rate=24)
+            stream.width, stream.height = CROP_W, CROP_H
+            stream.pix_fmt = "yuv420p"
+            stream.options = {"crf": "18", "preset": "veryfast", "g": "1"}
+            for i in range(SPAN):
+                vf = av.VideoFrame.from_ndarray(snapshot[i], format="gray")
+                vf = vf.reformat(format="yuv420p")
+                for pkt in stream.encode(vf):
+                    out.mux(pkt)
+            for pkt in stream.encode():
+                out.mux(pkt)
+        return time.perf_counter() - before
+
+    def _persist_landed(self, wall: float) -> None:
+        self.cut = CutFetcher(GROWN_CUT)
+        if self.run:
+            self.run.walls.append(
+                {"what": "persist", "wall_s": round(wall, 2),
+                 "detail": f"{GROWN_CUT.stat().st_size} bytes"})
+        self.hud.setText(
+            f"cut persisted in {wall:.2f}s ({GROWN_CUT.stat().st_size:,} "
+            "bytes) — shrink the RAM budget and misses now land on it")
+        self.persist_btn.setEnabled(True)
+        self._touch()
+
+    def _persist_broke(self, err: str) -> None:
+        self.hud.setText(f"background work failed: {err}")
+        self.persist_btn.setEnabled(True)
+        self.flow_btn.setEnabled(True)
+
+    def _persist(self) -> None:
+        if len(self.cache) < SPAN:
+            self.hud.setText(
+                f"persist needs full coverage ({len(self.cache)}/{SPAN} "
+                "cached) — turn fill on and let it finish, or raise the "
+                "budget")
+            return
         self.persist_btn.setEnabled(False)
         self.hud.setText("persisting from RAM…")
-        snapshot = {k: v for k, v in self.cache.d.items()}
-
-        def encode():
-            before = time.perf_counter()
-            GROWN_CUT.parent.mkdir(exist_ok=True)
-            with av.open(str(GROWN_CUT), "w") as out:
-                stream = out.add_stream("libx264", rate=24)
-                stream.width, stream.height = CROP_W, CROP_H
-                stream.pix_fmt = "yuv420p"
-                stream.options = {"crf": "18", "preset": "veryfast", "g": "1"}
-                for i in range(SPAN):
-                    vf = av.VideoFrame.from_ndarray(snapshot[i], format="gray")
-                    vf = vf.reformat(format="yuv420p")
-                    for pkt in stream.encode(vf):
-                        out.mux(pkt)
-                for pkt in stream.encode():
-                    out.mux(pkt)
-            return time.perf_counter() - before
-
-        def done(wall: float):
-            self.cut = CutFetcher(GROWN_CUT)
-            if self.run:
-                self.run.walls.append(
-                    {"what": "persist", "wall_s": round(wall, 2),
-                     "detail": f"{GROWN_CUT.stat().st_size} bytes"})
-            self.hud.setText(
-                f"cut persisted in {wall:.2f}s ({GROWN_CUT.stat().st_size:,} "
-                "bytes) — shrink the RAM budget and misses now land on it")
-            self.persist_btn.setEnabled(True)
-            self._touch()
+        snapshot = self.cache.snapshot()
 
         def worker():
             try:
-                wall = encode()
+                wall = self._encode_cut(snapshot)
             except Exception as exc:  # noqa: BLE001
-                QTimer.singleShot(0, lambda: (
-                    self.hud.setText(f"persist failed: {exc}"),
-                    self.persist_btn.setEnabled(True)))
+                self.persist_failed.emit(repr(exc)[:200])
                 return
-            QTimer.singleShot(0, lambda: done(wall))
+            self.persist_done.emit(wall)  # queued to the GUI thread
 
         threading.Thread(target=worker, daemon=True).start()
 
+    @staticmethod
+    def _flow_sweep(arrays: list[np.ndarray]) -> float:
+        dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST)
+        before = time.perf_counter()
+        prev = arrays[0]
+        for cur in arrays[1:]:
+            flow = dis.calc(prev, cur, None)
+            float(np.mean(np.abs(flow)))
+            prev = cur
+        return time.perf_counter() - before
+
+    def _flow_landed(self, wall: float, n: int) -> None:
+        if self.run:
+            self.run.walls.append(
+                {"what": "flow", "wall_s": round(wall, 2),
+                 "detail": f"{n} frames"})
+        self.hud.setText(
+            f"flow re-paid over {n} frames in {wall:.2f}s — what a "
+            "flow-parameter slider costs on this region")
+        self.flow_btn.setEnabled(True)
+        self._touch()
+
     def _flow(self) -> None:
-        cached = sorted(self.cache.d.keys())
-        if len(cached) < 2:
+        snapshot = self.cache.snapshot()
+        if len(snapshot) < 2:
             self.hud.setText("re-pay flow: nothing cached yet")
             return
         self.flow_btn.setEnabled(False)
-        self.hud.setText(f"flow over {len(cached)} cached frames…")
-        arrays = [self.cache.d[k] for k in cached]
+        self.hud.setText(f"flow over {len(snapshot)} cached frames…")
+        arrays = [snapshot[k] for k in sorted(snapshot)]
 
         def worker():
-            dis = cv2.DISOpticalFlow_create(
-                cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST)
-            before = time.perf_counter()
-            prev = arrays[0]
-            for cur in arrays[1:]:
-                flow = dis.calc(prev, cur, None)
-                float(np.mean(np.abs(flow)))
-                prev = cur
-            wall = time.perf_counter() - before
-
-            def done():
-                if self.run:
-                    self.run.walls.append(
-                        {"what": "flow", "wall_s": round(wall, 2),
-                         "detail": f"{len(arrays)} frames"})
-                self.hud.setText(
-                    f"flow re-paid over {len(arrays)} frames in {wall:.2f}s "
-                    "— what a flow-parameter slider costs on this region")
-                self.flow_btn.setEnabled(True)
-                self._touch()
-
-            QTimer.singleShot(0, done)
+            try:
+                wall = self._flow_sweep(arrays)
+            except Exception as exc:  # noqa: BLE001
+                self.persist_failed.emit(f"flow: {exc!r}"[:200])
+                return
+            self.flow_done.emit(wall, len(arrays))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -886,6 +1030,19 @@ def main() -> None:
         return
     app = QApplication.instance() or QApplication(sys.argv)
     window = StorageExplorer()
+    if "--walk" in sys.argv:  # headless validation of the full walk
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        window._walk()
+        print(window.hud.text())
+        data = json.loads(window.log_path.read_text(encoding="utf-8"))
+        print(f"walk ok: {len(data['runs'])} configs logged to "
+              f"{window.log_path.name}")
+        window.fill.stop()
+        if window.cut:  # Windows will not unlink a file still held open
+            window.cut.close()
+            window.cut = None
+        GROWN_CUT.unlink(missing_ok=True)
+        return
     if "--smoke" in sys.argv:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         for rel in (5, 6, 30):

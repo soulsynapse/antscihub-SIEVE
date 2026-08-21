@@ -9,6 +9,7 @@
     - 📄 `ADR-0001-panes-house-any-view.md`
     - 📄 `ADR-0002-a-subpane-divides-the-spare-axis.md`
     - 📄 `ADR-0003-the-right-pane-swipes-between-positions.md`
+    - 📄 `ADR-0004-a-frame-is-its-timestamp.md`
   - 📁 `decode/`
     - 📄 `ideas.md`
   - 📁 `findings/`

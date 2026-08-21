@@ -9,6 +9,8 @@
     - 📄 `ADR-0001-panes-house-any-view.md`
     - 📄 `ADR-0002-a-subpane-divides-the-spare-axis.md`
     - 📄 `ADR-0003-the-right-pane-swipes-between-positions.md`
+  - 📁 `decode/`
+    - 📄 `ideas.md`
   - 📁 `findings/`
     - 📄 `2026.07.21-decode-cost-tracks-pixels-not-bytes.md`
   - 📁 `vocab/`

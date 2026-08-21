@@ -16,6 +16,7 @@ experiments = [
     "av>=13",
     "numpy>=2",
     "opencv-python-headless>=4.10",
+    "matplotlib>=3.9",
 ]
 
 [project.scripts]

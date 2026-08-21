@@ -72,12 +72,14 @@
       - 📄 `05-the-cut-20260821T192609Z.json`
       - 📄 `06-analysis-costs-20260821T174722Z.json`
       - 📄 `06-analysis-costs-20260821T175216Z.json`
+      - 📄 `07-contention-20260821T203200Z.json`
     - 📄 `01-pyav-vs-opencv.py` — Does the inherited OpenCV sequential-decode corpus survive a binding change?
     - 📄 `02-random-access.py` — Random access: frame-accurate seek against grab-forward, by jump distance.
     - 📄 `03-fastest-luma.py` — The fastest route to a luma frame off the 5.3K source, including libav with no Python in the loop.
     - 📄 `04-keyframe-index.py` — Building the keyframe index by demuxing only: read packets, decode nothing.
     - 📄 `05-the-cut.py` — The cut: does an intra-only intermediate make random access stop costing anything?
     - 📄 `06-analysis-costs.py` — Does the analysis compute dominate decode? Price the v1/v2-shaped ops per regime.
+    - 📄 `07-contention.py` — Contention: does foreground latency survive a machine that is already working?
     - 📄 `2026.08.21-best-combinations.md`
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the decode approaches by hand: scrub, play, step and sweep each backend.

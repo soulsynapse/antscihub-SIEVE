@@ -167,13 +167,20 @@ class PyAVSource:
             self.reformatter = VideoReformatter()
         tb, rate = self.stream.time_base, self.stream.average_rate
         self.fps = float(rate)
+        self._base = self.stream.start_time or 0
         self.nframes = self.stream.frames
         if not self.nframes:  # Matroska (the FFV1 cut) stores no count
             if self.stream.duration:
                 self.nframes = int(self.stream.duration * tb * rate)
             elif self.container.duration:
-                self.nframes = int(self.container.duration / 1_000_000 * rate)
-        self._base = self.stream.start_time or 0
+                # container.duration on a -copyts Matroska is the *end*
+                # timestamp, not the span: the utvideo cut reports 72.5 s for
+                # 300 frames starting at 60.018. Subtract the start (a no-op
+                # when timestamps begin at zero) or every consumer inherits
+                # ~1400 frames that do not exist.
+                span_s = self.container.duration / 1_000_000 - float(
+                    self._base * tb)
+                self.nframes = int(span_s * rate)
         self._step_pts = Fraction(1, 1) / (rate * tb)
         self._decoded = self.container.decode(self.stream)
         self.pos = -1

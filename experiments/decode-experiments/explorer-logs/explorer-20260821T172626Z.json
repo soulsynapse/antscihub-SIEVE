@@ -1,0 +1,336 @@
+{
+ "tool": "explorer.py",
+ "when": "2026-08-21T17:26:33.813016+00:00",
+ "sieve_rev": "972b766",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "step_within": 40,
+ "coalesce": true,
+ "runs": [
+  {
+   "label": "GX010047c2_02_17 \u00b7 luma-auto",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "pyav \u00b7 luma \u00b7 threads=auto",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 3.47,
+     "p50": 20.39,
+     "p95": 158.76,
+     "max": 158.76,
+     "mean": 60.88
+    },
+    "open": {
+     "n": 1,
+     "min": 260.85,
+     "p50": 260.85,
+     "p95": 260.85,
+     "max": 260.85,
+     "mean": 260.85
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T17:26:26.705824+00:00",
+   "events": [
+    {
+     "t": 0.2727,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 260.854,
+     "disp": 11.821
+    },
+    {
+     "t": 0.31,
+     "task": "drag",
+     "frame": 5,
+     "route": "step \u00d75",
+     "ms": 20.391,
+     "disp": 9.972
+    },
+    {
+     "t": 0.325,
+     "task": "drag",
+     "frame": 6,
+     "route": "step \u00d71",
+     "ms": 3.473,
+     "disp": 9.413
+    },
+    {
+     "t": 0.4973,
+     "task": "drag",
+     "frame": 30,
+     "route": "step \u00d724",
+     "ms": 158.761,
+     "disp": 12.926
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 luma-t1",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "pyav \u00b7 luma \u00b7 threads=1",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 106.64,
+     "p50": 482.58,
+     "p95": 2123.59,
+     "max": 2123.59,
+     "mean": 904.27
+    },
+    "open": {
+     "n": 1,
+     "min": 1480.45,
+     "p50": 1480.45,
+     "p95": 1480.45,
+     "max": 1480.45,
+     "mean": 1480.45
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T17:26:27.332047+00:00",
+   "events": [
+    {
+     "t": 1.4907,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 1480.453,
+     "disp": 10.137
+    },
+    {
+     "t": 1.9845,
+     "task": "drag",
+     "frame": 5,
+     "route": "step \u00d75",
+     "ms": 482.576,
+     "disp": 10.327
+    },
+    {
+     "t": 2.1024,
+     "task": "drag",
+     "frame": 6,
+     "route": "step \u00d71",
+     "ms": 106.638,
+     "disp": 10.531
+    },
+    {
+     "t": 4.2384,
+     "task": "drag",
+     "frame": 30,
+     "route": "step \u00d724",
+     "ms": 2123.588,
+     "disp": 11.685
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 bgr24",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "pyav \u00b7 bgr24 (cached reformatter)",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 2.58,
+     "p50": 14.13,
+     "p95": 181.49,
+     "max": 181.49,
+     "mean": 66.07
+    },
+    "open": {
+     "n": 1,
+     "min": 304.96,
+     "p50": 304.96,
+     "p95": 304.96,
+     "max": 304.96,
+     "mean": 304.96
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T17:26:31.581262+00:00",
+   "events": [
+    {
+     "t": 0.3184,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 304.958,
+     "disp": 13.389
+    },
+    {
+     "t": 0.3464,
+     "task": "drag",
+     "frame": 5,
+     "route": "step \u00d75",
+     "ms": 14.133,
+     "disp": 11.75
+    },
+    {
+     "t": 0.3635,
+     "task": "drag",
+     "frame": 6,
+     "route": "step \u00d71",
+     "ms": 2.582,
+     "disp": 12.492
+    },
+    {
+     "t": 0.5602,
+     "task": "drag",
+     "frame": 30,
+     "route": "step \u00d724",
+     "ms": 181.494,
+     "disp": 13.3
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 cuda",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "pyav \u00b7 cuda hw \u00b7 luma",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 7.5,
+     "p50": 38.64,
+     "p95": 182.55,
+     "max": 182.55,
+     "mean": 76.23
+    },
+    "open": {
+     "n": 1,
+     "min": 203.82,
+     "p50": 203.82,
+     "p95": 203.82,
+     "max": 203.82,
+     "mean": 203.82
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T17:26:32.517150+00:00",
+   "events": [
+    {
+     "t": 0.2165,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 203.823,
+     "disp": 12.586
+    },
+    {
+     "t": 0.266,
+     "task": "drag",
+     "frame": 5,
+     "route": "step \u00d75",
+     "ms": 38.642,
+     "disp": 10.777
+    },
+    {
+     "t": 0.2847,
+     "task": "drag",
+     "frame": 6,
+     "route": "step \u00d71",
+     "ms": 7.5,
+     "disp": 10.991
+    },
+    {
+     "t": 0.4786,
+     "task": "drag",
+     "frame": 30,
+     "route": "step \u00d724",
+     "ms": 182.553,
+     "disp": 11.222
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 cv2",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "cv2 \u00b7 read BGR",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 25.56,
+     "p50": 29.78,
+     "p95": 175.69,
+     "max": 175.69,
+     "mean": 77.01
+    },
+    "open": {
+     "n": 1,
+     "min": 380.13,
+     "p50": 380.13,
+     "p95": 380.13,
+     "max": 380.13,
+     "mean": 380.13
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T17:26:33.099521+00:00",
+   "events": [
+    {
+     "t": 0.3926,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 380.133,
+     "disp": 12.406
+    },
+    {
+     "t": 0.4376,
+     "task": "drag",
+     "frame": 5,
+     "route": "step \u00d75",
+     "ms": 29.78,
+     "disp": 12.315
+    },
+    {
+     "t": 0.4778,
+     "task": "drag",
+     "frame": 6,
+     "route": "step \u00d71",
+     "ms": 25.564,
+     "disp": 12.6
+    },
+    {
+     "t": 0.6684,
+     "task": "drag",
+     "frame": 30,
+     "route": "step \u00d724",
+     "ms": 175.693,
+     "disp": 12.799
+    }
+   ]
+  }
+ ]
+}

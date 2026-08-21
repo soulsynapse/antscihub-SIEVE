@@ -1,0 +1,444 @@
+{
+ "tool": "explorer.py",
+ "when": "2026-08-21T18:12:42.702174+00:00",
+ "sieve_rev": "972b766",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "step_within": 40,
+ "coalesce": true,
+ "kf_snap": false,
+ "runs": [
+  {
+   "label": "GX010047c2_02_17 \u00b7 hybrid",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "hybrid \u00b7 sw steps + cuda seeks",
+   "target_fps": 23.976,
+   "by_task": {
+    "open": {
+     "n": 1,
+     "min": 260.35,
+     "p50": 260.35,
+     "p95": 260.35,
+     "max": 260.35,
+     "mean": 260.35
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T18:12:41.935368+00:00",
+   "events": [
+    {
+     "t": 0.2728,
+     "task": "open",
+     "frame": 0,
+     "route": "sw step \u00d71",
+     "ms": 260.354,
+     "disp": 12.412
+    }
+   ]
+  },
+  {
+   "label": "cut-crf18-intra \u00b7 hybrid",
+   "source": "cut-crf18-intra.mp4",
+   "approach": "hybrid \u00b7 sw steps + cuda seeks",
+   "target_fps": 23.976,
+   "by_task": {
+    "play": {
+     "n": 5,
+     "min": 10.52,
+     "p50": 13.02,
+     "p95": 15.76,
+     "max": 15.76,
+     "mean": 13.18
+    },
+    "open": {
+     "n": 1,
+     "min": 12.83,
+     "p50": 12.83,
+     "p95": 12.83,
+     "max": 12.83,
+     "mean": 12.83
+    },
+    "hop": {
+     "n": 5,
+     "min": 0.02,
+     "p50": 12.32,
+     "p95": 30.21,
+     "max": 30.21,
+     "mean": 11.3
+    },
+    "batch": {
+     "n": 32,
+     "min": 0.06,
+     "p50": 2.87,
+     "p95": 24.85,
+     "max": 26.49,
+     "mean": 4.96
+    }
+   },
+   "play_achieved_fps": 67.23,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T18:12:42.395063+00:00",
+   "events": [
+    {
+     "t": 0.0138,
+     "task": "open",
+     "frame": 0,
+     "route": "sw step \u00d71",
+     "ms": 12.828,
+     "disp": 0.916
+    },
+    {
+     "t": 0.0151,
+     "task": "batch",
+     "frame": 11,
+     "route": "sw step \u00d711",
+     "ms": 1.078,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0235,
+     "task": "batch",
+     "frame": 29,
+     "route": "sw step \u00d718",
+     "ms": 8.427,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0272,
+     "task": "batch",
+     "frame": 36,
+     "route": "sw step \u00d77",
+     "ms": 3.637,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0273,
+     "task": "batch",
+     "frame": 38,
+     "route": "sw step \u00d72",
+     "ms": 0.111,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0276,
+     "task": "batch",
+     "frame": 40,
+     "route": "sw step \u00d72",
+     "ms": 0.258,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0304,
+     "task": "batch",
+     "frame": 47,
+     "route": "sw step \u00d77",
+     "ms": 2.87,
+     "disp": 0.0
+    },
+    {
+     "t": 0.032,
+     "task": "batch",
+     "frame": 49,
+     "route": "sw step \u00d72",
+     "ms": 1.525,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0336,
+     "task": "batch",
+     "frame": 54,
+     "route": "sw step \u00d75",
+     "ms": 1.593,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0382,
+     "task": "batch",
+     "frame": 66,
+     "route": "sw step \u00d712",
+     "ms": 4.626,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0383,
+     "task": "batch",
+     "frame": 67,
+     "route": "sw step \u00d71",
+     "ms": 0.059,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0403,
+     "task": "batch",
+     "frame": 74,
+     "route": "sw step \u00d77",
+     "ms": 2.002,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0436,
+     "task": "batch",
+     "frame": 80,
+     "route": "sw step \u00d76",
+     "ms": 3.269,
+     "disp": 0.0
+    },
+    {
+     "t": 0.046,
+     "task": "batch",
+     "frame": 86,
+     "route": "sw step \u00d76",
+     "ms": 2.412,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0463,
+     "task": "batch",
+     "frame": 90,
+     "route": "sw step \u00d74",
+     "ms": 0.276,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0503,
+     "task": "batch",
+     "frame": 99,
+     "route": "sw step \u00d79",
+     "ms": 4.041,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0527,
+     "task": "batch",
+     "frame": 106,
+     "route": "sw step \u00d77",
+     "ms": 2.421,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0577,
+     "task": "batch",
+     "frame": 117,
+     "route": "sw step \u00d711",
+     "ms": 4.982,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0583,
+     "task": "batch",
+     "frame": 118,
+     "route": "sw step \u00d71",
+     "ms": 0.559,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0848,
+     "task": "batch",
+     "frame": 181,
+     "route": "hw seek",
+     "ms": 26.489,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0906,
+     "task": "batch",
+     "frame": 189,
+     "route": "hw step \u00d78",
+     "ms": 5.78,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0919,
+     "task": "batch",
+     "frame": 190,
+     "route": "hw step \u00d71",
+     "ms": 1.351,
+     "disp": 0.0
+    },
+    {
+     "t": 0.0926,
+     "task": "batch",
+     "frame": 191,
+     "route": "hw step \u00d71",
+     "ms": 0.671,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1071,
+     "task": "batch",
+     "frame": 210,
+     "route": "hw step \u00d719",
+     "ms": 14.516,
+     "disp": 0.0
+    },
+    {
+     "t": 0.132,
+     "task": "batch",
+     "frame": 241,
+     "route": "hw step \u00d731",
+     "ms": 24.852,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1335,
+     "task": "batch",
+     "frame": 243,
+     "route": "hw step \u00d72",
+     "ms": 1.493,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1397,
+     "task": "batch",
+     "frame": 251,
+     "route": "hw step \u00d78",
+     "ms": 6.212,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1456,
+     "task": "batch",
+     "frame": 258,
+     "route": "hw step \u00d77",
+     "ms": 5.821,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1486,
+     "task": "batch",
+     "frame": 262,
+     "route": "hw step \u00d74",
+     "ms": 3.072,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1493,
+     "task": "batch",
+     "frame": 263,
+     "route": "hw step \u00d71",
+     "ms": 0.695,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1509,
+     "task": "batch",
+     "frame": 265,
+     "route": "hw step \u00d72",
+     "ms": 1.553,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1629,
+     "task": "batch",
+     "frame": 280,
+     "route": "hw step \u00d715",
+     "ms": 12.028,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1729,
+     "task": "batch",
+     "frame": 292,
+     "route": "hw step \u00d712",
+     "ms": 9.977,
+     "disp": 0.0
+    },
+    {
+     "t": 0.1856,
+     "task": "play",
+     "frame": 291,
+     "route": "hw seek",
+     "ms": 10.517,
+     "disp": 0.872
+    },
+    {
+     "t": 0.1984,
+     "task": "play",
+     "frame": 290,
+     "route": "hw seek",
+     "ms": 11.747,
+     "disp": 0.855
+    },
+    {
+     "t": 0.2123,
+     "task": "play",
+     "frame": 289,
+     "route": "hw seek",
+     "ms": 13.016,
+     "disp": 0.809
+    },
+    {
+     "t": 0.2282,
+     "task": "play",
+     "frame": 288,
+     "route": "hw seek",
+     "ms": 14.864,
+     "disp": 0.909
+    },
+    {
+     "t": 0.2451,
+     "task": "play",
+     "frame": 287,
+     "route": "hw seek",
+     "ms": 15.758,
+     "disp": 0.914
+    },
+    {
+     "t": 0.2479,
+     "task": "hop",
+     "frame": 130,
+     "route": "sw step \u00d712",
+     "ms": 1.464,
+     "disp": 1.201
+    },
+    {
+     "t": 0.2613,
+     "task": "hop",
+     "frame": 254,
+     "route": "hw seek",
+     "ms": 12.484,
+     "disp": 0.822
+    },
+    {
+     "t": 0.2927,
+     "task": "hop",
+     "frame": 292,
+     "route": "hw step \u00d738",
+     "ms": 30.208,
+     "disp": 0.933
+    },
+    {
+     "t": 0.2937,
+     "task": "hop",
+     "frame": 295,
+     "route": "hw step \u00d73",
+     "ms": 0.021,
+     "disp": 0.851
+    },
+    {
+     "t": 0.3069,
+     "task": "hop",
+     "frame": 74,
+     "route": "hw seek",
+     "ms": 12.316,
+     "disp": 0.888
+    }
+   ]
+  }
+ ]
+}

@@ -26,6 +26,31 @@
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
   - 📁 `decode-experiments/`
+    - 📁 `explorer-logs/`
+      - 📄 `explorer-20260821T172626Z.json`
+      - 📄 `explorer-20260821T172652Z.json`
+      - 📄 `explorer-20260821T173337Z.json`
+      - 📄 `explorer-20260821T173446Z.json`
+      - 📄 `explorer-20260821T174106Z.json`
+      - 📄 `explorer-20260821T174200Z.json`
+      - 📄 `explorer-20260821T174350Z.json`
+      - 📄 `explorer-20260821T175153Z.json`
+      - 📄 `explorer-20260821T180238Z.json`
+      - 📄 `explorer-20260821T180446Z.json`
+      - 📄 `explorer-20260821T180918Z.json`
+      - 📄 `explorer-20260821T181241Z.json`
+      - 📄 `explorer-20260821T181447Z.json`
+      - 📄 `explorer-20260821T181925Z.json`
+      - 📄 `explorer-20260821T182320Z.json`
+      - 📄 `explorer-20260821T182841Z.json`
+      - 📄 `explorer-20260821T182921Z.json`
+      - 📄 `explorer-20260821T183622Z.json`
+      - 📄 `explorer-20260821T184145Z.json`
+      - 📄 `explorer-20260821T184310Z.json`
+      - 📄 `explorer-20260821T184404Z.json`
+      - 📄 `explorer-20260821T184500Z.json`
+      - 📄 `explorer-20260821T185319Z.json`
+      - 📄 `explorer-20260821T185600Z.json`
     - 📁 `results/`
       - 📄 `01-pyav-vs-opencv-20260821T163621Z.json`
       - 📄 `01-pyav-vs-opencv-20260821T164038Z.json`
@@ -43,6 +68,7 @@
     - 📄 `05-the-cut.py` — The cut: does an intra-only intermediate make random access stop costing anything?
     - 📄 `06-analysis-costs.py` — Does the analysis compute dominate decode? Price the v1/v2-shaped ops per regime.
     - 📄 `README.md`
+    - 📄 `explorer.py` — Feel the decode approaches by hand: scrub, play, step and sweep each backend.
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.

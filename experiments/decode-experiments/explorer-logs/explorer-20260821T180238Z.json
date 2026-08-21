@@ -1,0 +1,179 @@
+{
+ "tool": "explorer.py",
+ "when": "2026-08-21T18:02:40.488782+00:00",
+ "sieve_rev": "972b766",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "step_within": 40,
+ "coalesce": true,
+ "kf_snap": false,
+ "runs": [
+  {
+   "label": "GX010047c2_02_17 \u00b7 hybrid",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "hybrid \u00b7 sw steps + cuda seeks",
+   "target_fps": 23.976,
+   "by_task": {
+    "open": {
+     "n": 1,
+     "min": 332.48,
+     "p50": 332.48,
+     "p95": 332.48,
+     "max": 332.48,
+     "mean": 332.48
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T18:02:38.484486+00:00",
+   "events": [
+    {
+     "t": 0.3546,
+     "task": "open",
+     "frame": 0,
+     "route": "sw step \u00d71",
+     "ms": 332.477,
+     "disp": 22.057
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 hybrid-ds-cache",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "hybrid \u2193display + LRU cache",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 0.01,
+     "p50": 84.44,
+     "p95": 336.71,
+     "max": 336.71,
+     "mean": 140.39
+    },
+    "open": {
+     "n": 1,
+     "min": 332.11,
+     "p50": 332.11,
+     "p95": 332.11,
+     "max": 332.11,
+     "mean": 332.11
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T18:02:39.068584+00:00",
+   "events": [
+    {
+     "t": 0.3335,
+     "task": "open",
+     "frame": 0,
+     "route": "sw step \u00d71",
+     "ms": 332.109,
+     "disp": 1.338
+    },
+    {
+     "t": 0.6716,
+     "task": "drag",
+     "frame": 500,
+     "route": "hw seek",
+     "ms": 336.711,
+     "disp": 1.212
+    },
+    {
+     "t": 0.7575,
+     "task": "drag",
+     "frame": 200,
+     "route": "hw seek",
+     "ms": 84.444,
+     "disp": 1.246
+    },
+    {
+     "t": 0.7587,
+     "task": "drag",
+     "frame": 500,
+     "route": "cache",
+     "ms": 0.005,
+     "disp": 1.07
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 cuda-ds-cache",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "cuda \u2193display + LRU cache",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 0.01,
+     "p50": 79.47,
+     "p95": 183.52,
+     "max": 183.52,
+     "mean": 87.67
+    },
+    "open": {
+     "n": 1,
+     "min": 187.73,
+     "p50": 187.73,
+     "p95": 187.73,
+     "max": 187.73,
+     "mean": 187.73
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": 183.52,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-21T18:02:40.032208+00:00",
+   "events": [
+    {
+     "t": 0.189,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 187.73,
+     "disp": 1.22
+    },
+    {
+     "t": 0.3738,
+     "task": "drag",
+     "frame": 500,
+     "route": "seek",
+     "ms": 183.519,
+     "disp": 1.176
+    },
+    {
+     "t": 0.4547,
+     "task": "drag",
+     "frame": 200,
+     "route": "seek",
+     "ms": 79.473,
+     "disp": 1.275
+    },
+    {
+     "t": 0.4564,
+     "task": "drag",
+     "frame": 500,
+     "route": "cache",
+     "ms": 0.008,
+     "disp": 1.61
+    }
+   ]
+  }
+ ]
+}

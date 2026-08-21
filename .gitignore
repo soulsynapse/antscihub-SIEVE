@@ -11,3 +11,8 @@ __pycache__/
 # clips are generated (`tests/conftest.py`) so a checkout needs no media, and
 # a tracked video would be the one file in the repo nobody can review.
 video-tests/
+
+# Per-machine seek-probe verdicts the explorer caches; a cache, not a result —
+# committing it would ship one machine's routing to every other. Delete to
+# re-probe after a hardware or driver change.
+experiments/decode-experiments/explorer-logs/probe-cache.json

@@ -1,0 +1,119 @@
+{
+ "tool": "explorer.py",
+ "when": "2026-08-21T17:42:09.643006+00:00",
+ "sieve_rev": "972b766",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "step_within": 40,
+ "coalesce": true,
+ "kf_snap": false,
+ "runs": [
+  {
+   "label": "GX010047c2_02_17 \u00b7 hybrid",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "hybrid \u00b7 sw steps + cuda seeks",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 113.81,
+     "p50": 113.81,
+     "p95": 113.81,
+     "max": 113.81,
+     "mean": 113.81
+    },
+    "open": {
+     "n": 1,
+     "min": 269.69,
+     "p50": 269.69,
+     "p95": 269.69,
+     "max": 269.69,
+     "mean": 269.69
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [
+    {
+     "frames": 600,
+     "wall_s": 3.222,
+     "fps": 186.2,
+     "parallel": [
+      {
+       "kind": "sw",
+       "start": 120,
+       "frames": 300,
+       "wall_s": 3.039,
+       "fps": 98.7
+      },
+      {
+       "kind": "hw",
+       "start": 420,
+       "frames": 300,
+       "wall_s": 2.743,
+       "fps": 109.4
+      }
+     ]
+    },
+    {
+     "frames": 900,
+     "wall_s": 5.734,
+     "fps": 157.0,
+     "parallel": [
+      {
+       "kind": "sw",
+       "start": 120,
+       "frames": 300,
+       "wall_s": 5.581,
+       "fps": 53.8
+      },
+      {
+       "kind": "sw",
+       "start": 420,
+       "frames": 300,
+       "wall_s": 5.251,
+       "fps": 57.1
+      },
+      {
+       "kind": "hw",
+       "start": 720,
+       "frames": 300,
+       "wall_s": 2.911,
+       "fps": 103.1
+      }
+     ]
+    }
+   ],
+   "events_capped": false,
+   "started": "2026-08-21T17:42:00.280728+00:00",
+   "events": [
+    {
+     "t": 0.2829,
+     "task": "open",
+     "frame": 0,
+     "route": "sw step \u00d71",
+     "ms": 269.694,
+     "disp": 13.107
+    },
+    {
+     "t": 0.4062,
+     "task": "drag",
+     "frame": 100,
+     "route": "hw seek",
+     "ms": 113.811,
+     "disp": 8.801
+    }
+   ]
+  }
+ ]
+}

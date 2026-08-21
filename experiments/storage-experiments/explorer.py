@@ -106,8 +106,16 @@ def _crop_luma(frame):
                                     CROP_X : CROP_X + CROP_W])
 
 
+STEP_WITHIN = 60  #: step forward instead of seeking within this many frames
+                  #: (exp02: the crossover on the uncut source)
+
+
 class Fetcher:
-    """One open container on the original, fetching region-relative frames."""
+    """One open container on the original, fetching region-relative frames.
+
+    Sequential requests step the decoder forward instead of seeking — without
+    this, play through the miss path costs the random-access price per frame
+    (the first headless walk measured 300 frames of 'play thru' at 88 s)."""
 
     def __init__(self, base_idx: int):
         self.container = av.open(str(BIG))
@@ -115,13 +123,27 @@ class Fetcher:
         self.stream.thread_type = "AUTO"
         self.pts_of, self.step = _pts_helpers(self.stream)
         self.base_idx = base_idx
+        self._decoded = None
+        self._pos: int | None = None  # rel index of the last decoded frame
 
     def exact(self, rel: int) -> np.ndarray:
+        if self._decoded is not None and self._pos is not None:
+            ahead = rel - self._pos
+            if 0 < ahead <= STEP_WITHIN:
+                try:
+                    for _ in range(ahead):
+                        frame = next(self._decoded)
+                    self._pos = rel
+                    return _crop_luma(frame)
+                except StopIteration:
+                    pass  # ran off the end; fall through to a real seek
         target = self.pts_of(self.base_idx + rel)
         half = self.step / 2
         self.container.seek(target, stream=self.stream)
-        for frame in self.container.decode(self.stream):
+        self._decoded = self.container.decode(self.stream)
+        for frame in self._decoded:
             if frame.pts is not None and frame.pts + half >= target:
+                self._pos = rel
                 return _crop_luma(frame)
         raise RuntimeError(f"off the end at rel {rel}")
 
@@ -129,9 +151,11 @@ class Fetcher:
         """One decode, no roll-forward: the storyboard gesture."""
         target = self.pts_of(self.base_idx + rel)
         self.container.seek(target, stream=self.stream)
-        frame = next(self.container.decode(self.stream))
+        self._decoded = self.container.decode(self.stream)
+        frame = next(self._decoded)
         landed = round((frame.pts - (self.stream.start_time or 0))
                        / self.step) - self.base_idx
+        self._pos = landed
         return _crop_luma(frame), landed
 
     def close(self) -> None:
@@ -679,6 +703,11 @@ class StorageExplorer(QMainWindow):
                 run.log("thru", rel, f"err {exc!r}"[:40], 0.0)
                 continue
             run.log("thru", rel, route, (time.perf_counter() - t0) * 1000)
+            if rel % 24 == 0:  # keep the window alive through a long pass
+                self.slider.blockSignals(True)
+                self.slider.setValue(rel)
+                self.slider.blockSignals(False)
+                QApplication.processEvents()
         wall = time.perf_counter() - before
         self.pos = SPAN - 1
         if image is not None:

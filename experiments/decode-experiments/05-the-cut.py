@@ -3,16 +3,18 @@
 The finding on the shelf says decode cost tracks pixels, not bytes, and
 ideas.md claims intra-only (FFV1) additionally retires the seek problem while
 CRF does not — v1's default was CRF and therefore never had the property. This
-cuts one 300-frame, 1024x1024 region out of the 5.3K source three ways (FFV1
-intra, x264 CRF18 inter, x264 CRF18 intra) and measures each against decoding
-the original with a crop, both sequentially and at random frames. Encode wall
-time and output size go into the notes, because the cut's cost is part of the
-claim.
+cuts one 300-frame, 1024x1024 region out of the 5.3K source five ways (FFV1
+intra, x264 CRF18 inter, x264 CRF18 intra, x264 qp0 intra, Ut Video) and
+measures each against decoding the original with a crop, both sequentially and
+at random frames. Encode wall time and output size go into the notes, because
+the cut's cost is part of the claim.
 
 The random-access case is the point: on an inter-coded clip a random frame
 pays keyframe-plus-decode-forward; on an intra-only one it should pay an index
 lookup and one decode. The lossy-intra case separates 'intra' from 'lossless',
-which the FFV1-only comparison conflates.
+which the FFV1-only comparison conflates — and the qp0/Ut Video cases separate
+'lossless' from 'FFV1', since a lossless codec built for decode speed may not
+lose the way an archival one does.
 """
 
 from __future__ import annotations
@@ -38,6 +40,13 @@ CLIPS = {
     "ffv1-intra": (DERIVED / "cut-ffv1.mkv", ["-c:v", "ffv1", "-level", "3", "-g", "1", "-slices", "16", "-threads", "8"]),
     "x264-crf18-inter": (DERIVED / "cut-crf18.mp4", ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast"]),
     "x264-crf18-intra": (DERIVED / "cut-crf18-intra.mp4", ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-g", "1"]),
+    # The fast-lossless cell: "lossy beats lossless" was first proven against
+    # FFV1 only, and FFV1 is built for archival, not decode speed. These two are
+    # the lossless codecs whose decoders are actually fast. Encoded with -copyts
+    # (ADR-0004: a derived encode preserves the source's timestamps); the three
+    # clips above predate that corollary and are reused as encoded.
+    "x264-qp0-intra": (DERIVED / "cut-qp0-intra.mp4", ["-c:v", "libx264", "-qp", "0", "-preset", "veryfast", "-g", "1", "-copyts"]),
+    "utvideo": (DERIVED / "cut-utvideo.mkv", ["-c:v", "utvideo", "-copyts"]),
 }
 
 

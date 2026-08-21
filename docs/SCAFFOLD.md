@@ -69,6 +69,7 @@
       - 📄 `03-fastest-luma-20260821T165543Z.json`
       - 📄 `04-keyframe-index-20260821T165601Z.json`
       - 📄 `05-the-cut-20260821T165634Z.json`
+      - 📄 `05-the-cut-20260821T192609Z.json`
       - 📄 `06-analysis-costs-20260821T174722Z.json`
       - 📄 `06-analysis-costs-20260821T175216Z.json`
     - 📄 `01-pyav-vs-opencv.py` — Does the inherited OpenCV sequential-decode corpus survive a binding change?

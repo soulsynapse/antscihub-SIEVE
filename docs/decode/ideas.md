@@ -127,8 +127,14 @@ them, and are cited to where they live rather than restated as true.
 - Intra-only costs storage, and the saving is not free. Lossless must encode
   inherited compression noise verbatim, and noise does not compress.
 
-- Baking a task parameter into the stored file. It is what makes TRex's format
-  two orders of magnitude smaller and what makes it answer exactly one question.
+- Baking a task parameter into the stored file. TRex's `.pv` bakes a luminance
+  floor, not the threshold itself — blob pixel values are stored, so
+  `track_threshold` stays tunable upward and only what fell below the floor is
+  gone. And "two orders of magnitude smaller" is true only against raw: on this
+  machine's own TRex outputs the `.pv` runs ~3–19x *larger* than the compressed
+  source it came from (the `.pv`/`.mp4` pairs under `Thermal hysteresis/` and
+  `ash-pipeyard/`, inspected 2026-08-21), because sparse-but-raw pixel runs lose
+  to dense-but-inter-coded H.264, and by more the more animals are in frame.
 
 - Coverage inferred from a zero. An unwritten frame and a frame measured as empty
   read identically, and every consumer added later is one that does not know to

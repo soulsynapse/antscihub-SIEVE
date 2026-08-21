@@ -135,8 +135,11 @@ def fill_worker(base_idx: int, chunk: int, cache: dict, last_req: list,
         fetcher.close()
 
 
+NEAR_RADIUS = 12  #: nearest-cached serves within this many frames
+
+
 def session(run: Run, base_idx: int, scrub: str, order: str,
-            chunk_gops: int, workers: int) -> None:
+            chunk_gops: int, workers: int, miss: str = "block") -> None:
     chunk = GOP * chunk_gops
     targets = scripted_targets(scrub)
     cache: dict[int, np.ndarray] = {}
@@ -167,6 +170,12 @@ def session(run: Run, base_idx: int, scrub: str, order: str,
         before = time.perf_counter()
         if tgt in cache:
             routes.append("hit")
+        elif miss == "nearest" and any(
+                abs(k - tgt) <= NEAR_RADIUS for k in cache):
+            # served without decoding — so the miss path memoizes nothing,
+            # which is the mechanism that made near-playhead fill redundant
+            # under miss=block
+            routes.append("near")
         else:
             cache[tgt] = miss_fetcher.fetch(tgt)
             routes.append("miss")
@@ -178,10 +187,14 @@ def session(run: Run, base_idx: int, scrub: str, order: str,
     miss_fetcher.close()
     misses = [i for i, r in enumerate(routes) if r == "miss"]
     name = f"{scrub}/{order}/gop x{chunk_gops}/{workers}w"
+    if miss != "block":
+        name += f"/{miss}"
     run.cases.append(Case(
         name,
         {"scrub": scrub, "order": order, "chunk_gops": chunk_gops,
-         "workers": workers, "routes": routes, "fill_done_s": fill_done,
+         "workers": workers, "miss": miss,
+         "near_serves": routes.count("near"),
+         "routes": routes, "fill_done_s": fill_done,
          "filled_frames": len(cache), "misses": len(misses),
          "last_miss": misses[-1] if misses else None,
          "fetch_interval_s": FETCH_INTERVAL_S, "warmup_discarded": 0},
@@ -220,6 +233,14 @@ def main() -> None:
         if workers == 1:
             continue  # already covered above
         session(run, base_idx, "lingering", "near-playhead", 1, workers)
+        # the cell the first pruning pass lacked: a second worker at the
+        # winning chunk size, not only at x1
+        session(run, base_idx, "lingering", "sequential", 4, workers)
+    # fill order x miss policy: under nearest-cached the miss path memoizes
+    # nothing, so the mechanism that made chasing redundant is absent
+    for order in ORDERS:
+        session(run, base_idx, "lingering", order, 4, workers=1,
+                miss="nearest")
 
     for case in run.cases:
         q = f"misses={case.params['misses']:>3} last={str(case.params['last_miss']):>4} fill={case.params['fill_done_s'] and round(case.params['fill_done_s'], 2)}"

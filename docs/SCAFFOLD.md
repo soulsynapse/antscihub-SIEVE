@@ -97,6 +97,7 @@
     - 📄 `04-persist-inprocess.py` — Persist: what encoding the grown cut costs the foreground, in-process vs out.
     - 📄 `05-flow-wall.py` — The flow wall: how big a span can re-pay DIS before it stops feeling live.
     - 📄 `README.md`
+    - 📄 `explorer.py` — Feel the storage stack by hand: scrub a region while fill, persist and play fight over it.
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
   - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.

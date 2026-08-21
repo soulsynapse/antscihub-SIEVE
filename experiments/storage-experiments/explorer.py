@@ -81,7 +81,15 @@ GROWN_CUT = FOOTAGE / "derived" / "_explorer-grown-cut.mp4"
 LOGS = Path(__file__).resolve().parent / "explorer-logs"
 
 SPAN = 300
+SPANS = (300, 1500, 4500)   #: region sizes; the composite only shows its
+                            #: shape at span scale, where fill takes long
+                            #: enough for policy to matter
 START_S = 60
+CHUNK_FRAMES = 96           #: persist chunk (GOP x4 - results/02-*)
+SKELETON_STRIDE = 24        #: one kept frame per GOP: nearest is then wrong
+                            #: by at most half a stride, everywhere, forever
+TELEPORT_DIST = 240         #: frontier relocates when attention commits
+TELEPORT_COOLDOWN_S = 1.0   #: this far away (10 GOPs) for this long
 CROP_W, CROP_H, CROP_X, CROP_Y = 1024, 1024, 2144, 982
 GOP = 24                #: results/04-* (decode side): fixed on this footage
 NEAR_RADIUS = 12        #: nearest-cached serves within this many frames
@@ -234,6 +242,167 @@ class RamTier:
         return len(self.d)
 
 
+CHUNK_DIR = FOOTAGE / "derived" / "_explorer-chunks"
+
+
+class ChunkStore:
+    """Persist-as-you-go: the grown cut as one intra file per 96-frame chunk.
+
+    A single growing mp4 cannot take chunks out of order (the muxer wants
+    monotone dts, and a teleporting frontier produces jumps), so the disk
+    tier is chunked — which is also the shape a real store wants: a chunk is
+    the unit of persistence, eviction and coverage, and 'which chunks exist'
+    is an explicit record, never inferred from a gap."""
+
+    def __init__(self):
+        self._open: OrderedDict[int, CutFetcher] = OrderedDict()
+        CHUNK_DIR.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _path(start: int) -> Path:
+        return CHUNK_DIR / f"chunk-{start:05d}.mp4"
+
+    def persisted(self) -> set[int]:
+        return {int(p.stem.split("-")[1]) for p in CHUNK_DIR.glob("chunk-*.mp4")}
+
+    def encode(self, start: int, frames: list[np.ndarray]) -> None:
+        path = self._path(start)
+        with av.open(str(path), "w") as out:
+            stream = out.add_stream("libx264", rate=24)
+            stream.width, stream.height = CROP_W, CROP_H
+            stream.pix_fmt = "yuv420p"
+            stream.options = {"crf": "18", "preset": "veryfast", "g": "1"}
+            for arr in frames:
+                vf = av.VideoFrame.from_ndarray(arr, format="gray")
+                vf = vf.reformat(format="yuv420p")
+                for pkt in stream.encode(vf):
+                    out.mux(pkt)
+            for pkt in stream.encode():
+                out.mux(pkt)
+
+    def fetch(self, rel: int) -> np.ndarray | None:
+        start = rel - rel % CHUNK_FRAMES
+        if start not in self._open:
+            path = self._path(start)
+            if not path.exists():
+                return None
+            self._open[start] = CutFetcher(path)
+            while len(self._open) > 3:  # a few open containers is plenty
+                _, old = self._open.popitem(last=False)
+                old.close()
+        self._open.move_to_end(start)
+        return self._open[start].exact(rel - start)
+
+    def wipe(self) -> None:
+        for fetcher in self._open.values():
+            fetcher.close()
+        self._open.clear()
+        for path in CHUNK_DIR.glob("chunk-*.mp4"):
+            path.unlink(missing_ok=True)
+
+
+class FrontierFill:
+    """The composite candidate: one sequential decode frontier that teleports
+    when attention commits elsewhere, keeps a stride skeleton exempt from
+    eviction, fills the dense RAM tier as it passes, and hands each completed
+    chunk to a persist thread. Ordering stays sequential because on this
+    footage a seek costs a GOP (docs/findings/2026.08.21-uncut-seek-*), so
+    jumping around buys nothing — the frontier only ever jumps for the user.
+    """
+
+    def __init__(self, base_idx: int, cache: RamTier, skeleton: dict,
+                 skel_lock: threading.Lock, store: ChunkStore):
+        self.base_idx = base_idx
+        self.cache = cache
+        self.skeleton = skeleton
+        self.skel_lock = skel_lock
+        self.store = store
+        self.filled: set[int] = set()
+        self.persisted: set[int] = store.persisted()
+        self.last_req = [0]
+        self._teleport_to: list[int | None] = [None]
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._encoder: threading.Thread | None = None
+        import queue
+
+        self._q: queue.Queue = queue.Queue()
+        self.frontier_pos = 0
+
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def teleport(self, rel: int) -> None:
+        self._teleport_to[0] = rel - rel % CHUNK_FRAMES
+
+    def start(self) -> None:
+        self.stop()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._encoder = threading.Thread(target=self._encode_loop, daemon=True)
+        self._thread.start()
+        self._encoder.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        for t in (self._thread, self._encoder):
+            if t:
+                t.join(timeout=15)
+        self._thread = self._encoder = None
+
+    def _encode_loop(self) -> None:
+        while not self._stop.is_set() or not self._q.empty():
+            try:
+                start, frames = self._q.get(timeout=0.2)
+            except Exception:  # noqa: BLE001 - empty queue, keep waiting
+                continue
+            try:
+                self.store.encode(start, frames)
+                self.persisted.add(start)
+            except Exception:  # noqa: BLE001 - a failed chunk re-derives
+                pass
+
+    def _run(self) -> None:
+        pending = [s for s in range(0, SPAN, CHUNK_FRAMES)
+                   if s not in self.persisted]
+        fetcher = Fetcher(self.base_idx)
+        pts_of, step = fetcher.pts_of, fetcher.step
+        half = step / 2
+        try:
+            while pending and not self._stop.is_set():
+                jump = self._teleport_to[0]
+                if jump is not None and jump in pending:
+                    self._teleport_to[0] = None
+                    pending.remove(jump)
+                    start = jump
+                else:
+                    start = pending.pop(0)
+                self.frontier_pos = start
+                target = pts_of(self.base_idx + start)
+                fetcher.container.seek(target, stream=fetcher.stream)
+                buffer: list[np.ndarray] = []
+                rel = start
+                end = min(start + CHUNK_FRAMES, SPAN)
+                for frame in fetcher.container.decode(fetcher.stream):
+                    if frame.pts is None or frame.pts + half < target:
+                        continue
+                    arr = _crop_luma(frame)
+                    buffer.append(arr)
+                    self.cache.put(rel, arr)
+                    if rel % SKELETON_STRIDE == 0:
+                        with self.skel_lock:
+                            self.skeleton[rel] = arr
+                    self.filled.add(rel)
+                    self.frontier_pos = rel
+                    rel += 1
+                    if rel >= end or self._stop.is_set():
+                        break
+                if len(buffer) == end - start and start not in self.persisted:
+                    self._q.put((start, buffer))
+        finally:
+            fetcher.close()
+
+
 class FillWorker:
     """02's winning shape, restartable: GOP-aligned chunks into the RAM tier."""
 
@@ -362,6 +531,12 @@ class StorageExplorer(QMainWindow):
         self.fill = FillWorker(self.base_idx)
         self.miss_fetcher = Fetcher(self.base_idx)
         self.cut: CutFetcher | None = None
+        self.skeleton: dict[int, np.ndarray] = {}
+        self.skel_lock = threading.Lock()
+        self.store = ChunkStore()
+        self.frontier: FrontierFill | None = None
+        self._recent_targets: deque[int] = deque(maxlen=5)
+        self._last_teleport = 0.0
         self.pos = 0
         self.run: RunLog | None = None
         self.runs: dict[str, RunLog] = {}
@@ -386,9 +561,17 @@ class StorageExplorer(QMainWindow):
         self._hud_timer.timeout.connect(self._refresh_status)
         self._hud_timer.start()
 
+        self.span_box = QComboBox()
+        self.span_box.addItems([f"span {s}" for s in SPANS])
+        self.span_box.setToolTip(
+            "region size. The composite frontier only shows its shape at "
+            "span scale, where fill takes long enough for policy to matter; "
+            "changing span resets everything cold.")
+        self.span_box.currentIndexChanged.connect(self._span_changed)
         self.fill_box = QComboBox()
         self.fill_box.addItems(["fill off", "fill sequential",
-                                "fill near-playhead"])
+                                "fill near-playhead",
+                                "fill frontier (composite)"])
         self.fill_box.setToolTip(
             "02 measured sequential beating near-playhead even under a "
             "lingering scrub — the miss path already memoizes attention, "
@@ -479,8 +662,8 @@ class StorageExplorer(QMainWindow):
         self.walk_btn.clicked.connect(self._walk)
 
         row1 = QHBoxLayout()
-        for w in (self.fill_box, self.chunk_box, self.budget_spin,
-                  self.bypass, self.miss_box):
+        for w in (self.span_box, self.fill_box, self.chunk_box,
+                  self.budget_spin, self.bypass, self.miss_box):
             row1.addWidget(w)
         row1.addStretch(1)
         for w in (self.persist_btn, self.flow_btn, self.reset_btn):
@@ -547,8 +730,11 @@ class StorageExplorer(QMainWindow):
         fill = self.fill_box.currentText().replace("fill ", "")
         chunk = self.chunk_box.currentText().replace("chunk ", "")
         miss = self.miss_box.currentText().replace("miss: ", "")
-        parts = [f"fill={fill}", chunk, f"miss={miss}",
+        parts = [f"span={SPAN}", f"fill={fill}", chunk, f"miss={miss}",
                  f"b={self.budget_spin.value()}"]
+        if self.frontier:
+            parts = [f"span={SPAN}", "COMPOSITE",
+                     f"b={self.budget_spin.value()}"]
         if not self.bypass.isChecked():
             parts.append("play-fills")
         if self.cut:
@@ -564,11 +750,29 @@ class StorageExplorer(QMainWindow):
 
     def _fill_changed(self, _=None) -> None:
         order = self.fill_box.currentText().replace("fill ", "")
+        if self.frontier:
+            self.frontier.stop()
+            self.frontier = None
         if order == "off":
             self.fill.stop()
             return
+        if "frontier" in order:
+            self.fill.stop()
+            self.frontier = FrontierFill(self.base_idx, self.cache,
+                                         self.skeleton, self.skel_lock,
+                                         self.store)
+            self.frontier.start()
+            return
         chunk = GOP * (1, 2, 4)[self.chunk_box.currentIndex()]
         self.fill.start(self.cache, order, chunk)
+
+    def _span_changed(self, _=None) -> None:
+        global SPAN
+        SPAN = SPANS[self.span_box.currentIndex()]
+        self.budget_spin.setRange(10, SPAN)
+        self.budget_spin.setValue(min(self.budget_spin.value(), SPAN))
+        self.slider.setMaximum(SPAN - 1)
+        self._reset()
 
     # ── the stack, one request at a time ─────────────────────────────────
     def _serve(self, rel: int, task: str, exact: bool) -> tuple[np.ndarray, str]:
@@ -576,6 +780,31 @@ class StorageExplorer(QMainWindow):
         got = self.cache.get(rel)
         if got is not None:
             return got, "hit"
+        if self.frontier:
+            self.frontier.last_req[0] = rel
+            with self.skel_lock:
+                skel = self.skeleton.get(rel)
+            if skel is not None:  # an exact frame the stride kept
+                return skel, "skel"
+            from_disk = self.store.fetch(rel)
+            if from_disk is not None:
+                self.cache.put(rel, from_disk)
+                return from_disk, "cut"
+            if not exact:  # bounded-Δ guarantee: dense ∪ skeleton
+                near = self.cache.nearest(rel)
+                if near is None:
+                    with self.skel_lock:
+                        best = min(self.skeleton,
+                                   key=lambda k: abs(k - rel), default=None)
+                        if best is not None and abs(best - rel) <= \
+                                SKELETON_STRIDE // 2:
+                            return self.skeleton[best], f"near Δ{rel - best}"
+                else:
+                    best, arr = near
+                    return arr, f"near Δ{rel - best}"
+            arr = self.miss_fetcher.exact(rel)
+            self.cache.put(rel, arr)
+            return arr, "miss"
         if self.cut:
             arr = self.cut.exact(rel)
             self.cache.put(rel, arr)
@@ -599,6 +828,21 @@ class StorageExplorer(QMainWindow):
 
     def request(self, rel: int, task: str = "step", exact: bool = False) -> None:
         rel = max(0, min(SPAN - 1, rel))
+        if self.frontier and task in ("drag", "step", "scrub"):
+            # committed-anchor teleport: five recent targets agreeing with
+            # each other, all far from the frontier, and a cooldown — chasing
+            # every request is the policy 02 measured losing
+            self._recent_targets.append(rel)
+            if len(self._recent_targets) == 5:
+                lo, hi = min(self._recent_targets), max(self._recent_targets)
+                center = (lo + hi) // 2
+                now = time.perf_counter()
+                if (hi - lo <= 60
+                        and abs(center - self.frontier.frontier_pos)
+                        > TELEPORT_DIST
+                        and now - self._last_teleport > TELEPORT_COOLDOWN_S):
+                    self.frontier.teleport(center)
+                    self._last_teleport = now
         self._queue.clear()  # coalesce always: 02's foreground shape
         self._queue.append(rel)
         if self._busy:
@@ -944,30 +1188,60 @@ class StorageExplorer(QMainWindow):
 
     def _reset(self) -> None:
         self.fill.stop()
+        if self.frontier:
+            self.frontier.stop()
+            self.frontier = None
         self.fill = FillWorker(self.base_idx)
         self.cache = RamTier(self.budget_spin.value())
+        with self.skel_lock:
+            self.skeleton.clear()
+        self.store.wipe()
         if self.cut:
             self.cut.close()
             self.cut = None
         GROWN_CUT.unlink(missing_ok=True)
         self.fill_box.setCurrentIndex(0)
-        self.hud.setText("cold again: nothing cached, no cut, fill off")
+        self.pos = 0
+        self._recent_targets.clear()
+        self.hud.setText("cold again: nothing cached, no cut, no chunks, "
+                         "fill off")
         self._touch()
 
     # ── status, graphs, log ──────────────────────────────────────────────
     def _refresh_status(self) -> None:
-        blocks = 30
+        blocks = 60
         per = SPAN / blocks
         with self.cache.lock:
-            keys = set(self.cache.d.keys())
-        bar = "".join(
-            "█" if any(int(b * per) <= k < int((b + 1) * per) for k in keys)
-            else "·" for b in range(blocks))
-        self.coverage.setText(
-            f"cache [{bar}] {len(keys)}/{SPAN}"
-            + (f" · fill {'running' if self.fill.running() else 'idle'}"
-               f" {len(self.fill.filled)}/{SPAN}" if self.fill else "")
-            + (" · cut on disk" if self.cut else ""))
+            dense = set(self.cache.d.keys())
+        if self.frontier:
+            persisted = self.frontier.persisted
+            with self.skel_lock:
+                skel = set(self.skeleton.keys())
+            def cell(b: int) -> str:
+                lo, hi = int(b * per), int((b + 1) * per)
+                if any(lo <= k < hi for k in dense):
+                    return "█"    # in RAM, exact
+                if any(lo <= s < hi or lo < s + CHUNK_FRAMES <= hi
+                       for s in persisted):
+                    return "▄"    # on disk, ~10 ms away
+                if any(lo <= k < hi for k in skel):
+                    return "·"    # skeleton only: nearest within Δ12
+                return " "
+            bar = "".join(cell(b) for b in range(blocks))
+            self.coverage.setText(
+                f"[{bar}] ram {len(dense)} · skel {len(skel)} · "
+                f"chunks {len(persisted)}/{-(-SPAN // CHUNK_FRAMES)} · "
+                f"frontier@{self.frontier.frontier_pos}")
+        else:
+            bar = "".join(
+                "█" if any(int(b * per) <= k < int((b + 1) * per)
+                           for k in dense)
+                else "·" for b in range(blocks))
+            self.coverage.setText(
+                f"cache [{bar}] {len(dense)}/{SPAN}"
+                + (f" · fill {'running' if self.fill.running() else 'idle'}"
+                   f" {len(self.fill.filled)}/{SPAN}" if self.fill else "")
+                + (" · cut on disk" if self.cut else ""))
         self.status.setText(self._config())
 
     def _touch(self) -> None:
@@ -1034,10 +1308,13 @@ class StorageExplorer(QMainWindow):
     def closeEvent(self, event) -> None:
         self.play_btn.setChecked(False)
         self.fill.stop()
+        if self.frontier:
+            self.frontier.stop()
         self._save_log()
         self.miss_fetcher.close()
         if self.cut:
             self.cut.close()
+        self.store.wipe()
         GROWN_CUT.unlink(missing_ok=True)
         super().closeEvent(event)
 
@@ -1085,6 +1362,18 @@ def main() -> None:
         time.sleep(3.0)
         window.request(40, "drag")
         print(window.hud.text())
+        # composite: frontier + skeleton + chunk store
+        window._reset()
+        window.fill_box.setCurrentIndex(3)
+        time.sleep(4.0)
+        window.request(250, "drag")   # ahead of the frontier: near/skel
+        print(window.hud.text())
+        window.budget_spin.setValue(10)  # force eviction onto the chunks
+        time.sleep(1.0)
+        window.request(20, "drag")
+        print(window.hud.text())
+        window._refresh_status()
+        print(window.coverage.text())
         window._redraw_graphs()
         window._save_log()
         data = json.loads(window.log_path.read_text(encoding="utf-8"))

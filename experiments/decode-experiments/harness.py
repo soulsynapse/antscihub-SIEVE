@@ -227,6 +227,8 @@ def time_case(
     truncated = len(samples) > SAMPLE_CAP
     if truncated:
         stride = len(samples) // SAMPLE_CAP + 1
+        params["samples_before_decimation"] = len(samples)
+        params["decimation_stride"] = stride
         samples = samples[::stride]
     case = Case(name, params, samples, unit=unit, note=note, truncated=truncated)
     run.cases.append(case)

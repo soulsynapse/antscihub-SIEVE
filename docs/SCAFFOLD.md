@@ -33,10 +33,12 @@
       - 📄 `02-random-access-20260821T170137Z.json`
       - 📄 `03-fastest-luma-20260821T165543Z.json`
       - 📄 `04-keyframe-index-20260821T165601Z.json`
+      - 📄 `05-the-cut-20260821T165634Z.json`
     - 📄 `01-pyav-vs-opencv.py` — Does the inherited OpenCV sequential-decode corpus survive a binding change?
     - 📄 `02-random-access.py` — Random access: frame-accurate seek against grab-forward, by jump distance.
     - 📄 `03-fastest-luma.py` — The fastest route to a luma frame off the 5.3K source, including libav with no Python in the loop.
     - 📄 `04-keyframe-index.py` — Building the keyframe index by demuxing only: read packets, decode nothing.
+    - 📄 `05-the-cut.py` — The cut: does an intra-only intermediate make random access stop costing anything?
     - 📄 `README.md`
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
 - 📁 `mockup/`

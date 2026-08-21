@@ -84,6 +84,11 @@
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the decode approaches by hand: scrub, play, step and sweep each backend.
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
+  - 📁 `storage-experiments/`
+    - 📁 `results/`
+      - 📄 `01-time-to-tunable-20260821T211839Z.json`
+    - 📄 `01-time-to-tunable.py` — Time-to-tunable: how fast does a cold region become interactive, per strategy?
+    - 📄 `README.md`
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
   - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.

@@ -26,6 +26,10 @@
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
   - 📁 `decode-experiments/`
+    - 📁 `results/`
+      - 📄 `01-pyav-vs-opencv-20260821T163621Z.json`
+      - 📄 `01-pyav-vs-opencv-20260821T164038Z.json`
+    - 📄 `01-pyav-vs-opencv.py` — Does the inherited OpenCV sequential-decode corpus survive a binding change?
     - 📄 `README.md`
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
 - 📁 `mockup/`

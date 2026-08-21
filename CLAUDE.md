@@ -14,6 +14,12 @@ plays.
   clone turns them on with `git config core.hooksPath .githooks`;
   `SIEVE_SKIP_SCAFFOLD=1` commits without one.
 - ADRs can be suggested, but never minted unprompted.
+- Findings are the same: suggested, never written unprompted. One records
+  what cost something to learn and would otherwise be re-derived, and names
+  what was measured, on what, and when, so a later measurement supersedes it
+  rather than argues with it. Anything a reader has to go re-check before
+  trusting is not a finding, and neither is anything a docstring already
+  says where the next person to touch it would read it.
 
 ## Environment
 

@@ -43,3 +43,16 @@ plays.
   comment says why for the only ones that do.
 - Don't redirect stderr (`2>&1`) on native commands in PowerShell 5.1; it
   wraps output in ErrorRecords and fails commands that succeeded.
+- The Bash tool's working directory does not reliably persist between calls,
+  so use absolute paths and never gate a write on `cd &&` — when the cd
+  fails, the write is silently skipped or lands somewhere else. Write new
+  source files longer than a screen with the Write/Edit tools, not heredocs;
+  long quoted heredocs of Python have failed to parse here.
+- Inline Python that patches a file: read bytes and decode utf-8, match and
+  replace as str — matching with the file's own line endings, which is the
+  autocrlf note above biting a second way. A bytes literal is additionally a
+  syntax error the moment the patch text carries a non-ASCII character.
+- `uv add` syncs the venv as part of adding, and rolls the pyproject edit
+  back when that sync fails — which it can, intermittently, when a running
+  app holds files in `.venv`. Then: edit pyproject by hand and `uv sync`,
+  retrying once if the first sync hits the same lock.

@@ -7,6 +7,17 @@ dependencies = [
     "PySide6>=6.8",
 ]
 
+[dependency-groups]
+# Decode libraries are not SIEVE runtime dependencies and must not become them:
+# `experiments/decode-experiments/` compares them against each other, and a
+# comparison whose contestants are installed by default is one the application
+# has already picked a winner for.
+experiments = [
+    "av>=13",
+    "numpy>=2",
+    "opencv-python-headless>=4.10",
+]
+
 [project.scripts]
 sieve = "sieve.__main__:main"
 

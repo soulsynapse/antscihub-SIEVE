@@ -24,6 +24,10 @@
   - 📄 `SCAFFOLD.md`
   - 📄 `VOCAB.md`
   - 📄 `vision-and-notes.md`
+- 📁 `experiments/`
+  - 📁 `decode-experiments/`
+    - 📄 `README.md`
+    - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
   - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.

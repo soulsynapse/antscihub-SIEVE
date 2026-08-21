@@ -89,9 +89,11 @@
       - 📄 `01-time-to-tunable-20260821T211839Z.json`
       - 📄 `02-fill-policy-20260821T212800Z.json`
       - 📄 `03-ram-tier-20260821T213111Z.json`
+      - 📄 `04-persist-inprocess-20260821T213201Z.json`
     - 📄 `01-time-to-tunable.py` — Time-to-tunable: how fast does a cold region become interactive, per strategy?
     - 📄 `02-fill-policy.py` — Fill policy: chunk size, fill order and worker count against a scrub with hands.
     - 📄 `03-ram-tier.py` — RAM tier: what a cached frame costs per form, and what a play-through evicts.
+    - 📄 `04-persist-inprocess.py` — Persist: what encoding the grown cut costs the foreground, in-process vs out.
     - 📄 `README.md`
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.

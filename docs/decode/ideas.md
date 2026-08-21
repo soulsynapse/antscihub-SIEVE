@@ -9,14 +9,6 @@ them, and are cited to where they live rather than restated as true.
 
 ## Good ideas
 
-- Measure PyAV against OpenCV on the same file before anything else. Most of the
-  v2/v3 decode corpus is OpenCV 4.13, and several of its findings are plausibly
-  properties of that binding rather than of video.
-
-- Take the Y plane and never convert what is not displayed. `grab()` is the
-  decode and `retrieve()` is a single-threaded colour conversion; in libav the
-  plane is simply there. v3's `decode/reader.py` already has the `luma=True` path.
-
 - Run the whole display path at display size, not just the decode. v1's
   `DISPLAY_MAX_W` covers the copy, the mask upscale, the blend and the convert,
   and the pixels it saves were being computed and then thrown away.
@@ -28,31 +20,12 @@ them, and are cited to where they live rather than restated as true.
 - Discard rather than queue when requests outrun the decoder. Worth keeping even
   if the seek gets cheap, since the discarded frames were never going to be seen.
 
-- Grab forward instead of seeking for short jumps. Cheaper, and it lands on the
-  exact frame rather than wherever the container index rounds to.
-
-- Cut the source once into a small intermediate. Decode cost tracks pixels, not
-  bytes, so a lossy cut buys almost nothing a lossless one does not.
-
-- Make that intermediate intra-only and the seek problem stops existing. FFV1 has
-  no inter-frame prediction, so a random frame costs an index lookup and one
-  decode. This is why NLEs cut ProRes and DNxHR proxies. Note that v1's default
-  quality is CRF-based and therefore does *not* have this property.
-
 - GoPro's own CineForm is an intra-only wavelet codec built for this workflow,
   which is worth a look given both the footage and the signal ops.
-
-- Build the keyframe index by demuxing only — read packets, check the keyframe
-  flag, decode nothing. Seconds on a 60 Mbps file, and it retires "the GOP is
-  variable so we cannot know" entirely.
 
 - Let a frame request carry a *set* of indices, not one. Sorting a batch by
   keyframe and decoding it together is decord's whole technique, and a
   one-at-a-time protocol cannot express it.
-
-- Price the hardware-decode download rather than assuming it erases the win. A
-  full-resolution luma plane is on the order of sixteen megabytes; that copy is
-  small next to a CPU colour convert.
 
 - Pool buffers before concluding anything about thread scaling. The measured
   ceiling past a handful of workers was diagnosed as allocator page faults from a

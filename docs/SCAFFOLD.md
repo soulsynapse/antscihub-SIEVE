@@ -13,6 +13,14 @@
     - 📄 `ideas.md`
   - 📁 `findings/`
     - 📄 `2026.07.21-decode-cost-tracks-pixels-not-bytes.md`
+    - 📄 `2026.08.21-decode-stack-best-combinations.md`
+    - 📄 `2026.08.21-keyframe-index-is-cheap-and-the-gop-is-fixed.md`
+    - 📄 `2026.08.21-lossy-intra-beats-lossless-for-the-cut.md`
+    - 📄 `2026.08.21-optical-flow-dominates-the-analysis.md`
+    - 📄 `2026.08.21-pyav-to-ndarray-pays-sws-setup-per-call.md`
+    - 📄 `2026.08.21-sequential-luma-ceiling-is-shared.md`
+    - 📄 `2026.08.21-software-decoders-collapse-under-contention.md`
+    - 📄 `2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md`
   - 📁 `vocab/`
     - 📄 `menu.md`
     - 📄 `pane.md`
@@ -67,6 +75,7 @@
     - 📄 `04-keyframe-index.py` — Building the keyframe index by demuxing only: read packets, decode nothing.
     - 📄 `05-the-cut.py` — The cut: does an intra-only intermediate make random access stop costing anything?
     - 📄 `06-analysis-costs.py` — Does the analysis compute dominate decode? Price the v1/v2-shaped ops per regime.
+    - 📄 `2026.08.21-best-combinations.md`
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the decode approaches by hand: scrub, play, step and sweep each backend.
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.

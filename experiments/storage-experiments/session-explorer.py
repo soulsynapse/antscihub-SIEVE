@@ -14,7 +14,7 @@ prerequisite to write-behind:
               RAM and chunks, because a stored small frame cannot become a
               different one.
   land        releasing the slider outside the active window (or clicking
-              anywhere on the timeline) lands a 300-frame window centered
+              anywhere on the timeline) lands a 300-frame window starting
               there and the loop starts — the 10 s tuning loop is the
               default gesture, not a button. A
               sequential frontier fills it into RAM at the sequential rate
@@ -82,6 +82,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QSpinBox,
     QSplitter,
@@ -868,6 +869,12 @@ class SessionExplorer(QMainWindow):
         self._pix_w = self._pix_h = 0
         self.canvas = CropCanvas()
         self.canvas.setMinimumSize(280, 180)
+        # a QLabel's size hint follows its pixmap; when the view swaps
+        # aspect (hunt full-frame vs crop) or a graph render lands, that
+        # hint reflows the splitter and the video visibly resizes — the
+        # felt "jitter on swap-over". Pixmaps must never drive layout.
+        self.canvas.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                  QSizePolicy.Policy.Ignored)
         self.canvas.setStyleSheet("background: #101010;")
         self.canvas.setToolTip(
             "drag a rectangle on the full-frame hunt view to draw the "
@@ -894,6 +901,15 @@ class SessionExplorer(QMainWindow):
         self.status = QLabel("")
         self.status.setStyleSheet(
             "font-family: Consolas, monospace; font-size: 9pt; color: #888;")
+        # text length must not drive layout either: the HUD and coverage
+        # strings change every half-second, and their size hints were
+        # nudging the splitter — the other half of the felt jitter
+        for lbl in (self.coverage, self.hud, self.status):
+            lbl.setSizePolicy(QSizePolicy.Policy.Ignored,
+                              QSizePolicy.Policy.Fixed)
+        self.window_box.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.window_box.setMinimumContentsLength(16)
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
@@ -906,6 +922,8 @@ class SessionExplorer(QMainWindow):
 
         self.graph_label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.graph_label.setMinimumSize(400, 300)
+        self.graph_label.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                       QSizePolicy.Policy.Ignored)
         self.graph_label.setStyleSheet("background: #ffffff;")
         self.stats = QPlainTextEdit(readOnly=True)
         self.stats.setStyleSheet(
@@ -1124,14 +1142,20 @@ class SessionExplorer(QMainWindow):
         self._drive()
 
     def _land_at(self, pos: int) -> None:
-        self._set_window(pos - WINDOW // 2, anchor=pos)
+        # the click is the START of the 10 s window: the user clicks where
+        # something begins and wants the ten seconds after it, not five
+        # seconds of lead-up
+        self._set_window(pos, anchor=pos)
         self._scrubbing = False
         self.pause_btn.setChecked(False)
         self._drive()
 
     def _set_window(self, at: int, anchor: int | None = None) -> None:
+        # the loop's bounds are exactly the ten seconds the user asked for;
+        # the FILL range is the chunk-grid superset of them, because the
+        # chunk store lives on the absolute grid and a window must not
+        # bend the grid to itself
         start = max(0, min(at, self.total - WINDOW))
-        start -= start % CHUNK_FRAMES
         end = min(start + WINDOW, self.total)
         if self.active == (start, end):
             return
@@ -1149,8 +1173,10 @@ class SessionExplorer(QMainWindow):
         run.walls.append({
             "what": "window-open", "wall_s": 0.0,
             "detail": f"chunks-still-encoding={overlap}"})
+        fill_lo = start - start % CHUNK_FRAMES
+        fill_hi = min(-(-end // CHUNK_FRAMES) * CHUNK_FRAMES, self.total)
         self.fill = WindowFill(
-            start, end, start if anchor is None else anchor,
+            fill_lo, fill_hi, start if anchor is None else anchor,
             self.cache, self.store, self._encode_q,
             lambda *a: self.covered.emit(*a))
         self.fill.config = run.config  # walls land on the run that launched
@@ -1663,7 +1689,13 @@ class SessionExplorer(QMainWindow):
             rgba, w, h, png = result
             self._last_graph_png = png
             image = QImage(rgba, w, h, QImage.Format.Format_RGBA8888)
-            self.graph_label.setPixmap(QPixmap.fromImage(image.copy()))
+            pixmap = QPixmap.fromImage(image.copy())
+            if pixmap.size() != self.graph_label.size():
+                pixmap = pixmap.scaled(  # render was at dispatch-time size
+                    self.graph_label.size(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation)
+            self.graph_label.setPixmap(pixmap)
         if self._graph_dirty:
             self._graph_dirty = False
             self._graph_timer.start(300)

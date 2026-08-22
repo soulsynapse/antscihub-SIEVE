@@ -35,8 +35,12 @@ prerequisite to write-behind:
               whose overlap is not. Jump back and feel the cut serve what
               RAM evicted.
 
-Every request logs task, route and ms; window-covered and flow walls carry
-their overlap facts. "walk session" scripts the whole story: hunt on both
+Every request logs task, route and ms on one session clock, and every
+background activity — fill, write-behind encodes, flow — logs its span, so
+the graphs read as a story: a latency timeline colored by route over an
+activity gantt (what was running when), and a route comparison panel (how
+good each tier is). The video carries live text overlays of the same
+ledger, so background signal math is visible the moment it starts. "walk session" scripts the whole story: hunt on both
 routes, land A, scrub it while filling, tune twice, jump to B mid-encode,
 shrink RAM, return to A on chunks. Logs land beside the storage explorer's
 in explorer-logs/, keyed by tool name.
@@ -109,6 +113,10 @@ DEBOUNCE_MS = 300       #: signal slider settles this long before flow runs
 EVENT_CAP = 20_000
 TASK_MARKERS = {"hunt": "x", "drag": "o", "play": ".", "step": "^",
                 "open": "s", "hop": "P", "scrub": "d"}
+ROUTE_COLORS = {"hit": "#2ca02c", "near": "#98c010", "cut": "#1f77b4",
+                "proxy": "#17becf", "kf": "#ff9310", "miss": "#d62728"}
+ACT_ROWS = {"fill": 0, "encode": 1, "flow": 2}
+ACT_COLORS = {"fill": "#1f77b4", "encode": "#909090", "flow": "#c218c2"}
 
 
 def _pts_helpers(stream):
@@ -473,13 +481,14 @@ class JumpSlider(QSlider):
 
 
 class RunLog:
-    """Everything one phase of the session was asked to do this launch."""
+    """Everything one phase of the session was asked to do this launch.
+    Event times share the session clock, so phases plot on one axis."""
 
-    def __init__(self, config: str):
+    def __init__(self, config: str, t0: float):
         self.config = config
         self.label = config
         self.started = datetime.now(timezone.utc).isoformat()
-        self._t0 = time.perf_counter()
+        self._t0 = t0
         self.events: list[dict] = []
         self.walls: list[dict] = []
         self.capped = False
@@ -542,6 +551,16 @@ class SessionExplorer(QMainWindow):
             self.total = (stream.frames or int(
                 stream.duration * stream.time_base * stream.average_rate))
         self.total -= GOP  # the last GOP's decodability is not guaranteed
+        self.t0 = time.perf_counter()   #: the session clock everything shares
+        self.activity: list[dict] = []  #: background spans: fill/encode/flow
+        self.act_lock = threading.Lock()
+        self._fill_act: dict | None = None
+        self._flow_act: dict | None = None
+        self._flow_started = 0.0
+        self._flow_value = 0
+        self._encoding_chunk: int | None = None
+        self._last_image: np.ndarray | None = None
+        self._last_graph = 0.0
         self.cache = Store(600)
         self.store = ChunkStore()
         self.miss_fetcher = Fetcher()
@@ -726,7 +745,7 @@ class SessionExplorer(QMainWindow):
         left_layout.addWidget(self.hud)
         left_layout.addWidget(self.status)
 
-        self.trace_fig = Figure(tight_layout=True)
+        self.trace_fig = Figure(layout="constrained")
         self.trace_canvas = FigureCanvasQTAgg(self.trace_fig)
         self.stats = QPlainTextEdit(readOnly=True)
         self.stats.setStyleSheet(
@@ -744,6 +763,30 @@ class SessionExplorer(QMainWindow):
         splitter.setSizes([760, 920])
         self.setCentralWidget(splitter)
         self.request(0, "open")
+
+    # ── the activity ledger ──────────────────────────────────────────────
+    def _now(self) -> float:
+        return time.perf_counter() - self.t0
+
+    def _act_start(self, what: str, detail: str = "") -> dict:
+        entry = {"what": what, "t0": round(self._now(), 3), "t1": None,
+                 "detail": detail}
+        with self.act_lock:
+            self.activity.append(entry)
+        return entry
+
+    def _act_end(self, entry: dict | None, detail: str | None = None) -> None:
+        if entry is None or entry["t1"] is not None:
+            return
+        entry["t1"] = round(self._now(), 3)
+        if detail:
+            entry["detail"] = detail
+
+    def _mark(self, what: str, detail: str) -> None:
+        t = round(self._now(), 3)
+        with self.act_lock:
+            self.activity.append(
+                {"what": what, "t0": t, "t1": t, "detail": detail})
 
     # ── phases and runs ──────────────────────────────────────────────────
     def _in_window(self, idx: int) -> bool:
@@ -764,7 +807,7 @@ class SessionExplorer(QMainWindow):
     def _run_for(self, idx: int) -> RunLog:
         config = self._config_for(idx)
         if config not in self.runs:
-            self.runs[config] = RunLog(config)
+            self.runs[config] = RunLog(config, self.t0)
         self.run = self.runs[config]
         return self.run
 
@@ -840,9 +883,41 @@ class SessionExplorer(QMainWindow):
             self._busy = False
             self._touch()
 
+    def _overlay_lines(self) -> list[str]:
+        """The live ledger, as the video sees it: what runs right now."""
+        lines = []
+        if self.fill and self.fill.running():
+            done = self.fill.pos - self.fill.start
+            span = self.fill.end - self.fill.start
+            state = " PAUSED by flow" if self.fill.pause.is_set() else ""
+            lines.append(f"FILL {done}/{span} @{self.fill.pos}{state}")
+        queued = self._encoding_now[0]
+        chunk = self._encoding_chunk
+        if chunk is not None:
+            extra = f" (+{queued - 1} queued)" if queued > 1 else ""
+            lines.append(f"WRITE-BEHIND chunk@{chunk}{extra}")
+        if self._flow_busy:
+            elapsed = self._now() - self._flow_started
+            lines.append(f"FLOW signal={self._flow_value} {elapsed:.1f}s")
+        elif self._debounce.isActive():
+            lines.append("SIGNAL settling...")
+        return lines
+
     def _show(self, image: np.ndarray) -> None:
         if not image.flags.c_contiguous:
             image = np.ascontiguousarray(image)
+        self._last_image = image
+        lines = self._overlay_lines()
+        if lines:
+            image = image.copy()
+            fs = max(0.5, image.shape[1] / 1800)
+            pitch = round(34 * fs)
+            for i, text in enumerate(lines):
+                org = (round(12 * fs), pitch * (i + 1))
+                cv2.putText(image, text, org, cv2.FONT_HERSHEY_SIMPLEX,
+                            fs, 0, max(2, round(4 * fs)), cv2.LINE_AA)
+                cv2.putText(image, text, org, cv2.FONT_HERSHEY_SIMPLEX,
+                            fs, 255, max(1, round(1.5 * fs)), cv2.LINE_AA)
         h, w = image.shape
         qimage = QImage(image.data, w, h, image.strides[0],
                         QImage.Format.Format_Grayscale8)
@@ -877,7 +952,9 @@ class SessionExplorer(QMainWindow):
             return
         if self.fill:
             self.fill.stop()
+            self._act_end(self._fill_act, "stopped: window switched")
         self.active = (start, end)
+        self._mark("window", f"@{start}")
         if start not in self.windows:
             self.windows.append(start)
             secs = start / self.fps
@@ -891,6 +968,7 @@ class SessionExplorer(QMainWindow):
             start, end, self.cache, self.store, self._encode_q,
             lambda *a: self.covered.emit(*a))
         self.fill.config = run.config  # walls land on the run that launched
+        self._fill_act = self._act_start("fill", f"@{start}")
         self.fill.launch()
         self.hud.setText(
             f"window @{start}: filling — drag it now, nearest serves while "
@@ -905,6 +983,8 @@ class SessionExplorer(QMainWindow):
 
     def _window_covered(self, start: int, wall: float, from_chunks: int,
                         from_original: int, paused_s: float) -> None:
+        self._act_end(self._fill_act,
+                      f"@{start}: {from_chunks}ch/{from_original}orig")
         config = getattr(self.fill, "config", None) \
             if self.fill and self.fill.start == start else None
         if config is None:
@@ -927,10 +1007,14 @@ class SessionExplorer(QMainWindow):
         while True:
             start, frames = self._encode_q.get()
             self._encoding_now[0] = self._encode_q.qsize() + 1
+            self._encoding_chunk = start
+            entry = self._act_start("encode", f"chunk@{start}")
             try:
                 self.store.encode(start, frames)
             except Exception:  # noqa: BLE001 — a failed chunk re-derives
                 pass
+            self._act_end(entry)
+            self._encoding_chunk = None
             self._encoding_now[0] = self._encode_q.qsize()
 
     # ── the drawn crop ───────────────────────────────────────────────────
@@ -963,6 +1047,7 @@ class SessionExplorer(QMainWindow):
         if self.fill:
             self.fill.stop()
             self.fill = None
+        self._act_end(self._fill_act, "stopped: crop changed")
         while not self._encode_q.empty():
             try:
                 self._encode_q.get_nowait()
@@ -976,6 +1061,7 @@ class SessionExplorer(QMainWindow):
         self.store.wipe()
         self.admitted_free = 0
         CROP_RECT[:] = [x, y, w, h]
+        self._mark("crop", f"{w}x{h}+{x}+{y}")
         self.hud.setText(
             f"crop drawn: {w}x{h}+{x}+{y} — old form dropped everywhere; "
             "click the timeline to land a window on the new crop")
@@ -1005,6 +1091,11 @@ class SessionExplorer(QMainWindow):
         with self.cache.lock:
             arrays = [self.cache.d[k] for k in covered if k in self.cache.d]
         value = self.signal_slider.value()
+        self._flow_started = self._now()
+        self._flow_value = value
+        self._flow_act = self._act_start(
+            "flow", f"signal={value}"
+                    f"{' preempting fill' if preempt else ''}")
         self.hud.setText(f"signal={value}: flow over {len(arrays)} frames…")
 
         def worker():
@@ -1027,6 +1118,7 @@ class SessionExplorer(QMainWindow):
 
     def _flow_landed(self, wall: float, n: int, value: int) -> None:
         self._flow_busy = False
+        self._act_end(self._flow_act, f"signal={value} n={n}")
         if self.fill:
             self.fill.pause.clear()
         if self.active is not None:
@@ -1046,6 +1138,7 @@ class SessionExplorer(QMainWindow):
 
     def _work_broke(self, err: str) -> None:
         self._flow_busy = False
+        self._act_end(self._flow_act, "failed")
         if self.fill:
             self.fill.pause.clear()
         self.hud.setText(f"background work failed: {err}")
@@ -1251,6 +1344,7 @@ class SessionExplorer(QMainWindow):
         if self.fill:
             self.fill.stop()
             self.fill = None
+        self._act_end(self._fill_act, "stopped: reset")
         while not self._encode_q.empty():
             try:
                 self._encode_q.get_nowait()
@@ -1268,6 +1362,11 @@ class SessionExplorer(QMainWindow):
         self._touch()
 
     def _refresh_status(self) -> None:
+        # keep overlays current while nothing is being requested — a flow
+        # or encode finishing must vanish from the frame without a scrub
+        if not self._busy and self._last_image is not None \
+                and not self._play_timer.isActive():
+            self._show(self._last_image)
         blocks = 72
         per = self.total / blocks
         with self.cache.lock:
@@ -1307,42 +1406,135 @@ class SessionExplorer(QMainWindow):
     def _ordered_runs(self) -> list[RunLog]:
         return [r for r in self.runs.values() if r.events or r.walls]
 
+    @staticmethod
+    def _route_key(route: str) -> str:
+        return route.split(" ")[0].split("Δ")[0]
+
     def _redraw_graphs(self) -> None:
-        if self._busy or self._play_timer.isActive():
+        # the loop is the default state now, so graphs must update under
+        # it — throttled, one hiccup every few seconds instead of never
+        if self._busy:
             self._graph_timer.start(1200)
             return
+        if self._play_timer.isActive() \
+                and time.perf_counter() - self._last_graph < 5.0:
+            self._graph_timer.start(1200)
+            return
+        self._last_graph = time.perf_counter()
         runs = self._ordered_runs()
-        cmap = matplotlib.colormaps["tab10"]
+        events = [e for r in runs for e in r.events]
+        with self.act_lock:
+            activity = [dict(a) for a in self.activity]
+        now = self._now()
         fig = self.trace_fig
         fig.clear()
-        ax = fig.add_subplot(111)
-        for index, run in enumerate(runs):
-            color = cmap(index % 10)
-            first = True
-            for task, marker in TASK_MARKERS.items():
-                xs = [i for i, e in enumerate(run.events)
-                      if e["task"] == task]
-                ys = [run.events[i]["ms"] for i in xs]
-                if xs:
-                    ax.scatter(xs, ys, s=14, marker=marker, color=color,
-                               alpha=0.7, label=run.label if first else None)
-                    first = False
-        if runs:
-            ax.set_yscale("log")
-            ax.grid(True, which="both", alpha=0.25)
-            ax.legend(fontsize=7, loc="best")
-        else:
+        if not events:
+            ax = fig.add_subplot(111)
             ax.set_axis_off()
-        ax.set_xlabel("request # per phase")
-        ax.set_ylabel("ms (log)")
-        ax.set_title("every request this launch, by session phase")
+            self.trace_canvas.draw_idle()
+            return
+        gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 2.2],
+                              hspace=0.12)
+        ax_lat = fig.add_subplot(gs[0])
+        ax_act = fig.add_subplot(gs[1], sharex=ax_lat)
+        ax_cmp = fig.add_subplot(gs[2])
+
+        # panel 1: the session — every request in time, colored by route
+        by_route: dict[str, tuple[list, list]] = {}
+        for e in events:
+            key = self._route_key(e["route"])
+            by_route.setdefault(key, ([], []))
+            by_route[key][0].append(e["t"])
+            by_route[key][1].append(max(e["ms"], 0.005))
+        for key, (xs, ys) in sorted(by_route.items()):
+            ax_lat.scatter(xs, ys, s=12, alpha=0.65,
+                           color=ROUTE_COLORS.get(key, "#777777"),
+                           label=key, linewidths=0)
+        for band, label in ((100, "felt"), (16, "frame")):
+            ax_lat.axhline(band, color="#999999", lw=0.7, ls=":")
+            ax_lat.annotate(f"{label} {band}ms", (0.998, band),
+                            xycoords=("axes fraction", "data"),
+                            fontsize=6, color="#777777",
+                            ha="right", va="bottom")
+        for a in activity:
+            if a["what"] in ("window", "crop"):
+                for ax in (ax_lat, ax_act):
+                    ax.axvline(a["t0"], color="#555555", lw=0.7, ls="--",
+                               alpha=0.6)
+                ax_lat.annotate(a["detail"], (a["t0"], 0.99),
+                                xycoords=("data", "axes fraction"),
+                                fontsize=6, color="#555555", rotation=90,
+                                ha="right", va="top")
+        ax_lat.set_yscale("log")
+        ax_lat.grid(True, which="both", alpha=0.2)
+        ax_lat.legend(fontsize=7, loc="upper right", ncols=len(by_route),
+                      frameon=False)
+        ax_lat.set_ylabel("ms (log)")
+        ax_lat.tick_params(labelbottom=False)
+        ax_lat.set_title("the session: request latency by route, over what "
+                         "ran behind it", fontsize=9)
+
+        # panel 2: what was running when — the background gantt
+        for a in activity:
+            row = ACT_ROWS.get(a["what"])
+            if row is None:
+                continue
+            t1 = a["t1"] if a["t1"] is not None else now
+            ax_act.broken_barh(
+                [(a["t0"], max(t1 - a["t0"], 0.03))], (row + 0.15, 0.7),
+                facecolors=ACT_COLORS[a["what"]],
+                alpha=0.5 if a["t1"] is not None else 0.9)
+        ax_act.set_ylim(0, len(ACT_ROWS))
+        ax_act.set_yticks([r + 0.5 for r in ACT_ROWS.values()])
+        ax_act.set_yticklabels(list(ACT_ROWS), fontsize=7)
+        ax_act.grid(True, axis="x", alpha=0.2)
+        ax_act.set_xlabel("session time (s)")
+        ax_act.invert_yaxis()
+
+        # panel 3: how good each tier is — p50 bar, p95 whisker, per route
+        order = sorted(by_route, key=lambda k: float(
+            np.median(by_route[k][1])))
+        p50s, p95s = [], []
+        for key in order:
+            ys = np.array(by_route[key][1])
+            p50s.append(float(np.median(ys)))
+            p95s.append(float(np.percentile(ys, 95)))
+        ypos = np.arange(len(order))
+        ax_cmp.barh(ypos, p50s, height=0.6, color=[
+            ROUTE_COLORS.get(k, "#777777") for k in order], alpha=0.8)
+        ax_cmp.hlines(ypos, p50s, p95s, color="#555555", lw=1.2)
+        ax_cmp.scatter(p95s, ypos, marker="|", s=60, color="#555555")
+        for i, key in enumerate(order):
+            n = len(by_route[key][1])
+            ax_cmp.annotate(
+                f" n={n}  p50 {p50s[i]:.3g}  p95 {p95s[i]:.3g}",
+                (max(p95s[i], p50s[i]), i), fontsize=7, va="center",
+                color="#444444")
+        ax_cmp.set_yticks(ypos)
+        ax_cmp.set_yticklabels(order, fontsize=8)
+        ax_cmp.set_xscale("log")
+        ax_cmp.grid(True, axis="x", which="both", alpha=0.2)
+        ax_cmp.set_xlabel("ms (log) — bar p50, whisker to p95")
+        ax_cmp.invert_yaxis()
         self.trace_canvas.draw_idle()
-        self.stats.setPlainText("\n\n".join(r.stats_text() for r in runs))
+
+        header = ["session by route:"]
+        for key in order:
+            ys = by_route[key][1]
+            header.append(
+                f"  {key:<6} n={len(ys):<5}"
+                f" p50={float(np.median(ys)):>8.2f}"
+                f"  p95={float(np.percentile(ys, 95)):>8.1f} ms")
+        self.stats.setPlainText(
+            "\n".join(header) + "\n\n"
+            + "\n\n".join(r.stats_text() for r in runs))
 
     def _save_log(self) -> None:
         if self._busy:
             self._save_timer.start(1500)
             return
+        with self.act_lock:
+            activity = [dict(a) for a in self.activity]
         payload = {
             "tool": "session-explorer.py",
             "when": datetime.now(timezone.utc).isoformat(),
@@ -1351,6 +1543,7 @@ class SessionExplorer(QMainWindow):
             "versions": harness._versions(),
             "total_frames": self.total, "window": WINDOW, "gop": GOP,
             "crop": list(CROP_RECT),
+            "activity": activity,
             "chunk_frames": CHUNK_FRAMES, "near_radius": NEAR_RADIUS,
             "runs": [
                 {**run.summary(), "started": run.started,
@@ -1393,9 +1586,16 @@ def main() -> None:
         return
     app = QApplication.instance() or QApplication(sys.argv)
     window = SessionExplorer()
+    if "--fig" in sys.argv:  # save the graphs after a headless run
+        fig_path = sys.argv[sys.argv.index("--fig") + 1]
+    else:
+        fig_path = None
     if "--walk" in sys.argv:  # headless validation of the full walk
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         window._walk()
+        if fig_path:
+            window.trace_fig.set_size_inches(13, 8)
+            window.trace_fig.savefig(fig_path, dpi=110)
         print(window.hud.text())
         data = json.loads(window.log_path.read_text(encoding="utf-8"))
         print(f"walk ok: {len(data['runs'])} phases logged to "
@@ -1438,6 +1638,10 @@ def main() -> None:
         window._redraw_graphs()
         window._save_log()
         data = json.loads(window.log_path.read_text(encoding="utf-8"))
+        acts = {}
+        for a in data["activity"]:
+            acts[a["what"]] = acts.get(a["what"], 0) + 1
+        print(f"activity ledger: {acts}")
         print(f"smoke ok: {len(data['runs'])} phases logged to "
               f"{window.log_path.name}")
         if window.fill:

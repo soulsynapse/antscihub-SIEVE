@@ -1520,6 +1520,13 @@ class SessionExplorer(QMainWindow):
             Qt.TransformationMode.FastTransformation)
         self._pix_w, self._pix_h = pixmap.width(), pixmap.height()
         self.canvas.setPixmap(pixmap)
+        # paint NOW, synchronously: during a drag the app never returns to
+        # the main event loop (each processEvents pulls the next mouse
+        # move, which re-enters request), so the deferred paint starves —
+        # measured 198 serves, zero paints across a 3 s drag storm. The
+        # frozen-drag report was real and the earlier probe measured
+        # setPixmap calls, not pixels.
+        self.canvas.repaint()
 
     # ── windows ──────────────────────────────────────────────────────────
     def _released(self) -> None:

@@ -2,6 +2,16 @@
 
 This document is for my own thoughts on the process. It is not binding, it is just a list of thoughts for potential ways to implement things and things to keep in mind.
 
+## Mentality
+
+It is critical to remember what SIEVE is measured against. SIEVE is competing with the same pipeline, built by hand, by an AI agent, explicitly tuned to the users needs.
+
+So the starting point for any implementation: If SIEVE is built in a way that is worse than the above, then SIEVE isn't being useful.
+
+This means being faster, more automatic, more accurate, more anticipatory by covering more cases, and more careful than the pipeline above.
+
+So the first way to think about this is: what does that bespoke pipeline look like in its best form? Then at least matching that, while providing the tuning loop SIEVE is made for.
+
 ## User layout ideas
 
 - Use logic gates to combine tools. Can probably be icons below the card maybe.

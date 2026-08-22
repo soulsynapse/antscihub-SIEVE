@@ -4,12 +4,19 @@ The storage explorer feels the *tier stack* on one region; this feels the
 *plan* — the shape a real SIEVE session takes once the cut is demoted from
 prerequisite to write-behind:
 
-  hunt        one slider over the whole file. Outside any window, requests
-              route to the display proxy (5-9 ms drags) or kf-snap on the
-              original (~130 ms, and every full frame decoded on that route
-              gets its crop sliced out and admitted to RAM for free — bytes
-              that already exist are never refused).
-  land        "window here" claims a 300-frame window at the playhead. A
+  hunt        one slider over the whole file — click anywhere to jump.
+              Outside any window, requests route to the display proxy
+              (5-9 ms drags) or kf-snap on the original (~130 ms, and every
+              full frame decoded on that route gets its crop sliced out and
+              admitted to RAM for free — bytes that already exist are never
+              refused). The crop is drawn, not configured: drag a rectangle
+              on the full-frame view; a new crop is a form change and wipes
+              RAM and chunks, because a stored small frame cannot become a
+              different one.
+  land        releasing the slider outside the active window (or clicking
+              anywhere on the timeline) lands a 300-frame window centered
+              there and the loop starts — the 10 s tuning loop is the
+              default gesture, not a button. A
               sequential frontier fills it into RAM at the sequential rate
               (~120 fps measured) while nearest-cached serves drags, so the
               window is interactive well before it is covered. No persist
@@ -84,7 +91,8 @@ from harness import FOOTAGE  # noqa: E402
 
 BIG = FOOTAGE / "GX010047c2_02_17_26.MP4"
 PROXY = FOOTAGE / "derived" / "proxy-1328-intra.mp4"
-CHUNK_DIR = FOOTAGE / "derived" / "_session-chunks"
+#: per-process — a smoke run beside a live GUI must not wipe its chunks
+CHUNK_DIR = FOOTAGE / "derived" / f"_session-chunks-{__import__('os').getpid()}"
 LOGS = Path(__file__).resolve().parent / "explorer-logs"
 
 WINDOW = 300            #: the 10 s tuning window, in frames
@@ -92,7 +100,9 @@ CHUNK_FRAMES = 96       #: persist chunk (GOP x4 — results/02-*); windows
                         #: snap to this grid so chunks tile them exactly
 GOP = 24
 NEAR_RADIUS = 12        #: nearest-cached serves within this many frames
-CROP_W, CROP_H, CROP_X, CROP_Y = 1024, 1024, 2144, 982
+CROP_RECT = [2144, 982, 1024, 1024]  #: x, y, w, h in original pixels —
+                                     #: mutable: the user draws it
+MIN_CROP = 64
 STEP_WITHIN = 60        #: step forward instead of seeking within this many
                         #: frames (exp02: the crossover on the uncut source)
 DEBOUNCE_MS = 300       #: signal slider settles this long before flow runs
@@ -116,8 +126,8 @@ def _luma(frame) -> np.ndarray:
 
 
 def _crop(full: np.ndarray) -> np.ndarray:
-    return np.ascontiguousarray(
-        full[CROP_Y : CROP_Y + CROP_H, CROP_X : CROP_X + CROP_W])
+    x, y, w, h = CROP_RECT
+    return np.ascontiguousarray(full[y : y + h, x : x + w])
 
 
 class Fetcher:
@@ -266,7 +276,7 @@ class ChunkStore:
         path = self._path(start)
         with av.open(str(path), "w") as out:
             stream = out.add_stream("libx264", rate=24)
-            stream.width, stream.height = CROP_W, CROP_H
+            stream.height, stream.width = frames[0].shape
             stream.pix_fmt = "yuv420p"
             stream.options = {"crf": "18", "preset": "veryfast", "g": "1"}
             for arr in frames:
@@ -306,7 +316,17 @@ class ChunkStore:
                 container.close()
             self._open.clear()
         for path in CHUNK_DIR.glob("chunk-*.mp4"):
-            path.unlink(missing_ok=True)
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:  # an encoder mid-write; the dir dies with us
+                pass
+
+    def destroy(self) -> None:
+        self.wipe()
+        try:
+            CHUNK_DIR.rmdir()
+        except OSError:
+            pass
 
 
 class WindowFill:
@@ -404,6 +424,54 @@ class WindowFill:
                 fetcher.close()
 
 
+class CropCanvas(QLabel):
+    """The frame view, with a rubber-band crop gesture. Emits the drawn
+    rectangle in label coordinates; the explorer owns the mapping back to
+    source pixels, because only it knows what the label is showing."""
+
+    drawn = Signal(int, int, int, int)  # x, y, w, h in label coords
+
+    def __init__(self):
+        super().__init__(alignment=Qt.AlignmentFlag.AlignCenter)
+        from PySide6.QtWidgets import QRubberBand
+        self._band = QRubberBand(QRubberBand.Shape.Rectangle, self)
+        self._origin = None
+
+    def mousePressEvent(self, event) -> None:
+        self._origin = event.position().toPoint()
+        from PySide6.QtCore import QRect
+        self._band.setGeometry(QRect(self._origin, self._origin))
+        self._band.show()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._origin is not None:
+            from PySide6.QtCore import QRect
+            self._band.setGeometry(
+                QRect(self._origin, event.position().toPoint()).normalized())
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        rect = self._band.geometry()
+        self._band.hide()
+        self._origin = None
+        if rect.width() > 8 and rect.height() > 8:  # a drag, not a click
+            self.drawn.emit(rect.x(), rect.y(), rect.width(), rect.height())
+
+
+class JumpSlider(QSlider):
+    """A timeline you can click: press jumps the thumb to the cursor, then
+    the normal drag machinery takes over."""
+
+    def mousePressEvent(self, event) -> None:
+        from PySide6.QtWidgets import QStyle
+        value = QStyle.sliderValueFromPosition(
+            self.minimum(), self.maximum(),
+            int(event.position().x()), self.width())
+        self.setValue(value)
+        super().mousePressEvent(event)
+
+
 class RunLog:
     """Everything one phase of the session was asked to do this launch."""
 
@@ -470,6 +538,7 @@ class SessionExplorer(QMainWindow):
         with av.open(str(BIG)) as c:
             stream = c.streams.video[0]
             self.fps = float(stream.average_rate)
+            self.orig_w, self.orig_h = stream.width, stream.height
             self.total = (stream.frames or int(
                 stream.duration * stream.time_base * stream.average_rate))
         self.total -= GOP  # the last GOP's decodability is not guaranteed
@@ -563,7 +632,7 @@ class SessionExplorer(QMainWindow):
             f"claim a {WINDOW}-frame window at the playhead (snapped to the "
             "chunk grid) and start filling it. Landing on an old window's "
             "ground refills from its chunks at cut speed.")
-        self.window_btn.clicked.connect(lambda: self._set_window(self.pos))
+        self.window_btn.clicked.connect(lambda: self._land_at(self.pos))
         self.window_box = QComboBox()
         self.window_box.addItem("windows…")
         self.window_box.setToolTip(
@@ -616,16 +685,28 @@ class SessionExplorer(QMainWindow):
         top.addLayout(row1)
         top.addLayout(row2)
 
-        self.canvas = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
+        self._view = "full"     #: what the canvas shows: full frame or crop
+        self._pix_w = self._pix_h = 0
+        self.canvas = CropCanvas()
         self.canvas.setMinimumSize(280, 180)
         self.canvas.setStyleSheet("background: #101010;")
-        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.canvas.setToolTip(
+            "drag a rectangle on the full-frame hunt view to draw the "
+            "crop. A new crop is a form change: RAM, chunks and windows "
+            "all invalidate, because a stored frame of the old form "
+            "cannot become the new one.")
+        self.canvas.drawn.connect(self._crop_drawn)
+        self.slider = JumpSlider(Qt.Orientation.Horizontal)
         self.slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.slider.setMaximum(self.total - 1)
+        self.slider.setToolTip(
+            "click anywhere to jump; release outside the active window "
+            "lands a fresh window there and the loop starts.")
         self.slider.sliderMoved.connect(lambda i: self.request(i, "drag"))
         self.slider.valueChanged.connect(lambda i: self.request(i, "drag"))
-        self.slider.sliderReleased.connect(
-            lambda: self.request(self.slider.value(), "drag", exact=True))
+        self.slider.sliderPressed.connect(
+            lambda: self.loop_btn.setChecked(False))
+        self.slider.sliderReleased.connect(self._released)
         self.coverage = QLabel("")
         self.coverage.setStyleSheet(
             "font-family: Consolas, monospace; font-size: 8pt; color: #6a6;")
@@ -672,6 +753,7 @@ class SessionExplorer(QMainWindow):
     def _config_for(self, idx: int) -> str:
         if self._in_window(idx):
             parts = [f"window@{self.active[0]}",
+                     f"crop={CROP_RECT[2]}x{CROP_RECT[3]}",
                      f"b={self.budget_spin.value()}"]
             if not self.preempt.isChecked():
                 parts.append("no-preempt")
@@ -687,14 +769,26 @@ class SessionExplorer(QMainWindow):
         return self.run
 
     # ── the stack, one request at a time ─────────────────────────────────
+    def _with_rect(self, full: np.ndarray) -> np.ndarray:
+        """The crop rectangle drawn onto a full-frame view, at its scale."""
+        s = full.shape[1] / self.orig_w
+        x, y, w, h = CROP_RECT
+        out = full.copy()
+        cv2.rectangle(out, (round(x * s), round(y * s)),
+                      (round((x + w) * s), round((y + h) * s)),
+                      255, max(1, round(full.shape[1] / 700)))
+        return out
+
     def _serve(self, idx: int, task: str, exact: bool) -> tuple[np.ndarray, str]:
         if not self._in_window(idx):
+            self._view = "full"
             if self.hunt_box.currentIndex() == 0 and self.proxy is not None:
-                return self.proxy.frame(idx), "proxy"
+                return self._with_rect(self.proxy.frame(idx)), "proxy"
             full, crop, landed = self.hunt_fetcher.keyframe(idx)
             self.cache.put(landed, crop)  # free bytes are never refused
             self.admitted_free += 1
-            return full, f"kf Δ{idx - landed}"
+            return self._with_rect(full), f"kf Δ{idx - landed}"
+        self._view = "crop"
         got = self.cache.get(idx)
         if got is not None:
             return got, "hit"
@@ -752,11 +846,29 @@ class SessionExplorer(QMainWindow):
         h, w = image.shape
         qimage = QImage(image.data, w, h, image.strides[0],
                         QImage.Format.Format_Grayscale8)
-        self.canvas.setPixmap(QPixmap.fromImage(qimage).scaled(
+        pixmap = QPixmap.fromImage(qimage).scaled(
             self.canvas.size(), Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.FastTransformation))
+            Qt.TransformationMode.FastTransformation)
+        self._pix_w, self._pix_h = pixmap.width(), pixmap.height()
+        self.canvas.setPixmap(pixmap)
 
     # ── windows ──────────────────────────────────────────────────────────
+    def _released(self) -> None:
+        """The landing gesture: release inside the active window is a
+        tuning scrub and the loop resumes; release anywhere else commits
+        attention there, so a window lands and the loop starts."""
+        value = self.slider.value()
+        if self._in_window(value):
+            self.request(value, "drag", exact=True)
+            self.loop_btn.setChecked(True)
+            return
+        self.request(value, "drag", exact=True)
+        self._land_at(value)
+
+    def _land_at(self, pos: int) -> None:
+        self._set_window(pos - WINDOW // 2)
+        self.loop_btn.setChecked(True)
+
     def _set_window(self, at: int) -> None:
         start = max(0, min(at, self.total - WINDOW))
         start -= start % CHUNK_FRAMES
@@ -783,7 +895,8 @@ class SessionExplorer(QMainWindow):
         self.hud.setText(
             f"window @{start}: filling — drag it now, nearest serves while "
             "the frontier races you")
-        self.request(start, "step")
+        # stay on the frame the user committed to; only move if it's outside
+        self.request(self.pos if start <= self.pos < end else start, "step")
 
     def _window_picked(self, row: int) -> None:
         if row <= 0 or row > len(self.windows):
@@ -819,6 +932,54 @@ class SessionExplorer(QMainWindow):
             except Exception:  # noqa: BLE001 — a failed chunk re-derives
                 pass
             self._encoding_now[0] = self._encode_q.qsize()
+
+    # ── the drawn crop ───────────────────────────────────────────────────
+    def _crop_drawn(self, lx: int, ly: int, lw: int, lh: int) -> None:
+        if self._view != "full" or not self._pix_w:
+            self.hud.setText("draw the crop on the full-frame hunt view — "
+                             "jump outside the window first")
+            return
+        off_x = (self.canvas.width() - self._pix_w) / 2
+        off_y = (self.canvas.height() - self._pix_h) / 2
+        sx = self.orig_w / self._pix_w
+        sy = self.orig_h / self._pix_h
+        x = round((lx - off_x) * sx)
+        y = round((ly - off_y) * sy)
+        w, h = round(lw * sx), round(lh * sy)
+        x = max(0, min(x, self.orig_w - MIN_CROP))
+        y = max(0, min(y, self.orig_h - MIN_CROP))
+        w = max(MIN_CROP, min(w, self.orig_w - x))
+        h = max(MIN_CROP, min(h, self.orig_h - y))
+        x, y, w, h = (v - v % 2 for v in (x, y, w, h))  # yuv420 wants even
+        self._apply_crop(x, y, w, h)
+
+    def _apply_crop(self, x: int, y: int, w: int, h: int) -> None:
+        """A new crop is a form change: everything derived from the old
+        one — RAM frames, chunks, windows — invalidates. The hunt tiers
+        (proxy, kf) survive; they never depended on the crop."""
+        self.loop_btn.setChecked(False)
+        self.play_btn.setChecked(False)
+        self.hop_btn.setChecked(False)
+        if self.fill:
+            self.fill.stop()
+            self.fill = None
+        while not self._encode_q.empty():
+            try:
+                self._encode_q.get_nowait()
+            except queue.Empty:
+                break
+        self.active = None
+        self.windows.clear()
+        self.window_box.clear()
+        self.window_box.addItem("windows…")
+        self.cache = Store(self.budget_spin.value())
+        self.store.wipe()
+        self.admitted_free = 0
+        CROP_RECT[:] = [x, y, w, h]
+        self.hud.setText(
+            f"crop drawn: {w}x{h}+{x}+{y} — old form dropped everywhere; "
+            "click the timeline to land a window on the new crop")
+        self.request(self.pos, "step")
 
     # ── signal / flow ────────────────────────────────────────────────────
     def _signal_changed(self, value: int) -> None:
@@ -919,7 +1080,10 @@ class SessionExplorer(QMainWindow):
 
     def _drive(self) -> None:
         if self._playing or self._looping or self._hopping:
-            self._play_timer.start(0)
+            # the loop is the product gesture, so it runs at video rate;
+            # play and hop stay free-run to feel throughput
+            interval = max(1, round(1000 / self.fps)) if self._looping else 0
+            self._play_timer.start(interval)
         else:
             self._play_timer.stop()
 
@@ -1186,6 +1350,7 @@ class SessionExplorer(QMainWindow):
             "machine": harness._machine(),
             "versions": harness._versions(),
             "total_frames": self.total, "window": WINDOW, "gop": GOP,
+            "crop": list(CROP_RECT),
             "chunk_frames": CHUNK_FRAMES, "near_radius": NEAR_RADIUS,
             "runs": [
                 {**run.summary(), "started": run.started,
@@ -1207,7 +1372,7 @@ class SessionExplorer(QMainWindow):
         self.hunt_fetcher.close()
         if self.proxy:
             self.proxy.close()
-        self.store.wipe()
+        self.store.destroy()
         super().closeEvent(event)
 
     def keyPressEvent(self, event) -> None:
@@ -1237,7 +1402,7 @@ def main() -> None:
               f"{window.log_path.name}")
         if window.fill:
             window.fill.stop()
-        window.store.wipe()
+        window.store.destroy()
         return
     if "--smoke" in sys.argv:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -1260,6 +1425,14 @@ def main() -> None:
         while not window.store.persisted() and time.perf_counter() < deadline:
             time.sleep(0.2)
         print(f"chunks persisted: {sorted(window.store.persisted())[:4]}")
+        window._apply_crop(1000, 500, 512, 512)  # form change drops it all
+        print(f"after crop: ram={len(window.cache)} "
+              f"chunks={len(window.store.persisted())} "
+              f"windows={len(window.windows)}")
+        window._land_at(4150)                 # re-land on the new form
+        window._walk_wait_covered(timeout_s=30)
+        window.request(4150, "drag", exact=True)
+        print(window.hud.text())
         window._refresh_status()
         print(window.coverage.text())
         window._redraw_graphs()
@@ -1269,7 +1442,7 @@ def main() -> None:
               f"{window.log_path.name}")
         if window.fill:
             window.fill.stop()
-        window.store.wipe()
+        window.store.destroy()
         return
     window.show()
     sys.exit(app.exec())

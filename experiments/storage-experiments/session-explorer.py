@@ -919,6 +919,9 @@ class SessionExplorer(QMainWindow):
         splitter.setSizes([760, 920])
         self.setCentralWidget(splitter)
         self.request(0, "open")
+        # there is no stopped state: the app opens looping. Pausing is the
+        # marked exception (space), never the default the user starts in.
+        self._land_at(0)
 
     # ── the activity ledger ──────────────────────────────────────────────
     def _now(self) -> float:

@@ -1115,6 +1115,13 @@ class SessionExplorer(QMainWindow):
         self._hud_timer.timeout.connect(self._refresh_status)
         self._hud_timer.start()
 
+        self.full_btn = QPushButton("full frame")
+        self.full_btn.setCheckable(True)
+        self.full_btn.setToolTip(
+            "crop-space is the default everywhere — the session is about "
+            "the replicate, so scrubbing previews the crop at every "
+            "position. Check this to see the whole frame (with the crop "
+            "outlined), which is also where a new crop gets drawn.")
         self.hunt_box = QComboBox()
         self.hunt_box.addItems(["hunt: proxy", "hunt: kf-snap"])
         # even cold, the proxy route stays selectable: it serves whatever
@@ -1206,7 +1213,7 @@ class SessionExplorer(QMainWindow):
         self.walk_btn.clicked.connect(self._walk)
 
         row1 = QHBoxLayout()
-        for w in (self.hunt_box, self.budget_spin, self.preempt,
+        for w in (self.full_btn, self.hunt_box, self.budget_spin, self.preempt,
                   QLabel("signal"), self.signal_slider, self.signal_label):
             row1.addWidget(w)
         row1.addStretch(1)
@@ -1390,17 +1397,40 @@ class SessionExplorer(QMainWindow):
             return self.segproxy.fetch(idx)
         return None
 
+    def _crop_of_display(self, shown: np.ndarray) -> np.ndarray | None:
+        """The crop region sliced out of a display-size frame, upscaled to
+        crop resolution — display-only pixels, never admitted."""
+        s = shown.shape[1] / self.orig_w
+        x, y, cw, ch = CROP_RECT
+        piece = shown[round(y * s) : round((y + ch) * s),
+                      round(x * s) : round((x + cw) * s)]
+        if not piece.size:
+            return None
+        return np.ascontiguousarray(cv2.resize(
+            piece, (cw, ch), interpolation=cv2.INTER_NEAREST))
+
     def _serve(self, idx: int, task: str, exact: bool) -> tuple[np.ndarray, str]:
         if not self._in_window(idx):
-            self._view = "full"
+            # crop-space is the default everywhere: the session is about
+            # the replicate, so hunting previews the crop at every
+            # position; the full frame is the marked exception (a toggle),
+            # summoned to see context or draw a new crop
+            full_view = self.full_btn.isChecked()
+            self._view = "full" if full_view else "crop"
             if self.hunt_box.currentIndex() == 0:
                 shown = self._display_frame(idx)
                 if shown is not None:
-                    return self._with_rect(shown), "proxy"
+                    if full_view:
+                        return self._with_rect(shown), "proxy"
+                    piece = self._crop_of_display(shown)
+                    if piece is not None:
+                        return piece, "proxy"
             full, crop, landed = self.hunt_fetcher.keyframe(idx)
             self.cache.put(landed, crop)  # free bytes are never refused
             self.admitted_free += 1
-            return self._with_rect(full), f"kf Δ{idx - landed}"
+            if full_view:
+                return self._with_rect(full), f"kf Δ{idx - landed}"
+            return crop, f"kf Δ{idx - landed}"  # exact crop pixels
         self._view = "crop"
         got = self.cache.get(idx)
         if got is not None:
@@ -1421,14 +1451,9 @@ class SessionExplorer(QMainWindow):
                 return arr, f"near Δ{idx - best}"
             lo = self._display_frame(idx)
             if lo is not None:
-                s = lo.shape[1] / self.orig_w
-                x, y, cw, ch = CROP_RECT
-                piece = lo[round(y * s) : round((y + ch) * s),
-                           round(x * s) : round((x + cw) * s)]
-                if piece.size:
-                    return np.ascontiguousarray(cv2.resize(
-                        piece, (cw, ch),
-                        interpolation=cv2.INTER_NEAREST)), "lo"
+                piece = self._crop_of_display(lo)
+                if piece is not None:
+                    return piece, "lo"
             if near is not None:
                 best, arr = near
                 return arr, f"near Δ{idx - best}"
@@ -1670,8 +1695,8 @@ class SessionExplorer(QMainWindow):
     # ── the drawn crop ───────────────────────────────────────────────────
     def _crop_drawn(self, lx: int, ly: int, lw: int, lh: int) -> None:
         if self._view != "full" or not self._pix_w:
-            self.hud.setText("draw the crop on the full-frame hunt view — "
-                             "jump outside the window first")
+            self.hud.setText("drawing a crop needs the whole frame — check "
+                             "'full frame', then drag the rectangle")
             return
         off_x = (self.canvas.width() - self._pix_w) / 2
         off_y = (self.canvas.height() - self._pix_h) / 2

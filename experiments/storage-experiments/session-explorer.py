@@ -345,9 +345,10 @@ class WindowFill:
     queue as they complete. `pause` is the priority inversion — flow sets
     it and the frontier yields its decode bandwidth."""
 
-    def __init__(self, start: int, end: int, cache: Store, store: ChunkStore,
-                 encode_q: queue.Queue, on_covered):
+    def __init__(self, start: int, end: int, anchor: int, cache: Store,
+                 store: ChunkStore, encode_q: queue.Queue, on_covered):
         self.start, self.end = start, end
+        self.anchor = max(start, min(anchor, end - 1))
         self.cache = cache
         self.store = store
         self.encode_q = encode_q
@@ -381,8 +382,15 @@ class WindowFill:
         from_chunks = from_original = 0
         paused_s = 0.0
         fetcher: Fetcher | None = None
+        # attention-first: fill from the playhead's chunk to the end, then
+        # wrap — the loop starts where the user clicked, and at ~3x the
+        # play rate the frontier stays ahead of it instead of behind it
+        chunks = list(range(self.start, self.end, CHUNK_FRAMES))
+        first = min((self.anchor - self.start) // CHUNK_FRAMES,
+                    len(chunks) - 1)
+        chunks = chunks[first:] + chunks[:first]
         try:
-            for cstart in range(self.start, self.end, CHUNK_FRAMES):
+            for cstart in chunks:
                 if self._stop.is_set():
                     return
                 cend = min(cstart + CHUNK_FRAMES, self.end)
@@ -492,8 +500,17 @@ class RunLog:
         self.events: list[dict] = []
         self.walls: list[dict] = []
         self.capped = False
+        self._steady = 0    #: play-hits are a constant 0.01 ms; a looping
+        self.suppressed = 0  #: session floods tens of thousands of them and
+                             #: the graph/save cost of the flood is what
+                             #: freezes the GUI — keep 1 in 8, count the rest
 
     def log(self, task: str, frame: int, route: str, ms: float) -> None:
+        if task == "play" and route == "hit" and ms < 0.5:
+            self._steady += 1
+            if self._steady % 8:
+                self.suppressed += 1
+                return
         if len(self.events) >= EVENT_CAP:
             self.capped = True
             return
@@ -515,6 +532,7 @@ class RunLog:
             routes[key] = routes.get(key, 0) + 1
         return {"label": self.label, "config": self.config,
                 "by_task": by_task, "routes": routes, "walls": self.walls,
+                "suppressed_play_hits": self.suppressed,
                 "events_capped": self.capped}
 
     def stats_text(self) -> str:
@@ -561,6 +579,7 @@ class SessionExplorer(QMainWindow):
         self._encoding_chunk: int | None = None
         self._last_image: np.ndarray | None = None
         self._last_graph = 0.0
+        self._last_save = 0.0
         self.cache = Store(600)
         self.store = ChunkStore()
         self.miss_fetcher = Fetcher()
@@ -941,10 +960,10 @@ class SessionExplorer(QMainWindow):
         self._land_at(value)
 
     def _land_at(self, pos: int) -> None:
-        self._set_window(pos - WINDOW // 2)
+        self._set_window(pos - WINDOW // 2, anchor=pos)
         self.loop_btn.setChecked(True)
 
-    def _set_window(self, at: int) -> None:
+    def _set_window(self, at: int, anchor: int | None = None) -> None:
         start = max(0, min(at, self.total - WINDOW))
         start -= start % CHUNK_FRAMES
         end = min(start + WINDOW, self.total)
@@ -965,7 +984,8 @@ class SessionExplorer(QMainWindow):
             "what": "window-open", "wall_s": 0.0,
             "detail": f"chunks-still-encoding={overlap}"})
         self.fill = WindowFill(
-            start, end, self.cache, self.store, self._encode_q,
+            start, end, start if anchor is None else anchor,
+            self.cache, self.store, self._encode_q,
             lambda *a: self.covered.emit(*a))
         self.fill.config = run.config  # walls land on the run that launched
         self._fill_act = self._act_start("fill", f"@{start}")
@@ -1331,7 +1351,7 @@ class SessionExplorer(QMainWindow):
                 self.request(rng.randrange(*self.active), "hop")
                 QApplication.processEvents()
                 time.sleep(0.02)
-            self._save_log()
+            self._save_log(force=True)
             self._redraw_graphs()
             self._announce("[walk] done — stats compare hunt, A cold, B "
                            "seam, A revisited; walls carry the overlap "
@@ -1447,6 +1467,9 @@ class SessionExplorer(QMainWindow):
             by_route[key][0].append(e["t"])
             by_route[key][1].append(max(e["ms"], 0.005))
         for key, (xs, ys) in sorted(by_route.items()):
+            if len(xs) > 2500:  # the draw cost is what stalls the loop;
+                stride = len(xs) // 2500  # stats below still use everything
+                xs, ys = xs[::stride], ys[::stride]
             ax_lat.scatter(xs, ys, s=12, alpha=0.65,
                            color=ROUTE_COLORS.get(key, "#777777"),
                            label=key, linewidths=0)
@@ -1529,10 +1552,15 @@ class SessionExplorer(QMainWindow):
             "\n".join(header) + "\n\n"
             + "\n\n".join(r.stats_text() for r in runs))
 
-    def _save_log(self) -> None:
-        if self._busy:
-            self._save_timer.start(1500)
+    def _save_log(self, force: bool = False) -> None:
+        # dumping a long session's JSON stalls the GUI thread; while the
+        # loop drives, save at most every 30 s and catch up when idle
+        if not force and (self._busy or (
+                self._play_timer.isActive()
+                and time.perf_counter() - self._last_save < 30)):
+            self._save_timer.start(5000)
             return
+        self._last_save = time.perf_counter()
         with self.act_lock:
             activity = [dict(a) for a in self.activity]
         payload = {
@@ -1560,7 +1588,7 @@ class SessionExplorer(QMainWindow):
         self.hop_btn.setChecked(False)
         if self.fill:
             self.fill.stop()
-        self._save_log()
+        self._save_log(force=True)
         self.miss_fetcher.close()
         self.hunt_fetcher.close()
         if self.proxy:
@@ -1636,7 +1664,7 @@ def main() -> None:
         window._refresh_status()
         print(window.coverage.text())
         window._redraw_graphs()
-        window._save_log()
+        window._save_log(force=True)
         data = json.loads(window.log_path.read_text(encoding="utf-8"))
         acts = {}
         for a in data["activity"]:

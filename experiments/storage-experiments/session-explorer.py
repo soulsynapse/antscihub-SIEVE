@@ -349,6 +349,8 @@ class ProxyBuilder:
         self.attention = 0
         self._act = None
         self._act_start, self._act_end = act_start, act_end
+        self._launching = False   #: a spawn thread is in flight
+        self._stopped = False
 
     @staticmethod
     def _present() -> set[int]:
@@ -399,6 +401,8 @@ class ProxyBuilder:
 
     def tick(self, fill_running: bool) -> bool:
         """Advance the schedule; True while a batch is running."""
+        if self._launching:
+            return True
         if self.proc is not None:
             if self.proc.poll() is None:
                 return True
@@ -413,14 +417,27 @@ class ProxyBuilder:
         s, n = min(remaining,
                    key=lambda b: abs(self.attention - (b[0] + b[1] // 2)))
         self.batch = (s, n)
-        self.proc = _launch_proxy_build(self.total, self.rate, s, n)
         self._act = self._act_start("proxy", f"batch @{s} x{n}")
+        # process creation blocks for hundreds of ms on Windows (measured
+        # 1.86 s worst on the GUI thread) — spawn from a worker
+        self._launching = True
+
+        def spawn():
+            proc = _launch_proxy_build(self.total, self.rate, s, n)
+            if self._stopped:
+                proc.terminate()
+            self.proc = proc
+            self._launching = False
+
+        threading.Thread(target=spawn, daemon=True).start()
         return True
 
     def done(self) -> bool:
-        return self.proc is None and not self._incomplete()
+        return not self._launching and self.proc is None \
+            and not self._incomplete()
 
     def stop(self) -> None:
+        self._stopped = True  # a spawn in flight terminates on arrival
         if self.proc is not None and self.proc.poll() is None:
             self._kill("stopped: session closed")
 

@@ -86,6 +86,8 @@
     - 📄 `explorer.py` — Feel the decode approaches by hand: scrub, play, step and sweep each backend.
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
   - 📁 `storage-experiments/`
+    - 📁 `explorer-logs/`
+      - 📄 `session-explorer-20260822T100248Z.json`
     - 📁 `results/`
       - 📄 `01-time-to-tunable-20260821T211839Z.json`
       - 📄 `02-fill-policy-20260821T212800Z.json`
@@ -100,6 +102,7 @@
     - 📄 `05-flow-wall.py` — The flow wall: how big a span can re-pay DIS before it stops feeling live.
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the storage stack by hand: scrub a region while fill, persist and play fight over it.
+    - 📄 `session-explorer.py` — Feel the session plan: hunt the full timeline, land a window, tune, jump.
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
   - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.

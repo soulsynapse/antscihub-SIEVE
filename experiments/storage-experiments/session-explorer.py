@@ -533,13 +533,29 @@ class SignalStrip:
 
 
 class StripLabel(QLabel):
-    """The strip is also a timeline: a click lands there."""
+    """The strip IS the timeline: press scrubs, drag hunts along the
+    signal, release lands — the same gesture grammar the slider had,
+    on the element that actually shows where the behavior is."""
 
-    clicked = Signal(float)  # 0..1 position
+    pressed = Signal(float)   # 0..1 position
+    moved = Signal(float)
+    released = Signal()
+
+    def _frac(self, event) -> float:
+        return min(1.0, max(0.0, event.position().x() / max(1, self.width())))
 
     def mousePressEvent(self, event) -> None:
-        if self.width() > 0:
-            self.clicked.emit(event.position().x() / self.width())
+        self._down = True
+        self.pressed.emit(self._frac(event))
+
+    def mouseMoveEvent(self, event) -> None:
+        if getattr(self, "_down", False):
+            self.moved.emit(self._frac(event))
+
+    def mouseReleaseEvent(self, event) -> None:
+        if getattr(self, "_down", False):
+            self._down = False
+            self.released.emit()
 
 
 class Store:
@@ -1258,18 +1274,26 @@ class SessionExplorer(QMainWindow):
         left_layout.addWidget(self.canvas, 1)
         left_layout.addWidget(self.slider)
         self.strip_label = StripLabel()
-        self.strip_label.setFixedHeight(36)
+        self.strip_label.setFixedHeight(56)
         self.strip_label.setSizePolicy(QSizePolicy.Policy.Ignored,
                                        QSizePolicy.Policy.Fixed)
         self.strip_label.setStyleSheet("background: #121212;")
         self.strip_label.setToolTip(
-            "motion energy over the display proxy — the hunt's real "
-            "feedback on a fixed camera, where frames all look alike. "
-            "Peaks are activity; click one to land the loop there. Fills "
-            "in as the proxy arrives; crop changes don't touch it.")
-        self.strip_label.clicked.connect(
-            lambda frac: self._land_at(int(frac * (self.total - 1))))
+            "THE timeline: motion energy over the display proxy, because "
+            "on a fixed camera the frames all look alike and the signal "
+            "is the only thing worth scrubbing. Drag to hunt along it; "
+            "release lands the loop there. Fills in as the proxy arrives; "
+            "crop changes don't touch it.")
+        # the hidden slider stays as the position model — every gesture
+        # funnels through it, so the walk, the drives and the request
+        # paths need no second navigation code path
+        self._frame_of = lambda frac: int(frac * (self.total - 1))
+        self.strip_label.pressed.connect(self._strip_pressed)
+        self.strip_label.moved.connect(
+            lambda frac: self.slider.setValue(self._frame_of(frac)))
+        self.strip_label.released.connect(self._released)
         left_layout.addWidget(self.strip_label)
+        self.slider.hide()
         left_layout.addWidget(self.coverage)
         left_layout.addWidget(self.hud)
         left_layout.addWidget(self.status)
@@ -1527,8 +1551,19 @@ class SessionExplorer(QMainWindow):
         # frozen-drag report was real and the earlier probe measured
         # setPixmap calls, not pixels.
         self.canvas.repaint()
+        # the strip is the timeline now, so its playhead must move at
+        # gesture rate, not at the 2 Hz status tick
+        now = time.perf_counter()
+        if now - getattr(self, "_strip_drawn", 0.0) > 0.05:
+            self._strip_drawn = now
+            self._render_strip()
+            self.strip_label.repaint()
 
     # ── windows ──────────────────────────────────────────────────────────
+    def _strip_pressed(self, frac: float) -> None:
+        self._scrub_began()
+        self.slider.setValue(self._frame_of(frac))
+
     def _released(self) -> None:
         """The landing gesture: release inside the active window is a
         tuning scrub (paused stays paused); release anywhere else commits
@@ -2060,7 +2095,7 @@ class SessionExplorer(QMainWindow):
             return
         with self.strip.lock:
             e = self.strip.energy.copy()
-        H = 36
+        H = max(24, self.strip_label.height())
         cols = (np.arange(self.total) * w_px // self.total).astype(np.int64)
         filled = np.where(np.isnan(e), -1.0, e).astype(np.float32)
         colmax = np.full(w_px, -1.0, dtype=np.float32)

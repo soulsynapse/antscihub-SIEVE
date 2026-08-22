@@ -105,6 +105,11 @@ from harness import FOOTAGE  # noqa: E402
 
 BIG = FOOTAGE / "GX010047c2_02_17_26.MP4"
 PROXY = FOOTAGE / "derived" / "proxy-1328-intra.mp4"
+#: the app must build its own proxy — a fresh project has none. Segments on
+#: the absolute chunk grid, each usable the moment ffmpeg finishes it, so
+#: the timeline gets fast piece by piece while kf-snap covers the rest.
+#: Durable across sessions: the proxy depends only on the source file.
+PROXY_SEG_DIR = FOOTAGE / "derived" / "proxy-seg"
 #: per-process — a smoke run beside a live GUI must not wipe its chunks
 CHUNK_DIR = FOOTAGE / "derived" / f"_session-chunks-{__import__('os').getpid()}"
 LOGS = Path(__file__).resolve().parent / "explorer-logs"
@@ -126,8 +131,9 @@ TASK_MARKERS = {"hunt": "x", "drag": "o", "play": ".", "step": "^",
 ROUTE_COLORS = {"hit": "#2ca02c", "near": "#98c010", "cut": "#1f77b4",
                 "proxy": "#17becf", "lo": "#9467bd", "kf": "#ff9310",
                 "miss": "#d62728"}
-ACT_ROWS = {"fill": 0, "encode": 1, "flow": 2}
-ACT_COLORS = {"fill": "#1f77b4", "encode": "#909090", "flow": "#c218c2"}
+ACT_ROWS = {"fill": 0, "encode": 1, "flow": 2, "proxy": 3}
+ACT_COLORS = {"fill": "#1f77b4", "encode": "#909090", "flow": "#c218c2",
+              "proxy": "#17becf"}
 
 
 def _pts_helpers(stream):
@@ -224,6 +230,82 @@ class ProxyFetcher:
 
     def close(self) -> None:
         self.container.close()
+
+
+class SegmentProxy:
+    """The proxy arriving in pieces: 96-frame intra segments on the absolute
+    grid, written by a background ffmpeg. A segment is trusted once a newer
+    one exists (ffmpeg has moved on) or the build has exited; the one still
+    being written is not readable and is never touched."""
+
+    def __init__(self):
+        self._open: OrderedDict[int, av.container.InputContainer] = OrderedDict()
+        self._usable: set[int] = set()   #: segment indices safe to read
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _path(seg: int) -> Path:
+        return PROXY_SEG_DIR / f"seg-{seg:05d}.mp4"
+
+    def refresh(self, building: bool) -> int:
+        """Rescan the directory; returns how many segments are usable."""
+        present = sorted(int(p.stem.split("-")[1])
+                         for p in PROXY_SEG_DIR.glob("seg-*.mp4"))
+        if building and present:
+            present = present[:-1]  # the newest is mid-write
+        with self._lock:
+            self._usable = set(present)
+        return len(present)
+
+    def fetch(self, idx: int) -> np.ndarray | None:
+        seg, rel = idx // CHUNK_FRAMES, idx % CHUNK_FRAMES
+        with self._lock:
+            if seg not in self._usable:
+                return None
+            if seg not in self._open:
+                try:
+                    self._open[seg] = av.open(str(self._path(seg)))
+                except OSError:
+                    self._usable.discard(seg)
+                    return None
+                while len(self._open) > 3:
+                    _, old = self._open.popitem(last=False)
+                    old.close()
+            self._open.move_to_end(seg)
+            container = self._open[seg]
+            stream = container.streams.video[0]
+            pts_of, step = _pts_helpers(stream)
+            target = pts_of(rel)
+            half = step / 2
+            container.seek(target, stream=stream)
+            for frame in container.decode(stream):
+                if frame.pts is not None and frame.pts + half >= target:
+                    return np.ascontiguousarray(_luma(frame))
+        return None
+
+    def close(self) -> None:
+        with self._lock:
+            for container in self._open.values():
+                container.close()
+            self._open.clear()
+
+
+def _launch_proxy_build(total: int) -> "subprocess.Popen":
+    """One ffmpeg, separate process (measured nearly free for the
+    foreground), segmenting as it goes. Splits land exactly on the chunk
+    grid because -g 1 makes every frame a keyframe."""
+    import subprocess
+    PROXY_SEG_DIR.mkdir(parents=True, exist_ok=True)
+    splits = ",".join(str(f) for f in range(CHUNK_FRAMES, total, CHUNK_FRAMES))
+    cmd = ["ffmpeg", "-y", "-i", str(BIG),
+           "-vf", "scale=1328:-2",
+           "-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-g", "1",
+           "-fps_mode", "passthrough", "-an",
+           "-f", "segment", "-segment_frames", splits,
+           "-reset_timestamps", "1",
+           str(PROXY_SEG_DIR / "seg-%05d.mp4")]
+    return subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
 
 
 class Store:
@@ -713,7 +795,25 @@ class SessionExplorer(QMainWindow):
         self.store = ChunkStore()
         self.miss_fetcher = Fetcher()
         self.hunt_fetcher = Fetcher()
-        self.proxy = ProxyFetcher() if PROXY.exists() else None
+        #: --cold simulates a fresh project: no hand-made proxy, no
+        #: segments — the app must earn its own fast timeline
+        cold = "--cold" in sys.argv
+        if cold:
+            for p in PROXY_SEG_DIR.glob("seg-*.mp4"):
+                p.unlink(missing_ok=True)
+        self.proxy = ProxyFetcher() if PROXY.exists() and not cold else None
+        self.segproxy: SegmentProxy | None = None
+        self._proxy_proc = None
+        self._proxy_act: dict | None = None
+        self._seg_expected = -(-self.total // CHUNK_FRAMES)
+        self._seg_have = 0
+        if self.proxy is None:
+            self.segproxy = SegmentProxy()
+            self._seg_have = self.segproxy.refresh(building=False)
+            if self._seg_have < self._seg_expected:
+                self._proxy_proc = _launch_proxy_build(self.total)
+                self._proxy_act = self._act_start(
+                    "proxy", f"building {self._seg_expected} segments")
         self.fill: WindowFill | None = None
         self.windows: list[int] = []       #: starts, chunk-aligned
         self.active: tuple[int, int] | None = None
@@ -759,9 +859,8 @@ class SessionExplorer(QMainWindow):
 
         self.hunt_box = QComboBox()
         self.hunt_box.addItems(["hunt: proxy", "hunt: kf-snap"])
-        if self.proxy is None:
-            self.hunt_box.setCurrentIndex(1)
-            self.hunt_box.setEnabled(False)
+        # even cold, the proxy route stays selectable: it serves whatever
+        # segments exist and falls through to kf for the rest
         self.hunt_box.setToolTip(
             "how requests outside any window are served. proxy = the "
             "display-size intra file (5-9 ms drags, display-only pixels); "
@@ -1003,11 +1102,22 @@ class SessionExplorer(QMainWindow):
                       255, max(1, round(full.shape[1] / 700)))
         return out
 
+    def _display_frame(self, idx: int) -> np.ndarray | None:
+        """The display tier, whichever form it exists in: the whole-file
+        proxy, or whatever segments the background build has finished."""
+        if self.proxy is not None:
+            return self.proxy.frame(idx)
+        if self.segproxy is not None:
+            return self.segproxy.fetch(idx)
+        return None
+
     def _serve(self, idx: int, task: str, exact: bool) -> tuple[np.ndarray, str]:
         if not self._in_window(idx):
             self._view = "full"
-            if self.hunt_box.currentIndex() == 0 and self.proxy is not None:
-                return self._with_rect(self.proxy.frame(idx)), "proxy"
+            if self.hunt_box.currentIndex() == 0:
+                shown = self._display_frame(idx)
+                if shown is not None:
+                    return self._with_rect(shown), "proxy"
             full, crop, landed = self.hunt_fetcher.keyframe(idx)
             self.cache.put(landed, crop)  # free bytes are never refused
             self.admitted_free += 1
@@ -1030,8 +1140,8 @@ class SessionExplorer(QMainWindow):
             if near is not None and abs(near[0] - idx) <= 3:
                 best, arr = near
                 return arr, f"near Δ{idx - best}"
-            if self.proxy is not None:
-                lo = self.proxy.frame(idx)
+            lo = self._display_frame(idx)
+            if lo is not None:
                 s = lo.shape[1] / self.orig_w
                 x, y, cw, ch = CROP_RECT
                 piece = lo[round(y * s) : round((y + ch) * s),
@@ -1102,6 +1212,8 @@ class SessionExplorer(QMainWindow):
             lines.append(f"FLOW signal={self._flow_value} {elapsed:.1f}s")
         elif self._debounce.isActive():
             lines.append("SIGNAL settling...")
+        if self._proxy_proc is not None:
+            lines.append(f"PROXY BUILD {self._seg_have}/{self._seg_expected}")
         return lines
 
     def _show(self, image: np.ndarray) -> None:
@@ -1586,6 +1698,17 @@ class SessionExplorer(QMainWindow):
         self._touch()
 
     def _refresh_status(self) -> None:
+        if self.segproxy is not None:
+            building = self._proxy_proc is not None \
+                and self._proxy_proc.poll() is None
+            self._seg_have = self.segproxy.refresh(building)
+            if self._proxy_proc is not None and not building:
+                self._act_end(self._proxy_act,
+                              f"{self._seg_have}/{self._seg_expected} segments")
+                self._proxy_proc = None
+                self.hud.setText(
+                    f"proxy complete: {self._seg_have} segments — the whole "
+                    "timeline is fast now")
         # keep overlays current while nothing is being requested — a flow
         # or encode finishing must vanish from the frame without a scrub
         if not self._busy and self._last_image is not None \
@@ -1739,6 +1862,10 @@ class SessionExplorer(QMainWindow):
         self.hunt_fetcher.close()
         if self.proxy:
             self.proxy.close()
+        if self._proxy_proc is not None:
+            self._proxy_proc.terminate()  # segments so far stay usable
+        if self.segproxy is not None:
+            self.segproxy.close()
         self.store.destroy()
         super().closeEvent(event)
 

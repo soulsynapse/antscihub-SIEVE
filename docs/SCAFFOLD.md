@@ -96,11 +96,13 @@
       - 📄 `03-ram-tier-20260821T213111Z.json`
       - 📄 `04-persist-inprocess-20260821T213201Z.json`
       - 📄 `05-flow-wall-20260821T213311Z.json`
+      - 📄 `06-build-order-20260822T152011Z.json`
     - 📄 `01-time-to-tunable.py` — Time-to-tunable: how fast does a cold region become interactive, per strategy?
     - 📄 `02-fill-policy.py` — Fill policy: chunk size, fill order and worker count against a scrub with hands.
     - 📄 `03-ram-tier.py` — RAM tier: what a cached frame costs per form, and what a play-through evicts.
     - 📄 `04-persist-inprocess.py` — Persist: what encoding the grown cut costs the foreground, in-process vs out.
     - 📄 `05-flow-wall.py` — The flow wall: how big a span can re-pay DIS before it stops feeling live.
+    - 📄 `06-build-order.py` — Build order: can the proxy build follow attention without paying for it?
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the storage stack by hand: scrub a region while fill, persist and play fight over it.
     - 📄 `session-explorer.py` — Feel the session plan: hunt the full timeline, land a window, tune, jump.

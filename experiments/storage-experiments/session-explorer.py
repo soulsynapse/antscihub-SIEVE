@@ -65,6 +65,12 @@ from pathlib import Path
 import av
 import cv2
 import numpy as np
+
+# the fill and encode threads churn the GIL hard enough to starve the GUI
+# thread for 100-400 ms at the default 5 ms switch interval — measured with
+# a heartbeat probe; a shorter interval trades a little throughput for the
+# event loop staying alive
+sys.setswitchinterval(0.002)
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
@@ -114,7 +120,8 @@ EVENT_CAP = 20_000
 TASK_MARKERS = {"hunt": "x", "drag": "o", "play": ".", "step": "^",
                 "open": "s", "hop": "P", "scrub": "d"}
 ROUTE_COLORS = {"hit": "#2ca02c", "near": "#98c010", "cut": "#1f77b4",
-                "proxy": "#17becf", "kf": "#ff9310", "miss": "#d62728"}
+                "proxy": "#17becf", "lo": "#9467bd", "kf": "#ff9310",
+                "miss": "#d62728"}
 ACT_ROWS = {"fill": 0, "encode": 1, "flow": 2}
 ACT_COLORS = {"fill": "#1f77b4", "encode": "#909090", "flow": "#c218c2"}
 
@@ -292,7 +299,8 @@ class ChunkStore:
                 vf = vf.reformat(format="yuv420p")
                 for pkt in stream.encode(vf):
                     out.mux(pkt)
-            for pkt in stream.encode():
+                time.sleep(0.001)  # yield: the GUI thread breathes between
+            for pkt in stream.encode():  # frames, ~0.1 s per chunk total
                 out.mux(pkt)
 
     def fetch(self, idx: int) -> np.ndarray | None:
@@ -365,10 +373,13 @@ class WindowFill:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, wait: bool = True) -> None:
+        """wait=False signals and returns: the dying frontier's last frames
+        land in the same cache at the same form, which is harmless — only a
+        form change must actually wait for it."""
         self._stop.set()
         self.pause.clear()
-        if self._thread:
+        if self._thread and wait:
             self._thread.join(timeout=15)
         self._thread = None
 
@@ -506,7 +517,8 @@ class RunLog:
                              #: freezes the GUI — keep 1 in 8, count the rest
 
     def log(self, task: str, frame: int, route: str, ms: float) -> None:
-        if task == "play" and route == "hit" and ms < 0.5:
+        if task == "play" and ms < 20 \
+                and route.split(" ")[0] in ("hit", "proxy", "lo"):
             self._steady += 1
             if self._steady % 8:
                 self.suppressed += 1
@@ -612,6 +624,14 @@ class SessionExplorer(QMainWindow):
         LOGS.mkdir(exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.log_path = LOGS / f"session-explorer-{stamp}.json"
+        #: provenance costs two subprocesses (git, ffmpeg) — probed once;
+        #: re-probing per autosave was a 2 s GUI stall every 30 s
+        self._provenance = {
+            "tool": "session-explorer.py",
+            "sieve_rev": harness._sieve_rev(),
+            "machine": harness._machine(),
+            "versions": harness._versions(),
+        }
         self._graph_timer = QTimer(self, singleShot=True, interval=600)
         self._graph_timer.timeout.connect(self._redraw_graphs)
         self._save_timer = QTimer(self, singleShot=True, interval=2500)
@@ -859,7 +879,25 @@ class SessionExplorer(QMainWindow):
             self.cache.put(idx, from_disk)
             return from_disk, "cut"
         if not exact:
+            # progressive refinement: a nearly-right cached frame first, a
+            # low-res placeholder second, and the same frame at full form
+            # arrives when the fill catches up. A blocking miss on the GUI
+            # thread is what "frozen" feels like; only exact requests
+            # (slider release) are allowed to pay it.
             near = self.cache.nearest(idx)
+            if near is not None and abs(near[0] - idx) <= 3:
+                best, arr = near
+                return arr, f"near Δ{idx - best}"
+            if self.proxy is not None:
+                lo = self.proxy.frame(idx)
+                s = lo.shape[1] / self.orig_w
+                x, y, cw, ch = CROP_RECT
+                piece = lo[round(y * s) : round((y + ch) * s),
+                           round(x * s) : round((x + cw) * s)]
+                if piece.size:
+                    return np.ascontiguousarray(cv2.resize(
+                        piece, (cw, ch),
+                        interpolation=cv2.INTER_NEAREST)), "lo"
             if near is not None:
                 best, arr = near
                 return arr, f"near Δ{idx - best}"
@@ -970,7 +1008,7 @@ class SessionExplorer(QMainWindow):
         if self.active == (start, end):
             return
         if self.fill:
-            self.fill.stop()
+            self.fill.stop(wait=False)  # landing must not wait on the old
             self._act_end(self._fill_act, "stopped: window switched")
         self.active = (start, end)
         self._mark("window", f"@{start}")
@@ -1564,11 +1602,8 @@ class SessionExplorer(QMainWindow):
         with self.act_lock:
             activity = [dict(a) for a in self.activity]
         payload = {
-            "tool": "session-explorer.py",
+            **self._provenance,
             "when": datetime.now(timezone.utc).isoformat(),
-            "sieve_rev": harness._sieve_rev(),
-            "machine": harness._machine(),
-            "versions": harness._versions(),
             "total_frames": self.total, "window": WINDOW, "gop": GOP,
             "crop": list(CROP_RECT),
             "activity": activity,

@@ -290,23 +290,46 @@ class SegmentProxy:
             self._open.clear()
 
 
-def _launch_proxy_build(total: int) -> "subprocess.Popen":
+def _launch_proxy_build(total: int, rate: Fraction,
+                        start_seg: int = 0) -> "subprocess.Popen":
     """One ffmpeg, separate process (measured nearly free for the
     foreground), segmenting as it goes. Splits land exactly on the chunk
-    grid because -g 1 makes every frame a keyframe."""
+    grid because -g 1 makes every frame a keyframe, and a resumed build's
+    -ss is frame-accurate (half a frame early, so the first emitted frame
+    is exactly start_seg*96 — exp06 verified the alignment)."""
     import subprocess
     PROXY_SEG_DIR.mkdir(parents=True, exist_ok=True)
-    splits = ",".join(str(f) for f in range(CHUNK_FRAMES, total, CHUNK_FRAMES))
+    start_frame = start_seg * CHUNK_FRAMES
     flags = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
-    cmd = ["ffmpeg", "-y", "-i", str(BIG),
-           "-vf", "scale=1328:-2",
-           "-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-g", "1",
-           "-fps_mode", "passthrough", "-an",
-           "-f", "segment", "-segment_frames", splits,
-           "-reset_timestamps", "1",
-           str(PROXY_SEG_DIR / "seg-%05d.mp4")]
+    cmd = ["ffmpeg", "-y"]
+    if start_frame:
+        ss = float((Fraction(start_frame) - Fraction(1, 2)) / rate)
+        cmd += ["-ss", f"{ss:.6f}"]
+    splits = ",".join(str(f) for f in
+                      range(CHUNK_FRAMES, total - start_frame, CHUNK_FRAMES))
+    cmd += ["-i", str(BIG),
+            "-vf", "scale=1328:-2",
+            "-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-g", "1",
+            "-fps_mode", "passthrough", "-an",
+            "-f", "segment", "-segment_frames", splits,
+            "-reset_timestamps", "1",
+            "-segment_start_number", str(start_seg),
+            str(PROXY_SEG_DIR / "seg-%05d.mp4")]
     return subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL, creationflags=flags)
+
+
+def _resume_seg(expected: int) -> int:
+    """Where an interrupted build should pick up: the newest present
+    segment may be a truncated victim of the kill, so it dies and the
+    build restarts at the first missing index."""
+    present = sorted(int(p.stem.split("-")[1])
+                     for p in PROXY_SEG_DIR.glob("seg-*.mp4"))
+    if present and len(present) < expected:
+        (PROXY_SEG_DIR / f"seg-{present.pop():05d}.mp4").unlink(
+            missing_ok=True)
+    have = set(present)
+    return next((i for i in range(expected) if i not in have), expected)
 
 
 class Store:
@@ -776,6 +799,7 @@ class SessionExplorer(QMainWindow):
         self.resize(1680, 900)
         with av.open(str(BIG)) as c:
             stream = c.streams.video[0]
+            self.rate = stream.average_rate  # exact, for the resume -ss
             self.fps = float(stream.average_rate)
             self.orig_w, self.orig_h = stream.width, stream.height
             self.total = (stream.frames or int(
@@ -1723,9 +1747,12 @@ class SessionExplorer(QMainWindow):
         # even existed, launching the build straight into the collapse
         if self._proxy_pending and (self._covered_once or self._now() > 20):
             self._proxy_pending = False
-            self._proxy_proc = _launch_proxy_build(self.total)
+            start_seg = _resume_seg(self._seg_expected)
+            self._proxy_proc = _launch_proxy_build(
+                self.total, self.rate, start_seg)
             self._proxy_act = self._act_start(
-                "proxy", f"building {self._seg_expected} segments")
+                "proxy", f"building {self._seg_expected} segments"
+                         + (f" (resuming at {start_seg})" if start_seg else ""))
         if self.segproxy is not None:
             building = self._proxy_proc is not None \
                 and self._proxy_proc.poll() is None

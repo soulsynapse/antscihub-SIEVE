@@ -130,7 +130,7 @@ TASK_MARKERS = {"hunt": "x", "drag": "o", "play": ".", "step": "^",
                 "open": "s", "hop": "P", "scrub": "d"}
 ROUTE_COLORS = {"hit": "#2ca02c", "near": "#98c010", "cut": "#1f77b4",
                 "proxy": "#17becf", "lo": "#9467bd", "kf": "#ff9310",
-                "miss": "#d62728"}
+                "wait": "#aaaaaa", "miss": "#d62728"}
 ACT_ROWS = {"fill": 0, "encode": 1, "flow": 2, "proxy": 3}
 ACT_COLORS = {"fill": "#1f77b4", "encode": "#909090", "flow": "#c218c2",
               "proxy": "#17becf"}
@@ -297,6 +297,7 @@ def _launch_proxy_build(total: int) -> "subprocess.Popen":
     import subprocess
     PROXY_SEG_DIR.mkdir(parents=True, exist_ok=True)
     splits = ",".join(str(f) for f in range(CHUNK_FRAMES, total, CHUNK_FRAMES))
+    flags = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
     cmd = ["ffmpeg", "-y", "-i", str(BIG),
            "-vf", "scale=1328:-2",
            "-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-g", "1",
@@ -305,7 +306,7 @@ def _launch_proxy_build(total: int) -> "subprocess.Popen":
            "-reset_timestamps", "1",
            str(PROXY_SEG_DIR / "seg-%05d.mp4")]
     return subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
+                            stderr=subprocess.DEVNULL, creationflags=flags)
 
 
 class Store:
@@ -712,7 +713,7 @@ class RunLog:
 
     def log(self, task: str, frame: int, route: str, ms: float) -> None:
         if task == "play" and ms < 20 \
-                and route.split(" ")[0] in ("hit", "proxy", "lo"):
+                and route.split(" ")[0] in ("hit", "proxy", "lo", "wait"):
             self._steady += 1
             if self._steady % 8:
                 self.suppressed += 1
@@ -807,13 +808,15 @@ class SessionExplorer(QMainWindow):
         self._proxy_act: dict | None = None
         self._seg_expected = -(-self.total // CHUNK_FRAMES)
         self._seg_have = 0
+        self._proxy_pending = False
+        self._covered_once = False
         if self.proxy is None:
             self.segproxy = SegmentProxy()
             self._seg_have = self.segproxy.refresh(building=False)
-            if self._seg_have < self._seg_expected:
-                self._proxy_proc = _launch_proxy_build(self.total)
-                self._proxy_act = self._act_start(
-                    "proxy", f"building {self._seg_expected} segments")
+            # attention outranks the timeline: the build waits until the
+            # first fill is done — two software decoders on the original
+            # collapse each other (measured: opening fill 7.1 s vs 3.6 s)
+            self._proxy_pending = self._seg_have < self._seg_expected
         self.fill: WindowFill | None = None
         self.windows: list[int] = []       #: starts, chunk-aligned
         self.active: tuple[int, int] | None = None
@@ -1153,6 +1156,11 @@ class SessionExplorer(QMainWindow):
             if near is not None:
                 best, arr = near
                 return arr, f"near Δ{idx - best}"
+            # nothing presentable and nothing owed: hold the current frame
+            # and let the fill arrive. Cold landings used to block the GUI
+            # 300-450 ms per play-miss here; a short hold reads as a beat,
+            # a blocked event loop reads as a hang.
+            return None, "wait"
         arr = self.miss_fetcher.exact(idx)
         self.cache.put(idx, arr)
         return arr, "miss"
@@ -1174,6 +1182,9 @@ class SessionExplorer(QMainWindow):
                     ms = (time.perf_counter() - before) * 1000
                 except Exception as exc:  # noqa: BLE001
                     self.hud.setText(f"frame {target}: {exc}")
+                    continue
+                if image is None:  # a hold, not a serve: the playhead
+                    run.log(task, target, route, ms)  # stays put
                     continue
                 self.pos = target
                 self._show(image)
@@ -1309,6 +1320,7 @@ class SessionExplorer(QMainWindow):
                         from_original: int, paused_s: float) -> None:
         self._act_end(self._fill_act,
                       f"@{start}: {from_chunks}ch/{from_original}orig")
+        self._covered_once = True
         config = getattr(self.fill, "config", None) \
             if self.fill and self.fill.start == start else None
         if config is None:
@@ -1404,6 +1416,14 @@ class SessionExplorer(QMainWindow):
             self._flow_dirty = True
             return
         covered = self.cache.covered(*self.active)
+        # flow between non-adjacent frames is garbage across the gaps:
+        # compute over the longest CONTIGUOUS covered run, not the set
+        runs, run_start = [], 0
+        for i in range(1, len(covered) + 1):
+            if i == len(covered) or covered[i] != covered[i - 1] + 1:
+                runs.append(covered[run_start:i])
+                run_start = i
+        covered = max(runs, key=len) if runs else []
         if len(covered) < 2:
             self.hud.setText("signal: window not filled enough for flow yet")
             return
@@ -1698,6 +1718,14 @@ class SessionExplorer(QMainWindow):
         self._touch()
 
     def _refresh_status(self) -> None:
+        # gate on a real first coverage, not on fill state — the opening
+        # request's processEvents fired this timer before the fill object
+        # even existed, launching the build straight into the collapse
+        if self._proxy_pending and (self._covered_once or self._now() > 20):
+            self._proxy_pending = False
+            self._proxy_proc = _launch_proxy_build(self.total)
+            self._proxy_act = self._act_start(
+                "proxy", f"building {self._seg_expected} segments")
         if self.segproxy is not None:
             building = self._proxy_proc is not None \
                 and self._proxy_proc.poll() is None

@@ -285,6 +285,10 @@ class SegmentProxy:
                     return np.ascontiguousarray(_luma(frame))
         return None
 
+    def snapshot(self) -> set[int]:
+        with self._lock:
+            return set(self._usable)
+
     def close(self) -> None:
         with self._lock:
             for container in self._open.values():
@@ -440,6 +444,102 @@ class ProxyBuilder:
         self._stopped = True  # a spawn in flight terminates on arrival
         if self.proc is not None and self.proc.poll() is None:
             self._kill("stopped: session closed")
+
+
+class SignalStrip:
+    """The hunt's real feedback channel: per-frame motion energy over the
+    display proxy, computed in the background, drawn under the timeline.
+    On a fixed camera the frames cannot show where you are or where the
+    behavior is — the signal can, which is the product's premise arriving
+    one screen early. Energy is crop-independent (whole-frame, proxy
+    resolution), so it survives crop changes untouched."""
+
+    def __init__(self, total: int, whole_file: Path | None,
+                 usable_segments):
+        self.total = total
+        self.energy = np.full(total, np.nan, dtype=np.float32)
+        self.lock = threading.Lock()
+        self.computed = 0
+        self._whole = whole_file
+        self._usable = usable_segments  #: callable -> set of segment starts
+        self._done_segs: set[int] = set()
+        self._stop = threading.Event()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _feed(self, start: int, lumas) -> None:
+        prev = None
+        vals: list[float] = []
+        pos = start
+
+        def flush() -> None:
+            nonlocal vals, pos
+            # incremental, and clamped: the source decodes a few more
+            # frames than the demux-counted total (the 11,308 vs 11,304
+            # disagreement) and the strip must not care
+            end = min(pos + len(vals), self.total)
+            if end > pos:
+                with self.lock:
+                    self.energy[pos:end] = vals[: end - pos]
+                    self.computed = int(np.sum(~np.isnan(self.energy)))
+            pos += len(vals)
+            vals = []
+
+        for arr in lumas:
+            small = arr[::4, ::4].astype(np.int16)
+            # moving-pixel area, not mean diff: the animals are a tiny
+            # fraction of a fixed frame, so mean diff is sensor noise
+            # (measured: p50 2.55 vs max 5.35 — flat); the fraction of
+            # pixels clearing a noise floor makes sparse motion pop
+            vals.append(float(np.mean(np.abs(small - prev) > 12))
+                        if prev is not None else np.nan)
+            prev = small
+            if len(vals) >= 256:
+                flush()
+            if self._stop.is_set():
+                break
+        flush()
+        with self.lock:  # the run's first diff is undefined; borrow one
+            if start + 1 < self.total and np.isnan(self.energy[start]) \
+                    and not np.isnan(self.energy[start + 1]):
+                self.energy[start] = self.energy[start + 1]
+
+    @staticmethod
+    def _decode(path: Path):
+        with av.open(str(path)) as container:
+            stream = container.streams.video[0]
+            stream.thread_type = "AUTO"
+            for frame in container.decode(stream):
+                yield _luma(frame)
+
+    def _run(self) -> None:
+        if self._whole is not None:
+            self._feed(0, self._decode(self._whole))
+            return
+        while not self._stop.is_set() and self.computed < self.total - 1:
+            fresh = sorted(self._usable() - self._done_segs)
+            for seg in fresh:
+                if self._stop.is_set():
+                    return
+                path = PROXY_SEG_DIR / f"seg-{seg:05d}.mp4"
+                try:
+                    self._feed(seg * CHUNK_FRAMES, self._decode(path))
+                except (OSError, av.error.FFmpegError):
+                    continue  # mid-write or vanished; retry next scan
+                self._done_segs.add(seg)
+            self._stop.wait(1.0)
+
+
+class StripLabel(QLabel):
+    """The strip is also a timeline: a click lands there."""
+
+    clicked = Signal(float)  # 0..1 position
+
+    def mousePressEvent(self, event) -> None:
+        if self.width() > 0:
+            self.clicked.emit(event.position().x() / self.width())
 
 
 class Store:
@@ -951,6 +1051,11 @@ class SessionExplorer(QMainWindow):
             # first fill is done — two software decoders on the original
             # collapse each other (measured: opening fill 7.1 s vs 3.6 s)
             self._proxy_pending = self._seg_have < self._seg_expected
+        self.strip = SignalStrip(
+            self.total,
+            PROXY if self.proxy is not None else None,
+            (self.segproxy.snapshot if self.segproxy is not None
+             else set))
         self.fill: WindowFill | None = None
         self.windows: list[int] = []       #: starts, chunk-aligned
         self.active: tuple[int, int] | None = None
@@ -1152,6 +1257,19 @@ class SessionExplorer(QMainWindow):
         left_layout.addLayout(top)
         left_layout.addWidget(self.canvas, 1)
         left_layout.addWidget(self.slider)
+        self.strip_label = StripLabel()
+        self.strip_label.setFixedHeight(36)
+        self.strip_label.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                       QSizePolicy.Policy.Fixed)
+        self.strip_label.setStyleSheet("background: #121212;")
+        self.strip_label.setToolTip(
+            "motion energy over the display proxy — the hunt's real "
+            "feedback on a fixed camera, where frames all look alike. "
+            "Peaks are activity; click one to land the loop there. Fills "
+            "in as the proxy arrives; crop changes don't touch it.")
+        self.strip_label.clicked.connect(
+            lambda frac: self._land_at(int(frac * (self.total - 1))))
+        left_layout.addWidget(self.strip_label)
         left_layout.addWidget(self.coverage)
         left_layout.addWidget(self.hud)
         left_layout.addWidget(self.status)
@@ -1361,6 +1479,9 @@ class SessionExplorer(QMainWindow):
             at = self.builder.batch[0] if self.builder.batch else 0
             lines.append(f"PROXY BUILD {self._seg_have}/{self._seg_expected}"
                          f" batch@{at}")
+        if self.strip.computed < self.total - 1:
+            lines.append(
+                f"SIGNAL STRIP {100 * self.strip.computed // self.total}%")
         return lines
 
     def _show(self, image: np.ndarray) -> None:
@@ -1889,8 +2010,10 @@ class SessionExplorer(QMainWindow):
                     "timeline is fast now")
         elif self.segproxy is not None:
             self._seg_have = self.segproxy.refresh()
+        self._render_strip()
         # keep overlays current while nothing is being requested — a flow
         # or encode finishing must vanish from the frame without a scrub
+        # (strip render above is a few ms of numpy at 2 Hz)
         if not self._busy and self._last_image is not None \
                 and not self._play_timer.isActive():
             self._show(self._last_image)
@@ -1923,6 +2046,40 @@ class SessionExplorer(QMainWindow):
             f"window {active}{fill_state} · encoding {self._encoding_now[0]}"
             f" · free-admits {self.admitted_free}")
         self.status.setText(self._config_for(self.pos))
+
+    def _render_strip(self) -> None:
+        w_px = self.strip_label.width()
+        if w_px < 20:
+            return
+        with self.strip.lock:
+            e = self.strip.energy.copy()
+        H = 36
+        cols = (np.arange(self.total) * w_px // self.total).astype(np.int64)
+        filled = np.where(np.isnan(e), -1.0, e).astype(np.float32)
+        colmax = np.full(w_px, -1.0, dtype=np.float32)
+        np.maximum.at(colmax, cols, filled)
+        known = colmax >= 0
+        img = np.full((H, w_px, 3), 18, dtype=np.uint8)
+        if known.any():
+            valid = e[~np.isnan(e)]
+            lo = float(np.percentile(valid, 50))   # the noise baseline —
+            hi = float(np.percentile(valid, 99.5))  # quiet sits low,
+            span = max(hi - lo, 1e-6)               # bouts pop
+            h = np.zeros(w_px, dtype=np.int64)
+            h[known] = (np.clip((colmax[known] - lo) / span, 0, 1)
+                        * (H - 5) + 1).astype(np.int64)
+            bars = np.arange(H)[:, None] >= (H - h[None, :])
+            img[bars & known[None, :]] = (74, 205, 94)
+        img[H - 3 :, ~known] = 62   # unknown ground: a dim baseline
+        if self.active is not None:
+            c0 = self.active[0] * w_px // self.total
+            c1 = max(c0 + 2, self.active[1] * w_px // self.total)
+            img[0:3, c0:c1] = (86, 148, 255)
+        pc = self.pos * w_px // self.total
+        img[:, pc : pc + 2] = 235
+        qimage = QImage(np.ascontiguousarray(img).data, w_px, H, 3 * w_px,
+                        QImage.Format.Format_RGB888)
+        self.strip_label.setPixmap(QPixmap.fromImage(qimage.copy()))
 
     def _touch(self) -> None:
         if not self._graph_timer.isActive():
@@ -2044,6 +2201,7 @@ class SessionExplorer(QMainWindow):
             self.proxy.close()
         if self.builder is not None:
             self.builder.stop()  # completed segments stay usable
+        self.strip.stop()
         if self.segproxy is not None:
             self.segproxy.close()
         self.store.destroy()

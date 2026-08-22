@@ -247,14 +247,16 @@ class SegmentProxy:
     def _path(seg: int) -> Path:
         return PROXY_SEG_DIR / f"seg-{seg:05d}.mp4"
 
-    def refresh(self, building: bool) -> int:
-        """Rescan the directory; returns how many segments are usable."""
-        present = sorted(int(p.stem.split("-")[1])
-                         for p in PROXY_SEG_DIR.glob("seg-*.mp4"))
-        if building and present:
-            present = present[:-1]  # the newest is mid-write
+    def refresh(self, exclude: int | None = None) -> int:
+        """Rescan the directory; returns how many segments are usable.
+        `exclude` is the segment ffmpeg holds open right now — with a
+        batch scheduler the file being written is not simply the newest
+        index, so the builder names it explicitly."""
+        present = {int(p.stem.split("-")[1])
+                   for p in PROXY_SEG_DIR.glob("seg-*.mp4")}
+        present.discard(exclude)
         with self._lock:
-            self._usable = set(present)
+            self._usable = present
         return len(present)
 
     def fetch(self, idx: int) -> np.ndarray | None:
@@ -290,8 +292,8 @@ class SegmentProxy:
             self._open.clear()
 
 
-def _launch_proxy_build(total: int, rate: Fraction,
-                        start_seg: int = 0) -> "subprocess.Popen":
+def _launch_proxy_build(total: int, rate: Fraction, start_seg: int = 0,
+                        n_segs: int | None = None) -> "subprocess.Popen":
     """One ffmpeg, separate process (measured nearly free for the
     foreground), segmenting as it goes. Splits land exactly on the chunk
     grid because -g 1 makes every frame a keyframe, and a resumed build's
@@ -305,31 +307,122 @@ def _launch_proxy_build(total: int, rate: Fraction,
     if start_frame:
         ss = float((Fraction(start_frame) - Fraction(1, 2)) / rate)
         cmd += ["-ss", f"{ss:.6f}"]
+    n_frames = total - start_frame
+    if n_segs is not None:
+        n_frames = min(n_segs * CHUNK_FRAMES, n_frames)
     splits = ",".join(str(f) for f in
-                      range(CHUNK_FRAMES, total - start_frame, CHUNK_FRAMES))
+                      range(CHUNK_FRAMES, n_frames, CHUNK_FRAMES))
     cmd += ["-i", str(BIG),
             "-vf", "scale=1328:-2",
             "-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-g", "1",
             "-fps_mode", "passthrough", "-an",
-            "-f", "segment", "-segment_frames", splits,
-            "-reset_timestamps", "1",
-            "-segment_start_number", str(start_seg),
-            str(PROXY_SEG_DIR / "seg-%05d.mp4")]
+            "-frames:v", str(n_frames)]
+    if splits:
+        cmd += ["-f", "segment", "-segment_frames", splits,
+                "-reset_timestamps", "1",
+                "-segment_start_number", str(start_seg),
+                str(PROXY_SEG_DIR / "seg-%05d.mp4")]
+    else:  # a single-segment batch needs no muxer
+        cmd += [str(PROXY_SEG_DIR / f"seg-{start_seg:05d}.mp4")]
     return subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL, creationflags=flags)
 
 
-def _resume_seg(expected: int) -> int:
-    """Where an interrupted build should pick up: the newest present
-    segment may be a truncated victim of the kill, so it dies and the
-    build restarts at the first missing index."""
-    present = sorted(int(p.stem.split("-")[1])
-                     for p in PROXY_SEG_DIR.glob("seg-*.mp4"))
-    if present and len(present) < expected:
-        (PROXY_SEG_DIR / f"seg-{present.pop():05d}.mp4").unlink(
-            missing_ok=True)
-    have = set(present)
-    return next((i for i in range(expected) if i not in have), expected)
+BUILD_BATCH = 4     #: segments per invocation — exp06: +5% wall over one
+                    #: linear pass, and position completely free
+REDIRECT_SEGS = 8   #: a commit farther than this from the running batch
+                    #: kills it (~1.3 s to the first segment at the new spot)
+
+
+class ProxyBuilder:
+    """exp06's verdict, wired: the proxy builds in 4-segment batches
+    ordered by distance from attention, redirected when a landing commits
+    far from the running batch, never racing a fill for the original
+    (the decoder collapse), resuming across sessions for free because the
+    schedule is just 'whichever batches are missing, nearest first'."""
+
+    def __init__(self, total: int, rate: Fraction, expected: int,
+                 act_start, act_end):
+        self.total, self.rate, self.expected = total, rate, expected
+        self.proc = None
+        self.batch: tuple[int, int] | None = None
+        self.attention = 0
+        self._act = None
+        self._act_start, self._act_end = act_start, act_end
+
+    @staticmethod
+    def _present() -> set[int]:
+        return {int(p.stem.split("-")[1])
+                for p in PROXY_SEG_DIR.glob("seg-*.mp4")}
+
+    def _incomplete(self) -> list[tuple[int, int]]:
+        present = self._present()
+        return [(s, min(BUILD_BATCH, self.expected - s))
+                for s in range(0, self.expected, BUILD_BATCH)
+                if any(i not in present
+                       for i in range(s, min(s + BUILD_BATCH, self.expected)))]
+
+    def writing_seg(self) -> int | None:
+        """The file ffmpeg holds open right now — never trust it."""
+        if self.proc is None or self.batch is None:
+            return None
+        s, n = self.batch
+        in_range = [i for i in self._present() if s <= i < s + n]
+        return max(in_range) if in_range else None
+
+    def _kill(self, why: str) -> None:
+        victim = self.writing_seg()
+        self.proc.terminate()
+        self.proc.wait()
+        self.proc = None
+        if victim is not None:  # a truncated victim would serve short
+            (PROXY_SEG_DIR / f"seg-{victim:05d}.mp4").unlink(missing_ok=True)
+        s, n = self.batch if self.batch else (0, 0)
+        self._act_end(self._act, f"batch @{s} x{n}: {why}")
+        self._act = None
+
+    def commit(self, seg: int) -> None:
+        """Attention committed somewhere; redirect if the running batch is
+        far and there is nearer work to do."""
+        self.attention = seg
+        if self.proc is None or self.batch is None or \
+                self.proc.poll() is not None:
+            return
+        s, n = self.batch
+        here = abs(seg - (s + n // 2))
+        if here <= REDIRECT_SEGS:
+            return
+        remaining = self._incomplete()
+        if remaining and min(abs(seg - (bs + bn // 2))
+                             for bs, bn in remaining) < here:
+            self._kill("redirected")
+
+    def tick(self, fill_running: bool) -> bool:
+        """Advance the schedule; True while a batch is running."""
+        if self.proc is not None:
+            if self.proc.poll() is None:
+                return True
+            self.proc = None
+            self._act_end(self._act)
+            self._act = None
+        if fill_running:
+            return False  # attention first: never race a fill
+        remaining = self._incomplete()
+        if not remaining:
+            return False
+        s, n = min(remaining,
+                   key=lambda b: abs(self.attention - (b[0] + b[1] // 2)))
+        self.batch = (s, n)
+        self.proc = _launch_proxy_build(self.total, self.rate, s, n)
+        self._act = self._act_start("proxy", f"batch @{s} x{n}")
+        return True
+
+    def done(self) -> bool:
+        return self.proc is None and not self._incomplete()
+
+    def stop(self) -> None:
+        if self.proc is not None and self.proc.poll() is None:
+            self._kill("stopped: session closed")
 
 
 class Store:
@@ -828,15 +921,15 @@ class SessionExplorer(QMainWindow):
                 p.unlink(missing_ok=True)
         self.proxy = ProxyFetcher() if PROXY.exists() and not cold else None
         self.segproxy: SegmentProxy | None = None
-        self._proxy_proc = None
-        self._proxy_act: dict | None = None
+        self.builder: ProxyBuilder | None = None
         self._seg_expected = -(-self.total // CHUNK_FRAMES)
         self._seg_have = 0
         self._proxy_pending = False
+        self._proxy_announced = False
         self._covered_once = False
         if self.proxy is None:
             self.segproxy = SegmentProxy()
-            self._seg_have = self.segproxy.refresh(building=False)
+            self._seg_have = self.segproxy.refresh()
             # attention outranks the timeline: the build waits until the
             # first fill is done — two software decoders on the original
             # collapse each other (measured: opening fill 7.1 s vs 3.6 s)
@@ -1247,8 +1340,10 @@ class SessionExplorer(QMainWindow):
             lines.append(f"FLOW signal={self._flow_value} {elapsed:.1f}s")
         elif self._debounce.isActive():
             lines.append("SIGNAL settling...")
-        if self._proxy_proc is not None:
-            lines.append(f"PROXY BUILD {self._seg_have}/{self._seg_expected}")
+        if self.builder is not None and self.builder.proc is not None:
+            at = self.builder.batch[0] if self.builder.batch else 0
+            lines.append(f"PROXY BUILD {self._seg_have}/{self._seg_expected}"
+                         f" batch@{at}")
         return lines
 
     def _show(self, image: np.ndarray) -> None:
@@ -1311,6 +1406,8 @@ class SessionExplorer(QMainWindow):
             self._act_end(self._fill_act, "stopped: window switched")
         self.active = (start, end)
         self._mark("window", f"@{start}")
+        if self.builder is not None:  # a landing is committed attention:
+            self.builder.commit(start // CHUNK_FRAMES)  # redirect the build
         if start not in self.windows:
             self.windows.append(start)
             secs = start / self.fps
@@ -1747,23 +1844,21 @@ class SessionExplorer(QMainWindow):
         # even existed, launching the build straight into the collapse
         if self._proxy_pending and (self._covered_once or self._now() > 20):
             self._proxy_pending = False
-            start_seg = _resume_seg(self._seg_expected)
-            self._proxy_proc = _launch_proxy_build(
-                self.total, self.rate, start_seg)
-            self._proxy_act = self._act_start(
-                "proxy", f"building {self._seg_expected} segments"
-                         + (f" (resuming at {start_seg})" if start_seg else ""))
-        if self.segproxy is not None:
-            building = self._proxy_proc is not None \
-                and self._proxy_proc.poll() is None
-            self._seg_have = self.segproxy.refresh(building)
-            if self._proxy_proc is not None and not building:
-                self._act_end(self._proxy_act,
-                              f"{self._seg_have}/{self._seg_expected} segments")
-                self._proxy_proc = None
+            self.builder = ProxyBuilder(self.total, self.rate,
+                                        self._seg_expected,
+                                        self._act_start, self._act_end)
+            self.builder.attention = self.pos // CHUNK_FRAMES
+        if self.builder is not None:
+            fill_running = self.fill is not None and self.fill.running()
+            self.builder.tick(fill_running)
+            self._seg_have = self.segproxy.refresh(self.builder.writing_seg())
+            if self.builder.done() and not self._proxy_announced:
+                self._proxy_announced = True
                 self.hud.setText(
                     f"proxy complete: {self._seg_have} segments — the whole "
                     "timeline is fast now")
+        elif self.segproxy is not None:
+            self._seg_have = self.segproxy.refresh()
         # keep overlays current while nothing is being requested — a flow
         # or encode finishing must vanish from the frame without a scrub
         if not self._busy and self._last_image is not None \
@@ -1917,8 +2012,8 @@ class SessionExplorer(QMainWindow):
         self.hunt_fetcher.close()
         if self.proxy:
             self.proxy.close()
-        if self._proxy_proc is not None:
-            self._proxy_proc.terminate()  # segments so far stay usable
+        if self.builder is not None:
+            self.builder.stop()  # completed segments stay usable
         if self.segproxy is not None:
             self.segproxy.close()
         self.store.destroy()

@@ -91,8 +91,11 @@ from PySide6.QtWidgets import (
 
 import matplotlib
 
-matplotlib.use("QtAgg")
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg  # noqa: E402
+# Agg only, never a Qt canvas: rasterizing the session figure (text glyphs
+# and point transforms, per a stall-stack watchdog) cost 150-400 ms on the
+# GUI thread per redraw. Figures render on a worker thread into a pixmap.
+matplotlib.use("Agg")
+from matplotlib.backends.backend_agg import FigureCanvasAgg  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "decode-experiments"))
@@ -451,6 +454,114 @@ class WindowFill:
                 fetcher.close()
 
 
+def _route_key(route: str) -> str:
+    return route.split(" ")[0].split("Δ")[0]
+
+
+def _render_session_figure(events: list[dict], activity: list[dict],
+                           now: float, size_px: tuple[int, int]):
+    """Runs on a worker thread: pure matplotlib/Agg, no Qt objects.
+    Returns (rgba bytes, w, h, png bytes) for the GUI to display and for
+    --fig to save."""
+    fig = Figure(figsize=(size_px[0] / 100, size_px[1] / 100), dpi=100,
+                 layout="constrained")
+    gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 2.2], hspace=0.12)
+    ax_lat = fig.add_subplot(gs[0])
+    ax_act = fig.add_subplot(gs[1], sharex=ax_lat)
+    ax_cmp = fig.add_subplot(gs[2])
+
+    # panel 1: the session — every request in time, colored by route
+    by_route: dict[str, tuple[list, list]] = {}
+    for e in events:
+        key = _route_key(e["route"])
+        by_route.setdefault(key, ([], []))
+        by_route[key][0].append(e["t"])
+        by_route[key][1].append(max(e["ms"], 0.005))
+    for key, (xs, ys) in sorted(by_route.items()):
+        if len(xs) > 1200:  # point transforms are the other draw cost;
+            stride = len(xs) // 1200  # stats below still use everything
+            xs, ys = xs[::stride], ys[::stride]
+        ax_lat.scatter(xs, ys, s=12, alpha=0.65,
+                       color=ROUTE_COLORS.get(key, "#777777"),
+                       label=key, linewidths=0)
+    for band, label in ((100, "felt"), (16, "frame")):
+        ax_lat.axhline(band, color="#999999", lw=0.7, ls=":")
+        ax_lat.annotate(f"{label} {band}ms", (0.998, band),
+                        xycoords=("axes fraction", "data"),
+                        fontsize=6, color="#777777",
+                        ha="right", va="bottom")
+    for a in activity:
+        if a["what"] in ("window", "crop"):
+            for ax in (ax_lat, ax_act):
+                ax.axvline(a["t0"], color="#555555", lw=0.7, ls="--",
+                           alpha=0.6)
+            ax_lat.annotate(a["detail"], (a["t0"], 0.99),
+                            xycoords=("data", "axes fraction"),
+                            fontsize=6, color="#555555", rotation=90,
+                            ha="right", va="top")
+    ax_lat.set_yscale("log")
+    ax_lat.grid(True, which="both", alpha=0.2)
+    if by_route:
+        ax_lat.legend(fontsize=7, loc="upper right", ncols=len(by_route),
+                      frameon=False)
+    ax_lat.set_ylabel("ms (log)")
+    ax_lat.tick_params(labelbottom=False)
+    ax_lat.set_title("the session: request latency by route, over what "
+                     "ran behind it", fontsize=9)
+
+    # panel 2: what was running when — the background gantt
+    for a in activity:
+        row = ACT_ROWS.get(a["what"])
+        if row is None:
+            continue
+        t1 = a["t1"] if a["t1"] is not None else now
+        ax_act.broken_barh(
+            [(a["t0"], max(t1 - a["t0"], 0.03))], (row + 0.15, 0.7),
+            facecolors=ACT_COLORS[a["what"]],
+            alpha=0.5 if a["t1"] is not None else 0.9)
+    ax_act.set_ylim(0, len(ACT_ROWS))
+    ax_act.set_yticks([r + 0.5 for r in ACT_ROWS.values()])
+    ax_act.set_yticklabels(list(ACT_ROWS), fontsize=7)
+    ax_act.grid(True, axis="x", alpha=0.2)
+    ax_act.set_xlabel("session time (s)")
+    ax_act.invert_yaxis()
+
+    # panel 3: how good each tier is — p50 bar, p95 whisker, per route
+    order = sorted(by_route, key=lambda k: float(
+        np.median(by_route[k][1])))
+    p50s, p95s = [], []
+    for key in order:
+        ys = np.array(by_route[key][1])
+        p50s.append(float(np.median(ys)))
+        p95s.append(float(np.percentile(ys, 95)))
+    ypos = np.arange(len(order))
+    ax_cmp.barh(ypos, p50s, height=0.6, color=[
+        ROUTE_COLORS.get(k, "#777777") for k in order], alpha=0.8)
+    ax_cmp.hlines(ypos, p50s, p95s, color="#555555", lw=1.2)
+    ax_cmp.scatter(p95s, ypos, marker="|", s=60, color="#555555")
+    for i, key in enumerate(order):
+        n = len(by_route[key][1])
+        ax_cmp.annotate(
+            f" n={n}  p50 {p50s[i]:.3g}  p95 {p95s[i]:.3g}",
+            (max(p95s[i], p50s[i]), i), fontsize=7, va="center",
+            color="#444444")
+    ax_cmp.set_yticks(ypos)
+    ax_cmp.set_yticklabels(order, fontsize=8)
+    ax_cmp.set_xscale("log")
+    ax_cmp.grid(True, axis="x", which="both", alpha=0.2)
+    ax_cmp.set_xlabel("ms (log) — bar p50, whisker to p95")
+    ax_cmp.invert_yaxis()
+
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()
+    w, h = canvas.get_width_height()
+    rgba = bytes(canvas.buffer_rgba())
+    import io
+    png = io.BytesIO()
+    fig.savefig(png, format="png", dpi=110)
+    return rgba, w, h, png.getvalue()
+
+
 class CropCanvas(QLabel):
     """The frame view, with a rubber-band crop gesture. Emits the drawn
     rectangle in label coordinates; the explorer owns the mapping back to
@@ -566,12 +677,17 @@ class SessionExplorer(QMainWindow):
     covered = Signal(int, float, int, int, float)
     flow_done = Signal(float, int, int)
     work_failed = Signal(str)
+    graphs_ready = Signal(object)
 
     def __init__(self):
         super().__init__()
         self.covered.connect(self._window_covered)
         self.flow_done.connect(self._flow_landed)
         self.work_failed.connect(self._work_broke)
+        self.graphs_ready.connect(self._graphs_landed)
+        self._graph_rendering = False
+        self._graph_dirty = False
+        self._last_graph_png: bytes | None = None
         self.setWindowTitle("session explorer — hunt, land, tune, jump")
         self.resize(1680, 900)
         with av.open(str(BIG)) as c:
@@ -784,8 +900,9 @@ class SessionExplorer(QMainWindow):
         left_layout.addWidget(self.hud)
         left_layout.addWidget(self.status)
 
-        self.trace_fig = Figure(layout="constrained")
-        self.trace_canvas = FigureCanvasQTAgg(self.trace_fig)
+        self.graph_label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
+        self.graph_label.setMinimumSize(400, 300)
+        self.graph_label.setStyleSheet("background: #ffffff;")
         self.stats = QPlainTextEdit(readOnly=True)
         self.stats.setStyleSheet(
             "font-family: Consolas, monospace; font-size: 9pt;")
@@ -793,7 +910,7 @@ class SessionExplorer(QMainWindow):
         save_lbl.setStyleSheet("color: #888; font-size: 8pt;")
         right = QWidget()
         right_layout = QVBoxLayout(right)
-        right_layout.addWidget(self.trace_canvas, 3)
+        right_layout.addWidget(self.graph_label, 3)
         right_layout.addWidget(self.stats, 2)
         right_layout.addWidget(save_lbl)
         splitter = QSplitter()
@@ -1464,19 +1581,19 @@ class SessionExplorer(QMainWindow):
     def _ordered_runs(self) -> list[RunLog]:
         return [r for r in self.runs.values() if r.events or r.walls]
 
-    @staticmethod
-    def _route_key(route: str) -> str:
-        return route.split(" ")[0].split("Δ")[0]
-
     def _redraw_graphs(self) -> None:
         # the loop is the default state now, so graphs must update under
-        # it — throttled, one hiccup every few seconds instead of never
+        # it — throttled; the actual rasterizing runs on a worker thread
+        # because Agg text/transform drawing cost 150-400 ms on the GUI
+        # thread (stall-stack watchdog), which felt like frozen playback
         if self._busy:
             self._graph_timer.start(1200)
             return
-        if self._play_timer.isActive() \
-                and time.perf_counter() - self._last_graph < 5.0:
+        if self._play_timer.isActive()                 and time.perf_counter() - self._last_graph < 5.0:
             self._graph_timer.start(1200)
+            return
+        if self._graph_rendering:
+            self._graph_dirty = True
             return
         self._last_graph = time.perf_counter()
         runs = self._ordered_runs()
@@ -1484,104 +1601,16 @@ class SessionExplorer(QMainWindow):
         with self.act_lock:
             activity = [dict(a) for a in self.activity]
         now = self._now()
-        fig = self.trace_fig
-        fig.clear()
-        if not events:
-            ax = fig.add_subplot(111)
-            ax.set_axis_off()
-            self.trace_canvas.draw_idle()
-            return
-        gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 2.2],
-                              hspace=0.12)
-        ax_lat = fig.add_subplot(gs[0])
-        ax_act = fig.add_subplot(gs[1], sharex=ax_lat)
-        ax_cmp = fig.add_subplot(gs[2])
 
-        # panel 1: the session — every request in time, colored by route
-        by_route: dict[str, tuple[list, list]] = {}
+        # stats text is cheap — build it here, on current data
+        by_route: dict[str, list[float]] = {}
         for e in events:
-            key = self._route_key(e["route"])
-            by_route.setdefault(key, ([], []))
-            by_route[key][0].append(e["t"])
-            by_route[key][1].append(max(e["ms"], 0.005))
-        for key, (xs, ys) in sorted(by_route.items()):
-            if len(xs) > 2500:  # the draw cost is what stalls the loop;
-                stride = len(xs) // 2500  # stats below still use everything
-                xs, ys = xs[::stride], ys[::stride]
-            ax_lat.scatter(xs, ys, s=12, alpha=0.65,
-                           color=ROUTE_COLORS.get(key, "#777777"),
-                           label=key, linewidths=0)
-        for band, label in ((100, "felt"), (16, "frame")):
-            ax_lat.axhline(band, color="#999999", lw=0.7, ls=":")
-            ax_lat.annotate(f"{label} {band}ms", (0.998, band),
-                            xycoords=("axes fraction", "data"),
-                            fontsize=6, color="#777777",
-                            ha="right", va="bottom")
-        for a in activity:
-            if a["what"] in ("window", "crop"):
-                for ax in (ax_lat, ax_act):
-                    ax.axvline(a["t0"], color="#555555", lw=0.7, ls="--",
-                               alpha=0.6)
-                ax_lat.annotate(a["detail"], (a["t0"], 0.99),
-                                xycoords=("data", "axes fraction"),
-                                fontsize=6, color="#555555", rotation=90,
-                                ha="right", va="top")
-        ax_lat.set_yscale("log")
-        ax_lat.grid(True, which="both", alpha=0.2)
-        ax_lat.legend(fontsize=7, loc="upper right", ncols=len(by_route),
-                      frameon=False)
-        ax_lat.set_ylabel("ms (log)")
-        ax_lat.tick_params(labelbottom=False)
-        ax_lat.set_title("the session: request latency by route, over what "
-                         "ran behind it", fontsize=9)
-
-        # panel 2: what was running when — the background gantt
-        for a in activity:
-            row = ACT_ROWS.get(a["what"])
-            if row is None:
-                continue
-            t1 = a["t1"] if a["t1"] is not None else now
-            ax_act.broken_barh(
-                [(a["t0"], max(t1 - a["t0"], 0.03))], (row + 0.15, 0.7),
-                facecolors=ACT_COLORS[a["what"]],
-                alpha=0.5 if a["t1"] is not None else 0.9)
-        ax_act.set_ylim(0, len(ACT_ROWS))
-        ax_act.set_yticks([r + 0.5 for r in ACT_ROWS.values()])
-        ax_act.set_yticklabels(list(ACT_ROWS), fontsize=7)
-        ax_act.grid(True, axis="x", alpha=0.2)
-        ax_act.set_xlabel("session time (s)")
-        ax_act.invert_yaxis()
-
-        # panel 3: how good each tier is — p50 bar, p95 whisker, per route
-        order = sorted(by_route, key=lambda k: float(
-            np.median(by_route[k][1])))
-        p50s, p95s = [], []
-        for key in order:
-            ys = np.array(by_route[key][1])
-            p50s.append(float(np.median(ys)))
-            p95s.append(float(np.percentile(ys, 95)))
-        ypos = np.arange(len(order))
-        ax_cmp.barh(ypos, p50s, height=0.6, color=[
-            ROUTE_COLORS.get(k, "#777777") for k in order], alpha=0.8)
-        ax_cmp.hlines(ypos, p50s, p95s, color="#555555", lw=1.2)
-        ax_cmp.scatter(p95s, ypos, marker="|", s=60, color="#555555")
-        for i, key in enumerate(order):
-            n = len(by_route[key][1])
-            ax_cmp.annotate(
-                f" n={n}  p50 {p50s[i]:.3g}  p95 {p95s[i]:.3g}",
-                (max(p95s[i], p50s[i]), i), fontsize=7, va="center",
-                color="#444444")
-        ax_cmp.set_yticks(ypos)
-        ax_cmp.set_yticklabels(order, fontsize=8)
-        ax_cmp.set_xscale("log")
-        ax_cmp.grid(True, axis="x", which="both", alpha=0.2)
-        ax_cmp.set_xlabel("ms (log) — bar p50, whisker to p95")
-        ax_cmp.invert_yaxis()
-        self.trace_canvas.draw_idle()
-
+            by_route.setdefault(_route_key(e["route"]), []).append(
+                max(e["ms"], 0.005))
         header = ["session by route:"]
-        for key in order:
-            ys = by_route[key][1]
+        for key in sorted(by_route, key=lambda k: float(
+                np.median(by_route[k]))):
+            ys = by_route[key]
             header.append(
                 f"  {key:<6} n={len(ys):<5}"
                 f" p50={float(np.median(ys)):>8.2f}"
@@ -1589,6 +1618,33 @@ class SessionExplorer(QMainWindow):
         self.stats.setPlainText(
             "\n".join(header) + "\n\n"
             + "\n\n".join(r.stats_text() for r in runs))
+
+        if not events:
+            return
+        size = (max(500, self.graph_label.width()),
+                max(360, self.graph_label.height()))
+        self._graph_rendering = True
+
+        def worker():
+            try:
+                result = _render_session_figure(events, activity, now, size)
+            except Exception:  # noqa: BLE001 — a failed frame of graphs
+                result = None  # just means the next one draws instead
+            self.graphs_ready.emit(result)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _graphs_landed(self, result) -> None:
+        self._graph_rendering = False
+        if result is not None:
+            rgba, w, h, png = result
+            self._last_graph_png = png
+            image = QImage(rgba, w, h, QImage.Format.Format_RGBA8888)
+            self.graph_label.setPixmap(QPixmap.fromImage(image.copy()))
+        if self._graph_dirty:
+            self._graph_dirty = False
+            self._graph_timer.start(300)
+
 
     def _save_log(self, force: bool = False) -> None:
         # dumping a long session's JSON stalls the GUI thread; while the
@@ -1656,9 +1712,14 @@ def main() -> None:
     if "--walk" in sys.argv:  # headless validation of the full walk
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         window._walk()
-        if fig_path:
-            window.trace_fig.set_size_inches(13, 8)
-            window.trace_fig.savefig(fig_path, dpi=110)
+        if fig_path:  # graphs render async now — wait for the png
+            deadline = time.perf_counter() + 20
+            while window._last_graph_png is None \
+                    and time.perf_counter() < deadline:
+                QApplication.processEvents()
+                time.sleep(0.05)
+            if window._last_graph_png:
+                Path(fig_path).write_bytes(window._last_graph_png)
         print(window.hud.text())
         data = json.loads(window.log_path.read_text(encoding="utf-8"))
         print(f"walk ok: {len(data['runs'])} phases logged to "

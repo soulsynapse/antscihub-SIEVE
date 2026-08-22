@@ -1,0 +1,467 @@
+{
+ "tool": "session-explorer.py",
+ "when": "2026-08-22T10:33:12.355651+00:00",
+ "sieve_rev": "8475997",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "total_frames": 11304,
+ "window": 300,
+ "gop": 24,
+ "crop": [
+  1000,
+  500,
+  512,
+  512
+ ],
+ "activity": [
+  {
+   "what": "window",
+   "t0": 0.454,
+   "t1": 0.454,
+   "detail": "@3936"
+  },
+  {
+   "what": "fill",
+   "t0": 0.454,
+   "t1": 4.418,
+   "detail": "@3936: 0ch/300orig"
+  },
+  {
+   "what": "encode",
+   "t0": 1.44,
+   "t1": 2.551,
+   "detail": "chunk@3936"
+  },
+  {
+   "what": "encode",
+   "t0": 2.552,
+   "t1": 4.028,
+   "detail": "chunk@4032"
+  },
+  {
+   "what": "encode",
+   "t0": 4.028,
+   "t1": 5.418,
+   "detail": "chunk@4128"
+  },
+  {
+   "what": "flow",
+   "t0": 4.775,
+   "t1": 7.667,
+   "detail": "signal=8 n=300"
+  },
+  {
+   "what": "encode",
+   "t0": 5.418,
+   "t1": 5.593,
+   "detail": "chunk@4224"
+  },
+  {
+   "what": "crop",
+   "t0": 7.741,
+   "t1": 7.741,
+   "detail": "512x512+1000+500"
+  },
+  {
+   "what": "window",
+   "t0": 7.872,
+   "t1": 7.872,
+   "detail": "@3936"
+  },
+  {
+   "what": "fill",
+   "t0": 7.872,
+   "t1": 12.004,
+   "detail": "@3936: 0ch/300orig"
+  },
+  {
+   "what": "encode",
+   "t0": 8.897,
+   "t1": 9.637,
+   "detail": "chunk@4128"
+  },
+  {
+   "what": "encode",
+   "t0": 9.637,
+   "t1": 9.748,
+   "detail": "chunk@4224"
+  },
+  {
+   "what": "encode",
+   "t0": 10.484,
+   "t1": 11.294,
+   "detail": "chunk@3936"
+  },
+  {
+   "what": "encode",
+   "t0": 11.678,
+   "t1": null,
+   "detail": "chunk@4032"
+  }
+ ],
+ "chunk_frames": 96,
+ "near_radius": 12,
+ "runs": [
+  {
+   "label": "hunt proxy",
+   "config": "hunt proxy",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 7.14,
+     "p50": 7.14,
+     "p95": 7.14,
+     "max": 7.14,
+     "mean": 7.14
+    },
+    "open": {
+     "n": 1,
+     "min": 11.87,
+     "p50": 11.87,
+     "p95": 11.87,
+     "max": 11.87,
+     "mean": 11.87
+    }
+   },
+   "routes": {
+    "proxy": 2
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T10:33:00.637720+00:00",
+   "events": [
+    {
+     "t": 0.3041,
+     "task": "open",
+     "frame": 0,
+     "route": "proxy",
+     "ms": 11.866
+    },
+    {
+     "t": 0.3125,
+     "task": "hunt",
+     "frame": 5000,
+     "route": "proxy",
+     "ms": 7.143
+    }
+   ]
+  },
+  {
+   "label": "hunt kf-snap",
+   "config": "hunt kf-snap",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 131.82,
+     "p50": 131.82,
+     "p95": 131.82,
+     "max": 131.82,
+     "mean": 131.82
+    },
+    "step": {
+     "n": 1,
+     "min": 117.86,
+     "p50": 117.86,
+     "p95": 117.86,
+     "max": 117.86,
+     "mean": 117.86
+    }
+   },
+   "routes": {
+    "kf": 2
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T10:33:00.662887+00:00",
+   "events": [
+    {
+     "t": 0.4536,
+     "task": "hunt",
+     "frame": 6000,
+     "route": "kf \u039420",
+     "ms": 131.825
+    },
+    {
+     "t": 7.8712,
+     "task": "step",
+     "frame": 4200,
+     "route": "kf \u039420",
+     "ms": 117.859
+    }
+   ]
+  },
+  {
+   "label": "window@3936 crop=1024x1024 b=600",
+   "config": "window@3936 crop=1024x1024 b=600",
+   "by_task": {
+    "drag": {
+     "n": 2,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    },
+    "step": {
+     "n": 1,
+     "min": 337.05,
+     "p50": 337.05,
+     "p95": 337.05,
+     "max": 337.05,
+     "mean": 337.05
+    }
+   },
+   "routes": {
+    "miss": 1,
+    "hit": 2
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    },
+    {
+     "what": "covered",
+     "wall_s": 3.79,
+     "detail": "0 from chunks, 300 from original, fill paused 0.00s"
+    },
+    {
+     "what": "flow",
+     "wall_s": 2.85,
+     "detail": "signal=8 n=300 preempt=on"
+    }
+   ],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T10:33:00.803913+00:00",
+   "events": [
+    {
+     "t": 0.8141,
+     "task": "step",
+     "frame": 3936,
+     "route": "miss",
+     "ms": 337.054
+    },
+    {
+     "t": 1.8171,
+     "task": "drag",
+     "frame": 4010,
+     "route": "hit",
+     "ms": 0.009
+    },
+    {
+     "t": 4.4181,
+     "task": "drag",
+     "frame": 4200,
+     "route": "hit",
+     "ms": 0.006
+    }
+   ]
+  },
+  {
+   "label": "window@3936 crop=512x512 b=600",
+   "config": "window@3936 crop=512x512 b=600",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    },
+    "play": {
+     "n": 18,
+     "min": 0.01,
+     "p50": 0.18,
+     "p95": 0.26,
+     "max": 0.26,
+     "mean": 0.14
+    },
+    "step": {
+     "n": 1,
+     "min": 291.99,
+     "p50": 291.99,
+     "p95": 291.99,
+     "max": 291.99,
+     "mean": 291.99
+    }
+   },
+   "routes": {
+    "miss": 1,
+    "near": 12,
+    "hit": 7
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    },
+    {
+     "what": "covered",
+     "wall_s": 3.8,
+     "detail": "0 from chunks, 300 from original, fill paused 0.00s"
+    }
+   ],
+   "suppressed_play_hits": 43,
+   "events_capped": false,
+   "started": "2026-08-22T10:33:08.222347+00:00",
+   "events": [
+    {
+     "t": 8.1668,
+     "task": "step",
+     "frame": 4200,
+     "route": "miss",
+     "ms": 291.992
+    },
+    {
+     "t": 8.2201,
+     "task": "play",
+     "frame": 4201,
+     "route": "near \u03941",
+     "ms": 0.238
+    },
+    {
+     "t": 8.272,
+     "task": "play",
+     "frame": 4202,
+     "route": "near \u03942",
+     "ms": 0.24
+    },
+    {
+     "t": 8.3236,
+     "task": "play",
+     "frame": 4203,
+     "route": "near \u03943",
+     "ms": 0.186
+    },
+    {
+     "t": 8.375,
+     "task": "play",
+     "frame": 4204,
+     "route": "near \u03944",
+     "ms": 0.179
+    },
+    {
+     "t": 8.4266,
+     "task": "play",
+     "frame": 4205,
+     "route": "near \u03945",
+     "ms": 0.161
+    },
+    {
+     "t": 8.4785,
+     "task": "play",
+     "frame": 4206,
+     "route": "near \u03946",
+     "ms": 0.221
+    },
+    {
+     "t": 8.5304,
+     "task": "play",
+     "frame": 4207,
+     "route": "near \u03947",
+     "ms": 0.243
+    },
+    {
+     "t": 8.5827,
+     "task": "play",
+     "frame": 4208,
+     "route": "near \u03948",
+     "ms": 0.205
+    },
+    {
+     "t": 8.6344,
+     "task": "play",
+     "frame": 4209,
+     "route": "near \u03949",
+     "ms": 0.256
+    },
+    {
+     "t": 8.6859,
+     "task": "play",
+     "frame": 4210,
+     "route": "near \u039410",
+     "ms": 0.162
+    },
+    {
+     "t": 8.7377,
+     "task": "play",
+     "frame": 4211,
+     "route": "near \u039411",
+     "ms": 0.24
+    },
+    {
+     "t": 8.7893,
+     "task": "play",
+     "frame": 4212,
+     "route": "near \u03945",
+     "ms": 0.159
+    },
+    {
+     "t": 9.2022,
+     "task": "play",
+     "frame": 4220,
+     "route": "hit",
+     "ms": 0.007
+    },
+    {
+     "t": 9.6153,
+     "task": "play",
+     "frame": 4228,
+     "route": "hit",
+     "ms": 0.015
+    },
+    {
+     "t": 10.0266,
+     "task": "play",
+     "frame": 3936,
+     "route": "hit",
+     "ms": 0.007
+    },
+    {
+     "t": 10.4901,
+     "task": "play",
+     "frame": 3944,
+     "route": "hit",
+     "ms": 0.007
+    },
+    {
+     "t": 10.9031,
+     "task": "play",
+     "frame": 3952,
+     "route": "hit",
+     "ms": 0.006
+    },
+    {
+     "t": 11.3187,
+     "task": "play",
+     "frame": 3960,
+     "route": "hit",
+     "ms": 0.007
+    },
+    {
+     "t": 12.0036,
+     "task": "drag",
+     "frame": 4150,
+     "route": "hit",
+     "ms": 0.007
+    }
+   ]
+  }
+ ]
+}

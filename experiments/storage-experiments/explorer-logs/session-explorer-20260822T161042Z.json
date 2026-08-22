@@ -1,0 +1,1553 @@
+{
+ "tool": "session-explorer.py",
+ "sieve_rev": "6c2e630",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "when": "2026-08-22T16:10:48.242287+00:00",
+ "total_frames": 11304,
+ "window": 300,
+ "gop": 24,
+ "crop": [
+  2144,
+  982,
+  1024,
+  1024
+ ],
+ "activity": [
+  {
+   "what": "window",
+   "t0": 0.51,
+   "t1": 0.51,
+   "detail": "@0"
+  },
+  {
+   "what": "fill",
+   "t0": 0.51,
+   "t1": 5.404,
+   "detail": "stopped: window switched"
+  },
+  {
+   "what": "encode",
+   "t0": 1.725,
+   "t1": 4.475,
+   "detail": "chunk@0"
+  },
+  {
+   "what": "encode",
+   "t0": 4.475,
+   "t1": null,
+   "detail": "chunk@96"
+  },
+  {
+   "what": "window",
+   "t0": 5.404,
+   "t1": 5.404,
+   "detail": "@8993"
+  },
+  {
+   "what": "fill",
+   "t0": 5.405,
+   "t1": null,
+   "detail": "@8993"
+  }
+ ],
+ "chunk_frames": 96,
+ "near_radius": 12,
+ "runs": [
+  {
+   "label": "hunt proxy",
+   "config": "hunt proxy",
+   "by_task": {
+    "drag": {
+     "n": 191,
+     "min": 5.94,
+     "p50": 10.24,
+     "p95": 16.04,
+     "max": 19.47,
+     "mean": 10.37
+    },
+    "open": {
+     "n": 1,
+     "min": 13.69,
+     "p50": 13.69,
+     "p95": 13.69,
+     "max": 13.69,
+     "mean": 13.69
+    }
+   },
+   "routes": {
+    "proxy": 192
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T16:10:42.707562+00:00",
+   "events": [
+    {
+     "t": 0.5097,
+     "task": "open",
+     "frame": 0,
+     "route": "proxy",
+     "ms": 13.692
+    },
+    {
+     "t": 2.2002,
+     "task": "drag",
+     "frame": 2000,
+     "route": "proxy",
+     "ms": 13.04
+    },
+    {
+     "t": 2.2221,
+     "task": "drag",
+     "frame": 2037,
+     "route": "proxy",
+     "ms": 16.174
+    },
+    {
+     "t": 2.2427,
+     "task": "drag",
+     "frame": 2074,
+     "route": "proxy",
+     "ms": 15.326
+    },
+    {
+     "t": 2.267,
+     "task": "drag",
+     "frame": 2111,
+     "route": "proxy",
+     "ms": 19.47
+    },
+    {
+     "t": 2.2848,
+     "task": "drag",
+     "frame": 2148,
+     "route": "proxy",
+     "ms": 13.394
+    },
+    {
+     "t": 2.3026,
+     "task": "drag",
+     "frame": 2185,
+     "route": "proxy",
+     "ms": 12.109
+    },
+    {
+     "t": 2.3202,
+     "task": "drag",
+     "frame": 2222,
+     "route": "proxy",
+     "ms": 10.703
+    },
+    {
+     "t": 2.3367,
+     "task": "drag",
+     "frame": 2259,
+     "route": "proxy",
+     "ms": 12.148
+    },
+    {
+     "t": 2.3529,
+     "task": "drag",
+     "frame": 2296,
+     "route": "proxy",
+     "ms": 12.17
+    },
+    {
+     "t": 2.3712,
+     "task": "drag",
+     "frame": 2333,
+     "route": "proxy",
+     "ms": 11.252
+    },
+    {
+     "t": 2.3857,
+     "task": "drag",
+     "frame": 2370,
+     "route": "proxy",
+     "ms": 11.145
+    },
+    {
+     "t": 2.4063,
+     "task": "drag",
+     "frame": 2407,
+     "route": "proxy",
+     "ms": 16.222
+    },
+    {
+     "t": 2.425,
+     "task": "drag",
+     "frame": 2444,
+     "route": "proxy",
+     "ms": 14.041
+    },
+    {
+     "t": 2.445,
+     "task": "drag",
+     "frame": 2481,
+     "route": "proxy",
+     "ms": 14.579
+    },
+    {
+     "t": 2.4697,
+     "task": "drag",
+     "frame": 2518,
+     "route": "proxy",
+     "ms": 18.735
+    },
+    {
+     "t": 2.4857,
+     "task": "drag",
+     "frame": 2555,
+     "route": "proxy",
+     "ms": 12.525
+    },
+    {
+     "t": 2.5014,
+     "task": "drag",
+     "frame": 2592,
+     "route": "proxy",
+     "ms": 10.701
+    },
+    {
+     "t": 2.5196,
+     "task": "drag",
+     "frame": 2629,
+     "route": "proxy",
+     "ms": 10.261
+    },
+    {
+     "t": 2.5366,
+     "task": "drag",
+     "frame": 2666,
+     "route": "proxy",
+     "ms": 13.411
+    },
+    {
+     "t": 2.5519,
+     "task": "drag",
+     "frame": 2703,
+     "route": "proxy",
+     "ms": 10.772
+    },
+    {
+     "t": 2.5695,
+     "task": "drag",
+     "frame": 2740,
+     "route": "proxy",
+     "ms": 13.742
+    },
+    {
+     "t": 2.5891,
+     "task": "drag",
+     "frame": 2777,
+     "route": "proxy",
+     "ms": 16.037
+    },
+    {
+     "t": 2.6074,
+     "task": "drag",
+     "frame": 2814,
+     "route": "proxy",
+     "ms": 13.461
+    },
+    {
+     "t": 2.6221,
+     "task": "drag",
+     "frame": 2851,
+     "route": "proxy",
+     "ms": 10.35
+    },
+    {
+     "t": 2.6436,
+     "task": "drag",
+     "frame": 2888,
+     "route": "proxy",
+     "ms": 17.706
+    },
+    {
+     "t": 2.6644,
+     "task": "drag",
+     "frame": 2925,
+     "route": "proxy",
+     "ms": 16.912
+    },
+    {
+     "t": 2.6847,
+     "task": "drag",
+     "frame": 2962,
+     "route": "proxy",
+     "ms": 16.162
+    },
+    {
+     "t": 2.7007,
+     "task": "drag",
+     "frame": 2999,
+     "route": "proxy",
+     "ms": 11.834
+    },
+    {
+     "t": 2.7211,
+     "task": "drag",
+     "frame": 3036,
+     "route": "proxy",
+     "ms": 12.671
+    },
+    {
+     "t": 2.7412,
+     "task": "drag",
+     "frame": 3073,
+     "route": "proxy",
+     "ms": 15.195
+    },
+    {
+     "t": 2.7611,
+     "task": "drag",
+     "frame": 3110,
+     "route": "proxy",
+     "ms": 11.166
+    },
+    {
+     "t": 2.7795,
+     "task": "drag",
+     "frame": 3147,
+     "route": "proxy",
+     "ms": 10.75
+    },
+    {
+     "t": 2.948,
+     "task": "drag",
+     "frame": 3184,
+     "route": "proxy",
+     "ms": 15.515
+    },
+    {
+     "t": 2.9672,
+     "task": "drag",
+     "frame": 3221,
+     "route": "proxy",
+     "ms": 13.823
+    },
+    {
+     "t": 2.9872,
+     "task": "drag",
+     "frame": 3258,
+     "route": "proxy",
+     "ms": 13.191
+    },
+    {
+     "t": 3.003,
+     "task": "drag",
+     "frame": 3295,
+     "route": "proxy",
+     "ms": 11.271
+    },
+    {
+     "t": 3.0245,
+     "task": "drag",
+     "frame": 3332,
+     "route": "proxy",
+     "ms": 17.307
+    },
+    {
+     "t": 3.0409,
+     "task": "drag",
+     "frame": 3369,
+     "route": "proxy",
+     "ms": 12.856
+    },
+    {
+     "t": 3.0578,
+     "task": "drag",
+     "frame": 3406,
+     "route": "proxy",
+     "ms": 12.318
+    },
+    {
+     "t": 3.079,
+     "task": "drag",
+     "frame": 3443,
+     "route": "proxy",
+     "ms": 17.028
+    },
+    {
+     "t": 3.099,
+     "task": "drag",
+     "frame": 3480,
+     "route": "proxy",
+     "ms": 15.575
+    },
+    {
+     "t": 3.1199,
+     "task": "drag",
+     "frame": 3517,
+     "route": "proxy",
+     "ms": 15.16
+    },
+    {
+     "t": 3.1364,
+     "task": "drag",
+     "frame": 3554,
+     "route": "proxy",
+     "ms": 12.979
+    },
+    {
+     "t": 3.1565,
+     "task": "drag",
+     "frame": 3591,
+     "route": "proxy",
+     "ms": 15.886
+    },
+    {
+     "t": 3.1729,
+     "task": "drag",
+     "frame": 3628,
+     "route": "proxy",
+     "ms": 10.665
+    },
+    {
+     "t": 3.1919,
+     "task": "drag",
+     "frame": 3665,
+     "route": "proxy",
+     "ms": 14.859
+    },
+    {
+     "t": 3.2106,
+     "task": "drag",
+     "frame": 3702,
+     "route": "proxy",
+     "ms": 11.893
+    },
+    {
+     "t": 3.2255,
+     "task": "drag",
+     "frame": 3739,
+     "route": "proxy",
+     "ms": 10.964
+    },
+    {
+     "t": 3.2387,
+     "task": "drag",
+     "frame": 3776,
+     "route": "proxy",
+     "ms": 8.814
+    },
+    {
+     "t": 3.2531,
+     "task": "drag",
+     "frame": 3813,
+     "route": "proxy",
+     "ms": 10.384
+    },
+    {
+     "t": 3.2644,
+     "task": "drag",
+     "frame": 3850,
+     "route": "proxy",
+     "ms": 7.243
+    },
+    {
+     "t": 3.2854,
+     "task": "drag",
+     "frame": 3887,
+     "route": "proxy",
+     "ms": 11.526
+    },
+    {
+     "t": 3.3014,
+     "task": "drag",
+     "frame": 3924,
+     "route": "proxy",
+     "ms": 11.4
+    },
+    {
+     "t": 3.3209,
+     "task": "drag",
+     "frame": 3961,
+     "route": "proxy",
+     "ms": 15.645
+    },
+    {
+     "t": 3.3357,
+     "task": "drag",
+     "frame": 3998,
+     "route": "proxy",
+     "ms": 10.899
+    },
+    {
+     "t": 3.3513,
+     "task": "drag",
+     "frame": 4035,
+     "route": "proxy",
+     "ms": 11.96
+    },
+    {
+     "t": 3.3629,
+     "task": "drag",
+     "frame": 4072,
+     "route": "proxy",
+     "ms": 7.488
+    },
+    {
+     "t": 3.3783,
+     "task": "drag",
+     "frame": 4109,
+     "route": "proxy",
+     "ms": 6.922
+    },
+    {
+     "t": 3.3918,
+     "task": "drag",
+     "frame": 4146,
+     "route": "proxy",
+     "ms": 9.883
+    },
+    {
+     "t": 3.4061,
+     "task": "drag",
+     "frame": 4183,
+     "route": "proxy",
+     "ms": 10.965
+    },
+    {
+     "t": 3.4188,
+     "task": "drag",
+     "frame": 4220,
+     "route": "proxy",
+     "ms": 8.651
+    },
+    {
+     "t": 3.4336,
+     "task": "drag",
+     "frame": 4257,
+     "route": "proxy",
+     "ms": 11.266
+    },
+    {
+     "t": 3.4503,
+     "task": "drag",
+     "frame": 4294,
+     "route": "proxy",
+     "ms": 9.71
+    },
+    {
+     "t": 3.4641,
+     "task": "drag",
+     "frame": 4331,
+     "route": "proxy",
+     "ms": 9.422
+    },
+    {
+     "t": 3.4861,
+     "task": "drag",
+     "frame": 4368,
+     "route": "proxy",
+     "ms": 11.423
+    },
+    {
+     "t": 3.5017,
+     "task": "drag",
+     "frame": 4405,
+     "route": "proxy",
+     "ms": 10.665
+    },
+    {
+     "t": 3.5141,
+     "task": "drag",
+     "frame": 4442,
+     "route": "proxy",
+     "ms": 7.96
+    },
+    {
+     "t": 3.5309,
+     "task": "drag",
+     "frame": 4479,
+     "route": "proxy",
+     "ms": 7.472
+    },
+    {
+     "t": 3.5447,
+     "task": "drag",
+     "frame": 4516,
+     "route": "proxy",
+     "ms": 6.728
+    },
+    {
+     "t": 3.5571,
+     "task": "drag",
+     "frame": 4553,
+     "route": "proxy",
+     "ms": 8.712
+    },
+    {
+     "t": 3.5724,
+     "task": "drag",
+     "frame": 4590,
+     "route": "proxy",
+     "ms": 11.33
+    },
+    {
+     "t": 3.5852,
+     "task": "drag",
+     "frame": 4627,
+     "route": "proxy",
+     "ms": 8.793
+    },
+    {
+     "t": 3.5991,
+     "task": "drag",
+     "frame": 4664,
+     "route": "proxy",
+     "ms": 9.611
+    },
+    {
+     "t": 3.6157,
+     "task": "drag",
+     "frame": 4701,
+     "route": "proxy",
+     "ms": 10.149
+    },
+    {
+     "t": 3.6323,
+     "task": "drag",
+     "frame": 4738,
+     "route": "proxy",
+     "ms": 12.207
+    },
+    {
+     "t": 3.6451,
+     "task": "drag",
+     "frame": 4775,
+     "route": "proxy",
+     "ms": 5.936
+    },
+    {
+     "t": 3.6634,
+     "task": "drag",
+     "frame": 4812,
+     "route": "proxy",
+     "ms": 13.83
+    },
+    {
+     "t": 3.6791,
+     "task": "drag",
+     "frame": 4849,
+     "route": "proxy",
+     "ms": 7.071
+    },
+    {
+     "t": 3.6933,
+     "task": "drag",
+     "frame": 4886,
+     "route": "proxy",
+     "ms": 10.711
+    },
+    {
+     "t": 3.7058,
+     "task": "drag",
+     "frame": 4923,
+     "route": "proxy",
+     "ms": 5.977
+    },
+    {
+     "t": 3.7193,
+     "task": "drag",
+     "frame": 4960,
+     "route": "proxy",
+     "ms": 6.598
+    },
+    {
+     "t": 3.7378,
+     "task": "drag",
+     "frame": 4997,
+     "route": "proxy",
+     "ms": 13.14
+    },
+    {
+     "t": 3.7496,
+     "task": "drag",
+     "frame": 5034,
+     "route": "proxy",
+     "ms": 7.485
+    },
+    {
+     "t": 3.7623,
+     "task": "drag",
+     "frame": 5071,
+     "route": "proxy",
+     "ms": 6.52
+    },
+    {
+     "t": 3.7765,
+     "task": "drag",
+     "frame": 5108,
+     "route": "proxy",
+     "ms": 7.17
+    },
+    {
+     "t": 3.7895,
+     "task": "drag",
+     "frame": 5145,
+     "route": "proxy",
+     "ms": 8.407
+    },
+    {
+     "t": 3.8039,
+     "task": "drag",
+     "frame": 5182,
+     "route": "proxy",
+     "ms": 7.646
+    },
+    {
+     "t": 3.8182,
+     "task": "drag",
+     "frame": 5219,
+     "route": "proxy",
+     "ms": 9.57
+    },
+    {
+     "t": 3.8338,
+     "task": "drag",
+     "frame": 5256,
+     "route": "proxy",
+     "ms": 8.218
+    },
+    {
+     "t": 3.8446,
+     "task": "drag",
+     "frame": 5293,
+     "route": "proxy",
+     "ms": 6.727
+    },
+    {
+     "t": 3.864,
+     "task": "drag",
+     "frame": 5330,
+     "route": "proxy",
+     "ms": 6.857
+    },
+    {
+     "t": 3.8803,
+     "task": "drag",
+     "frame": 5367,
+     "route": "proxy",
+     "ms": 7.428
+    },
+    {
+     "t": 3.8999,
+     "task": "drag",
+     "frame": 5404,
+     "route": "proxy",
+     "ms": 8.931
+    },
+    {
+     "t": 3.9173,
+     "task": "drag",
+     "frame": 5441,
+     "route": "proxy",
+     "ms": 9.566
+    },
+    {
+     "t": 3.9282,
+     "task": "drag",
+     "frame": 5478,
+     "route": "proxy",
+     "ms": 7.246
+    },
+    {
+     "t": 3.9423,
+     "task": "drag",
+     "frame": 5515,
+     "route": "proxy",
+     "ms": 10.312
+    },
+    {
+     "t": 3.9547,
+     "task": "drag",
+     "frame": 5552,
+     "route": "proxy",
+     "ms": 7.836
+    },
+    {
+     "t": 3.9685,
+     "task": "drag",
+     "frame": 5589,
+     "route": "proxy",
+     "ms": 9.27
+    },
+    {
+     "t": 3.9837,
+     "task": "drag",
+     "frame": 5626,
+     "route": "proxy",
+     "ms": 7.899
+    },
+    {
+     "t": 4.0002,
+     "task": "drag",
+     "frame": 5663,
+     "route": "proxy",
+     "ms": 11.491
+    },
+    {
+     "t": 4.017,
+     "task": "drag",
+     "frame": 5700,
+     "route": "proxy",
+     "ms": 10.34
+    },
+    {
+     "t": 4.0304,
+     "task": "drag",
+     "frame": 5737,
+     "route": "proxy",
+     "ms": 7.584
+    },
+    {
+     "t": 4.0506,
+     "task": "drag",
+     "frame": 5774,
+     "route": "proxy",
+     "ms": 12.117
+    },
+    {
+     "t": 4.0679,
+     "task": "drag",
+     "frame": 5811,
+     "route": "proxy",
+     "ms": 10.536
+    },
+    {
+     "t": 4.0866,
+     "task": "drag",
+     "frame": 5848,
+     "route": "proxy",
+     "ms": 10.777
+    },
+    {
+     "t": 4.0985,
+     "task": "drag",
+     "frame": 5885,
+     "route": "proxy",
+     "ms": 7.712
+    },
+    {
+     "t": 4.1122,
+     "task": "drag",
+     "frame": 5922,
+     "route": "proxy",
+     "ms": 7.41
+    },
+    {
+     "t": 4.1255,
+     "task": "drag",
+     "frame": 5959,
+     "route": "proxy",
+     "ms": 9.593
+    },
+    {
+     "t": 4.1405,
+     "task": "drag",
+     "frame": 5996,
+     "route": "proxy",
+     "ms": 10.702
+    },
+    {
+     "t": 4.1546,
+     "task": "drag",
+     "frame": 6033,
+     "route": "proxy",
+     "ms": 10.585
+    },
+    {
+     "t": 4.1711,
+     "task": "drag",
+     "frame": 6070,
+     "route": "proxy",
+     "ms": 11.074
+    },
+    {
+     "t": 4.1871,
+     "task": "drag",
+     "frame": 6107,
+     "route": "proxy",
+     "ms": 12.213
+    },
+    {
+     "t": 4.2004,
+     "task": "drag",
+     "frame": 6144,
+     "route": "proxy",
+     "ms": 9.575
+    },
+    {
+     "t": 4.2145,
+     "task": "drag",
+     "frame": 6181,
+     "route": "proxy",
+     "ms": 7.66
+    },
+    {
+     "t": 4.2288,
+     "task": "drag",
+     "frame": 6218,
+     "route": "proxy",
+     "ms": 6.691
+    },
+    {
+     "t": 4.2434,
+     "task": "drag",
+     "frame": 6255,
+     "route": "proxy",
+     "ms": 7.775
+    },
+    {
+     "t": 4.2616,
+     "task": "drag",
+     "frame": 6292,
+     "route": "proxy",
+     "ms": 14.545
+    },
+    {
+     "t": 4.2747,
+     "task": "drag",
+     "frame": 6329,
+     "route": "proxy",
+     "ms": 9.441
+    },
+    {
+     "t": 4.2884,
+     "task": "drag",
+     "frame": 6366,
+     "route": "proxy",
+     "ms": 8.627
+    },
+    {
+     "t": 4.306,
+     "task": "drag",
+     "frame": 6403,
+     "route": "proxy",
+     "ms": 13.726
+    },
+    {
+     "t": 4.3206,
+     "task": "drag",
+     "frame": 6440,
+     "route": "proxy",
+     "ms": 11.161
+    },
+    {
+     "t": 4.334,
+     "task": "drag",
+     "frame": 6477,
+     "route": "proxy",
+     "ms": 9.234
+    },
+    {
+     "t": 4.3491,
+     "task": "drag",
+     "frame": 6514,
+     "route": "proxy",
+     "ms": 8.641
+    },
+    {
+     "t": 4.3647,
+     "task": "drag",
+     "frame": 6551,
+     "route": "proxy",
+     "ms": 10.21
+    },
+    {
+     "t": 4.3789,
+     "task": "drag",
+     "frame": 6588,
+     "route": "proxy",
+     "ms": 6.689
+    },
+    {
+     "t": 4.3971,
+     "task": "drag",
+     "frame": 6625,
+     "route": "proxy",
+     "ms": 6.063
+    },
+    {
+     "t": 4.4231,
+     "task": "drag",
+     "frame": 6662,
+     "route": "proxy",
+     "ms": 13.401
+    },
+    {
+     "t": 4.4343,
+     "task": "drag",
+     "frame": 6699,
+     "route": "proxy",
+     "ms": 7.514
+    },
+    {
+     "t": 4.4491,
+     "task": "drag",
+     "frame": 6736,
+     "route": "proxy",
+     "ms": 10.802
+    },
+    {
+     "t": 4.4662,
+     "task": "drag",
+     "frame": 6773,
+     "route": "proxy",
+     "ms": 8.857
+    },
+    {
+     "t": 4.4893,
+     "task": "drag",
+     "frame": 6810,
+     "route": "proxy",
+     "ms": 12.225
+    },
+    {
+     "t": 4.5067,
+     "task": "drag",
+     "frame": 6847,
+     "route": "proxy",
+     "ms": 13.935
+    },
+    {
+     "t": 4.5192,
+     "task": "drag",
+     "frame": 6884,
+     "route": "proxy",
+     "ms": 9.218
+    },
+    {
+     "t": 4.5309,
+     "task": "drag",
+     "frame": 6921,
+     "route": "proxy",
+     "ms": 6.934
+    },
+    {
+     "t": 4.5501,
+     "task": "drag",
+     "frame": 6958,
+     "route": "proxy",
+     "ms": 8.3
+    },
+    {
+     "t": 4.5703,
+     "task": "drag",
+     "frame": 6995,
+     "route": "proxy",
+     "ms": 14.766
+    },
+    {
+     "t": 4.583,
+     "task": "drag",
+     "frame": 7032,
+     "route": "proxy",
+     "ms": 8.235
+    },
+    {
+     "t": 4.5973,
+     "task": "drag",
+     "frame": 7069,
+     "route": "proxy",
+     "ms": 9.204
+    },
+    {
+     "t": 4.6138,
+     "task": "drag",
+     "frame": 7106,
+     "route": "proxy",
+     "ms": 7.316
+    },
+    {
+     "t": 4.6294,
+     "task": "drag",
+     "frame": 7143,
+     "route": "proxy",
+     "ms": 6.183
+    },
+    {
+     "t": 4.6497,
+     "task": "drag",
+     "frame": 7180,
+     "route": "proxy",
+     "ms": 6.497
+    },
+    {
+     "t": 4.6651,
+     "task": "drag",
+     "frame": 7217,
+     "route": "proxy",
+     "ms": 10.597
+    },
+    {
+     "t": 4.6797,
+     "task": "drag",
+     "frame": 7254,
+     "route": "proxy",
+     "ms": 6.579
+    },
+    {
+     "t": 4.693,
+     "task": "drag",
+     "frame": 7291,
+     "route": "proxy",
+     "ms": 9.428
+    },
+    {
+     "t": 4.7079,
+     "task": "drag",
+     "frame": 7328,
+     "route": "proxy",
+     "ms": 6.35
+    },
+    {
+     "t": 4.7236,
+     "task": "drag",
+     "frame": 7365,
+     "route": "proxy",
+     "ms": 10.737
+    },
+    {
+     "t": 4.7355,
+     "task": "drag",
+     "frame": 7402,
+     "route": "proxy",
+     "ms": 7.686
+    },
+    {
+     "t": 4.7495,
+     "task": "drag",
+     "frame": 7439,
+     "route": "proxy",
+     "ms": 9.503
+    },
+    {
+     "t": 4.7666,
+     "task": "drag",
+     "frame": 7476,
+     "route": "proxy",
+     "ms": 11.108
+    },
+    {
+     "t": 4.7798,
+     "task": "drag",
+     "frame": 7513,
+     "route": "proxy",
+     "ms": 7.063
+    },
+    {
+     "t": 4.796,
+     "task": "drag",
+     "frame": 7550,
+     "route": "proxy",
+     "ms": 7.457
+    },
+    {
+     "t": 4.8113,
+     "task": "drag",
+     "frame": 7587,
+     "route": "proxy",
+     "ms": 6.379
+    },
+    {
+     "t": 4.8282,
+     "task": "drag",
+     "frame": 7624,
+     "route": "proxy",
+     "ms": 6.633
+    },
+    {
+     "t": 4.8383,
+     "task": "drag",
+     "frame": 7661,
+     "route": "proxy",
+     "ms": 6.211
+    },
+    {
+     "t": 4.8574,
+     "task": "drag",
+     "frame": 7698,
+     "route": "proxy",
+     "ms": 15.565
+    },
+    {
+     "t": 4.874,
+     "task": "drag",
+     "frame": 7735,
+     "route": "proxy",
+     "ms": 11.567
+    },
+    {
+     "t": 4.8849,
+     "task": "drag",
+     "frame": 7772,
+     "route": "proxy",
+     "ms": 7.055
+    },
+    {
+     "t": 4.8993,
+     "task": "drag",
+     "frame": 7809,
+     "route": "proxy",
+     "ms": 9.829
+    },
+    {
+     "t": 4.9118,
+     "task": "drag",
+     "frame": 7846,
+     "route": "proxy",
+     "ms": 6.942
+    },
+    {
+     "t": 4.9274,
+     "task": "drag",
+     "frame": 7883,
+     "route": "proxy",
+     "ms": 11.712
+    },
+    {
+     "t": 4.9424,
+     "task": "drag",
+     "frame": 7920,
+     "route": "proxy",
+     "ms": 10.241
+    },
+    {
+     "t": 4.9601,
+     "task": "drag",
+     "frame": 7957,
+     "route": "proxy",
+     "ms": 14.055
+    },
+    {
+     "t": 4.9725,
+     "task": "drag",
+     "frame": 7994,
+     "route": "proxy",
+     "ms": 8.258
+    },
+    {
+     "t": 4.9862,
+     "task": "drag",
+     "frame": 8031,
+     "route": "proxy",
+     "ms": 10.078
+    },
+    {
+     "t": 5.0038,
+     "task": "drag",
+     "frame": 8068,
+     "route": "proxy",
+     "ms": 11.5
+    },
+    {
+     "t": 5.0158,
+     "task": "drag",
+     "frame": 8105,
+     "route": "proxy",
+     "ms": 7.493
+    },
+    {
+     "t": 5.0305,
+     "task": "drag",
+     "frame": 8142,
+     "route": "proxy",
+     "ms": 7.276
+    },
+    {
+     "t": 5.048,
+     "task": "drag",
+     "frame": 8179,
+     "route": "proxy",
+     "ms": 10.143
+    },
+    {
+     "t": 5.0636,
+     "task": "drag",
+     "frame": 8216,
+     "route": "proxy",
+     "ms": 6.049
+    },
+    {
+     "t": 5.0783,
+     "task": "drag",
+     "frame": 8253,
+     "route": "proxy",
+     "ms": 7.182
+    },
+    {
+     "t": 5.0934,
+     "task": "drag",
+     "frame": 8290,
+     "route": "proxy",
+     "ms": 10.368
+    },
+    {
+     "t": 5.1053,
+     "task": "drag",
+     "frame": 8327,
+     "route": "proxy",
+     "ms": 7.891
+    },
+    {
+     "t": 5.1199,
+     "task": "drag",
+     "frame": 8364,
+     "route": "proxy",
+     "ms": 8.513
+    },
+    {
+     "t": 5.1378,
+     "task": "drag",
+     "frame": 8401,
+     "route": "proxy",
+     "ms": 10.29
+    },
+    {
+     "t": 5.1512,
+     "task": "drag",
+     "frame": 8438,
+     "route": "proxy",
+     "ms": 8.537
+    },
+    {
+     "t": 5.1641,
+     "task": "drag",
+     "frame": 8475,
+     "route": "proxy",
+     "ms": 6.991
+    },
+    {
+     "t": 5.1824,
+     "task": "drag",
+     "frame": 8512,
+     "route": "proxy",
+     "ms": 7.116
+    },
+    {
+     "t": 5.1955,
+     "task": "drag",
+     "frame": 8549,
+     "route": "proxy",
+     "ms": 6.574
+    },
+    {
+     "t": 5.214,
+     "task": "drag",
+     "frame": 8586,
+     "route": "proxy",
+     "ms": 9.211
+    },
+    {
+     "t": 5.2282,
+     "task": "drag",
+     "frame": 8623,
+     "route": "proxy",
+     "ms": 6.945
+    },
+    {
+     "t": 5.2434,
+     "task": "drag",
+     "frame": 8660,
+     "route": "proxy",
+     "ms": 10.347
+    },
+    {
+     "t": 5.2578,
+     "task": "drag",
+     "frame": 8697,
+     "route": "proxy",
+     "ms": 8.882
+    },
+    {
+     "t": 5.2757,
+     "task": "drag",
+     "frame": 8734,
+     "route": "proxy",
+     "ms": 13.986
+    },
+    {
+     "t": 5.2875,
+     "task": "drag",
+     "frame": 8771,
+     "route": "proxy",
+     "ms": 8.253
+    },
+    {
+     "t": 5.303,
+     "task": "drag",
+     "frame": 8808,
+     "route": "proxy",
+     "ms": 9.737
+    },
+    {
+     "t": 5.3141,
+     "task": "drag",
+     "frame": 8845,
+     "route": "proxy",
+     "ms": 7.205
+    },
+    {
+     "t": 5.3337,
+     "task": "drag",
+     "frame": 8882,
+     "route": "proxy",
+     "ms": 10.522
+    },
+    {
+     "t": 5.3508,
+     "task": "drag",
+     "frame": 8919,
+     "route": "proxy",
+     "ms": 12.729
+    },
+    {
+     "t": 5.3626,
+     "task": "drag",
+     "frame": 8956,
+     "route": "proxy",
+     "ms": 7.469
+    },
+    {
+     "t": 5.3819,
+     "task": "drag",
+     "frame": 8993,
+     "route": "proxy",
+     "ms": 8.971
+    },
+    {
+     "t": 5.4009,
+     "task": "drag",
+     "frame": 8993,
+     "route": "proxy",
+     "ms": 10.13
+    }
+   ]
+  },
+  {
+   "label": "window@0 crop=1024x1024 b=600",
+   "config": "window@0 crop=1024x1024 b=600",
+   "by_task": {
+    "play": {
+     "n": 4,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.48,
+     "max": 0.48,
+     "mean": 0.13
+    },
+    "step": {
+     "n": 1,
+     "min": 24.62,
+     "p50": 24.62,
+     "p95": 24.62,
+     "max": 24.62,
+     "mean": 24.62
+    }
+   },
+   "routes": {
+    "lo": 1,
+    "near": 1,
+    "hit": 3
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    }
+   ],
+   "suppressed_play_hits": 27,
+   "events_capped": false,
+   "started": "2026-08-22T16:10:42.740164+00:00",
+   "events": [
+    {
+     "t": 0.537,
+     "task": "step",
+     "frame": 0,
+     "route": "lo",
+     "ms": 24.617
+    },
+    {
+     "t": 1.0161,
+     "task": "play",
+     "frame": 7,
+     "route": "near \u03941",
+     "ms": 0.48
+    },
+    {
+     "t": 1.1072,
+     "task": "play",
+     "frame": 9,
+     "route": "hit",
+     "ms": 0.01
+    },
+    {
+     "t": 1.52,
+     "task": "play",
+     "frame": 17,
+     "route": "hit",
+     "ms": 0.008
+    },
+    {
+     "t": 1.897,
+     "task": "play",
+     "frame": 25,
+     "route": "hit",
+     "ms": 0.008
+    }
+   ]
+  },
+  {
+   "label": "window@8993 crop=1024x1024 b=600",
+   "config": "window@8993 crop=1024x1024 b=600",
+   "by_task": {
+    "step": {
+     "n": 1,
+     "min": 177.52,
+     "p50": 177.52,
+     "p95": 177.52,
+     "max": 177.52,
+     "mean": 177.52
+    }
+   },
+   "routes": {
+    "lo": 1
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=1"
+    }
+   ],
+   "suppressed_play_hits": 6,
+   "events_capped": false,
+   "started": "2026-08-22T16:10:47.634727+00:00",
+   "events": [
+    {
+     "t": 5.5845,
+     "task": "step",
+     "frame": 8993,
+     "route": "lo",
+     "ms": 177.524
+    }
+   ]
+  }
+ ]
+}

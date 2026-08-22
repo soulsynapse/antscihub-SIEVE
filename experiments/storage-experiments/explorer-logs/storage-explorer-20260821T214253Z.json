@@ -1,0 +1,167 @@
+{
+ "tool": "storage-explorer.py",
+ "when": "2026-08-21T21:42:57.498724+00:00",
+ "sieve_rev": "6c1378c",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "span": 300,
+ "gop": 24,
+ "near_radius": 12,
+ "runs": [
+  {
+   "label": "fill=off GOPx4 miss=block b=300",
+   "config": "fill=off GOPx4 miss=block b=300",
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 168.6,
+     "p50": 176.63,
+     "p95": 204.77,
+     "max": 204.77,
+     "mean": 183.33
+    },
+    "open": {
+     "n": 1,
+     "min": 256.47,
+     "p50": 256.47,
+     "p95": 256.47,
+     "max": 256.47,
+     "mean": 256.47
+    }
+   },
+   "routes": {
+    "miss": 4
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T21:42:53.469341+00:00",
+   "events": [
+    {
+     "t": 0.2615,
+     "task": "open",
+     "frame": 0,
+     "route": "miss",
+     "ms": 256.472
+    },
+    {
+     "t": 0.4681,
+     "task": "drag",
+     "frame": 5,
+     "route": "miss",
+     "ms": 204.766
+    },
+    {
+     "t": 0.6466,
+     "task": "drag",
+     "frame": 6,
+     "route": "miss",
+     "ms": 176.629
+    },
+    {
+     "t": 0.8166,
+     "task": "drag",
+     "frame": 30,
+     "route": "miss",
+     "ms": 168.597
+    }
+   ]
+  },
+  {
+   "label": "fill=off GOPx4 miss=kf-snap b=300",
+   "config": "fill=off GOPx4 miss=kf-snap b=300",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 182.41,
+     "p50": 182.41,
+     "p95": 182.41,
+     "max": 182.41,
+     "mean": 182.41
+    }
+   },
+   "routes": {
+    "kf": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T21:42:54.286063+00:00",
+   "events": [
+    {
+     "t": 0.1836,
+     "task": "drag",
+     "frame": 80,
+     "route": "kf \u03943",
+     "ms": 182.411
+    }
+   ]
+  },
+  {
+   "label": "fill=off GOPx4 miss=nearest-cached b=300",
+   "config": "fill=off GOPx4 miss=nearest-cached b=300",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 0.02,
+     "p50": 0.02,
+     "p95": 0.02,
+     "max": 0.02,
+     "mean": 0.02
+    }
+   },
+   "routes": {
+    "near": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T21:42:54.469938+00:00",
+   "events": [
+    {
+     "t": 0.0012,
+     "task": "drag",
+     "frame": 82,
+     "route": "near \u03945",
+     "ms": 0.024
+    }
+   ]
+  },
+  {
+   "label": "fill=sequential GOPx4 miss=nearest-cached b=300",
+   "config": "fill=sequential GOPx4 miss=nearest-cached b=300",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    }
+   },
+   "routes": {
+    "hit": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T21:42:57.474633+00:00",
+   "events": [
+    {
+     "t": 0.0021,
+     "task": "drag",
+     "frame": 40,
+     "route": "hit",
+     "ms": 0.009
+    }
+   ]
+  }
+ ]
+}

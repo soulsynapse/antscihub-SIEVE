@@ -1,0 +1,213 @@
+{
+ "tool": "session-explorer.py",
+ "when": "2026-08-22T10:31:16.182871+00:00",
+ "sieve_rev": "8475997",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "total_frames": 11304,
+ "window": 300,
+ "gop": 24,
+ "crop": [
+  2144,
+  982,
+  1024,
+  1024
+ ],
+ "activity": [
+  {
+   "what": "window",
+   "t0": 0.431,
+   "t1": 0.431,
+   "detail": "@3936"
+  },
+  {
+   "what": "fill",
+   "t0": 0.431,
+   "t1": 4.564,
+   "detail": "@3936: 0ch/300orig"
+  },
+  {
+   "what": "encode",
+   "t0": 1.437,
+   "t1": 2.555,
+   "detail": "chunk@3936"
+  },
+  {
+   "what": "encode",
+   "t0": 2.555,
+   "t1": 4.137,
+   "detail": "chunk@4032"
+  },
+  {
+   "what": "encode",
+   "t0": 4.137,
+   "t1": 5.534,
+   "detail": "chunk@4128"
+  },
+  {
+   "what": "flow",
+   "t0": 4.919,
+   "t1": null,
+   "detail": "signal=8 preempting fill"
+  },
+  {
+   "what": "encode",
+   "t0": 5.534,
+   "t1": 5.713,
+   "detail": "chunk@4224"
+  }
+ ],
+ "chunk_frames": 96,
+ "near_radius": 12,
+ "runs": [
+  {
+   "label": "hunt proxy",
+   "config": "hunt proxy",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 6.9,
+     "p50": 6.9,
+     "p95": 6.9,
+     "max": 6.9,
+     "mean": 6.9
+    },
+    "open": {
+     "n": 1,
+     "min": 12.57,
+     "p50": 12.57,
+     "p95": 12.57,
+     "max": 12.57,
+     "mean": 12.57
+    }
+   },
+   "routes": {
+    "proxy": 2
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T10:31:09.390421+00:00",
+   "events": [
+    {
+     "t": 0.2916,
+     "task": "open",
+     "frame": 0,
+     "route": "proxy",
+     "ms": 12.574
+    },
+    {
+     "t": 0.2997,
+     "task": "hunt",
+     "frame": 5000,
+     "route": "proxy",
+     "ms": 6.897
+    }
+   ]
+  },
+  {
+   "label": "hunt kf-snap",
+   "config": "hunt kf-snap",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 121.9,
+     "p50": 121.9,
+     "p95": 121.9,
+     "max": 121.9,
+     "mean": 121.9
+    }
+   },
+   "routes": {
+    "kf": 1
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T10:31:09.414281+00:00",
+   "events": [
+    {
+     "t": 0.431,
+     "task": "hunt",
+     "frame": 6000,
+     "route": "kf \u039420",
+     "ms": 121.904
+    }
+   ]
+  },
+  {
+   "label": "window@3936 crop=1024x1024 b=600",
+   "config": "window@3936 crop=1024x1024 b=600",
+   "by_task": {
+    "drag": {
+     "n": 2,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    },
+    "step": {
+     "n": 1,
+     "min": 345.95,
+     "p50": 345.95,
+     "p95": 345.95,
+     "max": 345.95,
+     "mean": 345.95
+    }
+   },
+   "routes": {
+    "miss": 1,
+    "hit": 2
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    },
+    {
+     "what": "covered",
+     "wall_s": 3.95,
+     "detail": "0 from chunks, 300 from original, fill paused 0.00s"
+    }
+   ],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T10:31:09.545645+00:00",
+   "events": [
+    {
+     "t": 0.7994,
+     "task": "step",
+     "frame": 3936,
+     "route": "miss",
+     "ms": 345.953
+    },
+    {
+     "t": 1.8038,
+     "task": "drag",
+     "frame": 4010,
+     "route": "hit",
+     "ms": 0.014
+    },
+    {
+     "t": 4.564,
+     "task": "drag",
+     "frame": 4200,
+     "route": "hit",
+     "ms": 0.01
+    }
+   ]
+  }
+ ]
+}

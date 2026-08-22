@@ -1,0 +1,225 @@
+{
+ "tool": "storage-explorer.py",
+ "when": "2026-08-21T22:24:12.338580+00:00",
+ "sieve_rev": "87e415e",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "span": 300,
+ "gop": 24,
+ "near_radius": 12,
+ "runs": [
+  {
+   "label": "span=300 fill=off GOPx4 miss=block b=300",
+   "config": "span=300 fill=off GOPx4 miss=block b=300",
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 0.58,
+     "p50": 30.35,
+     "p95": 166.28,
+     "max": 166.28,
+     "mean": 65.74
+    },
+    "open": {
+     "n": 1,
+     "min": 265.67,
+     "p50": 265.67,
+     "p95": 265.67,
+     "max": 265.67,
+     "mean": 265.67
+    }
+   },
+   "routes": {
+    "miss": 4
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T22:24:03.392114+00:00",
+   "events": [
+    {
+     "t": 0.2703,
+     "task": "open",
+     "frame": 0,
+     "route": "miss",
+     "ms": 265.67
+    },
+    {
+     "t": 0.3023,
+     "task": "drag",
+     "frame": 5,
+     "route": "miss",
+     "ms": 30.35
+    },
+    {
+     "t": 0.3046,
+     "task": "drag",
+     "frame": 6,
+     "route": "miss",
+     "ms": 0.58
+    },
+    {
+     "t": 0.4723,
+     "task": "drag",
+     "frame": 30,
+     "route": "miss",
+     "ms": 166.285
+    }
+   ]
+  },
+  {
+   "label": "span=300 fill=off GOPx4 miss=kf-snap b=300",
+   "config": "span=300 fill=off GOPx4 miss=kf-snap b=300",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 194.73,
+     "p50": 194.73,
+     "p95": 194.73,
+     "max": 194.73,
+     "mean": 194.73
+    }
+   },
+   "routes": {
+    "kf": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T22:24:03.864508+00:00",
+   "events": [
+    {
+     "t": 0.1959,
+     "task": "drag",
+     "frame": 80,
+     "route": "kf \u03943",
+     "ms": 194.728
+    }
+   ]
+  },
+  {
+   "label": "span=300 fill=off GOPx4 miss=nearest-cached b=300",
+   "config": "span=300 fill=off GOPx4 miss=nearest-cached b=300",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    }
+   },
+   "routes": {
+    "near": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T22:24:04.060625+00:00",
+   "events": [
+    {
+     "t": 0.001,
+     "task": "drag",
+     "frame": 82,
+     "route": "near \u03945",
+     "ms": 0.012
+    }
+   ]
+  },
+  {
+   "label": "span=300 fill=sequential GOPx4 miss=nearest-cached b=300",
+   "config": "span=300 fill=sequential GOPx4 miss=nearest-cached b=300",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    }
+   },
+   "routes": {
+    "hit": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T22:24:07.064573+00:00",
+   "events": [
+    {
+     "t": 0.0014,
+     "task": "drag",
+     "frame": 40,
+     "route": "hit",
+     "ms": 0.008
+    }
+   ]
+  },
+  {
+   "label": "span=300 COMPOSITE b=300",
+   "config": "span=300 COMPOSITE b=300",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    }
+   },
+   "routes": {
+    "hit": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T22:24:11.267317+00:00",
+   "events": [
+    {
+     "t": 0.002,
+     "task": "drag",
+     "frame": 250,
+     "route": "hit",
+     "ms": 0.011
+    }
+   ]
+  },
+  {
+   "label": "span=300 COMPOSITE b=10",
+   "config": "span=300 COMPOSITE b=10",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 32.29,
+     "p50": 32.29,
+     "p95": 32.29,
+     "max": 32.29,
+     "mean": 32.29
+    }
+   },
+   "routes": {
+    "cut": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-21T22:24:12.281443+00:00",
+   "events": [
+    {
+     "t": 0.0336,
+     "task": "drag",
+     "frame": 20,
+     "route": "cut",
+     "ms": 32.29
+    }
+   ]
+  }
+ ]
+}

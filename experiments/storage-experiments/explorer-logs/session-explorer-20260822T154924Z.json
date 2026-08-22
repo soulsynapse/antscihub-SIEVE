@@ -1,0 +1,580 @@
+{
+ "tool": "session-explorer.py",
+ "sieve_rev": "ae4237e",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "when": "2026-08-22T15:49:37.033784+00:00",
+ "total_frames": 11304,
+ "window": 300,
+ "gop": 24,
+ "crop": [
+  1000,
+  500,
+  512,
+  512
+ ],
+ "activity": [
+  {
+   "what": "window",
+   "t0": 0.465,
+   "t1": 0.465,
+   "detail": "@0"
+  },
+  {
+   "what": "fill",
+   "t0": 0.465,
+   "t1": 0.672,
+   "detail": "stopped: window switched"
+  },
+  {
+   "what": "window",
+   "t0": 0.672,
+   "t1": 0.672,
+   "detail": "@4000"
+  },
+  {
+   "what": "fill",
+   "t0": 0.672,
+   "t1": 5.4,
+   "detail": "@3936: 0ch/384orig"
+  },
+  {
+   "what": "encode",
+   "t0": 1.738,
+   "t1": 3.031,
+   "detail": "chunk@3936"
+  },
+  {
+   "what": "encode",
+   "t0": 3.031,
+   "t1": 4.365,
+   "detail": "chunk@4032"
+  },
+  {
+   "what": "encode",
+   "t0": 4.365,
+   "t1": 5.826,
+   "detail": "chunk@4128"
+  },
+  {
+   "what": "flow",
+   "t0": 5.454,
+   "t1": 8.481,
+   "detail": "signal=8 n=300"
+  },
+  {
+   "what": "encode",
+   "t0": 5.826,
+   "t1": 7.76,
+   "detail": "chunk@4224"
+  },
+  {
+   "what": "crop",
+   "t0": 8.551,
+   "t1": 8.551,
+   "detail": "512x512+1000+500"
+  },
+  {
+   "what": "window",
+   "t0": 8.551,
+   "t1": 8.551,
+   "detail": "@4257"
+  },
+  {
+   "what": "fill",
+   "t0": 8.551,
+   "t1": 8.56,
+   "detail": "stopped: window switched"
+  },
+  {
+   "what": "window",
+   "t0": 8.56,
+   "t1": 8.56,
+   "detail": "@4150"
+  },
+  {
+   "what": "fill",
+   "t0": 8.56,
+   "t1": null,
+   "detail": "@4150"
+  },
+  {
+   "what": "encode",
+   "t0": 9.769,
+   "t1": 10.755,
+   "detail": "chunk@4128"
+  },
+  {
+   "what": "encode",
+   "t0": 10.94,
+   "t1": 11.841,
+   "detail": "chunk@4224"
+  },
+  {
+   "what": "encode",
+   "t0": 12.061,
+   "t1": null,
+   "detail": "chunk@4320"
+  }
+ ],
+ "chunk_frames": 96,
+ "near_radius": 12,
+ "runs": [
+  {
+   "label": "hunt proxy",
+   "config": "hunt proxy",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 7.31,
+     "p50": 7.31,
+     "p95": 7.31,
+     "max": 7.31,
+     "mean": 7.31
+    },
+    "open": {
+     "n": 1,
+     "min": 12.24,
+     "p50": 12.24,
+     "p95": 12.24,
+     "max": 12.24,
+     "mean": 12.24
+    }
+   },
+   "routes": {
+    "proxy": 2
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T15:49:24.690456+00:00",
+   "events": [
+    {
+     "t": 0.4644,
+     "task": "open",
+     "frame": 0,
+     "route": "proxy",
+     "ms": 12.236
+    },
+    {
+     "t": 0.4918,
+     "task": "hunt",
+     "frame": 5000,
+     "route": "proxy",
+     "ms": 7.306
+    }
+   ]
+  },
+  {
+   "label": "window@0 crop=1024x1024 b=600",
+   "config": "window@0 crop=1024x1024 b=600",
+   "by_task": {
+    "step": {
+     "n": 1,
+     "min": 16.2,
+     "p50": 16.2,
+     "p95": 16.2,
+     "max": 16.2,
+     "mean": 16.2
+    }
+   },
+   "routes": {
+    "lo": 1
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    }
+   ],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T15:49:24.719049+00:00",
+   "events": [
+    {
+     "t": 0.4827,
+     "task": "step",
+     "frame": 0,
+     "route": "lo",
+     "ms": 16.2
+    }
+   ]
+  },
+  {
+   "label": "hunt kf-snap",
+   "config": "hunt kf-snap",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 161.06,
+     "p50": 161.06,
+     "p95": 161.06,
+     "max": 161.06,
+     "mean": 161.06
+    }
+   },
+   "routes": {
+    "kf": 1
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T15:49:24.746334+00:00",
+   "events": [
+    {
+     "t": 0.6712,
+     "task": "hunt",
+     "frame": 6000,
+     "route": "kf \u039420",
+     "ms": 161.057
+    }
+   ]
+  },
+  {
+   "label": "window@4000 crop=1024x1024 b=600",
+   "config": "window@4000 crop=1024x1024 b=600",
+   "by_task": {
+    "drag": {
+     "n": 2,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    },
+    "play": {
+     "n": 14,
+     "min": 0.0,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    },
+    "step": {
+     "n": 1,
+     "min": 10.69,
+     "p50": 10.69,
+     "p95": 10.69,
+     "max": 10.69,
+     "mean": 10.69
+    }
+   },
+   "routes": {
+    "lo": 1,
+    "hit": 16
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    },
+    {
+     "what": "covered",
+     "wall_s": 4.57,
+     "detail": "0 from chunks, 384 from original, fill paused 0.00s"
+    },
+    {
+     "what": "flow",
+     "wall_s": 3.0,
+     "detail": "signal=8 n=300 preempt=on"
+    }
+   ],
+   "suppressed_play_hits": 105,
+   "events_capped": false,
+   "started": "2026-08-22T15:49:24.926554+00:00",
+   "events": [
+    {
+     "t": 0.6885,
+     "task": "step",
+     "frame": 4000,
+     "route": "lo",
+     "ms": 10.688
+    },
+    {
+     "t": 1.691,
+     "task": "drag",
+     "frame": 4010,
+     "route": "hit",
+     "ms": 0.008
+    },
+    {
+     "t": 2.1164,
+     "task": "play",
+     "frame": 4018,
+     "route": "hit",
+     "ms": 0.006
+    },
+    {
+     "t": 2.5386,
+     "task": "play",
+     "frame": 4026,
+     "route": "hit",
+     "ms": 0.007
+    },
+    {
+     "t": 3.0145,
+     "task": "play",
+     "frame": 4034,
+     "route": "hit",
+     "ms": 0.009
+    },
+    {
+     "t": 3.4896,
+     "task": "play",
+     "frame": 4042,
+     "route": "hit",
+     "ms": 0.006
+    },
+    {
+     "t": 3.9097,
+     "task": "play",
+     "frame": 4050,
+     "route": "hit",
+     "ms": 0.006
+    },
+    {
+     "t": 4.3334,
+     "task": "play",
+     "frame": 4058,
+     "route": "hit",
+     "ms": 0.006
+    },
+    {
+     "t": 4.7541,
+     "task": "play",
+     "frame": 4066,
+     "route": "hit",
+     "ms": 0.004
+    },
+    {
+     "t": 5.1209,
+     "task": "drag",
+     "frame": 4200,
+     "route": "hit",
+     "ms": 0.006
+    },
+    {
+     "t": 5.1779,
+     "task": "play",
+     "frame": 4202,
+     "route": "hit",
+     "ms": 0.007
+    },
+    {
+     "t": 5.7198,
+     "task": "play",
+     "frame": 4210,
+     "route": "hit",
+     "ms": 0.009
+    },
+    {
+     "t": 6.201,
+     "task": "play",
+     "frame": 4218,
+     "route": "hit",
+     "ms": 0.007
+    },
+    {
+     "t": 6.6392,
+     "task": "play",
+     "frame": 4226,
+     "route": "hit",
+     "ms": 0.008
+    },
+    {
+     "t": 7.1639,
+     "task": "play",
+     "frame": 4234,
+     "route": "hit",
+     "ms": 0.008
+    },
+    {
+     "t": 7.6835,
+     "task": "play",
+     "frame": 4242,
+     "route": "hit",
+     "ms": 0.008
+    },
+    {
+     "t": 8.1147,
+     "task": "play",
+     "frame": 4250,
+     "route": "hit",
+     "ms": 0.009
+    }
+   ]
+  },
+  {
+   "label": "window@4257 crop=512x512 b=600",
+   "config": "window@4257 crop=512x512 b=600",
+   "by_task": {
+    "step": {
+     "n": 1,
+     "min": 7.85,
+     "p50": 7.85,
+     "p95": 7.85,
+     "max": 7.85,
+     "mean": 7.85
+    }
+   },
+   "routes": {
+    "lo": 1
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    }
+   ],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-22T15:49:32.805296+00:00",
+   "events": [
+    {
+     "t": 8.56,
+     "task": "step",
+     "frame": 4257,
+     "route": "lo",
+     "ms": 7.848
+    }
+   ]
+  },
+  {
+   "label": "window@4150 crop=512x512 b=600",
+   "config": "window@4150 crop=512x512 b=600",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    },
+    "play": {
+     "n": 9,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 8.4,
+     "max": 8.4,
+     "mean": 2.4
+    },
+    "step": {
+     "n": 1,
+     "min": 11.3,
+     "p50": 11.3,
+     "p95": 11.3,
+     "max": 11.3,
+     "mean": 11.3
+    }
+   },
+   "routes": {
+    "lo": 4,
+    "near": 1,
+    "hit": 6
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    }
+   ],
+   "suppressed_play_hits": 62,
+   "events_capped": false,
+   "started": "2026-08-22T15:49:32.814746+00:00",
+   "events": [
+    {
+     "t": 8.5727,
+     "task": "step",
+     "frame": 4257,
+     "route": "lo",
+     "ms": 11.302
+    },
+    {
+     "t": 9.163,
+     "task": "play",
+     "frame": 4265,
+     "route": "lo",
+     "ms": 6.412
+    },
+    {
+     "t": 9.6803,
+     "task": "play",
+     "frame": 4273,
+     "route": "lo",
+     "ms": 6.546
+    },
+    {
+     "t": 10.1682,
+     "task": "play",
+     "frame": 4281,
+     "route": "lo",
+     "ms": 8.4
+    },
+    {
+     "t": 10.6915,
+     "task": "play",
+     "frame": 4289,
+     "route": "near \u03942",
+     "ms": 0.176
+    },
+    {
+     "t": 10.7446,
+     "task": "play",
+     "frame": 4290,
+     "route": "hit",
+     "ms": 0.007
+    },
+    {
+     "t": 11.1567,
+     "task": "play",
+     "frame": 4298,
+     "route": "hit",
+     "ms": 0.005
+    },
+    {
+     "t": 11.5706,
+     "task": "play",
+     "frame": 4306,
+     "route": "hit",
+     "ms": 0.009
+    },
+    {
+     "t": 11.9854,
+     "task": "play",
+     "frame": 4314,
+     "route": "hit",
+     "ms": 0.006
+    },
+    {
+     "t": 12.4,
+     "task": "play",
+     "frame": 4322,
+     "route": "hit",
+     "ms": 0.006
+    },
+    {
+     "t": 12.763,
+     "task": "drag",
+     "frame": 4150,
+     "route": "hit",
+     "ms": 0.008
+    }
+   ]
+  }
+ ]
+}

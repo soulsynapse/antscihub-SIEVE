@@ -1,0 +1,166 @@
+{
+ "tool": "session-explorer.py",
+ "when": "2026-08-22T10:15:02.774326+00:00",
+ "sieve_rev": "eaea7b1",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "total_frames": 11304,
+ "window": 300,
+ "gop": 24,
+ "crop": [
+  2144,
+  982,
+  1024,
+  1024
+ ],
+ "chunk_frames": 96,
+ "near_radius": 12,
+ "runs": [
+  {
+   "label": "hunt proxy",
+   "config": "hunt proxy",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 6.02,
+     "p50": 6.02,
+     "p95": 6.02,
+     "max": 6.02,
+     "mean": 6.02
+    },
+    "open": {
+     "n": 1,
+     "min": 13.4,
+     "p50": 13.4,
+     "p95": 13.4,
+     "max": 13.4,
+     "mean": 13.4
+    }
+   },
+   "routes": {
+    "proxy": 2
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-22T10:14:55.584644+00:00",
+   "events": [
+    {
+     "t": 0.0168,
+     "task": "open",
+     "frame": 0,
+     "route": "proxy",
+     "ms": 13.402
+    },
+    {
+     "t": 0.024,
+     "task": "hunt",
+     "frame": 5000,
+     "route": "proxy",
+     "ms": 6.022
+    }
+   ]
+  },
+  {
+   "label": "hunt kf-snap",
+   "config": "hunt kf-snap",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 175.14,
+     "p50": 175.14,
+     "p95": 175.14,
+     "max": 175.14,
+     "mean": 175.14
+    }
+   },
+   "routes": {
+    "kf": 1
+   },
+   "walls": [],
+   "events_capped": false,
+   "started": "2026-08-22T10:14:55.608791+00:00",
+   "events": [
+    {
+     "t": 0.1891,
+     "task": "hunt",
+     "frame": 6000,
+     "route": "kf \u039420",
+     "ms": 175.138
+    }
+   ]
+  },
+  {
+   "label": "window@3936 crop=1024x1024 b=600",
+   "config": "window@3936 crop=1024x1024 b=600",
+   "by_task": {
+    "drag": {
+     "n": 2,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    },
+    "step": {
+     "n": 1,
+     "min": 447.04,
+     "p50": 447.04,
+     "p95": 447.04,
+     "max": 447.04,
+     "mean": 447.04
+    }
+   },
+   "routes": {
+    "miss": 1,
+    "hit": 2
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    },
+    {
+     "what": "covered",
+     "wall_s": 4.21,
+     "detail": "0 from chunks, 300 from original, fill paused 0.00s"
+    }
+   ],
+   "events_capped": false,
+   "started": "2026-08-22T10:14:55.799041+00:00",
+   "events": [
+    {
+     "t": 0.4497,
+     "task": "step",
+     "frame": 3936,
+     "route": "miss",
+     "ms": 447.044
+    },
+    {
+     "t": 1.4527,
+     "task": "drag",
+     "frame": 4010,
+     "route": "hit",
+     "ms": 0.014
+    },
+    {
+     "t": 4.4448,
+     "task": "drag",
+     "frame": 4200,
+     "route": "hit",
+     "ms": 0.007
+    }
+   ]
+  }
+ ]
+}

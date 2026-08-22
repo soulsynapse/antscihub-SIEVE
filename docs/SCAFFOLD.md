@@ -63,6 +63,11 @@
       - 📄 `explorer-20260821T185319Z.json`
       - 📄 `explorer-20260821T185600Z.json`
       - 📄 `explorer-20260821T191919Z.json`
+      - 📄 `explorer-20260821T200326Z.json`
+      - 📄 `explorer-20260821T200356Z.json`
+      - 📄 `explorer-20260821T200458Z.json`
+      - 📄 `explorer-20260821T200650Z.json`
+      - 📄 `explorer-20260821T200811Z.json`
     - 📁 `results/`
       - 📄 `01-pyav-vs-opencv-20260821T163621Z.json`
       - 📄 `01-pyav-vs-opencv-20260821T164038Z.json`
@@ -88,7 +93,86 @@
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
   - 📁 `storage-experiments/`
     - 📁 `explorer-logs/`
+      - 📄 `session-explorer-20260822T100122Z.json`
+      - 📄 `session-explorer-20260822T100140Z.json`
       - 📄 `session-explorer-20260822T100248Z.json`
+      - 📄 `session-explorer-20260822T100729Z.json`
+      - 📄 `session-explorer-20260822T101455Z.json`
+      - 📄 `session-explorer-20260822T101606Z.json`
+      - 📄 `session-explorer-20260822T101629Z.json`
+      - 📄 `session-explorer-20260822T102054Z.json`
+      - 📄 `session-explorer-20260822T102129Z.json`
+      - 📄 `session-explorer-20260822T102214Z.json`
+      - 📄 `session-explorer-20260822T102453Z.json`
+      - 📄 `session-explorer-20260822T102539Z.json`
+      - 📄 `session-explorer-20260822T103109Z.json`
+      - 📄 `session-explorer-20260822T103122Z.json`
+      - 📄 `session-explorer-20260822T103300Z.json`
+      - 📄 `session-explorer-20260822T103313Z.json`
+      - 📄 `session-explorer-20260822T132913Z.json`
+      - 📄 `session-explorer-20260822T133156Z.json`
+      - 📄 `session-explorer-20260822T133351Z.json`
+      - 📄 `session-explorer-20260822T133921Z.json`
+      - 📄 `session-explorer-20260822T134101Z.json`
+      - 📄 `session-explorer-20260822T134446Z.json`
+      - 📄 `session-explorer-20260822T134521Z.json`
+      - 📄 `session-explorer-20260822T141259Z.json`
+      - 📄 `session-explorer-20260822T142416Z.json`
+      - 📄 `session-explorer-20260822T142430Z.json`
+      - 📄 `session-explorer-20260822T142509Z.json`
+      - 📄 `session-explorer-20260822T142915Z.json`
+      - 📄 `session-explorer-20260822T143404Z.json`
+      - 📄 `session-explorer-20260822T143425Z.json`
+      - 📄 `session-explorer-20260822T143448Z.json`
+      - 📄 `session-explorer-20260822T143611Z.json`
+      - 📄 `session-explorer-20260822T143819Z.json`
+      - 📄 `session-explorer-20260822T150130Z.json`
+      - 📄 `session-explorer-20260822T150144Z.json`
+      - 📄 `session-explorer-20260822T150253Z.json`
+      - 📄 `session-explorer-20260822T150549Z.json`
+      - 📄 `session-explorer-20260822T150903Z.json`
+      - 📄 `session-explorer-20260822T150916Z.json`
+      - 📄 `session-explorer-20260822T151120Z.json`
+      - 📄 `session-explorer-20260822T152212Z.json`
+      - 📄 `session-explorer-20260822T152835Z.json`
+      - 📄 `session-explorer-20260822T152849Z.json`
+      - 📄 `session-explorer-20260822T153023Z.json`
+      - 📄 `session-explorer-20260822T153812Z.json`
+      - 📄 `session-explorer-20260822T153958Z.json`
+      - 📄 `session-explorer-20260822T154111Z.json`
+      - 📄 `session-explorer-20260822T154345Z.json`
+      - 📄 `session-explorer-20260822T154808Z.json`
+      - 📄 `session-explorer-20260822T154853Z.json`
+      - 📄 `session-explorer-20260822T154924Z.json`
+      - 📄 `session-explorer-20260822T160037Z.json`
+      - 📄 `session-explorer-20260822T160106Z.json`
+      - 📄 `session-explorer-20260822T160203Z.json`
+      - 📄 `session-explorer-20260822T160236Z.json`
+      - 📄 `session-explorer-20260822T160310Z.json`
+      - 📄 `session-explorer-20260822T160344Z.json`
+      - 📄 `session-explorer-20260822T161042Z.json`
+      - 📄 `session-explorer-20260822T161101Z.json`
+      - 📄 `session-explorer-20260822T161129Z.json`
+      - 📄 `session-explorer-20260822T161147Z.json`
+      - 📄 `session-explorer-20260822T161239Z.json`
+      - 📄 `session-explorer-20260822T161256Z.json`
+      - 📄 `session-explorer-20260822T161341Z.json`
+      - 📄 `session-explorer-20260822T161826Z.json`
+      - 📄 `session-explorer-20260822T161840Z.json`
+      - 📄 `session-explorer-20260822T173750Z.json`
+      - 📄 `session-explorer-20260822T174039Z.json`
+      - 📄 `session-explorer-20260822T174053Z.json`
+      - 📄 `storage-explorer-20260821T214201Z.json`
+      - 📄 `storage-explorer-20260821T214253Z.json`
+      - 📄 `storage-explorer-20260821T214818Z.json`
+      - 📄 `storage-explorer-20260821T215247Z.json`
+      - 📄 `storage-explorer-20260821T215309Z.json`
+      - 📄 `storage-explorer-20260821T215751Z.json`
+      - 📄 `storage-explorer-20260821T220212Z.json`
+      - 📄 `storage-explorer-20260821T220410Z.json`
+      - 📄 `storage-explorer-20260821T222403Z.json`
+      - 📄 `storage-explorer-20260821T222412Z.json`
+      - 📄 `storage-explorer-20260821T222817Z.json`
     - 📁 `results/`
       - 📄 `01-time-to-tunable-20260821T211839Z.json`
       - 📄 `02-fill-policy-20260821T212800Z.json`

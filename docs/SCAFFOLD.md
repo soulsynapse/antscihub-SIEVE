@@ -31,6 +31,7 @@
     - 📄 `window.md`
   - 📄 `ADR.md`
   - 📄 `SCAFFOLD.md`
+  - 📄 `TODO.md`
   - 📄 `VOCAB.md`
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`

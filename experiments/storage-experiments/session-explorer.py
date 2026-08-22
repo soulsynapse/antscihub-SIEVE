@@ -731,7 +731,7 @@ class SessionExplorer(QMainWindow):
         self._rng = random.Random()
         self._play_timer = QTimer(self)
         self._play_timer.timeout.connect(self._play_tick)
-        self._playing = self._looping = self._hopping = False
+        self._scrubbing = False  #: finger down on the timeline
         self._scrub_timer = QTimer(self)
         self._scrub_timer.timeout.connect(self._scrub_tick)
         self._scrub_targets: list[int] = []
@@ -817,11 +817,16 @@ class SessionExplorer(QMainWindow):
         self.play_btn = QPushButton("play")
         self.play_btn.setCheckable(True)
         self.play_btn.toggled.connect(self._toggle_play)
-        self.loop_btn = QPushButton("loop window")
-        self.loop_btn.setCheckable(True)
-        self.loop_btn.setToolTip("loop playback inside the active window — "
-                                 "the tuning gesture")
-        self.loop_btn.toggled.connect(self._toggle_loop)
+        self.pause_btn = QPushButton("pause")
+        self.pause_btn.setCheckable(True)
+        self.pause_btn.setToolTip(
+            "the marked exception. The loop is the default state — it runs "
+            "whenever a window exists and nothing else claims the playhead. "
+            "Pause (space) is for staring at one frame; arrows step while "
+            "paused. Relocating the window resumes the loop.")
+        self.pause_btn.setStyleSheet(
+            "QPushButton:checked { background: #b33; color: white; }")
+        self.pause_btn.toggled.connect(self._toggle_pause)
         self.hop_btn = QPushButton("hop")
         self.hop_btn.setCheckable(True)
         self.hop_btn.setToolTip("uniform-random frames inside the active "
@@ -852,7 +857,7 @@ class SessionExplorer(QMainWindow):
         for w in (self.window_btn, self.window_box):
             row2.addWidget(w)
         row2.addStretch(1)
-        for w in (self.play_btn, self.loop_btn, self.hop_btn,
+        for w in (self.play_btn, self.pause_btn, self.hop_btn,
                   self.scrub_btn, self.walk_btn):
             row2.addWidget(w)
         top = QVBoxLayout()
@@ -878,8 +883,7 @@ class SessionExplorer(QMainWindow):
             "lands a fresh window there and the loop starts.")
         self.slider.sliderMoved.connect(lambda i: self.request(i, "drag"))
         self.slider.valueChanged.connect(lambda i: self.request(i, "drag"))
-        self.slider.sliderPressed.connect(
-            lambda: self.loop_btn.setChecked(False))
+        self.slider.sliderPressed.connect(self._scrub_began)
         self.slider.sliderReleased.connect(self._released)
         self.coverage = QLabel("")
         self.coverage.setStyleSheet(
@@ -1063,6 +1067,8 @@ class SessionExplorer(QMainWindow):
     def _overlay_lines(self) -> list[str]:
         """The live ledger, as the video sees it: what runs right now."""
         lines = []
+        if self.pause_btn.isChecked():
+            lines.append("PAUSED  [space] resume  [arrows] step")
         if self.fill and self.fill.running():
             done = self.fill.pos - self.fill.start
             span = self.fill.end - self.fill.start
@@ -1107,19 +1113,21 @@ class SessionExplorer(QMainWindow):
     # ── windows ──────────────────────────────────────────────────────────
     def _released(self) -> None:
         """The landing gesture: release inside the active window is a
-        tuning scrub and the loop resumes; release anywhere else commits
-        attention there, so a window lands and the loop starts."""
+        tuning scrub (paused stays paused); release anywhere else commits
+        attention there — the window relocates and the loop resumes,
+        clearing any pause, because moving attention means wanting motion."""
+        self._scrubbing = False
         value = self.slider.value()
-        if self._in_window(value):
-            self.request(value, "drag", exact=True)
-            self.loop_btn.setChecked(True)
-            return
         self.request(value, "drag", exact=True)
-        self._land_at(value)
+        if not self._in_window(value):
+            self._land_at(value)
+        self._drive()
 
     def _land_at(self, pos: int) -> None:
         self._set_window(pos - WINDOW // 2, anchor=pos)
-        self.loop_btn.setChecked(True)
+        self._scrubbing = False
+        self.pause_btn.setChecked(False)
+        self._drive()
 
     def _set_window(self, at: int, anchor: int | None = None) -> None:
         start = max(0, min(at, self.total - WINDOW))
@@ -1219,7 +1227,6 @@ class SessionExplorer(QMainWindow):
         """A new crop is a form change: everything derived from the old
         one — RAM frames, chunks, windows — invalidates. The hunt tiers
         (proxy, kf) survive; they never depended on the crop."""
-        self.loop_btn.setChecked(False)
         self.play_btn.setChecked(False)
         self.hop_btn.setChecked(False)
         if self.fill:
@@ -1242,8 +1249,8 @@ class SessionExplorer(QMainWindow):
         self._mark("crop", f"{w}x{h}+{x}+{y}")
         self.hud.setText(
             f"crop drawn: {w}x{h}+{x}+{y} — old form dropped everywhere; "
-            "click the timeline to land a window on the new crop")
-        self.request(self.pos, "step")
+            "relanding the loop on the new form")
+        self._land_at(self.pos)  # the app never stops: new form, same place
 
     # ── signal / flow ────────────────────────────────────────────────────
     def _signal_changed(self, value: int) -> None:
@@ -1322,65 +1329,77 @@ class SessionExplorer(QMainWindow):
         self.hud.setText(f"background work failed: {err}")
 
     # ── drives ───────────────────────────────────────────────────────────
-    def _toggle_play(self, on: bool) -> None:
-        if on:
-            self._playing, self._looping, self._hopping = True, False, False
-            self.loop_btn.setChecked(False)
-            self.hop_btn.setChecked(False)
-        else:
-            self._playing = False
-        self._drive()
+    # There is no stopped state. The transport resolves to one mode:
+    # paused and scrub are exceptions the user is actively holding open,
+    # play and hop are harness drives, and everything else falls through
+    # to the loop — the default the app always returns to.
+    def _mode(self) -> str:
+        if self.pause_btn.isChecked():
+            return "paused"
+        if self._scrubbing:
+            return "scrub"
+        if self.play_btn.isChecked():
+            return "play"
+        if self.hop_btn.isChecked():
+            return "hop"
+        return "loop" if self.active else "idle"
 
-    def _toggle_loop(self, on: bool) -> None:
+    def _toggle_pause(self, on: bool) -> None:
         if on:
-            self._playing, self._looping, self._hopping = False, True, False
             self.play_btn.setChecked(False)
             self.hop_btn.setChecked(False)
-        else:
-            self._looping = False
+        self._drive()
+
+    def _toggle_play(self, on: bool) -> None:
+        if on:
+            self.pause_btn.setChecked(False)
+            self.hop_btn.setChecked(False)
         self._drive()
 
     def _toggle_hop(self, on: bool) -> None:
         if on:
-            self._playing, self._looping, self._hopping = False, False, True
+            self.pause_btn.setChecked(False)
             self.play_btn.setChecked(False)
-            self.loop_btn.setChecked(False)
-        else:
-            self._hopping = False
+        self._drive()
+
+    def _scrub_began(self) -> None:
+        self._scrubbing = True
         self._drive()
 
     def _drive(self) -> None:
-        if self._playing or self._looping or self._hopping:
-            # the loop is the product gesture, so it runs at video rate;
-            # play and hop stay free-run to feel throughput
-            interval = max(1, round(1000 / self.fps)) if self._looping else 0
-            self._play_timer.start(interval)
-        else:
+        mode = self._mode()
+        if mode in ("paused", "scrub", "idle"):
             self._play_timer.stop()
+            return
+        # the loop is the product gesture, so it runs at video rate;
+        # play and hop stay free-run to feel throughput
+        self._play_timer.start(
+            max(1, round(1000 / self.fps)) if mode == "loop" else 0)
 
     def _play_tick(self) -> None:
         if self._busy:
             return
-        if self._hopping:
+        mode = self._mode()
+        if mode == "hop":
             if self.active is None:
                 self.hop_btn.setChecked(False)
                 return
             self.request(self._rng.randrange(*self.active), "hop")
             return
-        if self._looping:
-            if self.active is None:
-                self.loop_btn.setChecked(False)
-                return
+        if mode == "loop":
             nxt = self.pos + 1
             if not self._in_window(nxt):
                 nxt = self.active[0]
             self.request(nxt, "play")
             return
-        nxt = self.pos + 1
-        if nxt >= self.total:
-            self.play_btn.setChecked(False)
+        if mode == "play":
+            nxt = self.pos + 1
+            if nxt >= self.total:
+                self.play_btn.setChecked(False)
+                return
+            self.request(nxt, "play")
             return
-        self.request(nxt, "play")
+        self._play_timer.stop()  # mode changed under the timer
 
     def _scripted_scrub(self) -> None:
         lo, hi = self.active if self.active else (0, self.total)
@@ -1536,7 +1555,8 @@ class SessionExplorer(QMainWindow):
         self.store.wipe()
         self.admitted_free = 0
         self.pos = 0
-        self.hud.setText("cold again: the whole timeline, no windows — hunt")
+        self.hud.setText("cold again — relanding the loop at the start")
+        self._land_at(0)  # there is no stopped state, even after a reset
         self._touch()
 
     def _refresh_status(self) -> None:
@@ -1678,8 +1698,8 @@ class SessionExplorer(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self.play_btn.setChecked(False)
-        self.loop_btn.setChecked(False)
         self.hop_btn.setChecked(False)
+        self._play_timer.stop()
         if self.fill:
             self.fill.stop()
         self._save_log(force=True)
@@ -1692,12 +1712,14 @@ class SessionExplorer(QMainWindow):
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
-        if key == Qt.Key.Key_Right:
-            self.request(self.pos + 1, "step")
-        elif key == Qt.Key.Key_Left:
-            self.request(self.pos - 1, "step")
+        if key in (Qt.Key.Key_Right, Qt.Key.Key_Left):
+            # stepping means staring at frames: entering the marked
+            # exception deliberately, one keypress at a time
+            self.pause_btn.setChecked(True)
+            step = 1 if key == Qt.Key.Key_Right else -1
+            self.request(self.pos + step, "step")
         elif key == Qt.Key.Key_Space:
-            self.loop_btn.toggle() if self.active else self.play_btn.toggle()
+            self.pause_btn.toggle()
         else:
             super().keyPressEvent(event)
 

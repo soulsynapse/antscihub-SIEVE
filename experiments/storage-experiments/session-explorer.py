@@ -1368,9 +1368,22 @@ class SessionExplorer(QMainWindow):
             image = np.ascontiguousarray(image)
         self._last_image = image
         lines = self._overlay_lines()
+        # on a fixed camera every frame looks the same, so position must
+        # be its own feedback channel: a timecode, large while scrubbing
+        # (measured: drags repaint at ~90 Hz and read as frozen anyway)
+        secs = self.pos / self.fps
+        tc = f"{int(secs // 60)}:{secs % 60:04.1f}  f{self.pos}"
+        image = image.copy()
+        fs = max(0.5, image.shape[1] / 1800)
+        tc_fs = fs * (2.6 if self._scrubbing else 1.0)
+        (tw, th), _ = cv2.getTextSize(tc, cv2.FONT_HERSHEY_SIMPLEX,
+                                      tc_fs, max(1, round(1.5 * tc_fs)))
+        org = (image.shape[1] - tw - round(12 * fs), th + round(10 * fs))
+        cv2.putText(image, tc, org, cv2.FONT_HERSHEY_SIMPLEX, tc_fs,
+                    0, max(2, round(4 * tc_fs)), cv2.LINE_AA)
+        cv2.putText(image, tc, org, cv2.FONT_HERSHEY_SIMPLEX, tc_fs,
+                    255, max(1, round(1.5 * tc_fs)), cv2.LINE_AA)
         if lines:
-            image = image.copy()
-            fs = max(0.5, image.shape[1] / 1800)
             pitch = round(34 * fs)
             for i, text in enumerate(lines):
                 org = (round(12 * fs), pitch * (i + 1))

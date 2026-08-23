@@ -191,6 +191,9 @@
     - 📄 `explorer.py` — Feel the storage stack by hand: scrub a region while fill, persist and play fight over it.
     - 📄 `session-explorer.py` — Feel the session plan: hunt the full timeline, land a window, tune, jump.
   - 📁 `tool-experiments/`
+    - 📁 `explorer-logs/`
+      - 📄 `tool-explorer-20260823T162926Z.json`
+      - 📄 `tool-explorer-20260823T162955Z.json`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
       - 📄 `02-form-derivation-20260823T155815Z.json`
@@ -202,6 +205,7 @@
     - 📄 `forms.py` — What a stored frame is, and when one already on hand can answer for another.
     - 📄 `series.py` — The reduced series, and the explicit record of which frames have one.
     - 📄 `surfaces.py` — Drawing a tool's output at display resolution, from data reduced to it.
+    - 📄 `tool-explorer.py` — Feel the loop with a tool on it: overlay live, series filling by watching.
     - 📄 `tools.py` — What a tool declares about itself before anything schedules or draws it.
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.

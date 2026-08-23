@@ -60,9 +60,16 @@ def to_columns(values: np.ndarray, covered: np.ndarray,
         empty = np.zeros(0, dtype=np.float32)
         return {"min": empty, "max": empty, "covered": empty}
     if n <= columns:
-        return {"min": values.astype(np.float32),
-                "max": values.astype(np.float32),
-                "covered": covered.astype(np.float32)}
+        # always `columns` wide, never `n`. A reduction whose output length
+        # depends on its input length is one every caller has to branch on,
+        # and the branch is the bug: a short series drawn into a wide strip
+        # indexes a mask of the wrong shape. Fewer rows than pixels means
+        # each row is stretched across several columns, which is what
+        # drawing a short series into a wide strip means anyway.
+        take = (np.arange(columns) * n // columns).astype(np.int64)
+        return {"min": values[take].astype(np.float32),
+                "max": values[take].astype(np.float32),
+                "covered": covered[take].astype(np.float32)}
     per = -(-n // columns)                      # ceil: columns * per >= n
     pad = columns * per - n
     vals = np.concatenate([values, np.zeros(pad, np.float32)]).reshape(columns, per)

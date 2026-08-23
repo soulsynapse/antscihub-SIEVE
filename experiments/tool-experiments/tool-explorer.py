@@ -760,13 +760,23 @@ class WindowFill:
     it and the frontier yields its decode bandwidth."""
 
     def __init__(self, start: int, end: int, anchor: int, cache: Store,
-                 store: ChunkStore, encode_q: queue.Queue, on_covered):
+                 store: ChunkStore, encode_q: queue.Queue, on_covered,
+                 on_admit=None):
         self.start, self.end = start, end
         self.anchor = max(start, min(anchor, end - 1))
         self.cache = cache
         self.store = store
         self.encode_q = encode_q
         self.on_covered = on_covered
+        #: called with (row, array) the moment a frame is admitted. This is
+        #: where a cheap tool's series gets written, because *this* is when
+        #: the expensive thing already happened. Not the display: what the
+        #: screen managed to draw is a function of paint cost, vsync and
+        #: machine load, and none of those may decide what gets computed.
+        #: The display is a consumer of decoded frames, exactly as the
+        #: series is, and a consumer that drives its own supply is the
+        #: inversion this argument is against.
+        self.on_admit = on_admit
         self.pause = threading.Event()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -816,10 +826,15 @@ class WindowFill:
                         if self._stop.is_set():
                             return
                         self._wait_if_paused()
-                        arr = self.store.fetch(idx)
+                        try:
+                            arr = self.store.fetch(idx)
+                        except (OSError, av.error.FFmpegError):
+                            arr = None   # mid-write; re-derive below
                         if arr is None:  # chunk vanished; re-derive below
                             break
                         self.cache.put(idx, arr)
+                        if self.on_admit is not None:
+                            self.on_admit(idx, arr)
                         self.pos = idx
                         from_chunks += 1
                     else:
@@ -842,6 +857,8 @@ class WindowFill:
                     arr = _crop(_luma(frame))
                     buffer.append(arr)
                     self.cache.put(idx, arr)
+                    if self.on_admit is not None:
+                        self.on_admit(idx, arr)
                     self.pos = idx
                     from_original += 1
                     idx += 1
@@ -1102,6 +1119,9 @@ class ToolRig:
         self.blur = 0
         self.tool = TOOLS[self.name]()
         self.series: dict[str, series_mod.Series] = {}
+        #: the fill thread writes series as frames land; the GUI thread
+        #: reads them to draw and creates them on a tool or crop change
+        self.lock = threading.RLock()
         self.ceilings: dict[str, float] = {}
         #: a decode for a row the declaration said was coming. The whole
         #: point of the counter is that a re-fetch is otherwise invisible —
@@ -1109,7 +1129,8 @@ class ToolRig:
         #: freeze hunt spent a day discovering about something else.
         self.avoidable = 0
         self.unavoidable = 0
-        self.by_watching = 0    #: series rows written by drawing a frame
+        self.by_decode = 0      #: series rows written where a frame was
+                                #: decoded and admitted - the byproduct
         self.by_sweep = 0       #: series rows written by an asked-for sweep
         self.held = 0           #: overlays skipped under load ("hold")
         self.approximate = 0    #: overlays drawn coarse ("downshift"), unstored
@@ -1260,8 +1281,19 @@ class SessionExplorer(QMainWindow):
         self._paint_recent: deque[float] = deque(maxlen=30)
         self._surface_recent: deque[float] = deque(maxlen=30)
         self._show_recent: deque[float] = deque(maxlen=30)
+        self._loop_t0 = 0.0
+        self._loop_frame0 = 0
+        self._loop_step = -1
+        #: frames the clock passed while the machine was still drawing
+        #: the last one. Visible and countable, which slow playback is
+        #: not - the whole reason the two were separated.
+        #: frames the clock passed while the last one was being drawn.
+        #: A picture-only quantity now: nothing about the data depends on
+        #: it, which is the point of separating the two.
+        self.dropped = 0
         self._tick_recent: deque[float] = deque(maxlen=30)
         self._tick_at: float | None = None
+        self._loop_t0 = 0.0
         self.t0 = time.perf_counter()   #: the session clock everything shares
         self.activity: list[dict] = []  #: background spans: fill/encode/flow
         self.act_lock = threading.Lock()
@@ -1410,6 +1442,14 @@ class SessionExplorer(QMainWindow):
         self.overlay_btn.setCheckable(True)
         self.overlay_btn.setChecked(True)
         self.overlay_btn.setToolTip("draw the field over the frame")
+        self.tool_series = QCheckBox("series on decode")
+        self.tool_series.setChecked(True)
+        self.tool_series.setToolTip(
+            "write the tool's series where frames are decoded, not where "
+            "they are drawn")
+        self._series_on_decode = True
+        self.tool_series.toggled.connect(
+            lambda on: setattr(self, "_series_on_decode", on))
         self.overlay_btn.toggled.connect(lambda _: self._repaint_current())
         self.ceiling_spin = QSpinBox()
         self.ceiling_spin.setRange(0, 255)
@@ -1497,7 +1537,8 @@ class SessionExplorer(QMainWindow):
             row2.addWidget(w)
         row0 = QHBoxLayout()
         for w in (QLabel("tool"), self.tool_box, self.overlay_btn,
-                  self.ceiling_spin, QLabel("under load"), self.policy_box):
+                  self.ceiling_spin, self.tool_series,
+                  QLabel("under load"), self.policy_box):
             row0.addWidget(w)
         row0.addStretch(1)
         for w in (self.sweep_btn, self.sweep_all_btn):
@@ -1849,6 +1890,7 @@ class SessionExplorer(QMainWindow):
         want = tool.needs(row)
         frames = {r: self.cache.get(r) for r in want}
         missing = [r for r in want if frames[r] is None]
+        fold = tool.sequential
         if missing:
             # a miss the declaration predicted is the bug this counter
             # exists to name; one it could not have is just a hop
@@ -1875,12 +1917,14 @@ class SessionExplorer(QMainWindow):
         field, value = got
         crop = tuple(CROP_RECT)
         row_series = self.rig.series_for(crop)
+        # nothing is written here. The field was computed to be drawn and
+        # is discarded with the frame; the series is written where the
+        # frame was decoded. A display that records what it managed to draw
+        # makes paint cost, vsync and machine load decide which rows exist,
+        # and the same footage on two machines then disagrees.
+        del row_series, value
         if coarse:
-            self.rig.approximate += 1   # shown, and deliberately not stored
-        else:
-            if row_series.get(row) is None:
-                self.rig.by_watching += 1
-            row_series.put(row, value)
+            self.rig.approximate += 1
         ceiling = self.rig.ceiling_for(crop)
         if not ceiling:
             ceiling = self.rig.ceiling_for(crop, max(float(field.max()), 1.0))
@@ -1912,6 +1956,40 @@ class SessionExplorer(QMainWindow):
         self._mark("policy", name)
         self.hud.setText(f"under load: {name} — {POLICIES[name]}")
         self._repaint_current()
+
+    def _on_admit(self, row: int, arr: np.ndarray) -> None:
+        """A frame was decoded and admitted. Spend a cheap tool on it now.
+
+        Called from the fill thread, which is the whole point: the decode
+        is the event. The frame is hot, the expensive thing has already
+        been paid for, and what falls out is the same number a sweep would
+        write later at full price. Coverage therefore follows what was
+        decoded, deterministically, instead of following what the screen
+        had time to draw.
+
+        Folds are refused here too, for a different reason than on the
+        display: the fill starts at the playhead's chunk and wraps, so it
+        is ordered within a chunk and not across the window. A fold needs a
+        start it can trust, which is a sweep.
+        """
+        # no widget is read here: this runs on the fill thread, and
+        # touching a widget from a worker is the crash rather than a style
+        # point. The toggle is mirrored to a plain flag on the GUI thread.
+        tool = self.rig.tool
+        if not self._series_on_decode or tool.sequential:
+            return
+        want = tool.needs(row)
+        frames = {r: (arr if r == row else self.cache.get(r)) for r in want}
+        if any(frames[r] is None for r in want):
+            return
+        out = self.rig.evaluate(row, frames)
+        if out is None:
+            return
+        with self.rig.lock:     # the GUI thread reads and creates these too
+            s = self.rig.series_for(tuple(CROP_RECT))
+            if s.get(row) is None:
+                self.rig.by_decode += 1
+            s.put(row, out[1])
 
     def _repaint_current(self) -> None:
         """Re-serve where we stand, so a display change is visible at once.
@@ -1962,15 +2040,20 @@ class SessionExplorer(QMainWindow):
         drift = (interval - target) / target * 100
         state = ("ON RATE" if abs(drift) < 4
                  else f"BEHIND {drift:.0f}%" if drift > 0 else "AHEAD")
+        shown = 1000.0 / interval if interval else 0.0
         def mean(d):
             return sum(d) / len(d) if d else 0.0
         serve, field = mean(self._recent), mean(self._field_recent)
         paint, surface = mean(self._paint_recent), mean(self._surface_recent)
         show = mean(self._show_recent)
         other = max(0.0, interval - serve - field - paint - surface - show)
+        # two rates, because they are now two things: the clock's, which
+        # is the truth about how fast the behaviour is being played, and
+        # the screen's, which is how much of it is being drawn
         return [
-            f"{achieved:.1f}/{self.fps:.1f} fps  {state}",
-            f"{interval:.1f}ms: work {interval - other:.1f} "
+            f"clock {self.fps:.1f} fps  drawn {shown:.1f}  "
+            f"dropped {self.dropped}  {state}",
+            f"{interval:.1f}ms/draw: work {interval - other:.1f} "
             f"(serve {serve:.1f} field {field:.1f} paint {paint:.1f} "
             f"surf {surface:.1f} show {show:.1f}) idle {other:.1f}",
         ]
@@ -2126,7 +2209,8 @@ class SessionExplorer(QMainWindow):
         self.fill = WindowFill(
             fill_lo, fill_hi, start if anchor is None else anchor,
             self.cache, self.store, self._encode_q,
-            lambda *a: self.covered.emit(*a))
+            lambda *a: self.covered.emit(*a),
+            on_admit=self._on_admit)
         self.fill.config = run.config  # walls land on the run that launched
         self._fill_act = self._act_start("fill", f"@{start}")
         self.fill.launch()
@@ -2321,42 +2405,40 @@ class SessionExplorer(QMainWindow):
         # three tools whose work differs by eight milliseconds, which is
         # the signature of a rounded deadline rather than of the work.
         if mode == "loop":
-            self._play_timer.setSingleShot(True)
+            # a render tick, not a frame tick: it runs faster than the
+            # video rate and exits immediately whenever the clock still
+            # names the frame already on screen, which at this ratio is
+            # most of the time. Nothing about the rate depends on it being
+            # accurate - the clock is the authority - so it needs no
+            # precise delivery, only to be often enough not to be the
+            # thing that misses a boundary.
+            self._play_timer.setSingleShot(False)
             self._loop_t0 = time.perf_counter()
-            self._loop_n = 0
-            self._play_timer.start(max(1, round(1000 / self.fps)))
+            self._loop_frame0 = self.pos if self._in_window(self.pos)                 else self.active[0]
+            self._loop_step = -1
+            self._play_timer.start(max(1, round(1000 / float(self.fps) / 4)))
         else:
             self._play_timer.setSingleShot(False)
             self._play_timer.start(0)
 
-    def _rearm_loop(self) -> None:
-        """Next tick at the next multiple of the period from the start.
-
-        Phase is kept against the loop's own start time, so a frame that
-        ran long borrows from the next wait rather than pushing every
-        later frame back by what it overran.
-        """
-        if not self._play_timer.isSingleShot() or self._mode() != "loop":
-            return
-        self._loop_n += 1
-        due = self._loop_t0 + self._loop_n * (1.0 / float(self.fps))
-        self._play_timer.start(
-            max(0, int(round((due - time.perf_counter()) * 1000))))
-
     def _play_tick(self) -> None:
-        try:
-            self._play_tick_body()
-        finally:
-            self._rearm_loop()
+        self._play_tick_body()
+
+    def _drew(self) -> None:
+        """Record the gap between frames actually put on screen.
+
+        Between draws, not between ticks: the render tick runs several
+        times per frame and exits without doing anything whenever the
+        clock still names the frame already up, so timing it would measure
+        the tick rate and call it the frame rate.
+        """
+        now = time.perf_counter()
+        last = self._tick_at
+        if last is not None and (now - last) < 1.0:
+            self._tick_recent.append((now - last) * 1000)
+        self._tick_at = now
 
     def _play_tick_body(self) -> None:
-        now = time.perf_counter()
-        last = getattr(self, "_tick_at", None)
-        if last is not None:
-            gap = (now - last) * 1000
-            if gap < 1000:          # a resumed loop is not a slow frame
-                self._tick_recent.append(gap)
-        self._tick_at = now
         if self._busy:
             return
         mode = self._mode()
@@ -2364,12 +2446,35 @@ class SessionExplorer(QMainWindow):
             if self.active is None:
                 self.hop_btn.setChecked(False)
                 return
+            self._drew()
             self.request(self._rng.randrange(*self.active), "hop")
             return
         if mode == "loop":
-            nxt = self.pos + 1
-            if not self._in_window(nxt):
-                nxt = self.active[0]
+            if self.active is None:
+                return
+            # the playhead follows the clock, not the tick. Which source
+            # frame *should* be showing is a question about elapsed wall
+            # time; how often we get to draw is a question about the
+            # machine, and tying them together means a slow frame delays
+            # the playhead instead of skipping one. That is a lie about
+            # behaviour: playback speed is the thing being judged when a
+            # bout is watched, and a loop that runs slow is silently wrong
+            # where a dropped frame is visible and counted.
+            start, end = self.active
+            span = max(1, end - start)
+            elapsed = time.perf_counter() - self._loop_t0
+            step = int(elapsed * float(self.fps))
+            nxt = start + (self._loop_frame0 - start + step) % span
+            if step == self._loop_step:
+                return          # same frame as last tick: nothing to draw
+            behind = step - self._loop_step - 1
+            if self._loop_step >= 0 and behind > 0:
+                # dropped from the picture and from nothing else. No
+                # catch-up: there is nothing to catch up on, because the
+                # display was never what computed anything.
+                self.dropped += behind
+            self._loop_step = step
+            self._drew()
             self.request(nxt, "play")
             return
         if mode == "play":
@@ -2377,6 +2482,7 @@ class SessionExplorer(QMainWindow):
             if nxt >= self.total:
                 self.play_btn.setChecked(False)
                 return
+            self._drew()
             self.request(nxt, "play")
             return
         self._play_timer.stop()  # mode changed under the timer
@@ -2619,11 +2725,11 @@ class SessionExplorer(QMainWindow):
             f"field {field_mean:.1f} / paint {paint_mean:.1f} / "
             f"surface {surface_mean:.1f} ms  "
             f"series {s.coverage(0, self.total) * 100:.1f}% "
-            f"(watching {rig.by_watching}, sweep {rig.by_sweep})  "
+            f"(decode {rig.by_decode}, sweep {rig.by_sweep})  "
             f"avoidable decodes {rig.avoidable} "
             f"(unpredictable {rig.unavoidable})  "
             f"{self.policy_box.currentText()}: held {rig.held}, "
-            f"coarse {rig.approximate}")
+            f"coarse {rig.approximate}  unpainted {self.dropped}")
 
     def _render_strip(self) -> None:
         w_px = self.strip_label.width()
@@ -2680,8 +2786,9 @@ class SessionExplorer(QMainWindow):
         """
         if w_px < 20 or height < 6:
             return None
-        s = self.rig.series_for(tuple(CROP_RECT))
-        cols = surfaces.to_columns(s.values, s.covered, w_px)
+        with self.rig.lock:
+            s = self.rig.series_for(tuple(CROP_RECT))
+            cols = surfaces.to_columns(s.values, s.covered, w_px)
         seen = cols["covered"] > 0
         band = np.full((height, w_px, 3), 12, dtype=np.uint8)
         if not seen.any():
@@ -2705,9 +2812,11 @@ class SessionExplorer(QMainWindow):
         """The active window's series, drawn the same way at window scale."""
         w_px = max(20, self.series_label.width())
         h_px = max(40, self.series_label.height())
-        s = self.rig.series_for(tuple(CROP_RECT))
-        start, end = self.active if self.active else (0, self.total)
-        values, covered = s.values[start:end], s.covered[start:end]
+        with self.rig.lock:
+            s = self.rig.series_for(tuple(CROP_RECT))
+            start, end = self.active if self.active else (0, self.total)
+            values = s.values[start:end].copy()
+            covered = s.covered[start:end].copy()
         cols = surfaces.to_columns(values, covered, w_px)
         img = np.full((h_px, w_px, 3), 18, dtype=np.uint8)
         seen = cols["covered"] > 0
@@ -2820,8 +2929,8 @@ class SessionExplorer(QMainWindow):
         crop = tuple(CROP_RECT)
         s = self.rig.series_for(crop)
         self.hud.setText(
-            f"sweep wrote {written} rows; {self.rig.by_watching} of this "
-            f"series came from watching, {self.rig.by_sweep} from sweeps "
+            f"sweep wrote {written} rows; {self.rig.by_decode} of this "
+            f"series came free with the decode, {self.rig.by_sweep} from sweeps "
             f"({s.coverage(0, self.total) * 100:.1f}% of the timeline)")
         self._render_series()
         self._render_strip()
@@ -2939,18 +3048,19 @@ class SessionExplorer(QMainWindow):
             },
             "play_rate": {
                 "target_fps": round(float(self.fps), 3),
-                "achieved_fps": (
+                "drawn_fps": (
                     round(1000.0 * len(self._tick_recent)
                           / sum(self._tick_recent), 2)
                     if self._tick_recent else None),
-                "timer_type": "precise",
+                "frames_unpainted": self.dropped,
+                "scheduling": "clock-driven playhead, free render tick",
             },
             "overlay_policy": self.policy_box.currentText(),
             "overlays_held": self.rig.held,
             "overlays_approximate": self.rig.approximate,
             "avoidable_decodes": self.rig.avoidable,
             "unavoidable_decodes": self.rig.unavoidable,
-            "series_rows_by_watching": self.rig.by_watching,
+            "series_rows_by_decode": self.rig.by_decode,
             "series_rows_by_sweep": self.rig.by_sweep,
             "series": [
                 {"key": key, "covered": int(v.covered.sum()),
@@ -3088,14 +3198,14 @@ def main() -> None:
             print(f"  {name:<22} key={rig.tool.key():<28} "
                   f"field={window._last_field_ms:6.2f} "
                   f"paint={window._last_paint_ms:6.2f} ms "
-                  f"watched={rig.by_watching} covered={covered * 100:.1f}%")
+                  f"by-decode={rig.by_decode} covered={covered * 100:.1f}%")
         window.tool_box.setCurrentText("absdiff")
         before = window.rig.series_for(tuple(CROP_RECT)).coverage(4000, 4300)
         window._sweep(whole=False)
         window._walk_wait_flow()
         after = window.rig.series_for(tuple(CROP_RECT)).coverage(4000, 4300)
         print(f"sweep: window coverage {before * 100:.1f}% -> {after * 100:.1f}%"
-              f"  (watching {window.rig.by_watching}, sweep {window.rig.by_sweep})")
+              f"  (decode {window.rig.by_decode}, sweep {window.rig.by_sweep})")
         window.signal_slider.setValue(4)      # a parameter, not a form
         window._walk_wait_flow()
         window._param_fire()
@@ -3156,6 +3266,9 @@ def main() -> None:
             window._show_recent.clear()
             window._tick_at = None
             gaps: list[float] = []
+            window.dropped = 0
+            before_cov = window.rig.series_for(tuple(CROP_RECT)).covered.sum()
+            pos0 = [None]
             # `loop`, not `play`. In this explorer the play button is
             # free-run on purpose - it exists to feel throughput - and the
             # rate-keeping mode is the default one with no transport button
@@ -3175,7 +3288,10 @@ def main() -> None:
                 or window._tick_recent.clear())
             stop.start(int(secs * 1000))
             sampler.start()
+            t_start = time.perf_counter()
+            QTimer.singleShot(200, lambda: pos0.__setitem__(0, window.pos))
             app.exec()
+            elapsed = time.perf_counter() - t_start
             sampler.stop()
             gaps.extend(window._tick_recent)
             if not gaps:
@@ -3191,6 +3307,14 @@ def main() -> None:
             show = mean(window._show_recent)
             other = max(0.0, p50 - serve - field - paint - surf - show)
             rows.append((label, p50, 1000 / p50, serve, field, paint, surf, other))
+            expect = elapsed * float(window.fps)
+            passed = len(gaps) + window.dropped
+            after_cov = window.rig.series_for(tuple(CROP_RECT)).covered.sum()
+            print(f"      clock {expect:.0f} frames in {elapsed:.1f}s | "
+                  f"painted {len(gaps)} unpainted {window.dropped} "
+                  f"| series +"
+                  f"{after_cov - before_cov} | "
+                  f"{'REAL TIME' if abs(passed - expect) < 0.06 * expect else 'OFF CLOCK'}")
             spread = (f"  [p10 {gaps[len(gaps)//10]:.1f} p90 "
                       f"{gaps[-len(gaps)//10 - 1]:.1f}]")
             print(f"  {label:<28} {1000 / p50:5.2f} fps  interval {p50:6.2f} ms"

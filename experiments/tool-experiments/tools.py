@@ -1,126 +1,62 @@
-"""What a tool declares about itself before anything schedules or draws it.
+"""What a step declares about itself before anything schedules or runs it.
 
-A tool, to everything in this folder, is five declarations and two
-functions. The declarations are what the scheduler and the overlay need in
-order to decide anything without running the tool first; the functions are
-the work.
+A step, here, is a form it wants its inputs in, a set of offsets naming which
+inputs it admits, a flag saying whether it can be evaluated anywhere or only
+in sequence, the parameters its answer depends on, and two functions: one
+producing a field and one reducing that field to the number a series stores.
 
-**The form it requires.** Not a fixed form — the crop is drawn by the user,
-so a tool declares how to build its form from whatever the crop currently
-is. This is what lets the store answer "does anything on hand satisfy the
-tool" (`forms.grade`) rather than "is the tool's frame cached".
+**The form.** Not a fixed one — the crop is drawn by the user, so a step says
+how to build its form from whatever the crop currently is. That is what lets
+a store answer "does anything on hand satisfy this" (`forms.grade`) rather
+than "is this step's frame cached".
 
-**Which frames it still needs**, as an explicit set of offsets from the
-frame being computed rather than a reach. A pointwise op declares `(0,)`,
-frame differencing and dense flow `(-1, 0)`, and a motion-history image
-sampled at fixed lags `(-30, -20, -10, 0)` — four frames, not thirty-one,
-which is the whole reason this is a set and not an integer. What must be
-*fetched* and how far a sweep must decode *through* are then different
-numbers, and only the second one is `reach`.
+**The offsets**, as an explicit set relative to the position being computed
+rather than as a single reach. Frame differencing admits `(-1, 0)`; a motion
+history sampled at fixed lags admits those lags and the current position,
+which is a handful of inputs spanning many — and the span and the set are
+different numbers, only the second of which is `reach`. What that declaration
+is *for* is scheduling fetches rather than saving memory, and the reasoning
+is ADR-0006 rather than repeated here.
 
-A declaration is a correctness specification, not a request. Evicting a
-frame a tool declared does not make the tool slower — it makes the tool
-decode again, which is the whole inefficiency the declaration exists to
-prevent. So the store's job is to honour it, and the tool's job is to
-declare what it actually needs; neither is planning against the other being
-wrong.
+Two readings of the same declaration, and confusing them is the trap that
+sparse offsets set. `needs(row)` is what must be resident to evaluate one
+position. `residency` over a run of positions is what may not be evicted
+while serving them — the union, not the point set, because honouring the
+point set for a moving playhead costs a fetch per offset per position.
 
-**Retention is the union over a horizon, not `needs` at a point.** This is
-the trap, and declaring sparsely is what springs it. `needs(row)` is exactly
-right for one evaluation at one row. As a retention policy for a moving
-playhead it is pathological: a lag-(30, 20, 10) tool at row 500 holds
-{470, 480, 490, 500} and at row 501 needs {471, 481, 491, 501}, four
-entirely new frames, so honouring the sparse set literally costs four
-decodes per displayed frame instead of one. What is correct is the union of
-`needs(r)` over the positions about to be served — sparse and small for a
-still playhead or a random hop, dense for forward playback, and in both
-cases computed from the declaration rather than assumed. One expression,
-evaluated over the horizon the transport implies.
+**Sequential** distinguishes a step evaluable at any position from one
+evaluable only in order from a start or a checkpoint. The first can be split,
+resumed, reordered, or skipped over ground nobody visits; the second can only
+be fed by a producer able to promise order and completeness. Nothing in this
+tree is sequential yet, so the reset/step/checkpoint protocol such a step
+would owe is named and unimplemented, and should stay that way until
+something real needs it.
 
-So the declaration does three jobs: unioned over the horizon it is what
-eviction may not take, read one row ahead it is the prefetch list, and read
-across a span it is what a sweep must decode. It is a pure function of
-position rather than a pin/release protocol, deliberately — nothing to leak
-when a tool is switched off or the playhead jumps, and the store asks what
-the active set needs now instead of remembering what it was told.
+**Cost class is not among the declarations**, and `classify` computes it from
+measurement instead. It was a declared field until `03-free-while-hot`
+falsified the idea rather than any particular declaration — every step
+measured landed in a different class against the two input regimes the loop
+runs over, because the cheapest class is a ratio against a fetch and those
+fetches differ by more than an order of magnitude. ADR-0007 carries the
+decision; the result files carry the numbers.
 
-What the declaration is *not* worth is a memory argument. During playback
-the union over the horizon is dense anyway, so retention collapses to what a
-window around the playhead would have held; where it stays sparse the
-playhead is stationary and nothing is under pressure. The declaration earns
-its keep as a **fetch plan**: a hop to a row whose lags sit thirty frames
-back needs three specific old frames that no locality rule would ever
-predict, and without the declaration they are discovered at display time and
-paid for inside one frame budget. Eviction could stay crude. Fetching could
-not. (An execution-strategy router keyed on how much a tool pins was drafted
-here and cut: it answered a question — interactive against ordered pass —
-that nothing in this tree asks yet. `docs/decode/ideas.md` keeps the general
-form, that unbounded extent is unschedulable rather than slow.)
+**The field and the reduction** have different economics and different fates.
+A field is image-sized — a difference image, a flow magnitude — and it exists
+to be drawn. It is computed where it is drawn and discarded there, because
+storing fields means another recording's worth of bytes per step per
+parameter setting. A reduction is a scalar, and it is what a series stores,
+written where the inputs it was computed from were admitted and never by
+anything that draws (ADR-0005).
 
-**Whether it is a map or a fold**, which is a different axis from the one
-above and is easily confused with it. A map-shaped tool is evaluable at any
-frame given its offsets, so a sweep can be split, resumed, reordered, or
-skipped over ground nobody visits. A fold-shaped tool — a progressive
-background, a continuous background subtractor, an MHI carrying a decayed
-accumulator — has a *bounded* memory requirement, one accumulator rather
-than a window of frames, and an *ordering* requirement instead: it must be
-fed in sequence from a start or a checkpoint, and a jump costs a replay. So
-a fold declares `sequential=True` with offsets `(0,)`; declaring frame
-retention for it would pin gigabytes to avoid re-fetching frames it never
-wanted. An MHI sampled at fixed lags and an MHI carrying an accumulator are
-the same name and opposite costs, and only the first one is about memory.
-The reset/step/checkpoint protocol a fold owes is not implemented yet,
-because the two tools this folder starts with are both maps.
+Drawing a field is `surfaces.py`'s job rather than a step's. A step that
+carried its own painter would carry its own paint cost into a place this
+folder measures paint separately on purpose.
 
-A fold's ordering requirement means it can only be fed by a producer that
-can promise order and completeness, which an ordered pass can and an
-opportunistic one cannot; a map is indifferent, because a position it
-misses is only a position coverage records and a later pass closes. Nothing
-in this tree is fold-shaped yet, so the protocol a fold owes — reset, step,
-and a checkpoint policy — is declared and unimplemented, and should stay
-that way until something real needs it.
-
-**Its cost class — which a tool does not get to declare.** The three classes
-are cut where product behaviour changes:
-
-- `FREE` — in the noise beside the decode that produced the frame. Its
-  series fills as a byproduct of the user watching, and a sweep is only ever
-  needed for ground nobody looked at.
-- `BUDGETED` — real time, but fits a frame period once decode and paint are
-  taken out of it. It can preview live and it can never be free.
-- `COMMIT` — does not fit. Live preview is unavailable; the overlay shows
-  what has been computed and says so where nothing has.
-
-This was originally a field on the tool, declared by its author and checked
-by an experiment. `03-free-while-hot` checked it and falsified the idea
-rather than the declarations: on this machine *every* tool changed class
-between the two regimes the loop runs in, because `FREE` is a ratio against
-a decode and the decodes differ by a factor of forty between an intra chunk
-and the uncut source. Frame differencing is genuinely free beside a 5.3K
-decode and genuinely is not beside a chunk, at the same size, in the same
-session, ten seconds apart. A class is a property of a *pairing*, so a tool
-carrying one was a tool asserting something it cannot know.
-
-What replaces it is `classify`, applied to measurements taken where the tool
-is actually running. That follows the tree's existing habit rather than
-inventing one: seek routing is probed at first open and cached per machine
-and source shape, for the same reason — the alternative is shipping one
-machine's answer to every other.
-
-**The field, and the reduction.** A tool produces two things per frame and
-they have completely different economics. The field is image-sized — the
-difference image, the flow magnitude — and it is what the overlay draws. The
-reduction is a scalar (or a few), and it is what the graphs read and the
-series tier stores. Fields are never stored: a stored field is another
-video's worth of bytes per tool per parameter setting, which is the whole
-reason tier 4 holds series. So a field is computed when it is drawn and
-discarded, and the frame it was computed on was hot anyway — which is how a
-tool's series gets written by the act of looking at it.
-
-Both tools here reduce a scalar field the same way, so only `field`
-differs. Drawing one is `surfaces.py`'s job, not a tool's: a tool that
-carried its own painter would carry its own paint cost, and paint cost is a
-thing this folder measures rather than distributes.
+A field stays in the narrowest type that carries its answer. Neither consumer
+wants a float for its own sake — the overlay rescales on its way to a colour
+map and the reduction is a mean — so widening one costs a full pass over an
+image and buys nothing. `03-free-while-hot` prices what that costs when it is
+done by accident.
 """
 
 from __future__ import annotations
@@ -134,80 +70,80 @@ import numpy as np
 
 from forms import Form
 
-FREE = "free"          #: noise beside decode; the series fills by watching
-BUDGETED = "budgeted"  #: fits the residual frame period; previews live
-COMMIT = "commit"      #: cannot preview live; shows what exists, says so
+FREE = "free"          #: in the noise beside the fetch that produced its input
+BUDGETED = "budgeted"  #: fits the period once fetch and paint are removed
+COMMIT = "commit"      #: does not fit; shows what exists and says where none
 
-#: at most this many decodes' worth of work to count as free. A cut, not a
-#: fact: it is exposed so a caller can move it, and every classification
-#: reports the ratio it was applied to so the cut can be argued with.
+#: at most this many fetches' worth of work to count as free. A cut rather
+#: than a fact, exposed so a caller can move it — every experiment that
+#: applies it records the ratio alongside, so the cut can be argued with
+#: without anything being re-run.
 FREE_RATIO = 2.0
 
 
-def classify(field_ms: float, decode_ms: float, period_ms: float,
+def classify(field_ms: float, fetch_ms: float, period_ms: float,
              paint_ms: float, free_ratio: float = FREE_RATIO) -> str:
-    """Which class a tool falls in *against this decode*, from measurement.
+    """Which class a step falls in *against this fetch*, from measurement.
 
-    Not a property of the tool. `FREE` is a ratio against the decode that
-    produced the frame, and the same op lands either side of it depending
-    on whether the frame came from the uncut source or an intra chunk —
-    which is why nothing here is declared. `BUDGETED` is measured against
-    the residual period, decode and paint removed, because a tool that fits
-    the frame alone and not beside the drawing of it does not fit.
+    Never a property of the step alone. `FREE` is a ratio against whatever
+    produced the input, so the same arithmetic lands either side of the line
+    depending on where the input came from. `BUDGETED` is measured against
+    what is left of the period once the fetch and the drawing are taken out,
+    because a step that fits the period alone and not beside the drawing of
+    it does not fit.
     """
-    if decode_ms > 0 and field_ms <= free_ratio * decode_ms:
+    if fetch_ms > 0 and field_ms <= free_ratio * fetch_ms:
         return FREE
-    return BUDGETED if field_ms <= period_ms - decode_ms - paint_ms else COMMIT
+    return BUDGETED if field_ms <= period_ms - fetch_ms - paint_ms else COMMIT
 
 
 @dataclass
 class Tool:
-    """One tool's declarations and its work."""
+    """One step's declarations and its work."""
 
     name: str
-    #: crop rect in source pixels -> the form the tool wants its frames in
+    #: crop rect in source pixels -> the form this step wants its inputs in
     form_for: Callable[[tuple[int, int, int, int]], Form]
-    #: offsets from the frame being computed; non-positive, 0 included
+    #: offsets from the position being computed; non-positive, 0 included
     offsets: tuple[int, ...]
     #: {row: array} for exactly `needs(row)`, and the row -> a scalar field
     field: Callable[[dict[int, np.ndarray], int], np.ndarray]
-    #: a scalar field -> the number the series stores
+    #: a scalar field -> the number a series stores
     reduce: Callable[[np.ndarray], float] = staticmethod(
         lambda f: float(np.mean(f)))
-    #: a fold: bounded state, but must be fed in order from a checkpoint
+    #: evaluable only in order, from a start or a checkpoint
     sequential: bool = False
+    #: what the field's answer depends on, and nothing downstream of it
     params: dict | None = None
 
     def needs(self, row: int) -> tuple[int, ...]:
-        """The rows that must be resident to compute `row`.
+        """The rows that must be resident to evaluate `row`.
 
-        One evaluation, one row. For what to *hold* while the playhead is
-        moving, use `residency` over the horizon — the sparse set at a
-        point is not the working set of a sequence, and mistaking the two
-        is how a sparse declaration turns into extra decodes per frame.
+        One position. For what to *hold* while the playhead moves, ask
+        `residency` over the run about to be served: the set at a point is
+        not the working set of a sequence, and treating it as one turns a
+        sparse declaration into extra fetches per position.
         """
         return tuple(row + off for off in self.offsets)
 
     @property
     def reach(self) -> int:
-        """How far back the oldest requirement sits.
+        """How far back the oldest admitted input sits.
 
-        What a sweep must decode *through* to produce an honest value,
+        What an ordered pass must work *through* to produce an honest value,
         which is wider than what it must *hold* whenever the offsets are
-        sparse. The two being one number is the thing a scalar extent got
-        wrong.
+        sparse. Collapsing the two into one number is what a scalar extent
+        got wrong.
         """
         return -min(self.offsets)
 
     def key(self) -> str:
         """The durable spelling, folding only what changes the stored value.
 
-        Parameters that live *downstream* of the series — a threshold read
-        off it, a smoothing window applied at display — are deliberately not
-        here: folding them would invalidate work whose own inputs never
-        changed, which is the cache-key failure `docs/decode/ideas.md`
-        records. What belongs in a tool's params is what the field depends
-        on.
+        Parameters downstream of the series — a threshold read off it, a
+        smoothing applied at display — are deliberately absent: folding them
+        would invalidate work whose own inputs never changed, which is the
+        cache-key failure `docs/decode/ideas.md` records.
         """
         if not self.params:
             return self.name
@@ -216,14 +152,13 @@ class Tool:
 
 
 def analysis_form(pix: str = "gray") -> Callable[[tuple[int, int, int, int]], Form]:
-    """The crop at source sampling — the default a tool wants.
+    """The crop at source sampling — the default a step wants.
 
     Native sampling because a form that has already been resampled can only
-    be derived from approximately (`forms.EXACT`), and an approximate frame
-    may not be recorded. A tool that genuinely wants less resolution says so
-    with its own `form_for` and accepts that its series is about a different
-    picture than the full-resolution one, which is a real answer to a real
-    question and not the same answer cheaper.
+    be derived from approximately, and an approximate input may not be
+    recorded (`forms.py`). A step that genuinely wants less resolution says
+    so with its own `form_for`, and accepts that its answer is about a
+    different picture rather than the same one cheaper.
     """
     def build(rect: tuple[int, int, int, int]) -> Form:
         x, y, w, h = rect
@@ -231,29 +166,24 @@ def analysis_form(pix: str = "gray") -> Callable[[tuple[int, int, int, int]], Fo
     return build
 
 
-# ── the two this folder starts with ──────────────────────────────────────
-# Chosen as a pair because they straddle the boundary the whole design keys
-# on: one is in the noise beside decode and one is roughly forty times it,
-# so every fork that reads the cost class fires at least once.
-
-# A field stays in the narrowest type that carries its answer. Neither
-# consumer wants float for its own sake — `surfaces.overlay` scales through
-# `convertScaleAbs` and the reduction is a mean — so an `astype(np.float32)`
-# on a difference image buys nothing and costs a full pass over a megabyte,
-# which 03-free-while-hot measured at roughly two thirds of the op itself.
+# ── the steps this folder measures against ───────────────────────────────
+# Loads, not proposals. `absdiff` and `dis_flow` sit either side of the
+# free/not-free line so every fork reading a cost class fires; `lag_mhi` is
+# the one whose admitted set is not its reach, which keeps that distinction
+# tested rather than merely described.
 
 def _absdiff(frames: dict[int, np.ndarray], row: int) -> np.ndarray:
+    # returned as it comes out, uint8: widening it here would cost a pass
+    # over the image and neither consumer asked for a float
     return cv2.absdiff(frames[row], frames[row - 1])
 
 
 def _dis_flow_factory(preset: int):
-    #: per-thread, not per-tool. A tool object is shared by every consumer
-    #: that wants it — that is the point of this folder — and the overlay
-    #: calling `field` on the GUI thread while a sweep calls it on a worker
-    #: is the normal case, not the exotic one. An op holding solver state
-    #: across calls therefore holds it per thread or corrupts it; the
-    #: alternative, a lock, would serialise the two consumers this folder
-    #: exists to measure running at once.
+    #: solver state per thread, not per step. A step object is shared by
+    #: every consumer that wants it, and one calling `field` on the GUI
+    #: thread while another calls it on a worker is the normal case here.
+    #: A lock would serialise exactly the two consumers this folder exists
+    #: to watch run at once.
     local = threading.local()
 
     def field(frames: dict[int, np.ndarray], row: int) -> np.ndarray:
@@ -261,39 +191,35 @@ def _dis_flow_factory(preset: int):
         if dis is None:
             dis = local.dis = cv2.DISOpticalFlow_create(preset)
         flow = dis.calc(frames[row - 1], frames[row], None)
-        # cv2.magnitude, not np.linalg.norm(axis=2): the numpy route builds
-        # intermediates over a two-channel megapixel field and measured
-        # slower than the flow solve it was reducing.
+        # cv2.magnitude rather than a numpy norm over the channel axis: the
+        # numpy route builds intermediates across the whole two-channel
+        # field and measured slower than the solve it was reducing
         return cv2.magnitude(flow[..., 0], flow[..., 1])
     return field
 
 
 def absdiff() -> Tool:
-    return Tool(
-        name="absdiff", form_for=analysis_form("gray"), offsets=(-1, 0),
-        field=_absdiff)
+    return Tool(name="absdiff", form_for=analysis_form("gray"),
+                offsets=(-1, 0), field=_absdiff)
 
 
 def dis_flow(preset: int = cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST) -> Tool:
     names = {cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST: "ultrafast",
              cv2.DISOPTICAL_FLOW_PRESET_FAST: "fast",
              cv2.DISOPTICAL_FLOW_PRESET_MEDIUM: "medium"}
-    return Tool(
-        name="dis", form_for=analysis_form("gray"), offsets=(-1, 0),
-        field=_dis_flow_factory(preset),
-        params={"preset": names.get(preset, str(preset))})
+    return Tool(name="dis", form_for=analysis_form("gray"), offsets=(-1, 0),
+                field=_dis_flow_factory(preset),
+                params={"preset": names.get(preset, str(preset))})
 
 
 def lag_mhi(lags: tuple[int, ...] = (30, 20, 10)) -> Tool:
-    """Motion history sampled at fixed lags — the sparse-retention case.
+    """Motion history sampled at fixed lags — the sparse-admission case.
 
-    Here as the third tool rather than as a hypothetical, because it is the
-    only one of the three whose retention set is not its reach: it holds
-    four frames and spans thirty-one. An MHI that instead carried a decayed
-    accumulator would be `sequential=True` with offsets `(0,)` — same
-    picture, bounded memory, and a replay cost on every jump. Which of the
-    two a user wants is a question about their footage, not an
-    implementation detail.
+    Present as a third load because it is the only one whose admitted set is
+    not its reach: it holds a handful of inputs and spans many. A motion
+    history carrying a decayed accumulator instead would be `sequential`
+    with offsets `(0,)` — the same picture, bounded state, and a replay on
+    every jump.
     """
     offsets = tuple(sorted(-lag for lag in lags) + [0])
 
@@ -301,10 +227,9 @@ def lag_mhi(lags: tuple[int, ...] = (30, 20, 10)) -> Tool:
         cur = frames[row]
         out = None
         for rank, off in enumerate(offsets[:-1]):
-            # `* weight` on a uint8 difference promotes the whole megapixel
-            # to float64 — a Python float is a double, and the promotion is
-            # silent. convertScaleAbs stays in uint8 and does the scale in
-            # the same pass as the subtraction's output.
+            # convertScaleAbs, not `* weight`: a Python float is a double,
+            # so multiplying a uint8 image by one silently promotes the
+            # whole thing. This scales in the same pass and stays uint8.
             weight = (rank + 1) / len(lags)
             aged = cv2.convertScaleAbs(cv2.absdiff(cur, frames[row + off]),
                                        alpha=weight)
@@ -317,19 +242,17 @@ def lag_mhi(lags: tuple[int, ...] = (30, 20, 10)) -> Tool:
 
 
 def residency(active: list[tuple[Tool, Form]], rows) -> set[tuple[int, str]]:
-    """What the active tools need held to serve `rows`, as (row, form) pairs.
+    """What the active steps need held to serve `rows`, as (row, form) pairs.
 
-    `rows` is the horizon the transport implies — one row while paused or
-    hopping, the run ahead of the playhead while playing, a whole span for
-    a sweep. Taking a horizon rather than a position is the difference
-    between a retention policy and a per-frame lookup: the union over the
-    rows about to be served is the working set, and `needs` at a single row
-    is only its degenerate case.
+    `rows` is the horizon the transport implies: one position while paused
+    or hopping, the run ahead of the playhead while playing, a whole span
+    for an ordered pass. Taking a horizon rather than a position is the
+    difference between a retention policy and a per-position lookup.
 
-    Pairs, not rows, because a pin is on a frame *in a form*: two tools at
-    different forms need different arrays of the same instant, and a store
-    unioning by row alone would think one satisfied the other. Everything
-    outside this set is the store's to evict however it likes.
+    Pairs rather than rows, because what is held is an input *in a form*:
+    two steps at different forms need different arrays of one instant, and
+    a store unioning by row alone would think one satisfied the other.
+    Everything outside this set is the store's to evict as it likes.
     """
     if isinstance(rows, int):
         rows = (rows,)

@@ -227,14 +227,18 @@
       - 📄 `tool-explorer-20260823T192412Z.json`
       - 📄 `tool-explorer-20260823T192438Z.json`
       - 📄 `tool-explorer-20260823T192452Z.json`
+      - 📄 `tool-explorer-20260823T193323Z.json`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
       - 📄 `02-form-derivation-20260823T155815Z.json`
       - 📄 `03-free-while-hot-20260823T160250Z.json`
+      - 📄 `03-free-while-hot-20260823T193219Z.json`
       - 📄 `04-under-load-20260823T172050Z.json`
       - 📄 `05-provenance-20260823T180759Z.json`
       - 📄 `05-provenance-20260823T180817Z.json`
       - 📄 `05-provenance-20260823T191912Z.json`
+      - 📄 `05-provenance-20260823T193304Z.json`
+      - 📄 `05-provenance-20260823T193321Z.json`
     - 📄 `01-paint-cost.py` — What drawing a tool's output costs, before anything is concluded about the store.
     - 📄 `02-form-derivation.py` — Does a held frame answer for a wanted form more cheaply than a decode?
     - 📄 `03-free-while-hot.py` — What riding along on a decode that was happening anyway actually costs.
@@ -245,7 +249,7 @@
     - 📄 `series.py` — The reduced series, and the explicit record of which frames have one.
     - 📄 `surfaces.py` — Drawing a tool's output at display resolution, from data reduced to it.
     - 📄 `tool-explorer.py` — Feel the loop with a tool on it: overlay live, series filling by watching.
-    - 📄 `tools.py` — What a tool declares about itself before anything schedules or draws it.
+    - 📄 `tools.py` — What a step declares about itself before anything schedules or runs it.
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
   - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.

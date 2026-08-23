@@ -1259,6 +1259,7 @@ class SessionExplorer(QMainWindow):
         self._field_recent: deque[float] = deque(maxlen=30)
         self._paint_recent: deque[float] = deque(maxlen=30)
         self._surface_recent: deque[float] = deque(maxlen=30)
+        self._show_recent: deque[float] = deque(maxlen=30)
         self._tick_recent: deque[float] = deque(maxlen=30)
         self._tick_at: float | None = None
         self.t0 = time.perf_counter()   #: the session clock everything shares
@@ -1788,7 +1789,9 @@ class SessionExplorer(QMainWindow):
                     continue
                 self.pos = target
                 image, field_ms, paint_ms = self._with_tool(target, image, task)
+                before = time.perf_counter()
                 self._show(image)
+                self._show_recent.append((time.perf_counter() - before) * 1000)
                 run.log(task, target, route, ms,
                         field_ms=field_ms, paint_ms=paint_ms)
                 self._recent.append(ms)
@@ -1963,11 +1966,13 @@ class SessionExplorer(QMainWindow):
             return sum(d) / len(d) if d else 0.0
         serve, field = mean(self._recent), mean(self._field_recent)
         paint, surface = mean(self._paint_recent), mean(self._surface_recent)
-        other = max(0.0, interval - serve - field - paint - surface)
+        show = mean(self._show_recent)
+        other = max(0.0, interval - serve - field - paint - surface - show)
         return [
             f"{achieved:.1f}/{self.fps:.1f} fps  {state}",
-            f"{interval:.1f}ms = serve {serve:.1f} + field {field:.1f}"
-            f" + paint {paint:.1f} + surf {surface:.1f} + other {other:.1f}",
+            f"{interval:.1f}ms: work {interval - other:.1f} "
+            f"(serve {serve:.1f} field {field:.1f} paint {paint:.1f} "
+            f"surf {surface:.1f} show {show:.1f}) idle {other:.1f}",
         ]
 
     def _overlay_lines(self) -> list[str]:
@@ -2305,11 +2310,46 @@ class SessionExplorer(QMainWindow):
             self._play_timer.stop()
             return
         # the loop is the product gesture, so it runs at video rate;
-        # play and hop stay free-run to feel throughput
+        # play and hop stay free-run to feel throughput.
+        #
+        # The loop re-arms itself against a wall-clock deadline instead of
+        # asking for a fixed interval. A repeating timer whose handler
+        # overruns its expiry does not resume on the original phase - the
+        # next fire lands on the following grid point, so any overrun at
+        # all costs a whole tick. Measured: the same loop achieved 42.0 ms
+        # with the overlay off and 46.2 ms with it on, identically for
+        # three tools whose work differs by eight milliseconds, which is
+        # the signature of a rounded deadline rather than of the work.
+        if mode == "loop":
+            self._play_timer.setSingleShot(True)
+            self._loop_t0 = time.perf_counter()
+            self._loop_n = 0
+            self._play_timer.start(max(1, round(1000 / self.fps)))
+        else:
+            self._play_timer.setSingleShot(False)
+            self._play_timer.start(0)
+
+    def _rearm_loop(self) -> None:
+        """Next tick at the next multiple of the period from the start.
+
+        Phase is kept against the loop's own start time, so a frame that
+        ran long borrows from the next wait rather than pushing every
+        later frame back by what it overran.
+        """
+        if not self._play_timer.isSingleShot() or self._mode() != "loop":
+            return
+        self._loop_n += 1
+        due = self._loop_t0 + self._loop_n * (1.0 / float(self.fps))
         self._play_timer.start(
-            max(1, round(1000 / self.fps)) if mode == "loop" else 0)
+            max(0, int(round((due - time.perf_counter()) * 1000))))
 
     def _play_tick(self) -> None:
+        try:
+            self._play_tick_body()
+        finally:
+            self._rearm_loop()
+
+    def _play_tick_body(self) -> None:
         now = time.perf_counter()
         last = getattr(self, "_tick_at", None)
         if last is not None:
@@ -3089,6 +3129,104 @@ def main() -> None:
         if window.fill:
             window.fill.stop()
         window.store.destroy()
+        return
+    if "--rate" in sys.argv:
+        # Does the loop keep its rate, and is the shortfall the work or the
+        # clock? Scripted rather than driven because a rate is a
+        # measurement — what needs hands is whether the overlay reads, not
+        # whether the timer fires. Runs with the window shown, on the real
+        # desktop rather than offscreen, because an unpainted window is a
+        # different event loop from the one the question is about.
+        idx = sys.argv.index("--rate")
+        secs = float(sys.argv[idx + 1]) if len(sys.argv) > idx + 1 \
+            and not sys.argv[idx + 1].startswith("-") else 8.0
+        window.show()
+        window._land_at(4000)
+        target = float(window.fps)
+        print(f"target {target:.2f} fps; {secs:.0f} s per condition, "
+              f"window shown\n")
+        rows = []
+
+        def measure(label: str) -> None:
+            window._recent.clear()
+            window._tick_recent.clear()
+            window._field_recent.clear()
+            window._paint_recent.clear()
+            window._surface_recent.clear()
+            window._show_recent.clear()
+            window._tick_at = None
+            gaps: list[float] = []
+            # `loop`, not `play`. In this explorer the play button is
+            # free-run on purpose - it exists to feel throughput - and the
+            # rate-keeping mode is the default one with no transport button
+            # held. The driven session that reported lag was in `loop`, so
+            # that is the mode with a rate to measure.
+            window.pause_btn.setChecked(False)
+            window.play_btn.setChecked(False)
+            window.hop_btn.setChecked(False)
+            window._drive()
+            stop = QTimer()
+            stop.setSingleShot(True)
+            stop.timeout.connect(app.quit)
+            sampler = QTimer()
+            sampler.setInterval(200)
+            sampler.timeout.connect(
+                lambda: gaps.extend(window._tick_recent)
+                or window._tick_recent.clear())
+            stop.start(int(secs * 1000))
+            sampler.start()
+            app.exec()
+            sampler.stop()
+            gaps.extend(window._tick_recent)
+            if not gaps:
+                print(f"  {label:<28} no ticks")
+                return
+            gaps.sort()
+            p50 = gaps[len(gaps) // 2]
+
+            def mean(d):
+                return sum(d) / len(d) if d else 0.0
+            serve, field = mean(window._recent), mean(window._field_recent)
+            paint, surf = mean(window._paint_recent), mean(window._surface_recent)
+            show = mean(window._show_recent)
+            other = max(0.0, p50 - serve - field - paint - surf - show)
+            rows.append((label, p50, 1000 / p50, serve, field, paint, surf, other))
+            spread = (f"  [p10 {gaps[len(gaps)//10]:.1f} p90 "
+                      f"{gaps[-len(gaps)//10 - 1]:.1f}]")
+            print(f"  {label:<28} {1000 / p50:5.2f} fps  interval {p50:6.2f} ms"
+                  f"  = serve {serve:4.1f} + field {field:5.1f} + paint "
+                  f"{paint:4.1f} + surf {surf:4.1f} + show {show:5.1f}"
+                  f" + idle/other {other:5.1f}" + spread)
+
+        window.overlay_btn.setChecked(False)
+        measure("overlay off")
+        window.overlay_btn.setChecked(True)
+        for name in TOOLS:
+            window.tool_box.setCurrentText(name)
+            measure(f"overlay on: {name}")
+        best = max(r[2] for r in rows) if rows else 0.0
+        print(f"\ntarget {target:.2f} fps, best achieved {best:.2f} "
+              f"({100 * best / target:.0f}%)")
+        # `other` is mostly the timer's own wait, so a large value is what
+        # a healthy loop looks like. What indicts the clock rather than the
+        # work is the interval exceeding the period while the measured work
+        # still fits inside it.
+        period = 1000.0 / target
+        for label, p50, fps, serve, field, paint, surf, other in rows:
+            work = p50 - other
+            if p50 > period * 1.04 and work < period:
+                print(f"  {label}: {work:.1f} ms of work fits the "
+                      f"{period:.1f} ms period and the interval is "
+                      f"{p50:.1f} — the shortfall is the clock, not the work.")
+        if rows and max(r[2] for r in rows) - min(r[2] for r in rows) < 0.5:
+            print("every condition achieved the same rate, so the cost is "
+                  "not the tool: a ceiling upstream of all of them.")
+        window._save_log(force=True)
+        if window.fill:
+            window.fill.stop()
+        window.store.destroy()
+        if winmm is not None:
+            winmm.timeEndPeriod(1)
         return
     window.show()
     code = app.exec()

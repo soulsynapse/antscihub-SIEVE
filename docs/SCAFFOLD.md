@@ -218,6 +218,15 @@
       - 📄 `tool-explorer-20260823T175635Z.json`
       - 📄 `tool-explorer-20260823T180841Z.json`
       - 📄 `tool-explorer-20260823T191844Z.json`
+      - 📄 `tool-explorer-20260823T192135Z.json`
+      - 📄 `tool-explorer-20260823T192228Z.json`
+      - 📄 `tool-explorer-20260823T192242Z.json`
+      - 📄 `tool-explorer-20260823T192322Z.json`
+      - 📄 `tool-explorer-20260823T192336Z.json`
+      - 📄 `tool-explorer-20260823T192353Z.json`
+      - 📄 `tool-explorer-20260823T192412Z.json`
+      - 📄 `tool-explorer-20260823T192438Z.json`
+      - 📄 `tool-explorer-20260823T192452Z.json`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
       - 📄 `02-form-derivation-20260823T155815Z.json`

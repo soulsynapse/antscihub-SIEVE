@@ -1197,8 +1197,15 @@ class ToolRig:
         return (tool or self.tool).form_for(tuple(crop))
 
     def key(self, crop, tool=None) -> str:
+        """The series key: source, tool, form.
+
+        The source belongs in it even though only one is open at a time —
+        a key that omits something the value depends on is a key that lets
+        two different things share an entry, and this one is written to
+        disk where a later session will read it back.
+        """
         tool = tool or self.tool
-        return f"{tool.key()}|{self.form(crop, tool).key()}"
+        return f"{BIG.name}|{tool.key()}|{self.form(crop, tool).key()}"
 
     def series_for(self, crop, tool=None) -> series_mod.Series:
         """The series for a tool in a form, made if it is new.
@@ -1227,6 +1234,35 @@ class ToolRig:
                     timebase=self.timebase)
         return got
 
+    def restore(self, root: Path) -> int:
+        """Read back whatever a previous session stored for this source.
+
+        Tier 4 is a durable cache and was behaving as a per-process one:
+        `save` and `load` were written, documented, and called by nothing,
+        which is the same defect as a guard nobody invokes. Restoring is
+        also what makes the byproduct claim compound — coverage earned by
+        one session's fills is still there for the next.
+        """
+        found = 0
+        for path in sorted(root.glob("*.npz")):
+            try:
+                got = series_mod.Series.load(path)
+            except Exception:  # noqa: BLE001
+                continue       # a half-written or stale file is not fatal
+            if got.source != BIG.name or len(got.pts) != len(self.pts):
+                continue       # a different source, or a different length
+            with self.lock:
+                self.series.setdefault(got.key, got)
+                found += 1
+        return found
+
+    def persist(self, root: Path) -> int:
+        with self.lock:
+            held = list(self.series.values())
+        for got in held:
+            got.save(root)
+        return len(held)
+
     def ceiling_for(self, crop, value: float | None = None) -> float:
         """The top of the overlay's scale, held rather than autoscaled.
 
@@ -1242,15 +1278,18 @@ class ToolRig:
         return self.ceilings.get(key, 0.0)
 
     def horizon(self, row: int, ahead: int) -> set[int]:
-        """Rows the tool needs to serve `row` and the `ahead` after it.
+        """Rows the active tools need to serve `row` and the `ahead` after it.
 
-        `needs` at a point is not a retention policy — the union over the
-        run about to be served is. For sparse offsets those differ
-        enormously, and holding only the point set costs a decode per
-        offset per displayed frame.
+        Defers to `tools.residency`, which already unions over a horizon
+        and over several (tool, form) pairs. Writing the union a second
+        time here left the folder with two implementations of one idea and
+        only one of them tested, which is the shape of every stale thing
+        this folder has had to remove.
         """
-        return {r for step in range(max(1, ahead))
-                for r in self.tool.needs(row + step)}
+        crop = tuple(CROP_RECT)
+        active = [(self.tool, self.form(crop, self.tool))]
+        pairs = toolkit.residency(active, range(row, row + max(1, ahead)))
+        return {r for r, _form_key in pairs}
 
     def evaluate(self, row: int, frames: dict[int, np.ndarray], tool=None):
         """The field and its reduction, or None if the window is not there.
@@ -1323,6 +1362,10 @@ class SessionExplorer(QMainWindow):
         self.rig = ToolRig(self.total, np.asarray(stamps[:self.total],
                                                   dtype=np.int64),
                            self.timebase)
+        restored = self.rig.restore(SERIES_DIR)
+        if restored:
+            print(f"restored {restored} stored series from "
+                  f"{SERIES_DIR.name}")
         self._sweep_stop = threading.Event()
         self._sweep_busy = False
         self._last_serve_ms = 0.0
@@ -1790,16 +1833,27 @@ class SessionExplorer(QMainWindow):
         return None
 
     def _crop_of_display(self, shown: np.ndarray) -> np.ndarray | None:
-        """The crop region sliced out of a display-size frame, upscaled to
-        crop resolution — display-only pixels, never admitted."""
-        s = shown.shape[1] / self.orig_w
-        x, y, cw, ch = CROP_RECT
-        piece = shown[round(y * s) : round((y + ch) * s),
-                      round(x * s) : round((x + cw) * s)]
-        if not piece.size:
+        """The crop sliced out of a display-size frame — the `lo` route.
+
+        Goes through `forms.derive` rather than doing the arithmetic here.
+        It was hand-rolled first, which meant the module that defines what
+        a derivation *is* and the code that actually performs one were two
+        implementations of one operation, free to drift — and the grade
+        that decides whether the result may be recorded was a comment
+        rather than a value. `derive` returns that grade, and it is
+        `APPROX` here by construction, which is why nothing downstream may
+        admit what this returns.
+        """
+        height, width = shown.shape[:2]
+        have = forms.Form((0, 0, self.orig_w, self.orig_h), (width, height),
+                          "gray" if shown.ndim == 2 else "bgr")
+        want = forms.Form(tuple(CROP_RECT),
+                          (CROP_RECT[2], CROP_RECT[3]),
+                          "gray" if shown.ndim == 2 else "bgr")
+        if forms.grade(have, want) is None:
             return None
-        return np.ascontiguousarray(cv2.resize(
-            piece, (cw, ch), interpolation=cv2.INTER_NEAREST))
+        piece, how = forms.derive(shown, have, want)
+        return piece if how == forms.APPROX and piece.size else None
 
     def _serve(self, idx: int, task: str, exact: bool) -> tuple[np.ndarray, str]:
         if not self._in_window(idx):
@@ -3154,6 +3208,7 @@ class SessionExplorer(QMainWindow):
         if self.fill:
             self.fill.stop()
         self._save_log(force=True)
+        self.rig.persist(SERIES_DIR)   # tier 4 outlives the process
         self.miss_fetcher.close()
         self.hunt_fetcher.close()
         if self.proxy:
@@ -3236,6 +3291,8 @@ def main() -> None:
               f"{window.log_path.name}")
         if window.fill:
             window.fill.stop()
+        kept = window.rig.persist(SERIES_DIR)
+        print(f"persisted {kept} series to {SERIES_DIR.name}")
         window.store.destroy()
         return
     if "--smoke" in sys.argv:
@@ -3303,6 +3360,8 @@ def main() -> None:
               f"{window.log_path.name}")
         if window.fill:
             window.fill.stop()
+        kept = window.rig.persist(SERIES_DIR)
+        print(f"persisted {kept} series to {SERIES_DIR.name}")
         window.store.destroy()
         return
     if "--rate" in sys.argv:
@@ -3413,6 +3472,7 @@ def main() -> None:
         window._save_log(force=True)
         if window.fill:
             window.fill.stop()
+        window.rig.persist(SERIES_DIR)
         window.store.destroy()
         if winmm is not None:
             winmm.timeEndPeriod(1)

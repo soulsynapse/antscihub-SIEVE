@@ -117,9 +117,10 @@ own docstring, which is where a wrong one gets argued with.
   its form requirement, its temporal extent, its cost class, its field and
   its reduction. Extent distinguishes a map from a fold, which is the
   difference between a sweep that can be split and resumed and one that can
-  only be replayed. The cost class is a *claim* — `free`, `budgeted`,
-  `commit`, cut where product behaviour changes — and the free-while-hot
-  experiment exists to falsify the ones that are wrong.
+  only be replayed. Cost class is *not* declared: `03-free-while-hot` found
+  every tool changing class between the two decodes the loop runs against,
+  so `classify` computes it from measurement at the pairing, the way seek
+  routing is probed rather than assumed.
 - `series.py` — tier 4: one float per frame per tool, coverage recorded
   rather than inferred, a pts table saying what a row means, and the
   extent's warm-up rows refused rather than written and masked.
@@ -188,11 +189,12 @@ optimising against a budget nobody is holding it to.
    keys by form and keeps both; if it is not, a form change stays the wipe
    it is today and the tool tier gets its own store.
 
-4. **What is free while a frame is hot.** Per op class, the marginal cost of
-   riding along on a decode that was happening anyway, which is what turns
-   the cost-class declarations from claims into checked ones. Includes the
-   two that need no decode at all: motion vectors off the packet stream and
-   per-frame packet size.
+4. **What is free while a frame is hot.** The marginal cost of riding along
+   on a decode that was happening anyway. `03-free-while-hot.py`, and it
+   came back with the class boundary landing on the *pairing* rather than
+   the tool, which removed a field from the descriptor. Also prices the
+   signals needing no decode at all — packet size, and motion vectors where
+   the build exports them.
 
 5. **The reduced-series tier.** What a per-frame series costs to write, to
    read back time-columnar, and to invalidate: layout (row-major against

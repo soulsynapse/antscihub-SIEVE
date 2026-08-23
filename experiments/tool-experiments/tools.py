@@ -72,21 +72,32 @@ the same name and opposite costs, and only the first one is about memory.
 The reset/step/checkpoint protocol a fold owes is not implemented yet,
 because the two tools this folder starts with are both maps.
 
-**Its cost class, as a claim that an experiment can falsify.** The three
-classes are cut where product behaviour actually changes:
+**Its cost class — which a tool does not get to declare.** The three classes
+are cut where product behaviour changes:
 
 - `FREE` — in the noise beside the decode that produced the frame. Its
   series fills as a byproduct of the user watching, and a sweep is only ever
   needed for ground nobody looked at.
-- `BUDGETED` — real time, but fits inside a frame period at the analysis
-  form. It can preview live and it can never be free.
-- `COMMIT` — cannot fit a frame period. Live preview is not available; the
-  overlay shows what has been computed and says so where nothing has.
+- `BUDGETED` — real time, but fits a frame period once decode and paint are
+  taken out of it. It can preview live and it can never be free.
+- `COMMIT` — does not fit. Live preview is unavailable; the overlay shows
+  what has been computed and says so where nothing has.
 
-The class is *declared*, not measured, because a descriptor is written
-before there is a measurement. The free-while-hot experiment's job is to
-check the declarations against the machine and report the ones that are wrong — a claim nothing can
-falsify would not be worth writing down.
+This was originally a field on the tool, declared by its author and checked
+by an experiment. `03-free-while-hot` checked it and falsified the idea
+rather than the declarations: on this machine *every* tool changed class
+between the two regimes the loop runs in, because `FREE` is a ratio against
+a decode and the decodes differ by a factor of forty between an intra chunk
+and the uncut source. Frame differencing is genuinely free beside a 5.3K
+decode and genuinely is not beside a chunk, at the same size, in the same
+session, ten seconds apart. A class is a property of a *pairing*, so a tool
+carrying one was a tool asserting something it cannot know.
+
+What replaces it is `classify`, applied to measurements taken where the tool
+is actually running. That follows the tree's existing habit rather than
+inventing one: seek routing is probed at first open and cached per machine
+and source shape, for the same reason — the alternative is shipping one
+machine's answer to every other.
 
 **The field, and the reduction.** A tool produces two things per frame and
 they have completely different economics. The field is image-sized — the
@@ -116,8 +127,29 @@ import numpy as np
 from forms import Form
 
 FREE = "free"          #: noise beside decode; the series fills by watching
-BUDGETED = "budgeted"  #: fits a frame period at analysis form; previews live
+BUDGETED = "budgeted"  #: fits the residual frame period; previews live
 COMMIT = "commit"      #: cannot preview live; shows what exists, says so
+
+#: at most this many decodes' worth of work to count as free. A cut, not a
+#: fact: it is exposed so a caller can move it, and every classification
+#: reports the ratio it was applied to so the cut can be argued with.
+FREE_RATIO = 2.0
+
+
+def classify(field_ms: float, decode_ms: float, period_ms: float,
+             paint_ms: float, free_ratio: float = FREE_RATIO) -> str:
+    """Which class a tool falls in *against this decode*, from measurement.
+
+    Not a property of the tool. `FREE` is a ratio against the decode that
+    produced the frame, and the same op lands either side of it depending
+    on whether the frame came from the uncut source or an intra chunk —
+    which is why nothing here is declared. `BUDGETED` is measured against
+    the residual period, decode and paint removed, because a tool that fits
+    the frame alone and not beside the drawing of it does not fit.
+    """
+    if decode_ms > 0 and field_ms <= free_ratio * decode_ms:
+        return FREE
+    return BUDGETED if field_ms <= period_ms - decode_ms - paint_ms else COMMIT
 
 
 @dataclass
@@ -129,7 +161,6 @@ class Tool:
     form_for: Callable[[tuple[int, int, int, int]], Form]
     #: offsets from the frame being computed; non-positive, 0 included
     offsets: tuple[int, ...]
-    claim: str
     #: {row: array} for exactly `needs(row)`, and the row -> a scalar field
     field: Callable[[dict[int, np.ndarray], int], np.ndarray]
     #: a scalar field -> the number the series stores
@@ -197,8 +228,14 @@ def analysis_form(pix: str = "gray") -> Callable[[tuple[int, int, int, int]], Fo
 # on: one is in the noise beside decode and one is roughly forty times it,
 # so every fork that reads the cost class fires at least once.
 
+# A field stays in the narrowest type that carries its answer. Neither
+# consumer wants float for its own sake — `surfaces.overlay` scales through
+# `convertScaleAbs` and the reduction is a mean — so an `astype(np.float32)`
+# on a difference image buys nothing and costs a full pass over a megabyte,
+# which 03-free-while-hot measured at roughly two thirds of the op itself.
+
 def _absdiff(frames: dict[int, np.ndarray], row: int) -> np.ndarray:
-    return cv2.absdiff(frames[row], frames[row - 1]).astype(np.float32)
+    return cv2.absdiff(frames[row], frames[row - 1])
 
 
 def _dis_flow_factory(preset: int):
@@ -216,14 +253,17 @@ def _dis_flow_factory(preset: int):
         if dis is None:
             dis = local.dis = cv2.DISOpticalFlow_create(preset)
         flow = dis.calc(frames[row - 1], frames[row], None)
-        return np.linalg.norm(flow, axis=2)
+        # cv2.magnitude, not np.linalg.norm(axis=2): the numpy route builds
+        # intermediates over a two-channel megapixel field and measured
+        # slower than the flow solve it was reducing.
+        return cv2.magnitude(flow[..., 0], flow[..., 1])
     return field
 
 
 def absdiff() -> Tool:
     return Tool(
         name="absdiff", form_for=analysis_form("gray"), offsets=(-1, 0),
-        claim=FREE, field=_absdiff)
+        field=_absdiff)
 
 
 def dis_flow(preset: int = cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST) -> Tool:
@@ -232,7 +272,7 @@ def dis_flow(preset: int = cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST) -> Tool:
              cv2.DISOPTICAL_FLOW_PRESET_MEDIUM: "medium"}
     return Tool(
         name="dis", form_for=analysis_form("gray"), offsets=(-1, 0),
-        claim=BUDGETED, field=_dis_flow_factory(preset),
+        field=_dis_flow_factory(preset),
         params={"preset": names.get(preset, str(preset))})
 
 
@@ -251,15 +291,20 @@ def lag_mhi(lags: tuple[int, ...] = (30, 20, 10)) -> Tool:
 
     def field(frames: dict[int, np.ndarray], row: int) -> np.ndarray:
         cur = frames[row]
-        out = np.zeros(cur.shape, dtype=np.float32)
+        out = None
         for rank, off in enumerate(offsets[:-1]):
+            # `* weight` on a uint8 difference promotes the whole megapixel
+            # to float64 — a Python float is a double, and the promotion is
+            # silent. convertScaleAbs stays in uint8 and does the scale in
+            # the same pass as the subtraction's output.
             weight = (rank + 1) / len(lags)
-            np.maximum(out, cv2.absdiff(cur, frames[row + off]) * weight,
-                       out=out)
+            aged = cv2.convertScaleAbs(cv2.absdiff(cur, frames[row + off]),
+                                       alpha=weight)
+            out = aged if out is None else cv2.max(out, aged)
         return out
 
     return Tool(name="mhi-lag", form_for=analysis_form("gray"),
-                offsets=offsets, claim=FREE, field=field,
+                offsets=offsets, field=field,
                 params={"lags": "-".join(str(lag) for lag in sorted(lags))})
 
 

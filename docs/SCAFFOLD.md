@@ -193,7 +193,9 @@
   - 📁 `tool-experiments/`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
+      - 📄 `02-form-derivation-20260823T155815Z.json`
     - 📄 `01-paint-cost.py` — What drawing a tool's output costs, before anything is concluded about the store.
+    - 📄 `02-form-derivation.py` — Does a held frame answer for a wanted form more cheaply than a decode?
     - 📄 `README.md`
     - 📄 `forms.py` — What a stored frame is, and when one already on hand can answer for another.
     - 📄 `series.py` — The reduced series, and the explicit record of which frames have one.

@@ -1259,6 +1259,8 @@ class SessionExplorer(QMainWindow):
         self._field_recent: deque[float] = deque(maxlen=30)
         self._paint_recent: deque[float] = deque(maxlen=30)
         self._surface_recent: deque[float] = deque(maxlen=30)
+        self._tick_recent: deque[float] = deque(maxlen=30)
+        self._tick_at: float | None = None
         self.t0 = time.perf_counter()   #: the session clock everything shares
         self.activity: list[dict] = []  #: background spans: fill/encode/flow
         self.act_lock = threading.Lock()
@@ -1317,6 +1319,14 @@ class SessionExplorer(QMainWindow):
         self._recent: deque[float] = deque(maxlen=30)
         self._rng = random.Random()
         self._play_timer = QTimer(self)
+        # PreciseTimer, and it is not a detail. Qt uses a coarse timer for
+        # intervals of 20 ms or more, and on Windows the coarse tick is
+        # 15.625 ms — so the 42 ms this asks for quantises up to three
+        # ticks, 46.875 ms, a 21.3 fps ceiling on a 23.976 fps loop no
+        # matter how cheap the frame is. A driven session of this explorer
+        # achieved exactly that rate under every tool and every overlay
+        # policy, which is only possible if the tools were never the cost.
+        self._play_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self._play_timer.timeout.connect(self._play_tick)
         self._scrubbing = False  #: finger down on the timeline
         self._scrub_timer = QTimer(self)
@@ -1928,9 +1938,41 @@ class SessionExplorer(QMainWindow):
         self.rig.ceiling_for(tuple(CROP_RECT), float(value))
         self._repaint_current()
 
+    def _rate_lines(self) -> list[str]:
+        """Is the loop keeping its rate, and if not, where is the time going?
+
+        The second line is the one that matters and the reason this exists:
+        it subtracts the three measured clocks from the actual frame
+        interval and prints the remainder as `other`. A tuning loop can be
+        slow because the work is expensive, which the clocks show, or
+        because something outside all of them is eating the period, which
+        nothing showed until this line did — and the first driven session
+        of this explorer was entirely the second kind. Every tool and every
+        policy achieved the same rate, which is only possible if the cost
+        was not the tool.
+        """
+        if not self._tick_recent:
+            return []
+        interval = sum(self._tick_recent) / len(self._tick_recent)
+        target = 1000.0 / self.fps
+        achieved = 1000.0 / interval if interval else 0.0
+        drift = (interval - target) / target * 100
+        state = ("ON RATE" if abs(drift) < 4
+                 else f"BEHIND {drift:.0f}%" if drift > 0 else "AHEAD")
+        def mean(d):
+            return sum(d) / len(d) if d else 0.0
+        serve, field = mean(self._recent), mean(self._field_recent)
+        paint, surface = mean(self._paint_recent), mean(self._surface_recent)
+        other = max(0.0, interval - serve - field - paint - surface)
+        return [
+            f"{achieved:.1f}/{self.fps:.1f} fps  {state}",
+            f"{interval:.1f}ms = serve {serve:.1f} + field {field:.1f}"
+            f" + paint {paint:.1f} + surf {surface:.1f} + other {other:.1f}",
+        ]
+
     def _overlay_lines(self) -> list[str]:
         """The live ledger, as the video sees it: what runs right now."""
-        lines = []
+        lines = self._rate_lines()
         if self.pause_btn.isChecked():
             lines.append("PAUSED  [space] resume  [arrows] step")
         if self.fill and self.fill.running():
@@ -2268,6 +2310,13 @@ class SessionExplorer(QMainWindow):
             max(1, round(1000 / self.fps)) if mode == "loop" else 0)
 
     def _play_tick(self) -> None:
+        now = time.perf_counter()
+        last = getattr(self, "_tick_at", None)
+        if last is not None:
+            gap = (now - last) * 1000
+            if gap < 1000:          # a resumed loop is not a slow frame
+                self._tick_recent.append(gap)
+        self._tick_at = now
         if self._busy:
             return
         mode = self._mode()
@@ -2848,6 +2897,14 @@ class SessionExplorer(QMainWindow):
                 "form": self.rig.form(tuple(CROP_RECT)).key(),
                 "sequential": self.rig.tool.sequential,
             },
+            "play_rate": {
+                "target_fps": round(float(self.fps), 3),
+                "achieved_fps": (
+                    round(1000.0 * len(self._tick_recent)
+                          / sum(self._tick_recent), 2)
+                    if self._tick_recent else None),
+                "timer_type": "precise",
+            },
             "overlay_policy": self.policy_box.currentText(),
             "overlays_held": self.rig.held,
             "overlays_approximate": self.rig.approximate,
@@ -2908,10 +2965,39 @@ class SessionExplorer(QMainWindow):
             super().keyPressEvent(event)
 
 
+def _hold_timer_resolution() -> object | None:
+    """Ask Windows for a 1 ms scheduler tick, and hold it for the process.
+
+    Without this the default tick is 15.625 ms, so a 42 ms frame interval
+    is delivered at three ticks - 46.9 ms, a 21.3 fps ceiling on a
+    23.976 fps loop no matter how cheap the frame is. A driven session
+    measured exactly that under every tool and every overlay policy, which
+    is the shape of a cost that is not the work.
+
+    Held for the whole process rather than around the loop: the request is
+    reference-counted, Qt raises and drops it around its own precise
+    timers, and a bench that took it and gave it back repeatedly measured
+    the rate flapping between 42 and 46 ms run to run. Whether it holds
+    here is not assumed - the explorer prints the achieved rate on the
+    video, and that readout is the check.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        winmm = ctypes.WinDLL("winmm")
+        if winmm.timeBeginPeriod(1) != 0:
+            return None
+        return winmm
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def main() -> None:
     if not BIG.exists():
         print(f"missing {BIG}")
         return
+    winmm = _hold_timer_resolution()
     app = QApplication.instance() or QApplication(sys.argv)
     window = SessionExplorer()
     if "--fig" in sys.argv:  # save the graphs after a headless run
@@ -3005,7 +3091,10 @@ def main() -> None:
         window.store.destroy()
         return
     window.show()
-    sys.exit(app.exec())
+    code = app.exec()
+    if winmm is not None:
+        winmm.timeEndPeriod(1)
+    sys.exit(code)
 
 
 if __name__ == "__main__":

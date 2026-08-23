@@ -1,0 +1,681 @@
+{
+ "tool": {
+  "name": "absdiff",
+  "key": "absdiff(blur=3)",
+  "offsets": [
+   -1,
+   0
+  ],
+  "reach": 1,
+  "form": "1000+500+512x512@512x512:gray",
+  "sequential": false
+ },
+ "sieve_rev": "2a4ab32",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "when": "2026-08-23T17:30:33.843103+00:00",
+ "total_frames": 11304,
+ "window": 300,
+ "gop": 24,
+ "crop": [
+  1000,
+  500,
+  512,
+  512
+ ],
+ "play_rate": {
+  "target_fps": 23.976,
+  "achieved_fps": 16.97,
+  "timer_type": "precise"
+ },
+ "overlay_policy": "pay",
+ "overlays_held": 0,
+ "overlays_approximate": 0,
+ "avoidable_decodes": 2,
+ "unavoidable_decodes": 29,
+ "series_rows_by_watching": 104,
+ "series_rows_by_sweep": 241,
+ "series": [
+  {
+   "key": "absdiff|2144+982+1024x1024@1024x1024:gray",
+   "covered": 299,
+   "rows": 11304
+  },
+  {
+   "key": "dis(preset=ultrafast)|2144+982+1024x1024@1024x1024:gray",
+   "covered": 1,
+   "rows": 11304
+  },
+  {
+   "key": "mhi-lag(lags=10-20-30)|2144+982+1024x1024@1024x1024:gray",
+   "covered": 1,
+   "rows": 11304
+  },
+  {
+   "key": "absdiff(blur=3)|2144+982+1024x1024@1024x1024:gray",
+   "covered": 1,
+   "rows": 11304
+  },
+  {
+   "key": "absdiff(blur=3)|1000+500+512x512@512x512:gray",
+   "covered": 43,
+   "rows": 11304
+  }
+ ],
+ "pts_index": {
+  "packets": 11328,
+  "rows": 11304,
+  "build_s": 0.916,
+  "timebase": "1/24000"
+ },
+ "activity": [
+  {
+   "what": "window",
+   "t0": 0.676,
+   "t1": 0.676,
+   "detail": "@0"
+  },
+  {
+   "what": "fill",
+   "t0": 0.676,
+   "t1": 0.9,
+   "detail": "stopped: window switched"
+  },
+  {
+   "what": "window",
+   "t0": 0.9,
+   "t1": 0.9,
+   "detail": "@4000"
+  },
+  {
+   "what": "fill",
+   "t0": 0.9,
+   "t1": 6.471,
+   "detail": "@3936: 0ch/384orig"
+  },
+  {
+   "what": "encode",
+   "t0": 2.237,
+   "t1": 3.678,
+   "detail": "chunk@3936"
+  },
+  {
+   "what": "encode",
+   "t0": 3.678,
+   "t1": 5.399,
+   "detail": "chunk@4032"
+  },
+  {
+   "what": "encode",
+   "t0": 5.399,
+   "t1": 6.931,
+   "detail": "chunk@4128"
+  },
+  {
+   "what": "tool",
+   "t0": 6.233,
+   "t1": 6.233,
+   "detail": "dis flow"
+  },
+  {
+   "what": "tool",
+   "t0": 6.3,
+   "t1": 6.3,
+   "detail": "mhi (lags 10/20/30)"
+  },
+  {
+   "what": "tool",
+   "t0": 6.493,
+   "t1": 6.493,
+   "detail": "absdiff"
+  },
+  {
+   "what": "sweep",
+   "t0": 6.511,
+   "t1": 6.901,
+   "detail": "wrote 241"
+  },
+  {
+   "what": "encode",
+   "t0": 6.931,
+   "t1": 8.451,
+   "detail": "chunk@4224"
+  },
+  {
+   "what": "param",
+   "t0": 7.339,
+   "t1": 7.339,
+   "detail": "blur=3"
+  },
+  {
+   "what": "crop",
+   "t0": 7.426,
+   "t1": 7.426,
+   "detail": "512x512+1000+500"
+  },
+  {
+   "what": "window",
+   "t0": 7.426,
+   "t1": 7.426,
+   "detail": "@4032"
+  },
+  {
+   "what": "fill",
+   "t0": 7.426,
+   "t1": 7.446,
+   "detail": "stopped: window switched"
+  },
+  {
+   "what": "window",
+   "t0": 7.446,
+   "t1": 7.446,
+   "detail": "@4150"
+  },
+  {
+   "what": "fill",
+   "t0": 7.446,
+   "t1": null,
+   "detail": "@4150"
+  },
+  {
+   "what": "encode",
+   "t0": 8.709,
+   "t1": 9.651,
+   "detail": "chunk@4128"
+  },
+  {
+   "what": "encode",
+   "t0": 9.939,
+   "t1": null,
+   "detail": "chunk@4320"
+  }
+ ],
+ "chunk_frames": 96,
+ "near_radius": 12,
+ "runs": [
+  {
+   "label": "hunt proxy",
+   "config": "hunt proxy",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 9.23,
+     "p50": 9.23,
+     "p95": 9.23,
+     "max": 9.23,
+     "mean": 9.23
+    },
+    "open": {
+     "n": 1,
+     "min": 24.46,
+     "p50": 24.46,
+     "p95": 24.46,
+     "max": 24.46,
+     "mean": 24.46
+    }
+   },
+   "routes": {
+    "proxy": 2
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-23T17:30:23.777347+00:00",
+   "events": [
+    {
+     "t": 0.6747,
+     "task": "open",
+     "frame": 0,
+     "route": "proxy",
+     "ms": 24.464
+    },
+    {
+     "t": 0.705,
+     "task": "hunt",
+     "frame": 5000,
+     "route": "proxy",
+     "ms": 9.228
+    }
+   ]
+  },
+  {
+   "label": "window@0 crop=1024x1024 b=600",
+   "config": "window@0 crop=1024x1024 b=600",
+   "by_task": {
+    "step": {
+     "n": 1,
+     "min": 13.27,
+     "p50": 13.27,
+     "p95": 13.27,
+     "max": 13.27,
+     "mean": 13.27
+    }
+   },
+   "routes": {
+    "lo": 1
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    }
+   ],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-23T17:30:23.823443+00:00",
+   "events": [
+    {
+     "t": 0.6921,
+     "task": "step",
+     "frame": 0,
+     "route": "lo",
+     "ms": 13.267
+    }
+   ]
+  },
+  {
+   "label": "hunt kf-snap",
+   "config": "hunt kf-snap",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 186.59,
+     "p50": 186.59,
+     "p95": 186.59,
+     "max": 186.59,
+     "mean": 186.59
+    }
+   },
+   "routes": {
+    "kf": 1
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-23T17:30:23.853672+00:00",
+   "events": [
+    {
+     "t": 0.896,
+     "task": "hunt",
+     "frame": 6000,
+     "route": "kf \u039420",
+     "ms": 186.589
+    }
+   ]
+  },
+  {
+   "label": "window@4000 crop=1024x1024 b=600",
+   "config": "window@4000 crop=1024x1024 b=600",
+   "by_task": {
+    "drag": {
+     "n": 2,
+     "min": 0.01,
+     "p50": 7.39,
+     "p95": 7.39,
+     "max": 7.39,
+     "mean": 3.7
+    },
+    "play": {
+     "n": 9,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.17,
+     "max": 0.17,
+     "mean": 0.03
+    },
+    "step": {
+     "n": 7,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 13.62,
+     "max": 13.62,
+     "mean": 1.95
+    }
+   },
+   "routes": {
+    "lo": 2,
+    "near": 1,
+    "hit": 15
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=0"
+    },
+    {
+     "what": "covered",
+     "wall_s": 5.41,
+     "detail": "0 from chunks, 384 from original, fill paused 0.00s"
+    },
+    {
+     "what": "sweep",
+     "wall_s": 0.39,
+     "detail": "absdiff wrote 241 rows, preempt=on"
+    }
+   ],
+   "suppressed_play_hits": 63,
+   "events_capped": false,
+   "started": "2026-08-23T17:30:24.048010+00:00",
+   "events": [
+    {
+     "t": 0.9168,
+     "task": "step",
+     "frame": 4000,
+     "route": "lo",
+     "ms": 13.622
+    },
+    {
+     "t": 1.9302,
+     "task": "drag",
+     "frame": 4010,
+     "route": "lo",
+     "ms": 7.39
+    },
+    {
+     "t": 2.0504,
+     "task": "play",
+     "frame": 4012,
+     "route": "near \u03941",
+     "ms": 0.172
+    },
+    {
+     "t": 2.5412,
+     "task": "play",
+     "frame": 4019,
+     "route": "hit",
+     "ms": 0.005,
+     "field_ms": 1.345,
+     "paint_ms": 4.783
+    },
+    {
+     "t": 3.1255,
+     "task": "play",
+     "frame": 4027,
+     "route": "hit",
+     "ms": 0.006,
+     "field_ms": 1.318,
+     "paint_ms": 3.367
+    },
+    {
+     "t": 3.6948,
+     "task": "play",
+     "frame": 4035,
+     "route": "hit",
+     "ms": 0.007,
+     "field_ms": 6.77,
+     "paint_ms": 3.75
+    },
+    {
+     "t": 4.2701,
+     "task": "play",
+     "frame": 4043,
+     "route": "hit",
+     "ms": 0.008,
+     "field_ms": 1.222,
+     "paint_ms": 5.185
+    },
+    {
+     "t": 4.8724,
+     "task": "play",
+     "frame": 4051,
+     "route": "hit",
+     "ms": 0.005,
+     "field_ms": 1.471,
+     "paint_ms": 6.522
+    },
+    {
+     "t": 5.4506,
+     "task": "play",
+     "frame": 4059,
+     "route": "hit",
+     "ms": 0.008,
+     "field_ms": 2.09,
+     "paint_ms": 6.187
+    },
+    {
+     "t": 6.005,
+     "task": "play",
+     "frame": 4067,
+     "route": "hit",
+     "ms": 0.007,
+     "field_ms": 1.337,
+     "paint_ms": 3.202
+    },
+    {
+     "t": 6.2087,
+     "task": "drag",
+     "frame": 4200,
+     "route": "hit",
+     "ms": 0.008,
+     "field_ms": 1.777,
+     "paint_ms": 3.008
+    },
+    {
+     "t": 6.225,
+     "task": "step",
+     "frame": 4020,
+     "route": "hit",
+     "ms": 0.007,
+     "field_ms": 1.766,
+     "paint_ms": 3.163
+    },
+    {
+     "t": 6.2654,
+     "task": "step",
+     "frame": 4020,
+     "route": "hit",
+     "ms": 0.008,
+     "field_ms": 16.269,
+     "paint_ms": 3.824
+    },
+    {
+     "t": 6.2962,
+     "task": "step",
+     "frame": 4020,
+     "route": "hit",
+     "ms": 0.008,
+     "field_ms": 15.635,
+     "paint_ms": 3.604
+    },
+    {
+     "t": 6.471,
+     "task": "step",
+     "frame": 4020,
+     "route": "hit",
+     "ms": 0.007,
+     "field_ms": 3.605,
+     "paint_ms": 3.515
+    },
+    {
+     "t": 6.4896,
+     "task": "step",
+     "frame": 4020,
+     "route": "hit",
+     "ms": 0.009,
+     "field_ms": 4.279,
+     "paint_ms": 3.444
+    },
+    {
+     "t": 6.5081,
+     "task": "step",
+     "frame": 4020,
+     "route": "hit",
+     "ms": 0.009,
+     "field_ms": 2.132,
+     "paint_ms": 3.14
+    },
+    {
+     "t": 6.9202,
+     "task": "play",
+     "frame": 4026,
+     "route": "hit",
+     "ms": 0.008,
+     "field_ms": 1.253,
+     "paint_ms": 3.389
+    }
+   ]
+  },
+  {
+   "label": "window@4032 crop=512x512 b=600",
+   "config": "window@4032 crop=512x512 b=600",
+   "by_task": {
+    "step": {
+     "n": 1,
+     "min": 13.38,
+     "p50": 13.38,
+     "p95": 13.38,
+     "max": 13.38,
+     "mean": 13.38
+    }
+   },
+   "routes": {
+    "lo": 1
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=1"
+    }
+   ],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "started": "2026-08-23T17:30:30.573874+00:00",
+   "events": [
+    {
+     "t": 7.444,
+     "task": "step",
+     "frame": 4032,
+     "route": "lo",
+     "ms": 13.384
+    }
+   ]
+  },
+  {
+   "label": "window@4150 crop=512x512 b=600",
+   "config": "window@4150 crop=512x512 b=600",
+   "by_task": {
+    "drag": {
+     "n": 1,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 0.01,
+     "max": 0.01,
+     "mean": 0.01
+    },
+    "play": {
+     "n": 6,
+     "min": 0.01,
+     "p50": 0.01,
+     "p95": 10.86,
+     "max": 10.86,
+     "mean": 1.81
+    },
+    "step": {
+     "n": 1,
+     "min": 11.26,
+     "p50": 11.26,
+     "p95": 11.26,
+     "max": 11.26,
+     "mean": 11.26
+    }
+   },
+   "routes": {
+    "lo": 2,
+    "hit": 6
+   },
+   "walls": [
+    {
+     "what": "window-open",
+     "wall_s": 0.0,
+     "detail": "chunks-still-encoding=1"
+    }
+   ],
+   "suppressed_play_hits": 45,
+   "events_capped": false,
+   "started": "2026-08-23T17:30:30.593619+00:00",
+   "events": [
+    {
+     "t": 7.4589,
+     "task": "step",
+     "frame": 4150,
+     "route": "lo",
+     "ms": 11.263
+    },
+    {
+     "t": 8.0825,
+     "task": "play",
+     "frame": 4158,
+     "route": "lo",
+     "ms": 10.86
+    },
+    {
+     "t": 8.5679,
+     "task": "play",
+     "frame": 4166,
+     "route": "hit",
+     "ms": 0.006,
+     "field_ms": 0.854,
+     "paint_ms": 0.995
+    },
+    {
+     "t": 9.0358,
+     "task": "play",
+     "frame": 4174,
+     "route": "hit",
+     "ms": 0.006,
+     "field_ms": 0.756,
+     "paint_ms": 0.723
+    },
+    {
+     "t": 9.5078,
+     "task": "play",
+     "frame": 4182,
+     "route": "hit",
+     "ms": 0.006,
+     "field_ms": 0.566,
+     "paint_ms": 1.129
+    },
+    {
+     "t": 9.9789,
+     "task": "play",
+     "frame": 4190,
+     "route": "hit",
+     "ms": 0.006,
+     "field_ms": 0.684,
+     "paint_ms": 1.318
+    },
+    {
+     "t": 10.4452,
+     "task": "play",
+     "frame": 4198,
+     "route": "hit",
+     "ms": 0.006,
+     "field_ms": 0.564,
+     "paint_ms": 1.135
+    },
+    {
+     "t": 10.6826,
+     "task": "drag",
+     "frame": 4150,
+     "route": "hit",
+     "ms": 0.007,
+     "field_ms": 0.742,
+     "paint_ms": 1.088
+    }
+   ]
+  }
+ ]
+}

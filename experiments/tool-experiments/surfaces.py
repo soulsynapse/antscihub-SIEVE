@@ -84,7 +84,7 @@ def to_columns(values: np.ndarray, covered: np.ndarray,
 def overlay(display: np.ndarray, field: np.ndarray, ceiling: float,
             alpha: float = 0.55,
             colormap: int = cv2.COLORMAP_INFERNO) -> np.ndarray:
-    """Blend a scalar field over the frame already being looked at.
+    """Blend a scalar field over the frame already on screen.
 
     The field arrives at analysis size because that is where it had to be
     computed — a threshold or a flow taken on a downscaled image is not the

@@ -190,6 +190,15 @@
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the storage stack by hand: scrub a region while fill, persist and play fight over it.
     - 📄 `session-explorer.py` — Feel the session plan: hunt the full timeline, land a window, tune, jump.
+  - 📁 `tool-experiments/`
+    - 📁 `results/`
+      - 📄 `01-paint-cost-20260823T114821Z.json`
+    - 📄 `01-paint-cost.py` — What drawing a tool's output costs, before anything is concluded about the store.
+    - 📄 `README.md`
+    - 📄 `forms.py` — What a stored frame is, and when one already on hand can answer for another.
+    - 📄 `series.py` — The reduced series, and the explicit record of which frames have one.
+    - 📄 `surfaces.py` — Drawing a tool's output at display resolution, from data reduced to it.
+    - 📄 `tools.py` — What a tool declares about itself before anything schedules or draws it.
 - 📁 `mockup/`
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
   - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.

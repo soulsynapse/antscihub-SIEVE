@@ -1378,47 +1378,28 @@ class SessionExplorer(QMainWindow):
         self.tool_box = QComboBox()
         self.tool_box.addItems(list(TOOLS))
         self.tool_box.setToolTip(
-            "the tool the overlay draws and the series stores. Switching is "
-            "not a clear: a series belongs to (tool, form), so the other "
-            "tool's numbers are still there and come back when you switch "
-            "back. absdiff is in the noise beside a 5.3K decode and not "
-            "beside a chunk; dis is roughly forty times a chunk decode; "
-            "mhi-lag needs four frames spanning thirty-one, which is the "
-            "one that makes a hop expensive.")
+            "what the overlay draws and the series stores")
         self.tool_box.currentTextChanged.connect(self._tool_picked)
         self.overlay_btn = QPushButton("overlay")
         self.overlay_btn.setCheckable(True)
         self.overlay_btn.setChecked(True)
-        self.overlay_btn.setToolTip(
-            "draw the tool's field over the frame. The field is computed at "
-            "analysis form and drawn at display size — a threshold on a "
-            "downscaled image is not the downscale of the threshold, and "
-            "what you tune against has to be what gets committed. Its "
-            "reduction is written to the series on the way past, which is "
-            "the byproduct claim: watching covers ground.")
+        self.overlay_btn.setToolTip("draw the field over the frame")
         self.overlay_btn.toggled.connect(lambda _: self._repaint_current())
         self.ceiling_spin = QSpinBox()
         self.ceiling_spin.setRange(0, 255)
         self.ceiling_spin.setValue(0)
         self.ceiling_spin.setPrefix("ceil ")
         self.ceiling_spin.setToolTip(
-            "top of the overlay's colour scale. 0 means take it from the "
-            "first honest field and hold it. Never autoscale per frame: a "
-            "still scene would look exactly as active as a moving one, "
-            "which is a lie about the quantity being tuned.")
+            "top of the overlay's colour scale; 0 takes it from the first "
+            "field and holds it")
         self.ceiling_spin.valueChanged.connect(self._ceiling_changed)
         self.sweep_btn = QPushButton("sweep window")
         self.sweep_btn.setToolTip(
-            "compute the tool over the active window and store the series. "
-            "A button, not a background default — full processing is on the "
-            "user's say. Watch the series band fill under the strip.")
+            "compute the tool over the active window")
         self.sweep_btn.clicked.connect(lambda: self._sweep(whole=False))
         self.sweep_all_btn = QPushButton("sweep all")
         self.sweep_all_btn.setToolTip(
-            "the same over the whole timeline. This is the run you asked "
-            "for, so it is allowed to make the loop worse — what it is not "
-            "allowed to do is keep doing so once you go back to tuning. "
-            "Click again to stop it.")
+            "the same over the whole timeline; click again to stop")
         self.sweep_all_btn.clicked.connect(lambda: self._sweep(whole=True))
         self.reset_btn = QPushButton("reset cold")
         self.reset_btn.setToolTip(
@@ -1583,17 +1564,11 @@ class SessionExplorer(QMainWindow):
         self.series_label.setSizePolicy(QSizePolicy.Policy.Ignored,
                                         QSizePolicy.Policy.Ignored)
         self.series_label.setStyleSheet("background: #121212;")
-        self.series_label.setToolTip(
-            "the active window's series, min/max per display column. "
-            "min/max rather than a mean because a one-frame spike averaged "
-            "with its neighbours is a spike that never reaches the screen, "
-            "and events are what this is for. Columns with nothing computed "
-            "are drawn absent, never as zero.")
+        # no tooltip: it covers a whole pane, so one would fire on any
+        # hover across the graphs. What it would have said is in the
+        # docstring and on the pane's own caption line.
         self.figure_btn = QPushButton("session figure")
-        self.figure_btn.setToolTip(
-            "render the matplotlib story figure now. It is not on a timer: "
-            "40 ms per refresh is free at save time and is not free inside "
-            "a frame budget.")
+        self.figure_btn.setToolTip("render the story figure now")
         self.figure_btn.clicked.connect(lambda: self._redraw_graphs())
         self.graph_label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.graph_label.setMinimumSize(400, 220)

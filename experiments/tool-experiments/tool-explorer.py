@@ -172,6 +172,18 @@ TOOLS = {"absdiff": toolkit.absdiff,
          "mhi (lags 10/20/30)": toolkit.lag_mhi}
 SWEEP_CHUNK = 48    #: rows a sweep does between yields, so it can be stopped
 
+#: what the overlay does while the loop's own background work is running.
+#: 04-under-load prices the compute — every tool inflates by about the same
+#: 1.5-1.95x, so the tool that is felt is simply the one with the largest
+#: number, not a specially fragile one. These are the three answers to that,
+#: and which is right is a judgement about what you are looking at while you
+#: tune rather than something a measurement settles.
+POLICIES = {
+    "pay": "always compute — the picture hitches, the overlay is always true",
+    "hold": "skip while loaded — the picture stays smooth, the overlay freezes",
+    "downshift": "compute at half — live but coarse, and never recorded",
+}
+
 WINDOW = 300            #: the 10 s tuning window, in frames
 CHUNK_FRAMES = 96       #: persist chunk (GOP x4 — results/02-*); windows
                         #: snap to this grid so chunks tile them exactly
@@ -1099,6 +1111,8 @@ class ToolRig:
         self.unavoidable = 0
         self.by_watching = 0    #: series rows written by drawing a frame
         self.by_sweep = 0       #: series rows written by an asked-for sweep
+        self.held = 0           #: overlays skipped under load ("hold")
+        self.approximate = 0    #: overlays drawn coarse ("downshift"), unstored
         self.declared: set[int] = set()   #: last horizon's residency rows
 
     def use(self, name: str | None = None, blur: int | None = None) -> None:
@@ -1244,6 +1258,7 @@ class SessionExplorer(QMainWindow):
         self._last_paint_ms = 0.0
         self._field_recent: deque[float] = deque(maxlen=30)
         self._paint_recent: deque[float] = deque(maxlen=30)
+        self._surface_recent: deque[float] = deque(maxlen=30)
         self.t0 = time.perf_counter()   #: the session clock everything shares
         self.activity: list[dict] = []  #: background spans: fill/encode/flow
         self.act_lock = threading.Lock()
@@ -1400,6 +1415,10 @@ class SessionExplorer(QMainWindow):
         self.sweep_all_btn = QPushButton("sweep all")
         self.sweep_all_btn.setToolTip(
             "the same over the whole timeline; click again to stop")
+        self.policy_box = QComboBox()
+        self.policy_box.addItems(list(POLICIES))
+        self.policy_box.setToolTip("what the overlay does under background load")
+        self.policy_box.currentTextChanged.connect(self._policy_picked)
         self.sweep_all_btn.clicked.connect(lambda: self._sweep(whole=True))
         self.reset_btn = QPushButton("reset cold")
         self.reset_btn.setToolTip(
@@ -1467,7 +1486,7 @@ class SessionExplorer(QMainWindow):
             row2.addWidget(w)
         row0 = QHBoxLayout()
         for w in (QLabel("tool"), self.tool_box, self.overlay_btn,
-                  self.ceiling_spin):
+                  self.ceiling_spin, QLabel("under load"), self.policy_box):
             row0.addWidget(w)
         row0.addStretch(1)
         for w in (self.sweep_btn, self.sweep_all_btn):
@@ -1803,6 +1822,16 @@ class SessionExplorer(QMainWindow):
         """
         if not self.overlay_btn.isChecked() or not self._in_window(row):
             return image, 0.0, 0.0
+        policy = self.policy_box.currentText()
+        loaded = self._under_load()
+        if loaded and policy == "hold":
+            # the loop's law, one level up: the GUI thread pays for an
+            # exact request the user just released and for nothing else.
+            # Here that means the picture keeps its rate and the overlay
+            # goes stale — which is only honest if it says so, hence the
+            # ledger line rather than a silently frozen field.
+            self.rig.held += 1
+            return image, 0.0, 0.0
         tool = self.rig.tool
         want = tool.needs(row)
         frames = {r: self.cache.get(r) for r in want}
@@ -1816,6 +1845,15 @@ class SessionExplorer(QMainWindow):
                 else:
                     self.rig.unavoidable += 1
             return image, 0.0, 0.0
+        coarse = loaded and policy == "downshift"
+        if coarse:
+            # the `lo` route, applied to a field instead of a frame. A field
+            # computed on halved pixels is not the halving of the field, so
+            # it is exactly what forms.py calls approximate: fit to show
+            # while something better is unavailable, never fit to record.
+            frames = {r: cv2.resize(a, (a.shape[1] // 2, a.shape[0] // 2),
+                                    interpolation=cv2.INTER_AREA)
+                      for r, a in frames.items()}
         before = time.perf_counter()
         got = self.rig.evaluate(row, frames)
         field_ms = (time.perf_counter() - before) * 1000
@@ -1824,9 +1862,12 @@ class SessionExplorer(QMainWindow):
         field, value = got
         crop = tuple(CROP_RECT)
         row_series = self.rig.series_for(crop)
-        if row_series.get(row) is None:
-            self.rig.by_watching += 1
-        row_series.put(row, value)
+        if coarse:
+            self.rig.approximate += 1   # shown, and deliberately not stored
+        else:
+            if row_series.get(row) is None:
+                self.rig.by_watching += 1
+            row_series.put(row, value)
         ceiling = self.rig.ceiling_for(crop)
         if not ceiling:
             ceiling = self.rig.ceiling_for(crop, max(float(field.max()), 1.0))
@@ -1842,6 +1883,22 @@ class SessionExplorer(QMainWindow):
         ahead = 12 if self._play_timer.isActive() and not self.hop_btn.isChecked() else 1
         self.rig.declared = self.rig.horizon(row, ahead)
         return painted, field_ms, paint_ms
+
+    def _under_load(self) -> bool:
+        """Is the loop's own background work running right now?
+
+        Fill and write-behind, the two the explorer starts for itself. A
+        sweep is deliberately not counted: the user asked for that one, and
+        the whole point of the policies is what happens to work nobody
+        asked for.
+        """
+        return bool((self.fill and self.fill.running())
+                    or self._encoding_now[0])
+
+    def _policy_picked(self, name: str) -> None:
+        self._mark("policy", name)
+        self.hud.setText(f"under load: {name} — {POLICIES[name]}")
+        self._repaint_current()
 
     def _repaint_current(self) -> None:
         """Re-serve where we stand, so a display change is visible at once.
@@ -1889,6 +1946,12 @@ class SessionExplorer(QMainWindow):
         if self._flow_busy:
             elapsed = self._now() - self._flow_started
             lines.append(f"SWEEP {self._flow_value} {elapsed:.1f}s")
+        if self.overlay_btn.isChecked() and self._under_load():
+            policy = self.policy_box.currentText()
+            if policy == "hold":
+                lines.append("OVERLAY HELD - loaded")
+            elif policy == "downshift":
+                lines.append("OVERLAY COARSE - not recorded")
         elif self._debounce.isActive():
             lines.append("SIGNAL settling...")
         if self.builder is not None and self.builder.proc is not None:
@@ -2459,14 +2522,19 @@ class SessionExplorer(QMainWindow):
                       if self._field_recent else 0.0)
         paint_mean = (sum(self._paint_recent) / len(self._paint_recent)
                       if self._paint_recent else 0.0)
+        surface_mean = (sum(self._surface_recent) / len(self._surface_recent)
+                        if self._surface_recent else 0.0)
         self.status.setText(
             f"{self._config_for(self.pos)}   |   {rig.tool.key()} "
             f"offsets={rig.tool.offsets} declared={held}  "
-            f"field {field_mean:.1f} / paint {paint_mean:.1f} ms  "
+            f"field {field_mean:.1f} / paint {paint_mean:.1f} / "
+            f"surface {surface_mean:.1f} ms  "
             f"series {s.coverage(0, self.total) * 100:.1f}% "
             f"(watching {rig.by_watching}, sweep {rig.by_sweep})  "
             f"avoidable decodes {rig.avoidable} "
-            f"(unpredictable {rig.unavoidable})")
+            f"(unpredictable {rig.unavoidable})  "
+            f"{self.policy_box.currentText()}: held {rig.held}, "
+            f"coarse {rig.approximate}")
 
     def _render_strip(self) -> None:
         w_px = self.strip_label.width()
@@ -2673,8 +2741,13 @@ class SessionExplorer(QMainWindow):
     def _touch(self) -> None:
         # the live surfaces are cheap enough to refresh on every serve;
         # the matplotlib figure is not, and is on a button instead of a
-        # timer for exactly that reason
+        # timer for exactly that reason. Timed all the same: this is the
+        # one cost the fork added without a clock on it, and an untimed
+        # presentation cost is the exact shape of every stall this tree has
+        # had to hunt.
+        before = time.perf_counter()
         self._render_series()
+        self._surface_recent.append((time.perf_counter() - before) * 1000)
         if not self._save_timer.isActive():
             self._save_timer.start()
 
@@ -2775,6 +2848,9 @@ class SessionExplorer(QMainWindow):
                 "form": self.rig.form(tuple(CROP_RECT)).key(),
                 "sequential": self.rig.tool.sequential,
             },
+            "overlay_policy": self.policy_box.currentText(),
+            "overlays_held": self.rig.held,
+            "overlays_approximate": self.rig.approximate,
             "avoidable_decodes": self.rig.avoidable,
             "unavoidable_decodes": self.rig.unavoidable,
             "series_rows_by_watching": self.rig.by_watching,

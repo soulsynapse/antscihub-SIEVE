@@ -1,0 +1,43 @@
+{
+ "experiment": "05-provenance",
+ "question": "Is every stored value reproducible from the key it is filed under, including while the tool changes underneath?",
+ "when": "2026-08-23T19:35:40.937702+00:00",
+ "sieve_rev": "127692e",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [
+  {
+   "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE-v4\\video-tests\\derived\\cut-crf18-intra.mp4",
+   "name": "cut-crf18-intra.mp4",
+   "bytes": 22387404,
+   "mtime": "2026-08-21T16:56:18.031220+00:00",
+   "codec_name": "h264",
+   "profile": "High",
+   "width": 1024,
+   "height": 1024,
+   "pix_fmt": "yuvj420p",
+   "r_frame_rate": "24000/1001",
+   "nb_frames": "300",
+   "duration": "12.512500",
+   "size": "22387404",
+   "bit_rate": "14313624"
+  }
+ ],
+ "notes": [
+  "the invariant: a value stored under (tool, form) must equal what that tool computes for that row. A cost experiment cannot see a violation, because a value filed under the wrong tool costs exactly what the right one costs.",
+  "quiet, one writer: 29 rows recomputed from their key, 0 disagreed",
+  "tool switching underneath: 87 rows recomputed from their key, 0 disagreed",
+  "reading while written: 29 rows recomputed from their key, 0 disagreed"
+ ],
+ "cases": []
+}

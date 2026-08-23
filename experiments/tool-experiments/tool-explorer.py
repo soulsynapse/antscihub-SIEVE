@@ -1,95 +1,60 @@
-"""Feel the loop with a tool on it: overlay live, series filling by watching.
+"""Feel the loop with a tool on it.
 
 Forked from `storage-experiments/session-explorer.py` and deliberately not
-rewritten. The question here is what adding a tool does to a loop that has
-already been measured, and that only has an answer if the loop is the same
-loop — so the transport, the tier stack, the log schema and every one of the
-freeze fixes come across untouched, and the existing
-`session-explorer-*.json` baseline subtracts from this one.
+rewritten. The question is what adding a tool does to a loop that has already
+been measured, and that only has an answer if the loop is the same loop — so
+the transport, the tier stack, the log schema and every freeze fix come
+across untouched, and the existing `session-explorer-*.json` baseline
+subtracts from this one.
 
-What the fork adds, and what each is for:
+For what was inherited — hunting the whole file, landing a window, the fill
+frontier, write-behind chunks, the seam when you jump — read that file. It is
+the home for all of it, and describing it a second time here is how the two
+descriptions come to disagree. What follows is only what this fork changes.
 
-  tool        one of `absdiff`, `dis`, `mhi-lag`, declaring the frames it
-              needs as offsets. Everything downstream reads the
-              declaration: the overlay asks for `needs(row)`, the prefetch
-              asks for the same one row ahead, the sweep asks across a span.
-  overlay     the field drawn over the frame, computed at analysis form
-              because a threshold on a downscaled image is not the
-              downscale of the threshold. It draws the field and discards
-              it, and writes nothing: what a screen managed to draw may not
-              decide what is recorded (ADR-0005).
-  series      one float per position per tool, coverage recorded rather
-              than inferred, written where frames are decoded and admitted
-              and drawn as a second band under the strip. Watch it fill
-              behind the fill frontier, not behind the playhead — that band
-              is the byproduct claim, and what makes it a claim worth
-              testing is that it costs almost nothing beside the decode
-              that produced its input.
-  five clocks   serve, field, paint, surface and show, timed separately,
-              because a conflated clock is how a slow overlay reads as a
-              slow store — and because the clock that mattered most turned
-              out to be the one nobody had added yet, which is why the
-              readout carries an explicit unattributed remainder.
-  avoidable   decodes for rows a declaration said were coming. Zero, or a
-              bug with an address. There is no other way to see a
-              re-fetch: it looks exactly like the store being slow.
+  tool        `absdiff`, `dis` or `mhi-lag`, each declaring the inputs it
+              admits as offsets. Everything downstream reads that one
+              declaration: what to prefetch, what may not be evicted, and
+              what an ordered pass owes.
+  overlay     draws the tool's field over the frame and discards it. The
+              field is computed at analysis form, because a threshold on a
+              downscaled image is not the downscale of the threshold and
+              what is tuned against must be what gets committed. It records
+              nothing (ADR-0005).
+  series      one float per position per tool, coverage recorded rather than
+              inferred, written where inputs are admitted and drawn as a
+              second band under the strip. It fills behind the fill
+              frontier rather than behind the playhead; that band is the
+              byproduct claim, and what makes the claim worth testing is
+              that the arithmetic costs little beside the fetch that
+              produced its input. It survives the process — restored at
+              open, persisted at close.
+  clocks      serve, field, paint, surface and show, timed apart, plus an
+              explicit unattributed remainder on the video. A conflated
+              clock is how a slow overlay reads as a slow store, and the
+              term that mattered most here turned out to be the one nothing
+              had a clock on.
+  waste       fetches for rows a declaration said were coming, and frames
+              the clock passed unpainted. A predicted re-fetch is otherwise
+              invisible — it looks exactly like the store being slow.
 
-The parameter slider is the tool's own, not the old signal knob: changing it
-invalidates the *series* and not the frames, which is the invalidation line
-made feelable. Redrawing the crop invalidates both. If the line is where
-this folder claims, the first gesture is dramatically cheaper than the
-second, and if it is not, the line is drawn in the wrong place.
+The parameter slider is the tool's own: changing it names a different series
+and leaves every frame where it is, while redrawing the crop is a form change
+and takes the frames with it. Driving one and then the other is the
+invalidation line made feelable, and they should not feel alike.
 
-Five states worth driving by hand, in order: cold with a tool on and
-playing; a hop into unswept ground with `mhi-lag` on, which is the prefetch
-question with four specific old frames and one frame budget; switching
-tools; redrawing the crop; and changing the parameter. What a script cannot
-do is judge whether the overlay reads at its ceiling, whether the decimated
-series band looks like signal or like noise, and whether any of it feels the
-way the numbers say it should.
+The playhead follows a clock and the render tick follows the machine, so a
+frame the machine is too busy to draw is dropped from the picture and from
+nothing else. What is recorded never depends on what was drawn.
 
-Inherited below, unchanged:
-
-  hunt        one slider over the whole file — click anywhere to jump.
-              Outside any window, requests route to the display proxy
-              (5-9 ms drags) or kf-snap on the original (~130 ms, and every
-              full frame decoded on that route gets its crop sliced out and
-              admitted to RAM for free — bytes that already exist are never
-              refused). The crop is drawn, not configured: drag a rectangle
-              on the full-frame view; a new crop is a form change and wipes
-              RAM and chunks, because a stored small frame cannot become a
-              different one.
-  land        releasing the slider outside the active window (or clicking
-              anywhere on the timeline) lands a 300-frame window starting
-              there and the loop starts — the 10 s tuning loop is the
-              default gesture, not a button. A
-              sequential frontier fills it into RAM at the sequential rate
-              (~120 fps measured) while nearest-cached serves drags, so the
-              window is interactive well before it is covered. No persist
-              button exists: completed 96-frame chunks stream to disk
-              behind the fill, and a revisited window refills from its own
-              chunks at cut speed instead of re-paying the original.
-  tune        a signal slider that means nothing except invalidation: each
-              change debounces, then re-pays decode-free DIS over the
-              covered window in the background — the felt version of the
-              slider-vs-commit fork exp05 priced at ~1.7 s per 300 frames.
-              "flow preempts fill" hands the frontier's decode bandwidth to
-              the signal, which is the priority inversion the plan calls
-              for when the user touches tuning while crops still grow.
-  jump        land a second window while the first one's chunks are still
-              encoding — the seam both halves of which are priced solo but
-              whose overlap is not. Jump back and feel the cut serve what
-              RAM evicted.
-
-Every request logs task, route and ms on one session clock, and every
-background activity — fill, write-behind encodes, flow — logs its span, so
-the graphs read as a story: a latency timeline colored by route over an
-activity gantt (what was running when), and a route comparison panel (how
-good each tier is). The video carries live text overlays of the same
-ledger, so background signal math is visible the moment it starts. "walk session" scripts the whole story: hunt on both
-routes, land A, scrub it while filling, tune twice, jump to B mid-encode,
-shrink RAM, return to A on chunks. Logs land beside the storage explorer's
-in explorer-logs/, keyed by tool name.
+Driving it. `--smoke` runs it headless end to end; `--rate` measures whether
+the loop keeps its rate and where the interval goes, with the window shown;
+`--cold` starts as a fresh project with no proxy; `walk session` scripts a
+whole story for comparability across builds. What none of them can do is
+judge whether the overlay reads at its ceiling, whether the decimated series
+band looks like signal or like noise, or what an overlay should do under
+load — the three policies are display-only and have never been shown to
+differ.
 
 Run:
     uv run --group experiments python experiments/tool-experiments/tool-explorer.py

@@ -1,253 +1,166 @@
 # tool-experiments
 
-Where SIEVE finds out what happens to the frame stack when the player stops
-being the only thing asking. `decode-experiments` settled what a frame costs
-to get; `storage-experiments` settled what it costs to keep, and measured the
-tuning loop end to end with one consumer and its own background fill. This
-folder measures the layer both of those deferred: **many consumers, many
-forms, one store** — and the second half of the same question, what a tool
-leaves *behind*.
+Where SIEVE finds out what happens to the frame stack once something other
+than the player asks for a frame, and what a tool leaves behind when it does.
+`decode-experiments` settled what a frame costs to get; `storage-experiments`
+settled what it costs to keep, and measured the tuning loop end to end with a
+single consumer. This folder is the layer both of those deferred.
 
-## Why this exists
+It is not a plan any more. Most of what it set out to answer is answered,
+three of those answers are ADRs now, and what remains here is the evidence,
+the substrate the answers produced, and an explorer to feel them in. Read the
+ADRs for what is settled; read this for why.
 
-The session explorer's store is keyed by frame index alone, and the form —
-the crop rect, the scale, the pixel format — is a module-level global. That
-is correct for one consumer: `_apply_crop` stops the fill, drops the windows,
-replaces the RAM tier and wipes the chunks, because a stored small frame
-cannot become a different one. It stops being correct the moment a tool wants
-the full frame while the loop shows the crop, or wants half resolution, or
-wants colour where the loop caches luma. Then "hit" no longer names anything,
-and a miss that was unavoidable and a miss that was a bookkeeping failure are
-indistinguishable.
+## What it settled
 
-The product claim this folder has to make true is narrow and testable:
-*a frame is fetched when it is needed, and refetched only when there was no
-way of knowing it would be needed.* Everything below is an attempt to turn
-half of that sentence into a measured number and the other half into a rule.
+**A value is recorded where its inputs landed** (ADR-0005). Nothing that
+draws may decide what gets recorded, because what a renderer selects depends
+on what the machine had time to draw.
 
-## The architecture under test
+**A declaration is a fetch plan** (ADR-0006). A step names the inputs it
+admits as a function of the position being computed, and the justification is
+scheduling fetches rather than saving memory — the memory argument is the one
+that suggests itself and does not survive measurement.
 
-Four things, each of which the storage stack currently does not do, or does
-exactly once by hand:
+**A cost class belongs to the pairing** (ADR-0007). Measured where it runs,
+never declared, so a weaker machine falls back deliberately instead of
+chasing a figure set on other hardware.
 
-1. **A request is `(pts, form)`, and serving is a domination test.** Form is
-   a declared, comparable descriptor — source-pixel rect, scale, pixel
-   format — and the store answers a request from anything on hand that
-   *derives* to it without decoding. A crop slices out of a full frame at the
-   same scale; a downscale derives from a larger one; luma derives from
-   colour; none of those reverse. Coverage is already explicit per span
-   (chunk files on disk, not inferred from a gap); it becomes explicit per
-   `(form, span)`. Whether the derivation is cheap enough to be worth
-   preferring over a re-decode is the form-key experiment's to settle, not
-   an assumption.
+Two more decisions live in module docstrings rather than ADRs, because they
+are about how this code is built rather than about the architecture.
+`forms.py` fixes the canonical construction and the rule that **derived is
+for looking at, decoded is for recording**. `surfaces.py` holds the two
+presentation rules: reduce to display resolution once per data change, and
+keep the live surface and the report surface as different code.
 
-2. **Byproducts are admitted, not recomputed.** The session explorer does
-   this once, on the kf route: a full frame decoded for hunting has its crop
-   sliced out and admitted to RAM, because bytes that already exist are never
-   refused. Generalising it needs a place to put what falls out and a rule
-   for what is worth computing while a frame is hot. The analysis-cost shelf
-   already suggests the shape of the rule — absdiff, background subtraction
-   and reductions are in the noise class beside decode, dense flow is a
-   thousand times it, and motion vectors and packet sizes need no decode at
-   all — so the free-while-hot experiment is measuring where that boundary
-   actually falls under load, not discovering it.
+## The experiments
 
-3. **A reduced series is a stored thing; a field never is.** A tool
-   produces two outputs per frame with completely different economics — a
-   field, image-sized, which is what the overlay draws, and a reduction, a
-   scalar, which is what the graphs read. Storing fields means another
-   video's worth of bytes per tool per parameter setting, so tier 4 of the
-   storage plan holds series and the field is recomputed every time it is
-   drawn. That is what makes the two halves of this folder one thing, and
-   it runs the opposite way round from the obvious guess: the overlay is
-   not a *reader* of the sweep's cache, it is a second *writer* to it. The
-   field was computed to be drawn, the frame was hot, and the number that
-   falls out is the same number a sweep would have written — so a tool's
-   series fills by being looked at, and the sweep exists to cover the
-   ground nobody looked at. Tier 4 is the one tier never built and never
-   felt: the session explorer computes DIS over the covered run on every
-   debounce and throws it away, which was honest as an instrument and
-   leaves the time-columnar half of the plan with nothing behind it.
+Each writes to `results/` carrying its build, machine and probed footage.
+Numbers are not restated here — the result files are where a later
+measurement supersedes an earlier one by sitting beside it.
 
-4. **A consumer the user launched can be made to yield.** The one priority
-   inversion that exists — flow preempts fill — is hard-wired between two
-   named parties, both of which the app started for itself. A full run is
-   different in kind: the user asked for it, so it is allowed to make the
-   loop worse, and what it is not allowed to do is keep making it worse
-   after they have gone back to tuning.
+1. `01-paint-cost.py` — what drawing a tool's output costs. Settled the
+   overlay draw order (resize the field, then colour-map: cheaper, and the
+   only order whose colour bar is honest), and put the rasteriser out of the
+   live loop rather than off its thread. Ran first because an uninstrumented
+   paint reads as a slow store.
+2. `02-form-derivation.py` — does a held frame answer a wanted form more
+   cheaply than a decode. The answer inverts between the two regimes the loop
+   runs in, and that inversion is the result: derivation pays only where
+   decode is expensive, which is exactly where the dominating form is too
+   heavy to hold much of. So the domination test belongs to the hunt tier,
+   and the window tier keeps the wipe it already has.
+3. `03-free-while-hot.py` — the marginal cost of riding along on a decode
+   that was happening anyway. Falsified declared cost classes, which produced
+   ADR-0007, and caught three wasteful field implementations on the way,
+   which is the second thing an experiment is for.
+4. `04-under-load.py` — the same with the loop's own background work running.
+   Every tool inflates by about the same factor, so the one that gets felt is
+   simply the largest number rather than a specially fragile one.
+5. `05-provenance.py` — the check the others cannot perform. One invariant: a
+   stored value must be reproducible from the key it is filed under. It runs
+   against a deliberately broken producer (`--broken`) as well, because a
+   test that has never failed has no demonstrated power.
 
-A fifth thing, stated here because it is a design fact rather than a
-measurement: **fusion belongs above the invalidation line, never below it.**
-Combining steps into one pass over hot memory is what makes a sequential run
-fast, and it is the right treatment for form construction — crop, scale,
-convert — which does not change when a knob turns. It is the wrong treatment
-for anything the knobs touch, for two reasons that both bite before
-performance does. A fused graph is specialised to its parameters, so every
-slider move re-pays building it. And fusion consumes intermediates, while
-the loop exists to *show* intermediates: fuse a difference into a threshold
-into a count and the overlay has nothing left to draw. A batch run draws
-nothing and may fuse freely, which is the whole of the difference.
+## What this folder got wrong
 
-What that leaves is the hazard worth guarding: a fused path and an unfused
-path that answer differently for the same frame, so the preview lies about
-the commit. It is `docs/decode/ideas.md`'s do-not-assume-bit-identical in
-another costume, and the guard is cheap — run both over a span and diff the
-series.
+Recorded because the wrong version is more appealing than the right one, and
+a later reader will otherwise re-derive it.
 
-Frame identity is pts everywhere durable (ADR-0004). This folder is where
-that starts costing something, because a form descriptor, a coverage record
-and an analysis-cache key are all things that cross a boundary, and the
-explorer is index-keyed end to end. An experiment here that keys durable
-state by index is measuring a stack SIEVE will not build.
+The overlay originally wrote the series. The argument was that a field has to
+be recomputed in order to be drawn, the frame it is drawn from was already
+decoded, and the number falling out of it is the same number a background
+pass would write later at full price. Every clause of that is true. The
+conclusion — that the drawing may therefore do the recording — inverts the
+dependency, and makes what is recorded depend on paint cost, compositor
+cadence and machine load.
+
+It survived four experiments because all four measured cost, and a value
+filed by the wrong producer costs exactly what the right one costs. No timing
+instrument can see a provenance error. What found it was a question about
+shape rather than about speed.
+
+Two smaller ones went the same way. A cost class was declared by each tool
+until measurement showed the class belongs to the pairing. And a
+`write_sweep` sat in `series.py` documenting a warm-up guarantee that nothing
+called — the same shape as a test that has never failed, and worse than no
+guarantee at all.
+
+The standing rule from all three: **a tool that does not exist may be a
+workload and may never be evidence.** Designs argued for here from invented
+tools have twice failed to survive contact; designs *tested* here against
+invented tools have been useful every time.
 
 ## The substrate
 
-Four modules, written before the experiments because both halves need them
-and neither can be measured without them. Each carries its reasoning in its
-own docstring, which is where a wrong one gets argued with.
+`forms.py` — what a stored frame is, and when one already on hand can answer
+for another: the canonical construction, and the exact/approximate admission
+line.
 
-- `forms.py` — what a stored frame *is*, and when one on hand can answer for
-  another. Holds the canonical construction (crop, resize, convert, in that
-  order, always) and the admission law that falls out of it: **derived is
-  for looking at, decoded is for recording.** An exact derivation
-  reproduces a build-from-source byte for byte and may be kept; an
-  approximate one may be shown and never stored, written to a series, or
-  read by anything that commits.
-- `tools.py` — what a tool declares before anything schedules or draws it:
-  its form requirement, its temporal extent, its cost class, its field and
-  its reduction. Extent distinguishes a map from a fold, which is the
-  difference between a sweep that can be split and resumed and one that can
-  only be replayed. Cost class is *not* declared: `03-free-while-hot` found
-  every tool changing class between the two decodes the loop runs against,
-  so `classify` computes it from measurement at the pairing, the way seek
-  routing is probed rather than assumed.
-- `series.py` — tier 4: one float per frame per tool, coverage recorded
-  rather than inferred, a pts table saying what a row means, and the
-  extent's warm-up rows refused rather than written and masked.
-- `surfaces.py` — drawing a tool's output at display resolution from data
-  reduced to it, and nothing Qt. Holds the two presentation rules this
-  folder enforces: reduce to display resolution once per data change, and
-  keep the live surface and the report surface as different code.
+`tools.py` — what a step declares before anything schedules or draws it: the
+form it wants, the inputs it admits as offsets from the position being
+computed, its field and its reduction. `classify` computes a cost class from
+measurement; nothing declares one.
 
-The two tools it starts with are `absdiff` and `dis_flow`, as a pair, because
-they straddle the boundary the whole design keys on: one is in the noise
-beside the decode that produced the frame and one is roughly forty times it,
-so every fork that reads the cost class fires at least once.
+`series.py` — one float per position per step, coverage recorded rather than
+inferred, a pts table saying what a row means, and its own lock. Its known
+gaps are stated in its docstring: nothing answers "is this *span* usable",
+and there is no third state for provisional values.
+
+`surfaces.py` — drawing at display resolution from data reduced to it, and
+nothing Qt.
+
+The tools are `absdiff`, `dis_flow` and `lag_mhi`, and they are loads rather
+than proposals. `absdiff` and `dis_flow` straddle the free/not-free boundary
+so every fork that reads a cost class fires at least once, and `lag_mhi` is
+the only one whose input set is not its reach, which keeps that distinction
+tested rather than merely stated.
+
+## The explorer
+
+`tool-explorer.py`, forked from `storage-experiments/session-explorer.py` and
+deliberately not rewritten, so the existing baseline subtracts from it. It
+adds a tool, an overlay that draws a field and records nothing, the series
+band, five clocks with an explicit unattributed remainder, and the counters —
+avoidable fetches, unpainted frames.
+
+`--smoke` drives it headless end to end; `--rate` measures whether the loop
+keeps its rate and where the interval goes, with the window shown. What
+neither can do is judge whether the overlay reads at its ceiling, whether the
+decimated series band looks like signal or like noise, or what an overlay
+should do under load. The three overlay policies are display-only, have never
+been shown to differ, and are kept because that last question is real and
+unanswered.
 
 ## The rule for a result
 
-The same as the other two folders, and for the same reason: import
-`../decode-experiments/harness.py`, repoint `harness.RESULTS` at this
-folder's `results/`, keep every per-iteration sample, discard a stated
-warm-up. Provenance — build, machine, probed footage — is attached rather
-than remembered. A case that could not run says so in the notes; a silently
-absent case reads as a case that came out equal.
+Import `../decode-experiments/harness.py`, repoint `harness.RESULTS` here,
+keep every per-iteration sample, discard a stated warm-up. A case that could
+not run says so in its notes; a silently absent case reads as a case that
+came out equal.
 
-**Every stored value names its writer, once, in the module that owns it.**
-Not a style note: a display path wrote this folder's series for four
-experiments and nothing noticed, because a cost measurement cannot see a
-provenance error — a value filed under the wrong name costs exactly what the
-right one costs. `05-provenance.py` is the check that can see it, and it
-states the invariant in one line: a stored value must be reproducible from
-its own key. It runs against a deliberately defective writer too
-(`--broken`), because a test that has never failed is a test with no
-demonstrated power.
+Two rules this folder adds. **A number claimed about the loop is taken in the
+loop, and a number taken in isolation says so** — a microbenchmark is often
+the right instrument and may never be quoted as a felt cost. And **every
+stored value names its writer, once, in the module that owns it**, which is
+the practice `05-provenance.py` exists to check.
 
-One rule this folder adds, because it is the failure it exists to catch:
-**a number claimed about the loop is taken in the loop, and a number taken
-in isolation says so in its notes.** A microbenchmark is allowed and often
-the right instrument — `01-paint-cost.py` is one — but it may not be quoted
-as a felt cost, because the gap between the two is where every freeze in
-this tree has lived. v2 measured a pipeline made 1.88x faster making
-playback worse, and that finding is still open.
+## What is still open
 
-## What to measure, roughly in order
-
-Ranked by how much each would change what gets built. The ordering rule that
-does the work: **measure hard where the requirement is hard.** The tuning
-loop is where it is hard — it is the product constraint, and the user has
-asked for nothing that would excuse it being slow. A run the user explicitly
-started is where it is soft: they know the machine is busy, and the
-requirement there is *degraded but usable*, plus yielding when they come
-back. An experiment that measures a batch job to interactive tolerances is
-optimising against a budget nobody is holding it to.
-
-1. **What the visual costs.** Priced first because it gates the rest rather
-   than merely mattering: a paint cost that is not separately instrumented
-   reads as a slow store, which is the day the freeze hunt cost, and a live
-   surface expensive enough to occupy a core is a consumer in its own right.
-   Overlay draw order, live graph against decimation, at the sizes the
-   explorer's own geometry says it draws. `01-paint-cost.py`; the standing
-   rules it produced live in `surfaces.py`.
-
-2. **The loop with a tool on it.** One consumer, no sweep: the overlay live
-   at the frame the user is on, the series filling as a side effect of
-   watching, the graphs drawn off the reduced series, and the whole thing
-   instrumented so paint, field and serve are three clocks rather than one.
-   The questions are whether the loop still feels like the loop, whether
-   each cost class fits the frame budget where it claims to, and how much of
-   a timeline gets covered by watching alone. Felt, forked from the session
-   explorer with its log schema intact so the existing baseline subtracts.
-
-3. **Does form belong in the key or in a wipe?** A loop question before it
-   is a batch one: if a tool's analysis form is not what the loop already
-   holds, every displayed frame pays a second decode inside the frame
-   budget, and that is what decides whether an overlay is affordable at all.
-   Price the derivations against their re-decode — slice-a-crop-from-a-
-   cached-full-frame, downscale-from-larger, luma-from-colour — at the
-   regimes on the decode shelf. If deriving is in the noise class the store
-   keys by form and keeps both; if it is not, a form change stays the wipe
-   it is today and the tool tier gets its own store.
-
-4. **What is free while a frame is hot.** The marginal cost of riding along
-   on a decode that was happening anyway. `03-free-while-hot.py`, and it
-   came back with the class boundary landing on the *pairing* rather than
-   the tool, which removed a field from the descriptor. Also prices the
-   signals needing no decode at all — packet size, and motion vectors where
-   the build exports them.
-
-5. **The reduced-series tier.** What a per-frame series costs to write, to
-   read back time-columnar, and to invalidate: layout (row-major against
-   chunked/time-major), the cost of a partial span, and what a parameter
-   change above the flow line re-pays against one below it. Gated on
-   `05-flow-wall` in storage-experiments, which priced the re-pay; this
-   prices the storing.
-
-6. **Yielding, when the user comes back.** The demoted form of contention.
-   The question is not whether a run the user started slows the loop — it
-   will, and they asked for it — but whether touching the loop preempts it
-   promptly, what it costs to pause a sweep mid-span, and whether a resumed
-   sweep re-pays ground it had already covered. `flow preempts fill` is this
-   inversion between two named parties; this is it with a party the user
-   launched.
-
-7. **A batch protocol.** A request carrying a set of indices, sorted by
-   keyframe and decoded together, against the same frames requested one at a
-   time — decord's technique, and the thing a sweep wants that the player's
-   one-at-a-time protocol cannot express. This is throughput, so it is
-   measured to throughput tolerances; most of what a full run costs is
-   already on the decode shelf, and the part that is not is this.
-
-## What this folder does not do
-
-Re-measure decode routes or the tier stack. Both are on the shelf with
-findings behind them, and an experiment here that concludes something about a
-decoder configuration is one that ran the wrong experiment. The subject is
-the memoisation and scheduling layer — the part with something left to buy.
-
-## Footage
-
-`video-tests/` at the repo root, gitignored. Probe it, never trust a figure
-written down here. Derived files the other folders make — the display proxy,
-its segment build, the intra cut, the per-session chunk dirs — are inputs
-here rather than outputs, and an experiment that needs one either finds it or
-makes it and says which in the notes.
+The reduced-series tier is built and unpriced: what a series costs to write,
+to read back time-columnar, and to invalidate, against the null hypothesis of
+one array per key. Yielding is unmeasured — a run the user started may make
+the loop worse and may not keep doing so once they come back. A batch
+protocol, one request carrying a set of positions sorted by keyframe, is
+untried. And the loop's achieved rate falls short of its target whenever
+anything draws over it, by an amount that is not the work: `--rate` reports
+the interval and the remainder, and the cause is characterised rather than
+fixed.
 
 ## Running
 
     uv run --group experiments python experiments/tool-experiments/<name>.py
 
-The felt version lives beside the harness experiments, as in the other two
-folders: an explorer whose logs land in `explorer-logs/`, keyed by tool name.
-Drive it by hand; the felt report and the harness number are two different
-artifacts and the finding is usually where they disagree.
+Footage comes from `video-tests/`, gitignored. Derived files the other folders
+make are inputs here; an experiment that needs one either finds it or makes it
+and says which in its notes.

@@ -217,6 +217,7 @@
       - 📄 `tool-explorer-20260823T175551Z.json`
       - 📄 `tool-explorer-20260823T175635Z.json`
       - 📄 `tool-explorer-20260823T180841Z.json`
+      - 📄 `tool-explorer-20260823T191844Z.json`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
       - 📄 `02-form-derivation-20260823T155815Z.json`
@@ -224,6 +225,7 @@
       - 📄 `04-under-load-20260823T172050Z.json`
       - 📄 `05-provenance-20260823T180759Z.json`
       - 📄 `05-provenance-20260823T180817Z.json`
+      - 📄 `05-provenance-20260823T191912Z.json`
     - 📄 `01-paint-cost.py` — What drawing a tool's output costs, before anything is concluded about the store.
     - 📄 `02-form-derivation.py` — Does a held frame answer for a wanted form more cheaply than a decode?
     - 📄 `03-free-while-hot.py` — What riding along on a decode that was happening anyway actually costs.

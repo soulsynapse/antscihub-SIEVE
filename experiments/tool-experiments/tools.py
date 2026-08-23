@@ -72,19 +72,13 @@ the same name and opposite costs, and only the first one is about memory.
 The reset/step/checkpoint protocol a fold owes is not implemented yet,
 because the two tools this folder starts with are both maps.
 
-**A fold may never be driven by the display.** This is the rule the
-ordering requirement implies and it is worth stating on its own, because
-missing it produces wrong answers rather than slow ones. A display path
-decides what to evaluate from what it had time to draw, which is a function
-of machine load — so it can offer neither completeness nor order, and a
-fold fed from it silently loses frames nobody chose to skip. Identity
-through a blob merge is decided by exactly those frames: drop one and the
-tracker does not get a gap it can fill later, it gets a wrong assignment
-that propagates, and the same footage analysed twice on differently loaded
-machines disagrees. So a fold's series is written by a sweep and by nothing
-else. A map is safe on the display path because a missed row is only a
-missed row: coverage records it, a sweep closes it, and the value that
-eventually lands is the same value either way.
+A fold's ordering requirement means it can only be fed by a producer that
+can promise order and completeness, which an ordered pass can and an
+opportunistic one cannot; a map is indifferent, because a position it
+misses is only a position coverage records and a later pass closes. Nothing
+in this tree is fold-shaped yet, so the protocol a fold owes — reset, step,
+and a checkpoint policy — is declared and unimplemented, and should stay
+that way until something real needs it.
 
 **Its cost class — which a tool does not get to declare.** The three classes
 are cut where product behaviour changes:

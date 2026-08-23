@@ -15,18 +15,21 @@ What the fork adds, and what each is for:
               asks for the same one row ahead, the sweep asks across a span.
   overlay     the field drawn over the frame, computed at analysis form
               because a threshold on a downscaled image is not the
-              downscale of the threshold. Its reduction goes straight into
-              the series — the field was computed to be drawn, the frame
-              was hot, and the number that falls out is the one a sweep
-              would have written. That is the byproduct claim, and this is
-              where it is true or false.
-  series      one float per frame per tool, coverage recorded rather than
-              inferred, drawn as a second band under the strip. Watch it
-              fill behind the playhead while you play; that band is the
-              claim that watching covers ground.
-  three clocks  serve, field and paint timed separately, because a
-              conflated clock is how a slow overlay reads as a slow store,
-              which is the day the freeze hunt cost.
+              downscale of the threshold. It draws the field and discards
+              it, and writes nothing: what a screen managed to draw may not
+              decide what is recorded (ADR-0005).
+  series      one float per position per tool, coverage recorded rather
+              than inferred, written where frames are decoded and admitted
+              and drawn as a second band under the strip. Watch it fill
+              behind the fill frontier, not behind the playhead — that band
+              is the byproduct claim, and what makes it a claim worth
+              testing is that it costs almost nothing beside the decode
+              that produced its input.
+  five clocks   serve, field, paint, surface and show, timed separately,
+              because a conflated clock is how a slow overlay reads as a
+              slow store — and because the clock that mattered most turned
+              out to be the one nobody had added yet, which is why the
+              readout carries an explicit unattributed remainder.
   avoidable   decodes for rows a declaration said were coming. Zero, or a
               bug with an address. There is no other way to see a
               re-fetch: it looks exactly like the store being slow.
@@ -178,10 +181,20 @@ SWEEP_CHUNK = 48    #: rows a sweep does between yields, so it can be stopped
 #: number, not a specially fragile one. These are the three answers to that,
 #: and which is right is a judgement about what you are looking at while you
 #: tune rather than something a measurement settles.
+#: what the *drawing* does while the loop's own background work runs. All
+#: three are display-only and none of them touches what is recorded — the
+#: series is written where frames are admitted, whatever the screen is
+#: doing. They were built when the overlay still wrote what it drew, when
+#: the choice between them had a data consequence; it no longer does, and
+#: they are kept only because what an overlay should do under load is a
+#: real question about looking at things. A driven session found no
+#: difference in achieved rate between them, so nothing here is settled:
+#: 04-under-load prices the compute they trade away, and whether any of it
+#: is visible is a judgement nobody has made yet.
 POLICIES = {
-    "pay": "always compute — the picture hitches, the overlay is always true",
-    "hold": "skip while loaded — the picture stays smooth, the overlay freezes",
-    "downshift": "compute at half — live but coarse, and never recorded",
+    "pay": "always compute the field — the picture may hitch",
+    "hold": "skip the field while loaded — the picture keeps its rate",
+    "downshift": "compute the field at half size — live but coarse",
 }
 
 WINDOW = 300            #: the 10 s tuning window, in frames
@@ -1147,7 +1160,9 @@ class ToolRig:
                                 #: decoded and admitted - the byproduct
         self.by_sweep = 0       #: series rows written by an asked-for sweep
         self.held = 0           #: overlays skipped under load ("hold")
-        self.approximate = 0    #: overlays drawn coarse ("downshift"), unstored
+        #: overlays drawn from a half-size field ("downshift"). A display
+        #: count and nothing more: no policy here reaches the series.
+        self.coarse_draws = 0
         self.declared: set[int] = set()   #: last horizon's residency rows
 
     def use(self, name: str | None = None, blur: int | None = None) -> None:
@@ -1959,7 +1974,7 @@ class SessionExplorer(QMainWindow):
         # and the same footage on two machines then disagrees.
         del row_series, value
         if coarse:
-            self.rig.approximate += 1
+            self.rig.coarse_draws += 1
         ceiling = self.rig.ceiling_for(crop)
         if not ceiling:
             ceiling = self.rig.ceiling_for(crop, max(float(field.max()), 1.0))
@@ -2772,7 +2787,7 @@ class SessionExplorer(QMainWindow):
             f"avoidable decodes {rig.avoidable} "
             f"(unpredictable {rig.unavoidable})  "
             f"{self.policy_box.currentText()}: held {rig.held}, "
-            f"coarse {rig.approximate}  unpainted {self.dropped}")
+            f"coarse {rig.coarse_draws}  unpainted {self.dropped}")
 
     def _render_strip(self) -> None:
         w_px = self.strip_label.width()
@@ -3107,7 +3122,7 @@ class SessionExplorer(QMainWindow):
             },
             "overlay_policy": self.policy_box.currentText(),
             "overlays_held": self.rig.held,
-            "overlays_approximate": self.rig.approximate,
+            "overlays_coarse": self.rig.coarse_draws,
             "avoidable_decodes": self.rig.avoidable,
             "unavoidable_decodes": self.rig.unavoidable,
             "series_rows_by_decode": self.rig.by_decode,

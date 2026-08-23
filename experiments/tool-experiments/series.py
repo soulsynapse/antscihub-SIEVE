@@ -45,6 +45,18 @@ copy it under the lock: a numpy slice is a view, and a view of a buffer
 another thread is writing is a race whose symptom is a plausible number
 rather than a crash.
 
+**What is missing, so nobody assumes otherwise.** `get` answers for one
+row and there is nothing that answers for a *span*: a consumer asking "is
+this stretch usable" has to walk `runs`/`missing` itself, and a consumer
+downstream of this series — a gate over its values, say — that reads
+uncovered rows as computed zeros repeats the failure coverage exists to
+prevent, one level up the chain. There is also no third state. A producer
+that emits provisional values and revises them later, which is how
+forward-backward work is normally done, has nowhere to say so: a row is
+covered or it is not, and anything reading a provisional value reads it as
+final. Both are known gaps rather than oversights, and both want a real
+consumer before being designed for.
+
 Invalidation is by key and needs no machinery: what a stored value depends
 on is folded into the tool's key and the form's key, so a change upstream of
 the series names a different series, and a change downstream of it — a
@@ -146,9 +158,11 @@ class Series:
     def put(self, row: int, value: float) -> None:
         """One frame's value — the overlay's side effect, one at a time.
 
-        This is how a tool's series fills by being looked at: the field was
-        computed to be drawn, the frame was hot, and the number that falls
-        out of it is the same number a sweep would have written.
+        Called where a frame was decoded and admitted, never where one was
+        drawn (ADR-0005). The frame is hot either way; what differs is that
+        admission happens on a cadence the producer controls and drawing
+        happens on one the machine decides, so only the first can be
+        reproduced.
         """
         with self.lock:
             if 0 <= row < len(self.values):

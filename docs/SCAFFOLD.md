@@ -230,27 +230,38 @@
       - 📄 `tool-explorer-20260823T193323Z.json`
       - 📄 `tool-explorer-20260823T193543Z.json`
       - 📄 `tool-explorer-20260823T193703Z.json`
+      - 📄 `tool-explorer-20260823T194613Z.json`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
+      - 📄 `01-paint-cost-20260823T194128Z.json`
       - 📄 `02-form-derivation-20260823T155815Z.json`
+      - 📄 `02-form-derivation-20260823T193956Z.json`
+      - 📄 `02-form-derivation-20260823T194133Z.json`
+      - 📄 `02-form-derivation-20260823T194156Z.json`
       - 📄 `03-free-while-hot-20260823T160250Z.json`
       - 📄 `03-free-while-hot-20260823T193219Z.json`
+      - 📄 `03-free-while-hot-20260823T194404Z.json`
       - 📄 `04-under-load-20260823T172050Z.json`
+      - 📄 `04-under-load-20260823T194554Z.json`
       - 📄 `05-provenance-20260823T180759Z.json`
       - 📄 `05-provenance-20260823T180817Z.json`
       - 📄 `05-provenance-20260823T191912Z.json`
       - 📄 `05-provenance-20260823T193304Z.json`
       - 📄 `05-provenance-20260823T193321Z.json`
       - 📄 `05-provenance-20260823T193540Z.json`
-    - 📄 `01-paint-cost.py` — What drawing a tool's output costs, before anything is concluded about the store.
-    - 📄 `02-form-derivation.py` — Does a held frame answer for a wanted form more cheaply than a decode?
-    - 📄 `03-free-while-hot.py` — What riding along on a decode that was happening anyway actually costs.
-    - 📄 `04-under-load.py` — What a tool's field costs while the machine is doing the loop's own work.
+      - 📄 `05-provenance-20260823T194420Z.json`
+      - 📄 `05-provenance-20260823T194437Z.json`
+      - 📄 `05-provenance-20260823T194515Z.json`
+      - 📄 `05-provenance-20260823T194532Z.json`
+    - 📄 `01-paint-cost.py` — What drawing a step's output costs, before anything is concluded about the store.
+    - 📄 `02-form-derivation.py` — Does a held frame answer a wanted form more cheaply than a decode?
+    - 📄 `03-free-while-hot.py` — What riding along on a fetch that was happening anyway actually costs.
+    - 📄 `04-under-load.py` — What a step's arithmetic costs while the machine does the loop's own work.
     - 📄 `05-provenance.py` — Is every stored value the one its own key says it is?
     - 📄 `README.md`
-    - 📄 `forms.py` — What a stored frame is, and when one already on hand can answer for another.
+    - 📄 `forms.py` — What a stored frame is, and when one on hand can answer for another.
     - 📄 `series.py` — A step's reduced output, and the explicit record of which rows have one.
-    - 📄 `surfaces.py` — Drawing a tool's output at display resolution, from data reduced to it.
+    - 📄 `surfaces.py` — Drawing a step's output at display resolution, from data reduced to it.
     - 📄 `tool-explorer.py` — Feel the loop with a tool on it.
     - 📄 `tools.py` — What a step declares about itself before anything schedules or runs it.
 - 📁 `mockup/`

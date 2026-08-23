@@ -1,42 +1,34 @@
 """Is every stored value the one its own key says it is?
 
-Every experiment in this folder so far asks how expensive something is. None
-asks where a number came from, which is how a real defect survived four of
-them: the display was writing the series, and a cost measurement cannot see
-a provenance error because the wrong number costs exactly what the right one
-does.
+The other experiments here ask how expensive something is. None of them can
+ask where a number came from, which is how a real defect survived four of
+them: the drawing was writing the series, and a cost measurement cannot see
+a provenance error because a value filed by the wrong producer costs exactly
+what the right one costs.
 
-The invariant is small enough to state in a sentence and it is the only one
-that matters here: **a stored value must be reproducible from its own key.**
-A series is filed under (tool, form). Take any covered row, recompute it
-with the tool that key names, and the answer must be the stored one. If a
-producer ever read the rig's tool twice — once to choose which frames to
-gather and again to decide where to file the answer — this fails, and
-nothing else in the folder would notice, because the number is plausible and
-the key is real.
+The invariant fits in a sentence and it is the only one this file checks: **a
+stored value must be reproducible from its own key.** A series is filed under
+a step and a form. Take any covered row, recompute it with the step that key
+names, and the answer must be the stored one. A producer that reads its
+step twice — once to choose which inputs to gather and again to decide where
+to file the answer — breaks it, and nothing else here would notice, because
+the number is plausible and the key is real.
 
-Three cases, in increasing nastiness:
+Three cases, in increasing nastiness. **Quiet**: one writer, nothing changing
+underneath, which establishes that the invariant is checkable and that the
+check itself is not the broken thing. **Switching underneath**: a writer that
+reads its step, gathers, evaluates and files, while another thread swaps the
+active step as fast as it can — the shape of the defect that was here.
+**Reading while written**: a reader snapshotting a series a writer is
+filling, because a numpy slice is a view and a reader that slices rather than
+copies can see values and coverage from two different instants, which reads
+as a real measurement of zero.
 
-1. **Quiet.** One writer, nothing changing underneath. Establishes that the
-   invariant is checkable at all and that the check itself is not the thing
-   that is broken.
-
-2. **Switching underneath.** A writer loop that reads the tool, gathers,
-   evaluates and files — while another thread swaps the active tool as fast
-   as it can. This is the shape of the bug that was here: on the fill thread
-   with the user changing tools. It should be impossible to produce a value
-   filed under a tool that did not compute it, and before the fix it was
-   routine.
-
-3. **Reading while written.** A reader taking snapshots of a series a writer
-   is filling. A numpy slice is a view, so a reader that slices rather than
-   copies can see a values array and a coverage array from two different
-   instants — a row marked covered whose value has not landed yet. That
-   reads as a real measurement of zero.
-
-A pass here is not a proof of thread safety; it is a regression test for
-three specific defects that were in this tree, run for long enough to make
-their windows likely rather than certain.
+A pass is not a proof of thread safety. It is a regression test for specific
+defects that were in this tree, run long enough to make their windows likely
+rather than certain — and it is run against a deliberately broken writer
+(`--broken`) as well, because a test that has never failed has no
+demonstrated power.
 """
 
 from __future__ import annotations
@@ -54,19 +46,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "decode-experime
 import harness  # noqa: E402
 from harness import FOOTAGE, Run  # noqa: E402
 
-import forms  # noqa: E402
 import series as series_mod  # noqa: E402
 import tools as toolkit  # noqa: E402
 
 harness.RESULTS = Path(__file__).resolve().parent / "results"
 
 CUT = FOOTAGE / "derived" / "cut-crf18-intra.mp4"
+CROP = (2144, 982, 1024, 1024)
 HELD = 60
 ROUNDS = 400
-CROP = (2144, 982, 1024, 1024)
+QUIET_ROUNDS = 120
+SWITCH_PAUSE_S = 0.0004
+TOLERANCE = 1e-4
 
 
-def _frames(count: int):
+def _resident(count: int):
     out = []
     with av.open(str(CUT)) as container:
         stream = container.streams.video[0]
@@ -85,11 +79,10 @@ def _frames(count: int):
 class Rig:
     """The smallest thing that can hold the defect, and the fix.
 
-    Mirrors the explorer's ToolRig in the one respect that matters: a
-    mutable `tool` that a GUI thread swaps while a worker produces. The
-    worker is written the correct way — one read, threaded through — and
-    `--broken` runs it the way it used to be, so the test can be shown to
-    fail against the defect rather than merely passing against the fix.
+    Mirrors the explorer's rig in the one respect that matters: a mutable
+    active step that one thread swaps while another produces. The correct
+    writer reads it once and threads it through; `--broken` reads it again
+    after gathering, which is how it used to be.
     """
 
     def __init__(self, pts, makers):
@@ -97,7 +90,7 @@ class Rig:
         self.names = list(makers)
         self.name = self.names[0]
         self.tool = makers[self.name]()
-        self.tools: dict[str, object] = {self.tool.key(): self.tool}
+        self.tools = {self.tool.key(): self.tool}
         self.series: dict[str, series_mod.Series] = {}
         self.pts = pts
         self.lock = threading.RLock()
@@ -116,19 +109,18 @@ class Rig:
             got = self.series.get(key)
             if got is None:
                 got = self.series[key] = series_mod.Series(
-                    source=CUT.name, tool_key=tool.key(), form_key=form.key(),
-                    pts=self.pts, timebase="1/24000")
+                    source=CUT.name, tool_key=tool.key(),
+                    form_key=form.key(), pts=self.pts, timebase="1/24000")
         return got
 
 
 def verify(rig: Rig, frames) -> tuple[int, list[str]]:
-    """Recompute every covered row from the tool its key names."""
+    """Recompute every covered row with the step its key names."""
     checked, bad = 0, []
     for key, series in rig.series.items():
-        tool_key = key.split("|")[0]
-        tool = rig.tools.get(tool_key)
+        tool = rig.tools.get(key.split("|")[0])
         if tool is None:
-            bad.append(f"{key}: no tool answers to this key")
+            bad.append(f"{key}: no step answers to this key")
             continue
         values, covered = series.snapshot(0, len(frames))
         for row in np.nonzero(covered)[0]:
@@ -136,36 +128,40 @@ def verify(rig: Rig, frames) -> tuple[int, list[str]]:
             want = tool.needs(row)
             if min(want) < 0 or max(want) >= len(frames):
                 continue
-            field = tool.field({r: frames[r] for r in want}, row)
-            expect = float(tool.reduce(field))
+            expect = float(tool.reduce(
+                tool.field({r: frames[r] for r in want}, row)))
             got = float(values[row])
             checked += 1
-            if abs(expect - got) > 1e-4 * max(1.0, abs(expect)):
-                bad.append(f"{key} row {row}: stored {got:.6f}, "
-                           f"its own tool gives {expect:.6f}")
+            if abs(expect - got) > TOLERANCE * max(1.0, abs(expect)):
+                bad.append(f"{key} row {row}: stored {got:.6f}, its own step "
+                           f"gives {expect:.6f}")
     return checked, bad
 
 
-def writer(rig: Rig, frames, rounds: int, broken: bool, stop: threading.Event):
+def writer(rig: Rig, frames, rounds: int, broken: bool,
+           stop: threading.Event) -> None:
     for i in range(rounds):
         if stop.is_set():
             return
-        tool = rig.tool                      # the one read
+        tool = rig.tool                        # the one read
         row = 31 + (i % (len(frames) - 31))
-        want = tool.needs(row)
-        got = {r: frames[r] for r in want}
-        field = (rig.tool if broken else tool).field(got, row)
+        window = {r: frames[r] for r in tool.needs(row)}
+        # the defect is *three independent reads* of one mutable field:
+        # gather with what it was, compute with what it is now, file under
+        # what it is by then. Collapsing them into a single re-read makes
+        # the writer self-consistent and the test toothless, which is worth
+        # a comment because that is exactly how this file was once wrong.
+        field = (rig.tool if broken else tool).field(window, row)
         value = float((rig.tool if broken else tool).reduce(field))
-        series = rig.series_for(rig.tool if broken else tool)
-        series.put(row, value)
+        rig.series_for(rig.tool if broken else tool).put(row, value)
 
 
-def switcher(rig: Rig, stop: threading.Event):
+def switcher(rig: Rig, stop: threading.Event) -> None:
     i = 0
     while not stop.is_set():
         rig.use(rig.names[i % len(rig.names)])
         i += 1
-        time.sleep(0.0004)
+        time.sleep(SWITCH_PAUSE_S)
 
 
 def main() -> None:
@@ -173,32 +169,29 @@ def main() -> None:
     run = Run(
         experiment="05-provenance",
         question="Is every stored value reproducible from the key it is "
-                 "filed under, including while the tool changes underneath?",
+                 "filed under, including while the active step changes "
+                 "underneath its producer?",
     )
     run.add_footage(CUT)
-    run.note("the invariant: a value stored under (tool, form) must equal "
-             "what that tool computes for that row. A cost experiment cannot "
-             "see a violation, because a value filed under the wrong tool "
-             "costs exactly what the right one costs.")
+    run.note("the invariant: a value stored under a step and a form must "
+             "equal what that step computes for that row. A cost experiment "
+             "cannot see a violation, because a value filed by the wrong "
+             "producer costs exactly what the right one costs.")
     if broken:
-        run.note("RUN WITH --broken: the writer re-reads the rig's tool after "
-                 "gathering, which is the defect this test exists for. A pass "
-                 "here would mean the test is not testing anything.")
+        run.note("RUN WITH --broken: the writer re-reads the active step "
+                 "after gathering, which is the defect this test exists for. "
+                 "A pass here would mean the test tests nothing.")
 
-    frames = _frames(HELD)
+    frames = _resident(HELD)
     pts = np.arange(len(frames), dtype=np.int64) * 1000
     makers = {"absdiff": toolkit.absdiff, "dis": toolkit.dis_flow,
               "mhi-lag": toolkit.lag_mhi}
     results = []
 
-    # 1 ── quiet
     rig = Rig(pts, makers)
-    stop = threading.Event()
-    writer(rig, frames, 120, broken, stop)
-    checked, bad = verify(rig, frames)
-    results.append(("quiet, one writer", checked, bad))
+    writer(rig, frames, QUIET_ROUNDS, broken, threading.Event())
+    results.append(("quiet, one writer", *verify(rig, frames)))
 
-    # 2 ── the tool changing underneath the writer
     rig = Rig(pts, makers)
     stop = threading.Event()
     swap = threading.Thread(target=switcher, args=(rig, stop), daemon=True)
@@ -206,10 +199,8 @@ def main() -> None:
     writer(rig, frames, ROUNDS, broken, stop)
     stop.set()
     swap.join(timeout=2)
-    checked, bad = verify(rig, frames)
-    results.append(("tool switching underneath", checked, bad))
+    results.append(("step switching underneath", *verify(rig, frames)))
 
-    # 3 ── a reader taking snapshots while a writer fills
     rig = Rig(pts, makers)
     stop = threading.Event()
     torn: list[str] = []
@@ -220,11 +211,8 @@ def main() -> None:
             values, covered = target.snapshot(0, len(frames))
             if len(values) != len(covered):
                 torn.append("snapshot returned mismatched lengths")
-            # a row marked covered whose value never landed reads as a
-            # real measurement of zero, which is the failure mode coverage
-            # exists to prevent
-            if covered.any() and not np.isfinite(values[covered]).all():
-                torn.append("covered row holds a non-finite value")
+            elif covered.any() and not np.isfinite(values[covered]).all():
+                torn.append("a covered row holds a non-finite value")
     rd = threading.Thread(target=reader, daemon=True)
     rd.start()
     writer(rig, frames, ROUNDS, broken, stop)
@@ -236,9 +224,9 @@ def main() -> None:
     ok = True
     print(f"{'case':<30} {'rows checked':>13}  verdict")
     for label, checked, bad in results:
-        verdict = "ok" if not bad else f"FAIL ({len(bad)})"
         ok = ok and not bad
-        print(f"{label:<30} {checked:>13}  {verdict}")
+        print(f"{label:<30} {checked:>13}  "
+              f"{'ok' if not bad else f'FAIL ({len(bad)})'}")
         for line in bad[:4]:
             print(f"    {line}")
         run.note(f"{label}: {checked} rows recomputed from their key, "
@@ -246,8 +234,8 @@ def main() -> None:
                  + ("; first: " + bad[0] if bad else ""))
     print("\nPASS" if ok else "\nFAIL")
     if broken and ok:
-        print("the --broken writer did not trip the check: the race window "
-              "was missed, not absent. Raise ROUNDS and run again.")
+        print("the --broken writer did not trip the check: the window was "
+              "missed rather than absent. Raise ROUNDS and run again.")
     path = run.write()
     print(f"wrote {path}")
 

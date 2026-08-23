@@ -1,37 +1,38 @@
-"""What a tool's field costs while the machine is doing the loop's own work.
+"""What a step's arithmetic costs while the machine does the loop's own work.
 
-Every field number this folder has is uncontended, and a driven session of
-the tool explorer found that is not the number that gets felt: bucketing its
-log by whether a fill or an encode was running showed dense flow going from
-6 ms to 8.8 ms at the median, 15.9 at p95, and once to 131 — while frame
-differencing barely moved. The felt report was "lags a bit at some points",
-and those points were all one tool under one condition.
+Every field cost in this folder is otherwise uncontended, and a driven
+session of the tool explorer showed that is not the number that gets felt.
+Bucketing its log by whether a fill or an encode was running made one step
+look specially fragile, which was an accident of a hand-driven session. This
+measures it on purpose.
 
-That was an accident of a hand-driven session, so this measures it on
-purpose, with the background work being the loop's actual background work
-rather than a synthetic spinner: a thread decoding the original
-sequentially, which is what a window fill is, and a thread encoding intra
-chunks, which is what the write-behind is.
+The background work is the loop's actual background work rather than a
+synthetic spinner: a thread decoding the original sequentially, which is what
+a window fill is, and a thread encoding intra chunks, which is what the
+write-behind is. Contention for the interpreter lock and for memory bandwidth
+against *that* is the subject, and a busy loop would take neither in the same
+proportion.
 
 Two things it settles.
 
-**How much each tool inflates**, which is not a constant. A tool whose field
-is a few numpy passes over a megabyte contends for memory bandwidth and the
-GIL differently from one that spends its time inside a solver, and the
-ratios in the explorer's log differ by tool by more than a factor of two.
+**How much each step inflates**, which need not be a constant. Arithmetic
+that makes a few passes over an image contends differently from arithmetic
+that spends its time inside a solver, so whether the inflation is uniform is
+a question rather than an assumption.
 
-**Whether the tail or the median is the thing to classify on.** A tool that
-fits a frame period at p50 and misses it at p99 is felt as lag, not as a
-tool that fits — so `tools.classify` should be reading a tail. What tail,
-and how much worse it is than the median, is what this run is for.
+**Whether the median or the tail decides the class.** A step that fits a
+frame period at the median and misses it at the tail is felt as lag rather
+than as a step that fits, so `tools.classify` may need to read a tail. What
+tail, and how much worse than the median, is what this run is for — and if
+the two agree everywhere, then the change is not supported and should not be
+made.
 
-The GUI is not here and neither is paint, deliberately: this prices the
-compute under contention, and the explorer prices what that feels like.
+No GUI here and no paint: this prices the arithmetic under contention, and
+the explorer prices what that feels like.
 """
 
 from __future__ import annotations
 
-import queue
 import sys
 import threading
 import time
@@ -51,11 +52,15 @@ harness.RESULTS = Path(__file__).resolve().parent / "results"
 
 BIG = FOOTAGE / "GX010047c2_02_17_26.MP4"
 CUT = FOOTAGE / "derived" / "cut-crf18-intra.mp4"
+SCRATCH = FOOTAGE / "derived" / "_under-load-scratch.mp4"
 
 CROP = (2144, 982, 1024, 1024)
 FPS = 24000 / 1001
+PAINT_MS = 2.1          #: read from 01-paint-cost
+FETCH_MS = 0.13         #: the chunk-regime fetch, from 02-form-derivation
 HELD = 40
-REPS = 120          #: more than the quiet experiments: the tail is the point
+REPS = 120              #: more than the quiet runs: the tail is the point
+SETTLE_S = 1.5          #: let the background reach steady state first
 
 
 def _luma_crop(frame, rect):
@@ -67,7 +72,7 @@ def _luma_crop(frame, rect):
     return np.ascontiguousarray(arr[y:y + h, x:x + w])
 
 
-def _real_frames(path: Path, count: int):
+def _resident(path: Path, count: int):
     out = []
     with av.open(str(path)) as container:
         stream = container.streams.video[0]
@@ -82,12 +87,10 @@ def _real_frames(path: Path, count: int):
 class Load:
     """The loop's own background work, started and stopped around a case.
 
-    A fill is a sequential decode of the original with the crop sliced out,
-    which is exactly what `WindowFill` does; an encode is intra frames into
-    a container, which is exactly the write-behind. Neither is a synthetic
-    spinner, because what is being measured is contention for the GIL and
-    for memory bandwidth against *this* work, and a busy loop would contend
-    for neither in the same proportion.
+    A fill is a sequential decode of the original with the crop sliced out;
+    an encode is intra frames into a container. Neither is synthetic,
+    because what is being measured is contention against this work in
+    particular.
     """
 
     def __init__(self, fill: bool, encode: bool, frames):
@@ -113,14 +116,14 @@ class Load:
                 return
 
     def _encode_loop(self):
-        out_path = FOOTAGE / "derived" / "_under-load-scratch.mp4"
         while not self.stop.is_set():
             try:
-                with av.open(str(out_path), "w") as out:
+                with av.open(str(SCRATCH), "w") as out:
                     stream = out.add_stream("libx264", rate=24)
                     stream.height, stream.width = self.frames[0].shape
                     stream.pix_fmt = "yuv420p"
-                    stream.options = {"crf": "18", "preset": "veryfast", "g": "1"}
+                    stream.options = {"crf": "18", "preset": "veryfast",
+                                      "g": "1"}
                     for arr in self.frames:
                         vf = av.VideoFrame.from_ndarray(arr, format="gray")
                         for pkt in stream.encode(vf.reformat(format="yuv420p")):
@@ -132,7 +135,7 @@ class Load:
                         out.mux(pkt)
             except Exception:  # noqa: BLE001
                 return
-        out_path.unlink(missing_ok=True)
+        SCRATCH.unlink(missing_ok=True)
 
     def __enter__(self):
         if self.fill:
@@ -144,7 +147,7 @@ class Load:
         for t in self.threads:
             t.start()
         if self.threads:
-            time.sleep(1.5)   # let the load reach steady state first
+            time.sleep(SETTLE_S)
         return self
 
     def __exit__(self, *exc):
@@ -166,25 +169,28 @@ def repeat(fn, n=REPS):
 def main() -> None:
     run = Run(
         experiment="04-under-load",
-        question="What does a tool's field cost while a fill and a "
-                 "write-behind encode are running, and does the tail or the "
-                 "median decide whether it fits?",
+        question="What does a step's arithmetic cost while a fill and a "
+                 "write-behind encode run, and does the tail or the median "
+                 "decide whether it fits?",
     )
     run.add_footage(BIG, CUT)
     period_ms = 1000.0 / FPS
-    run.note(f"frame period {period_ms:.1f} ms; the background work is a "
-             f"sequential decode of the original with the crop sliced out (a "
-             f"window fill) and libx264 intra encoding (the write-behind), "
-             f"not a synthetic spinner — contention for the GIL and for "
-             f"memory bandwidth is the subject and a busy loop would take "
-             f"neither in the same proportion")
-    run.note("sys.setswitchinterval is left at its default here; the "
-             "explorer sets it to 0.002, so these ratios are the untuned "
-             "case and the explorer's are the tuned one")
+    run.note("the background work is a sequential decode of the original "
+             "with the crop sliced out (a window fill) and libx264 intra "
+             "encoding (the write-behind), not a synthetic spinner — "
+             "contention for the interpreter lock and for memory bandwidth "
+             "is the subject, and a busy loop would take neither in the same "
+             "proportion")
+    run.note("the interpreter's switch interval is left at its default; the "
+             "explorer shortens it, so these are the untuned ratios and the "
+             "explorer's are the tuned ones")
+    run.note("the fetch and paint figures used for classification come from "
+             "02-form-derivation and 01-paint-cost rather than being "
+             "re-measured here")
 
-    frames = _real_frames(CUT, HELD)
+    frames = _resident(CUT, HELD)
     height, width = frames[0].shape
-    print(f"resident {width}x{height} real frames; period {period_ms:.1f} ms\n")
+    print(f"resident {width}x{height} real inputs; period {period_ms:.1f} ms\n")
 
     conditions = (("idle", False, False),
                   ("fill", True, False),
@@ -209,26 +215,23 @@ def main() -> None:
             report(case)
             table[(tool.key(), label)] = quantiles(case.samples_ms)
             if fill or encode:
-                run.note(f"{tool.key()} under {label}: background did "
-                         f"{load.fills} fill frames, {load.encodes} encodes "
-                         f"during the case")
+                run.note(f"{tool.key()} under {label}: the background did "
+                         f"{load.fills} fill frames and {load.encodes} "
+                         f"encodes during the case")
         print()
 
-    print(f"{'tool':<26} {'condition':<12} {'p50':>7} {'p95':>7} {'p99':>7} "
-          f"{'max':>8}  {'x idle p50':>10}")
+    print(f"{'step':<26} {'condition':<12} {'p50':>7} {'p95':>7} {'max':>8}"
+          f"  {'x idle p50':>10}")
     for (key, label), q in table.items():
         idle = table[(key, "idle")]["p50"]
         print(f"{key:<26} {label:<12} {q['p50']:>7.2f} {q['p95']:>7.2f} "
-              f"{q.get('p99', q['p95']):>7.2f} {q['max']:>8.2f}  "
-              f"{q['p50'] / idle:>10.2f}")
+              f"{q['max']:>8.2f}  {q['p50'] / idle:>10.2f}")
 
-    # what the classifier would say, median against tail
-    print("\nclass by median against class by tail (decode 0.13 ms, "
-          "paint 2.8 ms, chunk regime):")
+    print("\nclass by median against class by tail:")
     verdicts = []
     for (key, label), q in table.items():
-        by_p50 = toolkit.classify(q["p50"], 0.13, period_ms, 2.8)
-        by_p95 = toolkit.classify(q["p95"], 0.13, period_ms, 2.8)
+        by_p50 = toolkit.classify(q["p50"], FETCH_MS, period_ms, PAINT_MS)
+        by_p95 = toolkit.classify(q["p95"], FETCH_MS, period_ms, PAINT_MS)
         verdicts.append({"tool": key, "load": label,
                          "p50": round(q["p50"], 2), "p95": round(q["p95"], 2),
                          "by_median": by_p50, "by_tail": by_p95,
@@ -237,10 +240,11 @@ def main() -> None:
         print(f"  {key:<26} {label:<12} median->{by_p50:<9} "
               f"tail->{by_p95:<9}{flag}")
     split = [v for v in verdicts if v["disagrees"]]
-    run.note("median/tail class disagreement: " + (
+    run.note("median/tail disagreement: " + (
         "; ".join(f"{v['tool']} under {v['load']} is {v['by_median']} by p50 "
-                  f"({v['p50']} ms) and {v['by_tail']} by p95 ({v['p95']} ms)"
-                  for v in split) or "none — the two agree everywhere here"))
+                  f"and {v['by_tail']} by p95" for v in split)
+        or "none — the two agree everywhere here, so classifying on a tail "
+           "is not supported by this run"))
     print(f"\n{len(split)} of {len(verdicts)} pairings classify differently "
           f"by median than by tail")
     path = run.write()

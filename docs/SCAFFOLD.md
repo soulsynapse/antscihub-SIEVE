@@ -10,6 +10,9 @@
     - 📄 `ADR-0002-a-subpane-divides-the-spare-axis.md`
     - 📄 `ADR-0003-the-right-pane-swipes-between-positions.md`
     - 📄 `ADR-0004-a-frame-is-its-timestamp.md`
+    - 📄 `ADR-0005-a-value-is-recorded-where-its-inputs-landed.md`
+    - 📄 `ADR-0006-a-declaration-is-a-fetch-plan.md`
+    - 📄 `ADR-0007-a-cost-class-belongs-to-the-pairing.md`
   - 📁 `decode/`
     - 📄 `ideas.md`
   - 📁 `findings/`

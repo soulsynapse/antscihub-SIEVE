@@ -32,8 +32,18 @@ full, and whatever it produces there is an artefact of where the sweep
 happened to start. Writing it and masking it at display is the failure
 `docs/decode/ideas.md` records — the value still exists for anything that
 does not mask, and a later overlapping sweep supplies the honest one, so
-there are then two answers for one frame. `write_sweep` refuses the warm-up
-rows rather than trusting callers to drop them.
+there are then two answers for one frame. `first_honest` names that boundary and every
+producer asks it, because a `put` of one row cannot tell whether its window
+was full, and a guard no caller invokes is worse than no guard at all —
+this file used to carry exactly that, a `write_sweep` enforcing the rule
+while the only sweep in the tree reached the same answer by hand.
+
+**Every access takes the lock.** A series is written by whichever thread
+decoded the frame and read by the one drawing it, so the guard belongs here
+rather than in each caller's discipline. Reads that hand an array outward
+copy it under the lock: a numpy slice is a view, and a view of a buffer
+another thread is writing is a race whose symptom is a plausible number
+rather than a crash.
 
 Invalidation is by key and needs no machinery: what a stored value depends
 on is folded into the tool's key and the form's key, so a change upstream of
@@ -50,6 +60,7 @@ hypothesis the series-tier experiment has to beat.
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,6 +80,7 @@ class Series:
     covered: np.ndarray = None   # type: ignore[assignment]
 
     def __post_init__(self) -> None:
+        self.lock = threading.RLock()
         n = len(self.pts)
         if self.values is None:
             self.values = np.zeros(n, dtype=np.float32)
@@ -82,13 +94,36 @@ class Series:
     # ── reading ──────────────────────────────────────────────────────────
     def get(self, row: int) -> float | None:
         """The value, or `None` — never a zero standing in for absence."""
-        if 0 <= row < len(self.values) and self.covered[row]:
-            return float(self.values[row])
+        with self.lock:
+            if 0 <= row < len(self.values) and self.covered[row]:
+                return float(self.values[row])
         return None
+
+    def snapshot(self, start: int, end: int):
+        """Copies of the values and coverage over a span.
+
+        Copies, not slices. A numpy slice is a view on a buffer another
+        thread is still writing, so handing one to a renderer is a race
+        whose symptom is a plausible number rather than a crash.
+        """
+        with self.lock:
+            return (self.values[start:end].copy(),
+                    self.covered[start:end].copy())
+
+    def first_honest(self, start: int, reach: int) -> int:
+        """The first row a run beginning at `start` may vouch for.
+
+        Named and asked rather than arrived at: a producer that works this
+        out for itself can get it wrong quietly, and a wrong answer here
+        writes an artefact of where the run started into a row a later run
+        will disagree with.
+        """
+        return start + max(0, reach)
 
     def runs(self, start: int, end: int) -> list[tuple[int, int]]:
         """Covered stretches within `[start, end)`, as half-open rows."""
-        return _runs(self.covered[start:end], start, True)
+        with self.lock:
+            return _runs(self.covered[start:end].copy(), start, True)
 
     def missing(self, start: int, end: int) -> list[tuple[int, int]]:
         """Uncovered stretches — what a sweep still owes.
@@ -99,11 +134,13 @@ class Series:
         decoded, even where its offsets are sparse enough that it only
         *holds* a few. A scheduler pricing a gap prices `gap + reach`.
         """
-        return _runs(self.covered[start:end], start, False)
+        with self.lock:
+            return _runs(self.covered[start:end].copy(), start, False)
 
     def coverage(self, start: int, end: int) -> float:
-        span = self.covered[start:end]
-        return float(span.mean()) if len(span) else 0.0
+        with self.lock:
+            span = self.covered[start:end]
+            return float(span.mean()) if len(span) else 0.0
 
     # ── writing ──────────────────────────────────────────────────────────
     def put(self, row: int, value: float) -> None:
@@ -113,43 +150,25 @@ class Series:
         computed to be drawn, the frame was hot, and the number that falls
         out of it is the same number a sweep would have written.
         """
-        if 0 <= row < len(self.values):
-            self.values[row] = value
-            self.covered[row] = True
-
-    def write_sweep(self, start: int, end: int, reach: int,
-                    values) -> tuple[int, int]:
-        """A span's worth, with the warm-up rows refused.
-
-        `start`/`end` are the rows the sweep *decoded*; `values` are the
-        honest results, which for a tool whose oldest requirement sits
-        `reach` back begin at `start + reach`. Sparse offsets do not change
-        this — a lag-30 tool cannot answer for row 5 of a span starting at
-        0 no matter how few of the intervening frames it holds. Returns the
-        rows actually written.
-        """
-        first = start + max(0, reach)
-        values = np.asarray(values, dtype=np.float32)
-        if len(values) != end - first:
-            raise ValueError(
-                f"reach {reach} over rows [{start},{end}) admits "
-                f"{end - first} values, got {len(values)}")
-        self.values[first:end] = values
-        self.covered[first:end] = True
-        return first, end
+        with self.lock:
+            if 0 <= row < len(self.values):
+                self.values[row] = value
+                self.covered[row] = True
 
     # ── persistence ──────────────────────────────────────────────────────
     def save(self, root: Path) -> Path:
+        with self.lock:
+            values, covered = self.values.copy(), self.covered.copy()
         root.mkdir(parents=True, exist_ok=True)
         stem = self.key.replace("|", "__").replace("/", "-").replace(":", "-")
         path = root / f"{stem}.npz"
-        np.savez_compressed(path, values=self.values, covered=self.covered,
+        np.savez_compressed(path, values=values, covered=covered,
                             pts=self.pts)
         path.with_suffix(".json").write_text(json.dumps({
             "source": self.source, "tool_key": self.tool_key,
             "form_key": self.form_key, "timebase": self.timebase,
             "rows": int(len(self.pts)),
-            "covered": int(self.covered.sum()),
+            "covered": int(covered.sum()),
         }, indent=1), encoding="utf-8")
         return path
 

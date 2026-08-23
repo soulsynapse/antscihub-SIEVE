@@ -213,15 +213,19 @@
       - 📄 `tool-explorer-20260823T175533Z.json`
       - 📄 `tool-explorer-20260823T175551Z.json`
       - 📄 `tool-explorer-20260823T175635Z.json`
+      - 📄 `tool-explorer-20260823T180841Z.json`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
       - 📄 `02-form-derivation-20260823T155815Z.json`
       - 📄 `03-free-while-hot-20260823T160250Z.json`
       - 📄 `04-under-load-20260823T172050Z.json`
+      - 📄 `05-provenance-20260823T180759Z.json`
+      - 📄 `05-provenance-20260823T180817Z.json`
     - 📄 `01-paint-cost.py` — What drawing a tool's output costs, before anything is concluded about the store.
     - 📄 `02-form-derivation.py` — Does a held frame answer for a wanted form more cheaply than a decode?
     - 📄 `03-free-while-hot.py` — What riding along on a decode that was happening anyway actually costs.
     - 📄 `04-under-load.py` — What a tool's field costs while the machine is doing the loop's own work.
+    - 📄 `05-provenance.py` — Is every stored value the one its own key says it is?
     - 📄 `README.md`
     - 📄 `forms.py` — What a stored frame is, and when one already on hand can answer for another.
     - 📄 `series.py` — The reduced series, and the explicit record of which frames have one.

@@ -225,6 +225,11 @@ def _crop(full: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(full[y : y + h, x : x + w])
 
 
+def _crop_with(full: np.ndarray, rect) -> np.ndarray:
+    x, y, w, h = rect
+    return np.ascontiguousarray(full[y : y + h, x : x + w])
+
+
 class Fetcher:
     """One open container on the original, absolute frame indices.
 
@@ -240,7 +245,16 @@ class Fetcher:
         self._decoded = None
         self._pos: int | None = None
 
-    def exact(self, idx: int) -> np.ndarray:
+    def exact(self, idx: int, rect=None) -> np.ndarray:
+        """The crop at `idx`, in `rect` if one is given.
+
+        A background reader must be handed the rect it started with. The
+        module-level one is what the user is drawing *now*, so reading it
+        here means a sweep silently switches to a new crop mid-run and
+        writes those frames into the series it opened for the old one —
+        values that are real, a key that is real, and a pairing that never
+        happened.
+        """
         if self._decoded is not None and self._pos is not None:
             ahead = idx - self._pos
             if 0 < ahead <= STEP_WITHIN:
@@ -248,7 +262,7 @@ class Fetcher:
                     for _ in range(ahead):
                         frame = next(self._decoded)
                     self._pos = idx
-                    return _crop(_luma(frame))
+                    return _crop_with(_luma(frame), rect or CROP_RECT)
                 except StopIteration:
                     pass  # ran off the end; fall through to a real seek
         target = self.pts_of(idx)
@@ -258,7 +272,7 @@ class Fetcher:
         for frame in self._decoded:
             if frame.pts is not None and frame.pts + half >= target:
                 self._pos = idx
-                return _crop(_luma(frame))
+                return _crop_with(_luma(frame), rect or CROP_RECT)
         raise RuntimeError(f"off the end at {idx}")
 
     def keyframe(self, idx: int) -> tuple[np.ndarray, np.ndarray, int]:
@@ -1164,26 +1178,38 @@ class ToolRig:
             tool.params = {**(tool.params or {}), "blur": self.blur}
         self.tool = tool
 
-    def form(self, crop) -> forms.Form:
-        return self.tool.form_for(tuple(crop))
+    def form(self, crop, tool=None) -> forms.Form:
+        return (tool or self.tool).form_for(tuple(crop))
 
-    def key(self, crop) -> str:
-        return f"{self.tool.key()}|{self.form(crop).key()}"
+    def key(self, crop, tool=None) -> str:
+        tool = tool or self.tool
+        return f"{tool.key()}|{self.form(crop, tool).key()}"
 
-    def series_for(self, crop) -> series_mod.Series:
-        """The series for this tool in this form, made if it is new.
+    def series_for(self, crop, tool=None) -> series_mod.Series:
+        """The series for a tool in a form, made if it is new.
+
+        `tool` is passed rather than read off the rig, and that is the
+        whole point of the argument existing. A producer running on the
+        fill thread reads the rig's tool once, computes with it, and then
+        asks for somewhere to put the answer; if this method looked the
+        tool up again it could hand back a different tool's series while
+        the user was mid-switch, and the value would be filed under a name
+        that did not compute it. Nothing would report that — the number is
+        plausible and the key is real.
 
         A tool change and a crop change both land here as a different key,
         so neither can read the other's numbers. That is the whole of
         invalidation: nothing is cleared, a different thing is named.
         """
-        key = self.key(crop)
-        got = self.series.get(key)
-        if got is None:
-            got = self.series[key] = series_mod.Series(
-                source=BIG.name, tool_key=self.tool.key(),
-                form_key=self.form(crop).key(), pts=self.pts,
-                timebase=self.timebase)
+        tool = tool or self.tool
+        key = self.key(crop, tool)
+        with self.lock:
+            got = self.series.get(key)
+            if got is None:
+                got = self.series[key] = series_mod.Series(
+                    source=BIG.name, tool_key=tool.key(),
+                    form_key=self.form(crop, tool).key(), pts=self.pts,
+                    timebase=self.timebase)
         return got
 
     def ceiling_for(self, crop, value: float | None = None) -> float:
@@ -1211,14 +1237,24 @@ class ToolRig:
         return {r for step in range(max(1, ahead))
                 for r in self.tool.needs(row + step)}
 
-    def evaluate(self, row: int, frames: dict[int, np.ndarray]):
-        """The field and its reduction, or None if the window is not there."""
-        want = self.tool.needs(row)
+    def evaluate(self, row: int, frames: dict[int, np.ndarray], tool=None):
+        """The field and its reduction, or None if the window is not there.
+
+        Takes the tool it is to use. Reading `self.tool` here was a real
+        defect: a caller reads the rig's tool, gathers the frames *that*
+        tool declared, and arrives — and a lookup at this point can return
+        a different tool, which then gets frames chosen for its
+        predecessor. Two independent reads of one mutable field is a torn
+        read whether or not threads are involved; on the fill thread it
+        also crossed a thread boundary.
+        """
+        tool = tool or self.tool
+        want = tool.needs(row)
         if any(frames.get(r) is None for r in want):
             return None
         got = {r: frames[r] for r in want}
-        field = self.tool.field(got, row)
-        return field, float(self.tool.reduce(field))
+        field = tool.field(got, row)
+        return field, float(tool.reduce(field))
 
 
 class SessionExplorer(QMainWindow):
@@ -1890,7 +1926,6 @@ class SessionExplorer(QMainWindow):
         want = tool.needs(row)
         frames = {r: self.cache.get(r) for r in want}
         missing = [r for r in want if frames[r] is None]
-        fold = tool.sequential
         if missing:
             # a miss the declaration predicted is the bug this counter
             # exists to name; one it could not have is just a hop
@@ -1910,13 +1945,13 @@ class SessionExplorer(QMainWindow):
                                     interpolation=cv2.INTER_AREA)
                       for r, a in frames.items()}
         before = time.perf_counter()
-        got = self.rig.evaluate(row, frames)
+        got = self.rig.evaluate(row, frames, tool)
         field_ms = (time.perf_counter() - before) * 1000
         if got is None:
             return image, field_ms, 0.0
         field, value = got
         crop = tuple(CROP_RECT)
-        row_series = self.rig.series_for(crop)
+        row_series = self.rig.series_for(crop, tool)
         # nothing is written here. The field was computed to be drawn and
         # is discarded with the frame; the series is written where the
         # frame was decoded. A display that records what it managed to draw
@@ -1975,18 +2010,22 @@ class SessionExplorer(QMainWindow):
         # no widget is read here: this runs on the fill thread, and
         # touching a widget from a worker is the crash rather than a style
         # point. The toggle is mirrored to a plain flag on the GUI thread.
+        # one read of each, at the top: everything below uses these and
+        # never looks them up again, so a switch mid-frame cannot file a
+        # value under a name that did not compute it
         tool = self.rig.tool
+        crop = tuple(CROP_RECT)
         if not self._series_on_decode or tool.sequential:
             return
         want = tool.needs(row)
         frames = {r: (arr if r == row else self.cache.get(r)) for r in want}
         if any(frames[r] is None for r in want):
             return
-        out = self.rig.evaluate(row, frames)
+        out = self.rig.evaluate(row, frames, tool)
         if out is None:
             return
-        with self.rig.lock:     # the GUI thread reads and creates these too
-            s = self.rig.series_for(tuple(CROP_RECT))
+        with self.rig.lock:
+            s = self.rig.series_for(crop, tool)
             if s.get(row) is None:
                 self.rig.by_decode += 1
             s.put(row, out[1])
@@ -2291,6 +2330,10 @@ class SessionExplorer(QMainWindow):
         if self.fill:
             self.fill.stop()
             self.fill = None
+        if self._sweep_busy:
+            # a sweep opened for the old form has nowhere to put what it
+            # is producing. It checks, but being told beats noticing.
+            self._sweep_stop.set()
         self._act_end(self._fill_act, "stopped: crop changed")
         while not self._encode_q.empty():
             try:
@@ -2786,9 +2829,9 @@ class SessionExplorer(QMainWindow):
         """
         if w_px < 20 or height < 6:
             return None
-        with self.rig.lock:
-            s = self.rig.series_for(tuple(CROP_RECT))
-            cols = surfaces.to_columns(s.values, s.covered, w_px)
+        s = self.rig.series_for(tuple(CROP_RECT))
+        values, covered = s.snapshot(0, self.total)
+        cols = surfaces.to_columns(values, covered, w_px)
         seen = cols["covered"] > 0
         band = np.full((height, w_px, 3), 12, dtype=np.uint8)
         if not seen.any():
@@ -2812,11 +2855,9 @@ class SessionExplorer(QMainWindow):
         """The active window's series, drawn the same way at window scale."""
         w_px = max(20, self.series_label.width())
         h_px = max(40, self.series_label.height())
-        with self.rig.lock:
-            s = self.rig.series_for(tuple(CROP_RECT))
-            start, end = self.active if self.active else (0, self.total)
-            values = s.values[start:end].copy()
-            covered = s.covered[start:end].copy()
+        s = self.rig.series_for(tuple(CROP_RECT))
+        start, end = self.active if self.active else (0, self.total)
+        values, covered = s.snapshot(start, end)
         cols = surfaces.to_columns(values, covered, w_px)
         img = np.full((h_px, w_px, 3), 18, dtype=np.uint8)
         seen = cols["covered"] > 0
@@ -2858,7 +2899,7 @@ class SessionExplorer(QMainWindow):
             self.hud.setText("sweep: land a window first, or sweep all")
             return
         tool, crop = self.rig.tool, tuple(CROP_RECT)
-        s = self.rig.series_for(crop)
+        s = self.rig.series_for(crop, tool)
         self._sweep_stop.clear()
         self._sweep_busy = True
         # the sweep inherits what the flow re-pay used to be: the same
@@ -2885,20 +2926,29 @@ class SessionExplorer(QMainWindow):
                 for gap_start, gap_end in s.missing(start, end):
                     if self._sweep_stop.is_set():
                         break
+                    # two different boundaries, and collapsing them is a
+                    # bug I wrote and this comment exists to stop: `first`
+                    # is where decoding starts, `reach` rows *before* the
+                    # gap so the first wanted row has a full window; the
+                    # first row that may be written is `first_honest`,
+                    # which is later. Ask for the second, derive the first.
                     first = max(start, gap_start - tool.reach)
+                    honest = s.first_honest(first, tool.reach)
                     window: dict[int, np.ndarray] = {}
                     for row in range(first, gap_end):
                         if self._sweep_stop.is_set():
                             break
+                        if tuple(CROP_RECT) != crop:
+                            break   # the form this run was opened for is gone
                         got = self.cache.get(row)
                         if got is None:
-                            got = fetcher.exact(row)
+                            got = fetcher.exact(row, crop)
                         window[row] = got
                         for old in [r for r in window if r < row - tool.reach]:
                             window.pop(old)
-                        if row < gap_start:
+                        if row < honest or row < gap_start:
                             continue        # still filling the warm-up
-                        out = self.rig.evaluate(row, window)
+                        out = self.rig.evaluate(row, window, tool)
                         if out is not None:
                             s.put(row, out[1])
                             written += 1

@@ -143,6 +143,16 @@ warm-up. Provenance — build, machine, probed footage — is attached rather
 than remembered. A case that could not run says so in the notes; a silently
 absent case reads as a case that came out equal.
 
+**Every stored value names its writer, once, in the module that owns it.**
+Not a style note: a display path wrote this folder's series for four
+experiments and nothing noticed, because a cost measurement cannot see a
+provenance error — a value filed under the wrong name costs exactly what the
+right one costs. `05-provenance.py` is the check that can see it, and it
+states the invariant in one line: a stored value must be reproducible from
+its own key. It runs against a deliberately defective writer too
+(`--broken`), because a test that has never failed is a test with no
+demonstrated power.
+
 One rule this folder adds, because it is the failure it exists to catch:
 **a number claimed about the loop is taken in the loop, and a number taken
 in isolation says so in its notes.** A microbenchmark is allowed and often

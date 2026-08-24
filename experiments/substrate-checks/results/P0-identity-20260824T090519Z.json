@@ -1,8 +1,8 @@
 {
  "experiment": "P0-identity",
  "question": "Does a row and a pts convert to each other without loss, and is the arithmetic route it replaces actually wrong?",
- "when": "2026-08-23T23:12:34.365971+00:00",
- "sieve_rev": "b489995",
+ "when": "2026-08-24T09:05:19.314252+00:00",
+ "sieve_rev": "8539d19",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",

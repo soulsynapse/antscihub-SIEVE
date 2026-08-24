@@ -54,6 +54,11 @@ ground share chunks rather than each writing the overlap.
 **partial** — a truncated file placed where a real chunk would be. Absent,
 because it is not in the record, and not because anything inspected it.
 
+**cost** — what recording a span costs as the record grows, timed rather than
+asserted (ADR-0008). `Coverage.record` rewrites the whole document, so the
+curve decides which threads may call it; `sieve.store.coverage` points here
+rather than quoting a number.
+
 `--broken` replaces the record lookup with the directory glob the explorers use.
 What it fails is `roundtrip` and `record`: rows that were never written come
 back holding another chunk's frames, and a file deleted underneath stays in the
@@ -78,7 +83,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode-experiments"))
 import harness  # noqa: E402
-from harness import Run  # noqa: E402
+from harness import Run, report, time_case  # noqa: E402
 
 from sieve.decode import fake as fake_mod  # noqa: E402
 from sieve.decode.fake import FakeRoute  # noqa: E402
@@ -365,6 +370,38 @@ def case_partial(run: Run, root: Path) -> tuple[str, int, list[str]]:
     return "partial (orphan file is absent)", 2, bad
 
 
+def case_record_cost(run: Run, root: Path) -> None:
+    """What a span costs to record, as the record grows.
+
+    Not an assertion and not a threshold (ADR-0008). `Coverage.record`
+    serialises every span it holds and renames the document into place, so
+    adding one gets dearer as there are more, and the shape of that curve
+    decides where this may be called from. Recorded here so the docstring in
+    `sieve.store.coverage` can point at a number instead of carrying one, and
+    so a later measurement supersedes this by sitting beside it.
+    """
+    coverage = Coverage(root / "cost")
+    spans = 0
+
+    def record_batch():
+        nonlocal spans
+        for _ in range(120):
+            coverage.record(Span("f", spans * 96, spans * 96 + 95, 96,
+                                 f"{spans}.mp4"))
+            spans += 1
+            yield spans
+
+    report(time_case(run, "coverage.record (first 120)", record_batch,
+                     params={"spans_before": 0}, warmup=1,
+                     unit="ms per record"))
+    report(time_case(run, "coverage.record (spans 120-240)", record_batch,
+                     params={"spans_before": 120}, warmup=1,
+                     unit="ms per record"))
+    report(time_case(run, "coverage.record (spans 240-360)", record_batch,
+                     params={"spans_before": 240}, warmup=1,
+                     unit="ms per record"))
+
+
 def main() -> None:
     broken = "--broken" in sys.argv
     if broken:
@@ -394,6 +431,10 @@ def main() -> None:
             case_grid(run, root),
             case_partial(run, root),
         ]
+        print()
+        print("cost (recorded, not a threshold):")
+        case_record_cost(run, root)
+        print()
 
     ok = True
     print(f"{'case':<40} {'checked':>9}  verdict")

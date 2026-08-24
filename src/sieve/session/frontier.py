@@ -44,7 +44,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from sieve.frame.form import Form, build
-from sieve.frame.table import FrameTable
 from sieve.session.ledger import Ledger
 from sieve.store.chunks import ChunkStore
 from sieve.store.resident import ResidentStore
@@ -129,13 +128,12 @@ def fill_order(start: int, end: int, anchor: int, rows_per_chunk: int,
 class Frontier:
     """The thread that walks a fill order and admits what it decodes."""
 
-    def __init__(self, route, table: FrameTable, form: Form,
+    def __init__(self, route, form: Form,
                  resident: ResidentStore, chunks: ChunkStore,
                  encode_queue: queue.Queue | None = None,
                  ledger: Ledger | None = None,
                  protected: set[tuple[int, str]] | None = None):
         self.route = route
-        self.table = table
         self.form = form
         self.resident = resident
         self.chunks = chunks

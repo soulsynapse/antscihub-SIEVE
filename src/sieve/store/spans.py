@@ -18,6 +18,15 @@ no more acceptable here for being a small file. Each opened file gets a table
 demuxed once and held with its container; the files are short, so it costs
 nothing worth measuring and it means one rule covers every seek in the tree.
 
+**One lock covers the pool and the decode, which serialises readers.** A
+container cannot be seeked by two threads at once, so the decode genuinely has
+to be exclusive — but the lock here is the store's rather than the container's,
+so a foreground read of one chunk waits on a background read of a different one.
+That is a real contention point and it is named rather than fixed because it
+costs nothing until two threads actually read at once, which is P7's problem and
+not this module's. The fix, when it is wanted, is a lock per open container and
+a short one around the pool.
+
 **Open containers are pooled and few.** Holding one per span would keep a file
 handle for every chunk ever written; holding one is a reopen on every drag that
 crosses a boundary. Three is what the explorers converged on and it is carried

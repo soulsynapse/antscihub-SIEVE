@@ -22,6 +22,19 @@ orphan that reads as absent and gets re-derived — which is the safe direction 
 fail in. The record is written the same way, through a rename, so a crash leaves
 the previous record rather than a truncated one.
 
+**Recording is a whole-document rewrite, and that is a stated limit rather
+than an oversight.** Every `record` serialises every span and renames the file
+into place, so the cost of adding one grows with how many there already are.
+That is affordable for a session's worth of chunks and it is not free: the
+measurement lives beside the other numbers, as a case in
+`experiments/substrate-checks/03-tiers.py`, where a later one can sit next to it
+rather than argue with it. Two consequences worth knowing before this is called
+from anywhere new. It belongs on a producer's thread and not on the one that
+draws — a publisher that records several spans in a row is doing that work
+serially, and presentation-layer work nobody clocked is the shape of every
+freeze this tree has diagnosed. And the growth is in spans rather than in
+frames, so shortening chunks costs more here than lengthening them saves.
+
 **A span names a pts range, not a row range.** Rows are a coordinate inside one
 store and mean nothing to the next thing that opens this directory (ADR-0004).
 The file this record points at is named by a digest rather than by its identity,

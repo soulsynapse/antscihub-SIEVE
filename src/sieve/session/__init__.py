@@ -15,6 +15,7 @@ cheaper answer and lets the fill overtake it
 
 from __future__ import annotations
 
+from sieve.session.frontier import Frontier, Piece, fill_order
 from sieve.session.ledger import (
     CHOSEN_KINDS,
     COARSE_FIELD,
@@ -33,7 +34,10 @@ from sieve.session.ledger import (
 )
 
 __all__ = [
-    "CHOSEN_KINDS", "COARSE_FIELD", "DISCARDED_VALUE", "DOUBLE_DECODE",
+    "CHOSEN_KINDS",
+    "Frontier",
+    "Piece",
+    "fill_order", "COARSE_FIELD", "DISCARDED_VALUE", "DOUBLE_DECODE",
     "PLACEHOLDER", "PREDICTED_FETCH", "RECOMPUTED", "SUPERSEDED_RENDER",
     "UNPAINTED", "WASTE_KINDS", "Account", "Activity", "Ledger", "Serve",
 ]

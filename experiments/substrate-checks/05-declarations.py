@@ -68,8 +68,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import numpy as np
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode-experiments"))
 import harness  # noqa: E402
 from harness import Run  # noqa: E402

@@ -69,7 +69,7 @@ from sieve.decode import fake as fake_mod  # noqa: E402
 from sieve.decode.fake import FakeRoute  # noqa: E402
 from sieve.frame.form import Form  # noqa: E402
 from sieve.session import frontier as frontier_mod  # noqa: E402
-from sieve.session.frontier import Frontier, Piece, fill_order  # noqa: E402
+from sieve.session.frontier import Frontier, fill_order  # noqa: E402
 from sieve.session.ledger import Ledger  # noqa: E402
 from sieve.store.build import (  # noqa: E402
     Batch,
@@ -138,7 +138,7 @@ class TouchLauncher:
         handle["done"] = True
 
 
-def case_order(run: Run, broken: bool) -> tuple[str, int, list[str]]:
+def case_order(run: Run) -> tuple[str, int, list[str]]:
     order = frontier_mod.fill_order
     bad: list[str] = []
 
@@ -221,7 +221,7 @@ def case_fill(run: Run, root: Path) -> tuple[str, int, list[str]]:
     chunks = ChunkStore(root / "fill", table, rows_per_chunk=CHUNK)
     book = Ledger()
 
-    frontier = Frontier(route, table, FORM, resident, chunks, ledger=book)
+    frontier = Frontier(route, FORM, resident, chunks, ledger=book)
     order = frontier.launch(0, 288, 100)
     if not frontier.wait():
         bad.append("the fill did not finish")
@@ -250,7 +250,7 @@ def case_fill(run: Run, root: Path) -> tuple[str, int, list[str]]:
 
     # second fill over the same ground: reads, does not decode
     route.reset()
-    again = Frontier(route, table, FORM, resident, chunks)
+    again = Frontier(route, FORM, resident, chunks)
     order2 = again.launch(0, 288, 100)
     if not again.wait():
         bad.append("the refill did not finish")
@@ -275,7 +275,7 @@ def case_pause(run: Run, root: Path) -> tuple[str, int, list[str]]:
     resident = ResidentStore(budget_bytes=ROWS * FRAME_BYTES)
     chunks = ChunkStore(root / "pause", table, rows_per_chunk=CHUNK)
 
-    frontier = Frontier(route, table, FORM, resident, chunks)
+    frontier = Frontier(route, FORM, resident, chunks)
     frontier.launch(0, 480, 0)
     time.sleep(0.05)
     frontier.pause.set()
@@ -403,7 +403,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         results = [
-            case_order(run, broken),
+            case_order(run),
             case_pieces(run),
             case_disk(run),
             case_fill(run, root),

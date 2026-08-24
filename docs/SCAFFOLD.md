@@ -198,18 +198,18 @@
     - 📄 `session-explorer.py` — Feel the session plan: hunt the full timeline, land a window, tune, jump.
   - 📁 `substrate-checks/`
     - 📁 `results/`
-      - 📄 `P0-identity-20260823T231234Z.json`
-      - 📄 `P0-identity-broken-20260823T231247Z.json`
-      - 📄 `P1-routes-20260824T002252Z.json`
-      - 📄 `P1-routes-broken-20260824T002418Z.json`
-      - 📄 `P2-tiers-20260824T080448Z.json`
-      - 📄 `P2-tiers-broken-20260824T080458Z.json`
-      - 📄 `P3-record-20260824T080448Z.json`
-      - 📄 `P3-record-broken-20260824T080459Z.json`
-      - 📄 `P4-declarations-20260824T080449Z.json`
-      - 📄 `P4-declarations-broken-20260824T080450Z.json`
-      - 📄 `P5-producers-20260824T085347Z.json`
-      - 📄 `P5-producers-broken-20260824T085348Z.json`
+      - 📄 `P0-identity-20260824T090519Z.json`
+      - 📄 `P0-identity-broken-20260824T090532Z.json`
+      - 📄 `P1-routes-20260824T090814Z.json`
+      - 📄 `P1-routes-broken-20260824T090741Z.json`
+      - 📄 `P2-tiers-20260824T091106Z.json`
+      - 📄 `P2-tiers-broken-20260824T091108Z.json`
+      - 📄 `P3-record-20260824T091109Z.json`
+      - 📄 `P3-record-broken-20260824T091110Z.json`
+      - 📄 `P4-declarations-20260824T091111Z.json`
+      - 📄 `P4-declarations-broken-20260824T091112Z.json`
+      - 📄 `P5-producers-20260824T091113Z.json`
+      - 📄 `P5-producers-broken-20260824T091115Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?

@@ -37,6 +37,7 @@ from pathlib import Path
 
 import numpy as np
 
+from sieve.analysis.record import Recorder
 from sieve.analysis.tool import Tool, residency
 from sieve.decode.hybrid import HybridRoute
 from sieve.decode.route import Route
@@ -134,6 +135,10 @@ class Session:
         self.crop: tuple[int, int, int, int] = (
             0, 0, self.source_form.rect[2], self.source_form.rect[3])
 
+        #: where values go. Given the project's derived directory, so a
+        #: series is written beside the chunks it was computed from.
+        self.recorder = Recorder(source.name, self.table,
+                                 root=derived / "series")
         self.frontier: Frontier | None = None
         self.encode_queue: queue.Queue = queue.Queue()
         self._encoder = threading.Thread(target=self._encode_loop, daemon=True)
@@ -182,12 +187,23 @@ class Session:
         self.proxy = store
         self.proxy_form = form if store is not None else None
 
+    def active(self) -> list[tuple[Tool, Form]]:
+        """The steps that are running, each with the form it wants, read once.
+
+        Handed to a producer rather than reached for by one. A producer that
+        reads the current step to decide which inputs to gather and reads it
+        again to decide where to file the answer writes a value computed with
+        one step under the key of another when the two reads straddle a change
+        — which is the defect `05-provenance.py` exists to catch, and which no
+        instrument that measures time can see.
+        """
+        return [(tool, tool.form_for(self.crop)) for tool in self.tools]
+
     def residency(self, horizon: range | int) -> set[tuple[int, str]]:
         """What the active steps need held over the positions about to run."""
         if not self.tools:
             return set()
-        active = [(tool, tool.form_for(self.crop)) for tool in self.tools]
-        return residency(active, horizon)
+        return residency(self.active(), horizon)
 
     # ── serving ──────────────────────────────────────────────────────────
     def situation(self, row: int) -> Situation:
@@ -350,10 +366,16 @@ class Session:
         self.window = (start, end)
         self.anchor = row
         form = self.form_for()
+        # read once, here, and closed over for the life of this fill. A crop
+        # change stops this fill and starts another, so the set a producer is
+        # working against cannot move underneath it.
+        active = self.active()
         self.frontier = Frontier(self.route, form, self.resident, self.chunks,
                                  encode_queue=self.encode_queue,
                                  ledger=self.ledger,
-                                 protected=self.residency(range(row, end)))
+                                 protected=self.residency(range(row, end)),
+                                 on_admitted=lambda landed: self.recorder.admitted(
+                                     active, landed, self.resident))
         self.frontier.launch(start, end, row)
         return self.window
 

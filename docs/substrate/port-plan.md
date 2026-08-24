@@ -691,6 +691,31 @@ substrate cannot prevent, so it is written where the widgets are.
 First phase you can look at, which is late — and is the cost of the
 arrangement above being testable before it is visible.
 
+### Not a phase — the producer, and ADR-0005
+
+`src/sieve/analysis/record.py`;
+checked by `experiments/substrate-checks/11-provenance.py`
+
+Landed because the parity gate exposed it: ADR-0005 was the one settled
+Substrate decision with **no code**. The port had stores, declarations, a
+ladder and a session, and nothing that wrote a number down — so
+`05-provenance.py`'s invariant could not be run against it for want of a
+stored value to check.
+
+A recorder evaluates a step where its inputs were admitted, on the thread
+that admitted them, and files the reduction. The one thing it is careful
+about is the thing that cost this tree four experiments: the active set is
+**read once** and handed over. A producer that reads the current step to
+decide what to gather and reads it again to decide where to file writes a
+value computed with one step under the key of another, and no timing
+instrument can see it because a misfiled value costs exactly what a correct
+one costs.
+
+`--broken` restores that double read, and one fill produces **two series** —
+values computed with one reduction filed under the other's key, each
+individually plausible. That is the whole argument for the invariant having
+a file of its own.
+
 ## Genuinely deferred
 
 **ADR-0008's waste instrument.** The explorers count cost and never waste,

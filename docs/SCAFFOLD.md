@@ -217,6 +217,8 @@
       - 📄 `parity-20260824T105711Z.json`
       - 📄 `project-20260824T102243Z.json`
       - 📄 `project-broken-20260824T101908Z.json`
+      - 📄 `provenance-20260824T110341Z.json`
+      - 📄 `provenance-broken-20260824T110348Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
@@ -227,6 +229,7 @@
     - 📄 `08-session.py` — Does the whole thing hold together, and does a drag ever decode?
     - 📄 `09-project.py` — Does pointing at a folder find the footage, and only the footage?
     - 📄 `10-parity.py` — The port, put through what the explorer was put through, on the real file.
+    - 📄 `11-provenance.py` — Is every stored value the one its own key says it is?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`
@@ -308,6 +311,7 @@
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
     - 📁 `analysis/` — What a step produces, and the record of which positions have one.
+      - 📄 `record.py` — Computing a step's value where its inputs landed, and filing it.
       - 📄 `series.py` — A step's reduced output, and the explicit record of which rows have one.
       - 📄 `tool.py` — What a step declares about itself before anything schedules or runs it.
     - 📁 `decode/` — Getting pixels out of a file, and nothing else.

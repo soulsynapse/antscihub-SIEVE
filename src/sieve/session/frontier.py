@@ -132,7 +132,8 @@ class Frontier:
                  resident: ResidentStore, chunks: ChunkStore,
                  encode_queue: queue.Queue | None = None,
                  ledger: Ledger | None = None,
-                 protected: set[tuple[int, str]] | None = None):
+                 protected: set[tuple[int, str]] | None = None,
+                 on_admitted=None):
         self.route = route
         self.form = form
         self.resident = resident
@@ -140,6 +141,11 @@ class Frontier:
         self.encode_queue = encode_queue
         self.ledger = ledger
         self.protected = protected or set()
+        #: called with each row as it lands, on this thread. A value is
+        #: computed where its inputs were admitted (ADR-0005), and this is
+        #: where they are admitted — so the producer runs here rather than
+        #: being told later by something that draws.
+        self.on_admitted = on_admitted
         self.pause = threading.Event()
         self.order: list[Piece] = []
         self.pos = -1
@@ -204,6 +210,22 @@ class Frontier:
                 self.ledger.end(activity, f"{self.from_disk} read, "
                                           f"{self.from_route} decoded")
 
+    def _admitted(self, row: int) -> None:
+        """Tell whoever is recording that this row has landed.
+
+        Failures are swallowed on purpose. A step that raises is a defect in
+        that step, and a fill that died because of one would take the frames
+        down with it — the frames are admitted either way, and a missing value
+        reads as coverage lagging, which is a state everything downstream
+        already has to handle.
+        """
+        if self.on_admitted is None:
+            return
+        try:
+            self.on_admitted(row)
+        except Exception:  # noqa: BLE001 - a step's fault, not the fill's
+            pass
+
     def _from_disk(self, piece: Piece) -> bool:
         """Refill a piece from its chunk. False if the chunk let us down."""
         for row in range(piece.start, piece.end):
@@ -215,6 +237,7 @@ class Frontier:
                 return False        # vanished mid-read; re-derive it instead
             self.resident.put(self.form.key(), row, frame,
                               protected=self.protected)
+            self._admitted(row)
             self.pos = row
             self.from_disk += 1
         return True
@@ -235,6 +258,7 @@ class Frontier:
             frame = build(answer[0], self.form)
             self.resident.put(self.form.key(), row, frame,
                               protected=self.protected)
+            self._admitted(row)
             buffered.append(frame)
             self.pos = row
             self.from_route += 1

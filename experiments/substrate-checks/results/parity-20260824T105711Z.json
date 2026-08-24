@@ -1,0 +1,49 @@
+{
+ "experiment": "parity",
+ "question": "Put through what the explorer was put through, does the ported substrate cost what the explorer cost?",
+ "when": "2026-08-24T10:57:11.286913+00:00",
+ "sieve_rev": "1ede577",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [
+  {
+   "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE-v4\\video-tests\\GX010047c2_02_17_26.MP4",
+   "name": "GX010047c2_02_17_26.MP4",
+   "bytes": 3546062144,
+   "mtime": "2026-07-14T18:50:16.126370+00:00",
+   "codec_name": "hevc",
+   "profile": "Main",
+   "width": 5312,
+   "height": 2988,
+   "pix_fmt": "yuvj420p",
+   "r_frame_rate": "24000/1001",
+   "nb_frames": "11328",
+   "duration": "471.651625",
+   "size": "3546062144",
+   "bit_rate": "60147141"
+  }
+ ],
+ "notes": [
+  "a different program from the storage experiments and compared anyway: they measured strategies against each other inside one file, this measures the substrate as it runs. The explorer's figures are read from its committed results, never restated.",
+  "scrub, p50: src/sieve 0.05 vs explorer 0.00 ms per fetch \u2014 the strategy this substrate implements; both serve from memory",
+  "scrub, p95: src/sieve 0.12 vs explorer \u2014 ms per fetch \u2014 kept because a p50 of nothing hides where the stalls were",
+  "fill over the region: src/sieve 1763.99 vs explorer 7560.00 ms to cover 300 \u2014 the window tier, where the plan expects parity; both under a scripted scrub competing for the decoder",
+  "region: window 1344..1644, 300 rows decoded, tiers {'hold': 17, 'resident': 82, 'near': 1}",
+  "region: the fill ran on the 'hw' side of the probed hybrid (seek race {'sw': 37.08760000154143, 'hw': 33.883000003697816}). The explorer filled with plain software PyAV, so a gap here is the routing decision P1 made showing up, and not the same work done faster.",
+  "miss, p50: src/sieve 0.01 vs explorer 290.52 ms per fetch \u2014 NOT a speedup: the explorer decodes and this holds, so the two are different acts and only one of them shows a frame",
+  "miss: with no fill running the ladder served {'hold': 100} \u2014 a hold shows the picture already up and lets the fill overtake it, which is a behaviour change and not a faster decode",
+  "proxy, between segments: src/sieve 718.94 vs explorer 749.21 ms per segment \u2014 the same batch size; the explorer's run was at normal process priority and this one is below-normal, so the ratio transfers and the absolute does not",
+  "build: 20 of 20 segments in 17077 ms"
+ ],
+ "cases": []
+}

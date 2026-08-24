@@ -214,6 +214,7 @@
       - 📄 `P6-ladder-broken-20260824T094731Z.json`
       - 📄 `P7-session-20260824T105116Z.json`
       - 📄 `P7-session-broken-20260824T094738Z.json`
+      - 📄 `parity-20260824T105711Z.json`
       - 📄 `project-20260824T102243Z.json`
       - 📄 `project-broken-20260824T101908Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
@@ -225,6 +226,7 @@
     - 📄 `07-ladder.py` — Does the ladder put the blocking decode where it belongs, and nowhere else?
     - 📄 `08-session.py` — Does the whole thing hold together, and does a drag ever decode?
     - 📄 `09-project.py` — Does pointing at a folder find the footage, and only the footage?
+    - 📄 `10-parity.py` — The port, put through what the explorer was put through, on the real file.
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`

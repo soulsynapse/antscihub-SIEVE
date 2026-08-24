@@ -584,7 +584,7 @@ wrong. It is also the first thing written fresh against rules that were
 already settled and measured, rather than carried across from a prototype —
 which is the more likely explanation than the code being unusually good.
 
-### P7 — the session — *landed, bar the footage comparison*
+### P7 — the session — *landed*
 
 `src/sieve/session/session.py`;
 checked by `experiments/substrate-checks/08-session.py`
@@ -632,24 +632,48 @@ premises were wrong: a crop that excluded the fake route's row marker, and a
 double-decode case that set up precisely the state where the ladder correctly
 *avoids* the decode, leaving the counter it was testing nothing to count.
 
-*Still owed, and the reason this phase is not simply done:* new harness scripts
-that put `src/sieve/` through what storage
-01, 02 and 06 put the explorer through, labelled in their notes as a
-different program — because they are, and a comparison that pretends
-otherwise is worse than one that says so. Set beside the committed JSON in
-`experiments/storage-experiments/results/`, the expectation is **parity at
-the window tier and a gain at the hunt tier**: the window keeps the wipe
-exp02 gave it, so its numbers should not move, while the hunt tier stops
-re-decoding a proxy segment per request now that two forms can be resident.
-A window number that moved names something dropped, and the candidates are
-known — the switch interval, the encoder yield, the step-versus-seek
-crossover, the playhead-anchored rotation. Each is one deletable-looking
-line.
+*And the comparison, which was owed and is now done:*
+`experiments/substrate-checks/10-parity.py` — a harness script putting
+`src/sieve/` through what storage
+01 and 06 put the explorer through, on the same source and over the same
+region, labelled in its notes as a different program — because it is, and a
+comparison that pretends otherwise is worse than one that says so. The
+explorer's figures are *read out of its committed result files* rather than
+written down, so a later run of an experiment supersedes them without this
+script or this plan being touched.
 
-And `05-provenance.py`'s invariant runs against the real thing: a stored
-value must be reproducible from the key it is filed under. It has a
-deliberately broken producer to prove it can fail, which is the property
-that makes it worth running here at all.
+**The prediction in this section was wrong, and the run is what said so.**
+It expected parity at the window tier, on the reasoning that the window
+keeps the wipe exp02 gave it and therefore decodes the same rows in the same
+order. It does — and the fill still came in several times faster than the
+explorer's. The mechanism is on the record beside the number: the fill ran
+on the hardware side of the probed hybrid, where the session explorer filled
+with plain software PyAV. That is P1's routing decision arriving, not the
+same work done faster, and the script reports which side served precisely so
+that "we are faster" is never a reading anybody has to take on trust.
+
+The miss is the other divergence and it is deliberately *not* reported as a
+speedup. The explorer decodes on a scrub into unfilled ground; the ladder
+holds. Those are different acts and only one of them puts a frame on screen,
+so the two figures sit side by side with that said in the note rather than
+being subtracted.
+
+What the gate is actually for is a window number that moved *without* a
+reason, and the candidates are still the deletable-looking lines: the
+interpreter switch interval, the encoder yield, the step-versus-seek
+crossover, the playhead-anchored rotation.
+
+*Still not covered:* `05-provenance.py`'s invariant — that a stored value is
+reproducible from the key it is filed under — has not been run against
+`src/sieve`. Nothing in the port writes a series yet, so there is no stored
+value to check; it becomes runnable when a step does.
+
+One thing the script had to be fixed for, worth keeping because it is the
+shape of a whole class of bad measurement: the first version waited on the
+frontier *after* its hundred scripted fetches, each of which sleeps. It
+therefore could not report a fill time below what the sleeps add up to. The
+number it printed was a floor wearing a measurement's label, and it was the
+one number in the file this section cares most about.
 
 ### P8 — the canvas
 

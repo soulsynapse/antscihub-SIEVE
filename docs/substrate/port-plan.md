@@ -534,9 +534,10 @@ application startup where it is visible; and the per-frame yield inside the
 chunk encoder, whose removal condition is encoding in a subprocess the way
 the proxy builder already does.
 
-### P6 — the ladder
+### P6 — the ladder — *landed*
 
-`src/sieve/session/ladder.py`
+`src/sieve/session/ladder.py`;
+checked by `experiments/substrate-checks/07-ladder.py`
 
 Owns choosing, and nothing else. Given a request — which row, in which
 form, exact or not — plus what is resident and what the active declarations
@@ -560,6 +561,28 @@ explorer carried as a toggle. In the session explorer it is a line inside a
 GUI method, which is why it has never been tested.
 
 May not know: how to decode, how to read a file, what a thread is.
+
+*Proved it:* seven cases, passing, as a table rather than a rig — which is
+the whole point of the tier choice being a pure function. A released request
+inside the window runs `resident → chunk → derive → decode`; a drag runs
+`resident → chunk → derive → near → proxy → near → hold` with **no blocking
+tier anywhere on it**; a hunt outside the window runs `resident → proxy →
+keyframe → hold`, and drops to `resident → keyframe → hold` before a proxy
+has been built. `--broken` makes the blocking decode available everywhere,
+which is what a viewer does before somebody measures it, and `dragging`
+fails with six complaints.
+
+Admissibility came out as a property rather than a rule. Thirty-eight
+attempts across every combination of window, exactness and wanted form, and
+none is admissible except by an exact derivation — so the explorer's
+hard-coded "the proxy never feeds the crop store" and its mirror image, the
+crop sliced from a keyframe decode being kept, are both just `grade`
+answering. No tier needed a rule of its own.
+
+Worth saying plainly: this is the first phase whose check found nothing
+wrong. It is also the first thing written fresh against rules that were
+already settled and measured, rather than carried across from a prototype —
+which is the more likely explanation than the code being unusually good.
 
 ### P7 — the session
 

@@ -210,12 +210,15 @@
       - 📄 `P4-declarations-broken-20260824T091112Z.json`
       - 📄 `P5-producers-20260824T091113Z.json`
       - 📄 `P5-producers-broken-20260824T091115Z.json`
+      - 📄 `P6-ladder-20260824T093857Z.json`
+      - 📄 `P6-ladder-broken-20260824T093905Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
     - 📄 `04-record.py` — Does the record say what it knows, and admit what it does not?
     - 📄 `05-declarations.py` — Is a declaration a fetch plan, or just a description of one?
     - 📄 `06-producers.py` — Do the background producers work in the order they claim to?
+    - 📄 `07-ladder.py` — Does the ladder put the blocking decode where it belongs, and nowhere else?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`

@@ -13,7 +13,8 @@ that is legal, and legality is three things at once:
 no others.
 
 **At least `MINIMUM` on a side.** A box with no area has no aspect, and every
-downstream fit divides by it.
+downstream fit divides by it. Where a frame is too small for the three rules to
+hold at once, the answer is an empty rect and `clamp` says why.
 
 **Even on every edge**, which is the one that is not obvious. 4:2:0 stores chroma
 at half resolution in each direction, so an odd offset or an odd width puts a
@@ -61,8 +62,21 @@ def clamp(rect: Rect, frame_width: int, frame_height: int,
     Idempotent. A rect that is already legal comes back unchanged rather than
     nudged, which is what lets an editor push its own value in without the
     result differing from what it showed.
+
+    **A frame with no legal crop gets an empty one**, and that is a stated
+    answer rather than an accident. On a frame narrower than two pixels the
+    three rules cannot all hold — even, positive area, on the frame — so there
+    is nothing to return that is not a lie about one of them. An empty rect is
+    the same bargain `gui.view.canvas.Canvas.stage` makes for a pane too small
+    to hold a stage: one obviously-nothing value that every caller reads as
+    *nothing here*, instead of each guarding against a different impossibility
+    in its own way. Anything that could act on a crop must therefore check for
+    area, which is a single test rather than three.
     """
-    floor = max(2, _even(minimum + minimum % 2))
+    # up to even, not down: a floor rounded down is a floor lowered, and
+    # the one number here that must not quietly get smaller is the one
+    # stopping a crop having no area.
+    floor = max(2, minimum + minimum % 2)
     x, y, width, height = (int(round(v)) for v in rect)
 
     width = _fit(width, frame_width, floor)
@@ -108,7 +122,7 @@ def to_source(drawn: Rect, placed: Rect, frame_width: int,
                      frame_height, minimum)
     scale_x = frame_width / pw
     scale_y = frame_height / ph
-    dx, dy, dw, dh = _normalised(drawn)
+    dx, dy, dw, dh = _forwards(drawn)
     return clamp(
         (round((dx - px) * scale_x), round((dy - py) * scale_y),
          round(dw * scale_x), round(dh * scale_y)),
@@ -134,8 +148,12 @@ def to_placed(rect: Rect, placed: Rect, frame_width: int,
             max(1, round(width * scale_x)), max(1, round(height * scale_y)))
 
 
-def _normalised(rect: Rect) -> Rect:
+def _forwards(rect: Rect) -> Rect:
     """A rectangle with positive extents, whichever corner it was started from.
+
+    Not called `normalised`, though Qt's own method for this is: a normalised
+    crop is a different thing this tree deliberately does not have, and a
+    helper wearing the name would make a reader think it did.
 
     A drag runs in whatever direction a hand moves, and the width of a
     right-to-left one is negative. Handled here rather than by whoever is
@@ -162,11 +180,3 @@ def whole(frame_width: int, frame_height: int,
     return clamp((0, 0, frame_width, frame_height), frame_width, frame_height,
                  minimum)
 
-
-def contains(outer: Rect, inner: Rect) -> bool:
-    """Does `outer` hold all of `inner`? For anything asking whether a form
-    already on hand covers a crop somebody has just drawn."""
-    ox, oy, ow, oh = outer
-    ix, iy, iw, ih = inner
-    return (ox <= ix and oy <= iy
-            and ix + iw <= ox + ow and iy + ih <= oy + oh)

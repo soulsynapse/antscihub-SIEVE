@@ -80,7 +80,8 @@ import harness  # noqa: E402
 from harness import Run  # noqa: E402
 
 from sieve.analysis import crop as crop_mod  # noqa: E402
-from sieve.analysis.crop import MINIMUM, contains, to_placed, to_source, whole  # noqa: E402
+from sieve.analysis.crop import MINIMUM, to_placed, to_source, whole  # noqa: E402
+from sieve.frame.form import Form, grade  # noqa: E402
 
 harness.RESULTS = Path(__file__).resolve().parent / "results"
 
@@ -105,10 +106,24 @@ def nearest_even(value: int) -> int:
 
 
 def illegal(rect, frame_width, frame_height, minimum=MINIMUM) -> str | None:
-    """Why this crop is not one, or `None`."""
+    """Why this crop is not one, or `None`.
+
+    An empty rect is legal only where the frame admits nothing else, and the
+    test says so explicitly. A first version wrote the floor as
+    `min(minimum, _even(frame))`, which on a one-pixel frame is zero — so a
+    zero-area crop, the exact thing the floor exists to prevent, passed
+    through a hole in the thing checking for it.
+    """
     x, y, width, height = rect
     if any(v % 2 for v in rect):
         return f"{rect} has an odd edge"
+    if rect == (0, 0, 0, 0):
+        if _even(frame_width) >= 2 and _even(frame_height) >= 2:
+            return (f"{rect} is empty on a {frame_width}x{frame_height} frame, "
+                    "which has room for a crop")
+        return None
+    if width < 2 or height < 2:
+        return f"{rect} has no area"
     if width < min(minimum, _even(frame_width)) or \
             height < min(minimum, _even(frame_height)):
         return f"{rect} is under the {minimum}px floor"
@@ -209,7 +224,7 @@ def case_untouched(run: Run) -> tuple[str, int, list[str]]:
 def case_cramped(run: Run) -> tuple[str, int, list[str]]:
     """A frame with no room for the minimum."""
     bad: list[str] = []
-    for width, height in ((40, 40), (63, 63), (2, 2), (1, 1)):
+    for width, height in ((40, 40), (63, 63), (2, 2), (1, 1), (0, 0)):
         got = crop_mod.clamp((0, 0, width, height), width, height)
         x, y, w, h = got
         if x < 0 or y < 0 or x + w > width or y + h > height:
@@ -219,9 +234,21 @@ def case_cramped(run: Run) -> tuple[str, int, list[str]]:
             bad.append(f"a {width}x{height} frame produced an odd {got}")
         if w > width or h > height:
             bad.append(f"a {width}x{height} frame produced a larger {got}")
+        # the frames with room for something must produce something, and the
+        # ones without must produce the empty rect rather than a zero-area one
+        # that looks like a crop
+        if _even(width) >= 2 and _even(height) >= 2:
+            if w < 2 or h < 2:
+                bad.append(f"a {width}x{height} frame has room and produced "
+                           f"the arealess {got}")
+        elif got != (0, 0, 0, 0):
+            bad.append(f"a {width}x{height} frame admits no crop and produced "
+                       f"{got} rather than an empty rect")
     run.note("cramped: a frame narrower than the floor yields the widest even "
-             "crop that fits, rather than one hanging off the edge")
-    return "cramped (the frame wins)", 4, bad
+             "crop that fits; one with room for no legal crop at all yields an "
+             "empty rect, which is the answer `Canvas.stage` gives for the "
+             "same impossibility")
+    return "cramped (the frame wins)", 5, bad
 
 
 def case_mapping(run: Run) -> tuple[str, int, list[str]]:
@@ -264,7 +291,14 @@ def case_whole(run: Run) -> tuple[str, int, list[str]]:
         why = illegal(rect, width, height)
         if why:
             bad.append(f"{width}x{height}: whole frame is {why}")
-        if not contains(rect, crop_mod.clamp((10, 10, 40, 40), width, height)):
+        # containment is `frame.form.grade`'s rule and is asked of it rather
+        # than written again here. A second implementation of a predicate that
+        # already has a home is the shape of two defects this tree has already
+        # had: a rounding rule written twice that disagreed by two pixels, and
+        # a clamp that existed in one caller and not the other.
+        inner = crop_mod.clamp((10, 10, 40, 40), width, height)
+        if inner[2] >= 2 and grade(Form(rect, rect[2:], "gray"),
+                                   Form(inner, inner[2:], "gray")) is None:
             bad.append(f"{width}x{height}: the whole frame does not contain a "
                        "crop of it")
     run.note("whole: the whole frame is a legal crop of itself on every frame "

@@ -97,6 +97,7 @@ from sieve.gui.view.pipeline import Pipeline
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
 from sieve.gui.view.project_list import Project as ProjectRow
+from sieve.project.footage import dialog_filter
 from sieve.project.library import Library
 from sieve.gui.view.step import Step
 
@@ -338,7 +339,7 @@ class MainWindow(QMainWindow):
         The rows are built here and not in the view, which is what
         `project_list/project.py` asks for: a card is handed finished lines so
         that what a project *holds* stays decided where projects are
-        understood. A folder that is not mounted keeps its row and says so in
+        understood. A recording that is not mounted keeps its row and says so in
         the line, because an external drive being unplugged is ordinary and a
         library that forgot the project would be one nobody could rely on.
         """
@@ -353,25 +354,34 @@ class MainWindow(QMainWindow):
         self.projects.show_projects(rows)
 
     def open_project(self) -> None:
-        """Point at a folder, and stand on it.
+        """Point at one or more recordings, and stand on the first.
 
-        Opening and adding are one verb. A folder already in the library is not
-        a duplicate and not an error — it is the same project, opened again —
-        so there is no second entry on the bar for the case where SIEVE has
-        seen the folder before, and no way to pick the wrong one of two.
+        A project is a recording, so the dialog offers files. Several at once,
+        because a person with a season of footage should not add fifty
+        projects fifty times, and because the common case of one recording is
+        the same gesture with one file selected.
 
-        The dialog offers a directory rather than a file because a project is
-        the folder, and its own New Folder button is what makes a new project
-        without a second verb here.
+        Opening and adding are one verb. A recording already in the library is
+        not a duplicate and not an error — it is the same project, opened again
+        — so there is no second entry on the bar for the case where SIEVE has
+        seen the file before, and no way to pick the wrong one of two.
         """
-        chosen = QFileDialog.getExistingDirectory(
-            self, "Open project folder", "",
-            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+        chosen, _ = QFileDialog.getOpenFileNames(
+            self, "Open recording", "", dialog_filter())
         if not chosen:
             return
-        project = self.library.add(Path(chosen))
+        opened, refused = self.library.add_all(Path(name) for name in chosen)
         self.show_library()
-        entry = self.library.find(project.document.project_id)
+        if refused:
+            # said rather than swallowed: somebody picked these on purpose, and
+            # a file that silently does not appear reads as SIEVE being broken
+            names = ", ".join(path.name for path in refused[:3])
+            more = f" and {len(refused) - 3} more" if len(refused) > 3 else ""
+            self.statusBar().showMessage(
+                f"Could not read {names}{more}", 8000)
+        if not opened:
+            return
+        entry = self.library.find(opened[0].document.project_id)
         if entry is not None:
             self.projects.select(self.library.entries.index(entry))
 

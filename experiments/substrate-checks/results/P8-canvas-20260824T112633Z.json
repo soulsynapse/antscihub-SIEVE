@@ -1,8 +1,8 @@
 {
- "experiment": "P8-canvas-broken",
+ "experiment": "P8-canvas",
  "question": "Does the picture stay out of the layout, and cost one scale per frame rather than one per paint?",
- "when": "2026-08-24T11:10:36.720257+00:00",
- "sieve_rev": "44ea9c4",
+ "when": "2026-08-24T11:26:33.945282+00:00",
+ "sieve_rev": "930e011",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
@@ -18,14 +18,13 @@
  "footage": [],
  "notes": [
   "offscreen and without footage: what a widget tells a layout, and how many times it scales, are not about pixels",
-  "RUN WITH --broken: the widget reports the size of the picture it holds, which is the hint that had the video deciding the width of its own pane. `layout` is expected to FAIL.",
-  "layout: hints 400x300 with a 1600x1200 frame up, policies Ignored/Ignored",
+  "layout: hints -1x-1 with a 1600x1200 frame up, policies Ignored/Ignored",
   "scale-once: 12 scales for 11 frames, one resize and twenty repaints",
   "copy: the drawn value stayed 10 after the source array was overwritten",
   "hold: the picture, the row and the scale count all unchanged \u2014 which is what the ladder's last rung means",
   "stand-in: whether the picture is the answer is remembered rather than re-derived from the pixels",
   "surface: 4000 rows reduced to 320 columns (['covered', 'max', 'min']) \u2014 one per pixel, which is what a strip is",
-  "layout (no vote, no hints): 4 checked, 3 disagreed; first: sizeHint is 400x300; a widget that updates may not vote on the layout",
+  "layout (no vote, no hints): 4 checked, 0 disagreed",
   "scale-once (per frame, not per paint): 12 checked, 0 disagreed",
   "copy (owns what it draws): 2 checked, 0 disagreed",
   "hold (nothing happens, on purpose): 3 checked, 0 disagreed",

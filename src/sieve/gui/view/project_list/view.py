@@ -109,7 +109,7 @@ class ProjectList(CardStack):
         self._add.setIcon(icons.icon(_ADD))
         self._add.setIconSize(QSize(icons.SIZE, icons.SIZE))
         self._add.setAutoRaise(True)
-        self._add.setToolTip("Add a folder as a project (Ctrl+O)")
+        self._add.setToolTip("Open a recording (Ctrl+O)")
         self._add.setCursor(Qt.CursorShape.PointingHandCursor)
         # Scoped to this widget's subtree, like the arrows' own rule: the head's
         # sheet dresses what the head builds, and this is the view's.
@@ -192,7 +192,7 @@ class ProjectList(CardStack):
             return
         self._nothing = Empty(
             "No projects yet",
-            "Add a folder with the + above, and it is remembered here.",
+            "Open a recording with the + above, and it is remembered here.",
         )
         self.add_card(self._nothing)
 

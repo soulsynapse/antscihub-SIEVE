@@ -1,8 +1,8 @@
 {
  "experiment": "P7-session-broken",
  "question": "Does a drag over unfilled ground decode, and does anything approximate reach a store?",
- "when": "2026-08-24T11:10:28.159542+00:00",
- "sieve_rev": "44ea9c4",
+ "when": "2026-08-24T11:26:26.862621+00:00",
+ "sieve_rev": "930e011",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",

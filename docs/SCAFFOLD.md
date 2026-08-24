@@ -202,25 +202,25 @@
       - 📄 `P0-identity-broken-20260824T090532Z.json`
       - 📄 `P1-routes-20260824T090814Z.json`
       - 📄 `P1-routes-broken-20260824T090741Z.json`
-      - 📄 `P2-tiers-20260824T111010Z.json`
-      - 📄 `P2-tiers-broken-20260824T111012Z.json`
-      - 📄 `P3-record-20260824T111013Z.json`
-      - 📄 `P3-record-broken-20260824T111014Z.json`
-      - 📄 `P4-declarations-20260824T111015Z.json`
-      - 📄 `P4-declarations-broken-20260824T111016Z.json`
-      - 📄 `P5-producers-20260824T111017Z.json`
-      - 📄 `P5-producers-broken-20260824T111019Z.json`
-      - 📄 `P6-ladder-20260824T111020Z.json`
-      - 📄 `P6-ladder-broken-20260824T111020Z.json`
-      - 📄 `P7-session-20260824T111024Z.json`
-      - 📄 `P7-session-broken-20260824T111028Z.json`
-      - 📄 `P8-canvas-20260824T111035Z.json`
-      - 📄 `P8-canvas-broken-20260824T111036Z.json`
+      - 📄 `P2-tiers-20260824T112608Z.json`
+      - 📄 `P2-tiers-broken-20260824T112611Z.json`
+      - 📄 `P3-record-20260824T112612Z.json`
+      - 📄 `P3-record-broken-20260824T112612Z.json`
+      - 📄 `P4-declarations-20260824T112613Z.json`
+      - 📄 `P4-declarations-broken-20260824T112614Z.json`
+      - 📄 `P5-producers-20260824T112616Z.json`
+      - 📄 `P5-producers-broken-20260824T112617Z.json`
+      - 📄 `P6-ladder-20260824T112618Z.json`
+      - 📄 `P6-ladder-broken-20260824T112619Z.json`
+      - 📄 `P7-session-20260824T112623Z.json`
+      - 📄 `P7-session-broken-20260824T112626Z.json`
+      - 📄 `P8-canvas-20260824T112633Z.json`
+      - 📄 `P8-canvas-broken-20260824T112634Z.json`
       - 📄 `parity-20260824T105711Z.json`
-      - 📄 `project-20260824T111029Z.json`
-      - 📄 `project-broken-20260824T111031Z.json`
-      - 📄 `provenance-20260824T111033Z.json`
-      - 📄 `provenance-broken-20260824T111034Z.json`
+      - 📄 `project-20260824T112628Z.json`
+      - 📄 `project-broken-20260824T112629Z.json`
+      - 📄 `provenance-20260824T112631Z.json`
+      - 📄 `provenance-broken-20260824T112633Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
@@ -229,7 +229,7 @@
     - 📄 `06-producers.py` — Do the background producers work in the order they claim to?
     - 📄 `07-ladder.py` — Does the ladder put the blocking decode where it belongs, and nowhere else?
     - 📄 `08-session.py` — Does the whole thing hold together, and does a drag ever decode?
-    - 📄 `09-project.py` — Does pointing at a folder find the footage, and only the footage?
+    - 📄 `09-project.py` — Does opening a recording cost one container open, and stay the same project?
     - 📄 `10-parity.py` — The port, put through what the explorer was put through, on the real file.
     - 📄 `11-provenance.py` — Is every stored value the one its own key says it is?
     - 📄 `12-canvas.py` — Does the picture stay out of the layout, and cost one scale per frame?
@@ -397,11 +397,11 @@
           - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
       - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
-    - 📁 `project/` — What a project is: a folder somebody pointed at, and the list of them.
-      - 📄 `document.py` — What a project knows about itself, written where the project is.
+    - 📁 `project/` — What a project is: one recording, and the list of them.
+      - 📄 `document.py` — What a project knows about itself, written beside the recording it is about.
+      - 📄 `footage.py` — Reading a recording's headers, which is all opening one costs.
       - 📄 `library.py` — Which projects this person has, and which they were in last.
-      - 📄 `project.py` — A folder somebody pointed at, and what SIEVE knows about it.
-      - 📄 `sources.py` — Finding the footage already in a folder somebody pointed at.
+      - 📄 `project.py` — One recording, and what SIEVE knows about it.
     - 📁 `session/` — The running session: what is being served, filled, computed and recorded.
       - 📄 `frontier.py` — Filling a window into memory, in the order attention actually wants it.
       - 📄 `ladder.py` — Choosing what to try, in what order, and what may be kept.

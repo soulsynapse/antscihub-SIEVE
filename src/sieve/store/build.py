@@ -46,6 +46,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Protocol
 
+from sieve.frame.form import Form
 from sieve.frame.shape import Shape
 from sieve.frame.table import FrameTable
 from sieve.store.coverage import Span
@@ -151,6 +152,33 @@ class FFmpegLauncher:
         self.rows_per_segment = rows_per_segment
         self.width = width
 
+    def output_size(self) -> tuple[int, int]:
+        """The dimensions ffmpeg will actually write, by its own rounding rule.
+
+        `scale=W:-2` keeps the aspect and rounds the free dimension to the
+        *nearest* even number, which is not the same as truncating to an even
+        number and differs by two often enough to matter. On the source in
+        `video-tests/` the two rules give 748 and 746.
+
+        Exposed rather than left implicit because whoever builds the `Form`
+        this store is keyed by must use the same arithmetic. Getting it wrong
+        produces a record that describes frames the store does not hold — the
+        exact failure the form vocabulary exists to prevent — and nothing
+        notices until something compares the two, which is how this was found.
+        """
+        height = round(self.shape.height * self.width / self.shape.width / 2) * 2
+        return self.width, height
+
+    def form(self) -> Form:
+        """The form this launcher's output actually is.
+
+        Ask the launcher rather than working it out: a caller that computes
+        the geometry itself is a second implementation of ffmpeg's rounding,
+        and the two disagreeing is silent.
+        """
+        return Form((0, 0, self.shape.width, self.shape.height),
+                    self.output_size(), "gray")
+
     def launch(self, batch: Batch, staging: Path):
         staging.mkdir(parents=True, exist_ok=True)
         first_row = batch.start * self.rows_per_segment
@@ -195,6 +223,9 @@ class ProxyBuilder:
 
     def __init__(self, store: SpanStore, table: FrameTable, form_key: str,
                  launcher: Launcher, segments: int, rows_per_segment: int,
+                 # `form_key` must be the launcher's own `form().key()` where
+                 # the launcher has one. Passing a key computed anywhere else
+                 # records a description of frames this store does not hold.
                  batch: int = BATCH, redirect: int = REDIRECT):
         self.store = store
         self.table = table

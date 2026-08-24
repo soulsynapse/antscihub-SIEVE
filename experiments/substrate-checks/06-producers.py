@@ -14,7 +14,7 @@ the check hands it one that touches files, so the schedule, the redirect, the
 publication rule and the resume are all exercised with no encoder, no footage
 and no waiting.
 
-Seven cases.
+Eight cases.
 
 **order** — the fill order is the playhead's chunk first, then forward, then
 wrapping to the window's start. Checked at the window's beginning, middle and
@@ -45,6 +45,12 @@ only what is missing.
 there is nearer work, and not otherwise. The second condition is what stops it
 thrashing between two equally distant batches.
 
+**geometry** — the form the builder records describes the pixels ffmpeg
+actually writes. Added after driving the builder against real ffmpeg found the
+record saying `1328x746` for segments that were `1328x748`: `scale=W:-2` rounds
+the free dimension to the nearest even number, and truncating instead is off by
+two often enough to matter.
+
 `--broken` fills from the window's start instead of the playhead's chunk, which
 is exactly what the explorer did before the finding, and `order` and `fill` both
 fail.
@@ -59,6 +65,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import time
+from fractions import Fraction
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode-experiments"))
@@ -71,8 +78,10 @@ from sieve.frame.form import Form  # noqa: E402
 from sieve.session import frontier as frontier_mod  # noqa: E402
 from sieve.session.frontier import Frontier, fill_order  # noqa: E402
 from sieve.session.ledger import Ledger  # noqa: E402
+from sieve.frame.shape import Shape  # noqa: E402
 from sieve.store.build import (  # noqa: E402
     Batch,
+    FFmpegLauncher,
     ProxyBuilder,
     missing_batches,
     next_batch,
@@ -382,6 +391,47 @@ def case_redirect(run: Run, root: Path) -> tuple[str, int, list[str]]:
     return "redirect (far, and somewhere nearer)", 3, bad
 
 
+def case_geometry(run: Run) -> tuple[str, int, list[str]]:
+    """Does the recorded form describe the pixels ffmpeg actually writes?
+
+    Found by driving the builder against real ffmpeg rather than by reasoning:
+    the record said `1328x746` and the segments were `1328x748`. `scale=W:-2`
+    rounds the free dimension to the *nearest* even number, and truncating to
+    an even number instead is off by two often enough to matter. A store whose
+    form key does not describe its frames is the failure the form vocabulary
+    exists to prevent, and nothing notices until something compares the two.
+
+    Checked as arithmetic against shapes whose answers are known, so it needs
+    no ffmpeg — but it is here because a real run is what asked the question.
+    """
+    bad: list[str] = []
+    cases = [
+        # source w, h, target w -> what `scale=W:-2` writes
+        ((5312, 2988), 1328, 748),   # the source in video-tests: 747 rounds up
+        ((1920, 1080), 1280, 720),   # exact, and even either way
+        ((1440, 1080), 640, 480),    # exact
+        ((3840, 2160), 1000, 562),   # 562.5 rounds to 562
+    ]
+    for (width, height), target, expected in cases:
+        shape = Shape(codec="hevc", width=width, height=height,
+                      pix_fmt="yuv420p", average_rate=Fraction(24000, 1001),
+                      timebase=Fraction(1, 24000))
+        launcher = FFmpegLauncher(Path("x.mp4"), shape, 100, 96, width=target)
+        got = launcher.output_size()
+        if got != (target, expected):
+            bad.append(f"{width}x{height} at width {target} sized {got}, "
+                       f"ffmpeg writes ({target}, {expected})")
+        truncated = int(height * target / width) // 2 * 2
+        if truncated != expected and got[1] == truncated:
+            bad.append(f"{width}x{height} used the truncating rule, which is "
+                       f"{truncated} where ffmpeg writes {expected}")
+        if launcher.form().out != got:
+            bad.append("the launcher's form disagrees with its own output size")
+    run.note("geometry: the launcher owns the rounding, so a caller cannot "
+             "compute the form a second way and disagree silently")
+    return "geometry (form matches the pixels)", len(cases), bad
+
+
 def main() -> None:
     broken = "--broken" in sys.argv
     if broken:
@@ -410,6 +460,7 @@ def main() -> None:
             case_pause(run, root),
             case_batches(run),
             case_redirect(run, root),
+            case_geometry(run),
         ]
 
     ok = True

@@ -121,7 +121,26 @@ only that flow is expensive, which
 already, and says nothing about three cheap nodes. What can implicate the
 architecture is the cost of the joints, not the cost of the work.
 
-### G4 — Do offsets compose, and does the residency set stay affordable?
+### G4 — Do offsets compose, and does the residency set stay affordable? — done
+
+`02-offsets-compose.py`. Yes to both, and the second answer is stronger than the
+question expected: over a moving playhead the working set grows by the *added
+reach* per node rather than by the multiplying point set, so depth is bounded by
+the horizon plus the total reach. The numbers are in `results/` beside the run
+that took them. It also priced what a lazy plan costs — planning by span instead
+of by set over-fetches at depth, and that gap is what ADR-0008 calls a bug
+rather than a price.
+
+The `--broken` mode is the defect G1 found in running code rather than an
+invented one, and two cases still pass under it, which is the finding underneath
+the finding: an under-fetching plan is *cheaper*, so every instrument that asks
+whether the working set is affordable reports an improvement. This class of
+defect is invisible to cost measurement, which is the same shape as the overlay
+that wrote its own series.
+
+Still open from this goal: whether a node exists whose needs are not expressible
+as offsets at all. That is the *no* that would take the plan away entirely, and
+it cannot be settled without knowing what the downstream tools are.
 
 **This is the one that can actually kill it, and it was ranked too low.** The
 product constraint is not that graphs are fast, it is that they refill faster

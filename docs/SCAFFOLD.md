@@ -46,7 +46,11 @@
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
   - 📁 `chain-experiments/`
+    - 📁 `results/`
+      - 📄 `G4-offsets-compose-20260824T174634Z.json`
+      - 📄 `G4-offsets-compose-broken-20260824T174641Z.json`
     - 📄 `01-the-explorer-as-a-graph.md`
+    - 📄 `02-offsets-compose.py` — G4. Does a graph still have a fetch plan, and can anything hold it?
     - 📄 `README.md`
   - 📁 `decode-experiments/`
     - 📁 `explorer-logs/`

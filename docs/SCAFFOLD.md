@@ -196,6 +196,12 @@
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the storage stack by hand: scrub a region while fill, persist and play fight over it.
     - 📄 `session-explorer.py` — Feel the session plan: hunt the full timeline, land a window, tune, jump.
+  - 📁 `substrate-checks/`
+    - 📁 `results/`
+      - 📄 `P0-identity-20260823T231234Z.json`
+      - 📄 `P0-identity-broken-20260823T231247Z.json`
+    - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
+    - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`
       - 📄 `tool-explorer-20260823T162926Z.json`
